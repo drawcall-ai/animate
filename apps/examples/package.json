@@ -1,0 +1,23 @@
+{
+  "name": "examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "metrics": "vitest run test/metrics.test.ts"
+  },
+  "dependencies": {
+    "@prohuman/core": "workspace:*",
+    "@prohuman/openpose": "workspace:*",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.7"
+  }
+}

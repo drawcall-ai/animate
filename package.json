@@ -1,0 +1,16 @@
+{
+  "name": "prohuman-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter examples dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @prohuman/core test",
+    "capture": "node scripts/capture.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0",
+    "typescript": "^5.9.0"
+  }
+}
