@@ -2,15 +2,26 @@
   "name": "prohuman-monorepo",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.18.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "dev": "pnpm --filter examples dev",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter \"./packages/*\" build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @prohuman/core test",
-    "capture": "node scripts/capture.mjs"
+    "test": "pnpm --filter \"./packages/*\" test",
+    "metrics": "pnpm --filter examples metrics",
+    "lint:pkg": "pnpm --filter \"./packages/*\" lint:pkg",
+    "capture": "node scripts/capture.mjs",
+    "bench": "pnpm --filter examples bench",
+    "bench:browser": "node scripts/bench.mjs"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "playwright": "^1.55.0",
+    "publint": "^0.3.24",
+    "tsdown": "^0.23.0",
     "typescript": "^5.9.0"
   }
 }

@@ -1,7 +1,11 @@
-export * from './math';
-export * from './body';
-export * from './ik';
-export * from './pose';
-export { Humanoid, type HumanoidInput, type HumanoidOptions, type Effector, type MoveStyle } from './humanoid';
-export { defaultStance, type Stance, type Obstacle, type AvoidSphere } from './posture';
-export { Gait, Foot, type FootPhase } from './gait';
+export { Humanoid, type Foot } from './humanoid';
+export { createSkeletonModel } from './skeleton';
+export type { Box, Input, Ladder, Options, Sphere, Style, Target } from './input';
+export type { FootPhase } from './gait/foot';
+export type { Quat, Vec3 } from './math';
+export type { Proportions } from './proportions';
+export type { Stance } from './stance';
+export { Track } from './gait/sequence';
+export { beyondRange, zzParts } from './pose/limits';
+export { zzLogD, zzRaw } from './pose/dynamics';
+export type { BoneName } from './pose/bones';

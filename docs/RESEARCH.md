@@ -346,6 +346,10 @@ T_stride = 120 / c         // s
 stanceFrac(v) ≈ clamp(0.665 − 0.035·v, 0.55, 0.70)     // [heur] fit: 0.63 at 1.0 m/s, 0.615 at 1.4, 0.60 at 1.8
 doubleSupport  = 2·stanceFrac − 1
 ```
+The implementation (`packages/core/src/gait/timing.ts`) uses **WR = 0.0056·(H/`DEFAULT_HEIGHT`)**, the low end
+of the adult range (≈ 0.0055–0.0075) rather than Sekiya's mean of 0.0065: shorter steps at a quicker cadence, a light
+brisk walk (v = 1.4 → c ≈ 122 steps/min, L ≈ 0.69 m).
+
 For slow speeds (< 0.6 m/s) the walk ratio breaks down (people shorten steps more than cadence). Clamp L ≥ 0.25 m and
 fade into "step in place / shuffle" behaviour.
 
@@ -653,9 +657,15 @@ colors = [255,0,0],[255,85,0],[255,170,0],[255,255,0],[170,255,0],[85,255,0],[0,
 
 ---
 
-## 8. Recommended architecture
+## 8. Architecture
 
-### 8.1 Per-frame pipeline
+§8.1–8.2 are the **original proposal**, written before the implementation, and kept for their reasoning. The
+implementation took a different route: instead of a VRIK-style stage chain with FABRIK and a final DLS pass, a small
+bounded Levenberg–Marquardt posture planner answers both *where to stand* and *how to hold the body*, with gait,
+limbs and head layered on top (README, "How it works"). One-Euro input filtering and the idle behaviours of §8.2 are
+not implemented. §8.3 lists rules of thumb (guidance, not all implemented); §8.4 is the implemented layout.
+
+### 8.1 Proposed per-frame pipeline (original proposal)
 
 ```
 Inputs (any subset, each optional): head {pos, rot}, handL/handR {pos, rot?}, torso {pos, rot} (chest or pelvis)
@@ -684,7 +694,7 @@ Inputs (any subset, each optional): head {pos, rot}, handL/handR {pos, rot?}, to
   └─ 10. Output             bone quaternions → three.js Skeleton; FK keypoints → BODY_25 / COCO-18 (+ renderer, §7)
 ```
 
-### 8.2 Missing-input inference policy
+### 8.2 Proposed missing-input inference policy (original proposal)
 
 | Given | Infer |
 |---|---|
@@ -709,19 +719,23 @@ Inputs (any subset, each optional): head {pos, rot}, handL/handR {pos, rot?}, to
 6. **Soft limits over hard clamps**: apply joint limits as swing-twist cones with smooth saturation (tanh), and
    rebalance the leftover to parent joints.
 
-### 8.4 Module layout (TypeScript)
+### 8.4 Module layout (implemented, `packages/core/src`)
 
 ```
-core/        math (V3/Quat helpers on three.js types), springs, minJerk, oneEuro, swingTwist
-skeleton/    HumanoidDef (Drillis–Contini proportions from H), rest pose, joint limits, masses (Winter)
-solvers/     twoBone.ts (analytic + soft extension + swivel), fabrik.ts (multi-effector), dls.ts (refinement)
-heuristics/  swivel.ts (Soechting + fallback), clavicle.ts, kneePole.ts, chestFromHands.ts, gazeSplit.ts
-locomotion/  com.ts, capturePoint.ts, stepPlanner.ts, gaitParams.ts (v → cadence/stance/amplitudes),
-             gaitCurves.ts (§3.4 keyframes), footRoll.ts, pelvisOscillator.ts, armSwing.ts, turnInPlace.ts
-behaviors/   reach.ts (min-jerk + gaze lead), lift.ts (squat/stoop blend), overhead.ts, idle.ts
-pipeline/    BodySolver.ts (orders the stages in 8.1), InputInference.ts (8.2)
-output/      openpose.ts (BODY_25/COCO-18 mapping, colours, v1.1 renderer to a canvas)
+humanoid.ts   Humanoid(model): the public entry; one fixed step = intent → planner → gait → posture → limbs → pose,
+              written to the model
+input.ts      Input / Options / Target types; proportions.ts (Drillis–Contini from H), stance.ts
+intent/       what the targets ask for: reach, seat, tracked-path detection, tasks for the planner
+posture/      the posture model and its LM solver (plan, cost terms, trunk FK, give-way, settling springs)
+gait/         locomotion: root follow, step timing (walk ratio) and placement, swing arcs over obstacles,
+              foot roll, turning, and the gait overlays (pelvis bob/sway, counter-rotation)
+limbs/        analytic two-bone IK for arms and legs, clavicle and swivel, head/neck/gaze split
+pose/         bones, joints (incl. BODY_25 face and foot points), VRM rotations, centre of mass
+rig.ts        the @pmndrs/viverse character model (VRM or glTF) as driven: proportions measured from its rest
+              pose, landmark nodes added, bones posed as viverse retargets VRM clips
+skeleton.ts   createSkeletonModel: bare VRM-named bones in the Drillis–Contini proportions, as viverse loads a glTF
 ```
+The OpenPose output (§7) is the separate `@prohuman/openpose` package: a skeleton model drawn as BODY_25.
 
 ---
 

@@ -1,13 +1,9 @@
-import {
-  Camera,
-  Color,
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  SphereGeometry,
-  Vector3,
-} from 'three';
-import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, type Pose } from '@prohuman/core';
+import { Camera, Color, Group, Matrix4, Mesh, MeshBasicMaterial, SphereGeometry, Vector3, type Object3D } from 'three';
+import type { CharacterModel } from '@pmndrs/viverse';
+import { createSkeletonModel } from '@prohuman/core';
+import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, keypointsOf, toBody25 } from './body25';
+
+export { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, toBody25 } from './body25';
 
 export interface OpenPoseSkeletonOptions {
   /** limb thickness in metres */
@@ -17,22 +13,41 @@ export interface OpenPoseSkeletonOptions {
   opacity?: number;
 }
 
+/**
+ * A character model drawn as an OpenPose BODY_25 skeleton: `createSkeletonModel(height)`
+ * with an `OpenPoseSkeleton` in its scene. Drive it with a Humanoid like any viverse model.
+ */
+export function createOpenPoseModel(options: OpenPoseSkeletonOptions & { height?: number } = {}): CharacterModel {
+  const model = createSkeletonModel(options.height);
+  model.scene.add(new OpenPoseSkeleton(model, options));
+  return model;
+}
+
 const _a = new Vector3();
 const _b = new Vector3();
 const _dir = new Vector3();
 const _up = new Vector3(0, 1, 0);
+const _toLocal = new Matrix4();
+const _identity = new Matrix4();
 
 /**
- * A 3D OpenPose BODY_25 skeleton: each limb is an elongated ellipsoid in the
- * colour of its child keypoint (as in OpenPose's renderer), each keypoint a
- * sphere.
+ * A 3D OpenPose BODY_25 skeleton over a character model's keypoints: each limb is an
+ * elongated ellipsoid in the colour of its child keypoint (as in OpenPose's renderer), each
+ * keypoint a sphere. Add it to `model.scene`, after the bones: it follows them whenever the
+ * scene's world matrices are updated (as rendering does) — once a Humanoid drives the model
+ * (before, the landmarks are missing and it throws).
  */
 export class OpenPoseSkeleton extends Group {
-  private limbs: Mesh[] = [];
-  private joints: Mesh[] = [];
+  private limbs: Mesh<SphereGeometry, MeshBasicMaterial>[] = [];
+  private joints: Mesh<SphereGeometry, MeshBasicMaterial>[] = [];
   private limbRadius: number;
+  /** resolved on first use: the landmarks come with the Humanoid */
+  private keypoints: Object3D[] | null = null;
 
-  constructor(opts: OpenPoseSkeletonOptions = {}) {
+  constructor(
+    private readonly model: CharacterModel,
+    opts: OpenPoseSkeletonOptions = {},
+  ) {
     super();
     this.limbRadius = opts.limbRadius ?? 0.022;
     const jointRadius = opts.jointRadius ?? 0.024;
@@ -67,10 +82,25 @@ export class OpenPoseSkeleton extends Group {
     BODY25_PAIRS.forEach(([i, j], k) => (this.limbs[k].visible = !hidden.has(i) && !hidden.has(j)));
   }
 
-  update(pose: Pose) {
+  /** frees the GPU resources (the shared sphere and the materials) */
+  dispose() {
+    this.joints[0].geometry.dispose();
+    for (const m of [...this.limbs, ...this.joints]) m.material.dispose();
+  }
+
+  override updateMatrixWorld(force?: boolean) {
+    this.follow();
+    super.updateMatrixWorld(force);
+  }
+
+  /** places the spheres and limbs on the keypoints (their world matrices are current: they come first) */
+  private follow() {
+    const keypoints = (this.keypoints ??= keypointsOf(this.model));
+    _toLocal.copy(this.parent?.matrixWorld ?? _identity).invert();
+    const at = (i: number, out: Vector3) => out.setFromMatrixPosition(keypoints[i].matrixWorld).applyMatrix4(_toLocal);
     BODY25_PAIRS.forEach(([i, j], k) => {
-      const a = _a.copy(pose[BODY25_KEYPOINTS[i]]);
-      const b = _b.copy(pose[BODY25_KEYPOINTS[j]]);
+      const a = at(i, _a);
+      const b = at(j, _b);
       const m = this.limbs[k];
       const len = a.distanceTo(b);
       m.position.addVectors(a, b).multiplyScalar(0.5);
@@ -80,23 +110,28 @@ export class OpenPoseSkeleton extends Group {
       const r = this.limbRadius * (face ? 0.6 : 1);
       m.scale.set(r, Math.max(len / 2, 1e-4), r);
     });
-    BODY25_KEYPOINTS.forEach((name, i) => this.joints[i].position.copy(pose[name]));
+    this.joints.forEach((m, i) => at(i, m.position));
   }
 }
 
-/** Project a pose to pixel coordinates (BODY_25 order), as OpenPose/ControlNet expects. */
-export function projectBody25(pose: Pose, camera: Camera, width: number, height: number): [number, number][] {
-  return BODY25_KEYPOINTS.map((name) => {
-    const v = _a.copy(pose[name]).project(camera);
+/** The model's BODY_25 keypoints projected to pixel coordinates, as OpenPose/ControlNet expects. */
+export function projectBody25(model: CharacterModel, camera: Camera, width: number, height: number): [number, number][] {
+  return toBody25(model).map(([x, y, z]) => {
+    const v = _a.set(x, y, z).project(camera);
     return [((v.x + 1) / 2) * width, ((1 - v.y) / 2) * height];
   });
 }
+
+/** What `drawOpenPose2D` draws with: a canvas or an offscreen canvas's 2D context. */
+export type Context2D = Pick<CanvasRenderingContext2D, 'save' | 'restore' | 'beginPath' | 'ellipse' | 'arc' | 'fill' | 'fillStyle' | 'globalAlpha'> & {
+  canvas: { width: number; height: number };
+};
 
 /**
  * Draw projected BODY_25 keypoints the way OpenPose renders them: ellipse limbs
  * in the child keypoint colour at 0.6 alpha, then keypoint discs.
  */
-export function drawOpenPose2D(ctx: CanvasRenderingContext2D, points: [number, number][], opts: { thickness?: number } = {}) {
+export function drawOpenPose2D(ctx: Context2D, points: [number, number][], opts: { thickness?: number } = {}) {
   const area = ctx.canvas.width * ctx.canvas.height;
   const t = opts.thickness ?? Math.max(2, Math.sqrt(area) / 75);
   ctx.save();
@@ -121,4 +156,3 @@ export function drawOpenPose2D(ctx: CanvasRenderingContext2D, points: [number, n
   });
   ctx.restore();
 }
-

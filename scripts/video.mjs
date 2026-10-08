@@ -4,54 +4,71 @@
 //        --markers          keep the input-target indicators (hidden by default)
 //        --cam cinematic    scripted camera: the normal third-person shot → a move into first person
 //        --blur 4           film motion blur: 4 subframes per frame, 180° shutter (half of them blended)
-// Needs the dev server (pnpm dev) and ffmpeg.
+// Needs ffmpeg for videos.
 import { spawn } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
+import { BASE, devServer, pageError } from './examples.mjs';
 
-const arg = (k, d) => {
-  const i = process.argv.indexOf(`--${k}`);
-  return i >= 0 ? process.argv[i + 1] : d;
-};
-const example = arg('example', 'fight');
-const [w, h] = arg('size', '1280x720').split('x').map(Number);
-const fps = Number(arg('fps', 60));
-const view = arg('view');
-const out = arg('out', `captures/${example}.mp4`);
-const base = arg('url', 'http://localhost:5287/');
-const stills = arg('stills')?.split(',').map(Number);
-const blur = stills ? 1 : Math.max(1, Number(arg('blur', 1)));
+const { values: args } = parseArgs({
+  args: process.argv.slice(2).filter((a) => a !== '--'),
+  options: {
+    example: { type: 'string', default: 'fight' },
+    size: { type: 'string', default: '1280x720' },
+    fps: { type: 'string', default: '60' },
+    view: { type: 'string' },
+    out: { type: 'string' },
+    stills: { type: 'string' },
+    markers: { type: 'boolean', default: false },
+    cam: { type: 'string' },
+    blur: { type: 'string', default: '1' },
+  },
+});
+const [w, h] = args.size.split('x').map(Number);
+const fps = Number(args.fps);
+const out = args.out ?? `captures/${args.example}.mp4`;
+const stills = args.stills?.split(',').map(Number);
+const blur = stills ? 1 : Math.max(1, Number(args.blur));
+const query = new URLSearchParams({ example: args.example, video: '1' });
+if (!args.markers) query.set('markers', '0');
+if (args.cam) query.set('cam', args.cam);
+if (args.view) query.set('view', args.view);
+mkdirSync(dirname(out), { recursive: true });
 
+await using server = await devServer();
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu'] });
-const page = await browser.newPage({ viewport: { width: w, height: h } });
-const errors = [];
-page.on('pageerror', (e) => errors.push(e.message));
-const markers = process.argv.includes('--markers') ? '' : '&markers=0';
-const cam = arg('cam') ? `&cam=${arg('cam')}` : '';
-await page.goto(`${base}?example=${example}&video=1${markers}${cam}${view ? `&view=${view}` : ''}`);
-await page.waitForFunction(() => window.__ready === true);
+try {
+  const page = await browser.newPage({ viewport: { width: w, height: h } });
+  const failed = pageError(page);
+  await page.goto(`${BASE}?${query}`);
+  await Promise.race([page.waitForFunction(() => window.__ready === true), failed]);
 
-// motion blur: render blur× the frame rate, average the first half of each frame's subframes
-const vf = blur > 1 ? ['-vf', `tmix=frames=${Math.max(1, Math.round(blur / 2))},fps=${fps}`] : [];
-const ff = stills ? null : spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps * blur), '-i', '-', ...vf, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });
-const done = ff ? new Promise((res, rej) => ff.on('close', (c) => (c === 0 ? res() : rej(new Error(`ffmpeg exited ${c}`))))) : Promise.resolve();
+  // motion blur: render blur× the frame rate, average the first half of each frame's subframes
+  const vf = blur > 1 ? ['-vf', `tmix=frames=${Math.max(1, Math.round(blur / 2))},fps=${fps}`] : [];
+  const ff = stills ? null : spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(fps * blur), '-i', '-', ...vf, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-preset', 'slow', '-movflags', '+faststart', out], { stdio: ['pipe', 'inherit', 'inherit'] });
+  const done = ff ? new Promise((res, rej) => ff.on('close', (c) => (c === 0 ? res() : rej(new Error(`ffmpeg exited ${c}`))))) : Promise.resolve();
 
-let frames = 0;
-for (;;) {
-  const more = await page.evaluate((dt) => window.__frame(dt), 1 / (fps * blur));
-  frames++;
-  if (stills) {
-    const t = frames / fps;
-    const hit = stills.find((s) => Math.abs(s - t) < 0.5 / fps);
-    if (hit !== undefined) await page.screenshot({ path: out.replace(/\.mp4$/, '') + `-${hit}.png` });
-    if (t > Math.max(...stills)) break;
-    continue;
+  let frames = 0;
+  for (;;) {
+    const more = await Promise.race([page.evaluate((dt) => window.__frame(dt), 1 / (fps * blur)), failed]);
+    frames++;
+    if (stills) {
+      const t = frames / fps;
+      const hit = stills.find((s) => Math.abs(s - t) < 0.5 / fps);
+      if (hit !== undefined) await page.screenshot({ path: out.replace(/\.mp4$/, '') + `-${hit}.png` });
+      if (t > Math.max(...stills)) break;
+      continue;
+    }
+    const png = await page.screenshot({ type: 'png' });
+    if (!ff.stdin.write(png)) await new Promise((r) => ff.stdin.once('drain', r));
+    if (frames % (fps * blur) === 0) process.stdout.write(`\r${(frames / fps / blur).toFixed(0)} s`);
+    if (!more) break;
   }
-  const png = await page.screenshot({ type: 'png' });
-  if (!ff.stdin.write(png)) await new Promise((r) => ff.stdin.once('drain', r));
-  if (frames % (fps * blur) === 0) process.stdout.write(`\r${(frames / fps / blur).toFixed(0)} s`);
-  if (!more) break;
+  ff?.stdin.end();
+  await done;
+  console.log(`\n${out}: ${stills ? `stills at ${stills.join(', ')} s` : `${Math.round(frames / blur)} frames`}, ${w}x${h} @ ${fps} fps`);
+} finally {
+  await browser.close();
 }
-ff?.stdin.end();
-await done;
-await browser.close();
-console.log(`\n${out}: ${Math.round(frames / blur)} frames, ${w}x${h} @ ${fps} fps${errors.length ? `, page errors: ${errors.join('; ')}` : ''}`);

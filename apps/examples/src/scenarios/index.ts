@@ -1,6 +1,24 @@
 import type { Scenario } from '../scenario';
-import { lookAround, reach, run, sit, stepOver, stroll, vr, walkTray } from './basic';
+import { aimStrafe } from './aim';
+import { throwBall } from './throw';
+import { sword } from './sword';
+import { kickBall } from './kick';
+import { bicycle } from './bicycle';
+import { car } from './car';
+import { horse } from './horse';
+import { snowboard } from './snowboard';
+import { skateboard } from './skateboard';
+import { climb } from './climb';
+import { crouch } from './crouch';
 import { fight } from './fight';
+import { jump } from './jump';
+import { ladder } from './ladder';
 import { pickupShelf } from './pickup';
+import { push } from './push';
+import { sit } from './sit';
+import { stairs } from './stairs';
+import { vault } from './vault';
+import { lookAround, reach, vr } from './tracking';
+import { stepOver, stroll, walkRun, walkTray } from './walk';
 
-export const SCENARIOS: Scenario[] = [walkTray, pickupShelf, stroll, run, sit, stepOver, reach, lookAround, vr, fight];
+export const SCENARIOS: Scenario[] = [walkTray, pickupShelf, stroll, walkRun, sit, stepOver, crouch, stairs, vault, jump, climb, ladder, push, reach, lookAround, vr, fight, aimStrafe, throwBall, sword, kickBall, bicycle, skateboard, car, horse, snowboard];
