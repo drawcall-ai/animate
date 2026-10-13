@@ -11,7 +11,7 @@ import { Report } from '../src/report';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import type { Frame } from './frame';
-import { judge, LIMITS, limitsOf, measure } from './judge';
+import { judge, LIMITS, limitsOf, measure, type Limits } from './judge';
 
 /** each fixed step's frames of a run `sim` (OpenPose models, read without rendering) */
 function* steps(sim: Simulation): Generator<Frame[]> {
@@ -23,11 +23,12 @@ function* steps(sim: Simulation): Generator<Frame[]> {
 }
 
 /** a run of `sc` measured, held to its limits, and to what it is for */
-function judged(sc: Scenario) {
+function judged(sc: Scenario, strides?: Limits['strides']) {
   const sim = new Simulation(sc);
   const m = measure(sc.id, steps(sim));
   console.log(m.report);
-  judge(m, limitsOf(sc.id));
+  const limit = limitsOf(sc.id);
+  judge(m, strides ? { ...limit, strides } : limit);
   expect(sim.stage.done(), `${sc.id}: done`).toBe(true);
 }
 
@@ -46,7 +47,9 @@ for (const sc of SCENARIOS) {
 }
 
 // the same limits a little off the script: no metric may hang on its exact numbers
-const VARIATIONS: [string, Scenario][] = [
+// (a variation that walks less than its scenario says how few strides it judges: none go unjudged silently)
+const NONE = { straight: 0, curve: 0 };
+const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['stroll 15% slower', stroll({ speed: 0.85 })],
   ['stroll 15% faster', stroll({ speed: 1.15 })],
   ['stroll on a 20% tighter arc', stroll({ radius: 2.4 })],
@@ -55,11 +58,14 @@ const VARIATIONS: [string, Scenario][] = [
   ['stroll setting off turned 0.3 rad right', stroll({ yaw: -0.3 })],
   ['stroll setting off turned a quarter turn away', stroll({ yaw: Math.PI / 2 })],
   ['stroll setting off facing away', stroll({ yaw: Math.PI })],
-  ['stroll round a sharp 0.6 m turn', stroll({ radius: 0.6 })],
-  ['walk to a point 2 m behind', walkThere(new Vector3(0, 0, -2))],
-  ['walk to a point 2 m to the right', walkThere(new Vector3(-2, 0, 0))],
-  ['turn round in place', walkThere(new Vector3(0, 0, 0), Math.PI)],
-  ['walk 4 m ahead, turning round on arrival', walkThere(new Vector3(0, 0, 4), Math.PI)],
+  // (round so sharp a bend the body slows below a walk's speed: no curve strides to judge)
+  ['stroll round a sharp 0.6 m turn', stroll({ radius: 0.6 }), { straight: 3, curve: 0 }],
+  ['walk to a point 2 m behind', walkThere(new Vector3(0, 0, -2)), NONE],
+  ['walk to a point 2 m to the right', walkThere(new Vector3(-2, 0, 0)), NONE],
+  ['turn round in place', walkThere(new Vector3(0, 0, 0), Math.PI), NONE],
+  ['walk 4 m ahead, turning round on arrival', walkThere(new Vector3(0, 0, 4), Math.PI), NONE],
+  ['walk within reach of a point 2 m to the left, no facing asked', walkThere(new Vector3(2, 0, 0), undefined, 0.45), NONE],
+  ['walk within reach of a point 2 m to the right, no facing asked', walkThere(new Vector3(-2, 0, 0), undefined, 0.45), NONE],
   ['stroll setting off turned 3/4 of a half turn left', stroll({ yaw: (3 * Math.PI) / 4 })],
   ['stroll setting off turned 3/4 of a half turn right', stroll({ yaw: (-3 * Math.PI) / 4 })],
   ['pickup-shelf, the box 10 cm nearer', pickupShelf({ nearer: 0.1 })],
@@ -70,7 +76,23 @@ const VARIATIONS: [string, Scenario][] = [
   ['pickup-shelf, the box behind', pickupShelf({ around: Math.PI })],
   ['pickup-shelf, the box lifted to the chest in 1.2 s', pickupShelf({ lift: 1.2 })],
 ];
-for (const [name, sc] of VARIATIONS) it(name, () => judged(sc));
+for (const [name, sc, strides] of VARIATIONS) it(name, () => judged(sc, strides));
+
+// known to fail, tracked until fixed (it.fails turns red once they pass): a brisk stroll's
+// arrival and a point stopping dead on a tight bend leave the extrapolated centre of mass out
+const KNOWN: [string, Scenario][] = [
+  ['stroll 40% faster (1.82 m/s)', stroll({ speed: 1.4 })],
+  ['stroll whose point stops dead on a 1.5 m bend', stroll({ radius: 1.5, halt: true })],
+];
+for (const [name, sc] of KNOWN) it.fails(`${name} (known)`, () => judged(sc));
+// (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)
+it.fails('stroll: the pelvis bobs on a bend within 1 cm of walking straight (known)', () => {
+  const m = measure('stroll', steps(new Simulation(stroll())));
+  const straight = m.gait.summary(false, false);
+  const curve = m.gait.summary(true, false);
+  expect(straight && curve).toBeTruthy();
+  expect(curve!.pelvisUp, 'curve pelvis vertical (m)').toBeLessThanOrEqual(straight!.pelvisUp + 0.01);
+});
 
 it('runs a scenario through the metrics: two actors standing still, relaxed, each reading the other', () => {
   const seen: number[] = [];

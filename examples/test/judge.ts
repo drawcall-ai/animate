@@ -9,13 +9,15 @@ import { ArmTurns, FreeArms } from './arms';
 import { Balance } from './balance';
 import { Feet, FinalStance, Landings } from './body';
 import type { Frame } from './frame';
-import { GaitKinematics } from './gait';
+import { GaitKinematics, RUNNING } from './gait';
 import { JointRates, type JointClass } from './rates';
 import { RangeOfMotion } from './rom';
 import { Targets } from './targets';
 
 /** ratchets: measured values, which may only go down */
 export interface Limits {
+  /** the fewest steady walking strides judged, straight and on a curve: a run too short to show its gait fails rather than passing unjudged */
+  strides?: { straight: number; curve: number };
   /** frames with the extrapolated centre of mass more than 10 cm outside the support */
   xcomFrames: number;
   /** centre of mass outside the feet while standing still (m) */
@@ -108,7 +110,7 @@ export const LIMITS: Record<string, Limits> = {
   'hand-over': { xcomFrames: 0, com: 0, crossings: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'walk-tray': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.002, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
   'pickup-shelf': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  stroll: { xcomFrames: 0, com: 0, crossings: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
+  stroll: { strides: { straight: 3, curve: 3 }, xcomFrames: 0, com: 0, crossings: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
   run: { rom: { leftUpperLeg: 14, rightUpperLeg: 12 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
   sit: { rom: { leftUpperLeg: 23, leftFoot: 12, rightUpperLeg: 23, rightFoot: 10 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'step-over': { rom: { rightFoot: 4 }, ankle: [20, 147], joints: { knee: { accel: 90 } }, xcomFrames: 1, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
@@ -259,6 +261,11 @@ export function judge(m: Measured, limit: Limits) {
   expect(m.targets.gaze, 'gaze: head off the target asked (°)').toBeLessThan(GAZE);
   // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
   if (m.targets.asked > 0) expect(m.targets.judged, 'gaze: frames judged').toBeGreaterThan(0);
+  if (limit.strides) {
+    const count = (curve: boolean) => m.gait.strides.filter((s) => s.curve === curve && s.speed <= RUNNING).length;
+    expect(count(false), 'steady straight walking strides judged').toBeGreaterThanOrEqual(limit.strides.straight);
+    expect(count(true), 'steady curve walking strides judged').toBeGreaterThanOrEqual(limit.strides.curve);
+  }
   for (const [curve, run] of [[false, false], [false, true], [true, false], [true, true]]) {
     // (walking and running strides each against their own references)
     const g = m.gait.summary(curve, run);

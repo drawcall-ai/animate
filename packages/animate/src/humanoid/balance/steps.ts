@@ -128,7 +128,9 @@ function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null
   // pushing off, unless the body is falling well past it)
   const out = uncaught(c, xcom);
   c.falling = out > (1 - 2 * still) * CATCH * c.p.scale ? c.falling + dt : 0;
-  const loaded = !c.moving || steps[c.lastLanded].plantedTime >= t.doubleSupport || out > FALL * c.p.scale;
+  // (round a bend the extrapolated centre of mass runs outside the path by (v/ω)²·κ/2 by design: that is no fall)
+  const bend = (0.5 * (c.speed / c.omega) ** 2 * Math.abs(c.turnRate)) / Math.max(c.speed, 0.1);
+  const loaded = !c.moving || steps[c.lastLanded].plantedTime >= t.doubleSupport || out > FALL * c.p.scale + bend;
   const falling = c.falling > (c.moving ? 0 : STILL_FALL) && loaded;
   const pick = falling ? catching(c, t, lead, xcom) : balanced(c, pickFoot(c, t, lead, xcom), t, lead, xcom);
   return pick < 0 ? null : lift(c, pick, t, xcom, falling);

@@ -12,6 +12,8 @@ import type { Stance } from './stance';
 const STROLL = { speed: 1.3, accel: 1.2 };
 /** arrived: the body this close to its goal (m, default body) and turned this close to its facing (rad), at rest on both feet */
 const ARRIVED = { distance: 0.15, yaw: 0.15 };
+/** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
+const CLOSE = 1;
 
 export interface WalkOptions<W> {
   /** where to go, on the floor (default: where it stands: a turn in place) */
@@ -42,11 +44,16 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
     const go: Go = { to: new Vector3(), speed, accel, plant };
     const face = { yaw: 0 };
     let at: Vector3 | null = null;
+    // (within reach, the way to the point is fixed once close: from where the body then stands it
+    // would drift as the body settles off the line to it)
+    let fixed: number | null = null;
     const where = (f: Frame<W>) => {
       const body = f.prev.com(_com).setY(0);
       at ??= body.clone();
       const to = options.to === undefined ? at : live(options.to, f);
-      const toward = headingOf(to.x - body.x, to.z - body.z);
+      const close = Math.hypot(to.x - body.x, to.z - body.z) < within + CLOSE * h.proportions.scale;
+      const toward = close && fixed !== null ? fixed : headingOf(to.x - body.x, to.z - body.z);
+      fixed = close ? toward : null;
       const yaw = options.face === undefined ? (within > 0 ? toward : null) : live(options.face, f);
       // (within: the point that far ahead, as the body will face it)
       go.to.copy(to).setY(0);

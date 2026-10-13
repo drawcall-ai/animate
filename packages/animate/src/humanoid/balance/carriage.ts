@@ -22,8 +22,8 @@ const ARRIVAL_TURN = [0.3, 0.6] as const;
 const GOAL_VELOCITY_RATE = 9;
 /** a goal moving faster than this (m/s) was re-planned, not carried: it jumped */
 const JUMP_SPEED = 4;
-/** a walk starts when the goal is this far (m, default body), turned (rad) or moving (m/s) */
-const START = { distance: 0.14, yaw: 0.45, speed: 0.25 };
+/** a walk starts when the goal is this far (m, default body), turned (rad; a facing asked: `faced`, just past where it stops) or moving (m/s) */
+const START = { distance: 0.14, yaw: 0.45, faced: 0.12, speed: 0.25 };
 /** it stops once close, slow, the goal still and the facing reached */
 const STOP = { distance: 0.05, speed: 0.15, goalSpeed: 0.08, yaw: 0.1 };
 /** until the first foot is off the ground the body barely glides (m/s) */
@@ -242,7 +242,7 @@ export class Carriage {
     const dist = Math.hypot(dx, dz);
     const yawErr = wrapAngle((this.goalFacing ?? this.yaw) - this.yaw);
     const scale = this.p.scale;
-    if (!this.moving && (dist > START.distance * scale || Math.abs(yawErr) > START.yaw || this.goalSpeed > START.speed)) {
+    if (!this.moving && (dist > START.distance * scale || Math.abs(yawErr) > (this.goalFacing === null ? START.yaw : START.faced) || this.goalSpeed > START.speed)) {
       this.moving = this.walked = true;
       // gait initiation: the first step goes at once, the body falls into it
       this.starting = true;
