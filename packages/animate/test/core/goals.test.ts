@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { RAMP, type Granted } from '../../src';
+import { Board, BodyState, merge, RAMP, type Granted } from '../../src';
+import { History } from '../../src/core/history';
 import { drive, run } from './drive';
 import { arm, tip } from './rigs';
 
@@ -113,5 +114,31 @@ describe('contacts ramp in', () => {
     const ramped = Math.ceil(RAMP * 60) - 1;
     gaps.slice(ramped).forEach((g) => expect(g).toBeLessThan(1e-6));
     for (let i = 1; i <= ramped; i++) expect(gaps[i]).toBeLessThan(gaps[i - 1]);
+  });
+});
+
+describe('contacts move', () => {
+  it('feed their own motion forward, their position’s and their turn’s', () => {
+    const history = new History();
+    const state = new BodyState(arm());
+    const dt = 1 / 60;
+    const velocity = new Vector3(0.5, -0.2, 0.1);
+    const spin = new Vector3(0, 2, 0);
+    const at = (k: number) => ({
+      point: tip(),
+      position: state.point(tip(), new Vector3()).addScaledVector(velocity, k * dt),
+      rotation: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), spin.y * k * dt).multiply(state.rotations[3]),
+      priority: 1,
+    });
+    let merged = merge(new Board(), arm());
+    for (let k = 0; k < 6; k++) {
+      const board = new Board();
+      board.contact(at(k));
+      merged = merge(board, arm());
+      history.apply(merged, state, dt);
+    }
+    // (once ramped in: the ramp moves it too)
+    expect(merged.contacts[0].velocity?.distanceTo(velocity)).toBeLessThan(1e-9);
+    expect(merged.contacts[0].spin?.distanceTo(spin)).toBeLessThan(1e-9);
   });
 });

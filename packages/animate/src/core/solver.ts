@@ -43,7 +43,7 @@ export class Solver {
     const v0 = state.readRates(new Float64Array(n));
     for (const i of merged.impulses) addImpulse(state, i.point, i.velocity, v0);
 
-    const next = fit(merged, this.start, this.joints, v0, dt);
+    const next = fit(merged, this.start, this.joints, v0, dt, this.trial);
     for (const j of this.joints) capJoint(j, next, v0, dt);
     state.move(next, dt);
     this.soft.copyPose(state);

@@ -71,8 +71,11 @@ export interface Merged {
    * it knows) how fast its value moves: m/s for a position or aim, rad/s for a rotation
    */
   targets: { target: Target; weight: number; velocity?: Vector3 }[];
-  /** the winning contacts, at most one per point */
-  contacts: Contact[];
+  /**
+   * the winning contacts, at most one per point, each (set by the body, when it knows) with how
+   * fast it moves: its position (m/s) and its rotation (rad/s, world)
+   */
+  contacts: (Contact & { velocity?: Vector3; spin?: Vector3 })[];
   /** each bone's limit, the intersection of those proposed */
   limits: (Limit | undefined)[];
   /** each bone's acceleration cap (rad/s²; Infinity when none) */
@@ -95,8 +98,8 @@ export interface Outcome {
  * target's weight is scaled by what the main targets of its sort (a position, or a rotation:
  * orientation, aim, local) on its bone, and those of any sort claiming it, leave (1 − Σ
  * weights, ≥ 0); contacts are exclusive per point, the highest priority wins and a tie between different
- * contacts throws; limits intersect; caps take the largest; loads and impulses add. The centre
- * of mass counts as a bone of its own.
+ * contacts throws; limits intersect; caps take the largest; loads and impulses add. A position
+ * of the centre of mass counts as one of the root's: either places the body as a whole.
  */
 export function merge(board: Board, skeleton: Skeleton): Merged {
   const n = skeleton.bones.length;
@@ -107,9 +110,9 @@ export function merge(board: Board, skeleton: Skeleton): Merged {
     if (p !== 'com') bone(p.bone, what);
   };
 
-  // the main weight on each bone (the centre of mass's last), positions' and rotations' apart
-  const main = new Array<number>(2 * (n + 1)).fill(0);
-  const slot = (t: Target, bone: number | 'com') => 2 * (bone === 'com' ? n : bone) + (t.kind === 'position' ? 0 : 1);
+  // the main weight on each bone, positions' and rotations' apart
+  const main = new Array<number>(2 * n).fill(0);
+  const slot = (t: Target, bone: number | 'com') => 2 * (bone === 'com' ? 0 : bone) + (t.kind === 'position' ? 0 : 1);
   for (const t of board.targets) {
     point(t.point, `${t.kind} target`);
     if (!(t.weight >= 0 && t.weight <= 1)) throw new Error(`${t.kind} target weight ${t.weight} is outside 0..1`);

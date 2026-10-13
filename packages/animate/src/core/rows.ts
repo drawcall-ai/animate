@@ -56,15 +56,18 @@ export function targetRows(state: BodyState, target: Target, velocity = NO_RATE)
   }
 }
 
-/** a contact's rows: one per axis its mask holds, 3 more for its rotation when it holds one */
-export function contactRows(state: BodyState, contact: Contact): Rows {
-  const goal = positionGoal(state, contact.point, contact.position, contact.mask, NO_RATE);
+/**
+ * a contact's rows: one per axis its mask holds, 3 more for its rotation when it holds one;
+ * moving at `velocity` (m/s) and turning at `spin` (rad/s, world)
+ */
+export function contactRows(state: BodyState, contact: Contact, velocity = NO_RATE, spin = NO_RATE): Rows {
+  const goal = positionGoal(state, contact.point, contact.position, contact.mask, velocity);
   if (!contact.rotation || contact.point === 'com') return goal;
   // (over the same coordinates: the bone's drivers)
   const bone = contact.point.bone;
   goal.rows.push(...angularBlock(state, bone).rows);
   goal.error.push(...rotationError(state.rotations[bone], contact.rotation));
-  goal.rate.push(0, 0, 0);
+  goal.rate.push(spin.x, spin.y, spin.z);
   return goal;
 }
 

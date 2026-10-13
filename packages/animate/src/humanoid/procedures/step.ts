@@ -6,9 +6,7 @@ import { ankleFor, ballOf, footRotation, heelOf, toeTipOf } from '../gait/foot';
 import { swingHump, swingProgress } from '../gait/swing';
 import type { Humanoid } from '../humanoid';
 import { leftOf, lerp, minimumJerk, smoothstep, softplus, wrapAngle } from '../math';
-import { legCaps, STEPPING } from '../profile/caps';
-import { holdLeg, plant, type Hold, type Leg } from './footing';
-import { carryCom, overFoot, READY, shiftWeight } from './shift';
+import { holdLeg, type Hold, type Leg } from './footing';
 import { withinReach } from './legs';
 
 /** where a foot stands: its flat-foot ankle and heading */
@@ -33,8 +31,12 @@ export interface StepOptions {
   /** the leg as the body carries it this frame (its knee bends over the toes, the foot swings past the standing one to its own side, as the body faces) */
   leg: () => Leg;
   hold: Omit<Hold, 'support'>;
-  /** the weight shifted onto the other foot first, and kept over it through the swing (a step from standing; a walk's body carries itself) */
-  shift?: boolean;
+  /**
+   * a step from standing, the weight over the other foot (whoever carries the body shifts it
+   * there first): the foot lifted gently and carried level, the pelvis asked down as far as the
+   * landing foot needs to reach the floor
+   */
+  standing?: boolean;
 }
 
 // Constants copied from the old core (a801be4:packages/core/src/gait/roll.ts, swing.ts).
@@ -67,9 +69,6 @@ const SWING_REACH = 0.93;
 /** how far to its own side of the standing foot a swinging ankle passes, at least (m, default body) */
 const SWING_PAST = 0.06;
 
-/** a step's legs move as stepping's do */
-const LEG_CAPS = legCaps(STEPPING);
-
 const _land = new Vector3();
 const _ankle = new Vector3();
 const _rotation = new Quaternion();
@@ -78,7 +77,6 @@ const _v = new Vector3();
 const _heel = new Vector3();
 const _ball = new Vector3();
 const _rel = new Vector3();
-const _over = new Vector3();
 const _reach = new Vector3();
 
 /**
@@ -108,8 +106,6 @@ export function step<W>(h: Humanoid<W>, side: Side, options: StepOptions): NonRe
   const other: Side = side === 'left' ? 'right' : 'left';
   const otherBone = INDEX[`${other}Foot`];
   return (function* () {
-    // (its foot held planted meanwhile, by the step: it is the step's from the start)
-    if (options.shift) yield* shiftWeight(h, other, options.hold.owner, (ctx) => plant(ctx, h, side, 0, options.leg(), options.hold));
     let s = 0;
     let started = false;
     let landed = false;
@@ -185,7 +181,7 @@ export function step<W>(h: Humanoid<W>, side: Side, options: StepOptions): NonRe
         }
         // (a foot lifted flat off the floor, from standing, rises from rest: off a nearly straight
         // leg its first centimetre is most of the knee's bend)
-        ankle.y += options.lift * swingHump(s, run) * (options.shift ? smoothstep(0, FLAT_LIFT, s) : 1);
+        ankle.y += options.lift * swingHump(s, run) * (options.standing ? smoothstep(0, FLAT_LIFT, s) : 1);
         const yaw = fromYaw + wrapAngle(to.yaw - fromYaw) * e;
         // past the standing foot with room, out to its own side as the body faces
         const leg = options.leg();
@@ -200,7 +196,7 @@ export function step<W>(h: Humanoid<W>, side: Side, options: StepOptions): NonRe
         const rolled = liftAnkle + liftRate * ROLL_ON * (1 - Math.exp((-s * options.duration) / ROLL_ON));
         const angle = lerp(rolled, SWING_ANKLE, minimumJerk((s - SWING_RETURN[0]) / (SWING_RETURN[1] - SWING_RETURN[0])));
         // (a step from standing carries the foot level: there was no push-off to return from)
-        const pitch = options.shift ? options.strike * smoothstep(STRIKE_TURN, 1, s) : Math.min(lerp(angle - tilt, options.strike, smoothstep(STRIKE_TURN, 1, s)), DORSIFLEXION - tilt);
+        const pitch = options.standing ? options.strike * smoothstep(STRIKE_TURN, 1, s) : Math.min(lerp(angle - tilt, options.strike, smoothstep(STRIKE_TURN, 1, s)), DORSIFLEXION - tilt);
         // the toes, bent up on the floor at lift-off, relax into line with the foot
         const toes = lerp(liftToes, pitch, smoothstep(0, TOES_RELAX, s));
         // the sole never goes through the floor, and clears it by a little through the swing
@@ -222,17 +218,14 @@ export function step<W>(h: Humanoid<W>, side: Side, options: StepOptions): NonRe
         const reached = withinReach(leg.hip, _reach.copy(ankle), lerp(LANDING_REACH, SWING_REACH, run * smoothstep(0, 0.2, s) * (1 - smoothstep(0.6, 1, s))) * p.legLength);
         ankle.lerp(reached, smoothstep(0, REACH_IN, s) * (1 - smoothstep(1 - REACH_IN, 1, s)));
         holdLeg(ctx, h, side, ankle, rotation, footRotation(yaw, toes, _toes), leg, { ...options.hold, support: 0 });
-        for (const c of LEG_CAPS) ctx.propose.cap(c);
-        if (options.shift) {
-          // the weight over the standing foot (it goes over to the landed one as the stand has it);
-          // the pelvis lowered as far as the landing foot needs to reach the floor (asked of
+        if (options.standing) {
+          // (the pelvis lowered as far as the landing foot needs to reach the floor: asked of
           // whoever carries it)
-          carryCom(ctx, h, overFoot(h, other, _over), options.hold.owner);
           const reach = LANDING_REACH * p.legLength;
           const across = (leg.hip.x - _land.x) ** 2 + (leg.hip.z - _land.z) ** 2;
           const top = _land.y + Math.sqrt(Math.max(1e-4, reach * reach - across)) + ctx.body.positions[0].y - leg.hip.y;
           const crouch = p.hipHeight - h.status.stance.crouch - top;
-          h.hints.crouch(ctx.time, Math.max(READY * p.height, crouch * smoothstep(0.2, 0.8, s)));
+          h.hints.crouch(ctx.time, crouch * smoothstep(0.2, 0.8, s));
         }
       },
     });

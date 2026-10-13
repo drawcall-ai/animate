@@ -25,6 +25,15 @@ export function hullOf(points: readonly Spot[]): Spot[] {
  * `away` (when given) gets the unit direction from the polygon out toward `q`.
  */
 export function outside(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
+  return Math.max(0, beyond(hull, q, away));
+}
+
+/**
+ * How far `q` (x, z) lies beyond the edge of the convex polygon `hull` (counter-clockwise):
+ * outside positive, inside negative (how far in); `away` (when given) gets the unit direction
+ * from the nearest edge toward `q`.
+ */
+export function beyond(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
   if (hull.length === 0) throw new Error('no support to be outside of');
   let inside = hull.length >= 3;
   let best = Infinity;
@@ -41,9 +50,8 @@ export function outside(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vect
     const d = Math.hypot(q.x - ax - t * ex, q.z - az - t * ez);
     if (d < best) [best, nx, nz] = [d, ax + t * ex, az + t * ez];
   }
-  if (inside) return 0;
   away?.set(q.x - nx, 0, q.z - nz).divideScalar(best || 1);
-  return best;
+  return inside ? -best : best;
 }
 
 /** the centroid of a polygon's corners (x, z) */

@@ -162,7 +162,7 @@ export class Posture<W> {
       .addScaledVector(fwd, shift)
       .setY(pelvis.y + ctx.body.com.y - ctx.body.positions[0].y);
     const byCom = walk * (1 - run);
-    if (byCom > 0) ctx.propose.target({ kind: 'position', point: 'com', value: com, weight: byCom, stiffness: STIFFNESS.pelvis, claims: HIPS_CLAIM, owner: 'walk' });
+    if (byCom > 0) ctx.propose.target({ kind: 'position', point: 'com', value: com, weight: byCom, stiffness: STIFFNESS.pelvis, owner: 'walk' });
     if (byCom < 1) ctx.propose.target({ kind: 'position', point: hips, value: pelvis, weight: 1 - byCom, stiffness: STIFFNESS.pelvis, owner: 'walk' });
     ctx.propose.target({ kind: 'orientation', point: hips, value: g.pelvisRotation, weight: 1, stiffness: STIFFNESS.pelvis, owner: 'walk' });
 
@@ -227,8 +227,6 @@ export class Posture<W> {
 }
 
 const _com = new Vector3();
-/** what carrying the centre of mass takes from the stand: the pelvis */
-const HIPS_CLAIM = [INDEX.hips];
 const _ankle = new Vector3();
 const _hip = new Vector3();
 /**

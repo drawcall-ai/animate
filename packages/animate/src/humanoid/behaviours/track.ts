@@ -3,7 +3,7 @@ import { action, parallel, type ReusableTimeline } from '@pmndrs/timeline';
 import type { Ctx } from '../../core/body';
 import { INDEX, type BoneName } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { clamp, quatYXZ, Spring, wrapAngle } from '../math';
+import { clamp, quatYXZ, softMin, softplus, Spring, wrapAngle } from '../math';
 import { yawOf } from '../rig';
 import type { Effector } from '../status';
 import { intend } from './follow';
@@ -23,6 +23,8 @@ const TURN_RATE = 2.5;
 const LEAN = 0.08;
 /** how deep the knees bend at most for the head (× height): a squat the body balances in, heels down; lower, the trunk bends further */
 const SQUAT = 0.25;
+/** over how much of the head's drop the knees start and stop bending (× height) */
+const BEND = 0.02;
 /** the trunk's and neck's pull toward upright: just enough to keep the turn and bend shared among them */
 const UPRIGHT = 0.03;
 /** the facing the head turns the body to beats a walk's */
@@ -30,6 +32,7 @@ const FACING = 2;
 
 const ORIGIN = new Vector3();
 const TRUNK: readonly BoneName[] = ['spine', 'chest', 'neck', 'head'];
+const CARRIERS = TRUNK.map((b) => INDEX[b]);
 const _q = new Quaternion();
 const _part = new Quaternion();
 const _rel = new Quaternion();
@@ -50,7 +53,6 @@ export function track<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effec
   const eyes = h.rig.points.eyes;
   return function* () {
     const yaw = new Spring(h.yaw);
-    const drop = new Spring();
     yield* parallel<Ctx<W>>(
       'all',
       intend(h, 'head', target),
@@ -74,7 +76,8 @@ export function track<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effec
           }
           // (and no higher than the body stands: a stretch up is the feet's, onto the toes, not the head's to pull)
           at.y = Math.min(at.y, p.eyeHeight - h.status.stance.crouch);
-          ctx.propose.target({ kind: 'position', point: eyes, value: at, weight, stiffness: HEAD_STIFFNESS, owner: 'track' });
+          // (the trunk and neck the head is carried on are the tracker's: their relaxed pose yields)
+          ctx.propose.target({ kind: 'position', point: eyes, value: at, weight, stiffness: HEAD_STIFFNESS, claims: CARRIERS, owner: 'track' });
           if (t.quaternion) ctx.propose.target({ kind: 'orientation', point: { bone: INDEX.head, at: ORIGIN }, value: q, weight, stiffness: HEAD_STIFFNESS, owner: 'track' });
           // the pelvis turns after the head once it is turned beyond what the trunk and neck take
           // (and only so far from the feet: further, it waits for them to step round; it turns at
@@ -83,11 +86,11 @@ export function track<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effec
           const feet = feetFacing(h);
           const want = feet + clamp(wrapAngle(yaw.value + ahead - clamp(ahead, -TWIST, TWIST) - feet), -OVER_FEET, OVER_FEET);
           yaw.value += clamp(wrapAngle(want - yaw.value), -TURN_RATE * ctx.dt, TURN_RATE * ctx.dt);
-          // the head lowered: first the trunk leans, then the knees bend
-          const below = Math.max(0, p.eyeHeight - t.position.y);
-          const knees = clamp(below - LEAN * p.height, 0, SQUAT * p.height);
+          // the head lowered: first the trunk leans, then the knees bend (as the head goes down: a
+          // crouch behind it holds it up; smoothly into and out of the squat's ends)
+          const knees = softMin(softplus(p.eyeHeight - t.position.y - LEAN * p.height, BEND * p.height), SQUAT * p.height, BEND * p.height);
           // (the stand carries the pelvis, over the feet: it is asked to turn and crouch)
-          h.hints.crouch(ctx.time, drop.step(knees, 6, ctx.dt) * t.weight);
+          h.hints.crouch(ctx.time, knees * t.weight);
           h.hints.facing(ctx.time, yaw.value, FACING, t.weight);
           quatYXZ(yaw.value, 0, 0, _q);
           // (the trunk and neck share the turn and bend, none of them into its stop)

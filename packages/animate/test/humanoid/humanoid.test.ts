@@ -10,6 +10,7 @@ import { defaultStance, footYaw } from '../../src/humanoid/stance';
 import { Hints } from '../../src/humanoid/hints';
 import { look } from '../../src/humanoid/behaviours/look';
 import { humanoid } from '../../src/humanoid/behaviours/humanoid';
+import { Shift } from '../../src/humanoid/procedures/shift';
 
 /** a behaviour proposing `propose` every sub-step, forever */
 const every = (propose: (ctx: Ctx) => void) =>
@@ -97,5 +98,24 @@ describe('Hints', () => {
     expect(hints.read(2)).toEqual({ crouch: 0.2, facing: -0.4, armSwing: 0.5 });
     expect(hints.read(3)).toEqual({ crouch: 0, facing: null, armSwing: 1 });
     expect(() => hints.read(2)).toThrow(/after/);
+  });
+});
+
+describe('Shift', () => {
+  it('shifts smoothly, and a shift begun before the last ended carries on without a jump or a jolt', () => {
+    const shift = new Shift(new Vector3());
+    const over = new Vector3(0.11, 0, 0.02);
+    const dt = 1 / 60;
+    const at: Vector3[] = [];
+    shift.to('left');
+    for (let k = 0; k < 12; k++) at.push(shift.update(over, 1, dt).clone());
+    // (half way over the foot, back over both)
+    shift.to(null);
+    while (!shift.shifted) at.push(shift.update(new Vector3(), 1, dt).clone());
+    expect(at[at.length - 1].length()).toBeLessThan(1e-12);
+    const accelerations = at.slice(2).map((p, k) => p.clone().sub(at[k + 1]).sub(at[k + 1].clone().sub(at[k])).length() / dt ** 2);
+    // (the shift a few m/s² at most, and changing that by a little a step: no velocity starting over, which would be ~15 m/s² for a step)
+    expect(Math.max(...accelerations)).toBeLessThan(8);
+    for (let k = 1; k < accelerations.length; k++) expect(Math.abs(accelerations[k] - accelerations[k - 1])).toBeLessThan(3);
   });
 });

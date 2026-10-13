@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Merged } from './board';
 import { inertia } from './jacobian';
-import type { Joint } from './joints';
+import { capJoint, type Joint } from './joints';
 import { clampRotation } from './limits';
 import { backward, factor, forward, solve, substitute } from './linear';
 import { exp, log } from './rotation';
@@ -12,14 +12,15 @@ import type { BodyState } from './state';
 /** how fast a coordinate no goal pulls slows on its own (1/s): a coasting joint halves its speed in ~0.7 s */
 export const DAMPING = 1;
 /**
- * how much a coordinate's inertia resists changing its velocity (per kg m², against a row of
- * weight 1): small enough that targets are followed, large enough that light segments move
- * before heavy ones and singular limbs stay calm
+ * how much a coordinate's inertia weighs in the soft solve (per kg m², against a row of weight
+ * 1): among coordinates that reach the goals equally well, the closest pose takes more of the
+ * light ones than of the heavy ones, and singular limbs stay calm. It slows nothing: each
+ * coordinate's own share is anchored to its pace toward that pose.
  */
 export const INERTIA_WEIGHT = 1e-3;
 /** how much more a contact's row weighs in the soft solve than a target's of weight 1 */
 const CONTACT_WEIGHT = 1e4;
-/** how often the soft solve re-fits around joints that reached a limit or their cap */
+/** how often the soft solve re-fits around joints that it drove past their limit */
 const PASSES = 4;
 
 /** A linear condition on a joint's displacement: `n · Δq[d…d+2] = value`; `z` caches L⁻¹ nᵀ (L the fit's factor). */
@@ -30,105 +31,198 @@ interface Pin {
   z?: Float64Array;
 }
 
+/** A goal linearized for the fit: its rows, its weight and how much of its way it goes this step. */
+interface Pull {
+  rows: Rows;
+  weight: number;
+  /** `1 − e^(−ω dt)` of a target at stiffness ω; 1 for a contact (met at once) */
+  part: number;
+  /** how many of its rows (the first) are a position's */
+  positions: number;
+}
+
 /**
  * The velocity each coordinate takes this step from `start` toward the pose the targets and
- * contacts ask, within the limits and caps (`v` its velocity so far). One inertia-regularized
- * least-squares system, solved for: the closest pose (each goal's whole error); this step's
- * share of it (a moving goal's own motion whole, so it is followed without lag, and the rest of a
- * target's error closed at its stiffness, `1 − e^(−ω dt)` of it, which never overshoots; a
- * contact's at once); and the goals' own motion. A capped joint goes no faster than its goal
- * moves on plus what still stops it at the closest pose under its cap (`√(2 cap distance)`), so
- * it brakes in time instead of overshooting; one its cap still holds back is pinned and the rest
- * re-fit. Joints driven past their limit are pinned along the way they went past.
+ * contacts ask, within the limits and caps (`v` its velocity so far; `scratch` a state to work
+ * in). One inertia-regularized least-squares system, solved for: the closest pose (each goal's
+ * whole error: where goals in conflict settle, by their weights alone); the goals' own motion
+ * this step (within the limits too: a goal moving past one carries no joint into it); and this step's share of the way to the closest pose (each goal's part of it: its
+ * own motion whole, so a moving goal is followed without lag, and the rest at its stiffness,
+ * `1 − e^(−ω dt)` of it, which never overshoots; a contact's at once). A stiffer goal gets there
+ * sooner, not more of its way. A capped joint goes no faster than its goal moves on plus what
+ * still stops it at the closest pose under its cap, so it brakes in time instead of
+ * overshooting; the joint its cap holds back most is pinned and the rest re-fit around it, until
+ * none is. Joints driven past their limit are pinned along the way they went past. Last, the
+ * step is fit once more where it takes the body (see `correction`).
  */
-export function fit(merged: Merged, start: BodyState, joints: readonly Joint[], v: Float64Array, dt: number): Float64Array {
-  const { skeleton } = start;
-  const n = skeleton.dofs;
-  const A = new Float64Array(n * n);
-  // the right-hand sides for the closest pose and for this step's share of it (displacements)
-  const whole = new Float64Array(n);
-  const share = new Float64Array(n);
-  // and for the goals' own motion this step (how far they move on by themselves)
-  const motion = new Float64Array(n);
-  const pulled = new Uint8Array(n);
-  let count = 0;
-  // (`at`: how far the goal is from `start`; `now`: how much of that to go this step)
-  const add = ({ rows, nz }: Rows, r: number, weight: number, at: number, now: number, on = 0) => {
-    count++;
-    const row = rows[r];
-    for (let a = 0; a < nz.length; a++) {
-      const wi = weight * row[a];
-      if (wi === 0) continue;
-      const i = nz[a];
-      pulled[i] = 1;
-      whole[i] += wi * at;
-      share[i] += wi * now;
-      motion[i] += wi * on;
-      for (let c = 0; c < nz.length; c++) A[i * n + nz[c]] += wi * row[c];
-    }
-  };
-  for (const { target, weight, velocity } of merged.targets) {
-    const bone = target.point === 'com' ? 0 : target.point.bone;
-    const w = 2 * Math.PI * (target.stiffness ?? skeleton.bones[bone].stiffness ?? STIFFNESS);
-    const part = 1 - Math.exp(-w * dt);
-    const rows = targetRows(start, target, velocity);
-    // (the goal is where it will be at the step's end: of the way there, its own motion is gone whole, the rest at the stiffness)
-    rows.error.forEach((error, r) => add(rows, r, weight, error, (error - rows.rate[r] * dt) * part + rows.rate[r] * dt, rows.rate[r] * dt));
-  }
-  for (const c of merged.contacts) {
-    const rows = contactRows(start, c);
-    rows.error.forEach((error, r) => add(rows, r, CONTACT_WEIGHT, error, error));
-  }
+export function fit(merged: Merged, start: BodyState, joints: readonly Joint[], v: Float64Array, dt: number, scratch: BodyState): Float64Array {
+  const n = start.skeleton.dofs;
+  const pulls = pullsAt(merged, start, dt);
   const decay = Math.exp(-DAMPING * dt);
-  if (count === 0) return v.map((x) => x * decay);
+  if (!pulls.some((p) => p.rows.error.length > 0)) return v.map((x) => x * decay);
 
-  const M = inertia(start, new Float64Array(n));
-  for (let i = 0; i < n; i++) A[i * n + i] += INERTIA_WEIGHT * M[i];
+  // the system, and the right-hand sides for the closest pose and for the goals' own motion; each
+  // coordinate's pace, its goals' parts weighed as they pull it
+  const { A, M, pulled } = system(pulls, start);
+  const whole = new Float64Array(n);
+  const motion = new Float64Array(n);
+  const pace = new Float64Array(n);
+  const norm = new Float64Array(n);
+  for (const { rows: { rows, nz, error, rate }, weight, part } of pulls) {
+    rows.forEach((row, r) => {
+      for (let a = 0; a < nz.length; a++) {
+        const wi = weight * row[a];
+        whole[nz[a]] += wi * error[r];
+        motion[nz[a]] += wi * rate[r] * dt;
+        pace[nz[a]] += wi * row[a] * part;
+        norm[nz[a]] += wi * row[a];
+      }
+    });
+  }
+  for (let i = 0; i < n; i++) if (norm[i] > 0) pace[i] /= norm[i];
   const L = factor(A, n);
-  const closest = within(L, whole, joints, merged, start, n, []);
-  const onward = substitute(L, motion, n);
+  const closest = within(L, whole, joints, merged, start, n, []).displacement;
+  const onward = within(L, motion, joints, merged, start, n, []).displacement;
 
-  // this step's way, braked in time for the caps; a joint its cap still holds back is pinned at
-  // what it can do and the rest re-fit around it, so free joints make up for it
+  // this step's share: along each row, its part of the way to the closest pose, its own motion
+  // whole; the inertia holds each coordinate to its own pace of it (or the regularization would
+  // shorten every step once more)
+  const share = new Float64Array(n);
+  for (let i = 0; i < n; i++) share[i] = INERTIA_WEIGHT * M[i] * (onward[i] + pace[i] * (closest[i] - onward[i]));
+  for (const { rows: { rows, nz }, weight, part } of pulls) {
+    for (const row of rows) {
+      let there = 0;
+      let on = 0;
+      for (let a = 0; a < nz.length; a++) {
+        there += row[a] * closest[nz[a]];
+        on += row[a] * onward[nz[a]];
+      }
+      const now = (there - on) * part + on;
+      for (let a = 0; a < nz.length; a++) share[nz[a]] += weight * row[a] * now;
+    }
+  }
+
+  // this step's way, braked in time for the caps; the joint its cap holds back most is pinned at
+  // what it can do and the rest re-fit around it (the others' fit with it free was no fit at
+  // all), until none is
   const capped: Pin[] = [];
   let next = v;
-  for (let pass = 0; pass < PASSES; pass++) {
+  let held: Pin[] = [];
+  for (let pass = 0; pass <= joints.length; pass++) {
     const step = within(L, share, joints, merged, start, n, capped);
-    next = v.map((x, i) => (pulled[i] ? step[i] / dt : x * decay));
-    let more = false;
+    held = step.pins;
+    next = v.map((x, i) => (pulled[i] ? step.displacement[i] / dt : x * decay));
+    let worst: { joint: Joint; by: number; rates: number[] } | undefined;
     for (const joint of joints) {
       const { d, cap } = joint;
       if (cap === Infinity || (!pulled[d] && !pulled[d + 1] && !pulled[d + 2]) || capped.some((p) => p.d === d)) continue;
+      const was = [next[d], next[d + 1], next[d + 2]];
       brake(joint, next, closest, onward, dt);
-      const a = Math.hypot(next[d] - v[d], next[d + 1] - v[d + 1], next[d + 2] - v[d + 2]) / dt;
-      if (a <= cap * (1 + 1e-9)) continue;
-      for (let k = d; k < d + 3; k++) next[k] = v[k] + ((next[k] - v[k]) * cap) / a;
-      capped.push(...AXES.map((n) => ({ d, n, value: (n.x * next[d] + n.y * next[d + 1] + n.z * next[d + 2]) * dt })));
-      more = true;
+      capJoint(joint, next, v, dt);
+      const by = Math.hypot(next[d] - was[0], next[d + 1] - was[1], next[d + 2] - was[2]) / (cap * dt);
+      if (by > 1e-9 && (!worst || by > worst.by)) worst = { joint, by, rates: [next[d], next[d + 1], next[d + 2]] };
     }
-    if (!more) break;
+    if (!worst) break;
+    const { joint: { d }, rates } = worst;
+    capped.push(...AXES.map((n) => ({ d, n, value: (n.x * rates[0] + n.y * rates[1] + n.z * rates[2]) * dt })));
   }
-  return next;
+  const more = correction(pulls, merged, start, scratch, next, dt, held);
+  return next.map((x, i) => (pulled[i] ? x + more[i] / dt : x));
+}
+
+/** `merged`'s targets and then its contacts, linearized at `state` */
+function pullsAt(merged: Merged, state: BodyState, dt: number): Pull[] {
+  const { skeleton } = state;
+  const pulls: Pull[] = merged.targets.map(({ target, weight, velocity }) => {
+    const bone = target.point === 'com' ? 0 : target.point.bone;
+    const w = 2 * Math.PI * (target.stiffness ?? skeleton.bones[bone].stiffness ?? STIFFNESS);
+    const rows = targetRows(state, target, velocity);
+    return { rows, weight, part: 1 - Math.exp(-w * dt), positions: target.kind === 'position' ? rows.rows.length : 0 };
+  });
+  for (const c of merged.contacts) {
+    const rows = contactRows(state, c, c.velocity, c.spin);
+    pulls.push({ rows, weight: CONTACT_WEIGHT, part: 1, positions: rows.rows.length - (c.rotation && c.point !== 'com' ? 3 : 0) });
+  }
+  return pulls;
+}
+
+/** `pulls`' weighted normal matrix, regularized by `state`'s inertia (`M`); and which coordinates any of them pulls */
+function system(pulls: readonly Pull[], state: BodyState): { A: Float64Array; M: Float64Array; pulled: Uint8Array } {
+  const n = state.skeleton.dofs;
+  const A = new Float64Array(n * n);
+  const pulled = new Uint8Array(n);
+  for (const { rows: { rows, nz }, weight } of pulls) {
+    for (const row of rows) {
+      for (let a = 0; a < nz.length; a++) {
+        const wi = weight * row[a];
+        if (wi === 0) continue;
+        pulled[nz[a]] = 1;
+        for (let c = 0; c < nz.length; c++) A[nz[a] * n + nz[c]] += wi * row[c];
+      }
+    }
+  }
+  const M = inertia(state, new Float64Array(n));
+  for (let i = 0; i < n; i++) A[i * n + i] += INERTIA_WEIGHT * M[i];
+  return { A, M, pulled };
+}
+
+/**
+ * What a second Gauss–Newton step adds to the displacement `next` · `dt` (`pulls` linearized at
+ * `start`), linearized where it takes the body (in `scratch`), the joints it was fit under `held`
+ * held: each position goal's miss of where the linear step foresaw it. A fast-turning limb's
+ * goals lie on a curve its linear step misses, and the miss would otherwise go to the cheapest
+ * coordinate, the root, instead of the limb. (A rotation's error is linear in the coordinates but
+ * for how it is written: it misses nothing.)
+ */
+function correction(pulls: readonly Pull[], merged: Merged, start: BodyState, scratch: BodyState, next: Float64Array, dt: number, held: readonly Pin[]): Float64Array {
+  const n = start.skeleton.dofs;
+  scratch.copyPose(start).move(next, dt);
+  const there = pullsAt(merged, scratch, dt);
+  const { A } = system(there, scratch);
+  const missed = new Float64Array(n);
+  pulls.forEach(({ rows: { rows: was, nz: from, error } }, k) => {
+    const { rows: { rows, nz, error: now }, weight, positions } = there[k];
+    // (an aim at its own point has no rows where it is reached: nothing to compare)
+    if (rows.length !== was.length) return;
+    for (let r = 0; r < positions; r++) {
+      let foreseen = 0;
+      for (let a = 0; a < from.length; a++) foreseen += was[r][a] * next[from[a]] * dt;
+      const miss = now[r] - error[r] + foreseen;
+      for (let a = 0; a < nz.length; a++) missed[nz[a]] += weight * rows[r][a] * miss;
+    }
+  });
+  const L = factor(A, n);
+  return pinned(L, missed, substitute(L, Float64Array.from(missed), n), held.map(({ d, n }) => ({ d, n, value: 0 })), n);
 }
 
 /**
  * slows `joint`'s velocity in `rates` to what still stops it at its closest pose under its cap:
- * as fast as its goal moves on by itself (`onward` this step) and `√(2 cap distance)` faster
+ * as fast as its goal moves on by itself (`onward` this step), and as much faster as slowing by
+ * `cap dt` every step from then on still stops it within the distance left beyond that motion
+ * (`u` with `u dt + (u − cap dt) dt + … ≤ distance`: the sub-step's version of `√(2 cap
+ * distance)`, which overshoots by a step and chatters about the pose at the cap)
  */
 function brake({ d, cap }: Joint, rates: Float64Array, closest: Float64Array, onward: Float64Array, dt: number): void {
   const speed = Math.hypot(rates[d], rates[d + 1], rates[d + 2]);
-  const stop = Math.hypot(onward[d], onward[d + 1], onward[d + 2]) / dt + Math.sqrt(2 * cap * Math.hypot(closest[d], closest[d + 1], closest[d + 2]));
+  const slowing = cap * dt;
+  const distance = Math.hypot(closest[d] - onward[d], closest[d + 1] - onward[d + 1], closest[d + 2] - onward[d + 2]);
+  const stop = Math.hypot(onward[d], onward[d + 1], onward[d + 2]) / dt + Math.sqrt((slowing * slowing) / 4 + 2 * cap * distance) - slowing / 2;
   if (speed <= stop) return;
   for (let k = d; k < d + 3; k++) rates[k] *= stop / speed;
 }
 
-/** the displacement `L`'s system gives for `b` under the `fixed` pins, re-fit with the joints it drives past their limits pinned there */
-function within(L: Float64Array, b: Float64Array, joints: readonly Joint[], merged: Merged, start: BodyState, n: number, fixed: readonly Pin[]): Float64Array {
+/**
+ * the displacement `L`'s system gives for `b` under the `fixed` pins, re-fit with the joints it
+ * drives past their limits pinned there; and all the pins it was fit under
+ */
+function within(L: Float64Array, b: Float64Array, joints: readonly Joint[], merged: Merged, start: BodyState, n: number, fixed: readonly Pin[]): { displacement: Float64Array; pins: Pin[] } {
   const free = substitute(L, Float64Array.from(b), n);
   const pins = new Map<number, Pin[]>();
   let displacement = free;
+  let all: Pin[] = [...fixed];
   for (let pass = 0; pass < PASSES; pass++) {
-    displacement = pinned(L, b, free, [...fixed, ...[...pins.values()].flat()], n);
+    all = [...fixed, ...[...pins.values()].flat()];
+    displacement = pinned(L, b, free, all, n);
     let more = false;
     for (const joint of joints) {
       const was = pins.get(joint.d) ?? [];
@@ -140,7 +234,7 @@ function within(L: Float64Array, b: Float64Array, joints: readonly Joint[], merg
     }
     if (!more) break;
   }
-  return displacement;
+  return { displacement, pins: all };
 }
 
 /** `joint`'s pins after this fit (`was` when it stays within its limit): pinned along the way it went past its limit */

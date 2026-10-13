@@ -29,5 +29,4 @@ export { follow, intend, type FollowOptions, type Part } from './humanoid/behavi
 export { carry, reach } from './humanoid/behaviours/reach';
 export { track } from './humanoid/behaviours/track';
 export { look } from './humanoid/behaviours/look';
-export { shiftWeight } from './humanoid/procedures/shift';
 export { Hints, type Hinted } from './humanoid/hints';

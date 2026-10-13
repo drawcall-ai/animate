@@ -6,7 +6,7 @@ import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../math';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import { footprint } from './foot';
 import type { Gait } from './gait';
-import { hullOf, outside } from './support';
+import { beyond, hullOf, outside } from './support';
 
 /** how far out to its own side of the body a foot lands, at least (m, default body) */
 const OWN_SIDE = 0.035;
@@ -161,10 +161,10 @@ function uncovered(g: Gait, s: number, to: Vector3, yaw: number, point: Vector3,
   return outside(hullOf([...footprint(g.p, other.position, other.yaw), ...footprint(g.p, to, yaw)]), point, away);
 }
 
-/** how far the extrapolated centre of mass (`xcom`) lies outside the planted feet (0 inside; Infinity with none) */
+/** how far the extrapolated centre of mass (`xcom`) lies beyond the edge of the planted feet (negative inside: how far in; Infinity with none) */
 export function uncaught(g: Gait, xcom: Readonly<Vector3>): number {
   const spots = g.status.flatMap((f) => (f.phase === 'planted' ? footprint(g.p, f.position, f.yaw) : []));
-  return spots.length ? outside(hullOf(spots), xcom) : Infinity;
+  return spots.length ? beyond(hullOf(spots), xcom) : Infinity;
 }
 
 /** no crossing over, not under the body, no over-long step */

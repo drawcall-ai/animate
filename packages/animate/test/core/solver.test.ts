@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { beyond, RAMP, STIFFNESS, type Limit } from '../../src';
+import { INERTIA_WEIGHT } from '../../src/core/fit';
 import { drive, run } from './drive';
 import { arm, biped, tip } from './rigs';
 
@@ -33,15 +34,38 @@ describe('soft targets', () => {
     expect(error(4)).toBeLessThan(error(2) / 3);
   });
 
-  it('add main targets: two equal pulls settle between them', () => {
-    const a = new Vector3(0.6, 1.2, 0);
-    const b = new Vector3(0.6, 0.8, 0);
-    const body = drive(arm(), (ctx) => {
-      ctx.propose.target({ kind: 'position', point: tip(), value: a, weight: 0.5 });
-      ctx.propose.target({ kind: 'position', point: tip(), value: b, weight: 0.5 });
+  it('settle in conflict by their weights alone: the stiffer one gets there sooner, not more of its way', () => {
+    const a = new Vector3(0.6, 1.3, 0.1);
+    const b = new Vector3(0.5, 0.8, -0.1);
+    const settle = (weight: number, stiffness: [number, number]) => {
+      const body = drive(arm(), (ctx) => {
+        ctx.propose.contact({ point: { bone: 0, at: new Vector3() }, position: new Vector3(0, 1, 0), rotation: new Quaternion(), priority: 0 });
+        ctx.propose.target({ kind: 'position', point: tip(), value: a, weight, stiffness: stiffness[0] });
+        ctx.propose.target({ kind: 'position', point: tip(), value: b, weight: 1 - weight, stiffness: stiffness[1] });
+      });
+      run(body, 6);
+      return body.state.point(tip(), new Vector3()).distanceTo(a.clone().multiplyScalar(weight).addScaledVector(b, 1 - weight));
+    };
+    expect(settle(0.5, [STIFFNESS, STIFFNESS])).toBeLessThan(1e-6);
+    expect(settle(0.75, [1, 20])).toBeLessThan(1e-6);
+  });
+
+  it('move a heavy coordinate under a single target its whole part of the way each step', () => {
+    // (the root's translation carries the whole arm: its inertia must not shorten the step)
+    const goal = new Vector3(0.3, 1.2, -0.1);
+    const root = { bone: 0, at: new Vector3() };
+    const body = drive(arm(), (ctx) => ctx.propose.target({ kind: 'position', point: root, value: goal, weight: 1 }));
+    // (its part of the way to where its weight against its inertia settles it: a position's row
+    // weighs 1 per skeleton length, the root's translation its whole mass)
+    const { mass, skeleton } = body.state;
+    const part = (1 - Math.exp((-2 * Math.PI * STIFFNESS) / 60)) / (1 + INERTIA_WEIGHT * mass * skeleton.length ** 2);
+    const p = new Vector3();
+    let gap = body.state.point(root, p).distanceTo(goal);
+    run(body, 0.5, () => {
+      const now = body.state.point(root, p).distanceTo(goal);
+      expect(Math.abs(gap - now - part * gap)).toBeLessThan(1e-6 * gap);
+      gap = now;
     });
-    run(body, 4);
-    expect(body.state.point(tip(), new Vector3()).distanceTo(new Vector3(0.6, 1, 0))).toBeLessThan(1e-4);
   });
 
   it('give a fallback only the remainder: a full main target overrides it', () => {
@@ -164,6 +188,23 @@ describe('contacts', () => {
     expect(body.state.comVelocity.x).toBeCloseTo(1, 1);
   });
 
+  it('keep a fast-turning limb’s curve to the limb: a posed arm sweeping its tip round leaves the root where it is held', () => {
+    // (each step's linear fit misses the arc by ~2 cm at the tip; the miss is the arm's to make up)
+    const body = drive(arm(), (ctx) => {
+      const t = ctx.time + ctx.dt;
+      const turn = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 3 * Math.PI * t);
+      ctx.propose.contact({ point: tip(), position: new Vector3(0.65, 0, 0).applyQuaternion(turn).add(new Vector3(0.2, 1, 0)), priority: 1 });
+      ctx.propose.target({ kind: 'local', point: { bone: 1, at: new Vector3() }, value: turn, weight: 1, stiffness: 20 });
+      for (const bone of [2, 3]) ctx.propose.target({ kind: 'local', point: { bone, at: new Vector3() }, value: new Quaternion(), weight: 1, stiffness: 20 });
+      ctx.propose.target({ kind: 'position', point: { bone: 0, at: new Vector3() }, value: new Vector3(0, 1, 0), weight: 1, stiffness: 20 });
+      ctx.propose.target({ kind: 'orientation', point: { bone: 0, at: new Vector3() }, value: new Quaternion(), weight: 1, stiffness: 20 });
+    });
+    run(body, 1);
+    let most = 0;
+    run(body, 2, () => (most = Math.max(most, body.state.position.distanceTo(new Vector3(0, 1, 0)))));
+    expect(most).toBeLessThan(2e-3);
+  });
+
   it('pull the centre of mass with a soft target', () => {
     const goal = new Vector3(0.3, 1.2, 0);
     const body = drive(arm(), (ctx) => ctx.propose.target({ kind: 'position', point: 'com', value: goal, weight: 1 }));
@@ -208,6 +249,23 @@ describe('limits and caps', () => {
     });
     expect(peak).toBeLessThanOrEqual(cap + 1e-6);
     expect(peak).toBeGreaterThan(cap * 0.99);
+  });
+
+  it('brake a capped joint in time to stop at its goal, without overshoot or chatter', () => {
+    const cap = 10;
+    const turn = new Vector3(0, 0, 1);
+    const goal = new Quaternion().setFromAxisAngle(turn, 1.2);
+    const body = drive(arm(), (ctx) => {
+      ctx.propose.contact({ point: { bone: 0, at: new Vector3() }, position: new Vector3(0, 1, 0), rotation: new Quaternion(), priority: 0 });
+      ctx.propose.cap({ bone: 1, acceleration: cap });
+      ctx.propose.target({ kind: 'local', point: { bone: 1, at: new Vector3() }, value: goal, weight: 1, stiffness: 20 });
+    });
+    const left: number[] = [];
+    run(body, 3, () => left.push(body.state.local[1].angleTo(goal)));
+    // (the cap holds it back, so it goes at the cap: never past the goal, and ever closer to it)
+    for (let i = 1; i < left.length; i++) expect(left[i]).toBeLessThanOrEqual(left[i - 1] + 1e-9);
+    expect(body.state.rates[1].dot(turn)).toBeGreaterThan(-1e-9);
+    expect(left[left.length - 1]).toBeLessThan(1e-6);
   });
 });
 

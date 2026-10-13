@@ -1,7 +1,7 @@
 // Adapted from the old core (a801be4:packages/core/src/gait/steps.ts: triggerStep, startSwing), without
 // obstacles, walls, foot targets and strides.
 import { Vector3 } from 'three';
-import { clamp, lerp, wrapAngle } from '../math';
+import { clamp, lerp, smoothstep, wrapAngle } from '../math';
 import type { Gait } from './gait';
 import { fitLanding, placeFoot, uncaught } from './placement';
 import { ankleFor } from './foot';
@@ -10,9 +10,11 @@ import { leadTime, type Timing } from './timing';
 
 /** the extrapolated centre of mass is caught by a step once it leaves the feet by this much (m, default body) */
 export const CATCH = 0.02;
-/** how long a standing body must have been falling before it steps (s) */
+/** below these speeds (m/s, default body) the body balances more and more as it does standing */
+const SLOW = [0.1, 0.2] as const;
 /** how far a runner's leg reaches back to its planted foot before it goes (× its length) */
 const RUN_REACH = 0.93;
+/** how long a standing body must have been falling before it steps (s) */
 const STILL_FALL = 0.1;
 /** how much better a step with the foot that just landed must catch the body to break the alternation (m, default body) */
 const ALTERNATE = 0.08;
@@ -56,18 +58,20 @@ export function nextStep(g: Gait, xcom: Readonly<Vector3>, dt: number): Lift | n
     // left behind out of the leg's reach goes at once
     const s = 1 - g.lastLift;
     const f = feet[s];
-    if (!f.swinging && ((g.clock - g.lastLiftAt >= t.step && f.plantedTime >= 0.6 * t.stance) || overstretched(g, s))) return lift(g, s, t, xcom, true);
+    if (!f.swinging && ((g.clock - g.lastLiftAt >= t.step && f.plantedTime >= 0.6 * t.stance) || overstretched(g, s, dt))) return lift(g, s, t, xcom, true);
     return null;
   }
   if (feet.some((f) => f.swinging)) return null;
   // a foot left behind out of the leg's reach goes at once
-  for (let s = 0; s < 2; s++) if (feet[s].plantedTime > t.doubleSupport && overstretched(g, s)) return lift(g, s, t, xcom, true);
+  for (let s = 0; s < 2; s++) if (feet[s].plantedTime > t.doubleSupport && overstretched(g, s, dt)) return lift(g, s, t, xcom, true);
   // (setting off, the knees give before a foot leaves: off a straight leg there is no stepping)
   if (g.starting && g.bent < READY) return null;
   const lead = g.moving ? leadTime(t, t.swing) : 0;
   // capture-point stepping: a body falling past its feet steps now, with the foot that catches it
   // (standing, once it has been falling for a moment: a passing jolt is no fall)
-  g.falling = uncaught(g, xcom) > CATCH * g.p.scale ? g.falling + dt : 0;
+  // (all but still, it steps as a standing body does: before its centre of mass comes to the edge of its feet)
+  const still = 1 - smoothstep(SLOW[0], SLOW[1], g.speed / g.p.scale);
+  g.falling = uncaught(g, xcom) > (1 - 2 * still) * CATCH * g.p.scale ? g.falling + dt : 0;
   const falling = g.falling > (g.moving ? 0 : STILL_FALL);
   const pick = falling ? catching(g, t, lead, xcom) : balanced(g, pickFoot(g, t, lead, xcom), t, lead, xcom);
   return pick < 0 ? null : lift(g, pick, t, xcom, falling);
@@ -174,12 +178,13 @@ const _hip = new Vector3();
 const _ankle = new Vector3();
 
 /**
- * planted foot `s` is left behind out of its leg's reach from the hip as the pelvis is carried,
- * even up on its toes (a runner's goes before the leg is straight)
+ * planted foot `s` will be left behind out of its leg's reach from the hip as the pelvis is
+ * carried, even up on its toes, by the time it could lift (`dt` s on: a runner's goes before the
+ * leg is straight)
  */
-function overstretched(g: Gait, s: number): boolean {
+function overstretched(g: Gait, s: number, dt: number): boolean {
   const f = g.status[s];
-  const hip = g.hip(g.feet[s].side, _hip);
+  const hip = g.hip(g.feet[s].side, _hip).addScaledVector(g.velocity, dt);
   // (a foot just put down ahead is what the body comes over: it is not left behind)
   if ((f.position.x - hip.x) * Math.sin(g.yaw) + (f.position.z - hip.z) * Math.cos(g.yaw) > 0) return false;
   return hip.distanceTo(ankleFor(g.p, g.feet[s].side, f.position, f.yaw, -MAX_HEEL, _ankle)) > lerp(REACH, RUN_REACH, g.run) * g.p.legLength;

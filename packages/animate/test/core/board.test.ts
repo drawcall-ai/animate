@@ -31,12 +31,13 @@ describe('merge', () => {
     expect(() => merge(board, arm())).toThrow(/claim on bone 9/);
   });
 
-  it('counts the centre of mass as a bone of its own for fallbacks', () => {
+  it("counts a position of the centre of mass as one of the root's for fallbacks", () => {
     const board = new Board();
     board.target({ kind: 'position', point: 'com', value: at(1), weight: 0.8 });
     board.target({ kind: 'position', point: 'com', value: at(0), weight: 1, tier: 'fallback' });
     board.target({ kind: 'position', point: { bone: 0, at: at(0) }, value: at(0), weight: 1, tier: 'fallback' });
-    expect(merge(board, arm()).targets.map((t) => t.weight)).toEqual([0.8, expect.closeTo(0.2, 12), 1]);
+    board.target({ kind: 'orientation', point: { bone: 0, at: at(0) }, value: new Quaternion(), weight: 1, tier: 'fallback' });
+    expect(merge(board, arm()).targets.map((t) => t.weight)).toEqual([0.8, expect.closeTo(0.2, 12), expect.closeTo(0.2, 12), 1]);
   });
 
   it('copies proposals so behaviours may reuse their vectors', () => {

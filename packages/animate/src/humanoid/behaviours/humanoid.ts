@@ -7,7 +7,7 @@ import { ankleFor, footprint } from '../gait/foot';
 import { hullOf, outside, type Spot } from '../gait/support';
 import type { Humanoid } from '../humanoid';
 import { clamp, forwardOf, GRAVITY, leftOf, quatYXZ, Spring, wrapAngle } from '../math';
-import { CALM, CALM_ROOT, caps, rootCap } from '../profile/caps';
+import { CALM, CALM_ROOT, caps, legCaps, rootCap, STEPPING } from '../profile/caps';
 import { ranges } from '../profile/limits';
 import { relaxedPose } from '../profile/relaxed';
 import { yawOf } from '../rig';
@@ -15,11 +15,16 @@ import { bodyYaw, defaultStance, feetFacing as facingOf, OVER_ANKLES, stanceFeet
 import { plant, type Leg } from '../procedures/footing';
 import { nextHip } from '../procedures/legs';
 import { STANDING_REACH } from '../start';
-import { standingHeight } from '../procedures/shift';
+import { overFoot, READY, Shift, standingHeight } from '../procedures/shift';
 import { shankTilt, step } from '../procedures/step';
 
 const ORIGIN = new Vector3();
 const HIPS = { bone: INDEX.hips, at: ORIGIN };
+/** the world axes a position is held along: across the floor, up */
+const ACROSS = new Vector3(1, 0, 1);
+const UP = new Vector3(0, 1, 0);
+/** a bone's left */
+const LEFT = new Vector3(1, 0, 0);
 
 /** how strongly the relaxed pose pulls a joint nothing else drives */
 const COMFORT = 0.2;
@@ -38,10 +43,21 @@ const ROLL_RATE = 25;
 const STAND_STIFFNESS = 3;
 /** how firmly the stand poses its legs (from where their hips are: a hint at the knees' way, not a brake) */
 const POSE = 0.1;
+/** a step's legs move as stepping's do */
+const STEP_CAPS = legCaps(STEPPING);
 /** how close a stepping foot may come to the other, side to side (× the stance's width): it never steps onto or across it */
 const CLEAR = 0.8;
+/** how deep a crouch the stand still repositions its feet from (× height) */
+const SQUATTING = 0.1;
 /** how long a step must have been due before it is taken (s) */
 const DUE = 0.1;
+/**
+ * how many times running the weight may fail to shift for a careful step (something holds the
+ * body off the other foot) and the step still be tried again as soon; after that, it waits twice
+ * as long for each further failure, up to `PATIENCE` (s): no swaying to and fro under a steady pull
+ */
+const TRIES = 2;
+const PATIENCE = 2;
 
 /**
  * The humanoid's lifetime bundle: its joints' human ranges of motion and calm acceleration caps,
@@ -115,15 +131,20 @@ interface Due {
   side: Side;
   to: Vector3;
   yaw: number;
+  /** it catches a body falling past its feet: at once, the body falling toward it, its weight not shifted first */
+  catching: boolean;
 }
 
-/** the stand's state: each foot's roll, the foot it is stepping */
+/** the stand's state: each foot's roll, the foot it is stepping, where it carries the centre of mass */
 interface Standing {
   pitch: [Spring, Spring];
   planted: [boolean, boolean];
   stepping: Side | null;
-  /** how long a step has been due (s) */
+  /** (made on the first frame, where the body stands) */
+  shift: Shift | null;
+  /** how long a step has been due (s), and how many times running the weight failed to shift for one */
   due: number;
+  failed: number;
 }
 
 const _com = new Vector3();
@@ -135,15 +156,18 @@ const _q = new Quaternion();
 const _homes: [Vector3, Vector3] = [new Vector3(), new Vector3()];
 const _f = new Vector3();
 const _l = new Vector3();
+const _to = new Vector3();
 
 /**
  * Standing balance, the fallback for the legs and the pelvis: planted feet held where the status
  * has them (rolled flat, up on the ball where the leg can't reach; one another behaviour swings
- * is left to it), the centre of mass over them; and, while the legs are its own, a step when the extrapolated centre of mass leaves the support or a foot is out of its
- * place in the stance (the body turned or moved over its feet).
+ * is left to it), the centre of mass carried over them; and, while the legs are its own, a step
+ * when the extrapolated centre of mass leaves the support or a foot is out of its place in the
+ * stance (the body turned or moved over its feet): the weight over the other foot first, then the
+ * step, then the weight back over both (a step may follow before it is).
  */
 function stand<W>(h: Humanoid<W>): ReusableTimeline<Ctx<W>> {
-  const st: Standing = { pitch: [new Spring(), new Spring()], planted: [true, true], stepping: null, due: 0 };
+  const st: Standing = { pitch: [new Spring(), new Spring()], planted: [true, true], stepping: null, shift: null, due: 0, failed: 0 };
   return function* () {
     const next: { due: Due | null } = { due: null };
     for (;;) {
@@ -152,18 +176,44 @@ function stand<W>(h: Humanoid<W>): ReusableTimeline<Ctx<W>> {
           hold(ctx, h, st);
           // (a step once it has been due for a moment: a passing jolt is no reason to step)
           const due = dueStep(ctx, h, st);
+          if (!due) st.failed = 0;
           st.due = due ? st.due + ctx.dt : 0;
-          next.due = st.due >= DUE ? due : null;
+          const wait = due?.catching ? DUE : Math.min(DUE * 2 ** Math.max(0, st.failed - TRIES), PATIENCE);
+          next.due = st.due >= wait ? due : null;
           return next.due === null;
         },
       });
       if (!next.due) continue;
+      const shift = st.shift;
+      if (!shift) throw new Error('the stand stepped before it held its feet');
+      // (a careful step shifts the weight onto the other foot first: it is there once the centre of
+      // mass is over it; falling meanwhile, it catches the body instead; held off it (something
+      // pulls the body the other way), the step is not taken and the weight goes back)
+      if (!next.due.catching) {
+        const other = next.due.side === 'left' ? 1 : 0;
+        let on = false;
+        shift.to(SIDES[other]);
+        yield* action<Ctx<W>>({
+          update: (ctx) => {
+            hold(ctx, h, st);
+            const due = dueStep(ctx, h, st);
+            if (due?.catching) next.due = due;
+            on = onFoot(h, other, ctx.body.com);
+          },
+          until: () => next.due?.catching || on || shift.progress >= 2,
+        });
+        if (!next.due || (!next.due.catching && !on)) {
+          shift.to(null);
+          st.due = 0;
+          st.failed++;
+          continue;
+        }
+      }
       const { side, to, yaw } = next.due;
       const p = h.proportions;
       const from = h.status.feet[side === 'left' ? 0 : 1].position;
       const length = Math.hypot(to.x - from.x, to.z - from.z);
       st.stepping = side;
-      // (the weight onto the other foot first, then the step)
       yield* parallel<Ctx<W>>(
         'race',
         action<Ctx<W>>({ update: (ctx) => void hold(ctx, h, st) }),
@@ -175,12 +225,14 @@ function stand<W>(h: Humanoid<W>): ReusableTimeline<Ctx<W>> {
             strike: 0.04,
             leg: () => solvedLeg(h, side),
             hold: { priority: 1, owner: 'stand.step', pose: POSE },
-            shift: true,
+            standing: true,
           });
         })(),
       );
       st.stepping = null;
+      shift.to(null);
       st.due = 0;
+      st.failed = 0;
     }
   };
 }
@@ -190,7 +242,6 @@ function hold<W>(ctx: Ctx<W>, h: Humanoid<W>, st: Standing) {
   const p = h.proportions;
   const { feet, stance } = h.status;
   let n = 0;
-  _com.set(0, 0, 0);
   SIDES.forEach((side, s) => {
     const f = feet[s];
     const bone = INDEX[`${side}Foot`];
@@ -210,41 +261,43 @@ function hold<W>(ctx: Ctx<W>, h: Humanoid<W>, st: Standing) {
       st.pitch[s].reset(Math.atan2(fwd.y, Math.hypot(fwd.x, fwd.z)));
       st.planted[s] = true;
     }
-    plant(ctx, h, side, st.pitch[s].step(heelPitch(ctx, h, side), ROLL_RATE, ctx.dt), solvedLeg(h, side), { priority: 1, owner: 'stand', tier: 'fallback', pose: POSE });
+    plant(ctx, h, side, st.pitch[s].step(heelPitch(ctx, h, side, ready(h, st)), ROLL_RATE, ctx.dt), solvedLeg(h, side), { priority: 1, owner: 'stand', tier: 'fallback', pose: POSE });
     n++;
   });
   if (n === 0) return;
-  // the centre of mass over the feet (onto the standing one during a step), the pelvis as high
-  // as the legs reach (and as low as asked), facing as asked or as the feet stand
-  const hinted = h.hints.read(ctx.time);
-  const facing = hinted.facing ?? feetFacing(h);
-  const mid = _v.set(0, 0, 0);
-  for (const f of feet) mid.add(f.position);
-  mid.multiplyScalar(0.5);
-  if (st.stepping) mid.copy(feet[st.stepping === 'left' ? 1 : 0].position);
-  mid.addScaledVector(forwardOf(facing, _f), OVER_ANKLES * p.scale);
-  const hips = _hips.copy(ctx.body.positions[0]);
-  hips.x += mid.x - ctx.body.com.x;
-  hips.z += mid.z - ctx.body.com.z;
-  hips.y = standingHeight(ctx, h);
-  ctx.propose.target({
-    kind: 'position',
-    point: HIPS,
-    value: hips,
-    weight: 1,
-    tier: 'fallback',
-    stiffness: STAND_STIFFNESS,
-    owner: 'stand',
-  });
-  ctx.propose.target({
-    kind: 'orientation',
-    point: HIPS,
-    value: quatYXZ(facing + stance.blade, 0, 0, _q),
-    weight: 1,
-    tier: 'fallback',
-    stiffness: STAND_STIFFNESS,
-    owner: 'stand',
-  });
+  // the centre of mass carried over the feet (over one for a step), the pelvis as high as the
+  // legs reach (and as low as asked), facing as asked or as the feet stand
+  const shift = (st.shift ??= new Shift(ctx.body.com));
+  const at = shift.update(shift.over ? overFoot(h, shift.over, _to) : overFeet(ctx, h, _to), p.scale, ctx.dt);
+  // (stepping, or the weight shifting for a step or back from one: its legs move as stepping's do)
+  if (st.stepping || shift.over || !shift.shifted) for (const c of STEP_CAPS) ctx.propose.cap(c);
+  ctx.propose.target({ kind: 'position', point: 'com', value: _com.set(at.x, 0, at.z), mask: ACROSS, weight: 1, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
+  ctx.propose.target({ kind: 'position', point: HIPS, value: _hips.set(0, standingHeight(ctx, h, ready(h, st)), 0), mask: UP, weight: 1, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
+  // (facing as asked and level side to side; how far it tips forward is the trunk's, bending at
+  // the hips to bring the head down, held upright only as comfort is)
+  const yaw = (h.hints.read(ctx.time).facing ?? feetFacing(h)) + stance.blade;
+  ctx.propose.target({ kind: 'aim', point: HIPS, axis: LEFT, value: leftOf(yaw, _l).add(ctx.body.positions[0]), weight: 1, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
+  ctx.propose.target({ kind: 'orientation', point: HIPS, value: quatYXZ(yaw, 0, 0, _q), weight: COMFORT, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
+}
+
+/** how far the stand lowers the pelvis for the knees to give, its weight going over a foot */
+const ready = <W>(h: Humanoid<W>, st: Standing) => READY * h.proportions.height * (st.shift?.knees ?? 0);
+
+/** whether `point` is over planted foot `s` (within its footprint, on the floor) */
+function onFoot<W>(h: Humanoid<W>, s: number, point: Readonly<Vector3>): boolean {
+  const f = h.status.feet[s];
+  return outside(hullOf(footprint(h.proportions, f.position, f.yaw)), point) <= 0;
+}
+
+/** where the stand holds the centre of mass (on the floor, into `out`): over the middle of the feet, a little ahead of the ankles as the body faces */
+function overFeet<W>(ctx: Ctx<W>, h: Humanoid<W>, out: Vector3): Vector3 {
+  const { feet } = h.status;
+  const facing = h.hints.read(ctx.time).facing ?? feetFacing(h);
+  return out
+    .addVectors(feet[0].position, feet[1].position)
+    .multiplyScalar(0.5)
+    .addScaledVector(forwardOf(facing, _f), OVER_ANKLES * h.proportions.scale)
+    .setY(0);
 }
 
 const _legs = [new Vector3(), new Vector3()];
@@ -271,14 +324,14 @@ export function feetFacing<W>(h: Humanoid<W>): number {
  * How far planted foot `side` is rolled to stand under the body as it was solved: flat, its heel up
  * once the shank tilts past what the ankle flexes (a squat) or the leg can't reach it
  */
-function heelPitch<W>(ctx: Ctx<W>, h: Humanoid<W>, side: Side): number {
+function heelPitch<W>(ctx: Ctx<W>, h: Humanoid<W>, side: Side, lower: number): number {
   const p = h.proportions;
   const f = h.status.feet[side === 'left' ? 0 : 1];
   let pitch = Math.min(0, HEEL_OFF - shankTilt(ctx, side, f.yaw));
   // (the hip joint where the stand carries it: a pelvis held up higher is brought down onto
   // flat feet, not followed up onto the toes)
   const hip = nextHip(ctx, side, _hip);
-  hip.y -= Math.max(0, ctx.body.positions[0].y - standingHeight(ctx, h));
+  hip.y -= Math.max(0, ctx.body.positions[0].y - standingHeight(ctx, h, lower));
   // (beyond the reach the stand stands at: the pelvis carried higher than the stand would)
   const reach = STANDING_REACH * p.legLength;
   if (hip.distanceTo(ankleFor(p, side, f.position, f.yaw, pitch, _v)) <= reach) return pitch;
@@ -320,12 +373,13 @@ function dueStep<W>(ctx: Ctx<W>, h: Humanoid<W>, st: Standing): Due | null {
   const left = leftOf(facing, _l);
   const falling = out > CATCH * p.scale;
   const s = falling ? (_v.copy(feet[0].position).add(feet[1].position).multiplyScalar(-0.5).add(xcom).dot(left) > 0 ? 0 : 1) : off[0] >= off[1] ? 0 : 1;
-  if (!falling && off[s] <= 1) return null;
+  // (crouched deep, the feet stay put but to catch a fall: they are repositioned standing up)
+  if (!falling && (off[s] <= 1 || h.hints.read(ctx.time).crouch > SQUATTING * p.height)) return null;
   // (never onto or across the other foot: at least CLEAR of the stance's width beside it)
   const to = _homes[s].clone();
   const side = s === 0 ? 1 : -1;
   const beside = _v.subVectors(to, feet[1 - s].position).dot(left) * side;
   const clear = CLEAR * stance.width;
   if (beside < clear) to.addScaledVector(left, (clear - beside) * side);
-  return { side: SIDES[s], to, yaw: yaws[s] };
+  return { side: SIDES[s], to, yaw: yaws[s], catching: falling };
 }

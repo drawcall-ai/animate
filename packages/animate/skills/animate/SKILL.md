@@ -113,7 +113,7 @@ What `ctx.propose` takes, and how proposals from different behaviours combine (o
 
 | proposal | is | combined |
 |---|---|---|
-| `target({ kind: 'position' \| 'orientation' \| 'aim' \| 'local', point, value, weight, stiffness?, tier?, claims?, mask? })` | a soft pull | main targets add; a `tier: 'fallback'` target gets only the weight the main ones leave on its bone |
+| `target({ kind: 'position' \| 'orientation' \| 'aim' \| 'local', point, value, weight, stiffness?, tier?, claims?, mask? })` | a soft pull | main targets add, and where they conflict settle by their weights (`stiffness` sets only how fast each gets there); a `tier: 'fallback'` target gets only the weight the main ones leave on its bone (the centre of mass counting as the root, bone 0, for positions) |
 | `contact({ point, position, rotation?, priority, support?, mask? })` | held exactly, as far as it can be | one per point: the highest priority wins; equal priorities that disagree throw |
 | `limit({ bone, axis, swing, twist, neutral? })` | a joint's swing–twist range | intersected |
 | `cap({ bone, acceleration, kind? })` | a joint's acceleration cap | the largest wins |
