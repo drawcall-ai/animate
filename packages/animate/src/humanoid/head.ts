@@ -31,11 +31,11 @@ const SQUARED = 0.15;
 /** how far ahead of the centre of mass the eyes are standing upright (m, default body), and the share of a bow's sweep that takes them further ahead (the hips go back the rest) */
 const EYES_AHEAD = 0.085;
 const BOW_AHEAD = 0.5;
-/** the furthest the trunk bows before the body steps closer (rad), and how far the knees let the pelvis down at most (× height: a squat, as `balance`'s) */
+/** the furthest the trunk bows before the body steps closer (rad) */
 const MOST_BOW = 1.0;
-/** how fast `balance` changes the drop asked of the knees (m/s²: its squat's pace) */
-const KNEES = 3;
+/** how far the knees let the pelvis down at most (× height: `balance`'s squat), and how fast `balance` changes it (m/s²) */
 const SQUAT = 0.25;
+const KNEES = 3;
 /** how quickly the way where the body stands moves is picked up (1/s) */
 const SPOT_RATE = 10;
 /** how fast the body walks round and over under a head (m/s, m/s²) */
@@ -66,7 +66,7 @@ export function headTo<W>(h: Humanoid<W>, eyes: Live<Placement, W>, options: Hea
     const turned = new TrackedRotation();
     const joints = SPINE.map(() => new TrackedRotation());
     const head = { position: new Vector3(), quaternion: new Quaternion() };
-    const body = { facing: NaN, off: 0, turning: false, height: NaN, spot: new Vector3(NaN, 0, 0), velocity: new Vector3() };
+    const under = lead ? new Under(h) : null;
     yield* action<Frame<W>>({
       update: (f) => {
         const goal = live(eyes, f);
@@ -83,42 +83,55 @@ export function headTo<W>(h: Humanoid<W>, eyes: Live<Placement, W>, options: Hea
           if (limit) clampRotation(q, limit);
           pose.setLocal(bone, q);
         });
-        if (!lead) return;
-
-        // the body under the head: turned round after it, standing where the eyes are over it, as low as they are
-        const yaw = yawOf(head.quaternion);
-        if (Number.isNaN(body.facing)) body.facing = h.gait.facing;
-        const off = Math.abs(wrapAngle(yaw - h.gait.facing));
-        if (body.turning && off < SQUARED && h.gait.settled) {
-          body.turning = false;
-          body.facing = h.gait.facing;
-        }
-        body.off = off > TURN ? body.off + f.dt : 0;
-        if (body.off >= WAIT) body.turning = true;
-        if (body.turning) body.facing = yaw;
-        // (as low as the eyes will be once the knees have caught up: `balance` takes a drop up at its
-        // own pace, so the pelvis lags one moving at v by about v² / 2a)
-        const rising = Number.isNaN(body.height) ? 0 : (goal.position.y - body.height) / f.dt;
-        body.height = goal.position.y;
-        const drop = p.eyeHeight - goal.position.y - (rising * Math.abs(rising)) / (2 * KNEES);
-        const fwd = forwardOf(yaw, _v);
-        const com = f.prev.com(_c);
-        const ahead = (goal.position.x - com.x) * fwd.x + (goal.position.z - com.z) * fwd.z;
-        const { lower, bow } = stoop(p, ahead, drop);
-        const asks = h.asks;
-        asks.lower = lower;
-        asks.bow = bow;
-        // (standing where that bow puts the eyes: where it stands now, unless they are further ahead or behind than it takes them)
-        const spot = _spot.copy(goal.position).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
-        // (and how fast it moves: a head going off is stepped after as it goes)
-        if (!Number.isNaN(body.spot.x)) body.velocity.lerp(_v.subVectors(spot, body.spot).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
-        body.spot.copy(spot);
-        asks.go = { to: spot, velocity: body.velocity, ...UNDER };
-        asks.face = { yaw: body.facing };
+        under?.ask(f, goal.position, yawOf(head.quaternion));
       },
       until,
     });
   };
+}
+
+/**
+ * The body brought under a led head (`h.asks`), every sub-step: turned round after the head once it
+ * is turned further than the trunk and neck take (TURN), and held facing as it was otherwise;
+ * bowed and let down as far as the eyes go ahead and down (`stoop`); standing where that puts the
+ * eyes, walking there (its way fed forward) once it is far enough to.
+ */
+class Under<W> {
+  private readonly go = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER };
+  private readonly face = { yaw: NaN };
+  /** turning after the head; how long it has been turned past TURN (s); the eyes' last height */
+  private turning = false;
+  private off = 0;
+  private height = NaN;
+
+  constructor(private readonly h: Humanoid<W>) {}
+
+  /** asks for the eyes at `eyes`, the head facing `yaw` */
+  ask(f: Frame<W>, eyes: Vector3, yaw: number) {
+    const { h, go, face } = this;
+    const p = h.proportions;
+    const facing = h.gait.facing;
+    const off = Math.abs(wrapAngle(yaw - facing));
+    if (Number.isNaN(face.yaw)) face.yaw = facing;
+    if (this.turning && off < SQUARED && h.gait.settled) [this.turning, face.yaw] = [false, facing];
+    this.off = off > TURN ? this.off + f.dt : 0;
+    if (this.off >= WAIT) this.turning = true;
+    if (this.turning) face.yaw = yaw;
+    // (as low as the eyes will be once the knees have caught up: `balance` takes a drop up at its
+    // own pace, so the pelvis lags one moving at v by about v² / 2a)
+    const rising = Number.isNaN(this.height) ? 0 : (eyes.y - this.height) / f.dt;
+    this.height = eyes.y;
+    const drop = p.eyeHeight - eyes.y - (rising * Math.abs(rising)) / (2 * KNEES);
+    const fwd = forwardOf(yaw, _v);
+    const com = f.prev.com(_c);
+    const { lower, bow } = stoop(p, (eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z, drop);
+    // (standing where that bow puts the eyes: where it stands now, unless they are further ahead or
+    // behind than it takes them; and how fast that moves: a head going off is stepped after as it goes)
+    const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
+    if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
+    go.to.copy(spot);
+    Object.assign(h.asks, { lower, bow, go, face });
+  }
 }
 
 const SPINE = [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head];

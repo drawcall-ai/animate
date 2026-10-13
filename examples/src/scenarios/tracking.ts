@@ -131,8 +131,8 @@ export function lookAround(v: Variation = {}): Scenario {
   };
 }
 
-/** controllers are followed briskly: they are where the hands are, only a jump braked (m/s², m/s) */
-const CONTROLLER = { accel: 30, speed: 4, turnAccel: 200, turnSpeed: 15, lead: false };
+/** controllers are followed briskly (m/s², m/s): they are where the hands are, only a jump braked; under a tracked head they only follow */
+const CONTROLLER = { accel: 30, speed: 4, lead: false };
 
 /**
  * a controller recording as a wrist target (into `out`, with its velocity): the recorded point,
@@ -334,7 +334,7 @@ export function reach(v: Variation = {}): Scenario {
               yield* action({ until: timePassed(0.4 / pace, 'seconds') });
               yield* parallel<Frame<World>>(
                 'race',
-                handTo(h, 'right', reported(report, 'rightWrist', target), { turnAccel: 200, turnSpeed: 15, until: there }),
+                handTo(h, 'right', reported(report, 'rightWrist', target), { until: there }),
                 // (the body ahead of the hand: where it is going a moment on)
                 ask(h, comeAlong(h, 'right', (f) => point(f.time + AHEAD / pace, ahead))),
                 // (the eyes lead the hand: where it is going a moment on)

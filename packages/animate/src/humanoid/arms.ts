@@ -22,8 +22,8 @@ const ABDUCTION = (8 * Math.PI) / 180;
 const SQUATTING = { abduction: (3 * Math.PI) / 180, depth: 0.25 };
 /** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it kinks; let go of, it comes down calmly */
 const SWING = { accel: 25, speed: 2.5 };
-/** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
-export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
+/** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise; its joints braked only where the solve turns them faster than any hand moves (near full stretch a small move of the hand swings them far: braked softer, they swing behind it and the hand off its way) */
+export const CALM = { accel: 8, speed: 1.5, turnAccel: 200, turnSpeed: 15 } satisfies Motion;
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
@@ -111,7 +111,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
   shrug(f, p, side, at);
   const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
   arm.to(f, target, { ...CALM, ...options, pole });
-  if (options.lead ?? true) ask(h, f, side, at);
+  if (options.lead ?? true) bringShoulder(h, f, side, at);
 }
 
 /**
@@ -168,7 +168,7 @@ function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Ve
  * for one below (`lowering`), up on the toes for one above. Of two hands asking (both arms on
  * something low), the one needing more wins: each sub-step's asks start cleared.
  */
-function ask<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
+function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
   const p = h.proportions;
   const { asks } = h;
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
