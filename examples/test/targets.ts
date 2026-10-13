@@ -11,6 +11,9 @@ import { Peak, type Frame } from './frame';
 export class Targets {
   private readonly wristPeak = new Peak();
   private readonly gazePeak = new Peak();
+  /** frames a gaze was asked, and frames it was judged in */
+  asked = 0;
+  judged = 0;
   /** the gaze target asked, and since when (s) */
   private gazeAt: { target: Vector3; since: number } | null = null;
   get wrist() {
@@ -35,7 +38,11 @@ export class Targets {
       if (!chest) throw new Error('no chest');
       const facing = new Vector3(0, 0, 1).applyQuaternion(chest.getWorldQuaternion(new Quaternion())).setY(0);
       const seen = facing.angleTo(toward.clone().setY(0)) < Math.PI / 2;
-      if (seen && t - this.gazeAt.since > SETTLE) this.gazePeak.see((forward.angleTo(toward) * 180) / Math.PI, t);
+      this.asked++;
+      if (seen && t - this.gazeAt.since > SETTLE) {
+        this.judged++;
+        this.gazePeak.see((forward.angleTo(toward) * 180) / Math.PI, t);
+      }
     }
     for (const s of ['left', 'right'] as const) {
       const held = h.holding[s];
@@ -49,7 +56,7 @@ export class Targets {
   }
 
   toString() {
-    return `max wrist err (held grips within arm+0.35m) ${this.wristPeak}, gaze off its target ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s`;
+    return `max wrist err (held grips within arm+0.35m) ${this.wristPeak}, gaze off its target ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
   }
 }
 

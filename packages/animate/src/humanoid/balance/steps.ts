@@ -35,10 +35,13 @@ const READY = 0.85;
 const BEHIND = 0.2;
 /** how far out to its own side of the body a foot lands, at least (m, default body) */
 const OWN_SIDE = 0.035;
-/** how far to its own side of the other foot a foot lands, at least, as the body faces now (m, default body) */
-const UNCROSSED = 0.04;
 /** how far inside a step's base the extrapolated centre of mass is caught (m, default body) */
 const COVER_MARGIN = 0.03;
+/** the turn rates (rad/s) over which a step catching the body moves only across the way, not along it */
+const BEND = [0.03, 0.1] as const;
+/** the widest the feet land apart walking slowly (× the stance's width), and the speeds (m/s) over which a walk's steps may go wider */
+const SLOW_WIDTH = 1.15;
+const WALKING = [0.6, 0.9] as const;
 /** the speeds (m/s, default body) over which a run turns into a bouncing gait, with flight phases */
 const BOUNCING = [2.2, 2.5] as const;
 
@@ -153,7 +156,8 @@ const rhythmCost = (c: Carriage, s: number, t: Timing) => (c.steps[s].plantedTim
 
 /** `pick`, unless its step would let the body fall past its feet and the other's would catch it */
 function balanced(c: Carriage, pick: number, t: Timing, lead: number, xcom: Readonly<Vector3>): number {
-  if (pick < 0) return pick;
+  // (a foot left behind the body goes: the other stepping again would leave it out of reach)
+  if (pick < 0 || behindBy(c, pick) > BEHIND * c.p.scale) return pick;
   const out = uncaughtBy(c, pick, lead, t.swing, xcom);
   if (out <= CATCH * c.p.scale) return pick;
   const other = uncaughtBy(c, 1 - pick, lead, t.swing, xcom);
@@ -225,11 +229,13 @@ function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Ve
   const minMove = c.speed < 0.3 ? 0.05 : 0.02;
   if (!lastLoaded || misplaced(off, next) <= (c.speed < 0.3 ? 0.06 : 0.03)) return -1;
   // (but a foot left behind the body goes next: the other stepping again would leave it out of reach)
-  const behind = -((feet[next].position.x - c.root.x) * Math.sin(c.yaw) + (feet[next].position.z - c.root.z) * Math.cos(c.yaw));
-  const lastInstead = nextLoaded && behind < BEHIND * c.p.scale && misplaced(off, last) > 0.03 && progress(last) >= minMove && (progress(next) < minMove || misplaced(off, last) > 1.5 * misplaced(off, next) + 0.03);
+  const lastInstead = nextLoaded && behindBy(c, next) < BEHIND * c.p.scale && misplaced(off, last) > 0.03 && progress(last) >= minMove && (progress(next) < minMove || misplaced(off, last) > 1.5 * misplaced(off, next) + 0.03);
   if (lastInstead) return last;
   return progress(next) >= minMove ? next : -1;
 }
+
+/** how far foot `s` is behind the root, as the body faces (m) */
+const behindBy = (c: Carriage, s: number) => -((c.feet[s].position.x - c.root.x) * Math.sin(c.yaw) + (c.feet[s].position.z - c.root.z) * Math.cos(c.yaw));
 
 /** how far foot `s` is out of place, in units of what's worth a step: a stance a few cm off is squared up */
 const offBy = (c: Carriage, off: Misplaced, s: number) => Math.max(off.distance[s] / 0.1, off.lateral[s] / settle(c), off.yaw[s] / square(c));
@@ -298,7 +304,8 @@ function placeFoot(c: Carriage, s: number, lead: number, out: Vector3): number {
     }
   }
   // (the facing turns with a curving path: by 2·arc then)
-  const yaw = c.yaw + 2 * arc + clamp(wrapAngle(c.goalYaw - c.yaw), -1.2, 1.2) * clamp(lead * 2.5, 0, 1);
+  // (no further round than a step turns a foot: the curve's turn and the facing asked are not added up past it)
+  const yaw = c.yaw + clamp(2 * arc + clamp(wrapAngle(c.goalYaw - c.yaw), -1.2, 1.2) * clamp(lead * 2.5, 0, 1), -0.9, 0.9);
   const narrow = smoothstep(0.1, 0.6, c.speed) * (stance.stagger === 0 ? 1 : 0.3);
   const width = lerp(stance.width, Math.min(stance.width, 0.036 * p.height), narrow);
   stanceFeet(root.x + px, root.z + pz, forwardOf(yaw, _f), leftOf(yaw, _l), p, stance, _homes, width);
@@ -338,7 +345,7 @@ function travel(c: Carriage, time: number, out: Vector3): number {
 function fitLanding(c: Carriage, s: number, to: Vector3, yaw: number, ahead: number, xcom: Readonly<Vector3>): number {
   predictXcom(c, ahead, xcom, _then);
   _bare.copy(to);
-  limit(c, s, _bare, yaw);
+  limit(c, s, _bare, yaw, ahead);
   const out = uncovered(c, s, _bare, yaw, _then);
   to.copy(_bare);
   if (out <= 0) return 0;
@@ -346,9 +353,17 @@ function fitLanding(c: Carriage, s: number, to: Vector3, yaw: number, ahead: num
   for (let pass = 0; pass < 3; pass++) {
     const d = uncovered(c, s, to, yaw, _then, _away);
     if (d <= 0) break;
-    to.addScaledVector(_away, d + margin);
+    // (round a bend, only across: along the way a step lands where the stride has it, the next one
+    // catching what this leaves ahead; otherwise the outer and inner steps would grow apart)
+    const bend = c.moving ? smoothstep(BEND[0], BEND[1], Math.abs(c.turnRate)) : 0;
+    const along = _away.dot(forwardOf(c.yaw + 2 * travel(c, ahead, _f), _f));
+    _away.addScaledVector(_f, -bend * along);
+    // (moved along that as far as covers it: its part along the way to the point is 1 − bend · along²)
+    const toward = 1 - bend * along * along;
+    if (toward < 1e-3) break;
+    to.addScaledVector(_away, (d + margin) / toward);
   }
-  limit(c, s, to, yaw);
+  limit(c, s, to, yaw, ahead);
   const left = uncovered(c, s, to, yaw, _then);
   if (left < out) return left;
   to.copy(_bare);
@@ -399,17 +414,20 @@ function uncaught(c: Carriage, xcom: Readonly<Vector3>): number {
   return spots.length ? past(hullOf(spots), xcom) : Infinity;
 }
 
-/** no crossing over, not under the body, no over-long step */
-function limit(c: Carriage, s: number, to: Vector3, yaw: number) {
+/** no crossing over, not under the body as it will be on landing (`ahead` s on), no over-long step */
+function limit(c: Carriage, s: number, to: Vector3, yaw: number, ahead: number) {
   const other = c.feet[1 - s];
   const sign = c.steps[s].sign;
   // (crossing over is judged across the step: halfway between the two feet's headings)
   const from = bodyYaw(other.yaw, c.steps[1 - s].sign, c.stance);
   const across = from + 0.5 * wrapAngle(bodyYaw(yaw, sign, c.stance) - from);
   const H = c.p.height;
-  aside(to, other.position, across, sign, 0.05 * H, Math.max(0.05 * H + 0.3 * H, 2.3 * c.stance.width));
-  aside(to, other.position, c.yaw, sign, UNCROSSED * c.p.scale, Infinity);
-  aside(to, c.root, c.yaw, sign, OWN_SIDE * c.p.scale, Infinity);
+  // (walking slowly, turning or stopping, the feet stay about a stance apart: no wide catching steps)
+  const widest = lerp(SLOW_WIDTH * 2 * c.stance.width, Math.max(0.05 * H + 0.3 * H, 2.3 * c.stance.width), smoothstep(WALKING[0], WALKING[1], c.speed));
+  aside(to, other.position, across, sign, 0.05 * H, widest);
+  // (on a bend the body will be further round: its side of where it will be, as it will face)
+  const arc = travel(c, ahead, _then2);
+  aside(to, _then2.add(c.root), c.yaw + 2 * arc, sign, OWN_SIDE * c.p.scale, Infinity);
   // step length grows with speed; the first steps from standing are short
   const span = Math.hypot(2 * c.stance.width, c.stance.stagger);
   const pace = Math.max(c.speed, c.goalSpeed * 0.5);
@@ -443,5 +461,6 @@ const _travel = new Vector3();
 const _f = new Vector3();
 const _l = new Vector3();
 const _then = new Vector3();
+const _then2 = new Vector3();
 const _bare = new Vector3();
 const _away = new Vector3();

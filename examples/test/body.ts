@@ -64,6 +64,10 @@ export class Feet {
 
 /** the latest 40% of a swing: where the foot lands is settled by then (m) */
 const LATE = 0.6;
+/** below this speed (m/s) a step is a slow one: stopping, turning, standing */
+const SLOW = 0.6;
+/** the default stance's width, ankle to ankle (× height) */
+const STANCE = 0.13;
 
 /**
  * Late retargeting: how far a swinging foot's planned landing still moves in the last 40%
@@ -72,6 +76,8 @@ const LATE = 0.6;
  */
 export class Landings {
   readonly late = new Peak();
+  /** slow steps' width: the feet apart sideways as one lands, below SLOW (× the stance's width, STANCE) */
+  readonly wide = new Peak();
   private readonly swings = new Map<Actor, ({ t: number; p: Vector3 }[] | null)[]>();
 
   see({ t, h }: Frame) {
@@ -88,11 +94,16 @@ export class Landings {
       if (f.phase !== 'planted' || !track?.length) return;
       const from = track[0].t + LATE * (t - track[0].t);
       for (const q of track) if (q.t >= from) this.late.see(q.p.distanceTo(f.position), t);
+      // (slow, stopping or standing, the feet land about a stance apart sideways)
+      const other = h.feet[1 - s];
+      if (Math.hypot(h.gait.velocity.x, h.gait.velocity.z) >= SLOW || other.phase !== 'planted') return;
+      const across = Math.abs(f.position.clone().sub(other.position).dot(leftOf(h.gait.facing)));
+      this.wide.see(across / (STANCE * h.proportions.height), t);
     });
   }
 
   toString() {
-    return `late landing retarget max ${this.late}`;
+    return `late landing retarget max ${this.late}, slow step width max ${this.wide.value.toFixed(2)} stances @${this.wide.at.toFixed(2)}s`;
   }
 }
 

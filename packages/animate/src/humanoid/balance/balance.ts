@@ -15,7 +15,6 @@ import { plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from '.
 import { Posture, type Trunk } from './posture';
 import { stepFeet } from './steps';
 
-export { lowering, TIPTOE } from './posture';
 
 /** What `balance` reports of the walk it carries the body on (its output: read it, never write it). */
 export interface Gait {
@@ -125,7 +124,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
 
         const g = h.gait;
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
-        g.settled = !c.moving && !stepped && c.steps.every((st) => st.plantedTime > SETTLED);
+        g.settled = !c.moving && !stepped && c.steps.every((st) => !st.swing && st.plantedTime > SETTLED);
         g.velocity.copy(c.velocity);
       },
     });

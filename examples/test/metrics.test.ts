@@ -59,12 +59,16 @@ const VARIATIONS: [string, Scenario][] = [
   ['walk to a point 2 m behind', walkThere(new Vector3(0, 0, -2))],
   ['walk to a point 2 m to the right', walkThere(new Vector3(-2, 0, 0))],
   ['turn round in place', walkThere(new Vector3(0, 0, 0), Math.PI)],
+  ['walk 4 m ahead, turning round on arrival', walkThere(new Vector3(0, 0, 4), Math.PI)],
+  ['stroll setting off turned 3/4 of a half turn left', stroll({ yaw: (3 * Math.PI) / 4 })],
+  ['stroll setting off turned 3/4 of a half turn right', stroll({ yaw: (-3 * Math.PI) / 4 })],
   ['pickup-shelf, the box 10 cm nearer', pickupShelf({ nearer: 0.1 })],
   ['pickup-shelf, the box 10 cm farther', pickupShelf({ nearer: -0.1 })],
   ['pickup-shelf, the box 5 cm higher', pickupShelf({ taller: 0.1 })],
   ['pickup-shelf, the box 5 cm lower', pickupShelf({ taller: -0.1 })],
   ['pickup-shelf, the shelf 5 cm lower', pickupShelf({ lower: 0.05 })],
   ['pickup-shelf, the box behind', pickupShelf({ around: Math.PI })],
+  ['pickup-shelf, the box lifted to the chest in 1.2 s', pickupShelf({ lift: 1.2 })],
 ];
 for (const [name, sc] of VARIATIONS) it(name, () => judged(sc));
 

@@ -9,7 +9,7 @@ import { ChainTip, reached } from '../core/tip';
 import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
-import { lowering, TIPTOE } from './balance/balance';
+import { lowering, TIPTOE } from './balance/posture';
 import { clamp, lerp, smoothstep } from './math';
 import type { Proportions } from './proportions';
 
@@ -43,7 +43,8 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
         SIDES.forEach((side, s) => {
           const sign = s === 0 ? 1 : -1;
           // (the left arm in front as the left foot lifts, the right behind)
-          const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * g.walk;
+          // (growing in as the walk does: setting off, the first steps barely swing them)
+          const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * smoothstep(0.3, 1, g.walk);
           const a = swing(lead);
           const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
           // the arm down from the T-pose (out by ABDUCTION), swung forward about the body's left; the forearm forward

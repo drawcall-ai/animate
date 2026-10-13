@@ -10,10 +10,14 @@ import { runAmount, stepTiming, type Timing } from './timing';
 
 /** how fast a root that got off its feet is brought back over them (m/s) */
 const LEASH_SPEED = 0.6;
-/** people brake harder than they speed up */
+/** people brake harder than they speed up (when they must) */
 export const BRAKE_FACTOR = 2.2;
 /** the share of the acceleration an approach plans with (it arrives without braking hard) */
 export const PLANNED_ACCEL = 0.8;
+/** how hard a planned stop slows (m/s², default body): comfortably, over two or three shortening steps */
+const ARRIVAL = 1.0;
+/** the facing asked on arrival is turned to once the body is this slow (m/s): first the stop, then the turn */
+const ARRIVAL_TURN = [0.3, 0.6] as const;
 /** how quickly the goal's own velocity is picked up (1/s) */
 const GOAL_VELOCITY_RATE = 9;
 /** a goal moving faster than this (m/s) was re-planned, not carried: it jumped */
@@ -188,7 +192,7 @@ export class Carriage {
     if (!to) {
       // (no goal asked: under way, it comes to a stop ahead, braking as it does arriving)
       if (this.asked && this.moving) {
-        const stop = (this.speed * this.speed) / (2 * BRAKE_FACTOR * this.accel * PLANNED_ACCEL);
+        const stop = (this.speed * this.speed) / (2 * ARRIVAL * this.p.scale);
         this.goal.copy(this.velocity).setLength(stop).add(this.root);
       } else if (!this.moving) this.goal.copy(this.root);
       this.asked = false;
@@ -298,7 +302,7 @@ export class Carriage {
       const ux = dx / dist;
       const uz = dz / dist;
       const along = out.x * ux + out.z * uz;
-      const cap = Math.max(0, gv.x * ux + gv.z * uz) + Math.sqrt(2 * BRAKE_FACTOR * accel * PLANNED_ACCEL * dist);
+      const cap = Math.max(0, gv.x * ux + gv.z * uz) + Math.sqrt(2 * Math.min(ARRIVAL * this.p.scale, accel) * dist);
       if (along > cap) out.add(_u.set(ux, 0, uz).multiplyScalar(cap - along));
     }
     // (no faster round a bend than the feet hold the body sideways; and a goal far off the facing is
@@ -349,7 +353,7 @@ export class Carriage {
     const travel = toGoal + wrapAngle(headingOf(this.velocity.x, this.velocity.z) - toGoal) * smoothstep(0.35, 0.8, this.speed);
     const facing = this.goalFacing ?? this.yaw;
     const backwards = Math.abs(wrapAngle(travel - facing)) > BACKUP.angle && dist < BACKUP.distance && this.speed < BACKUP.speed;
-    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed)) * (backwards ? 0 : 1);
+    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (backwards ? 0 : 1);
     this.goalYaw = facing + wrapAngle(travel - facing) * far;
     const e = wrapAngle(this.goalYaw - this.yaw);
     const most = (this.turnSpeed ?? TURN_RATE) * dt;

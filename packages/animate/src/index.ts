@@ -15,7 +15,7 @@ export { clampRotation, beyond } from './core/limits';
 export { BONES, INDEX, PARENT, SIDES, type BoneName, type ChildBone, type Side } from './humanoid/bones';
 export { Humanoid, type HumanoidOptions } from './humanoid/humanoid';
 export { createAsks, type Asks, type Go } from './humanoid/asks';
-export { balance, lowering, type Gait } from './humanoid/balance/balance';
+export { balance, type Gait } from './humanoid/balance/balance';
 export type { Foot, FootPhase } from './humanoid/balance/foot';
 export { CALM, handTo, hangArms, type HandOptions } from './humanoid/arms';
 export { CARRYING, closeHand, grab, hold, openHand, type Grips } from './humanoid/hands';

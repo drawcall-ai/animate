@@ -9,7 +9,7 @@ import { Report, reported, reporting } from '../report';
 /** the box's width, height and depth (m) */
 const BOX = new Vector3(0.34, 0.26, 0.26);
 /** the shelf: where its middle stands on the floor, its boards' heights, its width and depth (m); the body stands this far before its middle to put things up */
-const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34, stand: 0.45 };
+const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34, stand: 0.4 };
 /** how long the box takes from the floor up to the chest, and up onto the board (s) */
 const LIFT = 1.8;
 const PLACE = 1.8;
@@ -20,19 +20,20 @@ const AWAY = 0.1;
 const UP = new Vector3(0, 1, 0);
 const HANDS = ['leftHand', 'rightHand'];
 
-/** the box's variations: nearer (m, along its way), taller (m: its middle half that higher), turned round the body's start (rad), the shelf's top board lower (m) */
+/** the box's variations: nearer (m, along its way), taller (m: its middle half that higher), turned round the body's start (rad), the shelf's top board lower (m), lifted to the chest in `lift` s */
 export interface Variation {
   nearer?: number;
   taller?: number;
   around?: number;
   lower?: number;
+  lift?: number;
 }
 
 /**
  * A box on the floor: the body walks to it, squats and takes it in both hands, lifts it to the chest,
  * carries it to a shelf, puts it on the top board above its head on its toes, and lets go.
  */
-export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0 }: Variation = {}): Scenario {
+export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lift = LIFT }: Variation = {}): Scenario {
   const size = BOX.clone().setY(BOX.y + taller);
   const top = SHELF.boards[3] - lower;
   return {
@@ -54,7 +55,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0 }: V
         props: () => [{ kind: 'box', position: box.current.position.clone(), size, yaw: facingOf(box.current.quaternion) }, ...shelf(SHELF.boards[3] - top)],
         script: (h) =>
           function* () {
-            yield* parallel<Frame<World>>('all', idle(h), tasks(h, box, size, top, report));
+            yield* parallel<Frame<World>>('all', idle(h), tasks(h, box, size, top, lift, report));
           },
       };
     },
@@ -62,7 +63,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0 }: V
 }
 
 /** the body's part: after a moment, it takes the box, carries it over and puts it up, its eyes on it and then on the board; then it lets go */
-function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, report: Report): Behaviour<World> {
+function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: number, report: Report): Behaviour<World> {
   const grips: Grips = { left: 'left', right: 'right' };
   return function* () {
     // (the eyes on the box until it is carried off, then on the board it goes to)
@@ -73,7 +74,7 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, report
       reporting(report, HANDS, function* () {
         yield* grab(h, box, grips)();
         const goal: Placement = { position: box.current.position.clone(), quaternion: box.current.quaternion.clone() };
-        yield* parallel<Frame<World>>('race', carry(h, goal, gaze, size, top), hold(h, box, grips, { to: goal }));
+        yield* parallel<Frame<World>>('race', carry(h, goal, gaze, size, top, lift), hold(h, box, grips, { to: goal }));
       }),
       lookAt(h.gazer, reported(report, 'gaze', () => gaze.on)),
     );
@@ -82,7 +83,7 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, report
 }
 
 /** where the box is carried (into `goal`, and the eyes into `gaze`): up from the floor to the chest, over to the shelf, up onto its top board */
-function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size: Vector3, top: number): Behaviour<World> {
+function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size: Vector3, top: number, duration: number): Behaviour<World> {
   const facing = new Quaternion();
   const turned = goal.quaternion?.clone() ?? new Quaternion();
   return function* () {
@@ -90,15 +91,15 @@ function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size:
     const hips = h.pose.position(0);
     const ahead = forwardOf(h.gait.facing);
     const from = goal.position.clone();
-    const lift = path(from, from.clone().addScaledVector(ahead, 0.12).setY(0.6), hips.clone().addScaledVector(ahead, CARRIED.ahead).setY(CARRIED.height), LIFT);
+    const lift = path(from, from.clone().addScaledVector(ahead, 0.12).setY(0.6), hips.clone().addScaledVector(ahead, CARRIED.ahead).setY(CARRIED.height), duration);
     let began = -1;
     yield* action<Frame<World>>({
       update: (f) => {
         if (began < 0) began = f.time;
         goal.position.copy(lift(f));
-        goal.quaternion?.copy(turned).slerp(facing.setFromAxisAngle(UP, h.gait.facing), Math.min(1, (f.time - began) / LIFT));
+        goal.quaternion?.copy(turned).slerp(facing.setFromAxisAngle(UP, h.gait.facing), Math.min(1, (f.time - began) / duration));
       },
-      until: timePassed(LIFT, 'seconds'),
+      until: timePassed(duration, 'seconds'),
     });
     // carried in front of the chest to the shelf, the eyes on its top
     gaze.on = new Vector3(SHELF.x, top, SHELF.z);

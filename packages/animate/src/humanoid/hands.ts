@@ -74,9 +74,10 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
         const on = to ? aim : item;
         if (to) {
           const goal = live(to, f);
-          const turned = rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion ?? aim.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
+          // (on from where the item is, fitted to the wrists: arms lagging the aim do not pull it apart from them)
+          const turned = rotation.follow(item.prev.quaternion, item.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
           const within = inReach(h, f, item, grips, sides, _at.copy(goal.position), turned);
-          aim.move(f.time, position.follow(aim.prev.position, aim.current.position, within, motion, f.dt, _p), turned);
+          aim.move(f.time, position.follow(item.prev.position, item.current.position, within, motion, f.dt, _p), turned);
         }
         for (const side of sides) handStep(h, f, side, gripOf(item, grip(grips, side)), { on, ...HOLD }, arms[side]);
         if (to) fit(f, item, aim, grips, sides);

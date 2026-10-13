@@ -3,9 +3,9 @@ import { eyesOf, jointOf } from '../src/joints';
 import { forwardOf, leftOf } from '../src/math';
 import type { Frame } from './frame';
 
-/** a stride is steady when its speed stays within this share of its mean */
-const STEADY = 0.12;
-/** a stride turning faster than this (rad/s) is on a curve */
+/** a stride is steady when its speed varies across it, and the stride before, by less than this share of its mean (and its turn rate by less than CURVE) */
+const STEADY = 0.1;
+/** a stride turning faster than this (rad/s) over any stride within a stride of it is on a curve */
 const CURVE = 0.15;
 /** strides slower than this (m/s) aren't walking */
 const MIN_SPEED = 0.6;
@@ -40,6 +40,8 @@ interface Sample {
   headYaw: number;
   /** foot phases: planted = true */
   planted: [boolean, boolean];
+  /** where the feet are planted or landing [left, right] */
+  feet: [Vector3, Vector3];
   /** the script asked the eyes somewhere: the head is not left to go along with the thorax */
   gazed: boolean;
   /** sagittal angles (+ = forward): left upper arm, right thigh — contralateral pair */
@@ -67,6 +69,8 @@ export interface Stride {
   curve: boolean;
   speed: number;
   /** lateral peak to peak: pelvis, chest, head (m) */
+  /** the stride's two step lengths' difference over their mean */
+  stepAsymmetry: number;
   pelvisLat: number;
   chestLat: number;
   headLat: number;
@@ -157,6 +161,7 @@ export class GaitKinematics {
       headRoll: head.roll,
       headYaw: head.yaw,
       planted: [h.feet[0].phase === 'planted', h.feet[1].phase === 'planted'],
+      feet: [h.feet[0].position.clone(), h.feet[1].position.clone()],
       gazed: asked.has('gaze'),
       arm: sagittal(j('leftLowerArm').sub(j('leftUpperArm')), fwd),
       thigh: sagittal(j('rightLowerLeg').sub(j('rightUpperLeg')), fwd),
@@ -184,13 +189,20 @@ export class GaitKinematics {
       const b = downs[i + 1];
       const n = b - a;
       if (a - n < 0 || b + n > S.length) continue;
-      const speeds = S.slice(a, b).map((s) => s.speed);
-      const mean = speeds.reduce((x, y) => x + y, 0) / n;
-      if (mean < MIN_SPEED || speeds.some((v) => Math.abs(v - mean) > STEADY * mean)) continue;
+      // (and the stride before it too: the first strides after setting off still settle into the rhythm)
+      const speeds = S.slice(a - n, b).map((s) => s.speed);
+      const mean = speeds.reduce((x, y) => x + y, 0) / speeds.length;
+      if (mean < MIN_SPEED || Math.max(...speeds) - Math.min(...speeds) > STEADY * mean) continue;
       if (S.slice(a, b).reduce((x, s) => x + s.ahead, 0) / n < FORWARD * mean) continue;
       if (S.slice(a - n, b).some((s) => s.trunk > STOOPED)) continue;
-      const turn = Math.abs(S[b].yaw - S[a].yaw) / (S[b].t - S[a].t);
-      out.push(this.stride(a, b, turn > CURVE, mean));
+      // (turning anywhere within a stride of it, a bend setting in or easing off shifts the moving
+      // averages; steady, it turns alike over it and the stride before)
+      const rate = (k: number) => Math.abs(S[k + n].yaw - S[k].yaw) / (S[k + n].t - S[k].t);
+      let most = 0;
+      let least = Infinity;
+      for (let k = a - n; k + n <= Math.min(S.length - 1, b + n); k++) [most, least] = [Math.max(most, rate(k)), Math.min(least, rate(k))];
+      if (most > CURVE && most - least > CURVE) continue;
+      out.push(this.stride(a, b, most > CURVE, mean));
     }
     return out;
   }
@@ -287,6 +299,7 @@ export class GaitKinematics {
       armRange: range(arm) * DEG,
       curve,
       speed,
+      stepAsymmetry: asymmetry(S, a, b),
       pelvisLat: range(pl),
       chestLat: range(cl),
       headLat: range(hl),
@@ -337,7 +350,7 @@ export class GaitKinematics {
     };
   }
 
-  /** the median of each measure over the straight / curved, walking / running steady strides */
+  /** the median of each measure over the straight / curved, walking / running steady strides (the step asymmetry: the most) */
   summary(curve: boolean, run: boolean): Stride | null {
     const xs = this.strides.filter((s) => s.curve === curve && s.speed > RUNNING === run);
     if (!xs.length) return null;
@@ -349,6 +362,7 @@ export class GaitKinematics {
     const keys = Object.keys(xs[0]).filter((k) => k !== 'curve' && k !== 'from' && k !== 'to') as (keyof Omit<Stride, 'curve' | 'from' | 'to'>)[];
     const out = { curve } as Stride;
     for (const k of keys) out[k] = med((s) => s[k]);
+    out.stepAsymmetry = Math.max(...xs.map((s) => s.stepAsymmetry).filter((x) => !Number.isNaN(x)), 0);
     return out;
   }
 
@@ -360,7 +374,7 @@ export class GaitKinematics {
       if (!s) continue;
       const cm = (m: number) => (m * 100).toFixed(1);
       lines.push(
-        `gait ${curve ? 'curve   ' : 'straight'} ${run ? 'run ' : 'walk'} (${n} strides, ${s.speed.toFixed(2)} m/s): lateral p2p pelvis ${cm(s.pelvisLat)} chest ${cm(s.chestLat)} head ${cm(s.headLat)} cm, pelvis vertical ${cm(s.pelvisUp)} cm; ` +
+        `gait ${curve ? 'curve   ' : 'straight'} ${run ? 'run ' : 'walk'} (${n} strides, ${s.speed.toFixed(2)} m/s): lateral p2p pelvis ${cm(s.pelvisLat)} chest ${cm(s.chestLat)} head ${cm(s.headLat)} cm, pelvis vertical ${cm(s.pelvisUp)} cm, step asymmetry ≤ ${(s.stepAsymmetry * 100).toFixed(0)}%; ` +
           `± pelvis obliquity ${s.obliquity.toFixed(1)}° rotation ${s.rotation.toFixed(1)}°, thorax−pelvis roll ${s.thoraxToPelvisRoll.toFixed(1)}° yaw ${s.thoraxToPelvisYaw.toFixed(1)}° (corr ${s.counter.toFixed(2)}), trunk lean ${s.lean.toFixed(1)}°, head roll ${s.headRoll.toFixed(1)}° yaw ${s.headYaw.toFixed(1)}°; ` +
           `chest jerk ${s.chestJerk.toFixed(1)} m/s³, off-stride residual pelvis ${s.pelvisResidual.toFixed(2)} chest ${s.chestResidual.toFixed(2)}; phase: sway ${s.phase.toFixed(2)} bob ${s.bobPhase.toFixed(2)}; ` +
           `arm vs other thigh: corr ${s.armCorrelation.toFixed(2)} lag ${(s.armLag * 100).toFixed(0)}% cycles ${s.armCycles.toFixed(1)} range ${s.armRange.toFixed(0)}°; ` +
@@ -450,6 +464,16 @@ function correlation(a: number[], b: number[]): number {
     bb += (b[i] - mb) ** 2;
   }
   return ab / Math.sqrt(aa * bb || 1);
+}
+
+/** a stride's two steps (left touch-down `a` to the right's, to the left's at `b`): how much their lengths differ, over their mean */
+function asymmetry(S: Sample[], a: number, b: number): number {
+  let r = a + 1;
+  while (r < b && !(S[r].planted[1] && !S[r - 1].planted[1])) r++;
+  if (r >= b) return NaN;
+  const right = S[r].feet[1].distanceTo(S[a].feet[0]);
+  const left = S[b].feet[0].distanceTo(S[r].feet[1]);
+  return Math.abs(right - left) / ((right + left) / 2);
 }
 
 /** RMS of what one sinusoid at the stride frequency (over exactly one stride) leaves of `xs`, relative to that sinusoid */

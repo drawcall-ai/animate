@@ -22,10 +22,8 @@ export interface Limits {
   com: number;
   /** frames with the ankles crossed (left right of right) */
   crossings: number;
-  /** wrist error on full-weight targets within reach (m) */
-  wrist: number;
-  /** eye-midpoint error on full-weight head targets (m) */
-  head: number;
+  /** wrist error on held grips within reach (m): judged where something is held */
+  wrist?: number;
   /**
    * setting off and stopping: the trunk's and pelvis's peak pitch rate over steady walking's
    * (a snap into or out of the walk shows as a spike; null: those windows hold more than a start and a stop)
@@ -107,27 +105,27 @@ export interface Limits {
  * reaching for the withers eases into the elbow's and wrist's ranges as its target comes in.
  */
 export const LIMITS: Record<string, Limits> = {
-  'hand-over': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  'walk-tray': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.002, head: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
-  'pickup-shelf': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  stroll: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
-  run: { rom: { leftUpperLeg: 14, rightUpperLeg: 12 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
-  sit: { rom: { leftUpperLeg: 23, leftFoot: 12, rightUpperLeg: 23, rightFoot: 10 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  'step-over': { rom: { rightFoot: 4 }, ankle: [20, 147], joints: { knee: { accel: 90 } }, xcomFrames: 1, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  crouch: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  stairs: { joints: { knee: { accel: 92 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  vault: { rom: { leftUpperLeg: 125, leftFoot: 4, rightShoulder: 2, rightLowerArm: 8, rightHand: 35, rightUpperLeg: 140, rightLowerLeg: 13 }, ankle: [6, 148], joints: { knee: { accel: 98 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 1 },
-  jump: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 1, climbs: 0, vaults: 0 },
-  climb: { rom: { leftShoulder: 6, leftUpperArm: 43, leftHand: 63, leftUpperLeg: 84, rightShoulder: 10, rightUpperArm: 42, rightLowerArm: 2, rightHand: 38, rightUpperLeg: 122 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 1, vaults: 0 },
-  ladder: { rom: { leftLowerArm: 7, leftHand: 32, leftUpperLeg: 5, rightShoulder: 9, rightUpperArm: 8, rightHand: 60, rightUpperLeg: 14 }, joints: { knee: { accel: 113 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  push: { rom: { leftShoulder: 4, leftHand: 55, leftFoot: 17, rightShoulder: 4, rightHand: 55, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  reach: { rom: { leftUpperLeg: 3, leftFoot: 27, rightShoulder: 10, rightUpperArm: 28, rightUpperLeg: 38, rightFoot: 25 }, xcomFrames: 11, com: 0, crossings: 0, wrist: 0.647, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  'look-around': { rom: { leftFoot: 2, rightFoot: 4 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0.055, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, head: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  fight: { rom: { leftFoot: 2, rightUpperArm: 13, rightUpperLeg: 28, rightFoot: 14 }, joints: { elbow: { speed: 3500, accel: 210 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.44, head: 0.083, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  'aim-strafe': { rom: { leftHand: 18, leftFoot: 23, rightHand: 97, rightFoot: 21 }, ankle: [20, 135], xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  throw: { rom: { leftFoot: 36, rightShoulder: 9, rightUpperArm: 121, rightLowerArm: 16 }, ankle: [10, 125], bones: { leftUpperArm: { speed: 260, accel: 23 }, leftLowerArm: { speed: 600, accel: 13 }, rightLowerArm: { speed: 1300, accel: 53 } }, joints: { ankle: { accel: 90 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.139, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  sword: { rom: { leftFoot: 48, rightShoulder: 3, rightUpperArm: 2, rightLowerArm: 44, rightHand: 134, rightFoot: 18 }, ankle: [12, 125], bones: { leftUpperArm: { speed: 500, accel: 23 }, leftLowerArm: { speed: 750, accel: 22 } }, joints: { ankle: { accel: 125 } }, xcomFrames: 1, com: 0, crossings: 0, wrist: 0.179, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'hand-over': { xcomFrames: 0, com: 0, crossings: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'walk-tray': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.002, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
+  'pickup-shelf': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  stroll: { xcomFrames: 0, com: 0, crossings: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
+  run: { rom: { leftUpperLeg: 14, rightUpperLeg: 12 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
+  sit: { rom: { leftUpperLeg: 23, leftFoot: 12, rightUpperLeg: 23, rightFoot: 10 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'step-over': { rom: { rightFoot: 4 }, ankle: [20, 147], joints: { knee: { accel: 90 } }, xcomFrames: 1, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  crouch: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  stairs: { joints: { knee: { accel: 92 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  vault: { rom: { leftUpperLeg: 125, leftFoot: 4, rightShoulder: 2, rightLowerArm: 8, rightHand: 35, rightUpperLeg: 140, rightLowerLeg: 13 }, ankle: [6, 148], joints: { knee: { accel: 98 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 1 },
+  jump: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 1, climbs: 0, vaults: 0 },
+  climb: { rom: { leftShoulder: 6, leftUpperArm: 43, leftHand: 63, leftUpperLeg: 84, rightShoulder: 10, rightUpperArm: 42, rightLowerArm: 2, rightHand: 38, rightUpperLeg: 122 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 1, vaults: 0 },
+  ladder: { rom: { leftLowerArm: 7, leftHand: 32, leftUpperLeg: 5, rightShoulder: 9, rightUpperArm: 8, rightHand: 60, rightUpperLeg: 14 }, joints: { knee: { accel: 113 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  push: { rom: { leftShoulder: 4, leftHand: 55, leftFoot: 17, rightShoulder: 4, rightHand: 55, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  reach: { rom: { leftUpperLeg: 3, leftFoot: 27, rightShoulder: 10, rightUpperArm: 28, rightUpperLeg: 38, rightFoot: 25 }, xcomFrames: 11, com: 0, crossings: 0, wrist: 0.647, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'look-around': { rom: { leftFoot: 2, rightFoot: 4 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  fight: { rom: { leftFoot: 2, rightUpperArm: 13, rightUpperLeg: 28, rightFoot: 14 }, joints: { elbow: { speed: 3500, accel: 210 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.44, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'aim-strafe': { rom: { leftHand: 18, leftFoot: 23, rightHand: 97, rightFoot: 21 }, ankle: [20, 135], xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  throw: { rom: { leftFoot: 36, rightShoulder: 9, rightUpperArm: 121, rightLowerArm: 16 }, ankle: [10, 125], bones: { leftUpperArm: { speed: 260, accel: 23 }, leftLowerArm: { speed: 600, accel: 13 }, rightLowerArm: { speed: 1300, accel: 53 } }, joints: { ankle: { accel: 90 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.139, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  sword: { rom: { leftFoot: 48, rightShoulder: 3, rightUpperArm: 2, rightLowerArm: 44, rightHand: 134, rightFoot: 18 }, ankle: [12, 125], bones: { leftUpperArm: { speed: 500, accel: 23 }, leftLowerArm: { speed: 750, accel: 22 } }, joints: { ankle: { accel: 125 } }, xcomFrames: 1, com: 0, crossings: 0, wrist: 0.179, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'kick-ball': {
     bones: {
       leftUpperArm: { speed: 800, accel: 24 },
@@ -137,7 +135,7 @@ export const LIMITS: Record<string, Limits> = {
       rightUpperLeg: { speed: 880, accel: 38 },
       rightFoot: { speed: 1550, accel: 52 },
     },
-    xcomFrames: 1, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+    xcomFrames: 1, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   // bicycle: coming out of the turn the body's lean trails the bike's a little, and standing on the
   // pedals the pelvis passes close over the saddle (a step-through frame, no top tube: into
   // 0.054 → 0.028, its spike 63 → 34); skateboard: the peak is the pushing knee at full stretch;
@@ -147,11 +145,11 @@ export const LIMITS: Record<string, Limits> = {
   // forearm on the reins there 45 → 64 (between 55 and 63 as the walk-off ramp shifts it).
   // Getting on: the horse's left arm lies along the neck holding the withers; the car's right thigh passes under the steering column; the driver's left hand
   // reaches out at full stretch for the door's pull (car wrist 0.018)
-  bicycle: { rom: { leftHand: 10, leftFoot: 20, rightHand: 8, rightUpperLeg: 6, rightFoot: 19 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.012, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0.001, into: 0.028, spike: 34 }, board: { contact: 0.004, into: 0.011, accel: 7300 } },
-  snowboard: { rom: { leftFoot: 5, rightFoot: 4 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0, into: 0, spike: 29 } },
-  horse: { rom: { leftShoulder: 4, leftUpperArm: 46, leftLowerArm: 38, leftHand: 67, leftUpperLeg: 44, leftFoot: 31, rightShoulder: 8, rightUpperArm: 38, rightLowerArm: 17, rightHand: 66, rightUpperLeg: 31, rightFoot: 55 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.002, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0, into: 0.027, spike: 64 }, board: { contact: 0.008, into: 0.028, accel: 8600 } },
-  car: { rom: { leftShoulder: 8, leftLowerArm: 84, leftHand: 135, leftUpperLeg: 25, rightShoulder: 7, rightLowerArm: 60, rightHand: 136, rightUpperLeg: 23, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.018, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0, into: 0.029, spike: 77 }, board: { contact: 0.018, into: 0.01, accel: 21300 } },
-  skateboard: { rom: { leftUpperLeg: 27, leftFoot: 14, rightFoot: 13 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0.004, into: 0, spike: 61 } },
+  bicycle: { rom: { leftHand: 10, leftFoot: 20, rightHand: 8, rightUpperLeg: 6, rightFoot: 19 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.012, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0.001, into: 0.028, spike: 34 }, board: { contact: 0.004, into: 0.011, accel: 7300 } },
+  snowboard: { rom: { leftFoot: 5, rightFoot: 4 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0, into: 0, spike: 29 } },
+  horse: { rom: { leftShoulder: 4, leftUpperArm: 46, leftLowerArm: 38, leftHand: 67, leftUpperLeg: 44, leftFoot: 31, rightShoulder: 8, rightUpperArm: 38, rightLowerArm: 17, rightHand: 66, rightUpperLeg: 31, rightFoot: 55 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.002, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0, into: 0.027, spike: 64 }, board: { contact: 0.008, into: 0.028, accel: 8600 } },
+  car: { rom: { leftShoulder: 8, leftLowerArm: 84, leftHand: 135, leftUpperLeg: 25, rightShoulder: 7, rightLowerArm: 60, rightHand: 136, rightUpperLeg: 23, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.018, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0, into: 0.029, spike: 77 }, board: { contact: 0.018, into: 0.01, accel: 21300 } },
+  skateboard: { rom: { leftUpperLeg: 27, leftFoot: 14, rightFoot: 13 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0, ride: { foot: 0.004, into: 0, spike: 61 } },
 };
 
 /**
@@ -195,8 +193,12 @@ const ON_TOES = 0.3;
 const FLOOR_SINK = 0.025;
 /** how far a landing may still move in the last 40% of a swing (m): later reads as a stumble */
 const LATE_RETARGET = 0.03;
-/** how far the head may face off what the eyes are asked to look at, once it stays put (°): the eyes turn the rest in their sockets (~35° each way at most, the comfortable range half that) */
-const GAZE = 35;
+/** how far the head may face off what the eyes are asked to look at, once it stays put (°): the eyes turn the rest in their sockets (~35° each way at most, the comfortable range half that; measured 20–23°) */
+const GAZE = 25;
+/** the widest a slow step lands the feet apart (× the stance's width) */
+const WIDE = 1.5;
+/** the most a steady stride's two step lengths differ (share of their mean) */
+const ASYMMETRY = 0.05;
 /** how far a planted ankle may be off its foothold beyond the foot's roll (m): the foot stands where it is said to */
 const PLANTED = 0.01;
 
@@ -247,11 +249,16 @@ export function judge(m: Measured, limit: Limits) {
   expect(m.feet.ankle.max.value, `ankle flexed up (°, @${m.feet.ankle.max.at.toFixed(2)}s)`).toBeLessThanOrEqual(ankleMax + 1);
   expect(m.feet.lowest, 'foot below the floor (m)').toBeGreaterThan(-FLOOR_SINK);
   expect(m.landings.late.value, 'late landing retarget (m)').toBeLessThan(LATE_RETARGET);
+  // stopping and standing, no wide catching steps: the feet land at most WIDE stances apart
+  expect(m.landings.wide.value, `slow step width (× stance, @${m.landings.wide.at.toFixed(2)}s)`).toBeLessThan(WIDE);
   expect(m.feet.crossings, 'leg-crossing frames').toBeLessThanOrEqual(limit.crossings);
   expect(m.balance.xcomFrames, 'XCoM > 10 cm frames').toBeLessThanOrEqual(limit.xcomFrames);
   expect(m.balance.com, 'standing CoM outside the feet (m)').toBeLessThanOrEqual(limit.com + 1e-3);
-  expect(m.targets.wrist, 'wrist error').toBeLessThanOrEqual(limit.wrist + HEADROOM);
+  if (limit.wrist !== undefined) expect(m.targets.wrist, 'wrist error').toBeLessThanOrEqual(limit.wrist + HEADROOM);
+  else expect(m.targets.wrist, 'wrist error (nothing held)').toBe(0);
   expect(m.targets.gaze, 'gaze: head off the target asked (°)').toBeLessThan(GAZE);
+  // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
+  if (m.targets.asked > 0) expect(m.targets.judged, 'gaze: frames judged').toBeGreaterThan(0);
   for (const [curve, run] of [[false, false], [false, true], [true, false], [true, true]]) {
     // (walking and running strides each against their own references)
     const g = m.gait.summary(curve, run);
@@ -266,6 +273,8 @@ export function judge(m: Measured, limit: Limits) {
     expect(g.headRoll, `${where}: head roll (°)`).toBeLessThan(2);
     // smooth: one sway per stride, over the stance foot at mid-stance, no jitter
     expect(g.chestResidual, `${where}: chest sway beyond the stride frequency`).toBeLessThan(0.4);
+    // the steps alike: left and right as long, on a curve too
+    expect(g.stepAsymmetry, `${where}: step length asymmetry`).toBeLessThan(ASYMMETRY);
     expect(g.chestJerk, `${where}: chest lateral jerk (m/s³)`).toBeLessThan(50);
     expect(g.phase, `${where}: pelvis over the stance foot at mid-stance`).toBeGreaterThan(0.7);
     // the whole body moves as in motion capture (CMU walks at 1.0–1.4 m/s, runs at 3.2–3.6):
@@ -317,7 +326,7 @@ export function judge(m: Measured, limit: Limits) {
     }
   }
   // free arms swing as pendulums, setting off too (a runner's swing takes ~0.3 s): never back and forth quicker
-  expect(m.turns.shortest.gap, `free arm swing: shortest between turns (s, @${m.turns.shortest.t.toFixed(2)}s)`).toBeGreaterThan(0.25);
+  expect(m.turns.shortest.gap, `free arm swing: shortest between turns (s, @${m.turns.shortest.t.toFixed(2)}s)`).toBeGreaterThanOrEqual(0.25 - 1e-9); // (no quicker: a half swing of exactly 15 frames is not)
   // relaxed arms hang a little out from the side and swing clear of the thighs, never
   // in front of the pelvis (Collins 2009; Meyns 2013)
   const { standing, walking } = m.arms;
