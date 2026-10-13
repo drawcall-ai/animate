@@ -1,7 +1,7 @@
 import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { ask, createWorld, handTo, headTo, idle, lookAt, reached, release, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
-import { keyed, scalar, type Key } from '../keys';
+import { ask, CALM, createWorld, handTo, headTo, idle, lookAt, reached, release, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
+import { destination, route, scalar, type Way } from '../keys';
 import { leftOf, wrapAngle } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
@@ -35,9 +35,10 @@ function playback({ pace = 1, turn = 0 }: Variation) {
   };
 }
 
-/** keys whose points `moved` says to moved by `shift` and `rise` */
-function moved(keys: Key<[number, number, number]>[], { shift = { x: 0, z: 0 }, rise = 0 }: Variation, which: (y: number) => boolean): Key<[number, number, number]>[] {
-  return keys.map(([t, [x, y, z]]): Key<[number, number, number]> => [t, which(y) ? [x + shift.x, y + rise, z + shift.z] : [x, y, z]]);
+/** keys whose points `which` says to (and their ways' via points) moved by `shift` and `rise` */
+function moved(ways: Way[], { shift = { x: 0, z: 0 }, rise = 0 }: Variation, which: (y: number) => boolean): Way[] {
+  const by = ([x, y, z]: [number, number, number]): [number, number, number] => [x + shift.x, y + rise, z + shift.z];
+  return ways.map(([t, to, via]): Way => (which(to[1]) ? [t, by(to), via && by(via)] : [t, to, via]));
 }
 
 /** a headset's recorded skull centre's height scaled to this body (a headset is calibrated to its wearer) */
@@ -72,7 +73,7 @@ export function lookAround(v: Variation = {}): Scenario {
   const pace = v.pace ?? 1;
   const back = -2.6;
   const [bx, bz] = [Math.sin(back), Math.cos(back)];
-  const center = keyed(
+  const center = route(
     moved(
       [
         [0, [0, 1.6, 0.05]],
@@ -132,7 +133,7 @@ export function lookAround(v: Variation = {}): Scenario {
 }
 
 /** controllers are followed briskly (m/s², m/s): they are where the hands are, only a jump braked; under a tracked head they only follow */
-const CONTROLLER = { accel: 30, speed: 4, lead: false };
+const CONTROLLER = { accel: 30, speed: 4, turnAccel: 200, turnSpeed: 15, lead: false };
 
 /**
  * a controller recording as a wrist target (into `out`, with its velocity): the recorded point,
@@ -168,7 +169,7 @@ function painting(from: number, to: number, radius: number) {
 /** Three-point tracking (a headset and two controllers): painting a circle, crouching to the floor, cheering, side-stepping. */
 export function vr(v: Variation = {}): Scenario {
   const pace = v.pace ?? 1;
-  const center = keyed([
+  const center = route([
     [0, [0, 1.6, 0.04]],
     [1, [0, 1.58, 0.07]],
     [5, [0, 1.58, 0.07]],
@@ -189,7 +190,7 @@ export function vr(v: Variation = {}): Scenario {
     [10.5, 0.1],
   ]);
   // (the hands' targets in the air, past where they start, moved by the variation: the floor stays where it is)
-  const hands = (keys: Key<[number, number, number]>[]) => keyed([keys[0], ...moved(keys.slice(1), v, (y) => y > 0.5)]);
+  const hands = (keys: Way[]) => route([keys[0], ...moved(keys.slice(1), v, (y) => y > 0.5)]);
   const left = hands([
     [0, [0.22, 0.88, 0.08]],
     [1, [0.25, 1.1, 0.3]],
@@ -248,11 +249,12 @@ export function vr(v: Variation = {}): Scenario {
 
 /**
  * How a hand's target leads the body (example-only: the reach's own choreography): once it is round
- * beside or behind the body (rad off its facing), the body turns after it (rad/s) until it faces it
- * (rad); once it is out of the shoulder's reach across the floor (× the arm's length), the body walks
- * to stand with the shoulder that far from it (× the arm's length), at a walk (m/s, m/s²).
+ * beside, across or behind the body (rad off its facing, from the shoulder), the body turns after it
+ * (rad/s) until it faces it (rad); once it is out of the shoulder's reach across the floor (× the
+ * arm's length), the body walks to stand with the shoulder that far from it (× the arm's length), at
+ * a walk (m/s, m/s²).
  */
-const LEADS = { round: 1.0, faced: 0.3, turn: 2.5, out: 1.05, stand: 0.55, speed: 1.3, accel: 1.2 };
+const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 1.05, stand: 0.55, speed: 1.3, accel: 1.2 };
 
 /** what a hand's target `target` asks of the body for hand `side` (see LEADS), every sub-step */
 function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame<World>) => Vector3): (f: Frame<World>) => Partial<Asks> {
@@ -265,7 +267,8 @@ function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame
     const spot = go.to;
     if (Number.isNaN(face.yaw)) [face.yaw, spot.x, spot.z] = [h.gait.facing, f.prev.com(_w).x, _w.z];
     const at = target(f);
-    const toward = Math.atan2(at.x - spot.x, at.z - spot.z);
+    // (round as the shoulder sees it: across the body is round too)
+    const toward = Math.atan2(at.x - spot.x - leftOf(face.yaw, _u).x * sign * p.shoulderHalfWidth, at.z - spot.z - _u.z * sign * p.shoulderHalfWidth);
     const off = Math.abs(wrapAngle(toward - face.yaw));
     turning = off > (turning ? LEADS.faced : LEADS.round);
     if (turning) face.yaw = toward;
@@ -279,27 +282,41 @@ function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame
   };
 }
 
+/** the reaching hand: calm, but its joints brisk enough to keep it on its way while the body turns under it (rad/s², rad/s) */
+const REACHING = { ...CALM, speed: 2, turnAccel: 200, turnSpeed: 15 };
+
 /** One hand reaching round: high, across the body, to the floor, behind, far ahead; the body comes along as it must. */
 export function reach(v: Variation = {}): Scenario {
   const pace = v.pace ?? 1;
-  const LAST = 11.2;
-  /** how far ahead of the hand the eyes and the body go (s) */
-  const [GLANCE, AHEAD] = [0.35, 0.5];
-  const keys: Key<[number, number, number]>[] = [
+  /** how far ahead of the hand the eyes go (s) */
+  const GLANCE = 0.35;
+  // (the old core's targets — the first where the hand hangs — each reached at a pace a calm hand
+  // keeps up with (a minimum-jerk move of L m peaks at 1.875 L / T m/s), down to the floor no faster
+  // than the body squats, and swung round the body to behind it and back out)
+  const ways: Way[] = [
     [0.4, [-0.25, 0.9, 0.2]],
-    [1.6, [-0.25, 1.95, 0.4]],
-    [2.4, [-0.25, 1.95, 0.4]],
-    [3.6, [0.3, 1.0, 0.4]],
-    [4.3, [0.3, 1.0, 0.4]],
-    [5.8, [-0.35, 0.06, 0.55]],
-    [6.6, [-0.35, 0.06, 0.55]],
-    [8.0, [-0.55, 1.2, -0.6]],
-    [8.8, [-0.55, 1.2, -0.6]],
-    [10.4, [0.0, 1.25, 1.8]],
-    [11.2, [0.0, 1.25, 1.8]],
+    [1.8, [-0.25, 1.95, 0.4]],
+    [2.6, [-0.25, 1.95, 0.4]],
+    [4.0, [0.3, 1.0, 0.4]],
+    [4.7, [0.3, 1.0, 0.4]],
+    [6.9, [-0.35, 0.06, 0.55]],
+    [7.7, [-0.35, 0.06, 0.55]],
+    [9.8, [-0.55, 1.2, -0.6], [-0.75, 0.7, 0.0]],
+    [10.6, [-0.55, 1.2, -0.6]],
+    [14.1, [0.0, 1.25, 1.8], [-0.95, 1.3, 0.5]],
+    [14.9, [0.0, 1.25, 1.8]],
   ];
+  const LAST = 14.1;
   // (the targets past the first, at the hanging wrist, moved by the variation)
-  const wrist = keyed([keys[0], ...moved(keys.slice(1), v, () => true)]);
+  // (from where the wrist hangs as the reach sets off; the rest moved by the variation)
+  const played = [ways[0], ...moved(ways.slice(1), v, () => true)];
+  let wrist = route(played);
+  const going = destination(played);
+  const setOff = (hanging: Vector3) => {
+    const [x, y, z] = hanging.clone().applyAxisAngle(UP, -(v.turn ?? 0)).toArray();
+    played[0] = [ways[0][0], [x, y, z]];
+    wrist = route(played);
+  };
   const play = playback(v);
   const point = (t: number, out: Vector3) => play.place(wrist(play.time(t), out));
   return {
@@ -307,7 +324,7 @@ export function reach(v: Variation = {}): Scenario {
     title: 'Reaching around (one hand)',
     description:
       'A single wrist target visits points high, across the body, on the floor, behind and far away. The body shrugs, bends, squats, turns and steps as needed; the eyes lead the hand.',
-    duration: 13 / pace + 1.5,
+    duration: 14.9 / pace + 1.5,
     actors: [{}],
     stage: () => {
       const report = new Report();
@@ -323,7 +340,9 @@ export function reach(v: Variation = {}): Scenario {
         done: () => released,
         script: (h) =>
           function* () {
+            let set = false;
             const target = (f: Frame<World>) => {
+              if (!set) [set] = [true, setOff(f.prev.position(h.rig.skeleton.index('rightHand')).clone())];
               point(f.time, hand.position);
               hand.velocity.subVectors(point(f.time + f.dt, _w), point(f.time - f.dt, _u)).divideScalar(2 * f.dt);
               return hand;
@@ -334,13 +353,13 @@ export function reach(v: Variation = {}): Scenario {
               yield* action({ until: timePassed(0.4 / pace, 'seconds') });
               yield* parallel<Frame<World>>(
                 'race',
-                handTo(h, 'right', reported(report, 'rightWrist', target), { until: there }),
-                // (the body ahead of the hand: where it is going a moment on)
-                ask(h, comeAlong(h, 'right', (f) => point(f.time + AHEAD / pace, ahead))),
+                handTo(h, 'right', reported(report, 'rightWrist', target), { ...REACHING, until: there }),
+                // (the body ahead of the hand: turned and stepped to where it is going)
+                ask(h, comeAlong(h, 'right', (f) => play.place(going(play.time(f.time), ahead)))),
                 // (the eyes lead the hand: where it is going a moment on)
                 lookAt(h.gazer, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look))),
               );
-              yield* reporting(report, ['rightHand'], release(h, ['right']))();
+              yield* reporting(report, ['rightHand'], release(h, ['right'], 0.3))();
               released = true;
             });
           },

@@ -33,7 +33,7 @@ const EYES_AHEAD = 0.085;
 const BOW_AHEAD = 0.5;
 /** the furthest the trunk bows before the body steps closer (rad) */
 const MOST_BOW = 1.0;
-/** how far the knees let the pelvis down at most (× height: `balance`'s squat), and how fast `balance` changes it (m/s²) */
+/** how far the knees let the pelvis down at most (× height), and how fast `balance` changes it (m/s²): balance/posture.ts `SQUAT`, balance/balance.ts `LOWER.accel` */
 const SQUAT = 0.25;
 const KNEES = 3;
 /** how quickly the way where the body stands moves is picked up (1/s) */

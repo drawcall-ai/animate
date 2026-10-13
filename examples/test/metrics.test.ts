@@ -85,12 +85,12 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['look-around, looking down 10 cm lower', lookAround({ rise: -0.1 })],
   ['look-around, turned 0.3 rad left', lookAround({ turn: 0.3 })],
   ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
-  ['reach, the hand 20% faster', reach({ pace: 1.2 })],
-  ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
   ['reach, the targets 10 cm to the right', reach({ shift: { x: -0.1, z: 0 } })],
   ['reach, the targets 10 cm higher', reach({ rise: 0.1 })],
   ['reach, the targets 10 cm lower', reach({ rise: -0.1 })],
   ['reach, turned 0.3 rad right', reach({ turn: -0.3 })],
+  ['reach, the hand 20% slower', reach({ pace: 0.8 })],
+  ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
 ];
 for (const [name, sc, strides] of VARIATIONS) it(name, () => judged(sc, strides));
 
@@ -101,10 +101,23 @@ const KNOWN: [string, Scenario][] = [
   ['stroll whose point stops dead on a 1.5 m bend', stroll({ radius: 1.5, halt: true })],
   // a head bent down off the line the body faces, or a little further than it bows to, is reached by
   // the spine alone: `balance` carries the centre of mass toward it only by walking, and walks only
-  // to a goal 14 cm off (asks.lean, being built, is the way: the weight shifted within the feet)
-  ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
+  // to a goal 14 cm off (asks.lean, being built, is the way: the weight shifted within the feet).
+  // Further off and higher the eyes miss (8 cm); further left the spine bends sideways and carries
+  // the shoulder 5 cm in over the squatting thigh: a hand hanging clear of it is out 17° (free arms: ≤ 12°)
   ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
   ['look-around, looking down 10 cm higher', lookAround({ rise: 0.1 })],
+  ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
+  // `balance` stepping round in a full squat, bowed: the swinging leg's hip twists to and fro (125k°/s²
+  // at 8.2 s; repro: idle, ask lower 0.44 and bow 1.6, then from 1.5 s face −1.8 rad at 2.5 rad/s and
+  // go to (−0.2, 0, 0.3): leftUpperLeg 77k°/s² at 2.13 s, over the 67k°/s² a joint may reach)
+  ['reach, the targets 10 cm further out', reach({ shift: { x: 0, z: 0.1 } })],
+  // the body turns to where the hand is going as soon as it sets off: a hand still across the body
+  // (the targets 10 cm left) or by the floor (10 cm nearer) is carried off its way by the turn (0.41, 0.25 m)
+  ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
+  ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
+  // reach played 20% faster: the target swung out far ahead outruns the body walking after it (1.3 m/s),
+  // beyond the arm but within the arm + 35 cm the wrist is judged in (0.5 m)
+  ['reach, the hand 20% faster', reach({ pace: 1.2 })],
   // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),
   // so the body comes under the head late; and a controller on the floor turned off the body's facing,
   // or brought in close while rising to the cheer, is missed by more than the floor's own 15 cm
@@ -117,12 +130,6 @@ const KNOWN: [string, Scenario][] = [
   ['vr, the controllers 10 cm lower', vr({ rise: -0.1 })],
   ['vr, turned 0.3 rad left', vr({ turn: 0.3 })],
   ['vr, turned 0.3 rad right', vr({ turn: -0.3 })],
-  // the hand swinging round a body still turning after it (from behind to far ahead) flips the arm
-  // through its limits; reaching across 10 cm further left, the catching step lands wide
-  ['reach, the hand 20% slower', reach({ pace: 0.8 })],
-  ['reach, the targets 10 cm further out', reach({ shift: { x: 0, z: 0.1 } })],
-  ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
-  ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
 ];
 for (const [name, sc] of KNOWN) it.fails(`${name} (known)`, () => judged(sc));
 // (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)

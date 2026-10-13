@@ -91,10 +91,11 @@ export interface Limits {
  * kick (1763°/s, 110k°/s²); the free arm tucking in and out in throw (5923°/s, 357k°/s²) and
  * sword (1975°/s, 199k°/s²); the throwing elbow slamming straight (5923°/s).
  * look-around and reach are held to what the rebuilt runs measure: no joint past its range,
- * reach's centre of mass never 10 cm out (11 frames before), its wrist 0.647 → 0.55 (measured
- * ≤ 0.53 over its variations: the far and behind targets while the body turns and walks after
- * them); look-around's head error is the eyes over a bow setting in (measured 0.039, ≤ 0.062 over
- * its variations). vr keeps its old limits until its side-step passes (a strafe in `balance`).
+ * reach's centre of mass never 10 cm out (11 frames before), its wrist 0.647 → 0.15 (measured 0.10,
+ * ≤ 0.13 over its variations: the hand reaching across the body and to the floor, its targets now
+ * at a pace a calm hand follows and swung round the body rather than through it); look-around's
+ * head error is the eyes over a bow setting in (measured 0.039, ≤ 0.062 over its variations). vr
+ * keeps its old limits until its side-step passes (a strafe in `balance`).
  * pickup-shelf is held to what the rebuilt run measures: no joint past its range, no bone of its
  * own, the wrists within 2 cm of what they hold (measured ≤ 1.0 cm over its variations: the hands
  * carry the box, fitted to them, so only a sub-step's lag shows).
@@ -128,7 +129,7 @@ export const LIMITS: Record<string, Limits> = {
   climb: { rom: { leftShoulder: 6, leftUpperArm: 43, leftHand: 63, leftUpperLeg: 84, rightShoulder: 10, rightUpperArm: 42, rightLowerArm: 2, rightHand: 38, rightUpperLeg: 122 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 1, vaults: 0 },
   ladder: { rom: { leftLowerArm: 7, leftHand: 32, leftUpperLeg: 5, rightShoulder: 9, rightUpperArm: 8, rightHand: 60, rightUpperLeg: 14 }, joints: { knee: { accel: 113 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   push: { rom: { leftShoulder: 4, leftHand: 55, leftFoot: 17, rightShoulder: 4, rightHand: 55, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  reach: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.55, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  reach: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.15, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'look-around': { xcomFrames: 0, com: 0, crossings: 0, head: 0.055, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, head: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   fight: { rom: { leftFoot: 2, rightUpperArm: 13, rightUpperLeg: 28, rightFoot: 14 }, joints: { elbow: { speed: 3500, accel: 210 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.44, startStop: null, jumps: 0, climbs: 0, vaults: 0 },

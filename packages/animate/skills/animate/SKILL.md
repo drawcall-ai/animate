@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer; a humanoid base (`idle`: balance, free arms, gaze) with tasks over it (`walkTo`, `handTo`, `headTo`, `grab`, `hold`, `release`, `ask`; `pelvisTo` / `trunkTo` for a task owning the whole body), and the generic pieces under them (`follow`, `TrackedPoint` / `TrackedRotation`, `ChainTip` / `chainTo`, `lookAt`, carriers). Use when writing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer; a humanoid base (`idle`: balance, free arms, gaze) with tasks over it (`walkTo`, `handTo`, `headTo`, `grab`, `hold`, `release`, `ask`), and the generic pieces under them (`follow`, `TrackedPoint` / `TrackedRotation`, `ChainTip` / `chainTo`, `lookAt`, carriers). Use when writing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -43,13 +43,13 @@ body.update(delta); // every frame
 
 Tasks:
 - `walkTo` walks to a point (a live one is followed), turns to `face`, or both; it ends once the body has settled on squared feet. Give it `until` to keep following a point that moves on (it then ends only when `until` is met). `within` stops short of the point, squarely before it.
-- `handTo` moves a wrist (and, given a rotation, the hand) to a target at a calm everyday pace by default (`CALM`), the clavicle shrugging and the elbow swivelling as the target asks; a target below the arm's reach asks `balance` to bow and squat, one above to go up on the toes (`lead: false`: the hand only follows, as a tracked controller does under a tracked head). Endless, or `until: 'reached'`.
+- `handTo` moves a wrist (and, given a rotation, the hand) to a target at a calm everyday pace by default (`CALM`), the clavicle shrugging and the elbow swivelling as the target asks; a target below the arm's reach asks `balance` to bow and squat, one above to go up on the toes (`lead: false`: the hand only follows, as a tracked controller does under a tracked head). Endless, or `until: 'reached'`. A target that moves fast wants brisker joints too (`turnAccel`), or the arm swings behind it.
 - `headTo` puts the eyes (and turns the head) where a tracker says, through the spine; with `lead` the body comes along under the head — turning round once it is turned past what the trunk and neck take, bowing and squatting for it, stepping where the eyes go. It writes the spine and the chest: put it after `idle` and before the hand tasks, which hang off the chest it places.
 - `release` lets go: the hands open and draw back off what they held, then the free arms take them.
 - `ask` asks `balance` for what no task asks (a facing while the hands work, how low to stand), every sub-step it runs; a live value is read every sub-step.
 - `grab` walks to an `Item`, reaches both hands to its grips together (one shared condition: no hand goes before all are there) and closes them; then hold on with `hold`, which keeps the hands on the grips. With `to`, the hands carry it there (no further out than they reach) and the item is fitted to the wrists every sub-step: `hold` is its one mover, so it never leaves the hands. `openHand` / `closeHand` only mark what a hand holds (`h.holding`): there are no fingers.
 - `lookAt(h.gazer, point)` turns the head to a point; put it after the base's `lookAround` (it overrides the neck and head) and it touches nothing below them.
-- `pelvisTo` takes the root from `balance`, and both feet with it: a task that runs it owns everything — it places the feet, turns the trunk with `trunkTo`, and puts `lookAt` last.
+- `pelvisTo` (the root) and `trunkTo` (the chest) are for a task that owns the whole body; `pelvisTo` asks for both feet, which `balance` does not take yet, so neither runs under `idle` today.
 
 ## Composing tasks
 

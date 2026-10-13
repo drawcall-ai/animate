@@ -10,7 +10,7 @@ import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { lowering, TIPTOE } from './balance/posture';
-import { clamp, lerp, smoothstep } from './math';
+import { clamp, leftOf, lerp, smoothstep } from './math';
 import { yawOf } from './rig';
 import type { Proportions } from './proportions';
 
@@ -18,12 +18,12 @@ import type { Proportions } from './proportions';
 const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
 /** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
 const ABDUCTION = (8 * Math.PI) / 180;
-/** squatting, an arm hangs this much further out (rad), clear of the knees, by the time the pelvis is down a squat's depth (× height) */
-const SQUATTING = { abduction: (3 * Math.PI) / 180, depth: 0.25 };
+/** how far a hanging hand keeps out past the thigh beside it, from axis to axis (× height): the thigh's and the hand's thickness (mid-thigh 0.034, hand 0.012) and a little air */
+const CLEAR = 0.055;
 /** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it kinks; let go of, it comes down calmly */
 const SWING = { accel: 25, speed: 2.5 };
-/** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise; its joints braked only where the solve turns them faster than any hand moves (near full stretch a small move of the hand swings them far: braked softer, they swing behind it and the hand off its way) */
-export const CALM = { accel: 8, speed: 1.5, turnAccel: 200, turnSpeed: 15 } satisfies Motion;
+/** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
+export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
@@ -44,7 +44,9 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
         const g = h.gait;
         const lead = lerp(LEAD.walk, LEAD.run, g.run);
         const p = h.proportions;
-        const out = ABDUCTION + SQUATTING.abduction * smoothstep(0, SQUATTING.depth * p.height, p.hipHeight - f.prev.position(0).y);
+        const yaw = yawOf(_h.copy(f.current.local(0)));
+        const hips = f.current.position(0);
+        const left = leftOf(yaw, _left);
         SIDES.forEach((side, s) => {
           const sign = s === 0 ? 1 : -1;
           // (the left arm in front as the left foot lifts, the right behind)
@@ -52,12 +54,16 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
           const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * smoothstep(0.3, 1, g.walk);
           const a = swing(lead);
           const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
-          // the arm hanging down (out from the T-pose, further squatting), swung forward about the chest's
-          // left as the chest is turned about the vertical — however the trunk bows or leans (as the
-          // clavicle was last, whoever placed the chest after); the forearm forward
+          // the arm hanging plumb from the shoulder (as it was last, whoever placed the chest after),
+          // out from the T-pose as far as keeps the hand clear of the thigh beside it (the hip's or
+          // the knee's, as the legs stand now; the pelvis' frame) — however the trunk bows, leans
+          // or twists — swung forward about the pelvis' left; the forearm forward
           set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
-          const turned = _q.setFromAxisAngle(Y, yawOf(_h.copy(f.prev.rotation(INDEX.chest))));
-          const hang = turned.multiply(_h.setFromAxisAngle(X, -a)).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out)));
+          const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
+          const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
+          const clear = (thigh + CLEAR * p.height - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / p.armLength;
+          const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1)));
+          const hang = _q.setFromAxisAngle(Y, yaw).multiply(_h.setFromAxisAngle(X, -a)).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out)));
           set(f, goals, INDEX[`${side}UpperArm`], hang.premultiply(_h.copy(f.prev.rotation(INDEX[`${side}Shoulder`])).invert()));
           set(f, goals, INDEX[`${side}LowerArm`], _q.setFromAxisAngle(Y, -sign * flex));
           set(f, goals, INDEX[`${side}Hand`], IDENTITY);
@@ -195,6 +201,7 @@ const _q = new Quaternion();
 const _p = new Quaternion();
 const _r = new Quaternion();
 const _h = new Quaternion();
+const _left = new Vector3();
 const _c = new Quaternion();
 const _g = new Quaternion();
 const _s = new Vector3();
