@@ -85,6 +85,7 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['look-around, looking down 10 cm lower', lookAround({ rise: -0.1 })],
   ['look-around, turned 0.3 rad left', lookAround({ turn: 0.3 })],
   ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
+  ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
   ['reach, the targets 10 cm to the right', reach({ shift: { x: -0.1, z: 0 } })],
   ['reach, the targets 10 cm higher', reach({ rise: 0.1 })],
   ['reach, the targets 10 cm lower', reach({ rise: -0.1 })],
@@ -111,12 +112,12 @@ const KNOWN: [string, Scenario][] = [
   // at 8.2 s; repro: idle, ask lower 0.44 and bow 1.6, then from 1.5 s face −1.8 rad at 2.5 rad/s and
   // go to (−0.2, 0, 0.3): leftUpperLeg 77k°/s² at 2.13 s, over the 67k°/s² a joint may reach)
   ['reach, the targets 10 cm further out', reach({ shift: { x: 0, z: 0.1 } })],
-  // the body turns to where the hand is going as soon as it sets off: a hand still across the body
-  // (the targets 10 cm left) or by the floor (10 cm nearer) is carried off its way by the turn (0.41, 0.25 m)
+  // the body turns back from the target across it to where the hand is going (the floor) as the hand
+  // sets off, the hand still across the body: carried off its way by the turn (0.19 m at 5.4 s; holding
+  // the turn until the hand has crossed the midline leaves this and breaks the targets 10 cm right)
   ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
-  ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
-  // reach played 20% faster: the target swung out far ahead outruns the body walking after it (1.3 m/s),
-  // beyond the arm but within the arm + 35 cm the wrist is judged in (0.5 m)
+  // reach played 20% faster: the target swung out far ahead still outruns the body walking after it
+  // (its walk faster with the pace), beyond the arm but within the arm + 35 cm the wrist is judged in (0.23 m)
   ['reach, the hand 20% faster', reach({ pace: 1.2 })],
   // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),
   // so the body comes under the head late; and a controller on the floor turned off the body's facing,

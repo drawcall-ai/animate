@@ -61,7 +61,7 @@ export class ChainTip {
     moved.before.copy(own ? moved.last : f.prev.position(tip));
     moved.last.copy(position);
     moved.time = f.time;
-    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : stretched(f, bones, live(options.pole, f), (on ? on.toWorld(target, _goal).position : target.position).distanceTo(base) / (REACH * length)) });
+    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : live(options.pole, f) });
     if (turnAccel === undefined) return;
     for (const b of bones) {
       let joint = this.joints.get(b);
@@ -121,21 +121,6 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
   const angle = 2 * Math.atan2(d.x * a.x + d.y * a.y + d.z * a.z, d.w);
   return _roll.setFromAxisAngle(a, angle).multiply(q);
 }
-
-/**
- * the pole a limb bends toward, its target `out` (the share of its reach) away: `pole`,
- * turning over to where the middle joint is now as the target goes out past its reach
- * (STRAIGHTENING), into a shared vector — a limb held straight is swivelled by any move of
- * its pole, and its braked joints swinging behind that move the tip off its way
- */
-function stretched<W>(f: Frame<W>, bones: readonly number[], pole: Vector3, out: number): Vector3 {
-  const t = Math.min(1, Math.max(0, (out - STRAIGHTENING[0]) / (STRAIGHTENING[1] - STRAIGHTENING[0])));
-  return _pole.copy(pole).lerp(f.current.position(bones[1]), t * t * (3 - 2 * t));
-}
-
-/** over what distances of its target (shares of its reach) a limb's pole turns over to where its middle joint is */
-const STRAIGHTENING = [0.95, 1.05] as const;
-const _pole = new Vector3();
 
 /** how near the tip a chain's tip moves on from where it last moved it (m): further off, something else moved it */
 const OWN = 0.03;

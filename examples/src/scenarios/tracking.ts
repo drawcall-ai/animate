@@ -252,15 +252,15 @@ export function vr(v: Variation = {}): Scenario {
  * beside, across or behind the body (rad off its facing, from the shoulder), the body turns after it
  * (rad/s) until it faces it (rad); once it is out of the shoulder's reach across the floor (× the
  * arm's length), the body walks to stand with the shoulder that far from it (× the arm's length), at
- * a walk (m/s, m/s²).
+ * a walk (m/s, m/s², at the recording's pace).
  */
 const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 1.05, stand: 0.55, speed: 1.3, accel: 1.2 };
 
 /** what a hand's target `target` asks of the body for hand `side` (see LEADS), every sub-step */
-function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame<World>) => Vector3): (f: Frame<World>) => Partial<Asks> {
+function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame<World>) => Vector3, pace: number): (f: Frame<World>) => Partial<Asks> {
   const p = h.proportions;
   const sign = side === 'left' ? 1 : -1;
-  const go = { to: new Vector3(NaN, 0, 0), speed: LEADS.speed, accel: LEADS.accel };
+  const go = { to: new Vector3(NaN, 0, 0), speed: LEADS.speed * pace, accel: LEADS.accel * pace };
   const face = { yaw: NaN, rate: LEADS.turn };
   let turning = false;
   return (f) => {
@@ -307,7 +307,6 @@ export function reach(v: Variation = {}): Scenario {
     [14.9, [0.0, 1.25, 1.8]],
   ];
   const LAST = 14.1;
-  // (the targets past the first, at the hanging wrist, moved by the variation)
   // (from where the wrist hangs as the reach sets off; the rest moved by the variation)
   const played = [ways[0], ...moved(ways.slice(1), v, () => true)];
   let wrist = route(played);
@@ -342,7 +341,10 @@ export function reach(v: Variation = {}): Scenario {
           function* () {
             let set = false;
             const target = (f: Frame<World>) => {
-              if (!set) [set] = [true, setOff(f.prev.position(h.rig.skeleton.index('rightHand')).clone())];
+              if (!set) {
+                set = true;
+                setOff(f.prev.position(h.rig.skeleton.index('rightHand')).clone());
+              }
               point(f.time, hand.position);
               hand.velocity.subVectors(point(f.time + f.dt, _w), point(f.time - f.dt, _u)).divideScalar(2 * f.dt);
               return hand;
@@ -355,7 +357,7 @@ export function reach(v: Variation = {}): Scenario {
                 'race',
                 handTo(h, 'right', reported(report, 'rightWrist', target), { ...REACHING, until: there }),
                 // (the body ahead of the hand: turned and stepped to where it is going)
-                ask(h, comeAlong(h, 'right', (f) => play.place(going(play.time(f.time), ahead)))),
+                ask(h, comeAlong(h, 'right', (f) => play.place(going(play.time(f.time), ahead)), pace)),
                 // (the eyes lead the hand: where it is going a moment on)
                 lookAt(h.gazer, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look))),
               );

@@ -25,22 +25,6 @@ describe('chainTo', () => {
     const spins = knee.slice(1).map((q, k) => spinOf(knee[k], q, dt, new Vector3()));
     expect(Math.max(...spins.slice(1).map((w, k) => w.distanceTo(spins[k]) / dt))).toBeLessThan(40 + 1e-6);
   });
-
-  it('keeps a limb stretched toward a target out of reach from swivelling as its pole moves round', () => {
-    // (the hip at (0.1, 1, 0), the leg 0.85 long: the target 1.2 m off; once there, the pole keeps swinging round)
-    const goal = new Vector3(0.1, 1, 1.2);
-    const pole = new Vector3();
-    const body = new Body(leg(), chainTo('leg', { position: goal }, { accel: 6, speed: 1, turnAccel: 40, pole: (f) => pole.set(0.1, 1 - 2 * Math.cos(f.time), 0.4 + 2 * Math.sin(f.time)) }));
-    for (let k = 0; k < 240; k++) body.update(dt);
-    const knee = body.pose.position(2).clone();
-    let off = 0;
-    for (let k = 0; k < 120; k++) {
-      body.update(dt);
-      off = Math.max(off, body.pose.position(2).distanceTo(knee), body.pose.position(3).distanceTo(new Vector3(0.1, 1, 0).addScaledVector(new Vector3(0, 0, 1), 0.98 * 0.85)));
-    }
-    // (it drifts a little as its joints settle; swivelled by its pole it went 17 cm)
-    expect(off).toBeLessThan(0.03);
-  });
 });
 
 describe('TrackedRotation', () => {
