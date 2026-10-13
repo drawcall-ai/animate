@@ -25,6 +25,8 @@ export interface WalkOptions<W> {
   accel?: number;
   /** follows the goal closely, setting off and stopping on small offsets (a tracked body part walks) */
   eager?: boolean;
+  /** keeps `facing` while going, side-stepping and stepping back, instead of facing the way it goes (default false) */
+  strafe?: boolean;
   /** stops: once met, the walk comes to rest where it is, then ends */
   until?: UntilCondition<Ctx<W>>;
 }
@@ -53,6 +55,7 @@ export function walk<W>(h: Humanoid<W>, options: WalkOptions<W>): ReusableTimeli
     const p = h.proportions;
     const g = new Gait(p, h.status.stance, h.status.feet, options.speed ?? 1.3, options.accel ?? 1.2);
     g.eager = options.eager ?? false;
+    g.strafe = options.strafe ?? false;
     const posture = new Posture(h);
     const xcom = new Vector3();
     const pitch = [new Spring(), new Spring()];

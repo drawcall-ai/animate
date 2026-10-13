@@ -3,8 +3,7 @@ import { action, parallel, type ReusableTimeline } from '@pmndrs/timeline';
 import type { Ctx } from '../../core/body';
 import { INDEX, type BoneName } from '../bones';
 import type { Humanoid } from '../humanoid';
-import type { Proportions } from '../proportions';
-import { clamp, forwardOf, quatYXZ, softMin, softplus, Spring, wrapAngle } from '../math';
+import { clamp, forwardOf, quatYXZ, Spring, wrapAngle } from '../math';
 import { yawOf } from '../rig';
 import type { Effector } from '../status';
 import { intend } from './follow';
@@ -12,6 +11,7 @@ import { feetFacing } from './humanoid';
 import { footprint } from '../gait/foot';
 import { beyond, hullOf } from '../gait/support';
 import { walk } from './walk';
+import { lowering } from '../procedures/bow';
 
 /** how stiffly the head follows its tracker (Hz): it goes where it is put */
 const HEAD_STIFFNESS = 60;
@@ -26,13 +26,7 @@ const HEAD_TURN = 1.3;
 const OVER_FEET = 0.4;
 /** how fast the pelvis turns after the head standing (rad/s) */
 const TURN_RATE = 2.5;
-/** how far a lean takes the head down where the body stands for it (m, × height): a head lowered further is squatted under */
-const LEAN = 0.08;
-/** how deep the knees bend at most for the head (× height): a squat the body balances in, heels down; lower, the trunk bends further */
-const SQUAT = 0.25;
-/** over how much of the head's drop the knees start and stop bending (× height) */
-const BEND = 0.02;
-/** how far the knees stay bent under a tracked head (× height): soft, never snapping straight under it */
+/** how far the knees stay bent under a tracked head (× height): soft, never snapping straight under it as it rises */
 const SOFT = 0.02;
 /** the trunk's and neck's pull toward upright: just enough to keep the turn and bend shared among them */
 const UPRIGHT = 0.005;
@@ -46,6 +40,11 @@ const FACING = 2;
  */
 const STEP = { turn: 1.0, off: 0.05, wait: 0.1 };
 const SETTLED = { turn: 0.15, far: 0.1 };
+/** how far ahead the spot's motion is foreseen (s), and how quickly its speed is picked up (1/s) */
+const ANTICIPATE = 0.4;
+const DRIFT_RATE = 6;
+/** how quickly the feet speed up walking round under the head (m/s²): a headset is followed briskly */
+const WALK_ACCEL = 1.2;
 /** how far a step turns the feet at most (rad): turning round on the spot takes a few steps, the body over them all along */
 const PIVOT = 0.7;
 /** how far inside the feet's footprints the centre of mass is carried (m, default body), and how firmly (Hz) */
@@ -55,10 +54,6 @@ const BALANCE = 4;
 const BALANCE_RATE = 6;
 /** how far ahead of the centre of mass the eyes are, standing upright (m, default body) */
 const EYES_AHEAD = 0.085;
-/** the share of a trunk's lean forward that takes the eyes ahead of the centre of mass (the hips go back the rest) */
-const LEAN_AHEAD = 0.6;
-/** the share of a trunk's forward bend the hips take (the pelvis tipping forward), the spine the rest */
-const HINGE = 0.6;
 
 const ORIGIN = new Vector3();
 const TRUNK: readonly BoneName[] = ['spine', 'chest', 'neck', 'head'];
@@ -73,6 +68,8 @@ const _centre = new Vector3();
 const _v = new Vector3();
 const _f = new Vector3();
 const _com = new Vector3();
+const _spot = new Vector3();
+const _ahead = new Vector3();
 const _away = new Vector3();
 const ACROSS = new Vector3(1, 0, 1);
 const UP = new Vector3(0, 1, 0);
@@ -81,7 +78,9 @@ const UP = new Vector3(0, 1, 0);
 interface Lead {
   yaw: number;
   spot: Vector3;
-  /** how far the spot lies off where the feet bear the centre of mass, standing (m) */
+  /** how fast it moves (m/s, smoothed) */
+  drift: Vector3;
+  /** how far the spot lies off where the feet bear the centre of mass, standing, as it will be shortly (m) */
   off: number;
   stepping: boolean;
 }
@@ -95,7 +94,7 @@ interface Lead {
  */
 export function track<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effector>): ReusableTimeline<Ctx<W>> {
   return function* () {
-    const lead: Lead = { yaw: h.yaw, spot: new Vector3(), off: 0, stepping: false };
+    const lead: Lead = { yaw: h.yaw, spot: new Vector3(), drift: new Vector3(), off: 0, stepping: false };
     yield* parallel<Ctx<W>>('all', intend(h, 'head', target), head(h, target, lead), feet(h, lead));
   };
 }
@@ -114,6 +113,7 @@ function head<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effector>, le
     let yaw = h.yaw;
     const balance = [new Spring(), new Spring()];
     let standing = false;
+    let tracked = false;
     yield* action<Ctx<W>>({
       update: (ctx) => {
         const t = target(ctx);
@@ -126,7 +126,9 @@ function head<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effector>, le
         standing = !lead.stepping;
         if (t.weight <= 0) {
           lead.spot.set(com.x, 0, com.z);
+          lead.drift.set(0, 0, 0);
           lead.off = 0;
+          tracked = false;
           return;
         }
         const q = _head.copy(t.quaternion ?? ctx.body.rotations[INDEX.head]);
@@ -149,14 +151,16 @@ function head<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effector>, le
         // further), never quite straight under it (they would snap straight and back); no higher
         // than that leaves it: a stretch up is the feet's, onto the toes, not the head's to pull
         const drop = Math.max(0, p.eyeHeight - h.status.stance.crouch - at.y);
-        const bend = softMin(drop, LEAN * p.height, BEND * p.height);
-        const knees = softMin(SOFT * p.height + softplus(drop - bend - SOFT * p.height - BEND * p.height, BEND * p.height), SQUAT * p.height, BEND * p.height);
-        const lean = Math.max(0, drop - knees);
-        at.y = Math.min(at.y, p.eyeHeight - h.status.stance.crouch - knees - lean);
+        const { knees, bow, stoop, ahead } = lowering(p, p.eyeHeight - p.hipHeight, drop, SOFT);
+        at.y = Math.min(at.y, p.eyeHeight - h.status.stance.crouch - knees - bow);
         h.hints.crouch(ctx.time, knees * t.weight);
-        h.hints.stoop(ctx.time, HINGE * stoopFor(p, lean) * t.weight);
+        h.hints.stoop(ctx.time, stoop * t.weight);
         // where the body stands for it (its centre of mass): as far behind it as that bow puts it
-        lead.spot.copy(at).addScaledVector(fwd, -EYES_AHEAD * p.scale - aheadFor(p, lean)).setY(0);
+        const spot = _spot.copy(at).addScaledVector(fwd, -EYES_AHEAD * p.scale - ahead).setY(0);
+        // (and how fast it goes: a head going somewhere is stepped after before it is out of reach)
+        if (tracked && ctx.dt > 0) lead.drift.lerp(_v.subVectors(spot, lead.spot).divideScalar(ctx.dt), 1 - Math.exp(-DRIFT_RATE * ctx.dt));
+        lead.spot.copy(spot);
+        tracked = true;
         if (standing) {
           // standing, the pelvis turns after the head once it is turned beyond what the trunk and
           // neck take, as far as it turns over the feet, at its own pace (the stand carries it);
@@ -168,8 +172,8 @@ function head<W>(h: Humanoid<W>, target: (ctx: Ctx<W>) => Readonly<Effector>, le
           const want = feet + clamp(wrapAngle(yaw + ahead - clamp(ahead, -TWIST, TWIST) - feet), -OVER_FEET, OVER_FEET);
           yaw += clamp(wrapAngle(want - yaw), -TURN_RATE * ctx.dt, TURN_RATE * ctx.dt);
           h.hints.facing(ctx.time, yaw, FACING, t.weight);
-          const carried = onFeet(h, lead.spot, MARGIN * p.scale, _com);
-          lead.off = lead.spot.distanceTo(carried);
+          lead.off = onFeet(h, _ahead.copy(spot).addScaledVector(lead.drift, ANTICIPATE), MARGIN * p.scale, _com).distanceTo(_ahead);
+          const carried = onFeet(h, spot, MARGIN * p.scale, _com);
           // (from where the walk left it, smoothly)
           carried.set(balance[0].step(carried.x, BALANCE_RATE, ctx.dt), 0, balance[1].step(carried.z, BALANCE_RATE, ctx.dt));
           ctx.propose.target({ kind: 'position', point: 'com', value: carried, mask: ACROSS, weight: t.weight, stiffness: BALANCE, owner: 'track' });
@@ -192,21 +196,6 @@ function onFeet<W>(h: Humanoid<W>, at: Readonly<Vector3>, margin: number, out: V
   out.set(at.x, 0, at.z);
   const by = beyond(hull, out, _away) + margin;
   return by > 0 ? out.addScaledVector(_away, -by) : out;
-}
-
-/**
- * How far the eyes go ahead of where they are upright as the trunk leans to bring them `lean` (m)
- * down, bending at the hips (the hips going back as far as balance asks)
- */
-function aheadFor(p: Proportions, lean: number): number {
-  const L = p.eyeHeight - p.hipHeight;
-  const l = clamp(lean, 0, L);
-  return LEAN_AHEAD * Math.sqrt(l * (2 * L - l));
-}
-/** how far the trunk bends forward at the hips to bring the eyes `lean` (m) down (rad) */
-function stoopFor(p: Proportions, lean: number): number {
-  const L = p.eyeHeight - p.hipHeight;
-  return Math.acos(1 - clamp(lean, 0, L) / L);
 }
 
 /**
@@ -233,7 +222,7 @@ function feet<W>(h: Humanoid<W>, lead: Lead): ReusableTimeline<Ctx<W>> {
       const facing = () => feetFacing(h) + clamp(wrapAngle(lead.yaw - feetFacing(h)), -PIVOT, PIVOT);
       yield* parallel<Ctx<W>>(
         'race',
-        walk(h, { to: () => lead.spot, facing, eager: true }),
+        walk(h, { to: () => lead.spot, facing, eager: true, strafe: true, accel: WALK_ACCEL }),
         action<Ctx<W>>({ until: (ctx) => planted() && turn() < SETTLED.turn && far(ctx) < SETTLED.far * scale }),
       );
       lead.stepping = false;

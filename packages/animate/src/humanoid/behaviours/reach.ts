@@ -6,9 +6,22 @@ import type { Humanoid } from '../humanoid';
 import { middleJoint } from '../procedures/legs';
 import type { Effector } from '../status';
 import { intend } from './follow';
+import { CALM, caps } from '../profile/caps';
+import { lerp, smoothstep } from '../math';
+import { lowering } from '../procedures/bow';
 
 /** how stiffly a hand follows its target (Hz): a held thing goes where it is carried */
 const HAND_STIFFNESS = 60;
+/**
+ * how fast a hand's target moves (m/s) for its arm to move calmly (everyday reaching, up to ~1 m/s),
+ * and for it to move at the joints' full acceleration (a hand thrown up, a strike), and how
+ * quickly that speed is picked up (1/s)
+ */
+const BRISK = [1.5, 3.5] as const;
+const SPEED_RATE = 10;
+/** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
+const REACH = 0.95;
+const OUT = 0.5;
 /** how strongly the elbow is placed where the arm's plane puts it (a weak hint: the hand's target leaves its swivel open) */
 const ELBOW = 0.3;
 
@@ -21,14 +34,17 @@ const _elbow = new Vector3();
 const _q = new Quaternion();
 const _qi = new Quaternion();
 const _goal = new Vector3();
+
 /** the arm's joints a hand target claims: not the clavicle, which stays as it rests (light, the solve would shrug it into its stop first) */
 const ARM = ['UpperArm', 'LowerArm', 'Hand'] as const;
 
 /**
  * Reaching with hand `side` for its target (the wrist, and the hand's turn when given), every
  * frame: the hand pulled there, a part weight part of the way from where it was (so a weight
- * ramping in is a reach), its arm claimed from the relaxed pose and the swing; the elbow
- * swivelled as the hand's place asks; reported in the intent.
+ * ramping in is a reach), its arm claimed from the relaxed pose and the
+ * swing; the elbow swivelled as the hand's place asks; the trunk bowed and the knees bent for a
+ * hand low down; the arm as brisk as the target is quick; reported in the intent. Bringing the
+ * body to a target out of reach is `follow`'s.
  */
 export function reach<W>(h: Humanoid<W>, side: Side, target: (ctx: Ctx<W>) => Readonly<Effector>): ReusableTimeline<Ctx<W>> {
   const p = h.proportions;
@@ -39,9 +55,15 @@ export function reach<W>(h: Humanoid<W>, side: Side, target: (ctx: Ctx<W>) => Re
   const axis = p.offsets[`${side}LowerArm`].clone().normalize();
   // (the hand's target takes its arm from the relaxed pose and the swing)
   const claims = ARM.map((b) => INDEX[`${side}${b}`]);
+  // (the shoulder joint's height standing)
+  const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets[`${side}Shoulder`].y + p.offsets[`${side}UpperArm`].y;
+  const elite = caps().filter((c) => claims.includes(c.bone) || c.bone === INDEX[`${side}Shoulder`]);
   return function* () {
     // (where the hand was as the reach began: a part weight goes part of the way from there)
     const from = new Vector3();
+    // (how fast the target moves, smoothed: a quick reach moves the arm briskly)
+    const last = new Vector3();
+    let speed = -1;
     yield* parallel<Ctx<W>>(
       'all',
       intend(h, `${side}Hand`, target),
@@ -49,16 +71,32 @@ export function reach<W>(h: Humanoid<W>, side: Side, target: (ctx: Ctx<W>) => Re
         update: (ctx) => {
           const t = target(ctx);
           if (t.weight <= 0) {
+            speed = -1;
             from.copy(ctx.body.positions[hand]);
             return;
           }
           const goal = _goal.lerpVectors(from, t.position, t.weight);
           h.hints.armSwing(ctx.time, 0);
+          // a target below what the arm reaches standing brings the body down to it: the trunk bows,
+          // the knees bend
+          const shoulder = _shoulder.copy(ctx.body.positions[upper]);
+          // (as far below the shoulder as the arm reaches, the hand held out as far as standing
+          // takes it: further out is the feet's to bring closer, not the bow's)
+          const at = t.position;
+          const across = Math.min(Math.hypot(at.x - shoulder.x, at.z - shoulder.z), OUT * p.armLength);
+          const below = Math.sqrt((REACH * p.armLength) ** 2 - across * across);
+          const { knees, stoop } = lowering(p, high - p.hipHeight, high - h.status.stance.crouch - at.y - below);
+          h.hints.crouch(ctx.time, knees * t.weight);
+          h.hints.stoop(ctx.time, stoop * t.weight);
+
+          speed = speed < 0 || ctx.dt <= 0 ? 0 : lerp(speed, last.distanceTo(t.position) / ctx.dt, 1 - Math.exp(-SPEED_RATE * ctx.dt));
+          last.copy(t.position);
+          const share = lerp(CALM, 1, smoothstep(BRISK[0], BRISK[1], speed));
+          for (const c of elite) ctx.propose.cap({ bone: c.bone, acceleration: c.acceleration * share });
           ctx.propose.target({ kind: 'position', point: { bone: hand, at: ORIGIN }, value: goal, weight: 1, stiffness: HAND_STIFFNESS, claims, owner: 'reach' });
           if (t.quaternion) ctx.propose.target({ kind: 'orientation', point: { bone: hand, at: ORIGIN }, value: t.quaternion, weight: t.weight, stiffness: HAND_STIFFNESS, claims, owner: 'reach' });
           // the elbow: a blend of where it goes for a hand hanging, forward, up, out and across
           // (copied from the old core, a801be4:packages/core/src/limbs/arms.ts), in the chest's frame
-          const shoulder = _shoulder.copy(ctx.body.positions[upper]);
           const qChest = _q.copy(ctx.body.rotations[chest]);
           const dl = _dl.subVectors(goal, shoulder).normalize().applyQuaternion(_qi.copy(qChest).invert());
           dl.x *= sign;
@@ -85,3 +123,4 @@ export function carry<W>(h: Humanoid<W>, hands: { left: (ctx: Ctx<W>) => Readonl
     yield* parallel<Ctx<W>>('all', reach(h, 'left', hands.left), reach(h, 'right', hands.right));
   };
 }
+

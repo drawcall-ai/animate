@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Merged } from './board';
-import { fit } from './fit';
+import { brakeAtLimit, fit } from './fit';
 import { inertia, positionBlock } from './jacobian';
 import { accelerationOf, capJoint, type Joint } from './joints';
 import { project, weighted } from './projection';
@@ -12,7 +12,7 @@ import type { Point } from './types';
  * Advances a body's state by one sub-step under merged proposals:
  * 1. impulses change the velocity;
  * 2. the soft solve (`fit`) gives the velocity toward the pose the targets and contacts ask,
- *    within the limits and braking in time for the caps;
+ *    within the limits and braking in time for the caps, at the closest pose and at the limits;
  * 3. the hard projection (`project`) meets the winning contacts as closely as they can be met,
  *    the joints at their caps heavier and the root the last resort;
  * 4. velocities are the actual change over the step, each joint's acceleration clamped to its
@@ -44,7 +44,10 @@ export class Solver {
     for (const i of merged.impulses) addImpulse(state, i.point, i.velocity, v0);
 
     const next = fit(merged, this.start, this.joints, v0, dt, this.trial);
-    for (const j of this.joints) capJoint(j, next, v0, dt);
+    for (const j of this.joints) {
+      brakeAtLimit(j, next, merged, this.start, dt);
+      capJoint(j, next, v0, dt);
+    }
     state.move(next, dt);
     this.soft.copyPose(state);
 

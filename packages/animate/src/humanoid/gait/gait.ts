@@ -96,6 +96,8 @@ export class Gait {
   bent = 0;
   /** follow the goal closely: a tracked body part walks */
   eager = false;
+  /** keep the goal's facing while going (side-steps and backward steps), not the way it goes */
+  strafe = false;
   /** the step clock (s), the foot that lifted last and when, and the one that landed last */
   clock = 0;
   lastLift = 1;
@@ -290,7 +292,7 @@ export class Gait {
     // (arriving with no facing asked for, the body keeps the one it has)
     const facing = this.goalFacing ?? this.yaw;
     const backwards = Math.abs(wrapAngle(travel - facing)) > BACKUP.angle && dist < BACKUP.distance && this.speed < BACKUP.speed;
-    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed)) * (backwards ? 0 : 1);
+    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed)) * (backwards || (this.strafe && this.goalFacing !== null) ? 0 : 1);
     this.goalYaw = facing + wrapAngle(travel - facing) * far;
     const e = wrapAngle(this.goalYaw - this.yaw);
     const turn = clamp((far * this.turnRate + e * TURN_GAIN) * dt, -TURN_RATE * dt, TURN_RATE * dt);
