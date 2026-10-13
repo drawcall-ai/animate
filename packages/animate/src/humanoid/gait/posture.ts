@@ -147,7 +147,8 @@ export class Posture<W> {
     const rate = lerp(lerp(OFFSET_RATE.stand, OFFSET_RATE.walk, walk), OFFSET_RATE.run, run);
     const offset = _v.set(this.offset[0].step(ctx.body.positions[0].x - ctx.body.com.x, rate, dt), 0, this.offset[1].step(ctx.body.positions[0].z - ctx.body.com.z, rate, dt));
     const pelvis = g.pelvis.copy(g.root).add(offset).addScaledVector(left, side).addScaledVector(fwd, shift);
-    quatYXZ(g.yaw + pelvisYaw, 0.5 * nod, roll, g.pelvisRotation);
+    // (tipped forward as far as asked: a trunk bending at the hips)
+    quatYXZ(g.yaw + pelvisYaw, 0.5 * nod + this.h.hints.read(ctx.time).stoop, roll, g.pelvisRotation);
     // (smoothed after the legs' limit: a dip that binds turns over smoothly; the limit leaves the
     // legs a few cm of reach for the spring's lag)
     const standing = p.hipHeight - status.stance.crouch - this.h.hints.read(ctx.time).crouch + lift;
@@ -169,7 +170,7 @@ export class Posture<W> {
     // the trunk: the thorax counter-rotating and rolling, leaning and nodding; the spine and
     // chest share the turn from the pelvis
     quatYXZ(g.yaw + thoraxYaw, lean, thoraxRoll, _chest);
-    this.split(ctx, g.pelvisRotation, _chest, 'spine', 'chest', 'main', STIFFNESS.trunk);
+    this.split(ctx, g.pelvisRotation, _chest, 'spine', 'chest', 'fallback', STIFFNESS.trunk);
     // the head on the way ahead, carrying a share of the thorax's swing (a fallback: a gaze overrides it)
     const eye = p.eyeHeight;
     const pitch = Math.atan2(eye - lerp(0.75, 0.35, smoothstep(0.1, 0.6, walk)) * H, lerp(3, 4.5, smoothstep(0.1, 0.6, walk)));

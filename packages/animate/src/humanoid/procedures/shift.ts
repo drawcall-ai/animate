@@ -88,6 +88,14 @@ export class Shift {
     this.duration = 0;
   }
 
+  /** carries it from `at` (on the floor) at rest, toward both feet: the body is taken over from wherever something else left it */
+  restart(at: Readonly<Vector3>) {
+    this.at.set(at.x, 0, at.z);
+    this.velocity.set(0, 0, 0);
+    this.acceleration.set(0, 0, 0);
+    this.to(null);
+  }
+
   /** whether the last shift is done */
   get shifted(): boolean {
     return this.duration > 0 && this.time >= this.duration;

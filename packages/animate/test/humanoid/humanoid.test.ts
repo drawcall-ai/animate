@@ -94,9 +94,11 @@ describe('Hints', () => {
     hints.facing(1, -0.4, 2);
     hints.facing(1, 0.9, 2, 0.5);
     hints.armSwing(1, 0.8);
-    expect(hints.read(1)).toEqual({ crouch: 0, facing: null, armSwing: 1 });
-    expect(hints.read(2)).toEqual({ crouch: 0.2, facing: -0.4, armSwing: 0.5 });
-    expect(hints.read(3)).toEqual({ crouch: 0, facing: null, armSwing: 1 });
+    hints.stoop(1, 0.3);
+    hints.stoop(1, 0.1);
+    expect(hints.read(1)).toEqual({ crouch: 0, facing: null, armSwing: 1, stoop: 0 });
+    expect(hints.read(2)).toEqual({ crouch: 0.2, facing: -0.4, armSwing: 0.5, stoop: 0.3 });
+    expect(hints.read(3)).toEqual({ crouch: 0, facing: null, armSwing: 1, stoop: 0 });
     expect(() => hints.read(2)).toThrow(/after/);
   });
 });

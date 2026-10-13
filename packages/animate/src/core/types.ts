@@ -39,7 +39,8 @@ interface Goal {
   stiffness?: number;
   /**
    * default 'main'; a fallback's weight is what the main targets of its sort (a position, or a
-   * rotation: orientation, aim, local) on its bone leave of 1
+   * rotation: orientation, aim, local) on its bone leave of 1 (a position's along each world
+   * axis: one held only across the floor leaves a height whole)
    */
   tier?: Tier;
   /**

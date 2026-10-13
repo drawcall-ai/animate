@@ -40,7 +40,20 @@ describe('merge', () => {
     expect(merge(board, arm()).targets.map((t) => t.weight)).toEqual([0.8, expect.closeTo(0.2, 12), expect.closeTo(0.2, 12), 1]);
   });
 
-  it('copies proposals so behaviours may reuse their vectors', () => {
+  it('gives a position fallback what the main positions leave along each axis it holds', () => {
+    const board = new Board();
+    const across = new Vector3(1, 0, 1);
+    board.target({ kind: 'position', point: 'com', value: at(1), mask: across, weight: 1 });
+    board.target({ kind: 'position', point: { bone: 0, at: at(0) }, value: at(0), mask: new Vector3(0, 1, 0), weight: 1, tier: 'fallback' });
+    board.target({ kind: 'position', point: 'com', value: at(0), mask: across, weight: 1, tier: 'fallback' });
+    board.target({ kind: 'position', point: { bone: 0, at: at(0) }, value: at(0), weight: 0.5, tier: 'fallback' });
+    const m = merge(board, arm());
+    expect(m.targets.map((t) => t.weight)).toEqual([1, 1, 0.5]);
+    // (the one held along every axis keeps only its height)
+    expect(m.targets[2].target).toMatchObject({ mask: new Vector3(0, 1, 0) });
+  });
+
+    it('copies proposals so behaviours may reuse their vectors', () => {
     const board = new Board();
     const v = at(1);
     board.target({ kind: 'position', point: tip(), value: v, weight: 1 });

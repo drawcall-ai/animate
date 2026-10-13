@@ -12,7 +12,8 @@ import { lerp, Spring } from '../math';
 import { GAIT_ROOT, legCaps, rootCap, RUNNING, STEPPING } from '../profile/caps';
 import { plant, type Leg } from '../procedures/footing';
 import { step } from '../procedures/step';
-import { feetFacing, xcomOf } from './humanoid';
+import { yawOf } from '../rig';
+import { xcomOf } from './humanoid';
 
 export interface WalkOptions<W> {
   /** where to go, on the floor: asked every frame (a moving goal is followed, its speed fed forward) */
@@ -59,17 +60,25 @@ export function walk<W>(h: Humanoid<W>, options: WalkOptions<W>): ReusableTimeli
     const lifts: [Lift | null, Lift | null] = [null, null];
     let started = false;
     let stopping = false;
+    /** where it comes to rest, once stopping, and facing which way (the root as it was then: aiming at the moving root, the walk would carry on at its speed) */
+    const rest = new Vector3();
+    let restYaw = 0;
 
     const body = action<Ctx<W>>({
       update: (ctx, clock, time) => {
         if (!started) {
           started = true;
-          g.reset(ctx.body.com, feetFacing(h));
+          // (facing as the pelvis does: a pelvis turned over its feet is not snapped back to them)
+          g.reset(ctx.body.com, yawOf(ctx.body.rotations[0]) - h.status.stance.blade);
           g.pelvis.copy(ctx.body.positions[0]);
           g.pelvisRotation.copy(ctx.body.rotations[0]);
         }
-        if (!stopping && options.until?.(ctx, clock, time)) stopping = true;
-        g.aim(stopping ? g.root : options.to(ctx), stopping ? g.yaw : (options.facing?.(ctx) ?? null), ctx.dt);
+        if (!stopping && options.until?.(ctx, clock, time)) {
+          stopping = true;
+          rest.copy(g.root);
+          restYaw = g.yaw;
+        }
+        g.aim(stopping ? rest : options.to(ctx), stopping ? restYaw : (options.facing?.(ctx) ?? null), ctx.dt);
         xcomOf(ctx, h, xcom);
         g.update(ctx.dt, xcom);
         g.feet.forEach((f) => f.swinging && (f.progress = Math.min(1, f.progress + ctx.dt / f.duration)));

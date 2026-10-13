@@ -41,8 +41,12 @@ const HEEL_OFF = 0.62;
 const ROLL_RATE = 25;
 /** the stand's pull on the pelvis (Hz): balance is slow, a sway */
 const STAND_STIFFNESS = 3;
-/** how firmly the stand poses its legs (from where their hips are: a hint at the knees' way, not a brake) */
-const POSE = 0.1;
+/**
+ * how firmly the stand poses its legs (from where their hips are): a hint at the knees' way, the
+ * swivel no other goal sets; firmer, it brakes the hips against whatever moves them (a head
+ * tracked down, a reach), and the legs snap straight and back under the strain
+ */
+const POSE = 0.01;
 /** a step's legs move as stepping's do */
 const STEP_CAPS = legCaps(STEPPING);
 /** how close a stepping foot may come to the other, side to side (× the stance's width): it never steps onto or across it */
@@ -268,16 +272,19 @@ function hold<W>(ctx: Ctx<W>, h: Humanoid<W>, st: Standing) {
   // the centre of mass carried over the feet (over one for a step), the pelvis as high as the
   // legs reach (and as low as asked), facing as asked or as the feet stand
   const shift = (st.shift ??= new Shift(ctx.body.com));
+  // (the legs back from another behaviour: the weight is carried on from where it left it)
+  if (ctx.granted('stand').lost.length > 0) shift.restart(ctx.body.com);
   const at = shift.update(shift.over ? overFoot(h, shift.over, _to) : overFeet(ctx, h, _to), p.scale, ctx.dt);
   // (stepping, or the weight shifting for a step or back from one: its legs move as stepping's do)
   if (st.stepping || shift.over || !shift.shifted) for (const c of STEP_CAPS) ctx.propose.cap(c);
   ctx.propose.target({ kind: 'position', point: 'com', value: _com.set(at.x, 0, at.z), mask: ACROSS, weight: 1, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
   ctx.propose.target({ kind: 'position', point: HIPS, value: _hips.set(0, standingHeight(ctx, h, ready(h, st)), 0), mask: UP, weight: 1, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
   // (facing as asked and level side to side; how far it tips forward is the trunk's, bending at
-  // the hips to bring the head down, held upright only as comfort is)
-  const yaw = (h.hints.read(ctx.time).facing ?? feetFacing(h)) + stance.blade;
+  // the hips as far as asked, held there only as comfort is)
+  const hinted = h.hints.read(ctx.time);
+  const yaw = (hinted.facing ?? feetFacing(h)) + stance.blade;
   ctx.propose.target({ kind: 'aim', point: HIPS, axis: LEFT, value: leftOf(yaw, _l).add(ctx.body.positions[0]), weight: 1, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
-  ctx.propose.target({ kind: 'orientation', point: HIPS, value: quatYXZ(yaw, 0, 0, _q), weight: COMFORT, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
+  ctx.propose.target({ kind: 'orientation', point: HIPS, value: quatYXZ(yaw, hinted.stoop, 0, _q), weight: COMFORT, tier: 'fallback', stiffness: STAND_STIFFNESS, owner: 'stand' });
 }
 
 /** how far the stand lowers the pelvis for the knees to give, its weight going over a foot */
@@ -347,14 +354,17 @@ function heelPitch<W>(ctx: Ctx<W>, h: Humanoid<W>, side: Side, lower: number): n
 }
 
 /**
- * The step the stand takes now, if any: while the legs are its own (its contacts won) and
- * both feet stand, a step with the foot that catches the body when its extrapolated centre of
+ * The step the stand takes now, if any: while the legs and the centre of mass are its own (its
+ * contacts won, its target on the centre of mass has weight) and both feet stand, a step with the foot that catches the body when its extrapolated centre of
  * mass leaves the support, or with the foot furthest out of its place in the stance.
  */
 function dueStep<W>(ctx: Ctx<W>, h: Humanoid<W>, st: Standing): Due | null {
   const { feet, stance } = h.status;
   const p = h.proportions;
-  if (feet.some((f) => f.phase !== 'planted') || ctx.granted('stand').lost.length > 0 || ctx.granted('stand').won.length < 2) return null;
+  const granted = ctx.granted('stand');
+  if (feet.some((f) => f.phase !== 'planted') || granted.lost.length > 0 || granted.won.length < 2) return null;
+  // (another behaviour carries the centre of mass, and with it the balance: its steps are its own)
+  if (!granted.targets.some((t) => t.kind === 'position' && t.point === 'com')) return null;
   const facing = yawOf(_q.copy(ctx.body.rotations[0])) - stance.blade;
   const xcom = xcomOf(ctx, h, _xcom);
   const support = hullOf(supportOf(h, ctx.supports()));

@@ -1,4 +1,4 @@
-import type { Vector3 } from 'three';
+import { Vector3 } from 'three';
 import type { Skeleton } from './skeleton';
 import type { BonePoint, Cap, Contact, Impulse, Limit, Load, Point, Target } from './types';
 
@@ -97,9 +97,10 @@ export interface Outcome {
  * Merges a board's proposals, independent of their order: main targets add; a fallback
  * target's weight is scaled by what the main targets of its sort (a position, or a rotation:
  * orientation, aim, local) on its bone, and those of any sort claiming it, leave (1 − Σ
- * weights, ≥ 0); contacts are exclusive per point, the highest priority wins and a tie between different
- * contacts throws; limits intersect; caps take the largest; loads and impulses add. A position
- * of the centre of mass counts as one of the root's: either places the body as a whole.
+ * weights, ≥ 0; positions along each world axis, as their masks hold it); contacts are
+ * exclusive per point, the highest priority wins and a tie between different contacts throws;
+ * limits intersect; caps take the largest; loads and impulses add. A position of the centre of
+ * mass counts as one of the root's: either places the body as a whole.
  */
 export function merge(board: Board, skeleton: Skeleton): Merged {
   const n = skeleton.bones.length;
@@ -110,9 +111,9 @@ export function merge(board: Board, skeleton: Skeleton): Merged {
     if (p !== 'com') bone(p.bone, what);
   };
 
-  // the main weight on each bone, positions' and rotations' apart
-  const main = new Array<number>(2 * n).fill(0);
-  const slot = (t: Target, bone: number | 'com') => 2 * (bone === 'com' ? 0 : bone) + (t.kind === 'position' ? 0 : 1);
+  // the main weight on each bone: its positions' along each world axis (as masked), its rotations'
+  const along = new Array<number>(3 * n).fill(0);
+  const turned = new Array<number>(n).fill(0);
   for (const t of board.targets) {
     point(t.point, `${t.kind} target`);
     if (!(t.weight >= 0 && t.weight <= 1)) throw new Error(`${t.kind} target weight ${t.weight} is outside 0..1`);
@@ -120,14 +121,24 @@ export function merge(board: Board, skeleton: Skeleton): Merged {
     if (t.kind === 'position' && t.mask) mask(t.mask, 'position target', (x) => x >= 0 && x <= 1);
     for (const b of t.claims ?? []) bone(b, `${t.kind} target's claim`);
     if (t.tier === 'fallback') continue;
-    // its own bone's fallbacks of its sort; a claimed bone's of either (its own bone at most once each)
-    const own = t.point === 'com' ? 'com' : t.point.bone;
-    const yields = new Set([slot(t, own), ...(t.claims ?? []).flatMap((b) => [2 * b, 2 * b + 1])]);
-    for (const s of yields) main[s] += t.weight;
+    // its own bone's fallbacks of its sort (a position's along the axes it holds); a claimed
+    // bone's of either sort and along every axis (its own bone at most once each)
+    const yields = new Map<number, number[]>();
+    const take = (b: number, w: readonly number[]) => yields.set(b, (yields.get(b) ?? [0, 0, 0, 0]).map((x, k) => Math.max(x, w[k])));
+    const own = t.point === 'com' ? 0 : t.point.bone;
+    const w = t.weight;
+    if (t.kind === 'position') take(own, [...(t.mask ?? ALL).toArray().map((m) => w * m), 0]);
+    else take(own, [0, 0, 0, w]);
+    for (const b of t.claims ?? []) take(b, [w, w, w, w]);
+    for (const [b, [x, y, z, r]] of yields) {
+      along[3 * b] += x;
+      along[3 * b + 1] += y;
+      along[3 * b + 2] += z;
+      turned[b] += r;
+    }
   }
-  const left = (t: Target) => Math.max(0, 1 - main[slot(t, t.point === 'com' ? 'com' : t.point.bone)]);
   const targets = board.targets
-    .map((target) => ({ target, weight: target.tier === 'fallback' ? target.weight * left(target) : target.weight }))
+    .map((target) => (target.tier === 'fallback' ? leftOf(target, along, turned) : { target, weight: target.weight }))
     .filter((t) => t.weight > 0);
 
   for (const c of board.contacts) {
@@ -164,6 +175,25 @@ export function merge(board: Board, skeleton: Skeleton): Merged {
   for (const i of board.impulses) point(i.point, 'impulse');
 
   return { targets, contacts, limits, caps, translationCap, loads: [...board.loads], impulses: [...board.impulses], outcomes };
+}
+
+const ALL = new Vector3(1, 1, 1);
+
+/**
+ * fallback `target` with the weight the main targets on its bone leave it (1 − Σ weights, ≥ 0):
+ * a rotation's of the rotations', a position's along each axis it holds of the positions' along
+ * it (a position held only across the floor leaves one up whole: its mask then says so)
+ */
+function leftOf(target: Target, along: readonly number[], turned: readonly number[]): { target: Target; weight: number } {
+  const b = target.point === 'com' ? 0 : target.point.bone;
+  if (target.kind !== 'position') return { target, weight: target.weight * Math.max(0, 1 - turned[b]) };
+  const held = (target.mask ?? ALL).toArray().map((m, a) => m * Math.max(0, 1 - along[3 * b + a]));
+  const most = Math.max(...held);
+  if (most <= 0) return { target, weight: 0 };
+  const masked = new Vector3(...held).divideScalar(most);
+  // (unchanged where it is left alike along every axis it holds)
+  const same = masked.equals(target.mask ?? ALL);
+  return { target: same ? target : { ...target, mask: masked }, weight: target.weight * most };
 }
 
 function mask(m: Vector3, what: string, valid: (x: number) => boolean): void {

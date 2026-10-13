@@ -6,9 +6,11 @@ export interface Hinted {
   facing: number | null;
   /** how far free arms swing, as a share of their own swing: the least asked */
   armSwing: number;
+  /** how far the pelvis tips forward, the trunk bending at the hips (rad): the deepest asked */
+  stoop: number;
 }
 
-const none = (): Hinted => ({ crouch: 0, facing: null, armSwing: 1 });
+const none = (): Hinted => ({ crouch: 0, facing: null, armSwing: 1, stoop: 0 });
 
 /**
  * How behaviours ask things of each other that are not proposals to the body: a crouch, a
@@ -52,6 +54,11 @@ export class Hints {
   armSwing(time: number, share: number) {
     this.turn(time);
     this.asked.armSwing = Math.min(this.asked.armSwing, share);
+  }
+
+  stoop(time: number, angle: number) {
+    this.turn(time);
+    this.asked.stoop = Math.max(this.asked.stoop, angle);
   }
 
   /** a new sub-step: what was asked comes into force */
