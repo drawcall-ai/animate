@@ -5,7 +5,7 @@ description: Animate three.js characters with @drawcall/animate — a body (a hu
 
 # @drawcall/animate
 
-A body runs **one behaviour timeline**, stepped in sub-steps of at most 1/60 s. Behaviours are [@pmndrs/timeline](https://github.com/pmndrs/timeline) generators; compose them with `parallel`, `action`, `timePassed` and its other helpers. No Promises inside behaviours: wait with conditions and `timePassed` (simulation time).
+A body runs **one behaviour timeline**, stepped in fixed sub-steps of 1/60 s (`STEP`): `update(delta)` runs as many as the time covers and carries the rest over. Behaviours are [@pmndrs/timeline](https://github.com/pmndrs/timeline) generators; compose them with `parallel`, `action`, `timePassed` and its other helpers. No Promises inside behaviours: wait with conditions and `timePassed` (simulation time).
 
 ## Frames and layers
 
@@ -39,7 +39,7 @@ action<Frame>({
 ## Helpers
 
 - `solveChain(frame, chain, { tip: { position, quaternion? }, pole? }, weight?)` — puts the tip bone of a named chain at `position` (as far as it reaches; straight toward it when out of reach), turned to `quaternion`, every bone within its joint limit, and writes the chain into `current`. A two-segment chain (a limb) bends its middle joint as a hinge, toward `pole` if given, else turned as it is now. The limb turns to a pole at once, so move a pole like any goal (`follow` it) rather than switching it; a near-straight limb, or a goal crossing the line to the pole, swivels fast. To move the body, `setRoot` first.
-- `follow(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the next value (a `Vector3` or a number) of something moving toward `target` from its history: velocity changes by at most `accel · dt`, closes in at most at `speed`. Moving straight at a still target (or from rest) it stops on it without passing it, unless too fast to brake in time; velocity across the line to it can carry it past, by up to about v⊥²/`accel`. Pass the goal's own `velocity` to follow a moving goal without lag. It throws on a target or history that is not finite.
+- `follow(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the next value (a `Vector3` or a number) of something moving toward `target` from its history: velocity changes by at most `accel · dt`, closes in at most at `speed`. Moving straight at a still target (or from rest) it stops on it without passing it, unless too fast to brake in time; velocity across the line to it can carry it past, by up to about 1.25 · v⊥²/`accel`. Pass the goal's own `velocity` to follow a moving goal without lag. It throws on a target or history that is not finite.
 - `followRotation(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the same for a quaternion (rad/s, rad/s²), in whatever frame the quaternions are in: world rotations, or a bone's `local` ones (`velocity` an angular velocity in that frame).
 - `clampRotation(q, limit)`, `beyond(q, limit)` — a joint's swing–twist limit (`skeleton.limits[bone]`).
 

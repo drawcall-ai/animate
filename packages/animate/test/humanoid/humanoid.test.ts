@@ -45,38 +45,62 @@ describe('Humanoid', () => {
     }
   });
 
-  it('solves a limb onto any pose within its ranges (bent 10° or more), its tip turned as that pose turns it', () => {
+  /** random poses of `chain` within its ranges, the elbow or knee a hinge bent `bent(degrees)` and twisted: where the tip is and how it is turned, and where the middle joint is */
+  function* limbPoses(chain: 'leftArm' | 'rightLeg', bent: (degrees: number) => boolean, n: number) {
     const skeleton = new Rig(createSkeletonModel()).skeleton;
     const relaxed = new Pose(skeleton);
     for (const { bone, rotation } of relaxedPose()) relaxed.setLocal(bone, rotation);
     const rand = rng(3);
+    const [first, middle, tip] = CHAINS[chain].map((b) => skeleton.index(b));
+    const limit = (b: number) => {
+      const l = skeleton.limits[b];
+      if (!l) throw new Error('no limit');
+      return l;
+    };
+    // the elbow bends about y (its swing's first component), the knee about x (its second); both twist about their bone
+    const [hinge, range, along] = chain === 'leftArm' ? [new Vector3(0, 1, 0), limit(middle).swing[0], new Vector3(1, 0, 0)] : [new Vector3(1, 0, 0), limit(middle).swing[1], new Vector3(0, 1, 0)];
+    for (let k = 0; k < n; k++) {
+      const truth = new Pose(skeleton).copy(relaxed);
+      for (const b of [first, tip]) {
+        const q = turnUpTo(rand, Math.PI);
+        clampRotation(q, limit(b));
+        truth.setLocal(b, q);
+      }
+      let bend = NaN;
+      while (!(bend >= range[0] && bend <= range[1] && bent(Math.abs(bend) / (Math.PI / 180)))) bend = range[0] + (range[1] - range[0]) * rand();
+      const [lo, hi] = limit(middle).twist;
+      truth.setLocal(middle, new Quaternion().setFromAxisAngle(hinge, bend).multiply(new Quaternion().setFromAxisAngle(along, lo + (hi - lo) * rand())));
+      yield { skeleton, relaxed, tip, goal: { position: truth.position(tip).clone(), quaternion: truth.rotation(tip).clone() }, middle: truth.position(middle).clone() };
+    }
+  }
+
+  it('solves a limb onto any pose within its ranges (bent 10° or more), its tip turned as that pose turns it', () => {
     for (const chain of ['leftArm', 'rightLeg'] as const) {
-      const [first, middle, tip] = CHAINS[chain].map((b) => skeleton.index(b));
-      const hinge = skeleton.limits[middle];
-      if (!hinge) throw new Error('no limit');
-      // (the elbow and the knee: a hinge about the axis of their widest swing, and their twist)
-      const wider = hinge.swing[0][1] - hinge.swing[0][0] >= hinge.swing[1][1] - hinge.swing[1][0] ? 0 : 1;
-      const axis = new Vector3().setComponent((hinge.axis + 1 + wider) % 3, 1);
-      const [lo, hi] = hinge.swing[wider];
-      for (let n = 0; n < 300; n++) {
-        const truth = new Pose(skeleton).copy(relaxed);
-        for (const b of [first, tip]) {
-          const limit = skeleton.limits[b];
-          if (!limit) throw new Error('no limit');
-          const q = turnUpTo(rand, Math.PI);
-          clampRotation(q, limit);
-          truth.setLocal(b, q);
-        }
-        let bend = 0;
-        while (Math.abs(bend) < 10 * (Math.PI / 180)) bend = lo + (hi - lo) * rand();
-        const twist = hinge.twist[0] + (hinge.twist[1] - hinge.twist[0]) * rand();
-        const along = new Vector3().setComponent(hinge.axis, 1);
-        truth.setLocal(middle, new Quaternion().setFromAxisAngle(axis, bend).multiply(new Quaternion().setFromAxisAngle(along, twist)));
+      for (const { skeleton, relaxed, tip, goal, middle } of limbPoses(chain, (d) => d >= 10, 300)) {
         const pose = new Pose(skeleton).copy(relaxed);
-        solveChain({ current: pose }, chain, { tip: { position: truth.position(tip).clone(), quaternion: truth.rotation(tip).clone() }, pole: truth.position(middle).clone() });
-        expect(pose.position(tip).distanceTo(truth.position(tip)), chain).toBeLessThan(1e-6);
-        expect(pose.rotation(tip).angleTo(truth.rotation(tip)), chain).toBeLessThan(Math.PI / 180);
+        solveChain({ current: pose }, chain, { tip: goal, pole: middle });
+        expect(pose.position(tip).distanceTo(goal.position), chain).toBeLessThan(1e-6);
+        expect(pose.rotation(tip).angleTo(goal.quaternion), chain).toBeLessThan(Math.PI / 180);
       }
     }
+  });
+
+  it('turns the hand of an arm held out nearly straight as asked: with a pole, and nearly always without one', () => {
+    const worst = { pole: 0, none: 0 };
+    let missed = 0;
+    for (const { skeleton, relaxed, tip, goal, middle } of limbPoses('leftArm', (d) => d < 10, 300)) {
+      for (const pole of [middle, undefined]) {
+        const pose = new Pose(skeleton).copy(relaxed);
+        solveChain({ current: pose }, 'leftArm', { tip: goal, pole });
+        expect(pose.position(tip).distanceTo(goal.position)).toBeLessThan(1e-3);
+        const off = pose.rotation(tip).angleTo(goal.quaternion);
+        const key = pole ? 'pole' : 'none';
+        worst[key] = Math.max(worst[key], off);
+        if (!pole && off > Math.PI / 180) missed++;
+      }
+    }
+    expect(worst.pole).toBeLessThan(Math.PI / 180);
+    // (without a pole the swivel is searched with the twist split by the joints' twist ranges: a few poses need another split)
+    expect(missed).toBeLessThanOrEqual(6);
   });
 });

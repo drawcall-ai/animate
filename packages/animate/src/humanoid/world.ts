@@ -1,4 +1,4 @@
-import type { Pose } from '../core/pose';
+import type { ReadonlyPose } from '../core/pose';
 
 /**
  * The world the actors share, as plain data the behaviours read (and the app keeps up to date):
@@ -6,7 +6,7 @@ import type { Pose } from '../core/pose';
  * through these, so the order they update in changes nothing).
  */
 export interface World {
-  bodies: Pose[];
+  bodies: ReadonlyPose[];
 }
 
 /** A world of `parts`, empty otherwise. */

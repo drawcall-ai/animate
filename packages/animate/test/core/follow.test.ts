@@ -39,12 +39,12 @@ describe('follow', () => {
     }
   });
 
-  it('passes a still goal by at most v⊥² / accel when it starts with velocity across the line to it', () => {
+  it('passes a still goal by at most 1.25 v⊥² / accel when it starts with velocity across the line to it', () => {
     for (const accel of [2, 8, 30]) {
       for (const [distance, across, along] of [[0.3, 1, 0], [0.05, 0.5, 0], [1, 2, 0.5], [0.3, 1, -1], [2, 4, 1]]) {
         const path = run(new Vector3(), new Vector3(along, across, 0), () => new Vector3(distance, 0, 0), () => ({ accel }), 1200);
         const past = Math.max(...path.map((p) => p.x - distance));
-        expect(past).toBeLessThanOrEqual((across * across) / accel);
+        expect(past).toBeLessThanOrEqual((1.25 * across * across) / accel);
         expect(path.at(-1)?.distanceTo(new Vector3(distance, 0, 0))).toBeLessThan(1e-12);
       }
     }

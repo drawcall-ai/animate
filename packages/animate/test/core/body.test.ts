@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Body, follow, followRotation, Pose, type Frame } from '../../src';
+import { rng } from '../humanoid/fixtures';
 import { leg, turn } from './rigs';
 
 /** a behaviour writing `write` every sub-step, forever (or for `seconds`) */
@@ -74,20 +75,36 @@ describe('Body', () => {
     expect(body.frame.prev2.position(3).distanceTo(body.pose.position(3))).toBeGreaterThan(0.01);
   });
 
-  it('steps in even sub-steps of at most 1/60 s: one update of 1/30 s is two of 1/60 s', () => {
+  it('steps in fixed sub-steps whatever the updates: jittered frames give what fixed ones do, still braked in time', () => {
+    const goal = new Vector3(1, 0, 0);
     const run = (updates: number[]) => {
-      const target = new Vector3(0.5, 0.2, 0.3);
+      const roots: Vector3[] = [];
       const body = new Body(
         leg(),
-        every((f) => f.current.setRoot(follow(f.prev2.position(0), f.prev.position(0), target, { accel: 5, speed: 1 }, f.dt, new Vector3()))),
+        every((f) => {
+          f.current.setRoot(follow(f.prev2.position(0), f.prev.position(0), goal, { accel: 10 }, f.dt, new Vector3()));
+          roots.push(f.current.position(0).clone());
+        }),
       );
       for (const dt of updates) body.update(dt);
-      return { root: body.pose.position(0).clone(), time: body.frame.time };
+      return { roots, time: body.frame.time };
     };
-    const once = run(Array(30).fill(1 / 30));
-    const twice = run(Array(60).fill(1 / 60));
-    expect(once.root.equals(twice.root)).toBe(true);
-    expect(once.time).toBeCloseTo(1, 12);
+    const fixed = run(Array(120).fill(1 / 60));
+    const rand = rng(5);
+    const jittered: number[] = [];
+    for (let left = 2; left > 1e-12; ) {
+      const dt = Math.min(left, [1 / 144, 1 / 240, 1 / 30, 1e-6][Math.floor(rand() * 4)] * (0.8 + 0.4 * rand()));
+      jittered.push(dt);
+      left -= dt;
+    }
+    const varied = run(jittered);
+    expect(varied.roots.length).toBe(fixed.roots.length);
+    varied.roots.forEach((r, k) => expect(r.equals(fixed.roots[k])).toBe(true));
+    const x = varied.roots.map((r) => r.x - 1);
+    expect(Math.max(...x)).toBeLessThan(1e-12);
+    const dt = 1 / 60;
+    expect(Math.max(...x.slice(2).map((v, k) => Math.abs(v - 2 * x[k + 1] + x[k]) / dt ** 2))).toBeLessThan(10 + 1e-6);
+    expect(run([1 / 30]).roots.length).toBe(2);
     expect(() => run([NaN])).toThrow(/cannot update/);
   });
 

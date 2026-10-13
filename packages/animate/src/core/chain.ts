@@ -17,6 +17,8 @@ export interface ChainGoal {
 /** the generic solver's sweeps at most; it stops sooner once a sweep brings the tip no closer than this (m) */
 const SWEEPS = 64;
 const PROGRESS = 1e-9;
+/** how far outside its limits (rad, summed) a solution still fits */
+const FITS = 1e-9;
 /** the most bones a chain has */
 const LONGEST = 16;
 
@@ -30,9 +32,18 @@ const LONGEST = 16;
  * the axis its limit allows the most swing about (its present bend axis without a limit), the
  * first bone turns the limb onto the goal and toward the pole, then the middle joint aims again
  * from where the first bone's limit left it; the tip's turn about the middle bone is shared
- * between the two. Other chains are solved by cyclic coordinate descent.
+ * between the two. The limb swivels about the line to the goal from the pole's side only as far
+ * as the limits need (with a tip rotation, the middle joint's and the tip's too). As the middle
+ * joint bends as a pure hinge, goals at the corners of its range — its small side play and its
+ * twist at once — can be missed by centimetres. Other chains are solved by cyclic coordinate
+ * descent.
  */
 export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
+  const { position: at, quaternion: turned } = goal.tip;
+  const finite = (...xs: number[]) => xs.every(Number.isFinite);
+  if (!finite(at.x, at.y, at.z) || (turned && !finite(turned.x, turned.y, turned.z, turned.w)) || (goal.pole && !finite(goal.pole.x, goal.pole.y, goal.pole.z))) {
+    throw new Error(`chain "${chain}": a goal that is not finite`);
+  }
   const pose = frame.current;
   const { skeleton } = pose;
   const bones = skeleton.chain(chain);
@@ -82,32 +93,63 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const toTarget = _t.subVectors(target, start);
   const d = toTarget.length();
   const turn = across > 1e-12 ? Math.acos(clampUnit((d * d - along - vp.lengthSq()) / across)) : 0;
-  let bend = nearest(wrap(turn - phi0), wrap(-turn - phi0), hinge);
-
-  // the first bone: the tip (in its frame) onto the target, the hinge axis toward the pole's side
-  const p = _p.copy(v).applyQuaternion(_q.setFromAxisAngle(h, bend)).add(o1);
+  const candidates = [wrap(turn - phi0), wrap(-turn - phi0)];
+  let bend = nearest(candidates[0], candidates[1], hinge);
   const now = _r.copy(c.base).multiply(local[0]);
-  if (d < 1e-12) toTarget.copy(p).applyQuaternion(now);
+  if (d < 1e-12) toTarget.copy(o1).add(v).applyQuaternion(now);
   const T = toTarget.normalize();
-  const pn = p.normalize();
-  const hl = _hl.copy(h).addScaledVector(pn, -h.dot(pn)).normalize();
-  const n = _n;
-  const P = pole ? _e.subVectors(pole, start) : null;
-  if (P && n.crossVectors(T, P).lengthSq() > 1e-12) {
-    // the middle joint's side of the line to the tip, as seen along the hinge axis
-    const side = Math.sign(o1.dot(_e.crossVectors(hl, pn))) || 1;
-    n.normalize().multiplyScalar(side);
-  } else n.copy(hl).applyQuaternion(now);
-  n.addScaledVector(T, -n.dot(T));
-  if (n.lengthSq() < 1e-12) perpendicular(T, n);
-  n.normalize();
-  const world = _qw.setFromRotationMatrix(_m.makeBasis(T, n, _e.crossVectors(T, n)));
-  const own = _ql.setFromRotationMatrix(_m.makeBasis(pn, hl, _e.crossVectors(pn, hl)));
-  const r0 = world.multiply(own.invert());
-  // swivelled about the line to the target as little as the first joint's limit needs
-  const first = skeleton.limits[bones[0]];
-  const swivelled = (angle: number) => local[0].copy(c.base).invert().multiply(_q.setFromAxisAngle(T, angle)).multiply(r0);
-  limited(skeleton, bones[0], swivelled(least((angle) => excess(swivelled(angle), first), -Math.PI, Math.PI, 0)));
+  const limits = bones.map((b) => skeleton.limits[b]);
+  const a = _axis.copy(o2).normalize();
+  const r0 = _r0;
+
+  /** the first bone placed (into `local[0]`, unclamped) for the middle joint bent `bend`: how far the limbs's limits are left out */
+  const place = (bend: number) => {
+    // the tip (in the first bone's frame) onto the target, the hinge axis toward the pole's side
+    const pn = _p.copy(v).applyQuaternion(_q.setFromAxisAngle(h, bend)).add(o1).normalize();
+    const hl = _hl.copy(h).addScaledVector(pn, -h.dot(pn)).normalize();
+    const n = _n;
+    const P = pole ? _pole.subVectors(pole, start) : null;
+    if (P && n.crossVectors(T, P).lengthSq() > 1e-12) {
+      // the middle joint's side of the line to the tip, as seen along the hinge axis
+      const side = Math.sign(o1.dot(_e.crossVectors(hl, pn))) || 1;
+      n.normalize().multiplyScalar(side);
+    } else n.copy(hl).applyQuaternion(now);
+    n.addScaledVector(T, -n.dot(T));
+    if (n.lengthSq() < 1e-12) perpendicular(T, n);
+    n.normalize();
+    const world = _qw.setFromRotationMatrix(_m.makeBasis(T, n, _e.crossVectors(T, n)));
+    const own = _ql.setFromRotationMatrix(_m.makeBasis(pn, hl, _e.crossVectors(pn, hl)));
+    r0.copy(world).multiply(own.invert());
+    // swivelled about the line to the target as little as the limits need: the first joint's, and
+    // with a tip rotation the middle joint's and the tip's as they would share its twist
+    const bent = _bent.setFromAxisAngle(h, bend).multiply(neutral);
+    const swivelled = (angle: number) => local[0].copy(c.base).invert().multiply(_q.setFromAxisAngle(T, angle)).multiply(r0);
+    const strain = (angle: number, search = false) => {
+      const first = swivelled(angle);
+      const upper = _upper.copy(c.base).multiply(first);
+      // (the first joint's limit before the tip's turn: it keeps the tip on the goal)
+      return 100 * excess(first, limits[0]) + (quaternion ? shared(upper, bent, a, quaternion, limits, search) : 0);
+    };
+    // as the pole has it, unless a swivel searched with the twist shared half and half fits better
+    let swivel = 0;
+    let left = strain(0, true);
+    if (left >= FITS) {
+      const searched = least(strain, -Math.PI, Math.PI, 0);
+      const there = strain(searched, true);
+      if (there < left) [swivel, left] = [searched, there];
+    }
+    swivelled(swivel);
+    return left;
+  };
+  // (a limb nearly straight can bend either way within its range: the way that fits its limits better)
+  const left = place(bend);
+  const other = candidates[0] === bend ? candidates[1] : candidates[0];
+  if (left >= FITS && other !== bend && clampBend(other, hinge) === other) {
+    _kept.copy(local[0]);
+    if (place(other) < left) bend = other;
+    else local[0].copy(_kept);
+  }
+  limited(skeleton, bones[0], local[0]);
 
   // the middle joint aimed again from where the first bone is: the target in its frame, about the hinge
   r0.copy(c.base).multiply(local[0]);
@@ -118,22 +160,30 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   if (!quaternion) return;
 
   // the tip's turn about the middle bone, shared between the middle bone and the tip
-  const a = _e.copy(o2).normalize();
-  const tip = (twist: number) => {
-    _twisted.copy(local[1]).multiply(_q.setFromAxisAngle(a, twist));
-    return _tip.copy(r0).multiply(_twisted).invert().multiply(quaternion);
-  };
-  const half = twistAbout(tip(0), a) / 2;
-  const limits = [skeleton.limits[bones[1]], skeleton.limits[bones[2]]];
-  const excessAt = (twist: number) => {
-    const t = tip(twist);
-    return excess(_twisted, limits[0]) + excess(t, limits[1]);
-  };
-  const [lo, hi] = limits[0]?.twist ?? [-Math.PI, Math.PI];
-  const best = least(excessAt, lo, hi, half);
-  tip(best);
+  shared(r0, local[1], a, quaternion, limits, true);
   limited(skeleton, bones[1], local[1].copy(_twisted));
   limited(skeleton, bones[2], local[2].copy(r0).multiply(local[1]).invert().multiply(quaternion));
+}
+
+/** the tip's rotation (into `_tip`) that turns it `quaternion` under a first bone turned `upper` (world) and a middle bone turned `middle` then `twist` about `axis` (into `_twisted`) */
+function tipped(upper: Quaternion, middle: Quaternion, axis: Vector3, twist: number, quaternion: Quaternion): Quaternion {
+  _twisted.copy(middle).multiply(_q2.setFromAxisAngle(axis, twist));
+  return _tip.copy(upper).multiply(_twisted).invert().multiply(quaternion);
+}
+
+/** how far the middle joint and the tip are outside their limits with the tip's twist split between them by their twist ranges (or, with `search`, as it best fits) */
+function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], search: boolean): number {
+  const at = (twist: number) => {
+    const tip = tipped(upper, middle, axis, twist, quaternion);
+    return excess(_twisted, limits[1]) + excess(tip, limits[2]);
+  };
+  // the twist halved, within the middle joint's twist range and leaving the tip's in its own
+  const whole = twistAbout(tipped(upper, middle, axis, 0, quaternion), axis);
+  const [lo, hi] = limits[1]?.twist ?? [-Math.PI, Math.PI];
+  const [tipLo, tipHi] = limits[2]?.twist ?? [-Math.PI, Math.PI];
+  const [from, to] = [Math.max(lo, whole - tipHi), Math.min(hi, whole - tipLo)];
+  const split = from <= to ? Math.min(to, Math.max(from, whole / 2)) : (from + to) / 2;
+  return at(search ? least(at, lo, hi, split) : split);
 }
 
 /** a middle joint as a hinge: its axis and range in its parent's frame, the rotation it bends from, and how far it is bent now */
@@ -171,7 +221,7 @@ function nearest(a: number, b: number, hinge: Hinge): number {
 function least(f: (x: number) => number, lo: number, hi: number, start: number): number {
   let best = start;
   let low = f(start);
-  if (low < 1e-9) return start;
+  if (low < FITS) return start;
   const see = (x: number) => {
     const e = f(x);
     if (e < low) [low, best] = [e, x];
@@ -258,4 +308,6 @@ const _m = new Matrix4();
 const _base = new Quaternion();
 const _start = new Vector3();
 const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s] = Array.from({ length: 12 }, () => new Vector3());
-const [_q, _r, _qw, _ql, _twisted, _tip] = Array.from({ length: 6 }, () => new Quaternion());
+const _pole = new Vector3();
+const _axis = new Vector3();
+const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept] = Array.from({ length: 11 }, () => new Quaternion());

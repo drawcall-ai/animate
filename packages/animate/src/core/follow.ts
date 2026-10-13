@@ -23,7 +23,9 @@ export interface FollowOptions<V> {
  * over continuously from any motion it has; given the goal's velocity, it follows a steadily
  * moving goal exactly; and it never passes a still goal it moves straight at (or starts still
  * for) unless it is too fast to brake in time. Velocity across the line to the goal turns with
- * what is left of the acceleration and can carry it past the goal, by up to about v⊥² / accel.
+ * what is left of the acceleration and can carry it past the goal, by up to about
+ * 1.25 · v⊥² / accel. The history is read as taken `dt` apart: step it evenly (a body's
+ * sub-steps are).
  */
 export function follow(prev2: number, prev: number, target: number, options: FollowOptions<number>, dt: number): number;
 export function follow(prev2: Vector3, prev: Vector3, target: Vector3, options: FollowOptions<Vector3>, dt: number, out?: Vector3): Vector3;

@@ -1,5 +1,5 @@
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Humanoid, type World } from '@drawcall/animate';
+import { Humanoid, type Pose, type World } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
 import { FIXED_DT, type Prop, type Scenario } from './scenario';
 
@@ -7,6 +7,8 @@ import { FIXED_DT, type Prop, type Scenario } from './scenario';
 export class Simulation {
   readonly world: World;
   readonly actors: Humanoid<World>[] = [];
+  /** the actors' poses as the world shows them: as they were last step */
+  private readonly bodies: Pose[];
   /** s */
   t = 0;
 
@@ -20,12 +22,13 @@ export class Simulation {
     scenario.actors.forEach((role, i) => {
       cast.push(new Humanoid(model(), (h) => scenario.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw }));
     });
-    this.world.bodies = cast.map((h) => h.snapshot());
+    this.bodies = cast.map((h) => h.snapshot());
+    this.world.bodies = this.bodies;
   }
 
   /** one fixed step of every actor, each reading the others as they were last step */
   step() {
-    this.actors.forEach((h, i) => this.world.bodies[i].copy(h.pose));
+    this.actors.forEach((h, i) => this.bodies[i].copy(h.pose));
     for (const h of this.actors) h.update(FIXED_DT);
     this.t += FIXED_DT;
   }
