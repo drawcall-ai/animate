@@ -1,4 +1,3 @@
-// Copied from the old core (a801be4:packages/core/src/pose/bones.ts), with the bones' indices added.
 import { Vector3 } from 'three';
 
 /**

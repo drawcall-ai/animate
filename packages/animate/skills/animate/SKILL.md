@@ -20,17 +20,27 @@ Each sub-step every running action's `update(frame)` gets a `Frame`:
 
 Behaviours **write** `current`. Children of a `parallel` are stepped in the order given, so a later behaviour wins on the bones it writes and leaves the rest to the ones before: put the base (a stance) first and overrides after it. A bone nobody writes keeps last sub-step's rotation. The poses rotate every sub-step: read them from the frame each time, never keep them.
 
+Order parents before children: a world position is read where the bones are when it is read, so a later write to a parent (the spine) moves the tips of chains solved before it (the hands). Write the trunk, then the limbs.
+
 A `Pose`, by bone index:
 - read: `local(bone)` (rotation in the parent's frame; the root's in the world's), `position(bone)` and `rotation(bone)` (world), `point(bone, at, out)`, `com(out)`
-- write: `setLocal(bone, q, weight?)`, `setRotation(bone, worldQ, weight?)`, `setRoot(position, weight?)`; a `weight` below 1 blends from what is there
+- write: `setLocal(bone, q, weight?)`, `setRotation(bone, worldQ, weight?)`, `setRoot(position, weight?)`; a `weight` below 1 blends over what the layers before wrote this sub-step — with none before, over the last pose, which eases toward the value at a rate that depends on the sub-step: use `follow` for that instead
 
-Nothing smooths, limits or fades for you: a behaviour moves its bones from the history at speeds it chooses, and hands over continuously because it starts from where the bones are.
+Nothing smooths, limits or fades for you. A behaviour moves its bones on from the history at speeds it chooses (`follow`, `followRotation`), and so hands over continuously: when a layer above ends, the bones are where it left them, moving as it moved them, and the layer below takes them on from there. A layer that sets bones outright (`setLocal(bone, rotation)`) snaps them instead — so the base layer too follows its pose:
+
+```ts
+action<Frame>({
+  update: (f) => {
+    for (const { bone, rotation } of relaxedPose()) f.current.setLocal(bone, followRotation(f.prev2.local(bone), f.prev.local(bone), rotation, { accel: 30 }, f.dt, q));
+  },
+});
+```
 
 ## Helpers
 
-- `solveChain(frame, chain, { tip: { position, quaternion? }, root?, pole? }, weight?)` — puts the tip bone of a named chain at `position` (as far as it reaches; straight toward it when out of reach), turned to `quaternion`, every bone within its joint limit, and writes the chain into `current`. A two-segment chain bends toward `pole`; `root` first moves the whole body so the chain starts there.
-- `follow(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the next value (a `Vector3` or a number) of something moving toward `target` from its history: velocity changes by at most `accel · dt`, closes in at most at `speed`, never overshoots a still target. Pass the goal's own `velocity` to follow a moving goal without lag.
-- `followRotation(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the same for a quaternion (rad/s, rad/s²; `velocity` an angular velocity in the world).
+- `solveChain(frame, chain, { tip: { position, quaternion? }, pole? }, weight?)` — puts the tip bone of a named chain at `position` (as far as it reaches; straight toward it when out of reach), turned to `quaternion`, every bone within its joint limit, and writes the chain into `current`. A two-segment chain (a limb) bends its middle joint as a hinge, toward `pole` if given, else turned as it is now. The limb turns to a pole at once, so move a pole like any goal (`follow` it) rather than switching it; a near-straight limb, or a goal crossing the line to the pole, swivels fast. To move the body, `setRoot` first.
+- `follow(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the next value (a `Vector3` or a number) of something moving toward `target` from its history: velocity changes by at most `accel · dt`, closes in at most at `speed`. Moving straight at a still target (or from rest) it stops on it without passing it, unless too fast to brake in time; velocity across the line to it can carry it past, by up to about v⊥²/`accel`. Pass the goal's own `velocity` to follow a moving goal without lag. It throws on a target or history that is not finite.
+- `followRotation(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the same for a quaternion (rad/s, rad/s²), in whatever frame the quaternions are in: world rotations, or a bone's `local` ones (`velocity` an angular velocity in that frame).
 - `clampRotation(q, limit)`, `beyond(q, limit)` — a joint's swing–twist limit (`skeleton.limits[bone]`).
 
 Typical: steer a point with `follow` from `prev2`/`prev`, then place it with `solveChain`.
@@ -38,27 +48,33 @@ Typical: steer a point with `follow` from `prev2`/`prev`, then place it with `so
 ## A humanoid
 
 ```ts
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import { loadCharacterModel } from '@pmndrs/viverse';
-import { follow, Humanoid, INDEX, relaxedPose, solveChain, type Frame } from '@drawcall/animate';
+import { follow, followRotation, Humanoid, INDEX, relaxedPose, solveChain, type Frame } from '@drawcall/animate';
 
 const model = await loadCharacterModel();
 scene.add(model.scene);
 const goal = new Vector3(-0.3, 1.2, 0.4);
+const relaxed = relaxedPose();
+const q = new Quaternion();
 const body = new Humanoid(
   model,
   () =>
     function* () {
       yield* parallel<Frame>(
         'all',
-        // the base: stand relaxed
-        action<Frame>({ update: (f) => relaxedPose().forEach(({ bone, rotation }) => f.current.setLocal(bone, rotation)) }),
+        // the base: every joint back to the relaxed pose
+        action<Frame>({
+          update: (f) => {
+            for (const { bone, rotation } of relaxed) f.current.setLocal(bone, followRotation(f.prev2.local(bone), f.prev.local(bone), rotation, { accel: 30 }, f.dt, q));
+          },
+        }),
         // over it: the right hand to the goal
         action<Frame>({
           update: (f) => {
             const hand = follow(f.prev2.position(INDEX.rightHand), f.prev.position(INDEX.rightHand), goal, { accel: 8, speed: 1.5 }, f.dt);
-            solveChain(f, 'rightArm', { tip: { position: hand }, pole: new Vector3(-0.8, 0.8, -0.4) });
+            solveChain(f, 'rightArm', { tip: { position: hand } });
           },
         }),
       );
@@ -70,13 +86,13 @@ const body = new Humanoid(
 body.update(delta);
 ```
 
-`new Humanoid(model, behaviour, { world, position, yaw })`: `behaviour` receives the humanoid and returns the timeline; the body starts standing relaxed, soles on the floor. One Humanoid per model; without a model file, `createSkeletonModel(height)` gives a bare-bones one. Read back `body.pose`, `body.yaw`, `body.velocity`, `body.proportions`, `body.rig.skeleton`, and `body.status` (feet, seated, mounted, intent — what behaviours report).
+`new Humanoid(model, behaviour, { world, position, yaw })`: `behaviour` receives the humanoid and returns the timeline; the body starts standing relaxed, soles on the floor. One Humanoid per model; without a model file, `createSkeletonModel(height)` gives a bare-bones one. Read back `body.pose`, `body.yaw`, `body.velocity`, `body.proportions` and `body.rig.skeleton`.
 
 Bones are the VRM humanoid bones (`BONES`, indices in `INDEX`; normalized: +Y up, facing +Z, left +X, the T-pose is identity). Chains (`CHAINS`): `leftArm`/`rightArm` (upper arm → hand: the wrist), `leftLeg`/`rightLeg` (thigh → foot: the ankle), `spine` (spine → head), `neck` (neck → head). Every joint but the hips has a human range of motion (`ranges()`).
 
 ### Several actors
 
-Share one `World` (`createWorld({ floorObstacles, ground, ladders, ... })`). Before updating, set `world.bodies` to each actor's pose as it was (copies: `actor.snapshot()`, or `pose.copy(actor.pose)` into poses you keep), so each body reads the others the same whatever order they update in.
+Share one `World` (`createWorld()`). Before updating, set `world.bodies` to each actor's pose as it was (copies: `actor.snapshot()`, or `pose.copy(actor.pose)` into poses you keep), so each body reads the others the same whatever order they update in.
 
 ## Any rig
 

@@ -2,14 +2,12 @@ import { Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import type { ReusableTimeline } from '@pmndrs/timeline';
 import { Body, type Frame } from '../core/body';
-import { Pose } from '../core/pose';
+import { Pose, type ReadonlyPose } from '../core/pose';
 import type { Skeleton } from '../core/skeleton';
 import { INDEX } from './bones';
 import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
 import { Rig, yawOf } from './rig';
-import { defaultStance } from './stance';
-import { createStatus, type Foot, type Status } from './status';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -21,15 +19,13 @@ export interface HumanoidOptions<W> {
 
 /**
  * A @pmndrs/viverse character model as a body stepping `behaviour` (made for this humanoid: it
- * reads the rig and writes the status), the model posed after every update. The body starts
+ * may read the rig and the proportions), the model posed after every update. The body starts
  * standing relaxed where `options` puts it. One Humanoid per model.
  */
 export class Humanoid<W = unknown> {
   readonly rig: Rig;
   /** measured from the model's rest pose */
   readonly proportions: Proportions;
-  /** what the behaviours report: footing, seated, mounted, intent */
-  readonly status: Status;
   private readonly body: Body<W>;
   private readonly ground = new Vector3();
 
@@ -42,31 +38,13 @@ export class Humanoid<W = unknown> {
     const p = (this.proportions = rig.proportions);
     const yaw = options.yaw ?? 0;
     const start = standing(rig.skeleton, p, options.position ?? { x: 0, z: 0 }, yaw);
-    const foot = (bone: number) => ({ position: start.position(bone).clone(), yaw });
-    // (the status first: the behaviour starts as the body is made)
-    this.status = createStatus([foot(INDEX.leftFoot), foot(INDEX.rightFoot)], defaultStance(p));
     this.body = new Body(rig.skeleton, behaviour(this), { world: options.world, pose: start });
     rig.write(this.body.pose, 0);
   }
 
   /** the last final pose */
-  get pose(): Pose {
+  get pose(): ReadonlyPose {
     return this.body.pose;
-  }
-
-  /** [left, right]; read-only */
-  get feet(): readonly [Readonly<Foot>, Readonly<Foot>] {
-    return this.status.feet;
-  }
-
-  /** how far the body is seated (0 standing … 1 seated) */
-  get seated(): number {
-    return this.status.seated;
-  }
-
-  /** riding a mount */
-  get mounted(): boolean {
-    return this.status.mounted;
   }
 
   /** the body's facing about +Y (0 faces +Z): the hips' */

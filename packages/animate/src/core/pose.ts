@@ -1,13 +1,25 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Skeleton } from './skeleton';
 
+/** A pose to read: by bone index, the transforms of `Pose`. */
+export interface ReadonlyPose {
+  readonly skeleton: Skeleton;
+  local(bone: number): Readonly<Quaternion>;
+  position(bone: number): Readonly<Vector3>;
+  rotation(bone: number): Readonly<Quaternion>;
+  point(bone: number, at: Vector3, out: Vector3): Vector3;
+  com(out: Vector3): Vector3;
+}
+
 /**
  * A skeleton's pose: the root's world position and each bone's rotation in its parent's frame
  * (the root's in the world's). The world transforms follow by forward kinematics, recomputed
  * when read after a write. Writes take a weight: 1 sets the value, less blends toward it from
- * what is there (slerp for rotations, lerp for the root's position).
+ * what is there (slerp for rotations, lerp for the root's position) — in a body's frame, from
+ * what the layers before wrote this sub-step, or else from the last pose (so a weighted write
+ * alone each sub-step eases toward its value at a rate that depends on the sub-step).
  */
-export class Pose {
+export class Pose implements ReadonlyPose {
   private readonly root = new Vector3();
   private readonly locals: Quaternion[];
   private readonly positions: Vector3[];
@@ -79,10 +91,10 @@ export class Pose {
     this.stale = true;
   }
 
-  copy(from: Pose): this {
+  copy(from: ReadonlyPose): this {
     if (from.skeleton !== this.skeleton) throw new Error('cannot copy a pose of another skeleton');
-    this.root.copy(from.root);
-    this.locals.forEach((q, i) => q.copy(from.locals[i]));
+    this.root.copy(from.position(0));
+    this.locals.forEach((q, i) => q.copy(from.local(i)));
     this.stale = true;
     return this;
   }

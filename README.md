@@ -9,12 +9,14 @@ npm install @drawcall/animate three @pmndrs/viverse
 ```
 
 ```ts
+import { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import { loadCharacterModel } from '@pmndrs/viverse';
 import { follow, Humanoid, INDEX, solveChain, type Frame } from '@drawcall/animate';
 
 const model = await loadCharacterModel();
 scene.add(model.scene);
+const goal = new Vector3(-0.3, 1.2, 0.4);
 const body = new Humanoid(model, () =>
   function* () {
     // the right hand to a goal, as fast as a hand moves

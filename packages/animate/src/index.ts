@@ -1,6 +1,6 @@
 // The generic core: an articulated body whose behaviour timeline writes its pose, layer by layer.
 export { Skeleton, type BoneDef, type Limit, type SkeletonOptions } from './core/skeleton';
-export { Pose } from './core/pose';
+export { Pose, type ReadonlyPose } from './core/pose';
 export { Body, STEP, type BodyOptions, type Frame } from './core/body';
 export { solveChain, type ChainGoal } from './core/chain';
 export { follow, followRotation, type FollowOptions } from './core/follow';
@@ -16,6 +16,4 @@ export { relaxedPose } from './humanoid/profile/relaxed';
 export { DEFAULT_HEIGHT, type Proportions } from './humanoid/proportions';
 export { Rig, yawOf } from './humanoid/rig';
 export { CHAINS, massFor, skeletonOf, type Chain } from './humanoid/skeleton';
-export { defaultStance, type Stance } from './humanoid/stance';
-export { createStatus, type Effector, type Foot, type FootPhase, type Intent, type Status } from './humanoid/status';
-export { createWorld, type Box, type Ladder, type Mount, type Seat, type Sphere, type World, type WorldEvent } from './humanoid/world';
+export { createWorld, type World } from './humanoid/world';

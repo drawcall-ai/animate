@@ -7,7 +7,6 @@ const DEG = Math.PI / 180;
 /** a range in degrees: the twist about `axis`, the swings about the next two axes in turn */
 const range = (axis: 0 | 1 | 2, a: [number, number], b: [number, number], twist: [number, number], neutral?: Quaternion) => ({ axis, swing: [a, b], twist, neutral }) satisfies Omit<Limit, 'bone'>;
 
-// Copied from the old core (a801be4:packages/core/src/pose/limits.ts: RANGES).
 /**
  * Each joint's range of motion (°, the left side's; the right mirrors it), in the bone's parent's
  * frame from the T-pose (the shoulder's from the arm hanging). Clinical norms of active motion

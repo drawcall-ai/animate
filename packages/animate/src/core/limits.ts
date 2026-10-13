@@ -8,9 +8,6 @@ import type { Limit } from './skeleton';
  * angle — and the ranges they are held to there (the twist's opening up as the swing nears the
  * turn opposite the axis, where the twist is undefined: held there, it would flip the bone round
  * as the swing passes it). Into `out`.
- *
- * The split and its inverse are copied from the old core (a801be4:packages/core/src/pose/limits.ts),
- * without its mirroring and soft easing.
  */
 export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = coordinates()): Coordinates {
   const off = limit.neutral ? _q.copy(limit.neutral).invert().premultiply(q) : _q.copy(q);
@@ -32,12 +29,16 @@ export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = co
   out.value[0] = sj * f;
   out.value[1] = sk * f;
   out.value[2] = 2 * Math.atan2(a, b);
-  const [lo, hi] = limit.twist;
-  const open = smooth((phi - TWIST_FADE) / (Math.PI - TWIST_FADE));
   out.range[0] = limit.swing[0];
   out.range[1] = limit.swing[1];
-  out.range[2] = [lo - (Math.PI + lo) * open, hi + (Math.PI - hi) * open];
+  out.range[2] = twistRange(limit, phi);
   return out;
+}
+
+/** the twist's range at a swing of `phi` (rad) */
+function twistRange({ twist: [lo, hi] }: Limit, phi: number): [number, number] {
+  const open = smooth((phi - TWIST_FADE) / (Math.PI - TWIST_FADE));
+  return [lo - (Math.PI + lo) * open, hi + (Math.PI - hi) * open];
 }
 
 /** a rotation in a limit's coordinates: the swing's two components and the twist (rad), and their ranges */
@@ -51,7 +52,13 @@ export const coordinates = (): Coordinates => ({ value: [0, 0, 0], range: [[0, 0
 /** Clamps `q`, a bone's rotation in its parent's frame, into `limit` (see `coordinatesOf`); returns whether it moved `q`. */
 export function clampRotation(q: Quaternion, limit: Limit): boolean {
   const { value, range } = coordinatesOf(q, limit, _c);
-  const [t1, t2, tt] = value.map((x, n) => Math.min(range[n][1], Math.max(range[n][0], x)));
+  let t1 = clamp(value[0], range[0]);
+  let t2 = clamp(value[1], range[1]);
+  // (a swing of more than half a turn is the other way round: its coordinates would not come back)
+  const swing = Math.hypot(t1, t2);
+  if (swing > Math.PI) [t1, t2] = [(t1 * Math.PI) / swing, (t2 * Math.PI) / swing];
+  // the twist's range as the clamped swing has it
+  const tt = clamp(value[2], twistRange(limit, Math.min(swing, Math.PI)));
   if (t1 === value[0] && t2 === value[1] && tt === value[2]) return false;
   // swing · twist, from the swing's rotation vector and the twist's angle
   const i = limit.axis;
@@ -83,6 +90,7 @@ export function beyond(q: Quaternion, limit: Limit): number {
 
 /** the swing (rad) from which the twist's range opens up, to all of it at the opposite turn */
 const TWIST_FADE = 0.75 * Math.PI;
+const clamp = (x: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, x));
 const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 const _q = new Quaternion();

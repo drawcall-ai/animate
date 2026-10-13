@@ -1,4 +1,3 @@
-// Copied from the old core (a801be4:packages/core/src/proportions.ts).
 import { Vector3 } from 'three';
 import { SIDES, createRest, type Rest } from './bones';
 

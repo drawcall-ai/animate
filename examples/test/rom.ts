@@ -1,5 +1,5 @@
 import { Quaternion, type Object3D } from 'three';
-import { BONES, ranges, type BoneName } from '@drawcall/animate';
+import { beyond, BONES, ranges, type BoneName } from '@drawcall/animate';
 import type { Frame } from './frame';
 
 const DEG = 180 / Math.PI;
@@ -54,45 +54,9 @@ const _q = new Quaternion();
 
 const RANGES = new Map(ranges().map((r) => [BONES[r.bone], r]));
 
-/**
- * a swing this far round (rad) nears the turn opposite the joint's axis, where its twist is
- * undefined: the twist's range opens up from here to there
- */
-const TWIST_FADE = 0.75 * Math.PI;
-const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-
-/**
- * How far `q`, `bone`'s rotation in its parent's frame, is beyond its range (rad; 0 within it):
- * the most any of the swing's two components and the twist (Baerlocher & Boulic 2001) is past its
- * limit, the twist's range opening up as the swing nears the opposite turn.
- */
+/** how far `q`, `bone`'s rotation in its parent's frame, is beyond its range (rad; 0 within it) */
 function beyondRange(bone: BoneName, q: Quaternion): number {
   const r = RANGES.get(bone);
   if (!r) throw new Error(`no range of motion for ${bone}`);
-  const p = _r.copy(q);
-  if (r.neutral) p.multiply(_n.copy(r.neutral).invert());
-  const sg = p.w < 0 ? -1 : 1;
-  const c = [sg * p.x, sg * p.y, sg * p.z];
-  const w = sg * p.w;
-  const i = r.axis;
-  const j = (i + 1) % 3;
-  const k = (i + 2) % 3;
-  // q = swing · twist: the twist is q's part about the axis, the swing q · twist⁻¹
-  const tl = Math.sqrt(c[i] * c[i] + w * w);
-  const a = tl > 1e-9 ? c[i] / tl : 0;
-  const b = tl > 1e-9 ? w / tl : 1;
-  const sj = b * c[j] - a * c[k];
-  const sk = b * c[k] + a * c[j];
-  const sl = Math.sqrt(sj * sj + sk * sk);
-  const phi = 2 * Math.atan2(sl, w * b + c[i] * a);
-  const f = sl > 1e-9 ? phi / sl : 2;
-  const tau = 2 * Math.atan2(a, b);
-  const out = (v: number, [lo, hi]: [number, number]) => Math.max(0, v - hi, lo - v);
-  const [lo, hi] = r.twist;
-  const fade = smooth((phi - TWIST_FADE) / (Math.PI - TWIST_FADE));
-  const twist: [number, number] = [lo - (Math.PI + lo) * fade, hi + (Math.PI - hi) * fade];
-  return Math.max(out(sj * f, r.swing[0]), out(sk * f, r.swing[1]), out(tau, twist));
+  return beyond(q, r);
 }
-
-const _r = new Quaternion();
-const _n = new Quaternion();

@@ -31,7 +31,6 @@ export interface Landmark {
 
 const mirror = (v: Vector3) => new Vector3(-v.x, v.y, v.z);
 
-// Copied from the old core (a801be4:packages/core/src/pose/pose.ts: landmarksOf), keyed by name.
 /** The landmarks of a body (the right side mirrors the left's x). */
 export function landmarksOf(p: Proportions): Record<LandmarkName, Landmark> {
   const { head: h, sole } = p;

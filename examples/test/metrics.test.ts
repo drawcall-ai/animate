@@ -15,9 +15,7 @@ function* steps(sc: Scenario): Generator<Frame[]> {
   const sim = new Simulation(sc);
   while (sim.t < sc.duration) {
     sim.step();
-    const inputs = sim.inputs();
-    const props = sim.props(inputs);
-    yield sim.actors.map((h, i) => ({ t: sim.t, h, input: inputs[i], props }));
+    yield sim.actors.map((h) => ({ t: sim.t, h }));
   }
 }
 
@@ -36,7 +34,7 @@ for (const sc of SCENARIOS) {
     const limit = limitsOf(sc.id);
     const m = measure(sc.id, steps(sc));
     console.log(m.report);
-    judge(sc, m, limit);
+    judge(m, limit);
   });
 }
 
@@ -55,12 +53,8 @@ it('runs a scenario through the metrics: two actors standing still, relaxed, eac
       },
   };
   const m = measure(still.id, steps(still));
-  // (a T-pose fails the free-arm rules: the rules that hold for any body standing still)
-  expect(m.feet.slide).toBeLessThan(1e-6);
-  expect(m.feet.hyper).toBe(0);
-  expect(m.balance.xcomFrames).toBe(0);
-  expect(m.balance.com).toBe(0);
-  expect(m.targets.wrist).toBe(0);
+  expect(m.rates.velocity.knee.value).toBe(0);
+  expect(m.rom.worst.value).toBe(0);
   expect(seen.length).toBe(2 * 30);
   expect(seen.every((x, i) => Math.abs(x - (i % 2 === 0 ? 1 : -1)) < 0.05)).toBe(true);
   expect(m.report).toContain('== still (30 frames)');

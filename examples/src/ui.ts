@@ -9,18 +9,16 @@ export interface Settings {
   /** 2D: the poses drawn as flat OpenPose over the scene, instead of the 3D skeletons */
   flat: boolean;
   playing: boolean;
-  markers: boolean;
 }
 
 export interface Actions {
   select(s: Scenario): void;
   viewChanged(): void;
-  markersChanged(): void;
   /** `fraction` of the scenario's duration */
   seek(fraction: number): void;
 }
 
-/** The side panel: the scenarios, views, play/pause, 2D/3D, markers and a time scrubber. */
+/** The side panel: the scenarios, views, play/pause, 2D/3D and a time scrubber. */
 export class Panel {
   private readonly play = byId('play', HTMLButtonElement);
   private readonly scrub = byId('scrub', HTMLInputElement);
@@ -61,12 +59,6 @@ export class Panel {
     mode.onclick = () => {
       settings.flat = !settings.flat;
       showMode();
-    };
-    const markers = byId('markers', HTMLInputElement);
-    markers.checked = settings.markers;
-    markers.onchange = () => {
-      settings.markers = markers.checked;
-      on.markersChanged();
     };
     this.scrub.oninput = () => {
       this.setPlaying(false);

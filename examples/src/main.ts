@@ -9,7 +9,6 @@ import { jointOf } from './joints';
 import { FIXED_DT, type Scenario } from './scenario';
 import { SCENARIOS } from './scenarios';
 import { Simulation } from './simulation';
-import { drawMarkers } from './stage/markers';
 import { drawProps } from './stage/props';
 import { FOV, Stage } from './stage';
 import { drawTrail } from './stage/trail';
@@ -25,8 +24,7 @@ if (capture) document.body.classList.add('capture');
 
 const stage = new Stage(byId('c', HTMLCanvasElement), byId('overlay', HTMLCanvasElement), capture);
 const props = new Group();
-const markers = new Group();
-stage.scene.add(props, markers);
+stage.scene.add(props);
 const bodies = new Bodies(stage.scene);
 /** the scenario's body, or the one body=openpose|mannequin asks for */
 function bodyOf(s: Scenario): NonNullable<Scenario['body']> {
@@ -51,14 +49,12 @@ const settings: Settings = {
   view: VIEWS.find((v) => v === params.get('view')) ?? 'orbit',
   flat: params.get('mode') === '2d',
   playing: !params.has('t'),
-  markers: params.get('markers') !== '0',
 };
 const panel = new Panel(settings, {
   select: load,
   viewChanged: () => {
     if (settings.view === 'orbit') startOrbit();
   },
-  markersChanged: () => drawMarkers(markers, settings.markers ? playback.sim.inputs() : []),
   seek: (fraction) => seek(fraction * playback.sim.scenario.duration),
 });
 window.addEventListener('resize', () => stage.resize());
@@ -122,7 +118,6 @@ function sync(alpha = 1, dt = 1 / 60) {
   const s = sim.scenario;
   const between = playback.blend(alpha);
   drawProps(props, between.props);
-  drawMarkers(markers, settings.markers ? sim.inputs() : []);
   stage.env?.update(sim.t);
   const focus = s.focus?.(sim.actors) ?? between.root;
   const yaw = (s.facing ?? sim.actors[0].yaw) + turn;

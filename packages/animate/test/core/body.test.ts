@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, follow, Pose, type Frame } from '../../src';
+import { Body, follow, followRotation, Pose, type Frame } from '../../src';
 import { leg, turn } from './rigs';
 
 /** a behaviour writing `write` every sub-step, forever (or for `seconds`) */
@@ -26,6 +26,30 @@ describe('Body', () => {
     body.update(1 / 60);
     expect(body.pose.local(2).angleTo(turn(1, 0, 0, 1))).toBeLessThan(1e-7);
     expect(body.pose.local(1).angleTo(turn(1, 0, 0, 0.6))).toBeLessThan(1e-7);
+  });
+
+  it('hands over continuously when a layer ends: the one below follows its pose from the motion there is', () => {
+    const accel = 40;
+    const rest = new Quaternion();
+    const body = new Body(leg(), function* () {
+      yield* parallel<Frame>(
+        'all',
+        every((f) => f.current.setLocal(2, followRotation(f.prev2.local(2), f.prev.local(2), rest, { accel }, f.dt, new Quaternion()))),
+        every((f) => f.current.setLocal(2, turn(1, 0, 0, 1.2 * Math.sin(4 * f.time))), 0.5),
+      );
+    });
+    const angles: number[] = [];
+    for (let k = 0; k < 120; k++) {
+      body.update(1 / 60);
+      const q = body.pose.local(2);
+      angles.push(2 * Math.atan2(q.x, q.w));
+    }
+    const dt = 1 / 60;
+    // after the upper layer (until 0.5 s), at most `accel`, and back at rest
+    const after = angles.slice(28);
+    const accelerations = after.slice(2).map((a, k) => Math.abs(a - 2 * after[k + 1] + after[k]) / dt ** 2);
+    expect(Math.max(...accelerations)).toBeLessThan(accel + 1e-6);
+    expect(Math.abs(angles.at(-1) ?? NaN)).toBeLessThan(1e-9);
   });
 
   it('keeps the final poses as history: current becomes prev, prev becomes prev2', () => {

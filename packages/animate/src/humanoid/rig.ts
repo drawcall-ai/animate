@@ -1,7 +1,6 @@
-// Adapted from the old core (a801be4:packages/core/src/rig.ts): the same measuring, bone writing and landmark nodes.
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
-import type { Pose } from '../core/pose';
+import type { ReadonlyPose } from '../core/pose';
 import { Skeleton } from '../core/skeleton';
 import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName } from './bones';
 import { landmarksOf, pointsOf, type BonePoint, type PointName } from './landmarks';
@@ -109,7 +108,7 @@ export class Rig {
    * `model.scene` placed (in world space) where the T-pose would stand with its hips there,
    * turned to their facing. A VRM is then updated by `dt`.
    */
-  write(pose: Pose, dt: number) {
+  write(pose: ReadonlyPose, dt: number) {
     if (pose.skeleton !== this.skeleton) throw new Error("a pose of another skeleton than the rig's");
     const hips = pose.local(0);
     const root = _root.setFromAxisAngle(UP, yawOf(hips));

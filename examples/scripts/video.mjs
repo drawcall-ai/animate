@@ -1,7 +1,6 @@
 // Frame-exact video of an example, as seen in live playback (orbit view by default).
 // Usage: node scripts/video.mjs --example hand-over [--size 1280x720] [--fps 60] [--view three] [--out captures/hand-over.mp4]
 //        --stills 2,6.5,11  saves PNG frames at those times instead of a video
-//        --markers          keep the input-target indicators (hidden by default)
 //        --cam cinematic    scripted camera: the normal third-person shot → a move into first person
 //        --blur 4           film motion blur: 4 subframes per frame, 180° shutter (half of them blended)
 // Needs ffmpeg for videos.
@@ -21,7 +20,6 @@ const { values: args } = parseArgs({
     view: { type: 'string' },
     out: { type: 'string' },
     stills: { type: 'string' },
-    markers: { type: 'boolean', default: false },
     cam: { type: 'string' },
     blur: { type: 'string', default: '1' },
   },
@@ -32,7 +30,6 @@ const out = args.out ?? `captures/${args.example}.mp4`;
 const stills = args.stills?.split(',').map(Number);
 const blur = stills ? 1 : Math.max(1, Number(args.blur));
 const query = new URLSearchParams({ example: args.example, video: '1' });
-if (!args.markers) query.set('markers', '0');
 if (args.cam) query.set('cam', args.cam);
 if (args.view) query.set('view', args.view);
 mkdirSync(dirname(out), { recursive: true });

@@ -1,4 +1,3 @@
-// Copied from the old core (a801be4:packages/core/src/skeleton.ts).
 import { AnimationMixer, Bone, Group } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { CHILD_BONES, PARENT, perBone } from './bones';

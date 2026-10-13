@@ -58,14 +58,11 @@ describe('solveChain', () => {
     expect(far.position(5).distanceTo(new Vector3(0.2, 1.4 - 1.4, 0))).toBeLessThan(1e-3);
   });
 
-  it('writes with a weight, and moves the body to put the chain’s first joint at `root`', () => {
+  it('writes with a weight, blended over what is there', () => {
     const skeleton = leg();
     const full = solve(skeleton, { tip: { position: new Vector3(0.3, 0.35, 0.25) } });
     const half = solve(skeleton, { tip: { position: new Vector3(0.3, 0.35, 0.25) } }, 0.5);
     const rest = new Pose(skeleton);
     for (const b of [1, 2]) expect(half.local(b).angleTo(rest.local(b).clone().slerp(full.local(b), 0.5))).toBeLessThan(1e-7);
-    const moved = solve(skeleton, { root: new Vector3(0.1, 0.9, 0), tip: { position: new Vector3(0.3, 0.25, 0.25) } });
-    expect(moved.position(1).distanceTo(new Vector3(0.1, 0.9, 0))).toBeLessThan(1e-12);
-    expect(moved.position(3).distanceTo(new Vector3(0.3, 0.25, 0.25))).toBeLessThan(1e-9);
   });
 });
