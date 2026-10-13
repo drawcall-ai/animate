@@ -1,19 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
+import type { Placed } from './carrier';
+import type { FollowOptions } from './goal';
 import { exp, log } from './rotation';
-
-/** How a value may move toward its goal. */
-export interface FollowOptions<V> {
-  /** the most its velocity changes (per s², in its units) */
-  accel: number;
-  /** the most it closes in on the goal (per s; default unbounded) */
-  speed?: number;
-  /**
-   * the goal's own velocity (per s; for a rotation, its angular velocity in the frame its
-   * quaternions are in, rad/s), added to the approach: a goal moving steadily is then followed
-   * without lag (default still)
-   */
-  velocity?: V;
-}
 
 /**
  * The next value of something moving toward `target` from its history (`prev2`, `prev`) over
@@ -25,25 +13,33 @@ export interface FollowOptions<V> {
  * for) unless it is too fast to brake in time. Velocity across the line to the goal turns with
  * what is left of the acceleration and can carry it past the goal, by up to about
  * 1.25 · v⊥² / accel. The history is read as taken `dt` apart: step it evenly (a body's
- * sub-steps are).
+ * sub-steps are). On a carrier (`on`), the goal is in its frame and the history is read in its
+ * frame as it was then: the value moves with the carrier, and toward the goal on it.
  */
-export function follow(prev2: number, prev: number, target: number, options: FollowOptions<number>, dt: number): number;
+export function follow(prev2: number, prev: number, target: number, options: Omit<FollowOptions<number>, 'on'>, dt: number): number;
 export function follow(prev2: Vector3, prev: Vector3, target: Vector3, options: FollowOptions<Vector3>, dt: number, out?: Vector3): Vector3;
 export function follow(
   prev2: number | Vector3,
   prev: number | Vector3,
   target: number | Vector3,
-  options: FollowOptions<number> | FollowOptions<Vector3>,
+  options: Omit<FollowOptions<number>, 'on'> | FollowOptions<Vector3>,
   dt: number,
   out = new Vector3(),
 ): number | Vector3 {
+  const on = 'on' in options ? options.on : undefined;
   const p = vector(prev, _p);
+  const was = vector(prev2, _a);
+  if (on) {
+    toLocal(on.prev, p);
+    toLocal(on.prev2, was);
+  }
   const goal = vector(options.velocity ?? 0, _g);
-  const velocity = vector(prev, _v).sub(vector(prev2, _a)).divideScalar(dt);
+  const velocity = _v.copy(p).sub(was).divideScalar(dt);
   // the goal where it was a step ago: the approach is to that, then moved with it
   const gap = vector(target, _d).addScaledVector(goal, -dt).sub(p);
   step(velocity, gap, goal, options, dt);
   const next = p.addScaledVector(velocity, dt);
+  if (on) next.applyQuaternion(on.current.quaternion).add(on.current.position);
   return typeof prev === 'number' ? next.x : out.copy(next);
 }
 
@@ -54,18 +50,31 @@ export function follow(
  * read the short way round.
  */
 export function followRotation(prev2: Quaternion, prev: Quaternion, target: Quaternion, options: FollowOptions<Vector3>, dt: number, out = new Quaternion()): Quaternion {
+  const { on } = options;
+  const p = _p2.copy(prev);
+  const p2 = _p3.copy(prev2);
+  if (on) {
+    p.premultiply(_r.copy(on.prev.quaternion).invert());
+    p2.premultiply(_r.copy(on.prev2.quaternion).invert());
+  }
   const goal = _g.copy(options.velocity ?? ZERO);
-  const velocity = log(_q.copy(prev2).invert().premultiply(prev), _v).divideScalar(dt);
+  const velocity = log(_q.copy(p2).invert().premultiply(p), _v).divideScalar(dt);
   // (the goal a step ago: exp(−ω·dt) · target)
   const was = exp(-goal.x * dt, -goal.y * dt, -goal.z * dt, _q).multiply(target);
-  const gap = log(was.multiply(_r.copy(prev).invert()), _d);
+  const gap = log(was.multiply(_r.copy(p).invert()), _d);
   step(velocity, gap, goal, options, dt);
   velocity.multiplyScalar(dt);
-  return out.copy(prev).premultiply(exp(velocity.x, velocity.y, velocity.z, _q)).normalize();
+  out.copy(p).premultiply(exp(velocity.x, velocity.y, velocity.z, _q)).normalize();
+  return on ? out.premultiply(on.current.quaternion) : out;
+}
+
+/** `world` into the frame of a carrier placed `at` */
+function toLocal(at: Placed, world: Vector3): Vector3 {
+  return world.sub(at.position).applyQuaternion(_r.copy(at.quaternion).invert());
 }
 
 /** turns `velocity` into the next step's: toward `gap` (from the goal a step ago), braking in time, plus the goal's own `goal` */
-function step(velocity: Vector3, gap: Vector3, goal: Vector3, { accel: a, speed = Infinity }: FollowOptions<unknown>, dt: number) {
+function step(velocity: Vector3, gap: Vector3, goal: Vector3, { accel: a, speed = Infinity }: { accel: number; speed?: number }, dt: number) {
   if (!(a > 0 && Number.isFinite(a))) throw new Error(`an acceleration of ${a}`);
   if (!(speed >= 0)) throw new Error(`a speed of ${speed}`);
   if (!(dt > 0 && Number.isFinite(dt))) throw new Error(`a step of ${dt} s`);
@@ -112,3 +121,5 @@ const _a = new Vector3();
 const _d = new Vector3();
 const _q = new Quaternion();
 const _r = new Quaternion();
+const _p2 = new Quaternion();
+const _p3 = new Quaternion();

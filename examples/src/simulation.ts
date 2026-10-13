@@ -1,10 +1,11 @@
 import type { CharacterModel } from '@pmndrs/viverse';
 import { Humanoid, type Pose, type World } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
-import { FIXED_DT, type Prop, type Scenario } from './scenario';
+import { FIXED_DT, type Prop, type Scenario, type Stage } from './scenario';
 
-/** Deterministic fixed-step run of a scenario: every actor stepped at 60 Hz. */
+/** Deterministic fixed-step run of a scenario: its carriers moved, then every actor stepped, at 60 Hz. */
 export class Simulation {
+  readonly stage: Stage;
   readonly world: World;
   readonly actors: Humanoid<World>[] = [];
   /** the actors' poses as the world shows them: as they were last step */
@@ -17,17 +18,19 @@ export class Simulation {
     readonly scenario: Scenario,
     model: () => CharacterModel = () => createOpenPoseModel(),
   ) {
-    this.world = scenario.world();
+    this.stage = scenario.stage();
+    this.world = this.stage.world;
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
-      cast.push(new Humanoid(model(), (h) => scenario.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw }));
+      cast.push(new Humanoid(model(), (h) => this.stage.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw }));
     });
     this.bodies = cast.map((h) => h.snapshot());
     this.world.bodies = this.bodies;
   }
 
-  /** one fixed step of every actor, each reading the others as they were last step */
+  /** one fixed step: the carriers to where they are then, every actor reading the others as they were last step */
   step() {
+    this.stage.move?.(this.t + FIXED_DT);
     this.actors.forEach((h, i) => this.bodies[i].copy(h.pose));
     for (const h of this.actors) h.update(FIXED_DT);
     this.t += FIXED_DT;
@@ -39,6 +42,6 @@ export class Simulation {
 
   /** the scenery as it is now */
   props(): Prop[] {
-    return this.scenario.props(this.t);
+    return this.stage.props(this.t);
   }
 }

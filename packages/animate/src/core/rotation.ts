@@ -18,3 +18,10 @@ export function log(q: Quaternion, out: Vector3): Vector3 {
   const f = s > 1e-12 ? (2 * Math.atan2(s, sign * q.w)) / s : 2;
   return out.set(x * f, y * f, z * f);
 }
+
+/** the angular velocity (rad/s, in the frame the quaternions are in) turning `from` into `to` over `dt` */
+export function spinOf(from: Quaternion, to: Quaternion, dt: number, out: Vector3): Vector3 {
+  return log(_d.copy(from).invert().premultiply(to), out).divideScalar(dt);
+}
+
+const _d = new Quaternion();

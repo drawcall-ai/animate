@@ -1,12 +1,18 @@
 // The objective motion metrics: what a run measures (`measure`) and the rules and per-scenario
-// ratchets it is held to (`judge`). Only the metrics that hold for any body are measured now —
-// joint speeds and accelerations, ranges of motion; the rest come back with the behaviours they
-// measure (git show 738b439:examples/test). The limits of every scenario id are kept as data,
-// those of scenarios not yet rebuilt included: what they are to meet again.
+// ratchets it is held to (`judge`). The metrics of the scenarios rebuilt so far are measured —
+// the feet, balance, held grips, gait and free arms, the rest stance, joint speeds and
+// accelerations, ranges of motion; the rest come back with the behaviours they measure (git show
+// 738b439:examples/test). The limits of every scenario id are kept as data, those of scenarios
+// not yet rebuilt included: what they are to meet again.
 import { expect } from 'vitest';
+import { ArmTurns, FreeArms } from './arms';
+import { Balance } from './balance';
+import { Feet, FinalStance, Landings } from './body';
 import type { Frame } from './frame';
+import { GaitKinematics } from './gait';
 import { JointRates, type JointClass } from './rates';
 import { RangeOfMotion } from './rom';
+import { Targets } from './targets';
 
 /** ratchets: measured values, which may only go down */
 export interface Limits {
@@ -173,6 +179,22 @@ const JOINT_SPEED: Record<JointClass, number> = {
  * against its own speed; nothing human gets there in under ~30 ms: α ≤ JOINT_SPEED / 0.03 s.
  */
 const TELEPORT_TIME = 0.03;
+/** for the target errors, which move a little with any change */
+const HEADROOM = 0.02;
+/**
+ * The ankle's angle between the shank and the foot (knee → ankle, ankle → ball; °): ~60 standing,
+ * the foot pointed ~40° at most (a kick's instep, a push-off), flexed up ~60° at most (a deep
+ * squat's heels down; walking needs ~10–20°, AAOS)
+ */
+const ANKLE: [number, number] = [20, 125];
+/** how far beyond the leg's length a planted foothold may be (m): rolled up onto the toes, a foot adds about its length */
+const ON_TOES = 0.3;
+/** how far a foot's sole points may sink into the floor (they roll on it) */
+const FLOOR_SINK = 0.025;
+/** how far a landing may still move in the last 40% of a swing (m): later reads as a stumble */
+const LATE_RETARGET = 0.03;
+/** how far a planted ankle may be off its foothold beyond the foot's roll (m): the foot stands where it is said to */
+const PLANTED = 0.01;
 
 /** the limits of scenario `id`; fails when it has none */
 export function limitsOf(id: string): Limits {
@@ -181,24 +203,133 @@ export function limitsOf(id: string): Limits {
   return limit;
 }
 
-/** every metric over a run of scenario `id`: `steps` gives each fixed step's frames, one per actor (the first actor's are measured) */
+/** every metric over a run of scenario `id`: `steps` gives each fixed step's frames, one per actor (the feet and balance are every actor's, the rest the first's) */
 export function measure(id: string, steps: Iterable<readonly Frame[]>) {
+  const feet = new Feet();
+  const landings = new Landings();
+  const balance = new Balance();
+  const targets = new Targets();
+  const gait = new GaitKinematics();
+  const arms = new FreeArms();
+  const turns = new ArmTurns();
+  const stance = new FinalStance();
   const rates = new JointRates();
   const rom = new RangeOfMotion();
   let frames = 0;
   for (const step of steps) {
     frames++;
-    rates.see(step[0]);
-    rom.see(step[0]);
+    step.forEach((f, i) => {
+      feet.see(f);
+      landings.see(f);
+      balance.see(f);
+      if (i > 0) return;
+      for (const m of [targets, gait, arms, turns, stance, rates, rom]) m.see(f);
+    });
   }
-  const report = [`== ${id} (${frames} frames)`, rates, rom].join('\n');
-  return { report, rates, rom };
+  const report = [`== ${id} (${frames} frames)`, feet, landings, balance, targets, gait, arms, turns, stance, rates, rom].join('\n');
+  return { report, feet, landings, balance, targets, gait, arms, turns, stance, rates, rom };
 }
 
 export type Measured = ReturnType<typeof measure>;
 
 /** holds a run (`m`) to the universal rules and its limits (`limit`, from `limitsOf`) */
 export function judge(m: Measured, limit: Limits) {
+  expect(m.feet.slide, 'planted foot slide').toBeLessThan(1e-6);
+  expect(m.feet.off.value, `planted ankle off its foothold (m, @${m.feet.off.at.toFixed(2)}s)`).toBeLessThan(PLANTED);
+  expect(m.feet.reach.value, `planted foothold out of the leg's reach (m, @${m.feet.reach.at.toFixed(2)}s)`).toBeLessThan(ON_TOES);
+  expect(m.feet.hyper, 'knee-backward frames').toBe(0);
+  const [ankleMin, ankleMax] = limit.ankle ?? ANKLE;
+  expect(180 - m.feet.ankle.min.value, `ankle pointed (°, @${m.feet.ankle.min.at.toFixed(2)}s)`).toBeGreaterThanOrEqual(ankleMin - 1);
+  expect(m.feet.ankle.max.value, `ankle flexed up (°, @${m.feet.ankle.max.at.toFixed(2)}s)`).toBeLessThanOrEqual(ankleMax + 1);
+  expect(m.feet.lowest, 'foot below the floor (m)').toBeGreaterThan(-FLOOR_SINK);
+  expect(m.landings.late.value, 'late landing retarget (m)').toBeLessThan(LATE_RETARGET);
+  expect(m.feet.crossings, 'leg-crossing frames').toBeLessThanOrEqual(limit.crossings);
+  expect(m.balance.xcomFrames, 'XCoM > 10 cm frames').toBeLessThanOrEqual(limit.xcomFrames);
+  expect(m.balance.com, 'standing CoM outside the feet (m)').toBeLessThanOrEqual(limit.com + 1e-3);
+  expect(m.targets.wrist, 'wrist error').toBeLessThanOrEqual(limit.wrist + HEADROOM);
+  for (const [curve, run] of [[false, false], [false, true], [true, false], [true, true]]) {
+    // (walking and running strides each against their own references)
+    const g = m.gait.summary(curve, run);
+    if (!g) continue;
+    const where = `${curve ? 'curve' : 'straight'} ${run ? 'running' : 'walking'} strides`;
+    // walking pelvis sway ~3–5 cm peak to peak (Orendurff 2004), a runner's less
+    expect(g.pelvisLat, `${where}: pelvis lateral p2p (m)`).toBeGreaterThan(run ? 0.01 : 0.025);
+    expect(g.pelvisLat, `${where}: pelvis lateral p2p (m)`).toBeLessThan(run ? 0.045 : 0.06);
+    // the upper body rides the pelvis's sway, no wider, and stays near vertical over it
+    expect(g.chestLat, `${where}: chest lateral p2p (m)`).toBeLessThan(g.pelvisLat + 0.005);
+    expect(g.lean, `${where}: trunk lateral lean (°)`).toBeLessThan(2.5);
+    expect(g.headRoll, `${where}: head roll (°)`).toBeLessThan(2);
+    // smooth: one sway per stride, over the stance foot at mid-stance, no jitter
+    expect(g.chestResidual, `${where}: chest sway beyond the stride frequency`).toBeLessThan(0.4);
+    expect(g.chestJerk, `${where}: chest lateral jerk (m/s³)`).toBeLessThan(50);
+    expect(g.phase, `${where}: pelvis over the stance foot at mid-stance`).toBeGreaterThan(0.7);
+    // the whole body moves as in motion capture (CMU walks at 1.0–1.4 m/s, runs at 3.2–3.6):
+    // the thorax rolls with its rotation, the forward shoulder up (corr ~0.95); the head goes
+    // along with ~55% of that rotation; the trunk nods forward at each double support (±1.2°
+    // walking, ±3° running); the ankle pushes off; the knee stays bent late into the swing
+    expect(g.rollWithYaw, `${where}: thorax roll with its rotation`).toBeGreaterThan(0.7);
+    expect(g.headCarry, `${where}: the head's share of the thorax rotation`).toBeGreaterThan(0.35);
+    expect(g.headCarry, `${where}: the head's share of the thorax rotation`).toBeLessThan(0.8);
+    expect(g.nod, `${where}: trunk nod (°)`).toBeGreaterThan(run ? 1 : 0.6);
+    expect(g.nod, `${where}: trunk nod (°)`).toBeLessThan(run ? 3.5 : 3);
+    expect(g.pushOff, `${where}: ankle push-off (°)`).toBeGreaterThan(run ? 30 : curve ? 8 : 15);
+    expect(g.lateKnee, `${where}: knee at 3/4 of the swing (°)`).toBeGreaterThan(run ? 45 : 15);
+    // free arms swing with the legs, one cycle per stride: each forward with the other leg,
+    // a pendulum — one smooth sinusoid, turning back once at each end, no jolt there
+    if (g.armRange > 10) {
+      expect(g.armCycles, `${where}: arm swings per stride`).toBe(1);
+      expect(g.armFit, `${where}: arm swing against one sinusoid (R²)`).toBeGreaterThan(0.97);
+      expect(g.armTurns, `${where}: arm swing turning points per stride`).toBe(2);
+      expect(g.armAcceleration, `${where}: arm swing peak acceleration (× the sinusoid's)`).toBeLessThan(2);
+      expect(g.armCorrelation, `${where}: arm with the other leg`).toBeGreaterThan(0.7);
+      expect(Math.abs(g.armLag), `${where}: arm lag (share of the stride)`).toBeLessThan(0.08);
+    }
+  }
+  // setting off and stopping blend in and out of the walk: no pitch faster than walking's own
+  const rates = m.gait.rates();
+  if (limit.startStop !== null && rates) {
+    for (const k of ['trunk', 'pelvis'] as const) {
+      expect(rates.start[k], `setting off: ${k} pitch rate (°/s)`).toBeLessThanOrEqual(limit.startStop * rates.steady[k]);
+      expect(rates.stop[k], `stopping: ${k} pitch rate (°/s)`).toBeLessThanOrEqual(limit.startStop * rates.steady[k]);
+    }
+  }
+  // coming to rest in a relaxed stance: feet about hip-width apart (heels 0.10–0.15 H), turned
+  // out a little, the pair centred under the body sideways and the pelvis over them (a slight
+  // asymmetry at most); fore-aft the centre of mass stands over the feet's rear half
+  const rest = m.stance.rest;
+  if (m.stance.endsStanding && rest) {
+    expect(rest.heels, 'at rest: heels apart (× height)').toBeGreaterThan(0.1);
+    expect(rest.heels, 'at rest: heels apart (× height)').toBeLessThan(0.15);
+    expect(Math.abs(rest.aside), "at rest: feet's midpoint off the CoM sideways (m)").toBeLessThan(0.02);
+    expect(Math.abs(rest.pelvis), "at rest: pelvis off the feet's midpoint sideways (m)").toBeLessThan(0.02);
+    expect(rest.ahead, "at rest: feet's midpoint ahead of the CoM (m)").toBeGreaterThan(0);
+    expect(rest.ahead, "at rest: feet's midpoint ahead of the CoM (m)").toBeLessThan(0.065);
+    for (const a of rest.toeOut) {
+      expect(a, 'at rest: toe-out (°)').toBeGreaterThan(0);
+      expect(a, 'at rest: toe-out (°)').toBeLessThan(12);
+    }
+  }
+  // free arms swing as pendulums, setting off too (a runner's swing takes ~0.3 s): never back and forth quicker
+  expect(m.turns.shortest.gap, `free arm swing: shortest between turns (s, @${m.turns.shortest.t.toFixed(2)}s)`).toBeGreaterThan(0.25);
+  // relaxed arms hang a little out from the side and swing clear of the thighs, never
+  // in front of the pelvis (Collins 2009; Meyns 2013)
+  const { standing, walking } = m.arms;
+  for (const [what, a] of [['standing', standing], ['walking', walking]] as const) {
+    if (!a.frames) continue;
+    expect(a.handOut.min, `free arms ${what}: hand outside the hip joint`).toBeGreaterThan(a.hipHalf);
+    expect(a.clearance.min, `free arms ${what}: hand clear of the thigh (m)`).toBeGreaterThan(0);
+  }
+  if (standing.frames) {
+    expect(standing.abduction.min, 'free arms standing: abduction (°)').toBeGreaterThan(5);
+    expect(standing.abduction.max, 'free arms standing: abduction (°)').toBeLessThan(12);
+    expect(standing.elbow.max, 'free arms standing: elbow (°)').toBeLessThan(25);
+  }
+  if (walking.frames) {
+    expect(walking.flexion.max, 'free arms walking: forward swing (°)').toBeGreaterThan(12);
+    expect(walking.flexion.max, 'free arms walking: forward swing (°)').toBeLessThan(35);
+    expect(walking.flexion.min, 'free arms walking: back swing (°)').toBeLessThan(-8);
+    expect(walking.flexion.min, 'free arms walking: back swing (°)').toBeGreaterThan(-30);
+  }
   // no joint faster than people turn it, nor getting there faster than they can: no teleport
   for (const c of Object.keys(JOINT_SPEED) as JointClass[]) {
     const v = m.rates.velocity[c];

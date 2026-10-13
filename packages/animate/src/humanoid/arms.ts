@@ -1,0 +1,216 @@
+import { Quaternion, Vector3 } from 'three';
+import { action } from '@pmndrs/timeline';
+import type { Frame } from '../core/body';
+import type { Carrier } from '../core/carrier';
+import { followRotation } from '../core/follow';
+import { live, type Behaviour, type Live, type Motion, type Target, type Until } from '../core/goal';
+import { clampRotation } from '../core/limits';
+import { spinOf } from '../core/rotation';
+import { reached, tipTo } from '../core/tip';
+import { INDEX, SIDES, type Side } from './bones';
+import type { Humanoid } from './humanoid';
+import { bowDrop } from './balance/posture';
+import { clamp, lerp, smoothstep, softMin, softplus } from './math';
+import type { Proportions } from './proportions';
+
+/** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm behind it (share of a step; CMU mocap) */
+const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
+/** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
+const ABDUCTION = (8 * Math.PI) / 180;
+/** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it kinks; let go of, it comes down calmly */
+const SWING = { accel: 25, speed: 2.5 };
+/** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
+export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
+/** how fast the clavicle moves (rad/s²) */
+const CLAVICLE = { accel: 30 };
+/** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
+const ARM_REACH = 0.9;
+const OUT = 0.5;
+/** how high on its toes the body goes for a hand target above its reach (m, default body) */
+const TIPTOE = 0.07;
+
+/**
+ * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
+ * steps as a pendulum (`h.gait`'s stride), opposite the legs, wider and bent walking faster; the
+ * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
+ * task let go of swings back into it.
+ */
+export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
+  return function* () {
+    const goals = new Map<number, Quaternion>();
+    yield* action<Frame<W>>({
+      update: (f) => {
+        const g = h.gait;
+        const lead = lerp(LEAD.walk, LEAD.run, g.run);
+        SIDES.forEach((side, s) => {
+          const sign = s === 0 ? 1 : -1;
+          // (the left arm in front as the left foot lifts, the right behind)
+          const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * g.walk;
+          const a = swing(lead);
+          const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
+          // the arm down from the T-pose (out by ABDUCTION), swung forward about the body's left; the forearm forward
+          set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
+          set(f, goals, INDEX[`${side}UpperArm`], _q.setFromAxisAngle(X, -a).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - ABDUCTION))));
+          set(f, goals, INDEX[`${side}LowerArm`], _q.setFromAxisAngle(Y, -sign * flex));
+          set(f, goals, INDEX[`${side}Hand`], IDENTITY);
+        });
+      },
+    });
+  };
+}
+
+/** joint `bone` turned on from its history toward `goal` (its own velocity fed forward) */
+function set<W>(f: Frame<W>, goals: Map<number, Quaternion>, bone: number, goal: Quaternion) {
+  let last = goals.get(bone);
+  if (!last) goals.set(bone, (last = goal.clone()));
+  const velocity = spinOf(last, goal, f.dt, _v);
+  last.copy(goal);
+  f.current.setLocal(bone, followRotation(f.prev2.local(bone), f.prev.local(bone), goal, { ...SWING, velocity }, f.dt, _r));
+}
+
+/** How a hand goes to its target. */
+export interface HandOptions<W> extends Partial<Motion> {
+  /** where the elbow bends toward (world; default as where the hand is asks: down and back hanging, out reaching across, …) */
+  pole?: Live<Vector3, W>;
+  /** the target is on this carrier, in its frame */
+  on?: Carrier;
+  until?: Until<W>;
+}
+
+/**
+ * Hand `side`'s wrist (and, given its rotation, the hand) to `target`, every sub-step, endless or
+ * until `until`: the hand moving on from its history at `Motion`'s pace (default `CALM`), its arm
+ * solved to it and braked; the clavicle shrugging for a hand up high and drawn forward for one far
+ * out; the elbow swivelled as where the hand is asks. A target below what the arm reaches standing
+ * asks `balance` to bow and bend the knees for it, one above to go up on the toes (`h.asks`).
+ */
+export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, options: HandOptions<W> = {}): Behaviour<W> {
+  const { until } = options;
+  return function* () {
+    const goals = new Map<number, Quaternion>();
+    yield* action<Frame<W>>({
+      update: (f) => void handStep(h, f, side, live(target, f), options, goals),
+      until: until === 'reached' ? (f) => reached(f.prev, f.prev2, f.dt, INDEX[`${side}Hand`], live(target, f), options.on) : until,
+    });
+  };
+}
+
+/** one sub-step of `handTo` (`goals`: its memory of the arm's joints' goals, for `brake`) */
+export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Target, options: HandOptions<W>, goals: Map<number, Quaternion>) {
+  const p = h.proportions;
+  const at = options.on ? options.on.toWorld(target, _world).position : target.position;
+  shrug(f, p, side, at);
+  const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
+  tipTo(f, `${side}Arm`, target, { ...CALM, ...options, pole }, goals);
+  ask(h, f, side, at);
+}
+
+/**
+ * the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward
+ * toward one far out (the old core's, a801be4:packages/core/src/limbs/arms.ts)
+ */
+function shrug<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Vector3>) {
+  const pose = f.current;
+  const bone = INDEX[`${side}Shoulder`];
+  const clavicle = pose.position(bone);
+  const shoulder = _s.copy(pose.position(INDEX[`${side}UpperArm`]));
+  const chest = pose.rotation(INDEX.chest);
+  const up = _up.set(0, 1, 0).applyQuaternion(chest);
+  const L = p.armLength;
+  const v = _d.subVectors(hand, shoulder);
+  const elevation = smoothstep(-0.05, 0.6, v.dot(up) / L);
+  const reach = v.length();
+  const want = shoulder.addScaledVector(up, elevation * 0.03 * p.height);
+  if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, 0.035 * p.height) / reach);
+  // (the joint on a sphere about the clavicle's origin: its rest offset turned toward it, in the chest's frame)
+  const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
+  const goal = _g.setFromUnitVectors(_rest.copy(p.offsets[`${side}UpperArm`]).normalize(), to);
+  const limit = pose.skeleton.limits[bone];
+  if (limit) clampRotation(goal, limit);
+  const q = followRotation(f.prev2.local(bone), f.prev.local(bone), goal, CLAVICLE, f.dt, _r);
+  if (limit) clampRotation(q, limit);
+  pose.setLocal(bone, q);
+}
+
+/**
+ * where the elbow bends toward (into `out`, world): a blend of where it goes for a hand hanging,
+ * forward, up, out and across, in the chest's frame (the old core's; up, the elbow out to the side:
+ * forward, the arm near straight overhead would swivel to and fro)
+ */
+function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
+  const sign = side === 'left' ? 1 : -1;
+  const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
+  const chest = _c.copy(f.current.rotation(INDEX.chest));
+  const dl = _d.subVectors(hand, shoulder).normalize().applyQuaternion(_q.copy(chest).invert());
+  dl.x *= sign;
+  out
+    .set(0.12, 0, -1)
+    .multiplyScalar(Math.max(0, -dl.y))
+    .addScaledVector(_w.set(0.4, -1, -0.15), Math.max(0, dl.z))
+    .addScaledVector(_w.set(0.7, -0.3, 0.5), Math.max(0, dl.y))
+    .addScaledVector(_w.set(0, -1, -0.4), Math.max(0, dl.x))
+    .addScaledVector(_w.set(0.7, -0.6, 0), Math.max(0, -dl.x));
+  out.x *= sign;
+  return out.applyQuaternion(chest).setLength(p.upperArm).add(shoulder);
+}
+
+/**
+ * Asks `balance` to bring the shoulder within reach of `hand`: the trunk bowing for the first of a
+ * drop, the knees bending for the rest (738b439:procedures/bow.ts, `lowering`); up on the toes for
+ * one above (each `h.asks` field the last writer's)
+ */
+function ask<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
+  const p = h.proportions;
+  const H = p.height;
+  // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
+  const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
+  const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
+  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), OUT * p.armLength);
+  const below = Math.sqrt((ARM_REACH * p.armLength) ** 2 - across * across);
+  const drop = high - hand.y - below;
+  if (drop > 0) {
+    const first = softMin(drop, BOW * H, BEND * H);
+    const knees = softMin(softplus(drop - first - BEND * H, BEND * H), SQUAT * H, BEND * H);
+    h.asks.lower = knees;
+    h.asks.bow = bowFor(p, knees, drop - knees);
+    return;
+  }
+  const rise = hand.y - (high + below);
+  if (rise > 0) h.asks.lower = -Math.min(rise, TIPTOE * p.scale);
+}
+
+/** the bow (rad) that brings the shoulders down by `drop` (m), let down `lower` by the knees (as far as a bow goes: MOST_BOW) */
+function bowFor(p: Proportions, lower: number, drop: number): number {
+  let [lo, hi] = [0, MOST_BOW];
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (bowDrop(p, lower, mid) < drop) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** the furthest the trunk bows (rad): the hips' and the spine's flexion together */
+const MOST_BOW = 1.6;
+/** how far the trunk's bow takes the shoulder down before the knees bend, how deep they bend at most, and over how much of the drop they start and stop (× height) */
+const BOW = 0.08;
+const SQUAT = 0.25;
+const BEND = 0.02;
+
+const X = new Vector3(1, 0, 0);
+const Y = new Vector3(0, 1, 0);
+const Z = new Vector3(0, 0, 1);
+const IDENTITY = new Quaternion();
+const _q = new Quaternion();
+const _p = new Quaternion();
+const _r = new Quaternion();
+const _c = new Quaternion();
+const _g = new Quaternion();
+const _v = new Vector3();
+const _s = new Vector3();
+const _d = new Vector3();
+const _w = new Vector3();
+const _up = new Vector3();
+const _rest = new Vector3();
+const _pole = new Vector3();
+const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

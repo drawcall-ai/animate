@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { follow, followRotation, type FollowOptions } from '../../src';
+import { Carrier, follow, followRotation, type FollowOptions } from '../../src';
 import { turn } from './rigs';
 
 const dt = 1 / 60;
@@ -72,6 +72,17 @@ describe('follow', () => {
     const path = run(new Vector3(), new Vector3(), (k) => (k < 40 ? first : second), () => ({ accel: 6 }), 300);
     expect(Math.max(...accelerations(path))).toBeLessThan(6 + 1e-9);
     expect(path.at(-1)?.distanceTo(second)).toBeLessThan(1e-12);
+  });
+
+  it('on a carrier: follows the goal in its frame and goes along with it', () => {
+    const cart = new Carrier(new Vector3());
+    const goal = new Vector3(0.5, 0, 0);
+    const path = [new Vector3(), new Vector3()];
+    for (let k = 1; k <= 300; k++) {
+      cart.move(k * dt, new Vector3(0, 0, 0.8 * k * dt), turn(0, 1, 0, 0.3 * k * dt));
+      path.push(follow(path[k - 1], path[k], goal, { accel: 10, on: cart }, dt));
+    }
+    expect(path.at(-1)?.distanceTo(goal.clone().applyQuaternion(cart.current.quaternion).add(cart.current.position))).toBeLessThan(1e-9);
   });
 
   it('follows scalars the same way', () => {
