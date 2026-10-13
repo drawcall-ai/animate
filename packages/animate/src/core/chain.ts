@@ -218,13 +218,17 @@ function nearest(a: number, b: number, hinge: Hinge): number {
   return Math.abs(a - hinge.now) <= Math.abs(b - hinge.now) ? a : b;
 }
 
-/** the x within lo…hi where `f` (≥ 0) is least, `start` if it is (all but) 0 there: sampled, then refined */
+/**
+ * the x within lo…hi where `f` (≥ 0) is least, `start` if it is (all but) 0 there: sampled, then
+ * refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than it must)
+ */
 function least(f: (x: number) => number, lo: number, hi: number, start: number): number {
+  const g = (x: number) => f(x) + NEAREST * Math.abs(x - start);
   let best = start;
-  let low = f(start);
+  let low = g(start);
   if (low < FITS) return start;
   const see = (x: number) => {
-    const e = f(x);
+    const e = g(x);
     if (e < low) [low, best] = [e, x];
   };
   for (let k = 0; k <= 24; k++) see(lo + ((hi - lo) * k) / 24);
@@ -235,6 +239,9 @@ function least(f: (x: number) => number, lo: number, hi: number, start: number):
   }
   return best;
 }
+
+/** how much `least` holds each radian away from its start against what it minimises: next to nothing (ties broken toward the start) */
+const NEAREST = 1e-3;
 
 const clampBend = (x: number, { range: [lo, hi] }: Hinge) => Math.min(hi, Math.max(lo, x));
 

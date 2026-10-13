@@ -6,8 +6,9 @@ import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../math';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import type { Carriage } from './carriage';
 import { ankleFor, footprint } from './foot';
-import { MAX_HEEL, REACH } from './legs';
-import { beyond, hullOf, outside } from './support';
+import type { Frame } from '../../core/body';
+import { DORSIFLEXION, liftOff, MAX_HEEL, REACH, shankTilt } from './legs';
+import { hullOf, outside, past } from './support';
 import { leadTime, type Timing } from './timing';
 
 /** the extrapolated centre of mass is caught by a step once it leaves the feet by this much (m, default body) */
@@ -22,8 +23,8 @@ const FALL = 0.06;
 const STILL_FALL = 0.1;
 /** how much better a step with the foot that just landed must catch the body to break the alternation (m, default body) */
 const ALTERNATE = 0.08;
-/** the shortest step standing still (m): a stance this far off is squared up */
-const SETTLE = 0.04;
+/** the shortest step standing still (m): a stance this far off is squared up; closer coming to rest after a walk */
+const SETTLE = { stopped: 0.02, standing: 0.04 };
 /** how far a foot may be turned off its place (rad) before it is squared up standing: closely coming to rest after a walk, not for so little otherwise */
 const SQUARE = { stopped: 0.05, standing: 0.45 };
 /** a foot further than this (× height) from the root must step regardless of rhythm */
@@ -51,9 +52,56 @@ export interface Lift {
 }
 
 const square = (c: Carriage) => (c.walked && c.plant ? SQUARE.stopped : SQUARE.standing);
+const settle = (c: Carriage) => (c.walked && c.plant ? SETTLE.stopped : SETTLE.standing) * c.p.scale;
+
+/**
+ * The feet one sub-step on (`f`), the body's extrapolated centre of mass at `xcom`: each swinging
+ * one along, its landing fine-tuned through the first part of its swing (one that moves later
+ * reads as a stumble) and put down at its end; then a step taken if one is due. Returns whether one was.
+ */
+export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): boolean {
+  c.steps.forEach((st, s) => {
+    const w = st.swing;
+    if (!w) return;
+    const foot = c.feet[s];
+    w.progress = Math.min(1, w.progress + f.dt / w.duration);
+    if (w.progress >= 1) {
+      foot.phase = 'planted';
+      st.swing = null;
+      st.plantedTime = 0;
+      // (as the swing ended: no more toes-up than the ankle flexes under the shank)
+      st.landPitch = Math.min(w.strike, DORSIFLEXION - shankTilt(f.prev, st.side, foot.yaw));
+      st.roll = [st.landPitch, st.landPitch];
+      c.lastLanded = s;
+      return;
+    }
+    const adapt = 1 - smoothstep(ADAPT.until[0], ADAPT.until[1], w.progress);
+    if (adapt <= 0) return;
+    const left = (1 - w.progress) * w.duration;
+    const { yaw } = landing(c, s, c.moving ? leadTime(c.timing(), left) : 0, left, xcom, _to);
+    const k = adapt * Math.min(1, f.dt * ADAPT.rate);
+    foot.position.lerp(_to, k);
+    foot.yaw += wrapAngle(yaw - foot.yaw) * k;
+  });
+  const lift = nextStep(c, xcom, f.dt);
+  if (!lift) return false;
+  const st = c.steps[lift.s];
+  const foot = c.feet[lift.s];
+  const fromYaw = foot.yaw;
+  const { yaw } = landing(c, lift.s, c.moving ? leadTime(c.timing(), lift.duration) : 0, lift.duration, xcom, foot.position);
+  foot.yaw = yaw;
+  foot.phase = 'swing';
+  st.swing = liftOff(f, st.side, fromYaw, foot.position, c.hip(st.side, _v), c.velocity, lift);
+  c.lastLift = lift.s;
+  c.lastLiftAt = c.clock;
+  return true;
+}
+
+/** how quickly a swinging foot's landing is fine-tuned (1/s), until this share of its swing on (then it stays) */
+const ADAPT = { rate: 20, until: [0.4, 0.75] as const };
 
 /** the step to take now (null: none), the body's extrapolated centre of mass at `xcom`, `dt` s on */
-export function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null {
+function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null {
   const t = c.timing();
   const { steps } = c;
   if (t.run > 0.5) {
@@ -84,7 +132,7 @@ export function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift
 }
 
 /** where foot `s` lands (into `out`), heading which way, the step landing `ahead` s from now; and how far the body's extrapolated centre of mass is left uncaught */
-export function landing(c: Carriage, s: number, lead: number, ahead: number, xcom: Readonly<Vector3>, out: Vector3): { yaw: number; out: number } {
+function landing(c: Carriage, s: number, lead: number, ahead: number, xcom: Readonly<Vector3>, out: Vector3): { yaw: number; out: number } {
   const yaw = placeFoot(c, s, lead, out);
   return { yaw, out: fitLanding(c, s, out, yaw, ahead, xcom) };
 }
@@ -112,21 +160,25 @@ function balanced(c: Carriage, pick: number, t: Timing, lead: number, xcom: Read
   return other <= CATCH * c.p.scale && other + rhythmCost(c, 1 - pick, t) < out ? 1 - pick : pick;
 }
 
-const errs = [0, 0];
-const lateral = [0, 0];
-const yawErrs = [0, 0];
+/** how far each foot [left, right] is from where it should be: its distance and sideways part (m), its heading (rad) */
+interface Misplaced {
+  distance: [number, number];
+  lateral: [number, number];
+  yaw: [number, number];
+}
 
 /** the foot to step with (−1: none) while walking or standing */
 function pickFoot(c: Carriage, t: Timing, lead: number, xcom: Readonly<Vector3>): number {
   const { steps, feet } = c;
+  const off: Misplaced = { distance: [0, 0], lateral: [0, 0], yaw: [0, 0] };
   for (let s = 0; s < 2; s++) {
     const yaw = placeFoot(c, s, lead, _v);
     const dx = _v.x - feet[s].position.x;
     const dz = _v.z - feet[s].position.z;
-    errs[s] = Math.hypot(dx, dz);
+    off.distance[s] = Math.hypot(dx, dz);
     const across = c.yaw + c.stance.blade;
-    lateral[s] = Math.abs(dx * Math.cos(across) - dz * Math.sin(across));
-    yawErrs[s] = Math.abs(wrapAngle(yaw - feet[s].yaw));
+    off.lateral[s] = Math.abs(dx * Math.cos(across) - dz * Math.sin(across));
+    off.yaw[s] = Math.abs(wrapAngle(yaw - feet[s].yaw));
   }
   let pick = -1;
   // a foot left far behind (or ahead) must step regardless of rhythm
@@ -134,24 +186,24 @@ function pickFoot(c: Carriage, t: Timing, lead: number, xcom: Readonly<Vector3>)
     const dev = Math.hypot(feet[s].position.x - c.root.x, feet[s].position.z - c.root.z);
     if (dev > MAX_DEVIATION * c.p.height && steps[1 - s].plantedTime > 0.05) pick = s;
   }
-  if (pick < 0 && (c.moving || c.speed > 0.05)) pick = pickWhileMoving(c, t, lead, xcom);
+  if (pick < 0 && (c.moving || c.speed > 0.05)) pick = pickWhileMoving(c, t, lead, xcom, off);
   else if (pick < 0 && !c.lowered) {
-    const best = offBy(c, 0) >= offBy(c, 1) ? 0 : 1;
+    const best = offBy(c, off, 0) >= offBy(c, off, 1) ? 0 : 1;
     const otherLoaded = steps[1 - best].plantedTime > 0.12;
-    if (offBy(c, best) > 1 && otherLoaded) pick = best;
+    if (offBy(c, off, best) > 1 && otherLoaded) pick = best;
     // finish the pair: bring the other foot alongside after an adjustment
-    else if (otherLoaded && (errs[best] > 0.1 || yawErrs[best] > square(c)) && steps[best].plantedTime > 0.35) pick = best;
+    else if (otherLoaded && (off.distance[best] > 0.1 || off.yaw[best] > square(c)) && steps[best].plantedTime > 0.35) pick = best;
   }
   if (pick >= 0 && !c.moving && c.speed < 0.05) {
     // an idle adjustment must actually move the foot somewhere
     const { yaw } = landing(c, pick, 0, t.swing, xcom, _v);
-    if (Math.hypot(_v.x - feet[pick].position.x, _v.z - feet[pick].position.z) < SETTLE * c.p.scale && Math.abs(wrapAngle(yaw - feet[pick].yaw)) < 0.5 * square(c)) pick = -1;
+    if (Math.hypot(_v.x - feet[pick].position.x, _v.z - feet[pick].position.z) < settle(c) && Math.abs(wrapAngle(yaw - feet[pick].yaw)) < 0.5 * square(c)) pick = -1;
   }
   return pick;
 }
 
 /** alternate by default, but the foot that needs it most (and can make progress) leads: side-steps lead with the foot on that side */
-function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Vector3>): number {
+function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Vector3>, off: Misplaced): number {
   const { steps, feet } = c;
   let last = c.lastLanded;
   // setting off: the foot on the side of the goal leads (no stepping across)
@@ -171,19 +223,19 @@ function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Ve
   };
   if (c.starting && lastLoaded && nextLoaded && progress(next) >= 0.1) return next;
   const minMove = c.speed < 0.3 ? 0.05 : 0.02;
-  if (!lastLoaded || misplaced(next) <= (c.speed < 0.3 ? 0.06 : 0.03)) return -1;
+  if (!lastLoaded || misplaced(off, next) <= (c.speed < 0.3 ? 0.06 : 0.03)) return -1;
   // (but a foot left behind the body goes next: the other stepping again would leave it out of reach)
   const behind = -((feet[next].position.x - c.root.x) * Math.sin(c.yaw) + (feet[next].position.z - c.root.z) * Math.cos(c.yaw));
-  const lastInstead = nextLoaded && behind < BEHIND * c.p.scale && misplaced(last) > 0.03 && progress(last) >= minMove && (progress(next) < minMove || misplaced(last) > 1.5 * misplaced(next) + 0.03);
+  const lastInstead = nextLoaded && behind < BEHIND * c.p.scale && misplaced(off, last) > 0.03 && progress(last) >= minMove && (progress(next) < minMove || misplaced(off, last) > 1.5 * misplaced(off, next) + 0.03);
   if (lastInstead) return last;
   return progress(next) >= minMove ? next : -1;
 }
 
 /** how far foot `s` is out of place, in units of what's worth a step: a stance a few cm off is squared up */
-const offBy = (c: Carriage, s: number) => Math.max(errs[s] / 0.1, lateral[s] / SETTLE, yawErrs[s] / square(c));
+const offBy = (c: Carriage, off: Misplaced, s: number) => Math.max(off.distance[s] / 0.1, off.lateral[s] / settle(c), off.yaw[s] / square(c));
 
 /** how far foot `s` is out of place while moving (m, with its heading error) */
-const misplaced = (s: number) => errs[s] + 0.25 * yawErrs[s];
+const misplaced = (off: Misplaced, s: number) => off.distance[s] + 0.25 * off.yaw[s];
 
 /** planted foot `s` will be left behind out of its leg's reach as the pelvis is carried, even up on its toes, by the time it could lift */
 function overstretched(c: Carriage, s: number, dt: number): boolean {
@@ -202,7 +254,7 @@ function lift(c: Carriage, s: number, t: Timing, xcom: Readonly<Vector3>, catchi
   const length = Math.hypot(_v.x - from.position.x, _v.z - from.position.z);
   const H = c.p.scale;
   // nobody lifts a foot to move it a couple of centimetres
-  if (!catching && length < (c.moving ? 0.1 : SETTLE) * H && Math.abs(wrapAngle(yaw - from.yaw)) < (c.moving ? 0.45 : square(c))) return null;
+  if (!catching && length < (c.moving ? 0.1 * H : settle(c)) && Math.abs(wrapAngle(yaw - from.yaw)) < (c.moving ? 0.45 : square(c))) return null;
   // short steps are quick; long walking strides follow the cadence
   const duration = t.run > 0.5 ? t.swing : clamp(0.24 + 0.32 * (length / H), c.moving ? 0.28 : 0.32, c.moving ? t.swing : 0.45);
   // the ankle's rise over its path as the knee flexes: ~9 cm walking, ~29 cm running (CMU mocap)
@@ -344,7 +396,7 @@ function uncovered(c: Carriage, s: number, to: Vector3, yaw: number, point: Vect
 /** how far the extrapolated centre of mass (`xcom`) lies beyond the edge of the planted feet (negative inside; Infinity with none) */
 function uncaught(c: Carriage, xcom: Readonly<Vector3>): number {
   const spots = c.feet.flatMap((f) => (f.phase === 'planted' ? footprint(c.p, f.position, f.yaw) : []));
-  return spots.length ? beyond(hullOf(spots), xcom) : Infinity;
+  return spots.length ? past(hullOf(spots), xcom) : Infinity;
 }
 
 /** no crossing over, not under the body, no over-long step */
@@ -383,6 +435,7 @@ function aside(to: Vector3, from: Readonly<Vector3>, yaw: number, sign: number, 
 }
 
 const _v = new Vector3();
+const _to = new Vector3();
 const _hip = new Vector3();
 const _ankle = new Vector3();
 const _homes: [Vector3, Vector3] = [new Vector3(), new Vector3()];

@@ -1,21 +1,21 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
-import { follow, followRotation } from '../../core/follow';
+import { follow } from '../../core/follow';
 import type { Behaviour } from '../../core/goal';
 import { clampRotation } from '../../core/limits';
-import { spinOf } from '../../core/rotation';
+import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks } from '../asks';
 import { INDEX, SIDES } from '../bones';
-import { smoothstep, wrapAngle } from '../math';
 import type { Humanoid } from '../humanoid';
 import { yawOf } from '../rig';
 import { defaultStance, type Stance } from '../stance';
 import { Carriage } from './carriage';
-import { liftOff, plantedPitch, plantedPose, shankTilt, solveLeg, swingPose, type FootPose } from './legs';
+import { plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
 import { Posture, type Trunk } from './posture';
-import { landing, nextStep } from './steps';
-import { leadTime } from './timing';
+import { stepFeet } from './steps';
+
+export { lowering, TIPTOE } from './posture';
 
 /** What `balance` reports of the walk it carries the body on (its output: read it, never write it). */
 export interface Gait {
@@ -45,14 +45,10 @@ const PELVIS = { accel: 30 };
 const TURN = { accel: 60 };
 /** how fast a planted foot rolls (rad/s², rad/s) */
 const ROLL = { accel: 300, speed: 8 };
-/** how quickly a swinging foot's landing is fine-tuned (1/s), until this share of its swing on (then it stays) */
-const ADAPT = { rate: 20, until: [0.4, 0.75] as const };
 /** let down or up this far (m, default body), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /** how long both feet stand before the body has settled (s): a squaring step comes before */
 const SETTLED = 0.4;
-/** how far the ankle flexes up (rad): a heel strike lands no more toes-up than this under the shank */
-const DORSIFLEXION = (40 * Math.PI) / 180;
 
 /**
  * Standing and walking: the body's root, legs and trunk posture, endless. It keeps the
@@ -71,8 +67,9 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
     const posture = new Posture();
     const asks = createAsks();
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
-    const history = { lower: [0, 0], bow: [0, 0], pitch: [0, 0, 0, 0] };
-    const goal = { pelvis: new Vector3(), rotation: new Quaternion(), trunk: [new Quaternion(), new Quaternion()] };
+    const asked = { lower: [0, 0], bow: [0, 0] };
+    // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)
+    const pelvis = { along: new TrackedPoint(), up: new TrackedPoint(), rotation: new TrackedRotation(), trunk: [new TrackedRotation(), new TrackedRotation()] };
     const feet: [FootPose, FootPose] = [footPose(), footPose()];
     let started = false;
     yield* action<Frame<W>>({
@@ -86,11 +83,8 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
           c.reset(f.prev.com(_com), yawOf(f.prev.local(0)) - c.stance.blade);
           c.pelvis.copy(f.prev.position(0));
           c.pelvisRotation.copy(f.prev.local(0));
-          goal.pelvis.copy(c.pelvis);
-          goal.rotation.copy(c.pelvisRotation);
-          TRUNK.forEach((bone, k) => goal.trunk[k].copy(f.prev.local(bone)));
         }
-        // the extrapolated centre of mass (Hof), as the body last was
+        // the root on toward what is asked, the feet stepping under it: the extrapolated centre of mass (Hof) as the body last was
         const com = f.prev.com(_com);
         const xcom = _xcom.subVectors(com, f.prev2.com(_v)).divideScalar(dt).divideScalar(c.omega).add(com).setY(0);
         const go = asks.go;
@@ -98,45 +92,26 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
         c.turnSpeed = asks.face?.rate;
         c.aim(go?.to ?? null, go?.velocity ?? null, asks.face?.yaw ?? null, dt);
         c.update(dt, xcom, c.over(_over));
-        swing(f, c, xcom, history.pitch);
-        const lift = nextStep(c, xcom, dt);
-        if (lift) {
-          const st = c.steps[lift.s];
-          const foot = h.feet[lift.s];
-          const fromYaw = foot.yaw;
-          const { yaw } = landing(c, lift.s, c.moving ? leadTime(c.timing(), lift.duration) : 0, lift.duration, xcom, foot.position);
-          foot.yaw = yaw;
-          foot.phase = 'swing';
-          st.swing = liftOff(f, st.side, fromYaw, foot.position, c.hip(st.side, _v), c.velocity, lift);
-          c.lastLift = lift.s;
-          c.lastLiftAt = c.clock;
-        }
+        const stepped = stepFeet(f, c, xcom);
 
         // the pelvis and the trunk over the feet, lowered and bowed as asked
-        const lower = followed(history.lower, asks.lower, LOWER, dt);
+        const lower = followed(asked.lower, asks.lower, LOWER, dt);
         c.lowered = Math.abs(lower) > LOWERED * p.scale;
-        const bow = followed(history.bow, asks.bow, BOW, dt);
+        const bow = followed(asked.bow, asks.bow, BOW, dt);
         posture.carry(f, c, lower, bow, trunk);
-        // (along the floor and up apart: the legs' reach moving the pelvis up and down does not hold back its sway)
-        const velocity = _v.subVectors(c.pelvis, goal.pelvis).divideScalar(dt);
-        const pelvis = follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), { ...PELVIS, velocity: _w.copy(velocity).setY(0) }, dt, _pelvis);
-        pelvis.y = follow(f.prev2.position(0).y, f.prev.position(0).y, c.pelvis.y, { ...PELVIS, velocity: velocity.y }, dt);
-        const rotation = followRotation(f.prev2.local(0), f.prev.local(0), c.pelvisRotation, { ...TURN, velocity: spinOf(goal.rotation, c.pelvisRotation, dt, _v) }, dt, _rotation);
-        goal.pelvis.copy(c.pelvis);
-        goal.rotation.copy(c.pelvisRotation);
-        f.current.setRoot(pelvis);
-        f.current.setLocal(0, rotation);
-        c.pelvis.copy(pelvis);
-        c.pelvisRotation.copy(rotation);
+        const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
+        const up = pelvis.up.follow(_a.set(0, f.prev2.position(0).y, 0), _b.set(0, f.prev.position(0).y, 0), _g.set(0, c.pelvis.y, 0), PELVIS, dt, _up);
+        c.pelvis.copy(at).setY(up.y);
+        pelvis.rotation.follow(f.prev2.local(0), f.prev.local(0), c.pelvisRotation, TURN, dt, c.pelvisRotation);
+        f.current.setRoot(c.pelvis);
+        f.current.setLocal(0, c.pelvisRotation);
         // (the lower back and the thorax each take half the turn from the pelvis to the chest)
-        const half = _half.identity().slerp(_q.copy(rotation).invert().multiply(trunk.chest), 0.5);
+        const half = _half.identity().slerp(_q.copy(c.pelvisRotation).invert().multiply(trunk.chest), 0.5);
         TRUNK.forEach((bone, k) => {
           const local = _local.copy(half);
           const limit = f.current.skeleton.limits[bone];
           if (limit) clampRotation(local, limit);
-          const velocity = spinOf(goal.trunk[k], local, dt, _v);
-          goal.trunk[k].copy(local);
-          f.current.setLocal(bone, followRotation(f.prev2.local(bone), f.prev.local(bone), local, { ...TURN, velocity }, dt, _q));
+          f.current.setLocal(bone, pelvis.trunk[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TURN, dt, _q));
         });
 
         // the legs down to the feet
@@ -144,51 +119,17 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
           const st = c.steps[s];
           const pose = feet[s];
           if (st.swing) swingPose(f, c, s, pose);
-          else {
-            const pitch = follow(history.pitch[2 * s], history.pitch[2 * s + 1], plantedPitch(f, c, s), ROLL, dt);
-            [history.pitch[2 * s], history.pitch[2 * s + 1]] = [history.pitch[2 * s + 1], pitch];
-            plantedPose(p, side, h.feet[s], pitch, pose);
-          }
+          else plantedPose(p, side, h.feet[s], followed(st.roll, plantedPitch(f, c, s), ROLL, dt), pose);
           solveLeg(f, c, side, pose);
         });
 
         const g = h.gait;
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
-        g.settled = !c.moving && !lift && c.steps.every((st) => st.plantedTime > SETTLED);
+        g.settled = !c.moving && !stepped && c.steps.every((st) => st.plantedTime > SETTLED);
         g.velocity.copy(c.velocity);
       },
     });
   };
-}
-
-/**
- * the swinging feet one sub-step on: each landing fine-tuned through the first part of its swing
- * (a landing that moves later reads as a stumble), and put down at its end
- */
-function swing(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>, pitch: number[]) {
-  c.steps.forEach((st, s) => {
-    const w = st.swing;
-    if (!w) return;
-    const foot = c.feet[s];
-    w.progress = Math.min(1, w.progress + f.dt / w.duration);
-    if (w.progress >= 1) {
-      foot.phase = 'planted';
-      st.swing = null;
-      st.plantedTime = 0;
-      // (as the swing ended: no more toes-up than the ankle flexes under the shank)
-      st.landPitch = Math.min(w.strike, DORSIFLEXION - shankTilt(f.prev, st.side, foot.yaw));
-      pitch[2 * s] = pitch[2 * s + 1] = st.landPitch;
-      c.lastLanded = s;
-      return;
-    }
-    const adapt = 1 - smoothstep(ADAPT.until[0], ADAPT.until[1], w.progress);
-    if (adapt <= 0) return;
-    const left = (1 - w.progress) * w.duration;
-    const { yaw } = landing(c, s, c.moving ? leadTime(c.timing(), left) : 0, left, xcom, _to);
-    const k = adapt * Math.min(1, f.dt * ADAPT.rate);
-    foot.position.lerp(_to, k);
-    foot.yaw += wrapAngle(yaw - foot.yaw) * k;
-  });
 }
 
 /** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
@@ -205,13 +146,11 @@ const _com = new Vector3();
 const _xcom = new Vector3();
 const _v = new Vector3();
 const _over = new Vector3();
-const _to = new Vector3();
-const _pelvis = new Vector3();
 const _a = new Vector3();
 const _b = new Vector3();
 const _g = new Vector3();
-const _w = new Vector3();
-const _rotation = new Quaternion();
+const _at = new Vector3();
+const _up = new Vector3();
 const _half = new Quaternion();
 const _q = new Quaternion();
 const _local = new Quaternion();

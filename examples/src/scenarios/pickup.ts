@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { createWorld, grab, handTo, hold, idle, Item, lookAt, openHand, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Placement, type Target, type World } from '@drawcall/animate';
+import { createWorld, grab, handTo, hold, idle, Item, lookAt, openHand, reached, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { path } from '../keys';
 import { forwardOf } from '../math';
@@ -9,7 +9,7 @@ import { Report, reported, reporting } from '../report';
 /** the box's width, height and depth (m) */
 const BOX = new Vector3(0.34, 0.26, 0.26);
 /** the shelf: where its middle stands on the floor, its boards' heights, its width and depth (m); the body stands this far before its middle to put things up */
-const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34, stand: 0.33 };
+const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34, stand: 0.45 };
 /** how long the box takes from the floor up to the chest, and up onto the board (s) */
 const LIFT = 1.8;
 const PLACE = 1.8;
@@ -20,10 +20,11 @@ const AWAY = 0.1;
 const UP = new Vector3(0, 1, 0);
 const HANDS = ['leftHand', 'rightHand'];
 
-/** the box's variations: nearer (m, along its way), taller (m: its middle half that higher), the shelf's top board lower (m) */
+/** the box's variations: nearer (m, along its way), taller (m: its middle half that higher), turned round the body's start (rad), the shelf's top board lower (m) */
 export interface Variation {
   nearer?: number;
   taller?: number;
+  around?: number;
   lower?: number;
 }
 
@@ -31,7 +32,7 @@ export interface Variation {
  * A box on the floor: the body walks to it, squats and takes it in both hands, lifts it to the chest,
  * carries it to a shelf, puts it on the top board above its head on its toes, and lets go.
  */
-export function pickupShelf({ nearer = 0, taller = 0, lower = 0 }: Variation = {}): Scenario {
+export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0 }: Variation = {}): Scenario {
   const size = BOX.clone().setY(BOX.y + taller);
   const top = SHELF.boards[3] - lower;
   return {
@@ -39,11 +40,11 @@ export function pickupShelf({ nearer = 0, taller = 0, lower = 0 }: Variation = {
     title: 'Pick up a box, shelve it overhead',
     description:
       'A box lies on the floor 2.6 m away: the body walks to it, squats and takes it in both hands, lifts it in front of the knees up to the chest, carries it to a shelf and puts it onto the top board above its head, on its toes; then lets go.',
-    duration: 17,
+    duration: 20,
     actors: [{}],
     stage: () => {
       const report = new Report();
-      const box = new Item(new Vector3(0.35, size.y / 2, 2.6 - nearer), new Quaternion().setFromAxisAngle(UP, 0.35), { left: grip(size, 1), right: grip(size, -1) }, 5);
+      const box = new Item(new Vector3(0.35, size.y / 2, 2.6 - nearer).applyAxisAngle(UP, around), new Quaternion().setFromAxisAngle(UP, 0.35 + around), { left: grip(size, 1), right: grip(size, -1) });
       const shelved = new Vector3(SHELF.x, top + size.y / 2 + 0.005, SHELF.z - SHELF.depth / 2 + size.z / 2 + 0.01);
       return {
         world: createWorld(),
@@ -64,7 +65,8 @@ export function pickupShelf({ nearer = 0, taller = 0, lower = 0 }: Variation = {
 function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, report: Report): Behaviour<World> {
   const grips: Grips = { left: 'left', right: 'right' };
   return function* () {
-    const gaze = box.current.position.clone();
+    // (the eyes on the box until it is carried off, then on the board it goes to)
+    const gaze = { on: box.current.position };
     yield* action({ until: timePassed(0.8, 'seconds') });
     yield* parallel<Frame<World>>(
       'race',
@@ -73,14 +75,14 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, report
         const goal: Placement = { position: box.current.position.clone(), quaternion: box.current.quaternion.clone() };
         yield* parallel<Frame<World>>('race', carry(h, goal, gaze, size, top), hold(h, box, grips, { to: goal }));
       }),
-      lookAt(h.gazer, gaze),
+      lookAt(h.gazer, reported(report, 'gaze', () => gaze.on)),
     );
     yield* release(h, report)();
   };
 }
 
 /** where the box is carried (into `goal`, and the eyes into `gaze`): up from the floor to the chest, over to the shelf, up onto its top board */
-function carry(h: Humanoid<World>, goal: Placement, gaze: Vector3, size: Vector3, top: number): Behaviour<World> {
+function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size: Vector3, top: number): Behaviour<World> {
   const facing = new Quaternion();
   const turned = goal.quaternion?.clone() ?? new Quaternion();
   return function* () {
@@ -99,7 +101,7 @@ function carry(h: Humanoid<World>, goal: Placement, gaze: Vector3, size: Vector3
       until: timePassed(LIFT, 'seconds'),
     });
     // carried in front of the chest to the shelf, the eyes on its top
-    gaze.set(SHELF.x, top, SHELF.z);
+    gaze.on = new Vector3(SHELF.x, top, SHELF.z);
     const stand = new Vector3(SHELF.x, 0, SHELF.z - SHELF.stand);
     yield* parallel<Frame<World>>(
       'race',
@@ -133,12 +135,12 @@ function release(h: Humanoid<World>, report: Report): Behaviour<World> {
     };
     const left = away('left');
     const right = away('right');
-    yield* parallel<Frame<World>>(
-      'race',
-      parallel<Frame<World>>('all', handTo(h, 'left', reported(report, 'leftHand', left), { until: 'reached' }), handTo(h, 'right', reported(report, 'rightHand', right), { until: 'reached' })),
-      openHand(h, 'left'),
-      openHand(h, 'right'),
-    );
+    const hand = (side: 'left' | 'right') => h.rig.skeleton.index(`${side}Hand`);
+    // (both hands on their way until both are there)
+    const there = (f: Frame<World>) => reached(f.prev2, f.prev, f.dt, hand('left'), left, undefined) && reached(f.prev2, f.prev, f.dt, hand('right'), right, undefined);
+    yield* openHand(h, 'left')();
+    yield* openHand(h, 'right')();
+    yield* parallel<Frame<World>>('all', handTo(h, 'left', reported(report, 'leftHand', left), { until: there }), handTo(h, 'right', reported(report, 'rightHand', right), { until: there }));
   };
 }
 

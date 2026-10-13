@@ -6,7 +6,7 @@ import { createWorld, type Frame as BodyFrame, type World } from '@drawcall/anim
 import { expect, it } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
-import { stroll } from '../src/scenarios/stroll';
+import { stroll, walkThere } from '../src/scenarios/stroll';
 import { Report } from '../src/report';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
@@ -28,7 +28,7 @@ function judged(sc: Scenario) {
   const m = measure(sc.id, steps(sim));
   console.log(m.report);
   judge(m, limitsOf(sc.id));
-  expect(sim.stage.done?.() ?? true, `${sc.id}: done`).toBe(true);
+  expect(sim.stage.done(), `${sc.id}: done`).toBe(true);
 }
 
 it('lists each scenario once', () => {
@@ -53,11 +53,18 @@ const VARIATIONS: [string, Scenario][] = [
   ['stroll on a 20% wider arc', stroll({ radius: 3.6 })],
   ['stroll setting off turned 0.3 rad left', stroll({ yaw: 0.3 })],
   ['stroll setting off turned 0.3 rad right', stroll({ yaw: -0.3 })],
+  ['stroll setting off turned a quarter turn away', stroll({ yaw: Math.PI / 2 })],
+  ['stroll setting off facing away', stroll({ yaw: Math.PI })],
+  ['stroll round a sharp 0.6 m turn', stroll({ radius: 0.6 })],
+  ['walk to a point 2 m behind', walkThere(new Vector3(0, 0, -2))],
+  ['walk to a point 2 m to the right', walkThere(new Vector3(-2, 0, 0))],
+  ['turn round in place', walkThere(new Vector3(0, 0, 0), Math.PI)],
   ['pickup-shelf, the box 10 cm nearer', pickupShelf({ nearer: 0.1 })],
   ['pickup-shelf, the box 10 cm farther', pickupShelf({ nearer: -0.1 })],
   ['pickup-shelf, the box 5 cm higher', pickupShelf({ taller: 0.1 })],
   ['pickup-shelf, the box 5 cm lower', pickupShelf({ taller: -0.1 })],
   ['pickup-shelf, the shelf 5 cm lower', pickupShelf({ lower: 0.05 })],
+  ['pickup-shelf, the box behind', pickupShelf({ around: Math.PI })],
 ];
 for (const [name, sc] of VARIATIONS) it(name, () => judged(sc));
 
@@ -71,6 +78,7 @@ it('runs a scenario through the metrics: two actors standing still, relaxed, eac
     stage: () => ({
       world: createWorld(),
       report: new Report(),
+      done: () => true,
       props: () => [],
       script: (_, index) =>
         function* () {

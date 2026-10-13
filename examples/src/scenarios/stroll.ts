@@ -64,3 +64,32 @@ export function stroll({ speed = 1, radius = 3, yaw = 0 }: Variation = {}): Scen
     },
   };
 }
+
+/** A walk to a point on the floor (and a facing there) from standing at the origin facing +Z: judged as a stroll. */
+export function walkThere(to: Vector3, face?: number): Scenario {
+  return {
+    id: 'stroll',
+    title: 'Walk there',
+    description: 'From standing, the body walks to a point (behind it, beside it, or where it stands, turning round) and comes to rest there.',
+    duration: 8,
+    actors: [{}],
+    stage: () => {
+      let walker: Humanoid<World> | null = null;
+      return {
+        world: createWorld(),
+        report: new Report(),
+        props: () => [],
+        done: () => {
+          if (!walker?.gait.settled) return false;
+          const turned = face === undefined || Math.abs(Math.atan2(Math.sin(walker.gait.facing - face), Math.cos(walker.gait.facing - face))) < 0.15;
+          return turned && walker.pose.com(new Vector3()).setY(0).distanceTo(to) < 0.15;
+        },
+        script: (h) =>
+          function* () {
+            walker = h;
+            yield* parallel<Frame<World>>('all', idle(h), walkTo(h, { to, face }));
+          },
+      };
+    },
+  };
+}

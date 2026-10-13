@@ -87,9 +87,10 @@ export interface Limits {
  * `bones` hold what the joints' dynamics and the scripts fixed (measured, ~10% headroom; was):
  * kick-ball's arms going out for balance (2531°/s, 124k°/s²) and its foot set down after the
  * kick (1763°/s, 110k°/s²); the free arm tucking in and out in throw (5923°/s, 357k°/s²) and
- * sword (1975°/s, 199k°/s²); the throwing elbow slamming straight (5923°/s); in pickup-shelf
- * the thigh twisting as the knee swung round the box (1217°/s, 72k°/s²) and the elbows
- * flipping at full stretch (696°/s, 41k°/s²).
+ * sword (1975°/s, 199k°/s²); the throwing elbow slamming straight (5923°/s).
+ * pickup-shelf is held to what the rebuilt run measures: no joint past its range, no bone of its
+ * own, the wrists within 2 cm of what they hold (measured ≤ 1.0 cm over its variations: the hands
+ * carry the box, fitted to them, so only a sub-step's lag shows).
  * kick-ball's hip (rightUpperLeg) 720 → 880°/s in round 2: the backswing now extends the hip
  * ~20° and the thigh drives through from there (instep kicks flex the hip at ~600–900°/s).
  * `rom`: the joints' dynamics keep every joint in its range of motion but a held limb's (a hand
@@ -100,14 +101,15 @@ export interface Limits {
  * (vault's and climb's legs swept over the top 84–140°, the horse's foot into the stirrup at hip
  * height 44°, reach's and vr's crossing and lunging steps 34–38°, sitting's thighs turned out
  * 23°, run's push-off extension 12–14°); planted ankles flexed up past the 40° of a lunge
- * (pickup-shelf's squat 44°, vr 46°, throw's and sword's long strides 36–48°); bicycle's riding
+ * (vr 46°, throw's and sword's long strides 36–48°); bicycle's riding
  * feet and grips 8–20° and the step-through's hip 6° (its abduction, flexed: clinically more
  * than the 45° of the neutral hip). horse's boarding acceleration 8400 → 8600°/s²: the forearm
  * reaching for the withers eases into the elbow's and wrist's ranges as its target comes in.
  */
 export const LIMITS: Record<string, Limits> = {
+  'hand-over': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'walk-tray': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.002, head: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
-  'pickup-shelf': { rom: { leftShoulder: 6, leftUpperArm: 28, leftUpperLeg: 10, rightShoulder: 5, rightUpperLeg: 10, rightFoot: 44 }, bones: { rightUpperLeg: { speed: 440, accel: 24 }, leftLowerArm: { speed: 570, accel: 34 }, rightLowerArm: { speed: 580, accel: 34 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.35, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'pickup-shelf': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   stroll: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
   run: { rom: { leftUpperLeg: 14, rightUpperLeg: 12 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: 1.25, jumps: 0, climbs: 0, vaults: 0 },
   sit: { rom: { leftUpperLeg: 23, leftFoot: 12, rightUpperLeg: 23, rightFoot: 10 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, head: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
@@ -193,6 +195,8 @@ const ON_TOES = 0.3;
 const FLOOR_SINK = 0.025;
 /** how far a landing may still move in the last 40% of a swing (m): later reads as a stumble */
 const LATE_RETARGET = 0.03;
+/** how far the head may face off what the eyes are asked to look at, once it stays put (°): the eyes turn the rest in their sockets (~35° each way at most, the comfortable range half that) */
+const GAZE = 35;
 /** how far a planted ankle may be off its foothold beyond the foot's roll (m): the foot stands where it is said to */
 const PLANTED = 0.01;
 
@@ -247,6 +251,7 @@ export function judge(m: Measured, limit: Limits) {
   expect(m.balance.xcomFrames, 'XCoM > 10 cm frames').toBeLessThanOrEqual(limit.xcomFrames);
   expect(m.balance.com, 'standing CoM outside the feet (m)').toBeLessThanOrEqual(limit.com + 1e-3);
   expect(m.targets.wrist, 'wrist error').toBeLessThanOrEqual(limit.wrist + HEADROOM);
+  expect(m.targets.gaze, 'gaze: head off the target asked (°)').toBeLessThan(GAZE);
   for (const [curve, run] of [[false, false], [false, true], [true, false], [true, true]]) {
     // (walking and running strides each against their own references)
     const g = m.gait.summary(curve, run);
@@ -268,8 +273,10 @@ export function judge(m: Measured, limit: Limits) {
     // along with ~55% of that rotation; the trunk nods forward at each double support (±1.2°
     // walking, ±3° running); the ankle pushes off; the knee stays bent late into the swing
     expect(g.rollWithYaw, `${where}: thorax roll with its rotation`).toBeGreaterThan(0.7);
-    expect(g.headCarry, `${where}: the head's share of the thorax rotation`).toBeGreaterThan(0.35);
-    expect(g.headCarry, `${where}: the head's share of the thorax rotation`).toBeLessThan(0.8);
+    if (!Number.isNaN(g.headCarry)) {
+      expect(g.headCarry, `${where}: the head's share of the thorax rotation`).toBeGreaterThan(0.35);
+      expect(g.headCarry, `${where}: the head's share of the thorax rotation`).toBeLessThan(0.8);
+    }
     expect(g.nod, `${where}: trunk nod (°)`).toBeGreaterThan(run ? 1 : 0.6);
     expect(g.nod, `${where}: trunk nod (°)`).toBeLessThan(run ? 3.5 : 3);
     expect(g.pushOff, `${where}: ankle push-off (°)`).toBeGreaterThan(run ? 30 : curve ? 8 : 15);

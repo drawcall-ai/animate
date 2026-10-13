@@ -5,12 +5,12 @@ import type { Carrier } from '../core/carrier';
 import { followRotation } from '../core/follow';
 import { live, type Behaviour, type Live, type Motion, type Target, type Until } from '../core/goal';
 import { clampRotation } from '../core/limits';
-import { spinOf } from '../core/rotation';
-import { reached, tipTo } from '../core/tip';
+import { ChainTip, reached } from '../core/tip';
+import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
-import { bowDrop } from './balance/posture';
-import { clamp, lerp, smoothstep, softMin, softplus } from './math';
+import { lowering, TIPTOE } from './balance/balance';
+import { clamp, lerp, smoothstep } from './math';
 import type { Proportions } from './proportions';
 
 /** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm behind it (share of a step; CMU mocap) */
@@ -26,8 +26,6 @@ const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 const ARM_REACH = 0.9;
 const OUT = 0.5;
-/** how high on its toes the body goes for a hand target above its reach (m, default body) */
-const TIPTOE = 0.07;
 
 /**
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
@@ -37,7 +35,7 @@ const TIPTOE = 0.07;
  */
 export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
   return function* () {
-    const goals = new Map<number, Quaternion>();
+    const goals = new Map<number, TrackedRotation>();
     yield* action<Frame<W>>({
       update: (f) => {
         const g = h.gait;
@@ -59,13 +57,11 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
   };
 }
 
-/** joint `bone` turned on from its history toward `goal` (its own velocity fed forward) */
-function set<W>(f: Frame<W>, goals: Map<number, Quaternion>, bone: number, goal: Quaternion) {
-  let last = goals.get(bone);
-  if (!last) goals.set(bone, (last = goal.clone()));
-  const velocity = spinOf(last, goal, f.dt, _v);
-  last.copy(goal);
-  f.current.setLocal(bone, followRotation(f.prev2.local(bone), f.prev.local(bone), goal, { ...SWING, velocity }, f.dt, _r));
+/** joint `bone` turned on from its history toward `goal` (its own motion followed) */
+function set<W>(f: Frame<W>, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion) {
+  let joint = joints.get(bone);
+  if (!joint) joints.set(bone, (joint = new TrackedRotation()));
+  f.current.setLocal(bone, joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r));
 }
 
 /** How a hand goes to its target. */
@@ -87,21 +83,21 @@ export interface HandOptions<W> extends Partial<Motion> {
 export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, options: HandOptions<W> = {}): Behaviour<W> {
   const { until } = options;
   return function* () {
-    const goals = new Map<number, Quaternion>();
+    const arm = new ChainTip(`${side}Arm`);
     yield* action<Frame<W>>({
-      update: (f) => void handStep(h, f, side, live(target, f), options, goals),
-      until: until === 'reached' ? (f) => reached(f.prev, f.prev2, f.dt, INDEX[`${side}Hand`], live(target, f), options.on) : until,
+      update: (f) => void handStep(h, f, side, live(target, f), options, arm),
+      until: until === 'reached' ? (f) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], live(target, f), options.on) : until,
     });
   };
 }
 
-/** one sub-step of `handTo` (`goals`: its memory of the arm's joints' goals, for `brake`) */
-export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Target, options: HandOptions<W>, goals: Map<number, Quaternion>) {
+/** one sub-step of `handTo`, its arm's tip `arm` */
+export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Target, options: HandOptions<W>, arm: ChainTip) {
   const p = h.proportions;
   const at = options.on ? options.on.toWorld(target, _world).position : target.position;
   shrug(f, p, side, at);
   const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
-  tipTo(f, `${side}Arm`, target, { ...CALM, ...options, pole }, goals);
+  arm.to(f, target, { ...CALM, ...options, pole });
   ask(h, f, side, at);
 }
 
@@ -155,13 +151,13 @@ function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Ve
 }
 
 /**
- * Asks `balance` to bring the shoulder within reach of `hand`: the trunk bowing for the first of a
- * drop, the knees bending for the rest (738b439:procedures/bow.ts, `lowering`); up on the toes for
- * one above (each `h.asks` field the last writer's)
+ * Asks `balance` to bring the shoulder within reach of `hand`: the trunk bowing and the knees bending
+ * for one below (`lowering`), up on the toes for one above. Of two hands asking (both arms on
+ * something low), the one needing more wins: each sub-step's asks start cleared.
  */
 function ask<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
   const p = h.proportions;
-  const H = p.height;
+  const { asks } = h;
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
   const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
   const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
@@ -169,33 +165,14 @@ function ask<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>
   const below = Math.sqrt((ARM_REACH * p.armLength) ** 2 - across * across);
   const drop = high - hand.y - below;
   if (drop > 0) {
-    const first = softMin(drop, BOW * H, BEND * H);
-    const knees = softMin(softplus(drop - first - BEND * H, BEND * H), SQUAT * H, BEND * H);
-    h.asks.lower = knees;
-    h.asks.bow = bowFor(p, knees, drop - knees);
+    const { lower, bow } = lowering(p, drop);
+    asks.lower = Math.max(asks.lower, lower);
+    asks.bow = Math.max(asks.bow, bow);
     return;
   }
   const rise = hand.y - (high + below);
-  if (rise > 0) h.asks.lower = -Math.min(rise, TIPTOE * p.scale);
+  if (rise > 0 && asks.lower <= 0) asks.lower = Math.min(asks.lower, -Math.min(rise, TIPTOE * p.scale));
 }
-
-/** the bow (rad) that brings the shoulders down by `drop` (m), let down `lower` by the knees (as far as a bow goes: MOST_BOW) */
-function bowFor(p: Proportions, lower: number, drop: number): number {
-  let [lo, hi] = [0, MOST_BOW];
-  for (let i = 0; i < 20; i++) {
-    const mid = (lo + hi) / 2;
-    if (bowDrop(p, lower, mid) < drop) lo = mid;
-    else hi = mid;
-  }
-  return lo;
-}
-
-/** the furthest the trunk bows (rad): the hips' and the spine's flexion together */
-const MOST_BOW = 1.6;
-/** how far the trunk's bow takes the shoulder down before the knees bend, how deep they bend at most, and over how much of the drop they start and stop (× height) */
-const BOW = 0.08;
-const SQUAT = 0.25;
-const BEND = 0.02;
 
 const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
@@ -206,7 +183,6 @@ const _p = new Quaternion();
 const _r = new Quaternion();
 const _c = new Quaternion();
 const _g = new Quaternion();
-const _v = new Vector3();
 const _s = new Vector3();
 const _d = new Vector3();
 const _w = new Vector3();

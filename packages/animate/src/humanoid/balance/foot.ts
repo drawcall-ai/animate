@@ -3,8 +3,8 @@ import type { Side } from '../bones';
 import { clamp, lerp, quatYXZ } from '../math';
 import type { Proportions } from '../proportions';
 
-/** planted: bearing weight on the floor; swing: stepping; lifted: a task's */
-export type FootPhase = 'planted' | 'swing' | 'lifted';
+/** planted: bearing weight on the floor; swing: stepping */
+export type FootPhase = 'planted' | 'swing';
 
 /** Where a foot stands or, swinging, lands: its flat-foot ankle and heading. */
 export interface Foot {

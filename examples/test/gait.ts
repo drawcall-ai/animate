@@ -40,6 +40,8 @@ interface Sample {
   headYaw: number;
   /** foot phases: planted = true */
   planted: [boolean, boolean];
+  /** the script asked the eyes somewhere: the head is not left to go along with the thorax */
+  gazed: boolean;
   /** sagittal angles (+ = forward): left upper arm, right thigh — contralateral pair */
   arm: number;
   thigh: number;
@@ -101,7 +103,7 @@ export interface Stride {
   armAcceleration: number;
   /** thorax roll against its rotation (+1: the shoulder going forward rises) */
   rollWithYaw: number;
-  /** the head's rotation over the thorax's (both in the heading frame): the share it goes along with */
+  /** the head's rotation over the thorax's (both in the heading frame): the share it goes along with (NaN: the eyes were asked somewhere) */
   headCarry: number;
   /** the trunk's forward-back pitch (half peak to peak, °) */
   nod: number;
@@ -121,7 +123,7 @@ export class GaitKinematics {
   private readonly samples: Sample[] = [];
   private cached: Stride[] | null = null;
 
-  see({ t, h }: Frame) {
+  see({ t, h, asked }: Frame) {
     const j = (n: string) => jointOf(h, n);
     const yaw = h.gait.facing;
     const fwd = forwardOf(yaw);
@@ -155,6 +157,7 @@ export class GaitKinematics {
       headRoll: head.roll,
       headYaw: head.yaw,
       planted: [h.feet[0].phase === 'planted', h.feet[1].phase === 'planted'],
+      gazed: asked.has('gaze'),
       arm: sagittal(j('leftLowerArm').sub(j('leftUpperArm')), fwd),
       thigh: sagittal(j('rightLowerLeg').sub(j('rightUpperLeg')), fwd),
       trunk: Math.atan2(up.dot(fwd), up.y),
@@ -274,7 +277,7 @@ export class GaitKinematics {
         S.slice(a, b).map((s) => s.thoraxRoll),
         thoraxYaw,
       ),
-      headCarry: range(S.slice(a, b).map((s) => s.headYaw)) / range(thoraxYaw),
+      headCarry: S.slice(a, b).some((s) => s.gazed) ? NaN : range(S.slice(a, b).map((s) => s.headYaw)) / range(thoraxYaw),
       nod: amp((s) => s.trunk),
       pushOff: (Math.max(...near.map((s) => s.ankle)) - Math.min(...S.slice(a, lift).map((s) => s.ankle))) * DEG,
       lateKnee: S[Math.round(lift + 0.75 * (b - lift))].knee * DEG,
@@ -338,9 +341,10 @@ export class GaitKinematics {
   summary(curve: boolean, run: boolean): Stride | null {
     const xs = this.strides.filter((s) => s.curve === curve && s.speed > RUNNING === run);
     if (!xs.length) return null;
+    // (a measure some strides have not, NaN, over those that have it)
     const med = (f: (s: Stride) => number) => {
-      const v = xs.map(f).sort((p, q) => p - q);
-      return v[Math.floor(v.length / 2)];
+      const v = xs.map(f).filter((x) => !Number.isNaN(x)).sort((p, q) => p - q);
+      return v.length ? v[Math.floor(v.length / 2)] : NaN;
     };
     const keys = Object.keys(xs[0]).filter((k) => k !== 'curve' && k !== 'from' && k !== 'to') as (keyof Omit<Stride, 'curve' | 'from' | 'to'>)[];
     const out = { curve } as Stride;

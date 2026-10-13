@@ -28,7 +28,7 @@ export const STANDING_REACH = 0.995;
 /** the most a planted heel rises (rad) */
 export const MAX_HEEL = 1.05;
 /** how far the ankle flexes up (rad) */
-const DORSIFLEXION = (40 * Math.PI) / 180;
+export const DORSIFLEXION = (40 * Math.PI) / 180;
 /** the swinging ankle holds its push-off through the start of the swing, then returns to just past neutral (rad), over this share of it */
 const SWING_ANKLE = 0.06;
 const SWING_RETURN = [0.1, 0.45] as const;
@@ -105,6 +105,8 @@ export function liftOff(f: Frame<unknown>, side: Side, fromYaw: number, to: Read
   const pitch = Math.atan2(fwd.y, Math.hypot(fwd.x, fwd.z));
   // (the foot rolling up off the floor rolls on a moment; it leaves the floor at the speed it had)
   const spin = _spin.copy(q).multiply(_q.copy(f.prev2.rotation(bone)).invert());
+  // (the short way round: q and −q are one rotation)
+  if (spin.w < 0) spin.set(-spin.x, -spin.y, -spin.z, -spin.w);
   const rate = (2 * Math.atan2(_a.set(spin.x, spin.y, spin.z).dot(leftOf(fromYaw, _b)), spin.w)) / f.dt;
   const liftVelocity = new Vector3()
     .subVectors(from, f.prev2.position(bone))
@@ -191,8 +193,9 @@ export function plantedPose(p: Proportions, side: Side, foot: Foot, pitch: numbe
 /** leg `side` solved down to `pose` (its knee bent over the toes), the toes turned to it */
 export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose) {
   const hip = c.hip(side, _hip);
-  const fwd = _v.set(0, 0, 1).applyQuaternion(pose.foot);
-  const pole = kneePole(side, Math.atan2(fwd.x, fwd.z), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
+  // (the foot's heading by its sideways axis, which its pitch leaves level: a foot rolled up onto its toes points nearly down)
+  const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
+  const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
   // (the ankle placed by the hip and knee alone, the foot turned after, within its range: a foot
   // turned with the leg would swivel the knee to and fro where the ankle's range binds)
   // (never pulled quite straight: a straight knee bends either way on the slightest wobble)
@@ -201,7 +204,11 @@ export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootP
   f.current.setRotation(foot, pose.foot);
   const limit = f.current.skeleton.limits[foot];
   if (limit) f.current.setLocal(foot, clampRotation(_r.copy(f.current.local(foot)), limit) ? _r : f.current.local(foot));
-  f.current.setLocal(INDEX[`${side}Toes`], _q.copy(f.current.rotation(foot)).invert().multiply(pose.toes));
+  const toes = INDEX[`${side}Toes`];
+  const local = _q.copy(f.current.rotation(foot)).invert().multiply(pose.toes);
+  const range = f.current.skeleton.limits[toes];
+  if (range) clampRotation(local, range);
+  f.current.setLocal(toes, local);
 }
 
 /**
@@ -210,7 +217,8 @@ export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootP
  * sideways carries it along. (From the old core's kneePole.)
  */
 function kneePole(side: Side, yaw: number, facing: number, hip: Vector3, ankle: Vector3, out: Vector3): Vector3 {
-  forwardOf(yaw, out).add(forwardOf(facing, _v)).normalize();
+  // (halfway round from the facing to the foot's heading: a sum of the two would vanish for a foot turned far round)
+  forwardOf(facing + 0.5 * wrapAngle(yaw - facing), out);
   const leg = _leg.subVectors(ankle, hip).normalize();
   const outward = _out.crossVectors(UP, out).multiplyScalar(side === 'left' ? 1 : -1);
   const abducted = Math.max(0, leg.dot(outward));

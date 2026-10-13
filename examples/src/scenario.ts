@@ -19,8 +19,8 @@ export interface Stage {
   report: Report;
   /** the scenery drawn at time `t` (s) */
   props(t: number): Prop[];
-  /** whether the run did what the scenario is for (asked at its end; default: nothing to check) */
-  done?(): boolean;
+  /** whether the run did what the scenario is for (asked at its end) */
+  done(): boolean;
   /** moves the scenario's own carriers to time `t` (s), before the bodies step (they read them there) */
   move?(t: number): void;
   /**

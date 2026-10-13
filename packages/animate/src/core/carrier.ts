@@ -3,21 +3,15 @@ import { STEP } from './body';
 import type { Placement, Target } from './goal';
 import { log } from './rotation';
 
-/** A carrier's placement at one sub-step. */
-export interface Placed {
-  readonly position: Vector3;
-  readonly quaternion: Quaternion;
-}
-
 /**
  * A rigid frame things move on (a cart, a board, a held box), with a history like a body's:
  * `current` where it is at the sub-step being posed, `prev` and `prev2` the two before. Its one
  * mover moves it once per sub-step, before anything that reads it.
  */
 export class Carrier {
-  readonly prev2: Placed;
-  readonly prev: Placed;
-  readonly current: Placed;
+  readonly prev2: Required<Placement>;
+  readonly prev: Required<Placement>;
+  readonly current: Required<Placement>;
   /** the time it was last moved to (s) */
   private time = -Infinity;
 
@@ -59,19 +53,18 @@ export class Carrier {
   }
 }
 
-/** A carrier something holds by its grips (targets in its frame: a palm on a face rolls freely about its normal, `axis`), of some mass (kg). */
+/** A carrier something holds by its grips (targets in its frame: a palm on a face rolls freely about its normal, `axis`). */
 export class Item extends Carrier {
   constructor(
     position: Vector3,
     quaternion: Quaternion,
     readonly grips: Readonly<Record<string, Target>>,
-    readonly mass: number,
   ) {
     super(position, quaternion);
   }
 }
 
-function copy(to: Placed, from: Placed) {
+function copy(to: Required<Placement>, from: Required<Placement>) {
   to.position.copy(from.position);
   to.quaternion.copy(from.quaternion);
 }

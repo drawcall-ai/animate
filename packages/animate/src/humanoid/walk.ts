@@ -57,10 +57,10 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
       update: (f) => {
         const yaw = where(f);
         h.asks.go = go;
+        if (options.stance) h.asks.stance = options.stance;
         if (yaw === null) return;
         face.yaw = yaw;
         h.asks.face = face;
-        if (options.stance) h.asks.stance = options.stance;
       },
       until: (f, clock, time) => {
         if (options.until) return options.until(f, clock, time);

@@ -22,14 +22,14 @@ export function hullOf(points: readonly Spot[]): Spot[] {
 
 /** how far `q` (x, z) lies outside the convex polygon `hull` (0 inside); `away` gets the unit direction out toward `q` */
 export function outside(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
-  return Math.max(0, beyond(hull, q, away));
+  return Math.max(0, past(hull, q, away));
 }
 
 /**
  * How far `q` (x, z) lies beyond the edge of the convex polygon `hull` (counter-clockwise): outside
  * positive, inside negative (how far in); `away` gets the unit direction from the nearest edge toward `q`.
  */
-export function beyond(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
+export function past(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
   if (hull.length === 0) throw new Error('no support to be outside of');
   let inside = hull.length >= 3;
   let best = Infinity;

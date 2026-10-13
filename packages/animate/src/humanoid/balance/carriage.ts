@@ -40,6 +40,11 @@ const TURN_TRACK_RATE = 6;
 const BEND_RATE = { give: 5, straighten: 1 };
 /** how quickly a body at rest settles over its feet (1/s) */
 const SETTLE_RATE = 1.5;
+/** the most a walk accelerates the body sideways round a bend (m/s²): ~0.08 g, a tight turn taken slowly (its facing turns no faster than TURN_RATE) */
+const LATERAL = 0.8;
+/** a goal this far off the facing (rad) is walked to more and more slowly, then turned to first; still, the body edges toward it this fast (m/s) */
+const TURN_FIRST = [0.6, 1.3] as const;
+const TURNING_SPEED = 0.15;
 /** people only back up for a short (m), slow (m/s) shuffle to a goal facing away (rad) */
 const BACKUP = { distance: 0.6, speed: 0.6, angle: 2.2 };
 
@@ -50,6 +55,8 @@ export interface Stepping {
   sign: 1 | -1;
   plantedTime: number;
   landPitch: number;
+  /** planted, how it is rolled (rad) the two last sub-steps */
+  roll: [number, number];
   swing: Swing | null;
 }
 
@@ -103,12 +110,16 @@ export class Carriage {
   turnSpeed: number | undefined = undefined;
   /** how fast the travel direction turns (rad/s, + toward +x) */
   turnRate = 0;
+  /** how fast the goal's way turns (rad/s, + left) */
+  private goalTurn = 0;
   /** how long the extrapolated centre of mass has been out of the feet (s) */
   falling = 0;
   /** it has walked (and come to rest since, or not); a walk is under way; it was just started and no foot has lifted yet */
   walked = false;
   moving = false;
   starting = false;
+  /** the goal is so far off the facing that the body turns where it stands before it goes */
+  private turningFirst = false;
   /** 0 standing … 1 walking (smoothed) */
   walk = 0;
   /** how far the knees have given for walking (0 standing tall … 1 ready) */
@@ -135,7 +146,7 @@ export class Carriage {
     /** the feet [left, right]: where they stand or land */
     readonly feet: readonly [Foot, Foot],
   ) {
-    const stepping = (side: Side, sign: 1 | -1): Stepping => ({ side, sign, plantedTime: 10, landPitch: 0, swing: null });
+    const stepping = (side: Side, sign: 1 | -1): Stepping => ({ side, sign, plantedTime: 10, landPitch: 0, roll: [0, 0], swing: null });
     this.steps = [stepping('left', 1), stepping('right', -1)];
     this.omega = Math.sqrt(GRAVITY / p.legLength);
   }
@@ -183,6 +194,7 @@ export class Carriage {
       this.asked = false;
       this.goalVelocity.set(0, 0, 0);
       this.goalAccel = 0;
+      this.goalTurn = 0;
       this.goalFacing = facing;
       this.seen = false;
       return;
@@ -203,6 +215,10 @@ export class Carriage {
     const speed = this.goalSpeed;
     const along = speed > 1e-3 && this.seen ? ((this.goalVelocity.x - was.x) * this.goalVelocity.x + (this.goalVelocity.z - was.z) * this.goalVelocity.z) / (speed * dt) : 0;
     this.goalAccel += (along - this.goalAccel) * (1 - Math.exp(-GOAL_VELOCITY_RATE * dt));
+    // (and how fast its way turns)
+    const gv = this.goalVelocity;
+    const turning = speed > TURN_SPEED && this.seen && dt > 0 ? (gv.z * (gv.x - was.x) - gv.x * (gv.z - was.z)) / (speed * speed * dt) : 0;
+    this.goalTurn += (turning - this.goalTurn) * (1 - Math.exp(-GOAL_VELOCITY_RATE * dt));
     this.seen = true;
     this.goal.set(to.x, 0, to.z);
     this.goalFacing = facing;
@@ -244,6 +260,13 @@ export class Carriage {
       root.z += v.z * dt;
       this.leash(dt, xcom);
       this.turn(dt, dx, dz, dist);
+      // (turning where it stands, the body stays over its feet as they step round)
+      const settle = 1 - smoothstep(STOP.distance, START.distance, dist);
+      if ((settle > 0 && this.goalSpeed < STOP.goalSpeed) || this.turningFirst) {
+        const k = (1 - Math.exp(-SETTLE_RATE * dt)) * (this.turningFirst ? 1 : settle);
+        root.x += (over.x - root.x) * k;
+        root.z += (over.z - root.z) * k;
+      }
       if (dist < STOP.distance * scale && this.speed < STOP.speed && this.goalSpeed < STOP.goalSpeed && Math.abs(yawErr) < STOP.yaw) {
         this.moving = this.starting = false;
         v.set(0, 0, 0);
@@ -278,7 +301,17 @@ export class Carriage {
       const cap = Math.max(0, gv.x * ux + gv.z * uz) + Math.sqrt(2 * BRAKE_FACTOR * accel * PLANNED_ACCEL * dist);
       if (along > cap) out.add(_u.set(ux, 0, uz).multiplyScalar(cap - along));
     }
-    const cap = this.starting ? Math.min(START_GLIDE, this.maxSpeed) : this.maxSpeed;
+    // (no faster round a bend than the feet hold the body sideways; and a goal far off the facing is
+    // turned to first: nobody walks off sideways or backward but for a short shuffle)
+    // (the bend it is on, or the goal's way ahead of it)
+    const bend = Math.min(this.maxSpeed, LATERAL / Math.max(1e-6, Math.abs(this.turnRate), Math.abs(this.goalTurn)));
+    const off = Math.abs(wrapAngle(headingOf(dx, dz) - this.yaw));
+    // (but a short shuffle back to a goal that stays put)
+    const shuffle = dist < BACKUP.distance && this.goalSpeed < STOP.goalSpeed;
+    const turned = shuffle ? 1 : 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], off);
+    // (a body standing turns first; one walking edges on round)
+    const cap = Math.max(this.speed > TURNING_SPEED ? TURNING_SPEED : 0, Math.min(this.starting ? START_GLIDE : bend, this.maxSpeed * turned));
+    this.turningFirst = cap <= 0;
     const l = Math.hypot(out.x, out.z);
     if (l > cap) out.multiplyScalar(cap / l);
     return out;
@@ -287,8 +320,8 @@ export class Carriage {
   /** the body can't outrun its feet: its sideways velocity keeps its extrapolated centre of mass within the feet's lateral span (where they stand or land) */
   private leash(dt: number, xcom: Readonly<Vector3>) {
     const { root, velocity: v } = this;
-    const lx = Math.cos(this.goalYaw);
-    const lz = -Math.sin(this.goalYaw);
+    const lx = Math.cos(this.yaw);
+    const lz = -Math.sin(this.yaw);
     const across = v.x * lx + v.z * lz;
     const closing = Math.sign(across) * Math.max(0, Math.abs(across) - SHUFFLE) * 1.5 * this.timing().swing;
     let lo = Infinity;

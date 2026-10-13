@@ -32,9 +32,20 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         const d = _d.subVectors(live(target, f), gazer.eyes(pose, _eyes));
         const across = Math.hypot(d.x, d.z);
         if (across + Math.abs(d.y) < 1e-6) return;
-        // upright: turned about the vertical, then pitched (+ down)
-        _q.setFromAxisAngle(Y, Math.atan2(d.x, d.z)).multiply(_p.setFromAxisAngle(X, Math.atan2(-d.y, across)));
+        // upright: turned about the vertical, then pitched (+ down); looking nearly straight up or
+        // down, the way it faces is the neck's parent's (the target's own heading flips there), and
+        // it pitches in that plane (past straight down for a target below and behind)
         const parent = pose.skeleton.bones[bones[0]].parent;
+        const turned = pose.rotation(parent);
+        const ahead = _f.set(0, 0, 1).applyQuaternion(turned);
+        const facing = Math.atan2(ahead.x, ahead.z);
+        const vertical = smoothstep(0.1, 0.35, across / d.length());
+        // (turned toward the target's heading, or away from it pitched back over past straight
+        // down or up: of the two, the nearer the parent's turn)
+        const toward = wrap(Math.atan2(d.x, d.z) - facing);
+        upright(d, facing + toward * vertical, _q);
+        upright(d, facing + wrap(toward + Math.PI) * vertical, _o);
+        if (_o.angleTo(turned) < _q.angleTo(turned)) _q.copy(_o);
         const rel = _rel.copy(pose.rotation(parent)).invert().multiply(_q);
         const share = _share.identity().slerp(rel, 1 / bones.length);
         for (const b of bones) {
@@ -50,12 +61,25 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
   };
 }
 
+/** looking along `d` turned `yaw` about the vertical, then pitched in that plane (+ down, past straight down for `d` behind it), into `out` */
+function upright(d: Vector3, yaw: number, out: Quaternion): Quaternion {
+  const pitch = Math.atan2(-d.y, d.x * Math.sin(yaw) + d.z * Math.cos(yaw));
+  return out.setFromAxisAngle(Y, yaw).multiply(_p.setFromAxisAngle(X, pitch));
+}
+
 const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
 const _d = new Vector3();
 const _eyes = new Vector3();
 const _q = new Quaternion();
 const _p = new Quaternion();
+const _o = new Quaternion();
+const _f = new Vector3();
+const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+const smoothstep = (lo: number, hi: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+};
 const _rel = new Quaternion();
 const _share = new Quaternion();
 const _goal = new Quaternion();

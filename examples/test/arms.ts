@@ -159,7 +159,7 @@ export class ArmTurns {
   see(frame: Frame) {
     const { t, h } = frame;
     if (tasked(frame)) this.held.push(t);
-    const stepping = (h.feet.some((f) => f.phase === 'swing') || Math.hypot(h.gait.velocity.x, h.gait.velocity.z) > 0.1) && h.feet.every((f) => f.phase !== 'lifted');
+    const stepping = (h.feet.some((f) => f.phase === 'swing') || Math.hypot(h.gait.velocity.x, h.gait.velocity.z) > 0.1);
     if (tasked(frame) || !stepping) {
       for (const s of this.sides) s.end = NaN;
       return;

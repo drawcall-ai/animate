@@ -4,7 +4,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, SIDES } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, wrapAngle } from '../math';
+import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, softplus, wrapAngle } from '../math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
 import { ankleFor } from './foot';
@@ -29,12 +29,12 @@ const ARM_PERIOD = { walk: 0.5, run: 0.3 };
 /** how firmly the stride's phase is pulled into step with the feet (1/s) */
 const ENTRAIN = 4;
 /** how far the pelvis goes up for a body asked onto its toes, at most (m, default body) */
-const TIPTOE = 0.07;
+export const TIPTOE = 0.07;
 /** the most a trailing foot's reach lowers the pelvis (× height): one left behind further is lifted instead */
 const MOST_DROP = 0.035;
-/** of a bow, the share the hips take (the pelvis tipping forward); the lower back the rest; none, let down this far by the knees (× height): a squat */
+/** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; how far the knees let the pelvis down at most (× height): a squat */
 const HINGE = 0.6;
-const SQUAT = 0.2;
+const SQUAT = 0.25;
 /**
  * a landing foot holds the pelvis down from this far through its swing on, fully by this far, and
  * by this much less before (× height); a foot just lifted still holds it, less and less, this far through its swing
@@ -127,10 +127,35 @@ export class Posture {
 const hingeOf = (p: Proportions, lower: number) => HINGE * (1 - 0.5 * smoothstep(0, SQUAT * p.height, lower));
 
 /**
+ * How a standing body brings its shoulders down by `drop` (m): the trunk bows (at the hips and the
+ * lower back) for the first of it, the knees bend for the rest, smoothly into and out of the squat's
+ * ends; past the squat, the trunk bows further (738b439:procedures/bow.ts, `lowering`). What to ask
+ * `balance`: `lower` (m) and `bow` (rad).
+ */
+export function lowering(p: Proportions, drop: number): { lower: number; bow: number } {
+  const H = p.height;
+  const first = softMin(drop, FIRST_BOW * H, BEND * H);
+  const lower = softMin(softplus(drop - first - BEND * H, BEND * H), SQUAT * H, BEND * H);
+  // (the bow that brings the shoulders down the rest, as far as a trunk bows)
+  let [lo, hi] = [0, MOST_BOW];
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2;
+    if (bowDrop(p, lower, mid) < drop - lower) lo = mid;
+    else hi = mid;
+  }
+  return { lower, bow: lo };
+}
+
+/** how far the trunk's bow takes the shoulders down before the knees bend, and over how much of the drop they start and stop (× height); the furthest the trunk bows (rad) */
+const FIRST_BOW = 0.08;
+const BEND = 0.02;
+const MOST_BOW = 1.6;
+
+/**
  * How far a bow of `bow` (rad) brings the shoulders down (m), let down `lower` by the knees: the
  * pelvis tipping its share, the lower back and the thorax half the rest each.
  */
-export function bowDrop(p: Proportions, lower: number, bow: number): number {
+function bowDrop(p: Proportions, lower: number, bow: number): number {
   const hinge = hingeOf(p, lower) * bow;
   const { spine, chest, leftShoulder } = p.offsets;
   const height = (a: number, b: number, c: number) => chest.y * Math.cos(a) + spine.y * Math.cos(b) + leftShoulder.y * Math.cos(c);
