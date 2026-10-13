@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>animate — examples</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <aside id="ui">
+      <h1>animate</h1>
+      <p class="sub">Humanlike bodies moved by behaviours as timelines. Rendered as OpenPose BODY_25 skeletons.</p>
+      <nav id="list"></nav>
+      <section id="info"></section>
+      <div class="row" id="views"></div>
+      <div class="row">
+        <button id="play">Pause</button>
+        <button id="mode">2D OpenPose</button>
+        <label><input type="checkbox" id="markers" checked /> inputs</label>
+      </div>
+      <input type="range" id="scrub" min="0" max="1000" value="0" />
+      <div id="time"></div>
+      <p class="legend"><span class="dot"></span> white markers = the effector targets the behaviours are given</p>
+    </aside>
+    <div id="stage"><canvas id="c"></canvas><canvas id="overlay"></canvas><div id="caption"></div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

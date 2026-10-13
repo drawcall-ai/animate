@@ -1,0 +1,21 @@
+{
+  "name": "@drawcall/animate",
+  "version": "0.0.0",
+  "description": "Procedural humanlike motion for three.js: an articulated body moved by behaviours written as @pmndrs/timeline timelines.",
+  "keywords": ["three", "threejs", "procedural-animation", "inverse-kinematics", "humanoid", "locomotion", "timeline", "viverse"],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": { "source": "./src/index.ts", "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "skills"],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json && tsc -p test/tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": { "@pmndrs/timeline": "^0.4.0" },
+  "peerDependencies": { "@pmndrs/viverse": ">=0.2.29", "three": ">=0.160.0" },
+  "devDependencies": { "@pixiv/three-vrm": "3.5.5", "@pmndrs/viverse": "^0.2.29", "@types/three": "^0.180.0", "three": "^0.180.0", "typescript": "^5.9.0", "vite": "^7.3.6", "vitest": "^3.2.0" }
+}

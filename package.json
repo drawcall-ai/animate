@@ -1,5 +1,5 @@
 {
-  "name": "prohuman-monorepo",
+  "name": "animate",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.18.0",
@@ -7,20 +7,18 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "dev": "pnpm --filter examples dev",
-    "build": "pnpm --filter \"./packages/*\" build",
+    "dev": "pnpm -F examples dev",
+    "build": "pnpm -F @drawcall/animate build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter \"./packages/*\" test",
-    "metrics": "pnpm --filter examples metrics",
-    "lint:pkg": "pnpm --filter \"./packages/*\" lint:pkg",
-    "capture": "node scripts/capture.mjs",
-    "bench": "pnpm --filter examples bench",
-    "bench:browser": "node scripts/bench.mjs"
+    "test": "pnpm -r test",
+    "metrics": "pnpm -F examples metrics",
+    "bench": "pnpm -F examples bench",
+    "bench:browser": "node examples/scripts/bench.mjs",
+    "capture": "node examples/scripts/capture.mjs",
+    "video": "node examples/scripts/video.mjs"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.18.5",
     "playwright": "^1.55.0",
-    "publint": "^0.3.24",
     "tsdown": "^0.23.0",
     "typescript": "^5.9.0"
   }

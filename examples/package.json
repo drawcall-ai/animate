@@ -1,0 +1,30 @@
+{
+  "name": "examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc && tsc -p test/tsconfig.json && tsc -p bench/tsconfig.json",
+    "test": "vitest run openpose",
+    "metrics": "vitest run metrics",
+    "bench": "vite build --ssr bench/node.ts --outDir node_modules/.bench --logLevel warn && node --expose-gc node_modules/.bench/node.js"
+  },
+  "dependencies": {
+    "@drawcall/animate": "workspace:*",
+    "@pmndrs/timeline": "^0.4.0",
+    "@pmndrs/viverse": "^0.2.29",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.7"
+  },
+  "assetDependencies": {
+    "generic-stylized-human-neutral": "^1.0.0"
+  }
+}
