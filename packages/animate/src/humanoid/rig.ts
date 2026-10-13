@@ -1,25 +1,13 @@
 // Adapted from the old core (a801be4:packages/core/src/rig.ts): the same measuring, bone writing and landmark nodes.
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
+import type { Pose } from '../core/pose';
 import { Skeleton } from '../core/skeleton';
-import type { BonePoint } from '../core/types';
 import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName } from './bones';
-import { landmarksOf, pointsOf, type PointName } from './landmarks';
+import { landmarksOf, pointsOf, type BonePoint, type PointName } from './landmarks';
+import { ranges } from './profile/limits';
 import { derive, type Proportions } from './proportions';
-import { skeletonOf } from './skeleton';
-
-/**
- * A posed body as the skeleton holds it (a body's `BodyState` is one): the hips' world position
- * and each bone's rotation in its parent's frame, the hips' in the world's, indexed as the
- * skeleton's bones (VRM normalized: identity is the T-pose).
- */
-export interface Pose {
-  position: Vector3;
-  local: readonly Quaternion[];
-}
-
-/** `skeleton`'s T-pose, standing at the origin facing +Z. */
-export const restPose = (skeleton: Skeleton): Pose => ({ position: skeleton.bones[0].offset.clone(), local: skeleton.bones.map(() => new Quaternion()) });
+import { CHAINS, skeletonOf } from './skeleton';
 
 const UP = new Vector3(0, 1, 0);
 const _left = new Vector3();
@@ -88,7 +76,7 @@ export class Rig {
     this.vrm = isVRM(model) ? model : null;
     const v0 = this.vrm?.meta.metaVersion === '0';
     this.proportions = measure(model, bones, v0);
-    this.skeleton = new Skeleton(skeletonOf(this.proportions));
+    this.skeleton = new Skeleton(skeletonOf(this.proportions), { limits: ranges(), chains: CHAINS });
     this.points = pointsOf(this.proportions);
     this.hips = need(bones.hips, 'hips').node;
     // the rest hips' scale (glTF): positions in the bones are divided by it (bones below the hips are unscaled)
@@ -122,18 +110,17 @@ export class Rig {
    * turned to their facing. A VRM is then updated by `dt`.
    */
   write(pose: Pose, dt: number) {
-    const { position, local } = pose;
-    const bones = this.skeleton.bones.length;
-    if (local.length !== bones) throw new Error(`a pose of ${local.length} bones for a skeleton of ${bones}`);
-    const root = _root.setFromAxisAngle(UP, yawOf(local[0]));
+    if (pose.skeleton !== this.skeleton) throw new Error("a pose of another skeleton than the rig's");
+    const hips = pose.local(0);
+    const root = _root.setFromAxisAngle(UP, yawOf(hips));
     const scene = this.model.scene;
-    scene.position.copy(this.proportions.hips).applyQuaternion(root).negate().add(position);
+    scene.position.copy(this.proportions.hips).applyQuaternion(root).negate().add(pose.position(0));
     // (composed aside: each change of an Object3D's quaternion recomputes its Euler rotation)
     _q.copy(root);
     scene.quaternion.copy(this.turned ? _q.multiply(TURN) : _q);
     // the clip is root-relative
-    _hips.copy(root).invert().multiply(local[0]);
-    for (const { index, node, left, right } of this.bones) node.quaternion.copy(_q.copy(left).multiply(index === 0 ? _hips : local[index]).multiply(right));
+    _hips.copy(root).invert().multiply(hips);
+    for (const { index, node, left, right } of this.bones) node.quaternion.copy(_q.copy(left).multiply(index === 0 ? _hips : pose.local(index)).multiply(right));
     this.hips.position.copy(this.hipsAt);
     this.vrm?.update(dt);
   }

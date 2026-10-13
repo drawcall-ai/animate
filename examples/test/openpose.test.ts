@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Bone, OrthographicCamera, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { action } from '@pmndrs/timeline';
-import { Humanoid, type Ctx } from '@drawcall/animate';
+import { Humanoid, type Frame } from '@drawcall/animate';
 import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, createOpenPoseModel, drawOpenPose2D, OpenPoseSkeleton, projectBody25, toBody25, type Context2D } from '../src/openpose';
 
 /** OpenPose's own BODY_25 part names, in its order (poseParameters.cpp) */
@@ -14,7 +14,7 @@ const OPENPOSE = [
 /** a body standing still, as it starts: relaxed */
 const still = () =>
   function* () {
-    yield* action<Ctx>({ update: () => {} });
+    yield* action<Frame>({ update: () => {} });
   };
 
 /** an OpenPose model standing at the origin, facing +Z (its left is +X) */

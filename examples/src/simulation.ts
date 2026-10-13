@@ -35,7 +35,7 @@ export class Simulation {
 
   /** one fixed step of every actor, each reading the others as they were solved last step */
   step() {
-    this.world.bodies = this.actors.map((h) => h.snapshot());
+    this.actors.forEach((h, i) => this.world.bodies[i].copy(h.pose));
     for (const h of this.actors) h.update(FIXED_DT);
     this.t += FIXED_DT;
   }

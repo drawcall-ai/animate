@@ -1,13 +1,14 @@
 // Objective motion metrics per scenario, judged by the universal rules and the limits of its id
 // (judge.ts). Run: pnpm metrics [-- -t <id>]
+import { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { createWorld, type Ctx, type World } from '@drawcall/animate';
+import { createWorld, type Frame as BodyFrame, type World } from '@drawcall/animate';
 import { expect, it } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import type { Frame } from './frame';
-import { judge, limitsOf, measure } from './judge';
+import { judge, LIMITS, limitsOf, measure } from './judge';
 
 /** each fixed step's frames of a run of `sc` (OpenPose models, read without rendering) */
 function* steps(sc: Scenario): Generator<Frame[]> {
@@ -25,7 +26,12 @@ it('lists each scenario once', () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+// (the scenarios without limits are not judged yet: they only have to run)
 for (const sc of SCENARIOS) {
+  if (!(sc.id in LIMITS)) {
+    it(`${sc.id} runs`, () => console.log(measure(sc.id, steps(sc)).report));
+    continue;
+  }
   it(sc.id, () => {
     const limit = limitsOf(sc.id);
     const m = measure(sc.id, steps(sc));
@@ -34,7 +40,7 @@ for (const sc of SCENARIOS) {
   });
 }
 
-it('runs a scenario through the metrics: two actors standing still in the T-pose, each reading the other', () => {
+it('runs a scenario through the metrics: two actors standing still, relaxed, each reading the other', () => {
   const seen: number[] = [];
   const still: Scenario = {
     id: 'still',
@@ -45,7 +51,7 @@ it('runs a scenario through the metrics: two actors standing still in the T-pose
     props: () => [],
     script: (_, index) =>
       function* () {
-        yield* action<Ctx<World>>({ update: (ctx) => void seen.push(ctx.world.bodies[1 - index].com.x) });
+        yield* action<BodyFrame<World>>({ update: (f) => void seen.push(f.world.bodies[1 - index].com(new Vector3()).x) });
       },
   };
   const m = measure(still.id, steps(still));

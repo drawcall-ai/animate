@@ -2,7 +2,6 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { beyond } from '../../src/core/limits';
 import { BONES, CHILD_BONES, INDEX } from '../../src/humanoid/bones';
-import { caps } from '../../src/humanoid/profile/caps';
 import { ranges } from '../../src/humanoid/profile/limits';
 import { relaxedPose } from '../../src/humanoid/profile/relaxed';
 import { rng, turnUpTo } from './fixtures';
@@ -40,18 +39,6 @@ describe('ranges of motion', () => {
       }
     }
     expect(outside).toBeGreaterThan(500);
-  });
-});
-
-describe('caps', () => {
-  it('cap every joint, the root too, distal ones faster', () => {
-    const all = caps();
-    expect(all.map((c) => c.bone)).toEqual(BONES.map((b) => INDEX[b]));
-    for (const c of all) expect(c.acceleration).toBeGreaterThan(0);
-    const of = (b: (typeof BONES)[number]) => all[INDEX[b]].acceleration;
-    expect(of('leftHand')).toBeGreaterThan(of('leftLowerArm'));
-    expect(of('leftLowerArm')).toBeGreaterThan(of('leftUpperArm'));
-    expect(of('leftUpperArm')).toBeGreaterThan(of('spine'));
   });
 });
 

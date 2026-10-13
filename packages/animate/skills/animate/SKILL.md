@@ -1,123 +1,99 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — compose a humanlike body from behaviours written as @pmndrs/timeline timelines (stand and balance, walk and run, follow a target, reach, carry, look, head tracking), or drive a generic articulated body from your own behaviours. Use when writing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer, with chain IK (`solveChain`) and acceleration-limited following (`follow`, `followRotation`). Use when writing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
 
-A body is moved by **one behaviour timeline**. Every 1/60 s sub-step the behaviour *proposes* what it wants — soft targets, hard contacts, joint limits, acceleration caps — and the body merges all proposals and solves the pose. Behaviours never write bones or transforms.
+A body runs **one behaviour timeline**, stepped in sub-steps of at most 1/60 s. Behaviours are [@pmndrs/timeline](https://github.com/pmndrs/timeline) generators; compose them with `parallel`, `action`, `timePassed` and its other helpers. No Promises inside behaviours: wait with conditions and `timePassed` (simulation time).
 
-Timelines are [@pmndrs/timeline](https://github.com/pmndrs/timeline) generators: compose them with `parallel`, `action`, `timePassed` and its other helpers.
+## Frames and layers
 
-## Two layers
+Each sub-step every running action's `update(frame)` gets a `Frame`:
 
-- **Humanoid** (most uses): `Humanoid` turns a `@pmndrs/viverse` character model (glTF or VRM, as `loadCharacterModel` loads it) into a body and poses the model after every update. The behaviours `humanoid`, `walk`, `follow`, `reach`, `carry`, `look`, `track` give it humanlike motion.
-- **Core** (any articulated rig): `Skeleton`, `Body` and the proposal `Board` (`ctx.propose`), for bodies that are not human or for behaviours of your own.
+| field | is |
+|---|---|
+| `dt`, `time` | the sub-step's length and the time `current` is posed for (s) |
+| `world` | the world the body was made with (throws without one) |
+| `prev2`, `prev` | the final poses of the two sub-steps before (read only) |
+| `current` | this sub-step's pose as written so far; it starts as a copy of `prev` |
+
+Behaviours **write** `current`. Children of a `parallel` are stepped in the order given, so a later behaviour wins on the bones it writes and leaves the rest to the ones before: put the base (a stance) first and overrides after it. A bone nobody writes keeps last sub-step's rotation. The poses rotate every sub-step: read them from the frame each time, never keep them.
+
+A `Pose`, by bone index:
+- read: `local(bone)` (rotation in the parent's frame; the root's in the world's), `position(bone)` and `rotation(bone)` (world), `point(bone, at, out)`, `com(out)`
+- write: `setLocal(bone, q, weight?)`, `setRotation(bone, worldQ, weight?)`, `setRoot(position, weight?)`; a `weight` below 1 blends from what is there
+
+Nothing smooths, limits or fades for you: a behaviour moves its bones from the history at speeds it chooses, and hands over continuously because it starts from where the bones are.
+
+## Helpers
+
+- `solveChain(frame, chain, { tip: { position, quaternion? }, root?, pole? }, weight?)` — puts the tip bone of a named chain at `position` (as far as it reaches; straight toward it when out of reach), turned to `quaternion`, every bone within its joint limit, and writes the chain into `current`. A two-segment chain bends toward `pole`; `root` first moves the whole body so the chain starts there.
+- `follow(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the next value (a `Vector3` or a number) of something moving toward `target` from its history: velocity changes by at most `accel · dt`, closes in at most at `speed`, never overshoots a still target. Pass the goal's own `velocity` to follow a moving goal without lag.
+- `followRotation(prev2, prev, target, { accel, speed?, velocity? }, dt, out?)` — the same for a quaternion (rad/s, rad/s²; `velocity` an angular velocity in the world).
+- `clampRotation(q, limit)`, `beyond(q, limit)` — a joint's swing–twist limit (`skeleton.limits[bone]`).
+
+Typical: steer a point with `follow` from `prev2`/`prev`, then place it with `solveChain`.
 
 ## A humanoid
 
 ```ts
 import { Vector3 } from 'three';
-import { parallel } from '@pmndrs/timeline';
+import { action, parallel } from '@pmndrs/timeline';
 import { loadCharacterModel } from '@pmndrs/viverse';
-import { createWorld, follow, humanoid, Humanoid, look, type Ctx, type World } from '@drawcall/animate';
+import { follow, Humanoid, INDEX, relaxedPose, solveChain, type Frame } from '@drawcall/animate';
 
-const world = createWorld();
 const model = await loadCharacterModel();
 scene.add(model.scene);
-
-const goal = { position: new Vector3(2, 0.9, 4), weight: 1 };
-const body = new Humanoid<World>(
+const goal = new Vector3(-0.3, 1.2, 0.4);
+const body = new Humanoid(
   model,
-  (h) =>
+  () =>
     function* () {
-      yield* parallel<Ctx<World>>(
+      yield* parallel<Frame>(
         'all',
-        humanoid(h), // always: ranges of motion, calm caps, relaxed pose, standing balance
-        follow(h, 'hips', { target: () => goal }), // the hips lead; the steps are the body's own
-        look(h, () => goal.position),
+        // the base: stand relaxed
+        action<Frame>({ update: (f) => relaxedPose().forEach(({ bone, rotation }) => f.current.setLocal(bone, rotation)) }),
+        // over it: the right hand to the goal
+        action<Frame>({
+          update: (f) => {
+            const hand = follow(f.prev2.position(INDEX.rightHand), f.prev.position(INDEX.rightHand), goal, { accel: 8, speed: 1.5 }, f.dt);
+            solveChain(f, 'rightArm', { tip: { position: hand }, pole: new Vector3(-0.8, 0.8, -0.4) });
+          },
+        }),
       );
     },
-  { world, position: { x: 0, z: 0 }, yaw: 0 },
+  { position: { x: 0, z: 0 }, yaw: 0 },
 );
 
 // every frame
 body.update(delta);
 ```
 
-`new Humanoid(model, behaviour, { world, position, yaw })`: `behaviour` receives the humanoid and returns the timeline; the body starts standing relaxed where it is put. Read back `body.yaw`, `body.velocity`, `body.feet` (each foot's position, yaw and phase), `body.proportions`, `body.state` (the solved bones). One Humanoid per model. Without a model file, `createSkeletonModel(height)` gives a bare-bones character model.
+`new Humanoid(model, behaviour, { world, position, yaw })`: `behaviour` receives the humanoid and returns the timeline; the body starts standing relaxed, soles on the floor. One Humanoid per model; without a model file, `createSkeletonModel(height)` gives a bare-bones one. Read back `body.pose`, `body.yaw`, `body.velocity`, `body.proportions`, `body.rig.skeleton`, and `body.status` (feet, seated, mounted, intent — what behaviours report).
 
-### Behaviours
-
-Run `humanoid(h)` for the whole life of every humanoid, in `parallel` with whatever else it does. It is the fallback everything else overrides.
-
-| behaviour | does | when |
-|---|---|---|
-| `humanoid(h, { stance? })` | human joint ranges, acceleration caps, the relaxed pose, standing balance with recovery steps | always |
-| `walk(h, { to, facing?, speed?, accel?, eager?, until? })` | walks (and, fast, runs) to a moving floor point; stepping, arm swing, pelvis and trunk motion included | you know where the body should go |
-| `follow(h, 'hips' \| 'head' \| 'hands', { target, speed?, accel?, until? })` | a body part leads: leans, steps or walks so the part reaches its target (for `'hands'`, the hands' midpoint; move the hands themselves with `reach` or `carry`) | you know where a part should be, not where to stand |
-| `reach(h, 'left' \| 'right', target)` | one hand to its target; ramp `weight` 0 → 1 to reach, back to let go | grabbing, pointing, touching |
-| `carry(h, { left, right })` | both hands on their targets together | trays, boxes, two-handed holds |
-| `look(h, target)` | head, neck and chest turn to a point (`null`: nowhere in particular) | attention, gaze |
-| `track(h, target)` | the eyes follow a head pose; the trunk, pelvis and feet turn after it, the knees bend when it goes low | VR headsets, recorded head motion |
-
-Targets are functions of the context, asked every sub-step, returning an `Effector`: `{ position, quaternion?, weight }` (`weight` 0..1). Mutate one object you keep, or return a fresh one. Hand targets are the wrists, the head target is the eye midpoint, foot targets are the ankles.
-
-`until` (a timeline `UntilCondition`) ends `walk` and `follow` gracefully: the body comes to rest, then the timeline finishes, so they compose in sequence:
-
-```ts
-yield* walk(h, { to: () => door, until: () => arrived });
-yield* reach(h, 'right', () => handle);
-```
-
-What a body is asked to do is reported in `h.status.intent` (its effector targets, where it looks); `h.status.feet` has each foot's phase (`planted`, `swing`, `lifted`, `carried`).
-
-### Composition rules
-
-- Things that must stay in sync are one behaviour; independent things are separate behaviours in `parallel`.
-- Behaviours only propose. Do not move bones, and do not use timeline's `transition`, `spring` or `lookAt` on body parts.
-- No Promises inside behaviours: wait with conditions and `timePassed` (simulation time).
-- Stop a behaviour gracefully with its `until`; cancelling it outright is safe too: `humanoid(h)` takes over.
+Bones are the VRM humanoid bones (`BONES`, indices in `INDEX`; normalized: +Y up, facing +Z, left +X, the T-pose is identity). Chains (`CHAINS`): `leftArm`/`rightArm` (upper arm → hand: the wrist), `leftLeg`/`rightLeg` (thigh → foot: the ankle), `spine` (spine → head), `neck` (neck → head). Every joint but the hips has a human range of motion (`ranges()`).
 
 ### Several actors
 
-Share one `World` (`createWorld({ floorObstacles, ground, ladders, ... })`). Before updating, set `world.bodies = actors.map((a) => a.snapshot())` so each body reads the others as they were last solved, whatever order they update in.
+Share one `World` (`createWorld({ floorObstacles, ground, ladders, ... })`). Before updating, set `world.bodies` to each actor's pose as it was (copies: `actor.snapshot()`, or `pose.copy(actor.pose)` into poses you keep), so each body reads the others the same whatever order they update in.
 
-## The core
-
-Use it for non-human rigs or behaviours the humanoid layer does not offer.
+## Any rig
 
 ```ts
 import { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, Skeleton, type Ctx } from '@drawcall/animate';
+import { Body, Skeleton, solveChain, type Frame } from '@drawcall/animate';
 
-const skeleton = new Skeleton([
-  { name: 'base', parent: -1, offset: new Vector3(), mass: 2, com: new Vector3() },
-  { name: 'arm', parent: 0, offset: new Vector3(0, 0.5, 0), mass: 1, com: new Vector3(0, 0.25, 0) },
-]);
-const body = new Body(skeleton, function* () {
-  yield* action<Ctx>({
-    update: (ctx) => {
-      ctx.propose.contact({ point: { bone: 0, at: new Vector3() }, position: new Vector3(), priority: 1 });
-      ctx.propose.target({ kind: 'position', point: { bone: 1, at: new Vector3(0, 0.5, 0) }, value: new Vector3(0.3, 0.4, 0), weight: 1 });
-    },
-  });
+const bone = (name: string, parent: number, y: number) => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
+const skeleton = new Skeleton([bone('base', -1, 0), bone('a', 0, 0.5), bone('b', 1, 0.5), bone('tip', 2, 0.5)], {
+  limits: [], // { bone, axis, swing, twist, neutral? } per joint
+  chains: { arm: ['a', 'b', 'tip'] },
 });
-body.update(delta); // read body.state
+const body = new Body(skeleton, function* () {
+  yield* action<Frame>({ update: (f) => solveChain(f, 'arm', { tip: { position: new Vector3(0.3, 0.6, 0) } }) });
+});
+body.update(delta); // read body.pose
 ```
 
-Bones are listed parents first; rest rotations are identity (+Y up, facing +Z, +X left). A `Point` is `{ bone, at }` (bone-local) or `'com'`, the centre of mass.
-
-What `ctx.propose` takes, and how proposals from different behaviours combine (order never matters):
-
-| proposal | is | combined |
-|---|---|---|
-| `target({ kind: 'position' \| 'orientation' \| 'aim' \| 'local', point, value, weight, stiffness?, tier?, claims?, mask? })` | a soft pull | main targets add, and where they conflict settle by their weights (`stiffness` sets only how fast each gets there); a `tier: 'fallback'` target gets only the weight the main ones leave on its bone (the centre of mass counting as the root, bone 0, for positions) |
-| `contact({ point, position, rotation?, priority, support?, mask? })` | held exactly, as far as it can be | one per point: the highest priority wins; equal priorities that disagree throw |
-| `limit({ bone, axis, swing, twist, neutral? })` | a joint's swing–twist range | intersected |
-| `cap({ bone, acceleration, kind? })` | a joint's acceleration cap | the largest wins |
-| `load({ bone, mass, at })` | carried mass | added |
-| `impulse(point, velocity)` | a sudden velocity change (a hit) | added |
-
-Give proposals an `owner` and read `ctx.granted(owner)` next sub-step: which contacts won or lost and how far each target was left off. `ctx.supports()` lists the weight-bearing winning contacts. The solver has no gravity: support and balance are up to behaviours.
+Bones are listed parents first, bone 0 the root; rest rotations are identity. Chains list a joint, its descendants down to the tip, each the child of the one before.

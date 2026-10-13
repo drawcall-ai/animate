@@ -1,17 +1,11 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Limit } from '../../core/types';
+import type { Limit } from '../../core/skeleton';
 import { CHILD_BONES, INDEX, type ChildBone } from '../bones';
 
 const DEG = Math.PI / 180;
 
-/**
- * A joint's range of motion: a body `Limit` measured from the joint's `neutral` (its bone's
- * rotation there; the T-pose's when absent): the limit holds for `q · neutral⁻¹`.
- */
-export type Range = Limit & { neutral?: Quaternion };
-
 /** a range in degrees: the twist about `axis`, the swings about the next two axes in turn */
-const range = (axis: 0 | 1 | 2, a: [number, number], b: [number, number], twist: [number, number], neutral?: Quaternion) => ({ axis, swing: [a, b], twist, neutral }) satisfies Omit<Range, 'bone'>;
+const range = (axis: 0 | 1 | 2, a: [number, number], b: [number, number], twist: [number, number], neutral?: Quaternion) => ({ axis, swing: [a, b], twist, neutral }) satisfies Omit<Limit, 'bone'>;
 
 // Copied from the old core (a801be4:packages/core/src/pose/limits.ts: RANGES).
 /**
@@ -87,7 +81,7 @@ const side = (r: [number, number], axis: number, right: boolean): [number, numbe
  * The human ranges of motion of every joint but the root (the hips) as the skeleton's limits:
  * each bone's rotation in its parent's frame (swing–twist).
  */
-export function ranges(): Range[] {
+export function ranges(): Limit[] {
   return CHILD_BONES.map((bone) => {
     const r = RANGES[JOINT_OF[bone]];
     const right = bone.startsWith('right');

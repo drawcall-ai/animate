@@ -1,12 +1,4 @@
-import { Euler, MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
-
-export const vec = (x: number, y: number, z: number) => new Vector3(x, y, z);
-
-/** Flash & Hogan minimum-jerk position profile, t in [0,1]. */
-export function minimumJerk(t: number): number {
-  const s = MathUtils.clamp(t, 0, 1);
-  return s * s * s * (10 - 15 * s + 6 * s * s);
-}
+import { Vector3 } from 'three';
 
 /** `a` wrapped into [-π, π] */
 export function wrapAngle(a: number): number {
@@ -15,21 +7,10 @@ export function wrapAngle(a: number): number {
   return a;
 }
 
-/** Yaw of a horizontal direction; yaw 0 faces +Z, positive yaw turns toward +X. */
-export const yawOf = (x: number, z: number) => Math.atan2(x, z);
-
 export const forwardOf = (yaw: number, out = new Vector3()) => out.set(Math.sin(yaw), 0, Math.cos(yaw));
 
 /** a character's left (+X when facing +Z) */
 export const leftOf = (yaw: number, out = new Vector3()) => out.set(Math.cos(yaw), 0, -Math.sin(yaw));
-
-const _euler = new Euler();
-/** yaw (Y) · pitch (X, + = nod down) · roll (Z) */
-export const quatYXZ = (yaw: number, pitch = 0, roll = 0, out = new Quaternion()) => out.setFromEuler(_euler.set(pitch, yaw, roll, 'YXZ'));
-
-const _m = new Matrix4();
-/** the rotation taking the axes x, y, z onto the given orthonormal vectors */
-export const quatBasis = (x: Vector3, y: Vector3, z: Vector3, out = new Quaternion()) => out.setFromRotationMatrix(_m.makeBasis(x, y, z));
 
 /** A seeded uniform [0, 1) generator (mulberry32): the same seed, the same run. */
 export function random(seed: number): () => number {

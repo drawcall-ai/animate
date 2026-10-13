@@ -1,91 +1,70 @@
 import { TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
-import type { Quaternion, Vector3 } from 'three';
-import { Board, merge, type Merged } from './board';
-import { History } from './history';
-import { contactResidual, targetResidual } from './rows';
+import { Pose } from './pose';
 import type { Skeleton } from './skeleton';
-import { Solver } from './solver';
-import { BodyState } from './state';
-import type { Granted, Support } from './types';
 
-/** the sub-step (s) */
+/** the longest sub-step (s) */
 export const STEP = 1 / 60;
 
-/** What a body's behaviour sees and writes each sub-step. */
-export interface Ctx<W = unknown> {
-  /** the last solved state */
-  body: Readonly<BodyState>;
-  /** the world the body was made with; throws when it was made without one */
-  readonly world: W;
+/**
+ * What a body's behaviour gets each sub-step: the two last final poses and the pose being
+ * written. `current` starts as a copy of `prev`; behaviours write it in the order the timeline
+ * steps them, so a later writer wins on the bones it writes. The poses rotate every sub-step:
+ * read them from the frame each time, do not keep them.
+ */
+export interface Frame<W = unknown> {
   /** this sub-step's length (s) */
   dt: number;
-  /** the simulation time of `body` (s) */
+  /** the time `current` is posed for (s); the body starts at 0 */
   time: number;
-  propose: Board;
-  /** what `owner`'s proposals got in the last sub-step, and how closely they were met */
-  granted(owner: string): Granted;
-  /** the winning contacts of the last merge that bear weight, where their points are now */
-  supports(): Support[];
+  /** the world the body was made with; throws when it was made without one */
+  readonly world: W;
+  /** the final pose two sub-steps ago (read only) */
+  prev2: Pose;
+  /** the final pose of the last sub-step (read only) */
+  prev: Pose;
+  /** this sub-step's pose, as written so far */
+  current: Pose;
 }
 
 export interface BodyOptions<W> {
   world?: W;
-  /** the root's start position (default its offset) */
-  position?: Vector3;
-  /** the root's start rotation (default none; it overrides `local[0]`) */
-  rotation?: Quaternion;
-  /** each bone's start rotation in its parent's frame, the root's in the world's (default none) */
-  local?: readonly Quaternion[];
+  /** the pose it starts at, still (default the skeleton's rest pose) */
+  pose?: Pose;
 }
 
-const NONE: Granted = { won: [], lost: [], targets: [] };
-
 /**
- * An articulated body moved by one behaviour timeline: each 1/60 s sub-step the board is
- * cleared, the behaviour proposes, the proposals are merged and the solver advances the state.
+ * An articulated body moved by one behaviour timeline. Each sub-step (1/60 s at most) the
+ * timeline writes `current`; then its world transforms are brought up to date and it becomes
+ * the history: current → prev → prev2.
  */
 export class Body<W = unknown> {
-  private readonly current: BodyState;
-  private readonly solver: Solver;
-  private readonly runner: TimelineRunner<Ctx<W>>;
+  /** after an update: `prev` is the final pose, `prev2` the one before, `dt` the last sub-step */
+  readonly frame: Frame<W>;
+  private readonly runner: TimelineRunner<Frame<W>>;
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
-  private readonly ctx: Ctx<W>;
-  private readonly history = new History();
-  private merged: Merged | undefined;
 
-  constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Ctx<W>>, options: BodyOptions<W> = {}) {
-    this.current = new BodyState(skeleton);
-    if (options.local) {
-      if (options.local.length !== skeleton.bones.length) throw new Error(`a start pose of ${options.local.length} rotations for ${skeleton.bones.length} bones`);
-      options.local.forEach((q, i) => this.current.local[i].copy(q).normalize());
-    }
-    if (options.position) this.current.position.copy(options.position);
-    if (options.rotation) this.current.local[0].copy(options.rotation).normalize();
-    this.current.derive();
-    this.solver = new Solver(skeleton);
+  constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame<W>>, options: BodyOptions<W> = {}) {
+    const start = new Pose(skeleton);
+    if (options.pose) start.copy(options.pose);
+    start.forward();
     const { world } = options;
-    this.ctx = {
-      body: this.current,
+    this.frame = {
+      dt: STEP,
+      time: 0,
       get world() {
         if (world === undefined) throw new Error('this body was made without a world');
         return world;
       },
-      dt: STEP,
-      time: 0,
-      propose: new Board(),
-      granted: (owner) => this.granted(owner),
-      supports: () => this.supports(),
+      prev2: new Pose(skeleton).copy(start),
+      prev: start,
+      current: new Pose(skeleton).copy(start),
     };
     this.runner = new TimelineRunner(behaviour);
   }
 
-  get state(): Readonly<BodyState> {
-    return this.current;
-  }
-
-  /** the simulation time (s) */
-  get time(): number {
-    return this.ctx.time;
+  /** the last final pose */
+  get pose(): Pose {
+    return this.frame.prev;
   }
 
   /** advances by `dt` (s) in ceil(dt · 60) even sub-steps */
@@ -97,37 +76,18 @@ export class Body<W = unknown> {
   }
 
   private step(dt: number): void {
-    const { ctx, clock } = this;
-    ctx.propose.clear();
-    ctx.dt = dt;
+    const { frame, clock } = this;
+    const { prev2, prev, current } = frame;
+    current.copy(prev);
+    frame.dt = dt;
+    frame.time += dt;
     clock.delta = dt;
-    this.runner.step(ctx, clock);
+    this.runner.step(frame, clock);
     clock.prevDelta = dt;
     clock.frame++;
-    this.merged = merge(ctx.propose, this.current.skeleton);
-    this.history.apply(this.merged, this.current, dt);
-    this.solver.step(this.current, this.merged, dt);
-    ctx.time += dt;
-  }
-
-  private granted(owner: string): Granted {
-    if (!this.merged) return NONE;
-    const { soft } = this.solver;
-    const outcome = this.merged.outcomes.get(owner);
-    const targets = this.merged.targets
-      .filter((t) => t.target.owner === owner)
-      .map(({ target, weight }) => ({ ...target, weight, strain: targetResidual(soft, target) }));
-    return {
-      won: (outcome?.won ?? []).map((c) => ({ ...c, strain: contactResidual(soft, c), residual: contactResidual(this.current, c) })),
-      lost: outcome?.lost ?? [],
-      targets,
-    };
-  }
-
-  private supports(): Support[] {
-    if (!this.merged) return [];
-    return this.merged.contacts
-      .filter((c) => (c.support ?? 0) > 0)
-      .map((contact) => ({ contact, position: this.current.point(contact.point, contact.position.clone()) }));
+    current.forward();
+    frame.prev2 = prev;
+    frame.prev = current;
+    frame.current = prev2;
   }
 }

@@ -1,63 +1,77 @@
-import { Vector3 } from 'three';
-import type { BoneDef } from './types';
+import type { Quaternion, Vector3 } from 'three';
 
-/** The pull's natural frequency (Hz) on a bone that sets none: a ~0.4 s settle, a deliberate move's. */
-export const STIFFNESS = 2;
+/** A bone of a rig: rest local rotation is identity (+Y up, facing +Z, left +X). */
+export interface BoneDef {
+  name: string;
+  /** index of the parent bone, -1 for the root (only bone 0); parents come before children */
+  parent: number;
+  /** rest offset of the bone's origin in its parent's frame (m); the root's is its default position in the world */
+  offset: Vector3;
+  /** segment mass (kg) */
+  mass: number;
+  /** the segment's centre of mass in the bone's frame (m) */
+  com: Vector3;
+}
 
 /**
- * A rig: bones in order, parents before children, bone 0 the only root. Its generalized
- * coordinates are the root's position (3) and every bone's rotation in its parent's frame
- * (3 each, the root's in the world's): `dofs` = 3 + 3 · bones.
+ * A joint's range of motion as swing and twist (rad) in its parent's frame, measured off
+ * `neutral` (the bone's rotation `q · neutral⁻¹`): the twist about `axis`, the swing's two
+ * components about the next two axes in turn (x: y, z; y: z, x; z: x, y).
  */
+export interface Limit {
+  bone: number;
+  axis: 0 | 1 | 2;
+  /** the rotation the range is measured from (default identity), e.g. an arm hanging */
+  neutral?: Quaternion;
+  twist: [number, number];
+  swing: [[number, number], [number, number]];
+}
+
+export interface SkeletonOptions {
+  /** at most one per bone */
+  limits?: readonly Limit[];
+  /**
+   * named chains of bones for `solveChain`, each from its first joint down to its tip, every bone
+   * the child of the one before (an arm: upper arm, forearm, hand)
+   */
+  chains?: Record<string, readonly string[]>;
+}
+
+/** A rig: bones in order, parents before children, bone 0 the only root; its joint limits and named chains. */
 export class Skeleton {
   readonly bones: readonly BoneDef[];
-  readonly dofs: number;
-  /** each bone's ancestors from the root down to the bone itself */
-  readonly chains: readonly (readonly number[])[];
-  /** each bone and its descendants */
-  readonly subtrees: readonly (readonly number[])[];
-  /** the coordinates that move each bone: the root's position and its ancestors' rotations (in that order) */
-  readonly drivers: readonly (readonly number[])[];
-  /** every coordinate, in order */
-  readonly coordinates: readonly number[];
-  /** each bone's subtree mass (kg) */
-  readonly masses: readonly number[];
-  readonly mass: number;
-  /**
-   * the rig's size (m): the diagonal of the box around its bone origins and centres of mass at
-   * rest (1 for a rig of a single point). Position errors are measured in it, so that a
-   * position target's weight pulls about as hard as a rotation's (rad).
-   */
-  readonly length: number;
+  /** each bone's limit, if it has one */
+  readonly limits: readonly (Limit | undefined)[];
   private readonly byName = new Map<string, number>();
+  private readonly chains = new Map<string, readonly number[]>();
 
-  constructor(bones: readonly BoneDef[]) {
+  constructor(bones: readonly BoneDef[], { limits = [], chains = {} }: SkeletonOptions = {}) {
     if (bones.length === 0) throw new Error('a skeleton needs at least one bone');
     bones.forEach((b, i) => {
       if (this.byName.has(b.name)) throw new Error(`bone name "${b.name}" is used twice`);
       this.byName.set(b.name, i);
       if (i === 0 && b.parent !== -1) throw new Error(`bone 0 "${b.name}" must be the root (parent -1)`);
-      if (i > 0 && !(b.parent >= 0 && b.parent < i && Number.isInteger(b.parent))) {
+      if (i > 0 && !(Number.isInteger(b.parent) && b.parent >= 0 && b.parent < i)) {
         throw new Error(`bone ${i} "${b.name}" has parent ${b.parent}; parents must come before children`);
       }
       if (!(b.mass >= 0 && Number.isFinite(b.mass))) throw new Error(`bone "${b.name}" has mass ${b.mass}`);
-      if (b.stiffness !== undefined && !(b.stiffness > 0)) throw new Error(`bone "${b.name}" has stiffness ${b.stiffness}`);
     });
     this.bones = bones;
-    this.dofs = 3 + 3 * bones.length;
-    this.coordinates = Array.from({ length: this.dofs }, (_, d) => d);
-    const chains: number[][] = [];
-    const subtrees: number[][] = bones.map((_, i) => [i]);
-    bones.forEach((b, i) => {
-      chains.push(i === 0 ? [0] : [...chains[b.parent], i]);
-      for (const a of chains[i]) if (a !== i) subtrees[a].push(i);
-    });
-    this.chains = chains;
-    this.drivers = chains.map((c) => [0, 1, 2, ...c.flatMap((j) => [dof(j), dof(j) + 1, dof(j) + 2])]);
-    this.subtrees = subtrees;
-    this.masses = subtrees.map((s) => s.reduce((m, i) => m + bones[i].mass, 0));
-    this.mass = this.masses[0];
-    this.length = extent(bones) || 1;
+    const byBone: (Limit | undefined)[] = bones.map(() => undefined);
+    for (const l of limits) {
+      if (!bones[l.bone]) throw new Error(`a limit for bone ${l.bone}, which does not exist`);
+      if (byBone[l.bone]) throw new Error(`bone "${bones[l.bone].name}" has two limits`);
+      byBone[l.bone] = l;
+    }
+    this.limits = byBone;
+    for (const [name, names] of Object.entries(chains)) {
+      const chain = names.map((n) => this.index(n));
+      if (chain.length < 2) throw new Error(`chain "${name}" needs at least two bones`);
+      chain.forEach((b, k) => {
+        if (k > 0 && bones[b].parent !== chain[k - 1]) throw new Error(`chain "${name}": "${bones[b].name}" is not the child of "${names[k - 1]}"`);
+      });
+      this.chains.set(name, chain);
+    }
   }
 
   /** the index of the bone named `name`; throws when there is none */
@@ -66,23 +80,11 @@ export class Skeleton {
     if (i === undefined) throw new Error(`no bone named "${name}"`);
     return i;
   }
-}
 
-/** the first generalized coordinate of bone `bone`'s rotation */
-export const dof = (bone: number): number => 3 + 3 * bone;
-
-/** the diagonal of the box around `bones`' origins and centres of mass at rest (m) */
-function extent(bones: readonly BoneDef[]): number {
-  const origins: Vector3[] = [];
-  const min = new Vector3(Infinity, Infinity, Infinity);
-  const max = new Vector3(-Infinity, -Infinity, -Infinity);
-  bones.forEach((b, i) => {
-    const origin = i === 0 ? new Vector3() : b.offset.clone().add(origins[b.parent]);
-    origins.push(origin);
-    for (const p of [origin, b.com.clone().add(origin)]) {
-      min.min(p);
-      max.max(p);
-    }
-  });
-  return min.distanceTo(max);
+  /** the bones of the chain named `name`, from its first joint to its tip; throws when there is none */
+  chain(name: string): readonly number[] {
+    const c = this.chains.get(name);
+    if (!c) throw new Error(`no chain named "${name}"`);
+    return c;
+  }
 }

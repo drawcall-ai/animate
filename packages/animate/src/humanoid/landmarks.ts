@@ -1,5 +1,4 @@
 import { Vector3 } from 'three';
-import type { BonePoint } from '../core/types';
 import { INDEX, type ChildBone, type Side } from './bones';
 import type { Proportions } from './proportions';
 
@@ -17,6 +16,12 @@ export type LandmarkName =
   | 'rightBigToe'
   | 'leftSmallToe'
   | 'rightSmallToe';
+
+/** A point fixed in a bone's frame (a heel, the eye midpoint, a palm), the bone by index. */
+export interface BonePoint {
+  bone: number;
+  at: Vector3;
+}
 
 /** A landmark: a point fixed in a bone's frame (VRM normalized). */
 export interface Landmark {

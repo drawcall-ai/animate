@@ -1,57 +1,29 @@
-import { Vector3 } from 'three';
-import { Skeleton, type BoneDef, type BonePoint } from '../../src';
+import { Quaternion, Vector3 } from 'three';
+import { Skeleton, type BoneDef, type Limit } from '../../src';
 
-const bone = (name: string, parent: number, offset: [number, number, number], mass: number, com: [number, number, number]): BoneDef => ({
+const bone = (name: string, parent: number, offset: [number, number, number]): BoneDef => ({
   name,
   parent,
   offset: new Vector3(...offset),
-  mass,
-  com: new Vector3(...com),
+  mass: 1,
+  com: new Vector3(),
 });
 
-/** a free root at (0, 1, 0) with a three-segment arm along +x */
-export const arm = () =>
-  new Skeleton([
-    bone('root', -1, [0, 1, 0], 10, [0, 0, 0]),
-    bone('upper', 0, [0.2, 0, 0], 2, [0.15, 0, 0]),
-    bone('lower', 1, [0.3, 0, 0], 1.5, [0.12, 0, 0]),
-    bone('hand', 2, [0.25, 0, 0], 0.5, [0.05, 0, 0]),
-  ]);
+/** a hinge about x (0 at the rest pose, `lo`…`hi` rad), twist and the other swing held near 0 */
+export const hinge = (bone: number, lo: number, hi: number): Limit => ({ bone, axis: 1, twist: [-0.05, 0.05], swing: [[-0.05, 0.05], [lo, hi]] });
 
-/** the arm's fingertip */
-export const tip = (): BonePoint => ({ bone: 3, at: new Vector3(0.1, 0, 0) });
+/** a free root at (0, 1, 0) with a leg hanging down −y: a ball-jointed thigh, a knee bending back (+x), a foot */
+export const leg = (limits: Limit[] = []) =>
+  new Skeleton([bone('pelvis', -1, [0, 1, 0]), bone('thigh', 0, [0.1, 0, 0]), bone('shin', 1, [0, -0.45, 0]), bone('foot', 2, [0, -0.4, 0])], {
+    limits,
+    chains: { leg: ['thigh', 'shin', 'foot'] },
+  });
 
-/** a pelvis at (0, 1, 0) with a trunk and two slightly bent legs of thigh, shin and foot */
-export const biped = () =>
-  new Skeleton([
-    bone('pelvis', -1, [0, 1, 0], 15, [0, 0, 0]),
-    bone('trunk', 0, [0, 0.1, 0], 30, [0, 0.3, 0]),
-    bone('leftThigh', 0, [0.1, 0, 0], 8, [0, -0.2, 0]),
-    bone('leftShin', 2, [0, -0.45, 0.08], 4, [0, -0.2, 0]),
-    bone('leftFoot', 3, [0, -0.45, -0.08], 1, [0, -0.05, 0.05]),
-    bone('rightThigh', 0, [-0.1, 0, 0], 8, [0, -0.2, 0]),
-    bone('rightShin', 5, [0, -0.45, 0.08], 4, [0, -0.2, 0]),
-    bone('rightFoot', 6, [0, -0.45, -0.08], 1, [0, -0.05, 0.05]),
-  ]);
-
-/** `arm`, `scale` times as large (and as heavy, by volume) */
-export const scaledArm = (scale: number, stiffness?: number[]) =>
+/** a horse's hind leg: four segments from the hip down to the hoof, each joint a hinge */
+export const horseLeg = () =>
   new Skeleton(
-    arm().bones.map((b, i) => ({
-      ...b,
-      offset: b.offset.clone().multiplyScalar(scale),
-      com: b.com.clone().multiplyScalar(scale),
-      mass: b.mass * scale ** 3,
-      stiffness: stiffness?.[i],
-    })),
+    [bone('pelvis', -1, [0, 1.4, 0]), bone('femur', 0, [0.2, 0, 0]), bone('tibia', 1, [0, -0.45, 0]), bone('cannon', 2, [0, -0.45, 0]), bone('pastern', 3, [0, -0.35, 0]), bone('hoof', 4, [0, -0.15, 0])],
+    { limits: [hinge(1, -1.2, 0.6), hinge(2, -0.2, 1.6), hinge(3, -1.6, 0.2), hinge(4, -0.4, 1.4)], chains: { leg: ['femur', 'tibia', 'cannon', 'pastern', 'hoof'] } },
   );
 
-/** a free root with a light, short clavicle ahead of a three-segment arm along +x */
-export const shoulder = () =>
-  new Skeleton([
-    bone('root', -1, [0, 1, 0], 10, [0, 0, 0]),
-    bone('clavicle', 0, [0.05, 0.1, 0], 0.2, [0.05, 0, 0]),
-    bone('upper', 1, [0.12, 0, 0], 2, [0.15, 0, 0]),
-    bone('lower', 2, [0.3, 0, 0], 1.5, [0.12, 0, 0]),
-    bone('hand', 3, [0.25, 0, 0], 0.5, [0.05, 0, 0]),
-  ]);
+export const turn = (x: number, y: number, z: number, angle: number) => new Quaternion().setFromAxisAngle(new Vector3(x, y, z).normalize(), angle);

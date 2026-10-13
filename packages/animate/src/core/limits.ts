@@ -1,5 +1,5 @@
 import { Quaternion } from 'three';
-import type { Limit } from './types';
+import type { Limit } from './skeleton';
 
 /**
  * Where `q`, a bone's rotation in its parent's frame, is in `limit`'s coordinates: its rotation

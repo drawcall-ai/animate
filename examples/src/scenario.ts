@@ -1,6 +1,6 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { ReusableTimeline } from '@pmndrs/timeline';
-import type { Ctx, Humanoid, Ladder, Stance, World } from '@drawcall/animate';
+import type { Frame, Humanoid, Ladder, Stance, World } from '@drawcall/animate';
 
 export const FIXED_DT = 1 / 60;
 
@@ -33,7 +33,7 @@ export interface Scenario {
    * the behaviour of actor `index` of `cast` (made in order: while the behaviours are being made,
    * `cast` holds only the actors before; by the time they run, all)
    */
-  script(actor: Humanoid<World>, index: number, cast: readonly Humanoid<World>[]): ReusableTimeline<Ctx<World>>;
+  script(actor: Humanoid<World>, index: number, cast: readonly Humanoid<World>[]): ReusableTimeline<Frame<World>>;
   /** camera focus; defaults to the first actor's hips */
   focus?(actors: readonly Humanoid<World>[]): Vector3;
   cameraDistance?: number;

@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import type { BoneDef } from '../core/types';
+import type { BoneDef } from '../core/skeleton';
 import { BONES, INDEX, PARENT, type BoneName } from './bones';
 import { palmOf } from './landmarks';
 import type { Proportions } from './proportions';
@@ -33,6 +33,24 @@ for (const s of ['left', 'right'] as const) {
   SEGMENT[`${s}LowerLeg`] = { mass: 0.0465, com: (p) => p.offsets[`${s}Foot`].clone().multiplyScalar(0.433) };
   SEGMENT[`${s}Foot`] = { mass: 0.0145, com: (p) => p.offsets[`${s}Toes`].clone().multiplyScalar(0.5) };
 }
+
+/**
+ * The chains `solveChain` solves, each from its first joint to its tip: the arms from the
+ * shoulder joint to the wrist and the legs from the hip to the ankle (limbs: two segments, bent
+ * toward a pole), the spine from the lumbar joint to the base of the skull, the neck from its
+ * base to the base of the skull.
+ */
+export const CHAINS = {
+  leftArm: ['leftUpperArm', 'leftLowerArm', 'leftHand'],
+  rightArm: ['rightUpperArm', 'rightLowerArm', 'rightHand'],
+  leftLeg: ['leftUpperLeg', 'leftLowerLeg', 'leftFoot'],
+  rightLeg: ['rightUpperLeg', 'rightLowerLeg', 'rightFoot'],
+  spine: ['spine', 'chest', 'neck', 'head'],
+  neck: ['neck', 'head'],
+} satisfies Record<string, readonly BoneName[]>;
+
+/** a chain of the humanoid's skeleton */
+export type Chain = keyof typeof CHAINS;
 
 /**
  * The body's skeleton: a bone per BONES entry (in its order, so `INDEX` finds them), each at its

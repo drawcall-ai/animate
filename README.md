@@ -1,27 +1,30 @@
 # animate
 
 Procedural, humanlike motion for three.js characters. A body is moved by behaviours written as
-[@pmndrs/timeline](https://github.com/pmndrs/timeline) timelines: they propose targets, contacts
-and limits, and the body solves a plausible pose from them — no animation clips, no runtime ML.
+[@pmndrs/timeline](https://github.com/pmndrs/timeline) timelines, layered in order: each writes the
+bones it controls, steering them from the poses before — no animation clips, no runtime ML.
 
 ```sh
 npm install @drawcall/animate three @pmndrs/viverse
 ```
 
 ```ts
-import { parallel } from '@pmndrs/timeline';
+import { action } from '@pmndrs/timeline';
 import { loadCharacterModel } from '@pmndrs/viverse';
-import { createWorld, humanoid, Humanoid, walk, type Ctx, type World } from '@drawcall/animate';
+import { follow, Humanoid, INDEX, solveChain, type Frame } from '@drawcall/animate';
 
 const model = await loadCharacterModel();
 scene.add(model.scene);
-const body = new Humanoid<World>(
-  model,
-  (h) =>
-    function* () {
-      yield* parallel<Ctx<World>>('all', humanoid(h), walk(h, { to: () => goal }));
-    },
-  { world: createWorld() },
+const body = new Humanoid(model, () =>
+  function* () {
+    // the right hand to a goal, as fast as a hand moves
+    yield* action<Frame>({
+      update: (f) => {
+        const hand = follow(f.prev2.position(INDEX.rightHand), f.prev.position(INDEX.rightHand), goal, { accel: 8, speed: 1.5 }, f.dt);
+        solveChain(f, 'rightArm', { tip: { position: hand } });
+      },
+    });
+  },
 );
 
 // each frame

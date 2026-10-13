@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { BodyState } from '../../core/state';
+import type { Pose } from '../core/pose';
 
 /** An axis-aligned box (a THREE.Box3 fits). */
 export interface Box {
@@ -64,7 +64,7 @@ export interface WorldEvent {
  * - `ladders`: ladders up to ground
  * - `bodyObstacles`: volumes the trunk and head give way to (a held box, a low ceiling)
  * - `seats`, `mounts`: what can be sat on and ridden
- * - `bodies`: every actor's body as solved last frame, by actor (bodies read each other only
+ * - `bodies`: every actor's final pose of the last frame, by actor (bodies read each other only
  *   through these, so the order they update in changes nothing)
  * - `events`: what happened between actors, oldest first
  */
@@ -75,7 +75,7 @@ export interface World {
   bodyObstacles: (Sphere | Box)[];
   seats: Seat[];
   mounts: Mount[];
-  bodies: Readonly<BodyState>[];
+  bodies: Pose[];
   events: WorldEvent[];
 }
 

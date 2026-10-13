@@ -1,5 +1,5 @@
 // Frame-exact video of an example, as seen in live playback (orbit view by default).
-// Usage: node scripts/video.mjs --example stroll [--size 1280x720] [--fps 60] [--view three] [--out captures/stroll.mp4]
+// Usage: node scripts/video.mjs --example hand-over [--size 1280x720] [--fps 60] [--view three] [--out captures/hand-over.mp4]
 //        --stills 2,6.5,11  saves PNG frames at those times instead of a video
 //        --markers          keep the input-target indicators (hidden by default)
 //        --cam cinematic    scripted camera: the normal third-person shot → a move into first person
@@ -15,7 +15,7 @@ import { BASE, devServer, pageError } from './examples.mjs';
 const { values: args } = parseArgs({
   args: process.argv.slice(2).filter((a) => a !== '--'),
   options: {
-    example: { type: 'string', default: 'stroll' },
+    example: { type: 'string', default: 'hand-over' },
     size: { type: 'string', default: '1280x720' },
     fps: { type: 'string', default: '60' },
     view: { type: 'string' },
