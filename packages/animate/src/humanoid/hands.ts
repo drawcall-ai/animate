@@ -8,6 +8,7 @@ import { TrackedPoint, TrackedRotation } from '../core/track';
 import { CALM, handStep, handTo } from './arms';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
+import { forwardOf } from './math';
 import { yawOf } from './rig';
 import { walkTo } from './walk';
 
@@ -86,6 +87,27 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
     });
   };
 }
+
+/**
+ * Letting go with the hands `sides`: they open and draw back off what they held and down, by `away`
+ * (m, default body) each way, together (one shared condition); then the free arms take them back
+ * on from there.
+ */
+export function release<W>(h: Humanoid<W>, sides: readonly Side[], away = AWAY * h.proportions.scale): Behaviour<W> {
+  return function* () {
+    const back = forwardOf(h.gait.facing).multiplyScalar(-away);
+    const targets = sides.map((side) => {
+      const hand = h.pose.position(INDEX[`${side}Hand`]).clone().add(back);
+      return { position: hand.setY(hand.y - away) };
+    });
+    const there = (f: Frame<W>) => sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], targets[k]));
+    for (const side of sides) yield* openHand(h, side)();
+    yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, targets[k], { until: there })));
+  };
+}
+
+/** how far the hands draw back and down letting go (m, default body) */
+const AWAY = 0.1;
 
 /**
  * `at`, where the item is to go turned `turned`, drawn toward the shoulders as far as a grip would be

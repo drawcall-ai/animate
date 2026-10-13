@@ -1,5 +1,9 @@
 import type { Vector3 } from 'three';
+import { action, type UntilCondition } from '@pmndrs/timeline';
+import type { Frame } from '../core/body';
+import { live, type Behaviour, type Live } from '../core/goal';
 import type { Side } from './bones';
+import type { Humanoid } from './humanoid';
 import type { Stance } from './stance';
 
 /** Walking somewhere: the point on the floor the body goes to, its velocity, and how fast the body may go (m/s, m/s²). */
@@ -46,4 +50,23 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
   [asks.go, asks.face, asks.lower, asks.bow, asks.lean, asks.onto, asks.stance] = [null, null, 0, 0, null, null, null];
   [asks.taken[0], asks.taken[1]] = [false, false];
   return into;
+}
+
+/**
+ * Asks `balance` for what `asks` gives (the fields it has; the rest as other tasks ask), every
+ * sub-step, endless or until `until`: a task of its own for what no other task asks (stand on one
+ * foot, lean into a push, turn to a facing while the hands work).
+ */
+export function ask<W>(h: Humanoid<W>, asks: Live<Partial<Asks>, W>, until?: UntilCondition<Frame<W>>): Behaviour<W> {
+  return function* () {
+    yield* action<Frame<W>>({
+      update: (f) => {
+        // (the feet taken copied in: `balance` clears the body's own pair)
+        const { taken, ...rest } = live(asks, f);
+        Object.assign(h.asks, rest);
+        if (taken) [h.asks.taken[0], h.asks.taken[1]] = taken;
+      },
+      until,
+    });
+  };
 }

@@ -24,5 +24,5 @@ export class Peak {
   }
 }
 
-/** a hand is on something: it holds an item, or the script asked it somewhere */
-export const tasked = ({ h, asked }: Frame) => !!h.holding.left || !!h.holding.right || asked.has('leftHand') || asked.has('rightHand');
+/** a hand is on something: it holds an item, or the script asked it somewhere (or tracks it) */
+export const tasked = ({ h, asked }: Frame) => !!h.holding.left || !!h.holding.right || ['leftHand', 'rightHand', 'leftWrist', 'rightWrist'].some((name) => asked.has(name));

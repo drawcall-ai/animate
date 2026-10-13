@@ -11,12 +11,15 @@ import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { lowering, TIPTOE } from './balance/posture';
 import { clamp, lerp, smoothstep } from './math';
+import { yawOf } from './rig';
 import type { Proportions } from './proportions';
 
 /** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm behind it (share of a step; CMU mocap) */
 const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
 /** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
 const ABDUCTION = (8 * Math.PI) / 180;
+/** squatting, an arm hangs this much further out (rad), clear of the knees, by the time the pelvis is down a squat's depth (× height) */
+const SQUATTING = { abduction: (3 * Math.PI) / 180, depth: 0.25 };
 /** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it kinks; let go of, it comes down calmly */
 const SWING = { accel: 25, speed: 2.5 };
 /** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
@@ -40,6 +43,8 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
       update: (f) => {
         const g = h.gait;
         const lead = lerp(LEAD.walk, LEAD.run, g.run);
+        const p = h.proportions;
+        const out = ABDUCTION + SQUATTING.abduction * smoothstep(0, SQUATTING.depth * p.height, p.hipHeight - f.prev.position(0).y);
         SIDES.forEach((side, s) => {
           const sign = s === 0 ? 1 : -1;
           // (the left arm in front as the left foot lifts, the right behind)
@@ -47,9 +52,13 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
           const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * smoothstep(0.3, 1, g.walk);
           const a = swing(lead);
           const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
-          // the arm down from the T-pose (out by ABDUCTION), swung forward about the body's left; the forearm forward
+          // the arm hanging down (out from the T-pose, further squatting), swung forward about the chest's
+          // left as the chest is turned about the vertical — however the trunk bows or leans (as the
+          // clavicle was last, whoever placed the chest after); the forearm forward
           set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
-          set(f, goals, INDEX[`${side}UpperArm`], _q.setFromAxisAngle(X, -a).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - ABDUCTION))));
+          const turned = _q.setFromAxisAngle(Y, yawOf(_h.copy(f.prev.rotation(INDEX.chest))));
+          const hang = turned.multiply(_h.setFromAxisAngle(X, -a)).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out)));
+          set(f, goals, INDEX[`${side}UpperArm`], hang.premultiply(_h.copy(f.prev.rotation(INDEX[`${side}Shoulder`])).invert()));
           set(f, goals, INDEX[`${side}LowerArm`], _q.setFromAxisAngle(Y, -sign * flex));
           set(f, goals, INDEX[`${side}Hand`], IDENTITY);
         });
@@ -71,6 +80,8 @@ export interface HandOptions<W> extends Partial<Motion> {
   pole?: Live<Vector3, W>;
   /** the target is on this carrier, in its frame */
   on?: Carrier;
+  /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default true); false: the hand only follows (a tracked controller: the head leads) */
+  lead?: boolean;
   until?: Until<W>;
 }
 
@@ -78,8 +89,9 @@ export interface HandOptions<W> extends Partial<Motion> {
  * Hand `side`'s wrist (and, given its rotation, the hand) to `target`, every sub-step, endless or
  * until `until`: the hand moving on from its history at `Motion`'s pace (default `CALM`), its arm
  * solved to it and braked; the clavicle shrugging for a hand up high and drawn forward for one far
- * out; the elbow swivelled as where the hand is asks. A target below what the arm reaches standing
- * asks `balance` to bow and bend the knees for it, one above to go up on the toes (`h.asks`).
+ * out; the elbow swivelled as where the hand is asks. Leading (by default), a target below what the
+ * arm reaches standing asks `balance` to bow and bend the knees for it, one above to go up on the
+ * toes (`h.asks`).
  */
 export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, options: HandOptions<W> = {}): Behaviour<W> {
   const { until } = options;
@@ -99,7 +111,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
   shrug(f, p, side, at);
   const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
   arm.to(f, target, { ...CALM, ...options, pole });
-  ask(h, f, side, at);
+  if (options.lead ?? true) ask(h, f, side, at);
 }
 
 /**
@@ -182,6 +194,7 @@ const IDENTITY = new Quaternion();
 const _q = new Quaternion();
 const _p = new Quaternion();
 const _r = new Quaternion();
+const _h = new Quaternion();
 const _c = new Quaternion();
 const _g = new Quaternion();
 const _s = new Vector3();

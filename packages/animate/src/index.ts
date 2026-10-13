@@ -14,11 +14,13 @@ export { clampRotation, beyond } from './core/limits';
 // The humanoid layer: a viverse character model as a body.
 export { BONES, INDEX, PARENT, SIDES, type BoneName, type ChildBone, type Side } from './humanoid/bones';
 export { Humanoid, type HumanoidOptions } from './humanoid/humanoid';
-export { createAsks, type Asks, type Go } from './humanoid/asks';
+export { ask, createAsks, type Asks, type Go } from './humanoid/asks';
 export { balance, type Gait } from './humanoid/balance/balance';
 export type { Foot, FootPhase } from './humanoid/balance/foot';
 export { CALM, handTo, hangArms, type HandOptions } from './humanoid/arms';
-export { CARRYING, closeHand, grab, hold, openHand, type Grips } from './humanoid/hands';
+export { CARRYING, closeHand, grab, hold, openHand, release, type Grips } from './humanoid/hands';
+export { HEADSET, headTo, type HeadOptions } from './humanoid/head';
+export { pelvisTo, trunkTo } from './humanoid/trunk';
 export { lookAround } from './humanoid/look';
 export { idle } from './humanoid/idle';
 export { walkTo, type WalkOptions } from './humanoid/walk';

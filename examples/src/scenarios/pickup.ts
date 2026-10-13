@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { createWorld, grab, handTo, hold, idle, Item, lookAt, openHand, reached, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Placement, type Target, type World } from '@drawcall/animate';
+import { createWorld, grab, hold, idle, Item, lookAt, release, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { path } from '../keys';
 import { forwardOf } from '../math';
@@ -15,8 +15,6 @@ const LIFT = 1.8;
 const PLACE = 1.8;
 /** carried: the box this far in front of the hips and this high (m) */
 const CARRIED = { ahead: 0.36, height: 1.05 };
-/** letting go: the hands this far back off the box and down (m) */
-const AWAY = 0.1;
 const UP = new Vector3(0, 1, 0);
 const HANDS = ['leftHand', 'rightHand'];
 
@@ -78,7 +76,7 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
       }),
       lookAt(h.gazer, reported(report, 'gaze', () => gaze.on)),
     );
-    yield* release(h, report)();
+    yield* reporting(report, HANDS, release(h, ['left', 'right']))();
   };
 }
 
@@ -124,24 +122,6 @@ function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size:
       },
       until: timePassed(PLACE + 0.3, 'seconds'),
     });
-  };
-}
-
-/** letting go: the hands open, back off the box and down a little; then the free arms have them */
-function release(h: Humanoid<World>, report: Report): Behaviour<World> {
-  return function* () {
-    const away = (side: 'left' | 'right') => {
-      const hand = h.pose.position(h.rig.skeleton.index(`${side}Hand`)).clone();
-      return { position: hand.addScaledVector(forwardOf(h.gait.facing), -AWAY).setY(hand.y - AWAY) };
-    };
-    const left = away('left');
-    const right = away('right');
-    const hand = (side: 'left' | 'right') => h.rig.skeleton.index(`${side}Hand`);
-    // (both hands on their way until both are there)
-    const there = (f: Frame<World>) => reached(f.prev2, f.prev, f.dt, hand('left'), left, undefined) && reached(f.prev2, f.prev, f.dt, hand('right'), right, undefined);
-    yield* openHand(h, 'left')();
-    yield* openHand(h, 'right')();
-    yield* parallel<Frame<World>>('all', handTo(h, 'left', reported(report, 'leftHand', left), { until: there }), handTo(h, 'right', reported(report, 'rightHand', right), { until: there }));
   };
 }
 

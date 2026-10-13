@@ -24,8 +24,10 @@ export interface Limits {
   com: number;
   /** frames with the ankles crossed (left right of right) */
   crossings: number;
-  /** wrist error on held grips within reach (m): judged where something is held */
+  /** wrist error on held grips and tracked targets within reach (m): judged where something is held or tracked */
   wrist?: number;
+  /** the eyes' error off a tracked head (m): judged where a head is tracked */
+  head?: number;
   /**
    * setting off and stopping: the trunk's and pelvis's peak pitch rate over steady walking's
    * (a snap into or out of the walk shows as a spike; null: those windows hold more than a start and a stop)
@@ -88,6 +90,11 @@ export interface Limits {
  * kick-ball's arms going out for balance (2531°/s, 124k°/s²) and its foot set down after the
  * kick (1763°/s, 110k°/s²); the free arm tucking in and out in throw (5923°/s, 357k°/s²) and
  * sword (1975°/s, 199k°/s²); the throwing elbow slamming straight (5923°/s).
+ * look-around and reach are held to what the rebuilt runs measure: no joint past its range,
+ * reach's centre of mass never 10 cm out (11 frames before), its wrist 0.647 → 0.55 (measured
+ * ≤ 0.53 over its variations: the far and behind targets while the body turns and walks after
+ * them); look-around's head error is the eyes over a bow setting in (measured 0.039, ≤ 0.062 over
+ * its variations). vr keeps its old limits until its side-step passes (a strafe in `balance`).
  * pickup-shelf is held to what the rebuilt run measures: no joint past its range, no bone of its
  * own, the wrists within 2 cm of what they hold (measured ≤ 1.0 cm over its variations: the hands
  * carry the box, fitted to them, so only a sub-step's lag shows).
@@ -121,9 +128,9 @@ export const LIMITS: Record<string, Limits> = {
   climb: { rom: { leftShoulder: 6, leftUpperArm: 43, leftHand: 63, leftUpperLeg: 84, rightShoulder: 10, rightUpperArm: 42, rightLowerArm: 2, rightHand: 38, rightUpperLeg: 122 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 1, vaults: 0 },
   ladder: { rom: { leftLowerArm: 7, leftHand: 32, leftUpperLeg: 5, rightShoulder: 9, rightUpperArm: 8, rightHand: 60, rightUpperLeg: 14 }, joints: { knee: { accel: 113 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   push: { rom: { leftShoulder: 4, leftHand: 55, leftFoot: 17, rightShoulder: 4, rightHand: 55, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  reach: { rom: { leftUpperLeg: 3, leftFoot: 27, rightShoulder: 10, rightUpperArm: 28, rightUpperLeg: 38, rightFoot: 25 }, xcomFrames: 11, com: 0, crossings: 0, wrist: 0.647, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  'look-around': { rom: { leftFoot: 2, rightFoot: 4 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  reach: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.55, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'look-around': { xcomFrames: 0, com: 0, crossings: 0, head: 0.055, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, head: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   fight: { rom: { leftFoot: 2, rightUpperArm: 13, rightUpperLeg: 28, rightFoot: 14 }, joints: { elbow: { speed: 3500, accel: 210 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.44, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'aim-strafe': { rom: { leftHand: 18, leftFoot: 23, rightHand: 97, rightFoot: 21 }, ankle: [20, 135], xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   throw: { rom: { leftFoot: 36, rightShoulder: 9, rightUpperArm: 121, rightLowerArm: 16 }, ankle: [10, 125], bones: { leftUpperArm: { speed: 260, accel: 23 }, leftLowerArm: { speed: 600, accel: 13 }, rightLowerArm: { speed: 1300, accel: 53 } }, joints: { ankle: { accel: 90 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.139, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
@@ -181,6 +188,8 @@ const JOINT_SPEED: Record<JointClass, number> = {
  * against its own speed; nothing human gets there in under ~30 ms: α ≤ JOINT_SPEED / 0.03 s.
  */
 const TELEPORT_TIME = 0.03;
+/** the least share of the frames a wrist target is tracked that it is judged on (within reach) */
+const TRACKED = 0.8;
 /** for the target errors, which move a little with any change */
 const HEADROOM = 0.02;
 /**
@@ -258,6 +267,11 @@ export function judge(m: Measured, limit: Limits) {
   expect(m.balance.com, 'standing CoM outside the feet (m)').toBeLessThanOrEqual(limit.com + 1e-3);
   if (limit.wrist !== undefined) expect(m.targets.wrist, 'wrist error').toBeLessThanOrEqual(limit.wrist + HEADROOM);
   else expect(m.targets.wrist, 'wrist error (nothing held)').toBe(0);
+  if (limit.head !== undefined) expect(m.targets.head, 'head (eyes) error').toBeLessThanOrEqual(limit.head + HEADROOM);
+  else expect(m.targets.tracked.head, 'head tracked, unjudged').toBe(0);
+  // (what is tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
+  if (limit.head !== undefined) expect(m.targets.tracked.head, 'head: frames judged').toBeGreaterThan(0);
+  expect(m.targets.tracked.judged, 'tracked wrists: frames judged').toBeGreaterThanOrEqual(TRACKED * m.targets.tracked.asked);
   expect(m.targets.gaze, 'gaze: head off the target asked (°)').toBeLessThan(GAZE);
   // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
   if (m.targets.asked > 0) expect(m.targets.judged, 'gaze: frames judged').toBeGreaterThan(0);

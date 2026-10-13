@@ -7,6 +7,31 @@ export function minimumJerk(t: number): number {
   return s * s * s * (10 - 15 * s + 6 * s * s);
 }
 
+/** A key: a value at a time (s). */
+export type Key<T> = [time: number, value: T];
+
+/** a value through keys: from each to the next at rest at both (minimum jerk), held before the first and after the last */
+export function scalar(keys: readonly Key<number>[]): (t: number) => number {
+  if (keys.length === 0) throw new Error('no keys');
+  for (let i = 1; i < keys.length; i++) if (!(keys[i][0] > keys[i - 1][0])) throw new Error(`key times must increase: ${keys[i - 1][0]} → ${keys[i][0]}`);
+  return (t) => {
+    if (t <= keys[0][0]) return keys[0][1];
+    for (let i = 1; i < keys.length; i++) {
+      const [t1, b] = keys[i];
+      if (t > t1) continue;
+      const [t0, a] = keys[i - 1];
+      return a + (b - a) * minimumJerk((t - t0) / (t1 - t0));
+    }
+    return keys[keys.length - 1][1];
+  };
+}
+
+/** `scalar` for a point (into `out`) */
+export function keyed(keys: readonly Key<[number, number, number]>[]): (t: number, out?: Vector3) => Vector3 {
+  const [x, y, z] = ([0, 1, 2] as const).map((k) => scalar(keys.map(([t, p]): Key<number> => [t, p[k]])));
+  return (t, out = new Vector3()) => out.set(x(t), y(t), z(t));
+}
+
 /**
  * A point going from `from` through `via` to `to` in `duration` s from when it is first read: one
  * smooth curve (a quadratic Bézier through `via` halfway), at rest at its ends (minimum jerk); it
