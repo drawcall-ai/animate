@@ -1,0 +1,157 @@
+import { AnimationClip, AnimationMixer, Quaternion, QuaternionKeyframeTrack, Vector3, VectorKeyframeTrack, type Object3D } from 'three';
+import { describe, expect, it } from 'vitest';
+import { fixModelAnimationClip, loadCharacterModel, type CharacterModel } from '@pmndrs/viverse';
+import type { Skeleton } from '@prohuman/body';
+import { createOpenPoseModel } from '@prohuman/openpose';
+import { BONES, CHILD_BONES, INDEX, PARENT, type BoneName } from '../src/bones';
+import { landmarksOf } from '../src/landmarks';
+import { Rig, restPose, yawOf, type Pose } from '../src/rig';
+import { massFor } from '../src/skeleton';
+import { oldLandmarks, oldProportions, rng, turnUpTo, vrmOf } from './fixtures';
+
+/** the bone's node, or the node the rig added at its origin (a VRM's) */
+const node = (m: CharacterModel, b: BoneName) => m.scene.getObjectByName(b);
+
+/**
+ * the models a rig is built from, each kind made fresh on demand, and the node a bone's rotation
+ * is written to (a VRM's normalized bone, which the rig's node named after it is attached to)
+ */
+const MODELS: { kind: string; make: () => Promise<CharacterModel>; driven: (m: CharacterModel, b: BoneName) => Object3D | null | undefined }[] = [
+  { kind: 'OpenPose', make: async () => createOpenPoseModel(), driven: node },
+  { kind: "viverse's mannequin (glTF)", make: () => loadCharacterModel(), driven: node },
+  { kind: 'VRM 0', make: async () => vrmOf('0'), driven: (m, b) => node(m, b)?.parent },
+  { kind: 'VRM 1', make: async () => vrmOf('1'), driven: (m, b) => node(m, b)?.parent },
+];
+
+const MM = 1e-3;
+
+/** forward kinematics: each bone's world origin and rotation in `pose` */
+function forward(skeleton: Skeleton, pose: Pose) {
+  const positions: Vector3[] = [];
+  const quaternions: Quaternion[] = [];
+  skeleton.bones.forEach((b, i) => {
+    if (b.parent < 0) {
+      positions.push(pose.position.clone());
+      quaternions.push(pose.local[i].clone());
+      return;
+    }
+    positions.push(b.offset.clone().applyQuaternion(quaternions[b.parent]).add(positions[b.parent]));
+    quaternions.push(quaternions[b.parent].clone().multiply(pose.local[i]));
+  });
+  return { positions, quaternions };
+}
+
+/** the pose as a one-key VRM-normalized clip, relative to the hips' facing (as a character controller plays it, the scene placed there) */
+function clipOf(rig: Rig, pose: Pose): AnimationClip {
+  const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yawOf(pose.local[0]));
+  const hips = facing.invert().multiply(pose.local[0]);
+  const tracks = BONES.map((b, i) => new QuaternionKeyframeTrack(`${b}.quaternion`, [0], (i === 0 ? hips : pose.local[i]).toArray()));
+  return new AnimationClip('pose', 1, [...tracks, new VectorKeyframeTrack('hips.position', [0], rig.proportions.hips.toArray())]);
+}
+
+/** how far apart two rotations are, componentwise (precise near zero, unlike angleTo; clips hold float32) */
+const gap = (a: Quaternion, b: Quaternion) => {
+  const d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0 ? -1 : 1;
+  return Math.hypot(a.x - d * b.x, a.y - d * b.y, a.z - d * b.z, a.w - d * b.w);
+};
+
+const world = (o: Object3D) => ({ position: o.getWorldPosition(new Vector3()), quaternion: o.getWorldQuaternion(new Quaternion()) });
+
+for (const { kind, make, driven } of MODELS) {
+  describe(`a rig of ${kind}`, { timeout: 20000 }, () => {
+    it('is a skeleton of the old core’s measures, with Dempster’s masses', async () => {
+      const rig = new Rig(await make());
+      const old = oldProportions(await make());
+      const { bones } = rig.skeleton;
+      expect(bones.map((b) => b.name)).toEqual([...BONES]);
+      expect(bones.map((b) => b.parent)).toEqual(BONES.map((b) => (b === 'hips' ? -1 : INDEX[PARENT[b]])));
+      bones.forEach((b, i) => expect(b.parent, b.name).toBeLessThan(i));
+      expect(bones[0].offset.distanceTo(old.hips)).toBeLessThan(MM);
+      for (const b of CHILD_BONES) expect(bones[INDEX[b]].offset.distanceTo(old.offsets[b]), b).toBeLessThan(MM);
+      expect(rig.proportions.height).toBeCloseTo(old.height, 9);
+      const total = bones.reduce((m, b) => m + b.mass, 0);
+      expect(total).toBeCloseTo(massFor(rig.proportions.height), 9);
+      expect(total).toBeGreaterThan(45);
+      expect(total).toBeLessThan(90);
+      // standing in the T-pose, the centre of mass is ~0.55–0.57 of the height up (Dempster), over the feet
+      const fk = forward(rig.skeleton, restPose(rig.skeleton));
+      const com = bones.reduce((c, b, i) => c.addScaledVector(b.com.clone().applyQuaternion(fk.quaternions[i]).add(fk.positions[i]), b.mass), new Vector3()).divideScalar(total);
+      expect(com.y / rig.proportions.height).toBeGreaterThan(0.53);
+      expect(com.y / rig.proportions.height).toBeLessThan(0.59);
+      expect(Math.hypot(com.x, com.z)).toBeLessThan(0.03);
+    });
+
+    it('writes the rest pose as the model’s rest pose', async () => {
+      const model = await make();
+      const rig = new Rig(model);
+      const old = oldProportions(await make());
+      rig.write(restPose(rig.skeleton), 0);
+      model.scene.updateMatrixWorld(true);
+      const joints = new Map<BoneName, Vector3>([['hips', old.hips.clone()]]);
+      for (const b of CHILD_BONES) joints.set(b, old.offsets[b].clone().add(joints.get(PARENT[b]) ?? new Vector3(NaN)));
+      for (const b of BONES) {
+        const n = node(model, b);
+        if (!n) {
+          expect(b, `${kind} lacks ${b}`).toMatch(/Toes$/);
+          continue;
+        }
+        expect(n.getWorldPosition(new Vector3()).distanceTo(joints.get(b) ?? new Vector3(NaN)), b).toBeLessThan(MM);
+      }
+    });
+
+    it('poses the model as viverse retargets a VRM-normalized clip, and as the skeleton has it', async () => {
+      const model = await make();
+      const rig = new Rig(model);
+      const rand = rng(kind.length);
+      for (let k = 0; k < 3; k++) {
+        const pose: Pose = {
+          position: new Vector3(rand() * 4 - 2, rand() + 0.5, rand() * 4 - 2),
+          local: BONES.map((_, i) => turnUpTo(rand, i === 0 ? Math.PI : 1.2)),
+        };
+        rig.write(pose, 0);
+        model.scene.updateMatrixWorld(true);
+        const ours = BONES.map((b) => node(model, b)).map((n) => n && world(n));
+        // the joints where the skeleton has them: the bones and the landmarks on them
+        const fk = forward(rig.skeleton, pose);
+        ours.forEach((o, i) => o && expect(o.position.distanceTo(fk.positions[i]), BONES[i]).toBeLessThan(1e-5));
+        for (const [name, point] of Object.entries(rig.points)) {
+          const mark = model.scene.getObjectByName(name);
+          if (!mark) continue;
+          const want = point.at.clone().applyQuaternion(fk.quaternions[point.bone]).add(fk.positions[point.bone]);
+          expect(mark.getWorldPosition(new Vector3()).distanceTo(want), name).toBeLessThan(1e-5);
+        }
+
+        for (const b of BONES) driven(model, b)?.quaternion.set(0.5, 0.5, 0.5, 0.5);
+        const clip = clipOf(rig, pose);
+        fixModelAnimationClip(model, clip, undefined, false);
+        const mixer = new AnimationMixer(model.scene);
+        mixer.clipAction(clip).play();
+        mixer.update(0);
+        model.scene.updateMatrixWorld(true);
+        BONES.forEach((b, i) => {
+          const n = node(model, b);
+          const o = ours[i];
+          if (!n || !o) return;
+          const theirs = world(n);
+          expect(theirs.position.distanceTo(o.position), b).toBeLessThan(1e-5);
+          expect(gap(theirs.quaternion, o.quaternion), b).toBeLessThan(1e-5);
+        });
+        mixer.stopAllAction();
+      }
+    });
+
+    it('adds the landmark nodes where the old core does', async () => {
+      const model = await make();
+      const rig = new Rig(model);
+      const names = Object.keys(landmarksOf(rig.proportions));
+      const old = oldLandmarks(await make(), names);
+      for (const name of names) {
+        const mark = model.scene.getObjectByName(name);
+        const want = old.get(name);
+        expect(mark?.parent?.name, name).toBe(want?.parent);
+        expect(mark?.position.distanceTo(want?.position ?? new Vector3(NaN)), name).toBeLessThan(MM);
+      }
+      expect(() => new Rig(model)).toThrow(/already has a node named/);
+    });
+  });
+}

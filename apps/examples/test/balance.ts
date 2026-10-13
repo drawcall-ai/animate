@@ -1,9 +1,8 @@
 import { Vector3 } from 'three';
-import type { Humanoid } from '@prohuman/core';
 import { jointOf } from '../src/joints';
 import { FIXED_DT } from '../src/scenario';
 import { forwardOf, leftOf } from '../src/math';
-import { Peak, type Frame } from './frame';
+import { Peak, type Frame, type Actor } from './frame';
 import { holding } from './climb';
 import { jumpSpans } from './flight';
 
@@ -41,14 +40,14 @@ const SEAT_CONTACT = 0.03;
  */
 export class Balance {
   /** per actor and frame: how far the XCoM lies outside the base, and outside it sideways, and whether only sideways counts */
-  private readonly samples = new Map<Humanoid, { t: number; out: number; side: number; running: boolean; planted: boolean[]; held: boolean }[]>();
+  private readonly samples = new Map<Actor, { t: number; out: number; side: number; running: boolean; planted: boolean[]; held: boolean }[]>();
   private judged: { xcom: Peak; outAt: number[] } | null = null;
   private readonly standing = new Peak();
-  private readonly prevCom = new Map<Humanoid, Vector3>();
+  private readonly prevCom = new Map<Actor, Vector3>();
   /** the seat each actor was last given (the chair stays when the seat target goes) */
-  private readonly seats = new Map<Humanoid, Vector3>();
+  private readonly seats = new Map<Actor, Vector3>();
   /** when each actor last had no foot on the floor (s) */
-  private readonly airborne = new Map<Humanoid, number>();
+  private readonly airborne = new Map<Actor, number>();
 
   get com() {
     return this.standing.value;
@@ -101,14 +100,14 @@ export class Balance {
   }
 
   /** the seat carries the body: the hip joints rest on it (within SEAT_CONTACT) */
-  private onSeat(h: Humanoid): boolean {
+  private onSeat(h: Actor): boolean {
     const seat = this.seats.get(h);
     if (!seat || h.seated <= 0) return false;
     const hips = (jointOf(h, 'leftUpperLeg').y + jointOf(h, 'rightUpperLeg').y) / 2;
     return hips < seat.y + SEAT_HIP * h.proportions.scale + SEAT_CONTACT;
   }
 
-  private dynamic(t: number, h: Humanoid, com: Vector3, velocity: Vector3) {
+  private dynamic(t: number, h: Actor, com: Vector3, velocity: Vector3) {
     const p = h.proportions;
     const x = com.clone().addScaledVector(velocity, 1 / Math.sqrt(9.81 / p.legLength));
     const pts = this.soles(h, true);
@@ -123,7 +122,7 @@ export class Balance {
     this.sample(h, { t, out: outsideHull(pts, [x.x, x.z]), side: sideways(pts, x, h.yaw), running, planted: h.feet.map((f) => f.phase === 'planted'), held: false });
   }
 
-  private sample(h: Humanoid, s: { t: number; out: number; side: number; running: boolean; planted: boolean[]; held: boolean }) {
+  private sample(h: Actor, s: { t: number; out: number; side: number; running: boolean; planted: boolean[]; held: boolean }) {
     const samples = this.samples.get(h) ?? [];
     this.samples.set(h, samples);
     samples.push(s);
@@ -143,7 +142,7 @@ export class Balance {
   }
 
   /** the sole points (x, z) of both feet, or of the planted ones */
-  private soles(h: Humanoid, plantedOnly = false): [number, number][] {
+  private soles(h: Actor, plantedOnly = false): [number, number][] {
     return (['left', 'right'] as const)
       .filter((_, s) => !plantedOnly || h.feet[s].phase === 'planted')
       .flatMap((n) => [`${n}Heel`, `${n}BigToe`, `${n}SmallToe`].map((j) => jointOf(h, j)))
@@ -190,7 +189,7 @@ const SEGMENTS: [mass: number, at: (j: Joints, skull: Vector3) => Vector3][] = [
  * the result does not depend on where in the world the body stands.
  */
 /** the body's centre of mass (Dempster's segments from the posed joints) */
-export function comOf(h: Humanoid): Vector3 {
+export function comOf(h: Actor): Vector3 {
   const j: Joints = (name) => jointOf(h, name);
   const hips = j('hips');
   // (the OpenPose skeleton's bone frames are the normalized ones the proportions are given in)
@@ -238,7 +237,7 @@ export function outsideHull(pts: [number, number][], q: [number, number]): numbe
 }
 
 /** where a force the hands exert holds the centre of mass off the feet (m): f·h / g, h the wrists' height over the feet, as far as the hands hold on */
-function leanOf(h: Humanoid, input: Frame['input']): Vector3 {
+function leanOf(h: Actor, input: Frame['input']): Vector3 {
   const f = input.handForce;
   const hands = [input.leftHand, input.rightHand].filter((e) => e && (e.weight ?? 1) > 0);
   if (!f || !hands.length) return new Vector3();

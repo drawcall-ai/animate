@@ -1,7 +1,7 @@
 import { AnimationMixer, type Scene } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterModel } from '@pmndrs/viverse';
-import type { Humanoid } from '@prohuman/core';
+import type { Actor } from '../scenario';
 import { OpenPoseSkeleton } from '@prohuman/openpose';
 
 /** the BODY_25 keypoints of the head: nose, eyes, ears */
@@ -28,7 +28,7 @@ export class Bodies {
   constructor(private readonly scene: Scene) {}
 
   /** replaces the bodies with the actors' */
-  cast(actors: Humanoid[]) {
+  cast(actors: readonly Actor[]) {
     for (const m of this.models) {
       this.scene.remove(m.scene);
       // (a mannequin's mesh is shared with the loaded character: only the skeletons are its own)

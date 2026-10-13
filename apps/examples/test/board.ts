@@ -1,9 +1,8 @@
 import { Vector3 } from 'three';
-import type { Humanoid } from '@prohuman/core';
 import { jointOf } from '../src/joints';
 import { FIXED_DT } from '../src/scenario';
 import { comOf, outsideHull } from './balance';
-import { Peak, type Frame } from './frame';
+import { Peak, type Frame, type Actor } from './frame';
 import { intoVehicles, LIMBS } from './ride';
 
 const DEG = 180 / Math.PI;
@@ -92,7 +91,7 @@ export class Boarding {
   }
 
   /** each segment's angular speed (°/s) and acceleration (°/s²) from its last three directions */
-  private turning(h: Humanoid, t: number) {
+  private turning(h: Actor, t: number) {
     for (const [a, b] of SEGMENTS) {
       const key = `${a}–${b}`;
       const ds = this.dirs.get(key) ?? [];
@@ -112,7 +111,7 @@ export class Boarding {
   }
 
   /** standing on its feet: the XCoM over the soles on the floor and on footholds; soles on the floor stay put */
-  private balance(h: Humanoid, input: Frame['input'], w: number, t: number) {
+  private balance(h: Actor, input: Frame['input'], w: number, t: number) {
     const com = comOf(h);
     const prev = this.com;
     this.com = com;

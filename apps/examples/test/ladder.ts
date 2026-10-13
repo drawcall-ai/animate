@@ -1,8 +1,8 @@
 import { Vector3 } from 'three';
-import type { Box, Humanoid, Ladder } from '@prohuman/core';
+import type { Box, Ladder } from '@prohuman/core';
 import { jointOf } from '../src/joints';
 import { depthIn, PARTS, type Part } from './climb';
-import type { Frame } from './frame';
+import type { Frame, Actor } from './frame';
 
 /** the rung and stile sizes drawn (m): a rung's radius, a stile's half depth and half width; how far the stiles reach above the top */
 const RUNG = 0.015;
@@ -44,7 +44,7 @@ export function ladderDistance(l: Ladder, p: Vector3): number {
 }
 
 /** a hand holds a ladder's rung or stile */
-export const onLadder = (h: Humanoid, ladders: readonly Ladder[] | undefined) =>
+export const onLadder = (h: Actor, ladders: readonly Ladder[] | undefined) =>
   !!ladders?.some((l) => (['left', 'right'] as const).some((s) => ladderDistance(l, jointOf(h, `${s}Hand`)) < ON));
 
 /** one ladder climb's measures (m, s, m/s) */

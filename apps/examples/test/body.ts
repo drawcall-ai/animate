@@ -1,10 +1,10 @@
 import { Vector3 } from 'three';
-import type { FootPhase, Humanoid } from '@prohuman/core';
+import type { FootPhase } from '@prohuman/core';
 import { jointOf } from '../src/joints';
 import { forwardOf, leftOf } from '../src/math';
 import { comOf } from './balance';
 import { holding } from './climb';
-import { Peak, type Frame } from './frame';
+import { Peak, type Frame, type Actor } from './frame';
 
 const SOLE = ['leftHeel', 'leftBigToe', 'leftSmallToe', 'rightHeel', 'rightBigToe', 'rightSmallToe'] as const;
 
@@ -22,7 +22,7 @@ export class Feet {
    * standing; smaller pointed (plantarflexed), larger flexed up (dorsiflexed)
    */
   readonly ankle = { min: new Peak(), max: new Peak() };
-  private readonly prev = new Map<Humanoid, { phase: FootPhase; position: Vector3 }[]>();
+  private readonly prev = new Map<Actor, { phase: FootPhase; position: Vector3 }[]>();
 
   see({ t, h, input }: Frame) {
     // (riding, the feet are on their targets, on the mount: the riding measures judge them)
@@ -74,7 +74,7 @@ const LATE = 0.6;
  */
 export class Landings {
   readonly late = new Peak();
-  private readonly swings = new Map<Humanoid, ({ t: number; p: Vector3; held: boolean }[] | null)[]>();
+  private readonly swings = new Map<Actor, ({ t: number; p: Vector3; held: boolean }[] | null)[]>();
 
   see({ t, h, input }: Frame) {
     const swings = this.swings.get(h) ?? [null, null];

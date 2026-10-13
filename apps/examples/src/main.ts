@@ -6,8 +6,8 @@ import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
 import { jointOf } from './joints';
-import { FIXED_DT, type Scenario } from './scenario';
-import { SCENARIOS } from './scenarios';
+import { FIXED_DT, type Shot } from './scenario';
+import { ENTRIES, type Entry } from './entries';
 import { drawMarkers } from './stage/markers';
 import { drawProps } from './stage/props';
 import { FOV, Stage } from './stage';
@@ -28,7 +28,7 @@ const markers = new Group();
 stage.scene.add(props, markers);
 const bodies = new Bodies(stage.scene);
 /** the scenario's body, or the one body=openpose|mannequin asks for */
-function bodyOf(s: Scenario): NonNullable<Scenario['body']> {
+function bodyOf(s: Shot): NonNullable<Shot['body']> {
   const asked = params.get('body');
   if (asked === 'openpose') return 'openpose';
   if (asked === 'mannequin') return {};
@@ -37,7 +37,7 @@ function bodyOf(s: Scenario): NonNullable<Scenario['body']> {
 // the viverse characters the scenarios wear, loaded up front (by url; no url = viverse's mannequin;
 // Draco decoding for compressed files such as Drawcall Market characters)
 const characters = new Map<string | undefined, CharacterModel>();
-for (const s of SCENARIOS) {
+for (const { shot: s } of ENTRIES) {
   const body = bodyOf(s);
   if (body !== 'openpose' && !characters.has(body.url)) characters.set(body.url, await loadCharacterModel(...flattenCharacterModelOptions({ url: body.url, useDraco: true })));
 }
@@ -63,21 +63,23 @@ const panel = new Panel(settings, {
 window.addEventListener('resize', () => stage.resize());
 stage.resize();
 
-let playback = start(SCENARIOS.find((s) => s.id === params.get('example')) ?? SCENARIOS[0]);
+let entry = ENTRIES.find((e) => e.shot.id === params.get('example')) ?? ENTRIES[0];
+let playback = start(entry);
 show();
 
-function load(s: Scenario) {
-  playback = start(s);
+function load(e: Entry) {
+  entry = e;
+  playback = start(e);
   show();
 }
 
 /** the scenario's actors are OpenPose skeletons, or copies of its viverse character */
-function start(s: Scenario) {
-  const body = bodyOf(s);
-  if (body === 'openpose') return new Playback(s);
+function start(e: Entry) {
+  const body = bodyOf(e.shot);
+  if (body === 'openpose') return new Playback(e.start());
   const character = characters.get(body.url);
   if (!character) throw new Error(`character ${body.url ?? 'mannequin'} was not loaded`);
-  return new Playback(s, () => instance(character));
+  return new Playback(e.start(() => instance(character)));
 }
 
 /** sets the stage for the playback just started */
@@ -86,7 +88,7 @@ function show() {
   bodies.cast(actors);
   stage.setEnvironment(s);
   bodies.castShadows(!!stage.env);
-  framing.set(s.focus?.(actors) ?? jointOf(actors[0], 'hips'), (playback.sim.run.facing?.() ?? s.facing ?? actors[0].yaw) + turn);
+  framing.set(s.focus?.(actors) ?? jointOf(actors[0], 'hips'), (playback.sim.facing() ?? s.facing ?? actors[0].yaw) + turn);
   panel.select(s);
   if (settings.view === 'orbit') startOrbit();
   if (!capture) {
@@ -98,7 +100,7 @@ function show() {
 }
 
 function seek(t: number) {
-  if (t < playback.sim.t - 1e-9) load(playback.sim.scenario);
+  if (t < playback.sim.t - 1e-9) load(entry);
   playback.advanceTo(t);
   sync();
 }
@@ -122,7 +124,7 @@ function sync(alpha = 1, dt = 1 / 60) {
   drawMarkers(markers, settings.markers ? sim.lastInputs : []);
   stage.env?.update(sim.t);
   const focus = s.focus?.(sim.actors) ?? between.root;
-  const yaw = (sim.run.facing?.() ?? s.facing ?? sim.actors[0].yaw) + turn;
+  const yaw = (sim.facing() ?? s.facing ?? sim.actors[0].yaw) + turn;
   const still = capture && !video;
   if (still) framing.set(focus, yaw);
   else framing.follow(focus, yaw, dt);
@@ -210,7 +212,7 @@ function playLive() {
       while (acc >= FIXED_DT) {
         acc -= FIXED_DT;
         playback.step();
-        if (playback.sim.t > playback.sim.scenario.duration) load(playback.sim.scenario);
+        if (playback.sim.t > playback.sim.scenario.duration) load(entry);
       }
       sync(acc / FIXED_DT, dt);
     }

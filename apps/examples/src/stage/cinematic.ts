@@ -1,5 +1,5 @@
 import { MathUtils, Quaternion, Vector3, type PerspectiveCamera } from 'three';
-import type { Humanoid } from '@prohuman/core';
+import type { Actor } from '../scenario';
 import { Spring, wrapAngle } from '../math';
 import { eyesOf, jointOf } from '../joints';
 
@@ -40,7 +40,7 @@ export class CinematicCamera {
   /** true while the camera is inside/near fighter 0's head: hide that head (as FPS games do) */
   hideOwnHead = false;
 
-  apply(camera: PerspectiveCamera, t: number, dt: number, [a, b]: Humanoid[], third: CameraPose) {
+  apply(camera: PerspectiveCamera, t: number, dt: number, [a, b]: readonly Actor[], third: CameraPose) {
     // the skull's middle, between its base and its top
     const center = jointOf(a, 'head').lerp(jointOf(a, 'headTop'), 0.5);
     const h0 = this.head.step(center, 8, dt);

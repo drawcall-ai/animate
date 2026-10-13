@@ -1,6 +1,5 @@
 import { Bone, Quaternion, Vector3, type Object3D } from 'three';
-import type { CharacterModel } from '@pmndrs/viverse';
-import { Simulation, type Prop, type Scenario } from './scenario';
+import type { Prop, Shown } from './scenario';
 
 /** the height the camera looks at over the body's travel path (m) */
 const FOCUS_HEIGHT = 0.95;
@@ -13,7 +12,6 @@ const FOCUS_HEIGHT = 0.95;
  * state the last one left, so the simulation is the same however it is shown.
  */
 export class Playback {
-  readonly sim: Simulation;
   /** what the humanoids pose: each model's scene and bones (not viverse's hidden rest copy; glTF-style models, not VRMs) */
   private readonly nodes: Object3D[] = [];
   /** the nodes' positions and quaternions (7 numbers each) after the previous and the current step */
@@ -24,8 +22,7 @@ export class Playback {
   private currentProps: Prop[] = [];
   private readonly prevRoot = new Vector3();
 
-  constructor(scenario: Scenario, model?: () => CharacterModel) {
-    this.sim = new Simulation(scenario, model);
+  constructor(readonly sim: Shown) {
     for (const { model } of this.sim.actors) {
       this.nodes.push(model.scene);
       model.scene.traverse((o) => {

@@ -43,8 +43,8 @@ try {
   await page.goto(`${BASE}?capture=1&t=0`);
   await ready();
   const durations = await page.evaluate(async () => {
-    const m = await import('/src/scenarios/index.ts');
-    return Object.fromEntries(m.SCENARIOS.map((s) => [s.id, s.duration]));
+    const m = await import('/src/entries.ts');
+    return Object.fromEntries(m.ENTRIES.map((e) => [e.shot.id, e.shot.duration]));
   });
   const ids = args.examples ? args.examples.split(',') : Object.keys(durations);
   const unknown = ids.filter((id) => !(id in durations));

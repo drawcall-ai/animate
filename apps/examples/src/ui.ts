@@ -1,7 +1,7 @@
 import { VIEWS, type View } from './stage/camera';
 import { byId } from './dom';
-import type { Scenario } from './scenario';
-import { SCENARIOS } from './scenarios';
+import type { Shot } from './scenario';
+import { ENTRIES, type Entry } from './entries';
 
 /** what the side panel sets */
 export interface Settings {
@@ -13,7 +13,7 @@ export interface Settings {
 }
 
 export interface Actions {
-  select(s: Scenario): void;
+  select(e: Entry): void;
   viewChanged(): void;
   markersChanged(): void;
   /** `fraction` of the scenario's duration */
@@ -31,12 +31,12 @@ export class Panel {
     on: Actions,
   ) {
     const list = byId('list', HTMLElement);
-    for (const s of SCENARIOS) {
+    for (const e of ENTRIES) {
       const b = document.createElement('button');
-      b.textContent = s.title;
-      b.dataset.id = s.id;
+      b.textContent = e.shot.title;
+      b.dataset.id = e.shot.id;
       b.onclick = () => {
-        on.select(s);
+        on.select(e);
         this.setPlaying(true);
       };
       list.appendChild(b);
@@ -75,8 +75,8 @@ export class Panel {
   }
 
   /** shows the scenario as the current one */
-  select(s: Scenario) {
-    byId('info', HTMLElement).innerHTML = `<div class="drives">input: ${s.drives}</div><p>${s.description}</p>`;
+  select(s: Shot) {
+    byId('info', HTMLElement).innerHTML = `<div class="drives">input: ${s.drives ?? ''}</div><p>${s.description ?? ''}</p>`;
     document.querySelectorAll('#list button').forEach((b) => b.classList.toggle('active', b instanceof HTMLElement && b.dataset.id === s.id));
   }
 

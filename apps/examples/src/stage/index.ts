@@ -24,7 +24,7 @@ import type { CharacterModel } from '@pmndrs/viverse';
 import { drawOpenPose2D, projectBody25 } from '@prohuman/openpose';
 import { createBoxingArena, type Environment } from './arena';
 import { context2d } from '../dom';
-import type { Scenario } from '../scenario';
+import type { Shot } from '../scenario';
 
 export const FOV = 38;
 
@@ -39,7 +39,7 @@ export class Stage {
   readonly camera = new PerspectiveCamera(FOV, 1, 0.05, 100);
   readonly controls: OrbitControls;
   env: Environment | null = null;
-  private envFor: Scenario | null = null;
+  private envFor: Shot | null = null;
   private readonly grid = new GridHelper(40, 80, 0x2a2a2a, 0x161616);
   /** the plain grid's light: only the characters are lit (everything else is unlit) */
   private readonly light = new Group();
@@ -71,7 +71,7 @@ export class Stage {
   }
 
   /** the scenario's surroundings (kept when it is the scenario already shown) */
-  setEnvironment(s: Scenario) {
+  setEnvironment(s: Shot) {
     if (s === this.envFor) return;
     this.envFor = s;
     if (this.env) {

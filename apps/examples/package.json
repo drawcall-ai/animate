@@ -2,8 +2,11 @@
   "name": "examples",
   "private": true,
   "dependencies": {
+    "@pmndrs/timeline": "^0.4.0",
     "@pmndrs/viverse": "^0.2.29",
+    "@prohuman/body": "workspace:*",
     "@prohuman/core": "workspace:*",
+    "@prohuman/humanoid": "workspace:*",
     "@prohuman/openpose": "workspace:*",
     "three": "^0.180.0"
   },

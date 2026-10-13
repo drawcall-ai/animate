@@ -5,7 +5,7 @@ const material = new MeshBasicMaterial({ color: 0xffffff, wireframe: true });
 const geometry = new OctahedronGeometry(0.035);
 
 /** Redraws `group` with a marker at each weighted input target: the only data the solver is given. */
-export function drawMarkers(group: Group, inputs: ScenarioInput[]) {
+export function drawMarkers(group: Group, inputs: readonly ScenarioInput[]) {
   group.clear();
   for (const input of inputs) {
     for (const k of EFFECTORS) {

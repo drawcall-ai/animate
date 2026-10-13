@@ -1,9 +1,9 @@
 import { Vector3 } from 'three';
-import type { Box, Humanoid, Ladder } from '@prohuman/core';
+import type { Box, Ladder } from '@prohuman/core';
 import { onLadder } from './ladder';
 import { jointOf } from '../src/joints';
 import { FIXED_DT } from '../src/scenario';
-import type { Frame } from './frame';
+import type { Frame, Actor } from './frame';
 
 const DEG = 180 / Math.PI;
 
@@ -50,7 +50,7 @@ function edgeDistance(o: Box, p: Vector3): number {
 }
 
 /** how far each wrist [left, right] is from the nearest top edge of the ground boxes (m) */
-function wristEdges(h: Humanoid, ground: readonly Box[]): [number, number] {
+function wristEdges(h: Actor, ground: readonly Box[]): [number, number] {
   const d = (s: string) => Math.min(Infinity, ...ground.map((o) => edgeDistance(o, jointOf(h, `${s}Hand`))));
   return [d('left'), d('right')];
 }
@@ -59,7 +59,7 @@ function wristEdges(h: Humanoid, ground: readonly Box[]): [number, number] {
 const PRESS = 0.07;
 
 /** a hand holds the edge of a ground box or a ladder, or presses on a floor obstacle's top: the body hangs from it or leans on it (supported without its feet) */
-export function holding(h: Humanoid, input: { ground?: readonly Box[]; floorObstacles?: readonly Box[]; ladders?: readonly Ladder[] }): boolean {
+export function holding(h: Actor, input: { ground?: readonly Box[]; floorObstacles?: readonly Box[]; ladders?: readonly Ladder[] }): boolean {
   const { ground = [], floorObstacles = [] } = input;
   if (onLadder(h, input.ladders)) return true;
   if (ground.length && wristEdges(h, ground).some((e) => e < HOLD * h.proportions.scale)) return true;

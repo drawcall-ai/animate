@@ -77,7 +77,7 @@ export interface Scenario {
   actors: Options[];
   create(): ScenarioRun;
   /** camera focus; defaults to the first actor's hips */
-  focus?(actors: Humanoid[]): Vector3;
+  focus?(actors: readonly Actor[]): Vector3;
   cameraDistance?: number;
   /** the facing (yaw) the camera shots are taken against, held fixed; defaults to the first actor's */
   facing?: number;
@@ -91,8 +91,31 @@ export interface Scenario {
 
 export const FIXED_DT = 1 / 60;
 
+/** what the app needs of an actor to show it */
+export interface Actor {
+  readonly model: CharacterModel;
+  readonly yaw: number;
+}
+
+/** what the app shows of a scenario: its name, text and camera */
+export type Shot = Pick<Scenario, 'id' | 'title' | 'duration' | 'cameraDistance' | 'facing' | 'body' | 'grid' | 'environment' | 'focus'> & { drives?: string; description?: string };
+
+/** A running scenario as the app shows it, on the old core or the new one. */
+export interface Shown {
+  readonly scenario: Shot;
+  readonly actors: readonly Actor[];
+  readonly t: number;
+  /** what each actor was asked to do last step (drawn as markers) */
+  readonly lastInputs: readonly ScenarioInput[];
+  /** the facing (yaw) the camera shots are taken against now, if the scenario steers it */
+  facing(): number | undefined;
+  props(): Prop[];
+  step(): void;
+  advanceTo(t: number): void;
+}
+
 /** Deterministic fixed-step simulation of a scenario. */
-export class Simulation {
+export class Simulation implements Shown {
   readonly actors: Humanoid[];
   readonly run: ScenarioRun;
   t = 0;
@@ -105,6 +128,10 @@ export class Simulation {
   ) {
     this.actors = scenario.actors.map((o) => new Humanoid(model(), o));
     this.run = scenario.create();
+  }
+
+  facing() {
+    return this.run.facing?.();
   }
 
   step() {

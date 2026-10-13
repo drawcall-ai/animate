@@ -1,9 +1,8 @@
 import { Vector3 } from 'three';
-import type { Humanoid } from '@prohuman/core';
 import { jointOf } from '../src/joints';
 import { FIXED_DT, type Part, type Prop } from '../src/scenario';
 import { comOf } from './balance';
-import { Peak, type Frame } from './frame';
+import { Peak, type Frame, type Actor } from './frame';
 
 const DEG = 180 / Math.PI;
 const UP = new Vector3(0, 1, 0);
@@ -180,7 +179,7 @@ export class Riding {
  * How deep the body is in the vehicles among `props` (m): `limbs` into their tubes and wheels
  * (`what` into which, at the deepest), its soles into their boxes.
  */
-export function intoVehicles(h: Humanoid, props: readonly Prop[], limbs = LIMBS) {
+export function intoVehicles(h: Actor, props: readonly Prop[], limbs = LIMBS) {
   const H = h.proportions.height;
   const out = { limbs: 0, what: '', soles: 0 };
   for (const v of props) {
