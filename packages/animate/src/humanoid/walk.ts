@@ -15,7 +15,28 @@ const ARRIVED = { distance: 0.15, yaw: 0.15 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
 const CLOSE = 1;
 
+/**
+ * How soon a walk arrives (s): written by the walk every sub-step (an estimate from the way and the
+ * turn left at the pace it goes), 0 once it has ended, Infinity before it sets out. Read it to set
+ * off what comes next before the walk is over (`overlap` with `before`).
+ */
+export interface Eta {
+  seconds: number;
+}
+
+/** a condition: the walk `eta` tells of arrives within `seconds` (or has) */
+export const before =
+  (eta: Eta, seconds: number) =>
+  (): boolean =>
+    eta.seconds <= seconds;
+
+/** walking, about how fast the body turns to its facing (rad/s), and how fast it goes at least when it has yet to set off (m/s): for an `Eta` */
+const TURNING = 2;
+const SETTING_OFF = 0.5;
+
 export interface WalkOptions<W> {
+  /** how soon it arrives, written every sub-step */
+  eta?: Eta;
   /** where to go, on the floor (default: where it stands: a turn in place) */
   to?: Live<Vector3, W>;
   /** the facing to arrive with (rad; default the way it arrives, or toward `to` with `within`) */
@@ -65,6 +86,7 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
         const yaw = where(f);
         h.asks.go = go;
         if (options.stance) h.asks.stance = options.stance;
+        if (options.eta) options.eta.seconds = etaOf(h, f.prev.com(_com), go, yaw);
         if (yaw === null) return;
         face.yaw = yaw;
         h.asks.face = face;
@@ -79,7 +101,21 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
         return there && turned && h.gait.settled;
       },
     });
+    if (options.eta) options.eta.seconds = 0;
   };
+}
+
+/**
+ * about how long (s) the body at `body` takes to stand at `go`'s point facing `yaw`: the way left at
+ * the pace it walks (at least as if setting off), plus slowing to a stop, or the turn left, whichever
+ * is longer (the trajectory a motion-matching query predicts, here from the walk's own goal)
+ */
+function etaOf<W>(h: Humanoid<W>, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
+  const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * h.proportions.scale;
+  const v = Math.min(go.speed, Math.max(h.gait.velocity.length(), SETTING_OFF));
+  const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;
+  const turn = yaw === null ? 0 : Math.max(0, Math.abs(wrapAngle(yaw - h.gait.facing)) - ARRIVED.yaw) / TURNING;
+  return Math.max(walk, turn);
 }
 
 const _com = new Vector3();

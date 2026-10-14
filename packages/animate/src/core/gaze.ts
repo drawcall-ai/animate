@@ -141,17 +141,17 @@ const JUMP = 3;
 const HEAD_SEQUENCE = { least: 1.75, slope: 2.3 };
 /**
  * the pace of a head turning a gaze shift of `shift` (rad): its peak speed as the shift is large
- * (`HEAD_SEQUENCE`), and the acceleration that reaches it halfway, braking from there (v² / shift:
- * a triangle, peaking at 2× its mean speed, near a minimum-jerk bell's 1.875×, with no plateau at a
- * cap) — within `motion`'s
+ * (`HEAD_SEQUENCE`), and the acceleration that gets it there (`BELL`) — within `motion`'s
  */
 function headPace(shift: number, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'>): { accel: number; speed: number } {
   const speed = Math.min(motion.turnSpeed ?? Infinity, HEAD_SEQUENCE.least + HEAD_SEQUENCE.slope * shift);
-  return { speed, accel: Math.min(motion.turnAccel, Math.max((speed * speed) / Math.max(shift, 1e-3), BRAKE)) };
+  return { speed, accel: Math.min(motion.turnAccel, Math.max((BELL * speed * speed) / Math.max(shift, 1e-3), BRAKE)) };
 }
 
 /** the least acceleration a head turns with (rad/s²): what brings it to rest on a target that moves on */
 const BRAKE = 4;
+/** how briskly the head gets up to its peak: 1.5 v² / shift reaches it a third of the way, holds it a third and brakes the last (a bell flattened a little: the eyes' line gets there within ~0.6 s of a large shift's start) */
+const BELL = 1.5;
 
 /** the turn from bone `from` to bone `to` in `pose` (into `out`) */
 function relative(pose: ReadonlyPose, from: number, to: number, out: Quaternion): Quaternion {

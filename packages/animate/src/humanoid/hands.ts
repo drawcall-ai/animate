@@ -3,6 +3,7 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { Carrier, type Item } from '../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from '../core/goal';
+import { overlap } from '../core/overlap';
 import { seeded, seedOf } from '../core/random';
 import { ChainTip, reached } from '../core/tip';
 import { TrackedPoint, TrackedRotation } from '../core/track';
@@ -12,7 +13,7 @@ import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { withGaze } from './look';
 import { forwardOf, headingOf, leftOf, lerp, wrapAngle } from './math';
-import { walkTo } from './walk';
+import { before, walkTo, type Eta } from './walk';
 
 /** Which of an item's grips each hand takes (by name). */
 export type Grips = Partial<Record<Side, string>>;
@@ -62,17 +63,56 @@ export function closeHand<W>(h: Humanoid<W>, side: Side, item: Item, grip: strin
 }
 
 /**
- * Taking hold of things: the body walks up to take them (`approach`), then, the eyes on them first
- * (`withGaze`: on the grips' middle, or `look`; `false`: not), the hands take hold (`reachFor`). It
- * ends with the hands on the grips: hold on with `hold` or `carry`.
+ * Taking hold of things, each step under way before the last is over: the body walks up to take
+ * them (`approach`); LOOKING s before it arrives the eyes go to them (`withGaze`: on the grips'
+ * middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
+ * short of each grip, nearer its shoulder, asking the body to bow and bend as low as they go), and
+ * once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
+ * `hold` or `carry`.
  */
 export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number } = {}): Behaviour<W> {
   const { look = true, bow } = options;
   return function* () {
-    yield* approach(h, holds, options)();
-    if (look === false) return yield* reachFor(h, holds)();
-    yield* withGaze(h, look === true ? middleOf(holds) : look, reachFor(h, holds), { bow })();
+    const eta: Eta = { seconds: Infinity };
+    let stood = false;
+    const reach = function* () {
+      // (on their way out while the body still comes up; it stands, they take hold)
+      yield* parallel<Frame<W>>('race', action({ until: () => stood }), function* () {
+        yield* action({ until: before(eta, REACHING_OUT) });
+        yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
+      });
+      yield* reachFor(h, holds)();
+    };
+    const walk = function* () {
+      yield* approach(h, holds, { ...options, eta })();
+      stood = true;
+    };
+    // (the eyes go once it is near and the head turns far enough to see it: turning to it, the body faces it first)
+    const near = before(eta, LOOKING);
+    const seen = (f: Frame<W>) => near() && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
+    yield* overlap(walk, look === false ? reach : withGaze(h, look === true ? middleOf(holds) : look, reach, { bow }), seen)();
   };
+}
+
+/** how far aside of the way the body faces something may be for the eyes to go to it, the head turned (rad) */
+const IN_VIEW = 1;
+
+/** the way from the body to `at` on the floor's plane (x, z) */
+const flatTo = <W>(f: Frame<W>, at: Readonly<Vector3>): [number, number] => {
+  const body = f.prev.com(_com);
+  return [at.x - body.x, at.z - body.z];
+};
+
+/** how long before the body arrives to take something the eyes go to it, and the hands set off toward it (s): the eyes ~0.5–1 s ahead of the hands (Land & Hayhoe 2001) */
+const LOOKING = 0.6;
+const REACHING_OUT = 0.5;
+/** how far toward its grip a hand reaches out while the body still comes up to it (share of the way from its shoulder) */
+const SHORT = 0.5;
+
+/** a point SHORT of the way from hand `side`'s shoulder to `item`'s grip `grip` (world) */
+function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
+  const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
+  return { position: item.toWorld(gripOf(item, grip), _world).position.sub(shoulder).multiplyScalar(SHORT).add(shoulder).clone() };
 }
 
 /**
@@ -83,14 +123,17 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
  * stood still on planted feet a while: a step of a few cm `balance` may not take). The first half
  * of `grab`.
  */
-export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
+export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; eta?: Eta } = {}): Behaviour<W> {
   const { ahead = WITHIN, aside = 0 } = options.stand ?? {};
   return function* () {
     const grips = held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
-    if (turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) return;
+    if (turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) {
+      if (options.eta) options.eta.seconds = 0;
+      return;
+    }
     const to = middleOf(holds).addScaledVector(leftOf(face), -aside);
     const there = to.clone().addScaledVector(forwardOf(face), -ahead * p.armLength);
     // (round it: the way from where the body stands to there passing nearer its grips than ROUND)
@@ -115,7 +158,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: numb
       still = planted ? still + f.dt : 0;
       return turned() && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || still > STILL);
     };
-    yield* walkTo(h, { to, face, within: ahead * p.armLength, until: arrived })();
+    yield* walkTo(h, { to, face, within: ahead * p.armLength, until: arrived, eta: options.eta })();
   };
 }
 

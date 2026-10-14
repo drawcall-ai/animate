@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, idle, INDEX, Item, reachFor, type Behaviour, type Frame, type Leg } from '../../src';
+import { carry, gazeOff, grab, idle, INDEX, Item, reachFor, type Behaviour, type Frame, type Leg } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
@@ -46,6 +46,42 @@ function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds
 
 const start = (v: number[]) => v.findIndex((x) => x > 0.05) / 60;
 const peak = (v: number[]) => v.indexOf(Math.max(...v)) / 60;
+
+describe('grab', () => {
+  it('anticipates: the eyes and then the hands go to what it takes before the body has come up to it', () => {
+    const load = box(new Vector3(0.1, 0.9, 2.2));
+    const at = { eyes: NaN, hands: NaN, stood: NaN };
+    const h = new Humanoid(createSkeletonModel(), (h) =>
+      function* () {
+        yield* action({ until: () => true });
+        const was = new Vector3();
+        yield* parallel<Frame>(
+          'race',
+          idle(h),
+          function* () {
+            yield* grab(h, { left: [load, 'left'], right: [load, 'right'] })();
+          },
+          action<Frame>({
+            update: (f) => {
+              const middle = load.current.position;
+              if (Number.isNaN(at.eyes) && gazeOff(h.gazer, f.prev, middle) < 0.2) at.eyes = f.time;
+              const hand = onHips(h, 'right');
+              if (Number.isNaN(at.hands) && f.time > 0.5 && hand.distanceTo(was) * 60 > 0.15) at.hands = f.time;
+              was.copy(hand);
+              if (Number.isNaN(at.stood) && f.time > 1 && h.gait.velocity.length() < 0.05) at.stood = f.time;
+            },
+          }),
+        );
+      },
+    );
+    for (let t = 0; t < 8; t += 1 / 60) h.update(1 / 60);
+    expect(h.holding.right?.item).toBe(load);
+    // (the eyes there, then the hands on their way, before the walk has come to a stop)
+    expect(at.eyes).toBeLessThan(at.stood);
+    expect(at.hands).toBeLessThan(at.stood);
+    expect(at.eyes).toBeLessThan(at.hands);
+  });
+});
 
 describe('two hands', () => {
   it('reaching together are not mirror images: the left sets off a moment after the right, a little slower', () => {

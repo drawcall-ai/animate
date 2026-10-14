@@ -70,7 +70,8 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
     yield* parallel<Frame<World>>(
       'race',
       reporting(report, HANDS, function* () {
-        yield* grab(h, { left: [box, 'left'], right: [box, 'right'] }, { look: false })();
+        // (its eyes on the box as it comes up to it: it bows to see it, the head turned by the gaze below)
+        yield* grab(h, { left: [box, 'left'], right: [box, 'right'] }, { look: () => gaze.on })();
         const goal: Placement = { position: box.current.position.clone(), quaternion: box.current.quaternion.clone() };
         yield* parallel<Frame<World>>('race', carry(h, goal, gaze, size, top, lift), hold(h, box, grips, { to: goal }));
       }),
