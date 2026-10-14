@@ -5,7 +5,6 @@ import { Framing, placeCamera, VIEWS } from './stage/camera';
 import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
-import { jointOf } from './joints';
 import { FIXED_DT, type Scenario } from './scenario';
 import { SCENARIOS } from './scenarios';
 import { Simulation } from './simulation';
@@ -85,7 +84,7 @@ function show() {
   bodies.cast(actors);
   stage.setEnvironment(s);
   bodies.castShadows(!!stage.env);
-  framing.set(s.focus?.(actors) ?? jointOf(actors[0], 'hips'), (s.facing ?? actors[0].yaw) + turn);
+  framing.set(playback.blend(1).root, facing());
   panel.select(s);
   if (settings.view === 'orbit') startOrbit();
   if (!capture) {
@@ -119,20 +118,23 @@ function sync(alpha = 1, dt = 1 / 60) {
   const between = playback.blend(alpha);
   drawProps(props, between.props);
   stage.env?.update(sim.t);
-  const focus = s.focus?.(sim.actors) ?? between.root;
-  // (the way the body faces, as balance has it: not the hips' twist as they step or swing)
-  const yaw = (s.facing ?? sim.actors[0].gait.facing) + turn;
   const still = capture && !video;
-  if (still) framing.set(focus, yaw);
-  else framing.follow(focus, yaw, dt);
+  if (still) framing.set(between.root, facing());
+  else framing.follow(between.root, sim.actors[0].gait.velocity, facing(), dt);
   panel.showTime(sim.t, s.duration);
   caption.textContent = still ? `${s.id}  t=${sim.t.toFixed(2)}s  ${settings.view}` : '';
 }
 
-/** aims the camera; `follow` = how far the orbit target moves to the focus this frame */
-function aim(follow: number) {
+/** the way the shots are taken against: the way the body faces, as balance has it (not the hips' twist as they step or swing) */
+function facing() {
+  const { scenario: s, actors } = playback.sim;
+  return (s.facing ?? actors[0].gait.facing) + turn;
+}
+
+/** aims the camera at the framing (which is smoothed already) */
+function aim() {
   if (settings.view === 'orbit') {
-    stage.controls.target.lerp(framing.focus, follow);
+    stage.controls.target.copy(framing.focus);
     stage.controls.update();
   } else placeCamera(stage.camera, settings.view, framing, distance());
 }
@@ -160,8 +162,7 @@ function recordVideo() {
       camera.position.copy(orbit);
       camera.fov = FOV;
     }
-    // (time-based: subframes may render faster than 60 Hz)
-    aim(1 - Math.pow(0.9, dt * 60));
+    aim();
     if (cinematic) {
       orbit = camera.position.clone();
       const look = settings.view === 'orbit' ? stage.controls.target.clone() : framing.focus.clone();
@@ -192,7 +193,7 @@ function captureStill() {
   if (trail > 0) drawTrail(stage.scene, playback, t - trail, t);
   playback.advanceTo(t);
   sync();
-  aim(0.1);
+  aim();
   draw();
   window.__ready = true;
 }
@@ -213,8 +214,7 @@ function playLive() {
       }
       sync(acc / FIXED_DT, dt);
     }
-    // (per 60 Hz frame)
-    aim(0.1);
+    aim();
     draw();
     requestAnimationFrame(loop);
   };

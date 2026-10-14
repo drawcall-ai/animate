@@ -1,30 +1,46 @@
 import { Vector3, type PerspectiveCamera } from 'three';
-import { forwardOf, leftOf } from '../math';
+import { forwardOf, leftOf, Spring } from '../math';
 
 /** `orbit` = free (OrbitControls); the others are fixed shots relative to the body's facing */
 export type View = 'orbit' | 'front' | 'side' | 'back' | 'three' | 'top';
 export type Shot = Exclude<View, 'orbit'>;
 export const VIEWS: View[] = ['orbit', 'front', 'side', 'three', 'back', 'top'];
 
+/** how quickly the camera takes up the body's travel and its turns (1/s): far below a walk's footfalls (~12 rad/s), of whose surges the travel then passes on ~3% */
+const TRAVEL = 2;
+const TURN = 2.5;
+
 /**
- * What the camera frames: a point on the body's travel path (the gait root, not the
- * pelvis — the hips' sway and bob shouldn't rock the camera) and the body's facing.
+ * What the camera frames: a point at a fixed height over the body's travel (the pelvis's ground
+ * point, which surges ahead at each footfall and sways side to side with the steps), and the way
+ * the body faces. Both follow on critically damped springs, the travel fed balance's ground
+ * velocity, so the camera keeps up with a walk without lagging and without the stride's surges.
  */
 export class Framing {
-  readonly focus = new Vector3(0, 1, 0);
+  private readonly travel = new Spring();
+  /** the facing as a direction: smoothed without wrapping */
+  private readonly heading = new Spring();
   yaw = 0;
 
+  get focus(): Readonly<Vector3> {
+    return this.travel.value;
+  }
+
   set(focus: Vector3, yaw: number) {
-    this.focus.copy(focus);
+    this.travel.reset(focus);
+    this.heading.reset(forwardOf(yaw, _f));
     this.yaw = yaw;
   }
 
-  /** frame-rate independent smoothing toward the target */
-  follow(focus: Vector3, yaw: number, dt: number) {
-    this.focus.lerp(focus, 1 - Math.exp(-5 * dt));
-    this.yaw += (yaw - this.yaw) * (1 - Math.exp(-2.45 * dt));
+  /** `velocity` = how the focus moves (m/s); `dt` = display frame time */
+  follow(focus: Vector3, velocity: Vector3, yaw: number, dt: number) {
+    this.travel.step(focus, TRAVEL, dt, velocity);
+    const f = this.heading.step(forwardOf(yaw, _f), TURN, dt);
+    this.yaw = Math.atan2(f.x, f.z);
   }
 }
+
+const _f = new Vector3();
 
 /** Puts `camera` `distance` from the framing's focus, on `shot`'s side of the body, looking at it. */
 export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw }: Framing, distance: number) {
