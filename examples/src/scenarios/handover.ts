@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Carrier, createWorld, handTo, idle, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { Carrier, createWorld, handTo, idle, lookAt, type Frame, type Humanoid, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { Report, reported } from '../report';
 
@@ -12,6 +12,8 @@ const CIRCLE = { centre: new Vector3(-0.2, 1.2, 0.35), radius: 0.12, period: 2.5
 /** where the override raises the hand, from `OVERRIDE[0]` for `OVERRIDE[1]` s */
 const RAISED = new Vector3(-0.35, 1.8, 0.15);
 const OVERRIDE = [4, 2] as const;
+/** how long before the hand the eyes go (s): they reach what the hand goes for first (Land & Hayhoe 2001) */
+const LEAD = 0.5;
 const ON_BALL = { position: new Vector3() };
 
 /** the circle's point at `t` */
@@ -24,7 +26,7 @@ export const handOver: Scenario = {
   id: 'hand-over',
   title: 'Layers: a hand handed over',
   description:
-    'The base stands the body and hangs the arms; over it the right hand rides a ball going round a circle; from 4 s to 6 s a later layer raises the hand instead. Each hand-over is continuous: every layer takes the bones on from the motion they have.',
+    'The base stands the body and hangs the arms; over it the right hand rides a ball going round a circle, the eyes on it; from 4 s to 6 s a later layer raises the hand instead, the eyes going there first and back first. Each hand-over is continuous: every layer takes the bones on from the motion they have.',
   duration: 10,
   actors: [{}],
   stage: () => {
@@ -52,6 +54,14 @@ export const handOver: Scenario = {
             idle(h),
             // over it: the right hand on the ball
             handTo(h, 'right', reported(report, 'rightHand', ON_BALL), { on: ball }),
+            // the eyes on the ball the hand rides; to where it is raised a moment before it goes, and
+            // back to the ball a moment before it comes down (eyes first, then the hand)
+            function* () {
+              const ballAt = () => ball.current.position;
+              yield* parallel<Frame<World>>('race', lookAt(h.gazer, reported(report, 'gaze', ballAt)), action({ until: timePassed(OVERRIDE[0] - LEAD, 'seconds') }));
+              yield* parallel<Frame<World>>('race', lookAt(h.gazer, reported(report, 'gaze', RAISED)), action({ until: timePassed(OVERRIDE[1], 'seconds') }));
+              yield* lookAt(h.gazer, reported(report, 'gaze', ballAt))();
+            },
             // over that, for a while: the right hand raised
             function* () {
               yield* action({ until: timePassed(OVERRIDE[0], 'seconds') });
