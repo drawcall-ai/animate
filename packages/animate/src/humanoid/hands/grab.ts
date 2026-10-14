@@ -4,7 +4,7 @@ import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import type { Behaviour, Live, Target } from '../../core/goal';
 import { overlap } from '../../core/overlap';
-import { handTo } from '../arms';
+import { bringShoulder, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { withGaze } from '../look';
@@ -39,8 +39,8 @@ const STILL = 0.5;
  * Taking hold of things, each step under way before the last is over: the body walks up to take
  * them (`approach`); LOOKING s before it arrives, once they are in view (IN_VIEW), the eyes go to
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
- * halfway from its shoulder to its grip: the walk is left to come to rest unbowed), and
- * once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
+ * halfway from its shoulder to its grip); LOWERING s before, as it plants its last step, the body
+ * starts to bow and bend for them; once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`.
  */
 export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number } = {}): Behaviour<W> {
@@ -49,11 +49,20 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
     const eta: Eta = { seconds: Infinity };
     let stood = false;
     const reach = function* () {
-      // (on their way out while the body still comes up; it stands, they take hold)
-      yield* parallel<Frame<W>>('race', action({ until: () => stood }), function* () {
-        yield* action({ until: before(eta, REACHING_OUT) });
-        yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
-      });
+      // (on their way out while the body still comes up, the body coming down for them as it plants
+      // its last step; it stands, they take hold)
+      yield* parallel<Frame<W>>(
+        'race',
+        action({ until: () => stood }),
+        function* () {
+          yield* action({ until: before(eta, REACHING_OUT) });
+          yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
+        },
+        function* () {
+          yield* action({ until: before(eta, LOWERING) });
+          yield* action<Frame<W>>({ update: (f) => held(holds).forEach(({ side, item, grip }) => bringShoulder(h, f, side, item.toWorld(gripOf(item, grip), _world).position)) });
+        },
+      );
       yield* reachFor(h, holds)();
     };
     const walk = function* () {
@@ -85,6 +94,8 @@ const flatTo = <W>(f: Frame<W>, at: Readonly<Vector3>): [number, number] => {
 /** how long before the body arrives to take something the eyes go to it, and the hands set off toward it (s): the eyes ~0.5–1 s ahead of the hands (Land & Hayhoe 2001) */
 const LOOKING = 0.6;
 const REACHING_OUT = 0.5;
+/** how long before the body arrives it starts to come down for what it takes (s): as it plants its last step, not once it has stood still */
+const LOWERING = 0.3;
 /** how far toward its grip a hand reaches out while the body still comes up to it (share of the way from its shoulder) */
 const SHORT = 0.5;
 

@@ -222,7 +222,7 @@ function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Ve
  * for one below (`lowering`), up on the toes for one above. Of two hands asking (both arms on
  * something low), the one needing more wins: each sub-step's asks start cleared.
  */
-function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
+export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
   const p = h.proportions;
   const { asks } = h;
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)

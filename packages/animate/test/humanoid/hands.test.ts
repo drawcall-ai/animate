@@ -87,6 +87,33 @@ describe('grab', () => {
   });
 });
 
+describe('grab low', () => {
+  it('comes down for what lies low as it plants its last step, not after standing still', () => {
+    const load = box(new Vector3(0.1, 0.15, 2.2));
+    const at = { arrived: NaN, down: NaN };
+    let walked = false;
+    let standing = NaN;
+    const h = new Humanoid(createSkeletonModel(), (h) =>
+      function* () {
+        yield* parallel<Frame>('race', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }), action<Frame>({
+          update: (f) => {
+            const hips = f.prev.position(INDEX.hips).y;
+            standing = Number.isNaN(standing) ? hips : standing;
+            const v = h.gait.velocity.length();
+            if (v > 0.3) walked = true;
+            if (walked && Number.isNaN(at.arrived) && v < 0.05) at.arrived = f.time;
+            if (Number.isNaN(at.down) && hips < standing - 0.1) at.down = f.time;
+          },
+        }));
+      },
+    );
+    for (let t = 0; t < 8; t += 1 / 60) h.update(1 / 60);
+    expect(h.holding.right?.item).toBe(load);
+    // (the hips 10 cm down within 0.3 s of coming to a stop: 1.6 s after, waiting to stand still)
+    expect(at.down - at.arrived).toBeLessThan(0.3);
+  });
+});
+
 describe('release', () => {
   it('follows through: a hand let go of something moving carries on its way, then off the item', () => {
     const load = box(new Vector3(0, 1.0, 0.4));
