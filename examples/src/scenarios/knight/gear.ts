@@ -37,7 +37,7 @@ export function helmet(at: Placement): Gear {
     left: { position: new Vector3(0.13, -0.15, 0.16) },
     right: { position: new Vector3(-0.13, -0.15, 0.16) },
     // (the chin strap: its ends hanging by the jaw, buckled under the chin — the wrists below and
-    // before them, the fingers up at the strap: any nearer the shoulders would fold the arms past their range)
+    // before them, the fingers up at the strap)
     strapLeft: { position: new Vector3(0.09, rim - 0.2, 0.2) },
     strapRight: { position: new Vector3(-0.09, rim - 0.2, 0.2) },
     chinLeft: { position: new Vector3(0.03, rim - 0.22, 0.22) },
