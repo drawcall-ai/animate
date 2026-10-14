@@ -171,11 +171,11 @@ export function reach(k: Knight, hands: Partial<Record<Side, [Item, string]>>): 
     return { item: hand[0], grip: hand[0].grips[hand[1]], name: hand[1] };
   };
   const there = (f: F) => sides.every((side) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], on(side).grip, on(side).item));
-  return busy(k, function* () {
+  return function* () {
     for (const side of sides) yield* openHand(h, side)();
     yield* parallel<F>('all', ...sides.map((side) => handTo(h, side, on(side).grip, { on: on(side).item, until: there })));
     for (const side of sides) yield* closeHand(h, side, on(side).item, on(side).name)();
-  });
+  };
 }
 
 /** Where the body stands to take something: the grips' middle `ahead` of it (× the arm's length) and `aside` to its left (m; negative: to its right). */
@@ -213,15 +213,15 @@ export function take(k: Knight, hands: Partial<Record<Side, [Item, string]>>, fa
   };
 }
 
-/** how far in front of what it takes the body stands (× the arm's length, unless said); how far a grip may be from its shoulder on the floor's plane to be in reach without a step (× the arm's length: lower, the body bows for it), the body facing within SQUARE (rad) of the way asked */
+/** how far in front of what it takes the body stands (× the arm's length, unless said) */
 const AHEAD = 0.6;
 /** the pause before going for the next thing (s at pace 1) */
 const SETTLE = 0.5;
+/** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const REACH = 0.75;
+const SQUARE = 0.3;
 /** arrived where it stands to take something: this near (m, default body) */
 const ARRIVED = 0.12;
-const _com = new Vector3();
-const SQUARE = 0.3;
 
 /**
  * Hand `side` into `item` (a gauntlet, a shield's straps): to its grip `entry`, in line, then slowly
@@ -259,7 +259,8 @@ export function letGo(k: Knight, sides: readonly Side[], away?: Partial<Record<S
 }
 
 /** the hands busy while `task` runs (the metrics judge the arms nobody asks anything of as free) */
-const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => reporting(k.report, ['leftHand', 'rightHand'], task);
+export const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => reporting(k.report, ['leftHand', 'rightHand'], task);
+
 /** marks `item` worn on `on` (a bone or an item), at once; given `settle` (in `on`'s frame, scaled with the body for a bone), it settles there */
 export const put = (k: Knight, item: Item, on: number | Item, settle?: Placement): Behaviour<World> =>
   function* () {
@@ -269,6 +270,7 @@ export const put = (k: Knight, item: Item, on: number | Item, settle?: Placement
 
 const UP = new Vector3(0, 1, 0);
 const IDENTITY = new Quaternion();
+const _com = new Vector3();
 
 /** the distance between `a` and `b` on the floor's plane */
 const horizontal = (a: Readonly<Vector3>, b: Readonly<Vector3>) => Math.hypot(a.x - b.x, a.z - b.z);

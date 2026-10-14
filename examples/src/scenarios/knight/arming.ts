@@ -1,8 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { closeHand, grab, handTo, hold, INDEX, lookAt, walkTo, type Behaviour, type Frame, type Item, type Live, type Placement, type Side, type World } from '@drawcall/animate';
+import { closeHand, handTo, hold, INDEX, lookAt, walkTo, type Behaviour, type Frame, type Item, type Placement, type Side, type World } from '@drawcall/animate';
 import { reported } from '../../report';
-import { carry, eyesFirst, facingAt, headFrame, itemFrame, letGo, pause, placed, put, reach, route, slideIn, take, type Knight, type Leg } from './handling';
+import { busy, carry, eyesFirst, facingAt, headFrame, itemFrame, letGo, pause, placed, put, reach, route, slideIn, take, type Knight, type Leg } from './handling';
 
 // Arming: the knight's behaviours, one piece of gear each, made of the handling pieces over the
 // package's tasks. Placements are in the frame of the body they go to (left +x, up +y, ahead +z; m,
@@ -42,7 +42,7 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, face: nu
     // (drawn round to the front, the ends together, the tongue through the buckle and pulled tight)
     const buckled = route(k, belt.buckle, hips(k), [[0.8, at(0.17, 0.05, 0.14)], [0.6, at(0.035, 0.05, 0.165)], [0.75, at(0.035, 0.05, 0.165)]]);
     const pulled = route(k, belt.tongue, hips(k), [[0.8, at(-0.17, 0.05, 0.14)], [0.6, at(-0.035, 0.05, 0.165)], [0.4, at(0.005, 0.05, 0.17)], [0.35, at(-0.05, 0.05, 0.165)]]);
-    yield* eyesFirst(k, placedAt(hips(k), front), carry(k, [[belt.buckle, { left: 'end' }, buckled], [belt.tongue, { right: 'end' }, pulled]]), 0)();
+    yield* eyesFirst(k, (f) => placed(hips(k), front)(f).position, carry(k, [[belt.buckle, { left: 'end' }, buckled], [belt.tongue, { right: 'end' }, pulled]]), 0)();
     yield* put(k, belt.buckle, INDEX.hips)();
     yield* put(k, belt.tongue, INDEX.hips)();
     yield* letGo(k, ['left', 'right'])();
@@ -72,14 +72,17 @@ export function hangSword(k: Knight, scabbard: Item, face: number): Behaviour<Wo
  */
 export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<World> {
   const hilt = (f: F) => placed(itemFrame(sword), { position: sword.grips.hilt.position })(f).position;
-  return eyesFirst(k, hilt, function* () {
+  return busy(
+    k,
+    eyesFirst(k, hilt, function* () {
       yield* reach(k, { left: [scabbard, 'throat'], right: [sword, 'hilt'] })();
       k.worn.take(sword);
-      const drawn = route(k, sword, itemFrame(scabbard), [[0.7, at(0, 0.3, 0)], [0.5, at(0, 0.3, 0)], [0.8, at(0, 0, 0)]]);
+      const drawn = route(k, sword, itemFrame(scabbard), [[0.7, at(0, 0.3, 0)], [0.5, still], [0.8, at(0, 0, 0)]]);
       yield* parallel<F>('race', carry(k, [[sword, { right: 'hilt' }, drawn]]), hold(k.h, scabbard, { left: 'throat' }));
       yield* put(k, sword, scabbard)();
       yield* letGo(k, ['left', 'right'])();
-    });
+    }),
+  );
 }
 
 /** where the helm sits on the head (its middle in the head's frame) */
@@ -99,7 +102,7 @@ export function putOnHelmet(k: Knight, helmet: Item, face: number): Behaviour<Wo
     // (its grips are toward its front, away from him: he stands back from them)
     yield* take(k, { left: [helmet, 'left'], right: [helmet, 'right'] }, face, { ahead: 0.9 })();
     // (held a moment before the face: a look into it)
-    yield* eyesFirst(k, (f) => helmet.current.position, carry(k, [[helmet, grips, route(k, helmet, level, [[1.0, at(0, 0.14, 0.3, new Quaternion())], [0.4, still]])]]), 0)();
+    yield* eyesFirst(k, () => helmet.current.position, carry(k, [[helmet, grips, route(k, helmet, level, [[1.0, at(0, 0.14, 0.3, new Quaternion())], [0.4, still]])]]), 0)();
     yield* carry(k, [[helmet, grips, route(k, helmet, level, [[0.7, at(0, 0.42, 0.26)], [0.6, at(0, 0.4, 0.06)]])]])();
     yield* parallel<F>('race', carry(k, [[helmet, grips, route(k, helmet, headFrame(k.h), [[1.2, HELMED]])]]), lookAt(k.h.gazer, reported(k.report, 'gaze', (f) => down(f).position)));
     yield* put(k, helmet, INDEX.head, HELMED)();
@@ -128,12 +131,8 @@ export function don(k: Knight, gauntlet: Item, side: Side, face: number): Behavi
     yield* carry(k, [[gauntlet, cuff, route(k, gauntlet, chest(k), [[1.0, heldOpen(side)]])]])();
     yield* eyesFirst(
       k,
-      (f) => gauntlet.current.position,
-      () => parallel<F>(
-        'race',
-        slideIn(k, side, gauntlet, 'mouth', 'inside'),
-        hold(k.h, gauntlet, cuff, { to: open }),
-      ),
+      () => gauntlet.current.position,
+      () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, cuff, { to: open })),
       0,
     )();
     yield* put(k, gauntlet, INDEX[`${side}Hand`])();
@@ -141,10 +140,12 @@ export function don(k: Knight, gauntlet: Item, side: Side, face: number): Behavi
   };
 }
 
-/** the shield borne: on the left forearm across the belly, the fist before the navel, its face turned out to the front and left (its frame in the hips') */
-const BORNE = at(0.1, 0.16, 0.32, turn(0, Math.PI + 0.35, 0));
-/** the left fist on the shield's grip as it is borne (thumb up, the forearm through the strap) */
-const FIST = at(0.1, 0.16, 0.32, BORNE.quaternion?.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2)));
+/**
+ * the left fist on the shield's grip as the shield is borne (in the hips' frame): on the forearm
+ * across the belly, the fist before the navel, thumb up, the shield's face turned out to the front
+ * and left (the shield turned so, the fist turned in it as its grip says)
+ */
+const FIST = at(0.1, 0.16, 0.32, turn(0, Math.PI + 0.35, 0).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2)));
 
 /**
  * The shield off the wall, where it hangs on a peg by its strap, its back to the room: the right
@@ -156,7 +157,7 @@ export function takeShield(k: Knight, shield: Item, face: number): Behaviour<Wor
   const steady = hold(k.h, shield, { right: 'rim' });
   return function* () {
     yield* take(k, { right: [shield, 'rim'] }, face)();
-    yield* eyesFirst(k, (f) => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady), 0)();
+    yield* eyesFirst(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady), 0)();
     yield* put(k, shield, INDEX.leftLowerArm)();
     yield* closeHand(k.h, 'left', shield, 'grip')();
     // (the right hand off to the side and down, out of the shield's way; then the shield up off the peg and back off the wall)
@@ -193,9 +194,3 @@ export function walkOut(k: Knight, yard: Vector3, face: number, sights: readonly
     for (const sight of sights) yield* eyesFirst(k, sight, pause(k, 1.4), 0)();
   };
 }
-
-/** a placement in a moving frame, its position */
-const placedAt =
-  (frame: ReturnType<typeof hips>, local: Placement): Live<Vector3, World> =>
-  (f) =>
-    placed(frame, local)(f).position;

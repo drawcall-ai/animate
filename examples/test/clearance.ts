@@ -1,6 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
 import { jointOf } from '../src/joints';
-import type { Solid } from '../src/scenario';
 import type { Frame } from './frame';
 
 /**

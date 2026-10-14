@@ -102,6 +102,10 @@ export interface Limits {
  * pickup-shelf is held to what the rebuilt run measures: no joint past its range, no bone of its
  * own, the wrists within 2 cm of what they hold (measured ≤ 1.0 cm over its variations: the hands
  * carry the box, fitted to them, so only a sub-step's lag shows).
+ * knight-arming is held to what its runs measure: no joint past its range, the wrists within 1 cm of
+ * what they hold (measured ≤ 1.0 cm over its variations), and what it handles at most 2 cm into the
+ * body's capsules (measured ≤ 1.9 cm: a forearm brushing the shield's back, a hanging arm the
+ * scabbard; the capsules are themselves good to a cm or two).
  * kick-ball's hip (rightUpperLeg) 720 → 880°/s in round 2: the backswing now extends the hip
  * ~20° and the thigh drives through from there (instep kicks flex the hip at ~600–900°/s).
  * `rom`: the joints' dynamics keep every joint in its range of motion but a held limb's (a hand
@@ -133,7 +137,7 @@ export const LIMITS: Record<string, Limits> = {
   ladder: { rom: { leftLowerArm: 7, leftHand: 32, leftUpperLeg: 5, rightShoulder: 9, rightUpperArm: 8, rightHand: 60, rightUpperLeg: 14 }, joints: { knee: { accel: 113 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   push: { rom: { leftShoulder: 4, leftHand: 55, leftFoot: 17, rightShoulder: 4, rightHand: 55, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   reach: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.15, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
-  'knight-arming': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, clearance: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'knight-arming': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.01, clearance: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'look-around': { xcomFrames: 0, com: 0, crossings: 0, head: 0.055, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, head: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   fight: { rom: { leftFoot: 2, rightUpperArm: 13, rightUpperLeg: 28, rightFoot: 14 }, joints: { elbow: { speed: 3500, accel: 210 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.44, startStop: null, jumps: 0, climbs: 0, vaults: 0 },

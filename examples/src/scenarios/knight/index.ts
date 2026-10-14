@@ -47,7 +47,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, rise = 0, height, pace = 
     title: 'A knight arming',
     description:
       'In his armoury a knight buckles on his sword belt, hangs his sword on it and checks it draws, puts on his helm, pulls on his gauntlets, takes his shield onto his left arm and his lance in his right hand, and walks out into the yard, looking round.',
-    duration: 78 / pace,
+    // (the walking keeps its own pace)
+    duration: 20 + 50 / pace,
     actors: [{ height }],
     cameraDistance: 4.2,
     stage: () => {
