@@ -35,6 +35,9 @@ const SQUARE = 0.3;
 const ARRIVED = 0.12;
 /** how far round what it takes the body walks when the way passes it (m, default body): past a stand's foot */
 const ROUND = 0.5;
+/** the point beside what it walks round: how far on toward where it goes, and how near it the body comes before turning there (× ROUND) */
+const ON = 0.5;
+const NEAR = 0.3;
 const STILL = 0.5;
 /** the longest the hands take to get to their grips or off them, and a carried item to come to rest at its goal, unless told (s) */
 const REACHING = 4;
@@ -74,7 +77,7 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
  * Walking up to take hold of things: to stand facing `face` with the grips' middle `stand` before
  * the body (default: in reach, squarely; facing so the left hand's grip is on the left, or toward a
  * single grip) — no step if every grip is in reach of its shoulder already; round what it takes if
- * the way there passes it (by a point ROUND beside it); it ends there, turned and come to rest (or
+ * the way there passes it (by a point ROUND beside it, on the side the way runs); it ends there, turned and come to rest (or
  * stood still on planted feet a while: a step of a few cm `balance` may not take). The first half
  * of `grab`.
  */
@@ -88,7 +91,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: numb
     if (turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) return;
     const to = middleOf(holds).addScaledVector(leftOf(face), -aside);
     const there = to.clone().addScaledVector(forwardOf(face), -ahead * p.armLength);
-    // (round it: the way from where the body stands to there passing nearer its grips than ROUND, by a point that far beside them, on the body's side)
+    // (round it: the way from where the body stands to there passing nearer its grips than ROUND)
     const body = h.pose.com(new Vector3()).setY(0);
     const middle = middleOf(holds).setY(0);
     const way = _d.subVectors(there, body).setY(0);
@@ -97,10 +100,12 @@ export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: numb
     const nearest = body.clone().addScaledVector(way, along / Math.max(length, 1e-6));
     // (it is in the way: passed on the way there, more than ROUND before its end, nearer the line than ROUND)
     if (along > 0 && along < length - ROUND * p.scale && flat(nearest, middle) < ROUND * p.scale) {
+      // (on the side of it the way runs, by a point ROUND beside it and a little on toward there,
+      // walked to until near it: the last leg does not cut back in past it)
       const across = new Vector3(-way.z, 0, way.x).normalize();
-      const side = Math.sign(_e.subVectors(body, middle).dot(across)) || 1;
-      const beside = middle.clone().addScaledVector(across, side * ROUND * p.scale);
-      yield* walkTo(h, { to: beside, until: (f) => flat(f.prev.com(_com), beside) < ROUND * p.scale * 0.6 })();
+      const side = Math.sign(_e.subVectors(nearest, middle).dot(across)) || 1;
+      const beside = middle.clone().addScaledVector(across, side * ROUND * p.scale).addScaledVector(way, (ON * ROUND * p.scale) / length);
+      yield* walkTo(h, { to: beside, until: (f) => flat(f.prev.com(_com), beside) < NEAR * ROUND * p.scale })();
     }
     let still = 0;
     const arrived = (f: Frame<W>) => {
