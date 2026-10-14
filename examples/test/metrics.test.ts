@@ -89,11 +89,6 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
   ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
   ['reach, the targets 10 cm to the right', reach({ shift: { x: -0.1, z: 0 } })],
-  ['reach, the targets 10 cm higher', reach({ rise: 0.1 })],
-  ['reach, the targets 10 cm lower', reach({ rise: -0.1 })],
-  ['reach, turned 0.3 rad right', reach({ turn: -0.3 })],
-  ['reach, the hand 20% slower', reach({ pace: 0.8 })],
-  ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
   ['knight-arming, the stand, wall and rack 15 cm further left', knightArming({ shift: { x: 0.15, z: 0 } })],
   ['knight-arming, the stand, wall and rack 15 cm further right', knightArming({ shift: { x: -0.15, z: 0 } })],
   ['knight-arming, the stand, wall and rack 15 cm further on', knightArming({ shift: { x: 0, z: 0.15 } })],
@@ -131,6 +126,15 @@ const KNOWN: [string, Scenario][] = [
   // reach played 20% faster: the target swung out far ahead still outruns the body walking after it
   // (its walk faster with the pace), beyond the arm but within the arm + 35 cm the wrist is judged in (0.23 m)
   ['reach, the hand 20% faster', reach({ pace: 1.2 })],
+  // judged honestly (a gaze target moving smoothly is judged, not only one standing still), the eyes
+  // trail the hand's lead point as it swings round the body to behind it and back out (t ≈ 8–11 s):
+  // the head turned to the end of the neck's range, the trunk not turning after it — 27–49° off
+  // (the base reach 23°, under the 25° the eyes turn the rest)
+  ['reach, the targets 10 cm higher', reach({ rise: 0.1 })],
+  ['reach, the targets 10 cm lower', reach({ rise: -0.1 })],
+  ['reach, turned 0.3 rad right', reach({ turn: -0.3 })],
+  ['reach, the hand 20% slower', reach({ pace: 0.8 })],
+  ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
   // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),
   // so the body comes under the head late; and a controller on the floor turned off the body's facing,
   // or brought in close while rising to the cheer, is missed by more than the floor's own 15 cm

@@ -21,12 +21,12 @@ export class Targets {
   get head() {
     return this.headPeak.value;
   }
-  /** the gaze target asked, and since when (s) */
+  /** the gaze target asked (as it was last step), and since when (s) */
   private gazeAt: { target: Vector3; since: number } | null = null;
   get wrist() {
     return this.wristPeak.value;
   }
-  /** the eyes off the gaze target asked (°), once it has stayed put for SETTLE, where it is in front of the chest */
+  /** the eyes off the gaze target asked (°), SETTLE after it last jumped, where it is in front of the chest */
   get gaze() {
     return this.gazePeak.value;
   }
@@ -35,7 +35,9 @@ export class Targets {
     const gaze = asked.get('gaze');
     if (!(gaze instanceof Vector3)) this.gazeAt = null;
     else {
-      if (!this.gazeAt || this.gazeAt.target.distanceTo(gaze) > 0.01) this.gazeAt = { target: gaze.clone(), since: t };
+      // (a target that jumps is a new one, settled on afresh; one moving smoothly is followed and judged)
+      if (!this.gazeAt || this.gazeAt.target.distanceTo(gaze) > JUMP) this.gazeAt = { target: gaze.clone(), since: t };
+      else this.gazeAt.target.copy(gaze);
       const head = h.model.scene.getObjectByName('head');
       if (!head) throw new Error('no head');
       const forward = new Vector3(0, 0, 1).applyQuaternion(head.getWorldQuaternion(new Quaternion()));
@@ -91,3 +93,5 @@ function positionOf(goal: unknown): Vector3 | null {
 const _v = new Vector3();
 /** how long a gaze target stays put before the eyes are judged on it (s): a gaze shift takes ~0.3–0.5 s */
 const SETTLE = 0.6;
+/** how far a gaze target moves in one step to count as a new one (m): a jump, not a motion (5 cm in 1/60 s is 3 m/s) */
+const JUMP = 0.05;
