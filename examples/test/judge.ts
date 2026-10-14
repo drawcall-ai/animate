@@ -104,8 +104,9 @@ export interface Limits {
  * carry the box, fitted to them, so only a sub-step's lag shows).
  * knight-arming is held to what its runs measure, in ~23 kg of harness, his gear's mass counted as
  * he bears it: his centre of mass never 10 cm out (≤ 9.4 cm over its variations, taking up the 5 kg
- * lance at arm's length); the wrists within 1 cm of what they hold (≤ 1.3 cm over its variations,
- * within the headroom: the hands at the chin strap lag the helm settling onto the head); what he
+ * lance at arm's length); the wrists within 1 cm of what they hold — judged against 1 cm + HEADROOM
+ * (2 cm, as every limit on the target errors), so 3 cm in effect (≤ 1.3 cm over its variations: the
+ * hands at the chin strap lag the helm settling onto the head); what he
  * handles at most 1.5 cm into the body's capsules (≤ 1.3 cm: the scabbard by the left hand hanging
  * beside it; the capsules are themselves good to a cm or two); no joint past its range; his gait
  * judged on three steady strides bearing shield and lance.
