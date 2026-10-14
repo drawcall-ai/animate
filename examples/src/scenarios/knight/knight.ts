@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, timePassed } from '@pmndrs/timeline';
-import { carry, grab, INDEX, onBone, overlap, release, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
+import { before, carry, grab, INDEX, onBone, overlap, release, walkTo, withGaze, type Behaviour, type Eta, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
@@ -68,10 +68,16 @@ export const ORIGIN: Placement = { position: new Vector3() };
 export const at = (x: number, y: number, z: number, quaternion?: Quaternion): Placement => ({ position: new Vector3(x, y, z), quaternion });
 export const turn = (x: number, y: number, z: number) => new Quaternion().setFromEuler(new Euler(x, y, z, 'YXZ'));
 
-/** Out to the yard: walking there, then looking round it, a while at each of `sights`. */
+/** how long before he comes to a stop in the yard his eyes go to the first sight (s): the head leads the body's turn (Imai et al. 2001) */
+const LOOKING = 1;
+
+/** Out to the yard: walking there, and looking round it, a while at each of `sights` — the eyes on the first LOOKING s before he stops. */
 export function walkOut(k: Knight, yard: Vector3, face: number, sights: readonly Vector3[]): Behaviour<World> {
   return function* () {
-    yield* walkTo(k.h, { to: yard, face })();
-    for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4))();
+    const eta: Eta = { seconds: Infinity };
+    const look = function* () {
+      for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4))();
+    };
+    yield* overlap(walkTo(k.h, { to: yard, face, eta }), look, before(eta, LOOKING))();
   };
 }

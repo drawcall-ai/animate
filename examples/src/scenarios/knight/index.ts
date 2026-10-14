@@ -7,7 +7,7 @@ import type { Prop, Scenario } from '../../scenario';
 import { bearLance, bearShield, takeLance, takeShield } from './arms';
 import { don } from './gauntlets';
 import { putOnHelmet } from './helm';
-import { flow, pause, walkOut, type Knight } from './knight';
+import { flow, walkOut, type Knight } from './knight';
 import { buckle, checkDraw, hangSword } from './sword';
 import { beltEnd, drawn, gauntlet, harness, helmet, lance, scabbard, shield, solidsOf, strap, sword, type Gear } from './gear';
 
@@ -72,8 +72,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
     title: 'A knight arming',
     description:
       'In his armoury a knight in harness buckles on his sword belt, hangs his sword on it and checks it draws, puts on his helm and buckles its strap, pulls on his gauntlets, takes his shield onto his left arm and his lance in his right hand, and walks out into the yard, looking round.',
-    // (the walking keeps its own pace)
-    duration: 30 + 52 / pace,
+    // (the walking keeps its own pace; a moment over looking round the yard, whatever the variation)
+    duration: 46 + 24 / pace,
     actors: [{ height }],
     cameraDistance: 4.2,
     stage: () => {
@@ -102,7 +102,6 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       const story = (k: Knight) =>
         function* () {
           yield* wear(k.h, gear.sword.item, gear.scabbard.item)();
-          yield* pause(k, 0.8)();
           // (each thing flowing into the next: it sets off as the hands let go of the last)
           const arms = function* () {
             yield* takeShield(k, gear.shield.item)();
@@ -123,7 +122,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
               [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left']],
               [putOnHelmet(k, gear.helmet.item), ['left', 'right']],
               [don(k, gear.gauntlets.left.item, 'left', AT_TABLE), ['right']],
-              [don(k, gear.gauntlets.right.item, 'right', AT_TABLE), ['left']],
+              // (the left letting go of the right gauntlet's cuff out to its own side, clear of the sword's hilt as it comes down)
+              [don(k, gear.gauntlets.right.item, 'right', AT_TABLE), ['left'], { left: new Vector3(0.15, 0.05, 0.05) }],
             ],
             arms,
           )();
