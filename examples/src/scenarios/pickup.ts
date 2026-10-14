@@ -44,7 +44,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
     title: 'Pick up a box, shelve it overhead',
     description:
       'A box lies on the floor 2.6 m away: the body walks to it, squats and takes it in both hands, lifts it in front of the knees up to the chest, carries it to a shelf and puts it onto the top board above its head, on its toes; then lets go.',
-    duration: 20,
+    duration: 17,
     actors: [{}],
     stage: () => {
       const report = new Report();
