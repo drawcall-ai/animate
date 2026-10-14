@@ -12,10 +12,19 @@ export interface Gazer {
   neck: string;
   /** the point the eyes look from (world), into `out` */
   eyes(pose: ReadonlyPose, out: Vector3): Vector3;
+  /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
+  range: { down: number; up: number; side: number };
 }
 
-/** how fast a head turns to look (rad/s², rad/s): a brisk gaze shift */
+/** how fast a head turns to look about (rad/s², rad/s): a glance aside */
 export const GLANCE = { turnAccel: 40, turnSpeed: 6 };
+/**
+ * how fast a head turns to what the hands go for (rad/s², rad/s): a large gaze shift's head,
+ * ~3400°/s² and ~340°/s at its peak (recalled from Guitton & Volle 1987, J Neurophysiol 58:427,
+ * not checked against the paper; head peaks in large shifts grow ~2.3°/s per degree of the
+ * shift, 100–350°/s)
+ */
+export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
 /**
  * The gazer's eyes on `target` (world), the head upright (rest: facing +Z, +Y up), every sub-step,
@@ -25,46 +34,85 @@ export const GLANCE = { turnAccel: 40, turnSpeed: 6 };
 export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour<W> {
   const turn = { accel: motion.turnAccel, speed: motion.turnSpeed };
   return function* () {
+    /** looking over the top: pitched back past straight down or up rather than turned toward the target (null: not chosen yet) */
+    let over: boolean | null = null;
     yield* action<Frame<W>>({
       update: (f) => {
         const pose = f.current;
         const bones = pose.skeleton.chain(gazer.neck);
-        const d = _d.subVectors(live(target, f), gazer.eyes(pose, _eyes));
-        const across = Math.hypot(d.x, d.z);
-        if (across + Math.abs(d.y) < 1e-6) return;
+        const d = _d.subVectors(live(target, f), gazer.eyes(pose, _eyes)).normalize();
+        if (d.lengthSq() === 0) return;
         // upright: turned about the vertical, then pitched (+ down); looking nearly straight up or
-        // down, the way it faces is the neck's parent's (the target's own heading flips there), and
-        // it pitches in that plane (past straight down for a target below and behind)
+        // down, the way it faces eases to the neck's parent's (the target's own heading flips
+        // there), then the least turn that puts the eyes on the target — either turned toward it,
+        // or away and pitched back over past straight down or up (a point just behind the feet)
         const parent = pose.skeleton.bones[bones[0]].parent;
-        const turned = pose.rotation(parent);
-        const ahead = _f.set(0, 0, 1).applyQuaternion(turned);
+        const ahead = _f.set(0, 0, 1).applyQuaternion(pose.rotation(parent));
         const facing = Math.atan2(ahead.x, ahead.z);
-        const vertical = smoothstep(0.1, 0.35, across / d.length());
-        // (turned toward the target's heading, or away from it pitched back over past straight
-        // down or up: of the two, the nearer the parent's turn)
+        const vertical = smoothstep(0.1, 0.35, Math.hypot(d.x, d.z));
         const toward = wrap(Math.atan2(d.x, d.z) - facing);
         upright(d, facing + toward * vertical, _q);
         upright(d, facing + wrap(toward + Math.PI) * vertical, _o);
-        if (_o.angleTo(turned) < _q.angleTo(turned)) _q.copy(_o);
-        const rel = _rel.copy(pose.rotation(parent)).invert().multiply(_q);
+        // (of the two, first the lesser turn from the neck's parent; then the one taken kept until the
+        // other, within the neck's range, leaves the eyes HYSTERESIS less of their range to turn: it
+        // never alternates between them as the body sways)
+        const turned = pose.rotation(parent);
+        over ??= _o.angleTo(turned) < _q.angleTo(turned);
+        const [kept, other] = over ? [_o, _q] : [_q, _o];
+        if (strain(gazer, pose, bones, turned, other, d) < strain(gazer, pose, bones, turned, kept, d) - HYSTERESIS) over = !over;
+        const goal = over ? _o : _q;
+        const rel = _rel.copy(turned).invert().multiply(goal);
         const share = _share.identity().slerp(rel, 1 / bones.length);
+        // (each bone followed in the world, from where it was in it: the head held steady on its
+        // target as the body moves under it, the neck taking up the trunk's motion within its range)
+        const world = _head.copy(turned);
         for (const b of bones) {
           const limit = pose.skeleton.limits[b];
-          const goal = _goal.copy(share);
-          if (limit) clampRotation(goal, limit);
-          const q = followRotation(f.prev2.local(b), f.prev.local(b), goal, turn, f.dt, _out);
+          const local = _goal.copy(share);
+          if (limit) clampRotation(local, limit);
+          const followed = followRotation(f.prev2.rotation(b), f.prev.rotation(b), _w.copy(world).multiply(local), turn, f.dt, _out);
+          const q = world.invert().multiply(followed);
           if (limit) clampRotation(q, limit);
           pose.setLocal(b, q);
+          world.copy(pose.rotation(b));
         }
       },
     });
   };
 }
 
-/** looking along `d` turned `yaw` about the vertical, then pitched in that plane (+ down, past straight down for `d` behind it), into `out` */
+/** how much less of the eyes' range (share of it) the other way of looking at a point must leave them to be taken */
+const HYSTERESIS = 0.3;
+
+/**
+ * how much of the eyes' range (1: all of it) the head, turned toward `goal` (world) from `parent`'s
+ * turn shared over the neck's `bones` each within its limit, leaves them to look along `d` (unit)
+ */
+function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, d: Vector3): number {
+  const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
+  const head = _head.copy(parent);
+  for (const b of bones) {
+    const limit = pose.skeleton.limits[b];
+    const local = _goal.copy(share);
+    if (limit) clampRotation(local, limit);
+    head.multiply(local);
+  }
+  const l = _l.copy(d).applyQuaternion(head.invert());
+  const side = Math.atan2(l.x, l.z);
+  const down = Math.atan2(-l.y, Math.hypot(l.x, l.z));
+  const { range } = gazer;
+  return Math.hypot(side / range.side, down / (down > 0 ? range.down : range.up));
+}
+
+/**
+ * looking along `d` (unit), turned `yaw` about the vertical and pitched in that plane (+ down, past
+ * straight down for `d` behind it), then turned the least way onto `d` (off that plane only where
+ * the yaw eased off its heading: nearly straight up or down), into `out`
+ */
 function upright(d: Vector3, yaw: number, out: Quaternion): Quaternion {
   const pitch = Math.atan2(-d.y, d.x * Math.sin(yaw) + d.z * Math.cos(yaw));
-  return out.setFromAxisAngle(Y, yaw).multiply(_p.setFromAxisAngle(X, pitch));
+  out.setFromAxisAngle(Y, yaw).multiply(_p.setFromAxisAngle(X, pitch));
+  return out.premultiply(_p.setFromUnitVectors(_l.set(0, 0, 1).applyQuaternion(out), d));
 }
 
 const X = new Vector3(1, 0, 0);
@@ -75,6 +123,7 @@ const _q = new Quaternion();
 const _p = new Quaternion();
 const _o = new Quaternion();
 const _f = new Vector3();
+const _l = new Vector3();
 const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 const smoothstep = (lo: number, hi: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
@@ -84,3 +133,5 @@ const _rel = new Quaternion();
 const _share = new Quaternion();
 const _goal = new Quaternion();
 const _out = new Quaternion();
+const _head = new Quaternion();
+const _w = new Quaternion();

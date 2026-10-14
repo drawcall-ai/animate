@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { action } from '@pmndrs/timeline';
+import { action, parallel } from '@pmndrs/timeline';
 import { Body, chainTo, lookAt, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
 import { spinOf } from '../../src/core/rotation';
 import { leg, turn } from './rigs';
@@ -54,7 +54,7 @@ describe('lookAt', () => {
   it("turns a gazer's head, upright, until its eyes are on the point", () => {
     const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
     const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
-    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out) };
+    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
     const point = new Vector3(2, 1.2, 1);
     const body = new Body(skeleton, lookAt(gazer, point));
     for (let k = 0; k < 120; k++) body.update(dt);
@@ -68,11 +68,36 @@ describe('lookAt', () => {
   it('looks down past straight down at a point below and a little behind, rather than turning round', () => {
     const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
     const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
-    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out) };
+    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
     const point = new Vector3(0.05, 0, -0.3);
     const body = new Body(skeleton, lookAt(gazer, point));
     for (let k = 0; k < 120; k++) body.update(dt);
     // (still facing the way the chest does, not turned half round)
     expect(new Vector3(1, 0, 0).applyQuaternion(body.pose.rotation(2)).x).toBeGreaterThan(0.9);
+  });
+
+  it('keeps one way of looking at a point nearly straight below, the chest bowed and swaying under it', () => {
+    const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
+    const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
+    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
+    // (a hilt at the left hip, seen from above: down, a little left and ahead)
+    const point = new Vector3(0.17, 0.95, 0.2);
+    const sway = (t: number) => turn(0, 1, 0, 0.04 * Math.sin(2 * Math.PI * 3 * t)).multiply(turn(1, 0, 0, 0.4));
+    const body = new Body(skeleton, function* () {
+      yield* parallel<Frame>('all', function* () {
+        yield* action<Frame>({ update: (f) => void f.current.setLocal(0, sway(f.time)) });
+      }, lookAt(gazer, point));
+    });
+    const heads: Quaternion[] = [];
+    let missed = 0;
+    for (let k = 0; k < 120; k++) {
+      body.update(dt);
+      heads.push(body.pose.rotation(2).clone());
+      const eyes = gazer.eyes(body.pose, new Vector3());
+      if (k >= 60) missed = Math.max(missed, new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(2)).angleTo(point.clone().sub(eyes)));
+    }
+    // (on it, the head turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
+    expect(missed).toBeLessThan(0.03);
+    expect(Math.max(...heads.slice(61).map((q, k) => q.angleTo(heads[60 + k])))).toBeLessThan(0.02);
   });
 });

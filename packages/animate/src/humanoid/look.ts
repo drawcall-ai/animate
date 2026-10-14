@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
-import { lookAt } from '../core/gaze';
+import { lookAt, SHIFT } from '../core/gaze';
 import { live, type Behaviour, type Live } from '../core/goal';
 import type { Humanoid } from './humanoid';
 import { forwardOf, lerp, smoothstep } from './math';
@@ -104,8 +104,6 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
 
 /** looking down: how far the head pitches on the neck (rad, ~57°: the neck's flexion short of its end), and how far the body bows to see lower at most (rad) */
 const NECK_PITCH = 1.0;
-/** how fast the head turns to what the hands go for (rad/s², rad/s): a large gaze shift's head, ~3400°/s² and ~340°/s at its peak (Guitton & Volle 1987) */
-const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 const MOST_BOW = 0.35;
 /** how far ahead of the hips the eyes are standing (m, default body) */
 const EYES_AHEAD = 0.09;

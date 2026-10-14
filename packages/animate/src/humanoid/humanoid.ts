@@ -69,7 +69,7 @@ export class Humanoid<W = unknown> {
     this.feet = start.feet;
     this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
-    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out) };
+    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES };
     if (options.wearing) dress(this, start.pose, options.wearing(p));
     // (after the behaviour each sub-step, the body carries what it wears and holds)
     const script = behaviour(this);
@@ -114,6 +114,15 @@ export class Humanoid<W = unknown> {
 }
 
 const _v = new Vector3();
+
+/**
+ * How far the eyes turn in the head comfortably (rad): down, the preferred declination of the line
+ * of sight below the head's (29° sitting upright, 34° over all postures, 38° for a near target: Hill
+ * & Kroemer 1986, Human Factors 28:127); up and aside, where the eyes end a head-free gaze shift
+ * (half the customary ocular motor range, 44° wide on average, and of the eye-only range, 36°:
+ * Stahl 1999, Exp Brain Res 126:41; measured horizontally, taken for up as well)
+ */
+const EYES = { down: (30 * Math.PI) / 180, up: (20 * Math.PI) / 180, side: (20 * Math.PI) / 180 };
 
 /**
  * `pose` standing relaxed at `floor` facing `yaw`: the feet flat where the default stance puts them,

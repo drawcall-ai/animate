@@ -217,7 +217,12 @@ const ON_TOES = 0.3;
 const FLOOR_SINK = 0.025;
 /** how far a landing may still move in the last 40% of a swing (m): later reads as a stumble */
 const LATE_RETARGET = 0.03;
-/** how far what the eyes are asked to look at may lie beyond what they turn comfortably in the head (°, targets.ts EYES), once it stays put: the head faces it within that */
+/**
+ * how far what the eyes are asked to look at may lie beyond what they turn comfortably in the head
+ * (°, targets.ts EYES), once it stays put: where people's eyes still end a gaze shift — aside, the
+ * customary ocular motor range, 44° wide (Stahl 1999: 2° past EYES' 20°); down, a near target's
+ * preferred declination, 38° (Hill & Kroemer 1986: 8° past EYES' 30°)
+ */
 const GAZE = 5;
 /** the widest a slow step lands the feet apart (× the stance's width) */
 const WIDE = 1.5;

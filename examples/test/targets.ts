@@ -97,9 +97,10 @@ function positionOf(goal: unknown): Vector3 | null {
 const _v = new Vector3();
 /**
  * How far the eyes turn in the head comfortably (°): down to the preferred declination of the line
- * of sight below the head's (~29°, Hill & Kroemer 1986, Human Factors 28:127), up and to the side
- * the eye-only range of head-free gaze shifts (~20°, Stahl 1999, Exp Brain Res 126:41) — an
- * ellipse round the head's forward.
+ * of sight below the head's (29° sitting upright, 34° over all postures: Hill & Kroemer 1986, Human
+ * Factors 28:127); up and to the side about half the eye-only range of head-free gaze shifts (36°
+ * wide on average: Stahl 1999, Exp Brain Res 126:41; measured horizontally, taken for up as well)
+ * — an ellipse round the head's forward.
  */
 const EYES = { down: 30, up: 20, side: 20 };
 
