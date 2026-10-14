@@ -120,7 +120,8 @@ function sync(alpha = 1, dt = 1 / 60) {
   drawProps(props, between.props);
   stage.env?.update(sim.t);
   const focus = s.focus?.(sim.actors) ?? between.root;
-  const yaw = (s.facing ?? sim.actors[0].yaw) + turn;
+  // (the way the body faces, as balance has it: not the hips' twist as they step or swing)
+  const yaw = (s.facing ?? sim.actors[0].gait.facing) + turn;
   const still = capture && !video;
   if (still) framing.set(focus, yaw);
   else framing.follow(focus, yaw, dt);
