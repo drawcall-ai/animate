@@ -26,7 +26,7 @@ export function takeShield(k: Knight, shield: Item): Behaviour<World> {
   const steady = hold(k.h, shield, { right: 'edge' });
   return function* () {
     yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI })();
-    yield* eyesOn(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady), 0)();
+    yield* eyesOn(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady), { first: false })();
     yield* wear(k.h, shield, INDEX.leftLowerArm)();
     yield* closeHand(k.h, 'left', shield, 'grip')();
     // (the right hand off to the side and down, out of the shield's way; then the shield up off the peg and back off the wall)

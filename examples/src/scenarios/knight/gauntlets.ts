@@ -25,7 +25,7 @@ export function don(k: Knight, gauntlet: Item, side: Side, stand: Stand): Behavi
     yield* take(k, { [other]: [gauntlet, 'cuff'] }, { face: headingOf(fingers.x, fingers.z), stand: { ...stand, aside: side === 'left' ? -0.1 : 0.1 } })();
     yield* along(k, facingAt(k, 'chest'), [[gauntlet, cuff, [[1.0, heldOpen(side)]]]])();
     const open = onBone(k.h, INDEX.chest, heldOpen(side), { facing: true });
-    yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, cuff, { to: open })), 0)();
+    yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, cuff, { to: open })), { first: false })();
     yield* wear(k.h, gauntlet, INDEX[`${side}Hand`], { to: { position: new Vector3(), quaternion: new Quaternion() } })();
     yield* busy(k, release(k.h, [other]))();
   };

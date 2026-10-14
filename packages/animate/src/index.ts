@@ -8,7 +8,7 @@ export { live, REACHED, type Behaviour, type FollowOptions, type Live, type Moti
 export { Carrier, Item, onItem, type ItemOptions } from './core/carrier';
 export { ChainTip, chainTo, reached, type TipOptions } from './core/tip';
 export { TrackedPoint, TrackedRotation } from './core/track';
-export { GLANCE, lookAt, SHIFT, type Gazer } from './core/gaze';
+export { gazeOff, GLANCE, lookAt, SHIFT, type Gazer } from './core/gaze';
 export { clampRotation, beyond } from './core/limits';
 
 // The humanoid layer: a viverse character model as a body.

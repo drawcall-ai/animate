@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { carry, hold, INDEX, onBone, onItem, reachFor, release, still, takeOff, wear, yawOf, type Behaviour, type Frame, type Item, type Leg, type Placement, type Stand, type World } from '@drawcall/animate';
-import { along, at, busy, eyesOn, facingAt, ORIGIN, pause, SETTLE, take, turn, type Knight } from './knight';
+import { along, at, busy, eyesOn, facingAt, ORIGIN, take, turn, type Knight } from './knight';
 
 // The sword belt and the sword: buckled on, hung at the left hip, its draw checked.
 
@@ -33,7 +33,7 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, stand: S
         [belt.buckle, { left: 'end' }, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]]],
         [belt.tongue, { right: 'end' }, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]]],
       ]),
-      0,
+      { first: false },
     )();
     yield* wear(k.h, belt.buckle, INDEX.hips)();
     yield* wear(k.h, belt.tongue, INDEX.hips)();
@@ -83,7 +83,6 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<Wor
       k,
       (f) => hilt(f).position,
       function* () {
-        yield* pause(k, SETTLE)();
         yield* reachFor(k.h, { left: [scabbard, 'below'] })();
         yield* takeOff(k.h, scabbard)();
         yield* along(k, hips, [[scabbard, { left: 'below' }, [[0.6, PRESENTED]]]])();
@@ -98,7 +97,6 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<Wor
         yield* wear(k.h, scabbard, INDEX.hips)();
         yield* release(k.h, ['left'])();
       },
-      0,
     ),
   );
 }

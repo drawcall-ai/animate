@@ -1,9 +1,9 @@
 import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
-import { lookAt, SHIFT } from '../core/gaze';
+import { gazeOff, lookAt, SHIFT } from '../core/gaze';
 import { live, type Behaviour, type Live } from '../core/goal';
-import { seeded } from '../core/random';
+import { seeded, seedOf } from '../core/random';
 import type { Humanoid } from './humanoid';
 import { forwardOf, lerp, smoothstep } from './math';
 
@@ -52,14 +52,16 @@ const _com = new Vector3();
 const _v = new Vector3();
 
 /**
- * `task` with the eyes on `at` first: they go there `lead` s before it sets off (people fixate what
- * they reach for ~0.5–1 s before the hand gets there: Land & Hayhoe 2001) and stay till it ends.
- * For a point further below the eyes than the neck pitches the head, the body bows to see it (asks
- * `balance`), or at least `bow` (rad: work at the waist, the eyes over the hands). Put it after the
+ * `task` with the eyes on `at` first: `task` sets off once they have got there (within ARRIVED) and
+ * a moment more, `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the
+ * hand goes for ~0.5 s before it (Land & Hayhoe 2001) — and they stay till it ends. For a point
+ * further below the eyes than the neck pitches the head, the body bows to see it (asks `balance`),
+ * or at least `bow` (rad: work at the waist, the eyes over the hands). With `first: false` the eyes
+ * do not lead: `task` sets off at once (the eyes on what the hands already work). Put it after the
  * base (its `lookAt` overrides `lookAround`'s).
  */
-export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number } = {}): Behaviour<W> {
-  const { lead = 0.5, bow = 0 } = options;
+export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour<W> {
+  const { bow = 0, first = true } = options;
   const bowing = (f: Frame<W>) => {
     // (as the hips stand: how far ahead of them and below the eyes the point is; then the bow under
     // which the head, pitched as far as the neck takes it on top of the bow, comes nearest to it —
@@ -79,10 +81,20 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
     h.asks.bow = Math.max(h.asks.bow, bow, best);
   };
   return function* () {
+    let lead = options.lead ?? NaN;
     yield* parallel<Frame<W>>(
       'race',
       function* () {
-        yield* action({ until: timePassed(lead, 'seconds') });
+        if (first) {
+          yield* action<Frame<W>>({
+            until: (f, _, time) => {
+              const point = live(at, f);
+              if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
+              return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
+            },
+          });
+          yield* action({ until: timePassed(lead, 'seconds') });
+        }
         yield* task();
       },
       lookAt(h.gazer, at, SHIFT),
@@ -91,6 +103,10 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
   };
 }
 
+/** the eyes have got where they look: within this of it (rad, 10°), or looked toward it this long (s: a point the head cannot turn to); and how long after that a task they lead sets off (s) */
+const ARRIVED = (10 * Math.PI) / 180;
+const LONGEST = 1.2;
+const LEAD = [0.1, 0.3];
 /** looking down: how far the head pitches on the neck (rad, ~57°: the neck's flexion short of its end), and how far the body bows to see lower at most (rad) */
 const NECK_PITCH = 1.0;
 const MOST_BOW = 0.35;

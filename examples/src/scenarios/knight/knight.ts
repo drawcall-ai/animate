@@ -28,8 +28,8 @@ export const pause = (k: Knight, seconds: number): Behaviour<World> =>
 /** the hands busy while `task` runs (the metrics judge the arms nobody asks anything of as free) */
 export const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => reporting(k.report, ['leftHand', 'rightHand'], task);
 
-/** `task` with the eyes on `at` first (`lead` s at pace 1; `withGaze`, bowing at least `bow`), reported as the gaze */
-export const eyesOn = (k: Knight, at: Live<Vector3, World>, task: Behaviour<World>, lead = 0.5, bow?: number): Behaviour<World> => withGaze(k.h, reported(k.report, 'gaze', at), task, { lead: lead / k.pace, bow });
+/** `task` with the eyes on `at` (`withGaze`: first, the task setting off once they are there, or with `first: false` at once; bowing at least `bow`), reported as the gaze */
+export const eyesOn = (k: Knight, at: Live<Vector3, World>, task: Behaviour<World>, options: { first?: boolean; bow?: number } = {}): Behaviour<World> => withGaze(k.h, reported(k.report, 'gaze', at), task, options);
 
 /** after a moment's pause, taking hold of `holds` (`grab`), the eyes on them reported */
 export function take(k: Knight, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<World> {
@@ -56,6 +56,6 @@ export function walkOut(k: Knight, yard: Vector3, face: number, sights: readonly
   return function* () {
     yield* pause(k, SETTLE)();
     yield* walkTo(k.h, { to: yard, face })();
-    for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4), 0)();
+    for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4))();
   };
 }
