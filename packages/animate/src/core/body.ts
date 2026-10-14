@@ -43,7 +43,9 @@ export class Body<W = unknown> {
   readonly frame: Frame<W>;
   /** the poses `frame` shows, as [prev2, prev, current] */
   private poses: [Pose, Pose, Pose];
-  private readonly runner: TimelineRunner<Frame<W>>;
+  private readonly behaviour: ReusableTimeline<Frame<W>>;
+  /** made on the first update: a behaviour may read the body (its pose) as it sets out */
+  private runner: TimelineRunner<Frame<W>> | null = null;
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
@@ -65,7 +67,7 @@ export class Body<W = unknown> {
       prev: this.poses[1],
       current: this.poses[2],
     };
-    this.runner = new TimelineRunner(behaviour);
+    this.behaviour = behaviour;
   }
 
   /** the last final pose */
@@ -91,7 +93,7 @@ export class Body<W = unknown> {
     frame.dt = dt;
     frame.time += dt;
     clock.delta = dt;
-    this.runner.step(frame, clock);
+    (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
     clock.prevDelta = dt;
     clock.frame++;
     current.forward();

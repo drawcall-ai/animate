@@ -29,6 +29,16 @@ describe('Body', () => {
     expect(body.pose.local(1).angleTo(turn(1, 0, 0, 0.6))).toBeLessThan(1e-7);
   });
 
+  it('sets its behaviour out on the first update: the behaviour may read the body it moves as it sets out', () => {
+    let read = NaN;
+    const body: Body = new Body(leg(), function* () {
+      read = body.pose.local(1).w;
+      yield* every(() => {})();
+    });
+    body.update(1 / 60);
+    expect(read).toBe(1);
+  });
+
   it('hands over continuously when a layer ends: the one below follows its pose from the motion there is', () => {
     const accel = 40;
     const rest = new Quaternion();
