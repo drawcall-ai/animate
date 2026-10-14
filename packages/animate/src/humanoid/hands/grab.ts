@@ -37,8 +37,8 @@ const STILL = 0.5;
 
 /**
  * Taking hold of things, each step under way before the last is over: the body walks up to take
- * them (`approach`); LOOKING s before it arrives the eyes go to them (`withGaze`: on the grips'
- * middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
+ * them (`approach`); LOOKING s before it arrives, once they are in view (IN_VIEW), the eyes go to
+ * them (`withGaze`: on the grips' middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
  * halfway from its shoulder to its grip: the walk is left to come to rest unbowed), and
  * once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`.
@@ -67,8 +67,14 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
   };
 }
 
-/** how far aside of the way the body faces something may be for the eyes to go to it, the head turned (rad) */
-const IN_VIEW = 1;
+/**
+ * how far aside of the way the body faces something may be for the eyes to go to it (rad, ~80°):
+ * about as far as the head turns on the trunk (the neck's and the head's ranges, ~75° together), the
+ * eyes taking the rest without strain. What it takes further aside — beside the way it walks, the
+ * body coming up to it sideways on — the eyes go to only as the body turns to it in its last steps:
+ * held there, the head would be turned past what it turns comfortably.
+ */
+const IN_VIEW = 1.4;
 
 /** the way from the body to `at` on the floor's plane (x, z) */
 const flatTo = <W>(f: Frame<W>, at: Readonly<Vector3>): [number, number] => {
