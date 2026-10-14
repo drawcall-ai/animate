@@ -12,27 +12,16 @@ import { lookAround, reach, vr } from '../src/scenarios/tracking';
 import { Report } from '../src/report';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
-import type { Frame } from './frame';
-import { judge, LIMITS, limitsOf, measure, type Limits } from './judge';
+import { failed, LIMITS, measure, type Limits } from './judge';
+import { run, steps } from './run';
 
-/** each fixed step's frames of a run `sim` (OpenPose models, read without rendering) */
-function* steps(sim: Simulation): Generator<Frame[]> {
-  while (sim.t < sim.scenario.duration) {
-    sim.step();
-    const asked = sim.stage.report.at(sim.t);
-    const solids = sim.stage.solids?.() ?? [];
-    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
-  }
-}
-
-/** a run of `sc` measured, held to its limits, and to what it is for */
+/** a run of `sc` measured, held to its own limits (the flow's sourced ones too), and to what it is for */
 function judged(sc: Scenario, strides?: Limits['strides']) {
-  const sim = new Simulation(sc);
-  const m = measure(sc.id, steps(sim));
-  console.log(m.report);
-  const limit = limitsOf(sc.id);
-  judge(m, strides ? { ...limit, strides } : limit);
-  expect(sim.stage.done(), `${sc.id}: done`).toBe(true);
+  const r = run(sc, strides && { strides });
+  console.log(r.m.report);
+  expect(r.own, `no limits for ${sc.id}`).toBe(true);
+  const fails = r.checks.filter((c) => failed(c) && !c.advisory).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit})${c.at === undefined ? '' : ` @${c.at.toFixed(2)}s`}${c.where ? ` ${c.where}` : ''}`);
+  expect(fails).toEqual([]);
 }
 
 it('lists each scenario once', () => {

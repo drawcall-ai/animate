@@ -12,6 +12,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "metrics": "pnpm -F examples metrics",
+    "judge": "pnpm -F examples judge",
     "bench": "pnpm -F examples bench",
     "bench:browser": "node examples/scripts/bench.mjs",
     "capture": "node examples/scripts/capture.mjs",

@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "typecheck": "tsc && tsc -p test/tsconfig.json && tsc -p bench/tsconfig.json",
     "test": "vitest run openpose",
-    "metrics": "vitest run metrics",
+    "metrics": "vitest run metrics flow",
+    "judge": "node scripts/judge.mjs",
     "bench": "vite build --ssr bench/node.ts --outDir node_modules/.bench --logLevel warn && node --expose-gc node_modules/.bench/node.js"
   },
   "dependencies": {

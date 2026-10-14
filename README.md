@@ -40,3 +40,11 @@ The package ships its usage guide as a skill: `packages/animate/skills/animate/S
 - `packages/animate` — the `@drawcall/animate` package
 - `examples` — the examples app (`pnpm dev`), its motion metrics (`pnpm metrics`) and capture tooling
   (`pnpm capture`)
+
+To check a scenario after every change, `pnpm judge <scenario>` runs it headless in about a second
+and prints what fails, worst first: each failure's value against its limit, when, the task running
+then (`grab@pickup.ts:82`) and the usual fix, then how the motion flows from one task into the next
+(dead time, the eyes leading the hands, reach profiles). `--vary N` adds N seeded variations of the
+actors' start, `--json` saves the results to `examples/.judge/` and tells what changed since the last
+run, and `--look` renders the moments worth a look with a yes/no question list for each. It exits 1
+when a check fails; scenarios without their own limits are held to the universal ones.

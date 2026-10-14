@@ -23,9 +23,18 @@ export class Targets {
     return this.headPeak.value;
   }
   /** the gaze target asked (as it was last step), and since when (s) */
-  private gazeAt: { target: Vector3; since: number } | null = null;
+  private goal: { target: Vector3; since: number } | null = null;
   get wrist() {
     return this.wristPeak.value;
+  }
+  get wristAt() {
+    return this.wristPeak.at;
+  }
+  get headAt() {
+    return this.headPeak.at;
+  }
+  get gazeAt() {
+    return this.gazePeak.at;
   }
   /** how far beyond what the eyes turn comfortably in the head (EYES) the gaze target asked lies (°), SETTLE after it last jumped, where it is before the body (in front of the frontal plane through the hips) */
   get gaze() {
@@ -34,11 +43,11 @@ export class Targets {
 
   see({ t, h, asked }: Frame) {
     const gaze = asked.get('gaze');
-    if (!(gaze instanceof Vector3)) this.gazeAt = null;
+    if (!(gaze instanceof Vector3)) this.goal = null;
     else {
       // (a target that jumps is a new one, settled on afresh; one moving smoothly is followed and judged)
-      if (!this.gazeAt || this.gazeAt.target.distanceTo(gaze) > JUMP) this.gazeAt = { target: gaze.clone(), since: t };
-      else this.gazeAt.target.copy(gaze);
+      if (!this.goal || this.goal.target.distanceTo(gaze) > JUMP) this.goal = { target: gaze.clone(), since: t };
+      else this.goal.target.copy(gaze);
       const head = h.model.scene.getObjectByName('head');
       if (!head) throw new Error('no head');
       const forward = new Vector3(0, 0, 1).applyQuaternion(head.getWorldQuaternion(new Quaternion()));
@@ -50,7 +59,7 @@ export class Targets {
       const facing = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0);
       const seen = gaze.clone().sub(hips.getWorldPosition(new Vector3())).dot(facing) > 0;
       this.asked++;
-      if (seen && t - this.gazeAt.since > SETTLE) {
+      if (seen && t - this.goal.since > SETTLE) {
         this.judged++;
         const off = (forward.angleTo(toward) * 180) / Math.PI;
         this.headOffPeak.see(off, t);
