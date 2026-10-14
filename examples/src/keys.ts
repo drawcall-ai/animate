@@ -1,11 +1,5 @@
 import { Vector3 } from 'three';
-import type { Frame, World } from '@drawcall/animate';
-
-/** Flash & Hogan's minimum-jerk profile, `t` in [0, 1] */
-export function minimumJerk(t: number): number {
-  const s = Math.min(1, Math.max(0, t));
-  return s * s * s * (10 - 15 * s + 6 * s * s);
-}
+import { minimumJerk } from '@drawcall/animate';
 
 /** A key: a value at a time (s). */
 export type Key<T> = [time: number, value: T];
@@ -23,19 +17,6 @@ export function scalar(keys: readonly Key<number>[]): (t: number) => number {
       return a + (b - a) * minimumJerk((t - t0) / (t1 - t0));
     }
     return keys[keys.length - 1][1];
-  };
-}
-
-/**
- * A point going from `from` through `via` to `to` in `duration` s from when it is first read: one
- * smooth curve (`curve`), at rest at its ends (minimum jerk); it stays at `to`. Into `out`.
- */
-export function path(from: Vector3, via: Vector3, to: Vector3, duration: number, out = new Vector3()): (f: Frame<World>) => Vector3 {
-  let start = -1;
-  const along = curve(from, via, to);
-  return (f) => {
-    if (start < 0) start = f.time;
-    return along(minimumJerk((f.time - start) / duration), out);
   };
 }
 

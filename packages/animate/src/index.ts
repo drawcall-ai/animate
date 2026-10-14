@@ -40,6 +40,6 @@ export { ranges } from './humanoid/profile/limits';
 export { relaxedPose } from './humanoid/profile/relaxed';
 export { DEFAULT_HEIGHT, type Proportions } from './humanoid/proportions';
 export { Rig, yawOf } from './humanoid/rig';
-export { headingOf } from './humanoid/math';
+export { headingOf, minimumJerk } from './humanoid/math';
 export { CHAINS, massFor, skeletonOf, type Chain } from './humanoid/skeleton';
 export { createWorld, type World } from './humanoid/world';
