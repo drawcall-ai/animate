@@ -1,8 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { hold, INDEX, lookAt, onBone, reachFor, release, wear, type Behaviour, type Frame, type Item, type World } from '@drawcall/animate';
+import { hold, INDEX, lookAt, onBone, reachFor, release, still, wear, type Behaviour, type Frame, type Item, type World } from '@drawcall/animate';
 import { reported } from '../../report';
-import { still } from './course';
 import { along, at, busy, eyesOn, facingAt, ORIGIN, pause, take, type Knight } from './knight';
 
 type F = Frame<World>;

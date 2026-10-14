@@ -18,6 +18,8 @@ function run(behaviour: (h: Humanoid) => Behaviour, seconds: number): Humanoid {
   return h;
 }
 
+/** the world as a course's frame */
+const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 const box = (at: Vector3, mass = 0) => new Item(at, new Quaternion(), { left: { position: new Vector3(0.15, 0, 0) }, right: { position: new Vector3(-0.15, 0, 0) } }, { mass });
 
 describe('items on the body', () => {
@@ -72,7 +74,7 @@ describe('items on the body', () => {
       (h) =>
         function* () {
           yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
-          yield* carry(h, [[load, { left: 'left', right: 'right' }, { position: new Vector3(0, 1.05, 0.35) }]])();
+          yield* carry(h, WORLD, [[load, { left: 'left', right: 'right' }, [[1, { position: new Vector3(0, 1.05, 0.35) }]]]])();
           yield* parallel<Frame>('race', hold(h, load, { left: 'left', right: 'right' }), function* () {
             yield* action({ until: timePassed(1, 'seconds') });
           });
@@ -127,7 +129,7 @@ describe('hands that cannot get there', () => {
         (h) =>
           function* () {
             yield* reachFor(h, { left: [held, 'left'], right: [held, 'right'] })();
-            yield* carry(h, [[held, { left: 'left', right: 'right' }, goal]])();
+            yield* carry(h, WORLD, [[held, { left: 'left', right: 'right' }, [[1, goal]]]])();
           },
         12,
       ),

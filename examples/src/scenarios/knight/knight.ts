@@ -1,8 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, timePassed } from '@pmndrs/timeline';
-import { carry, grab, INDEX, onBone, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Live, type Placement, type Stand, type World } from '@drawcall/animate';
+import { carry, grab, INDEX, onBone, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Stand, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
-import { course, type Leg } from './course';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
 // are in the frame of the body part they go to (left +x, up +y, ahead +z; m, default body), timed at
@@ -42,17 +41,8 @@ export function take(k: Knight, holds: Holds, options: { face?: number; stand?: 
   };
 }
 
-/** `loads` carried along their courses' legs, through one moving frame, together (the hands on each item's grips) */
-export function along(k: Knight, frame: Live<Required<Placement>, World>, loads: readonly [Item, Grips, readonly Leg[]][]): Behaviour<World> {
-  return function* () {
-    const courses = loads.map(([item, , legs]) => course(item, frame, legs, { scale: k.h.proportions.scale, pace: k.pace }));
-    yield* carry(
-      k.h,
-      loads.map(([item, grips], i) => [item, grips, courses[i].to] as const),
-      { until: (f) => courses.every((c) => c.over(f)) },
-    )();
-  };
-}
+/** `loads` carried along their courses' legs, through one moving frame, together, at the knight's pace (`carry`) */
+export const along = (k: Knight, frame: Live<Required<Placement>, World>, loads: readonly [Item, Grips, readonly Leg[]][]): Behaviour<World> => carry(k.h, frame, loads, { pace: k.pace });
 
 /** a frame at bone `bone`'s joint, turned as the body faces */
 export const facingAt = (k: Knight, bone: BoneName) => onBone(k.h, INDEX[bone], ORIGIN, { facing: true });

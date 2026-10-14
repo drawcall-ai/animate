@@ -6,6 +6,7 @@ import { live, type Behaviour, type Live, type Motion, type Placement, type Targ
 import { ChainTip, reached } from '../core/tip';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import { CALM, handStep, handTo } from './arms';
+import { course, type Leg } from './course';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { withGaze } from './look';
@@ -144,23 +145,26 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
 }
 
 /**
- * Items carried, each by the hands on its grips toward its goal (`hold` with `to`), together:
- * until `until` holds (default at once) and every item has come to rest at its goal (within
- * 1 cm, under 5 cm/s): one shared condition, no hand lets go before the others. An item not at
- * rest there `limit` s after `until` throws (a goal out of the arms' reach).
+ * Items carried, each by the hands on its grips along its course through `frame` (`course`: its
+ * legs' placements in that frame, m × `scale`, default the body's), together: every course from
+ * where its item is when it sets off, timed by its legs, `pace` times as fast. It ends once every
+ * course is over and every item has come to rest at its end (within 1 cm, under 5 cm/s): one shared
+ * condition, no hand lets go before the others. An item not at rest there `limit` s after its course
+ * is over throws (a course out of the arms' reach).
  */
-export function carry<W>(h: Humanoid<W>, loads: readonly (readonly [Item, Grips, Live<Placement, W>])[], options: { until?: (f: Frame<W>) => boolean; motion?: Motion; limit?: number } = {}): Behaviour<W> {
-  const { limit = RESTING } = options;
+export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, loads: readonly (readonly [Item, Grips, readonly Leg[]])[], options: { scale?: number; pace?: number; motion?: Motion; limit?: number } = {}): Behaviour<W> {
+  const { scale = h.proportions.scale, pace = 1, limit = RESTING } = options;
   return function* () {
+    const courses = loads.map(([item, , legs]) => course(item, frame, legs, { scale, pace }));
     let since = NaN;
     const there = (f: Frame<W>) => {
-      if (options.until && !options.until(f)) return false;
+      if (!courses.every((c) => c.over(f))) return false;
       if (Number.isNaN(since)) since = f.time;
-      if (loads.every(([item, , to]) => atRest(item, live(to, f), f.dt))) return true;
-      if (f.time - since > limit) throw new Error(`a carried item did not come to rest at its goal in ${limit} s`);
+      if (loads.every(([item], i) => atRest(item, courses[i].to(f), f.dt))) return true;
+      if (f.time - since > limit) throw new Error(`a carried item did not come to rest at its course's end in ${limit} s`);
       return false;
     };
-    yield* parallel<Frame<W>>('all', ...loads.map(([item, grips, to]) => hold(h, item, grips, { to, motion: options.motion, until: there })));
+    yield* parallel<Frame<W>>('all', ...loads.map(([item, grips], i) => hold(h, item, grips, { to: courses[i].to, motion: options.motion, until: there })));
   };
 }
 
