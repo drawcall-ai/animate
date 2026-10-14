@@ -1,0 +1,160 @@
+import { Vector3 } from 'three';
+import { action, parallel } from '@pmndrs/timeline';
+import type { Frame } from '../../core/body';
+import type { Item } from '../../core/carrier';
+import type { Behaviour, Live, Target } from '../../core/goal';
+import { overlap } from '../../core/overlap';
+import { handTo } from '../arms';
+import { INDEX, type Side } from '../bones';
+import type { Humanoid } from '../humanoid';
+import { withGaze } from '../look';
+import { forwardOf, headingOf, leftOf, wrapAngle } from '../math';
+import { before, walkTo, type Eta } from '../walk';
+import { gripOf, held, type Holds } from './grips';
+import { reachFor } from './reach';
+
+// Taking hold of things: walking up to them, the eyes and hands going ahead.
+
+/** Where the body stands to take something: its grips' middle `ahead` of it (× the arm's length) and `aside` to its left (m; negative: its right). */
+export interface Stand {
+  ahead?: number;
+  aside?: number;
+}
+
+/** how far (× the arm's length) before what it takes the body stands */
+const WITHIN = 0.6;
+/** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
+const IN_REACH = 0.65;
+const SQUARE = 0.3;
+/** arrived where it stands to take something: this near (m, default body), and come to rest or stood still this long (s) */
+const ARRIVED = 0.12;
+/** how far round what it takes the body walks when the way passes it (m, default body): past a stand's foot */
+const ROUND = 0.5;
+/** the point beside what it walks round: how far on toward where it goes, and how near it the body comes before turning there (× ROUND) */
+const ON = 0.5;
+const NEAR = 0.3;
+const STILL = 0.5;
+
+/**
+ * Taking hold of things, each step under way before the last is over: the body walks up to take
+ * them (`approach`); LOOKING s before it arrives the eyes go to them (`withGaze`: on the grips'
+ * middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
+ * halfway from its shoulder to its grip: the walk is left to come to rest unbowed), and
+ * once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
+ * `hold` or `carry`.
+ */
+export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number } = {}): Behaviour<W> {
+  const { look = true, bow } = options;
+  return function* () {
+    const eta: Eta = { seconds: Infinity };
+    let stood = false;
+    const reach = function* () {
+      // (on their way out while the body still comes up; it stands, they take hold)
+      yield* parallel<Frame<W>>('race', action({ until: () => stood }), function* () {
+        yield* action({ until: before(eta, REACHING_OUT) });
+        yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
+      });
+      yield* reachFor(h, holds)();
+    };
+    const walk = function* () {
+      yield* approach(h, holds, { ...options, eta })();
+      stood = true;
+    };
+    // (the eyes go once it is near and the head turns far enough to see it: turning to it, the body faces it first)
+    const near = before(eta, LOOKING);
+    const seen = (f: Frame<W>) => near() && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
+    yield* overlap(walk, look === false ? reach : withGaze(h, look === true ? middleOf(holds) : look, reach, { bow }), seen)();
+  };
+}
+
+/** how far aside of the way the body faces something may be for the eyes to go to it, the head turned (rad) */
+const IN_VIEW = 1;
+
+/** the way from the body to `at` on the floor's plane (x, z) */
+const flatTo = <W>(f: Frame<W>, at: Readonly<Vector3>): [number, number] => {
+  const body = f.prev.com(_com);
+  return [at.x - body.x, at.z - body.z];
+};
+
+/** how long before the body arrives to take something the eyes go to it, and the hands set off toward it (s): the eyes ~0.5–1 s ahead of the hands (Land & Hayhoe 2001) */
+const LOOKING = 0.6;
+const REACHING_OUT = 0.5;
+/** how far toward its grip a hand reaches out while the body still comes up to it (share of the way from its shoulder) */
+const SHORT = 0.5;
+
+/** a point SHORT of the way from hand `side`'s shoulder to `item`'s grip `grip` (world) */
+function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
+  const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
+  return { position: item.toWorld(gripOf(item, grip), _world).position.sub(shoulder).multiplyScalar(SHORT).add(shoulder).clone() };
+}
+
+/**
+ * Walking up to take hold of things: to stand facing `face` with the grips' middle `stand` before
+ * the body (default: in reach, squarely; facing so the left hand's grip is on the left, or toward a
+ * single grip) — no step if every grip is in reach of its shoulder already; round what it takes if
+ * the way there passes it (by a point ROUND beside it, on the side the way runs); it ends there, turned and come to rest (or
+ * stood still on planted feet a while: a step of a few cm `balance` may not take). The first half
+ * of `grab`.
+ */
+export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; eta?: Eta } = {}): Behaviour<W> {
+  const { ahead = WITHIN, aside = 0 } = options.stand ?? {};
+  return function* () {
+    const grips = held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
+    const face = options.face ?? facingFor(h, grips);
+    const p = h.proportions;
+    const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
+    if (turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) {
+      if (options.eta) options.eta.seconds = 0;
+      return;
+    }
+    const to = middleOf(holds).addScaledVector(leftOf(face), -aside);
+    const there = to.clone().addScaledVector(forwardOf(face), -ahead * p.armLength);
+    // (round it: the way from where the body stands to there passing nearer its grips than ROUND)
+    const body = h.pose.com(new Vector3()).setY(0);
+    const middle = middleOf(holds).setY(0);
+    const way = _d.subVectors(there, body).setY(0);
+    const length = way.length();
+    const along = length > 1e-6 ? _e.subVectors(middle, body).dot(way) / length : 0;
+    const nearest = body.clone().addScaledVector(way, along / Math.max(length, 1e-6));
+    // (it is in the way: passed on the way there, more than ROUND before its end, nearer the line than ROUND)
+    if (along > 0 && along < length - ROUND * p.scale && flat(nearest, middle) < ROUND * p.scale) {
+      // (on the side of it the way runs, by a point ROUND beside it and a little on toward there,
+      // walked to until near it: the last leg does not cut back in past it)
+      const across = new Vector3(-way.z, 0, way.x).normalize();
+      const side = Math.sign(_e.subVectors(nearest, middle).dot(across)) || 1;
+      const beside = middle.clone().addScaledVector(across, side * ROUND * p.scale).addScaledVector(way, (ON * ROUND * p.scale) / length);
+      yield* walkTo(h, { to: beside, until: (f) => flat(f.prev.com(_com), beside) < NEAR * ROUND * p.scale })();
+    }
+    let still = 0;
+    const arrived = (f: Frame<W>) => {
+      const planted = !h.gait.moving && h.feet.every((foot) => foot.phase === 'planted');
+      still = planted ? still + f.dt : 0;
+      return turned() && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || still > STILL);
+    };
+    yield* walkTo(h, { to, face, within: ahead * p.armLength, until: arrived, eta: options.eta })();
+  };
+}
+
+/** the middle of the grips `holds` take, where they are now */
+function middleOf(holds: Holds): Vector3 {
+  const hands = held(holds);
+  return hands.reduce((sum, { item, grip }) => sum.add(item.toWorld(gripOf(item, grip), _world).position), new Vector3()).divideScalar(hands.length);
+}
+
+/** the facing to take grips `grips` with: the left hand's to the left of the right's, or toward a single one from where the body stands */
+function facingFor<W>(h: Humanoid<W>, grips: { side: Side; at: Vector3 }[]): number {
+  const left = grips.find((g) => g.side === 'left');
+  const right = grips.find((g) => g.side === 'right');
+  if (left && right) return Math.atan2(-(left.at.z - right.at.z), left.at.x - right.at.x);
+  const at = grips[0].at;
+  const body = h.pose.com(_com);
+  return headingOf(at.x - body.x, at.z - body.z);
+}
+
+/** the distance between `a` and `b` on the floor's plane */
+const flat = (a: Readonly<Vector3>, b: Readonly<Vector3>) => Math.hypot(a.x - b.x, a.z - b.z);
+
+const _com = new Vector3();
+const _d = new Vector3();
+const _e = new Vector3();
+const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

@@ -11,6 +11,7 @@ export { TrackedPoint, TrackedRotation } from './core/track';
 export { gazeOff, GLANCE, lookAt, SHIFT, type Gazer } from './core/gaze';
 export { clampRotation, beyond } from './core/limits';
 export { overlap } from './core/overlap';
+export { Glide } from './core/glide';
 
 // The humanoid layer: a viverse character model as a body.
 export { BONES, INDEX, PARENT, SIDES, type BoneName, type ChildBone, type Side } from './humanoid/bones';
@@ -19,7 +20,11 @@ export { ask, createAsks, type Asks, type Go } from './humanoid/asks';
 export { balance, type Gait } from './humanoid/balance/balance';
 export type { Foot, FootPhase } from './humanoid/balance/foot';
 export { CALM, handTo, hangArms, type HandOptions } from './humanoid/arms';
-export { approach, CARRYING, carry, closeHand, grab, hold, openHand, reachFor, release, type Grips, type Holds, type Stand } from './humanoid/hands';
+export { approach, grab, type Stand } from './humanoid/hands/grab';
+export { CARRYING, carry, hold } from './humanoid/hands/carry';
+export { closeHand, openHand, type Grips, type Holds } from './humanoid/hands/grips';
+export { reachFor } from './humanoid/hands/reach';
+export { release } from './humanoid/hands/release';
 export { course, still, type Course, type Leg } from './humanoid/course';
 export { onBone } from './humanoid/goal';
 export { takeOff, wear, type Bearing, type Dressed, type Wearing } from './humanoid/worn';
