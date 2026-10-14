@@ -60,21 +60,17 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         over ??= _o.angleTo(turned) < _q.angleTo(turned);
         const [kept, other] = over ? [_o, _q] : [_q, _o];
         if (strain(gazer, pose, bones, turned, other, d) < strain(gazer, pose, bones, turned, kept, d) - HYSTERESIS) over = !over;
-        const goal = over ? _o : _q;
-        const rel = _rel.copy(turned).invert().multiply(goal);
-        const share = _share.identity().slerp(rel, 1 / bones.length);
-        // (each bone followed in the world, from where it was in it: the head held steady on its
-        // target as the body moves under it, the neck taking up the trunk's motion within its range)
-        const world = _head.copy(turned);
+        // (the turn from the neck's parent shared evenly down the neck, followed once from the
+        // first bone's history: every joint turns at `motion`'s pace, stopped at its range's end)
+        const share = _share.identity().slerp(_rel.copy(turned).invert().multiply(over ? _o : _q), 1 / bones.length);
+        const first = pose.skeleton.limits[bones[0]];
+        if (first) clampRotation(share, first);
+        const followed = followRotation(f.prev2.local(bones[0]), f.prev.local(bones[0]), share, turn, f.dt, _out);
         for (const b of bones) {
           const limit = pose.skeleton.limits[b];
-          const local = _goal.copy(share);
+          const local = _goal.copy(followed);
           if (limit) clampRotation(local, limit);
-          const followed = followRotation(f.prev2.rotation(b), f.prev.rotation(b), _w.copy(world).multiply(local), turn, f.dt, _out);
-          const q = world.invert().multiply(followed);
-          if (limit) clampRotation(q, limit);
-          pose.setLocal(b, q);
-          world.copy(pose.rotation(b));
+          pose.setLocal(b, local);
         }
       },
     });
@@ -89,19 +85,24 @@ const HYSTERESIS = 0.3;
  * turn shared over the neck's `bones` each within its limit, leaves them to look along `d` (unit)
  */
 function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, d: Vector3): number {
-  const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
-  const head = _head.copy(parent);
-  for (const b of bones) {
-    const limit = pose.skeleton.limits[b];
-    const local = _goal.copy(share);
-    if (limit) clampRotation(local, limit);
-    head.multiply(local);
-  }
-  const l = _l.copy(d).applyQuaternion(head.invert());
+  const l = _l.copy(d).applyQuaternion(within(pose, bones, parent, goal, _within).invert());
   const side = Math.atan2(l.x, l.z);
   const down = Math.atan2(-l.y, Math.hypot(l.x, l.z));
   const { range } = gazer;
   return Math.hypot(side / range.side, down / (down > 0 ? range.down : range.up));
+}
+
+/** the head's turn (world, into `out`) toward `goal` from `parent`'s, the turn shared evenly over the neck's `bones`, each within its limit */
+function within(pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, out: Quaternion): Quaternion {
+  const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
+  out.copy(parent);
+  for (const b of bones) {
+    const limit = pose.skeleton.limits[b];
+    const local = _goal.copy(share);
+    if (limit) clampRotation(local, limit);
+    out.multiply(local);
+  }
+  return out;
 }
 
 /**
@@ -133,5 +134,4 @@ const _rel = new Quaternion();
 const _share = new Quaternion();
 const _goal = new Quaternion();
 const _out = new Quaternion();
-const _head = new Quaternion();
-const _w = new Quaternion();
+const _within = new Quaternion();
