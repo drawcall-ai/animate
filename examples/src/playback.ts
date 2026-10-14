@@ -2,8 +2,8 @@ import { Bone, Quaternion, Vector3, type Object3D } from 'three';
 import type { Prop } from './scenario';
 import type { Simulation } from './simulation';
 
-/** the height the camera looks at over the body's travel path (m) */
-const FOCUS_HEIGHT = 0.95;
+/** the height the camera looks at over the body's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
+const FOCUS_HEIGHT = 0.54;
 
 /**
  * A simulation shown at display rate. The sim runs at a fixed 60 Hz; displays often refresh
@@ -100,7 +100,8 @@ export class Playback {
   }
 
   private root() {
-    return this.sim.actors[0].model.scene.position.clone().setY(FOCUS_HEIGHT);
+    const h = this.sim.actors[0];
+    return h.model.scene.position.clone().setY(FOCUS_HEIGHT * h.proportions.height);
   }
 }
 

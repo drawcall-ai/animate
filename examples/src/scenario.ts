@@ -45,8 +45,6 @@ export interface Scenario {
   duration: number;
   actors: readonly Role[];
   stage(): Stage;
-  /** camera focus; defaults to the first actor's hips */
-  focus?(actors: readonly Humanoid<World>[]): Vector3;
   cameraDistance?: number;
   /** the facing (yaw) the camera shots are taken against, held fixed; defaults to the first actor's */
   facing?: number;
