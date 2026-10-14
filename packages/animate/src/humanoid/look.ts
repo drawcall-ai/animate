@@ -1,6 +1,8 @@
 import { Vector3 } from 'three';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
+import type { Frame } from '../core/body';
 import { lookAt } from '../core/gaze';
-import type { Behaviour } from '../core/goal';
+import type { Behaviour, Live } from '../core/goal';
 import type { Humanoid } from './humanoid';
 import { forwardOf, lerp, smoothstep } from './math';
 
@@ -59,3 +61,22 @@ function mulberry32(seed: number): () => number {
 
 const _com = new Vector3();
 const _v = new Vector3();
+
+/**
+ * `task` with the eyes on `at` first: they go there `lead` s before it sets off (people fixate what
+ * they reach for ~0.5–1 s before the hand gets there: Land & Hayhoe 2001) and stay till it ends.
+ * Put it after the base (its `lookAt` overrides `lookAround`'s).
+ */
+export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number } = {}): Behaviour<W> {
+  const { lead = 0.5 } = options;
+  return function* () {
+    yield* parallel<Frame<W>>(
+      'race',
+      function* () {
+        yield* action({ until: timePassed(lead, 'seconds') });
+        yield* task();
+      },
+      lookAt(h.gazer, at),
+    );
+  };
+}

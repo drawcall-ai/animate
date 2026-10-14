@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
+import { parallel } from '@pmndrs/timeline';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Body } from '../core/body';
+import { Body, type Frame } from '../core/body';
 import type { Item } from '../core/carrier';
 import { solveChain } from '../core/chain';
 import type { Gazer } from '../core/gaze';
@@ -16,6 +17,7 @@ import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
 import { Rig, yawOf } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
+import { carryWorn, wornBy, type Wearing } from './worn';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -28,7 +30,9 @@ export interface HumanoidOptions<W> {
 /**
  * A @pmndrs/viverse character model as a body stepping `behaviour` (made for this humanoid: it
  * may read the rig and the proportions), the model posed after every update. The body starts
- * standing relaxed in its stance where `options` puts it. One Humanoid per model.
+ * standing relaxed in its stance where `options` puts it. After the behaviour, every sub-step, it
+ * moves the items it wears and loads what it holds and wears onto its bones (their mass counts in
+ * its centre of mass). One Humanoid per model.
  */
 export class Humanoid<W = unknown> {
   readonly rig: Rig;
@@ -60,8 +64,22 @@ export class Humanoid<W = unknown> {
     this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
     this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out) };
-    this.body = new Body(rig.skeleton, behaviour(this), { world: options.world, pose: start.pose });
+    // (after the behaviour each sub-step, the body carries what it wears and holds)
+    const script = behaviour(this);
+    const carried = carryWorn(this);
+    this.body = new Body(
+      rig.skeleton,
+      function* () {
+        yield* parallel<Frame<W>>('all', script, carried);
+      },
+      { world: options.world, pose: start.pose },
+    );
     rig.write(this.body.pose, 0);
+  }
+
+  /** what it wears (`wear`, `takeOff`): each item and what it is worn on */
+  get worn(): ReadonlyMap<Item, Wearing> {
+    return wornBy(this);
   }
 
   /** the last final pose */

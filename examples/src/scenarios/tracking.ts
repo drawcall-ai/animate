@@ -361,7 +361,7 @@ export function reach(v: Variation = {}): Scenario {
                 // (the eyes lead the hand: where it is going a moment on)
                 lookAt(h.gazer, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look))),
               );
-              yield* reporting(report, ['rightHand'], release(h, ['right'], 0.3))();
+              yield* reporting(report, ['rightHand'], release(h, ['right'], { away: { right: new Vector3(0, -0.3, -0.3) } }))();
               released = true;
             });
           },

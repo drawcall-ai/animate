@@ -1,5 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { STEP } from './body';
+import type { Frame } from './body';
 import type { Placement, Target } from './goal';
 import { log } from './rotation';
 
@@ -53,15 +54,37 @@ export class Carrier {
   }
 }
 
-/** A carrier something holds by its grips (targets in its frame: a palm on a face rolls freely about its normal, `axis`). */
+/** An item's mass (kg; default none) and where its centre of mass is in its frame (default its origin). */
+export interface ItemOptions {
+  mass?: number;
+  centre?: Vector3;
+}
+
+/**
+ * A carrier something holds by its grips (targets in its frame: a palm on a face rolls freely about
+ * its normal, `axis`), with a mass: a body that holds or wears it carries it (its centre of mass).
+ */
 export class Item extends Carrier {
+  readonly mass: number;
+  readonly centre: Readonly<Vector3>;
+
   constructor(
     position: Vector3,
     quaternion: Quaternion,
     readonly grips: Readonly<Record<string, Target>>,
+    { mass = 0, centre = new Vector3() }: ItemOptions = {},
   ) {
     super(position, quaternion);
+    if (!(mass >= 0 && Number.isFinite(mass))) throw new Error(`an item of mass ${mass}`);
+    this.mass = mass;
+    this.centre = centre.clone();
   }
+}
+
+/** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
+export function onItem<W>(item: Carrier, local: Placement): (f: Frame<W>) => Target {
+  const out: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+  return () => item.toWorld(local, out);
 }
 
 function copy(to: Required<Placement>, from: Required<Placement>) {

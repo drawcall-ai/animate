@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { massFor } from '@drawcall/animate';
 import { jointOf } from '../src/joints';
 import { FIXED_DT } from '../src/scenario';
 import { forwardOf, leftOf } from '../src/math';
@@ -155,10 +156,11 @@ const SEGMENTS: [mass: number, at: (j: Joints, skull: Vector3) => Vector3][] = [
 ];
 
 /**
- * Centre of mass: the mass-weighted mean of the segments. Summed relative to the hips, so
- * the result does not depend on where in the world the body stands.
+ * the body's centre of mass: the mass-weighted mean of its segments (Dempster's, from the posed
+ * joints, its mass a body mass index of 22's) and of the items it holds and wears (each where its
+ * centre is). Summed relative to the hips, so the result does not depend on where in the world the
+ * body stands.
  */
-/** the body's centre of mass (Dempster's segments from the posed joints) */
 export function comOf(h: Actor): Vector3 {
   const j: Joints = (name) => jointOf(h, name);
   const hips = j('hips');
@@ -169,9 +171,16 @@ export function comOf(h: Actor): Vector3 {
   const sum = new Vector3();
   const offset = new Vector3();
   let total = 0;
-  for (const [mass, at] of SEGMENTS) {
-    sum.addScaledVector(offset.subVectors(at(j, skull), hips), mass);
-    total += mass;
+  const body = massFor(h.proportions.height);
+  for (const [share, at] of SEGMENTS) {
+    sum.addScaledVector(offset.subVectors(at(j, skull), hips), share * body);
+    total += share * body;
+  }
+  const items = new Set([...h.worn.keys(), ...(['left', 'right'] as const).flatMap((s) => h.holding[s]?.item ?? [])]);
+  for (const item of items) {
+    const centre = item.centre.clone().applyQuaternion(item.current.quaternion).add(item.current.position);
+    sum.addScaledVector(offset.subVectors(centre, hips), item.mass);
+    total += item.mass;
   }
   return sum.divideScalar(total).add(hips);
 }

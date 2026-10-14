@@ -1,8 +1,8 @@
 import type { Humanoid } from '@drawcall/animate';
 import type { Solid } from '../src/scenario';
 
-/** a body as the metrics read it: its posed model, and what `balance` (its heading and ground velocity: `gait.facing`, `gait.velocity`) and the hands report of it */
-export type Actor = Pick<Humanoid, 'model' | 'proportions' | 'feet' | 'gait' | 'holding'>;
+/** a body as the metrics read it: its posed model, and what `balance` (its heading and ground velocity: `gait.facing`, `gait.velocity`), the hands (what they hold) and what it wears report of it */
+export type Actor = Pick<Humanoid, 'model' | 'proportions' | 'feet' | 'gait' | 'holding' | 'worn'>;
 
 /** one actor after one step: what the script asked of it then (the first actor's) */
 export interface Frame {

@@ -9,6 +9,7 @@ export interface ReadonlyPose {
   rotation(bone: number): Readonly<Quaternion>;
   point(bone: number, at: Vector3, out: Vector3): Vector3;
   com(out: Vector3): Vector3;
+  load(bone: number): Readonly<{ mass: number; at: Readonly<Vector3> }>;
 }
 
 /**
@@ -24,6 +25,8 @@ export class Pose implements ReadonlyPose {
   private readonly locals: Quaternion[];
   private readonly positions: Vector3[];
   private readonly rotations: Quaternion[];
+  /** what each bone carries besides its segment: a mass (kg) at a point in its frame */
+  private readonly loads: { mass: number; at: Vector3 }[];
   private stale = true;
 
   constructor(readonly skeleton: Skeleton) {
@@ -31,6 +34,7 @@ export class Pose implements ReadonlyPose {
     this.locals = Array.from({ length: n }, () => new Quaternion());
     this.positions = Array.from({ length: n }, () => new Vector3());
     this.rotations = Array.from({ length: n }, () => new Quaternion());
+    this.loads = Array.from({ length: n }, () => ({ mass: 0, at: new Vector3() }));
     this.root.copy(skeleton.bones[0].offset);
   }
 
@@ -56,16 +60,33 @@ export class Pose implements ReadonlyPose {
     return out.copy(at).applyQuaternion(this.rotation(bone)).add(this.positions[bone]);
   }
 
-  /** the centre of mass (world) */
+  /** the centre of mass (world): the segments' and what the bones carry (`setLoad`) */
   com(out: Vector3): Vector3 {
     out.set(0, 0, 0);
     let mass = 0;
     this.skeleton.bones.forEach((b, i) => {
-      if (b.mass === 0) return;
-      out.addScaledVector(this.point(i, b.com, _v), b.mass);
-      mass += b.mass;
+      if (b.mass > 0) {
+        out.addScaledVector(this.point(i, b.com, _v), b.mass);
+        mass += b.mass;
+      }
+      const load = this.loads[i];
+      if (load.mass === 0) return;
+      out.addScaledVector(this.point(i, load.at, _v), load.mass);
+      mass += load.mass;
     });
     return mass > 0 ? out.divideScalar(mass) : out.copy(this.position(0));
+  }
+
+  /** what `bone` carries besides its segment (see `setLoad`) */
+  load(bone: number): Readonly<{ mass: number; at: Readonly<Vector3> }> {
+    return this.loads[bone];
+  }
+
+  /** what `bone` carries besides its segment: `mass` (kg; 0: nothing) with its centre at `at` (in the bone's frame); it goes with the pose (copies carry it) */
+  setLoad(bone: number, mass: number, at: Readonly<Vector3>): void {
+    if (!(mass >= 0 && Number.isFinite(mass))) throw new Error(`a load of ${mass} kg`);
+    this.loads[bone].mass = mass;
+    this.loads[bone].at.copy(at);
   }
 
   /** writes `bone`'s rotation in its parent's frame (the root's in the world's) */
@@ -95,6 +116,10 @@ export class Pose implements ReadonlyPose {
     if (from.skeleton !== this.skeleton) throw new Error('cannot copy a pose of another skeleton');
     this.root.copy(from.position(0));
     this.locals.forEach((q, i) => q.copy(from.local(i)));
+    this.loads.forEach((_, i) => {
+      const l = from.load(i);
+      this.setLoad(i, l.mass, l.at);
+    });
     this.stale = true;
     return this;
   }
