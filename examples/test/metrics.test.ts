@@ -107,6 +107,7 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['knight-arming, the stand, wall and rack on the other sides', knightArming({ mirror: true })],
   ['knight-arming, the helm turned a quarter on its stand', knightArming({ helmTurn: Math.PI / 2 })],
   ['knight-arming, the helm turned a quarter the other way', knightArming({ helmTurn: -Math.PI / 2 })],
+  ['knight-arming, the helm turned half round on its stand: walked round to take it', knightArming({ helmTurn: Math.PI })],
   ['knight-arming, the shield\'s wall turned 0.4 rad', knightArming({ wallTurn: 0.4 })],
   ['knight-arming, the shield\'s wall turned −0.4 rad', knightArming({ wallTurn: -0.4 })],
 ];

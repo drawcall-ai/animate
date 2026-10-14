@@ -37,10 +37,17 @@ export function takeShield(k: Knight, shield: Item): Behaviour<World> {
   };
 }
 
-/** the shield borne on the left arm across the belly: endless */
-export const bearShield = (k: Knight): Behaviour<World> => handTo(k.h, 'left', onBone(k.h, INDEX.hips, FIST, { facing: true }));
+/** how the fist bearing the shield goes along with the body (m/s², m/s): briskly, with the hips as they bob and turn walking */
+const BORNE = { accel: 30, speed: 3 };
 
-/** the lance borne upright in the right hand, the fist by the right side at the lower ribs */
+/** the shield borne on the left arm across the belly: endless */
+export const bearShield = (k: Knight): Behaviour<World> => handTo(k.h, 'left', onBone(k.h, INDEX.hips, FIST, { facing: true }), BORNE);
+
+/**
+ * the lance borne upright in the right hand, the fist by the right side at the lower ribs (pulled in:
+ * its natural carry has the fist 22 cm ahead of the hips, but `balance` leaves the centre of mass
+ * a little ahead under a load in front; its rewrite handles that, and then the lance goes back out)
+ */
 const UPRIGHT = at(-0.27, 0.3, 0.1, new Quaternion());
 
 /** The lance out of its rack: the right hand takes it (the lance ahead of the right shoulder: the head clear of the shaft), lifts it out of its socket and brings it in upright by the right side. Then bear it (`bearLance`). */
