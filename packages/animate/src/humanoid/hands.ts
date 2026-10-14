@@ -36,7 +36,7 @@ const ARRIVED = 0.12;
 const STILL = 0.5;
 /** the longest the hands take to get to their grips, and a carried item to come to rest at its goal (s) */
 const REACHING = 4;
-const SETTLING = 2;
+const RESTING = 2;
 /** a hand on a grip it holds follows it briskly, its joints too (they lag the solve no more than a few cm): a held thing goes where it is carried */
 const HOLD = { ...CALM, accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
@@ -123,7 +123,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds): Behaviour<W> {
  * Items carried, each by the hands on its grips toward its goal (`hold` with `to`), together:
  * until `until` holds (default at once) and every item has come to rest at its goal (within
  * 1 cm, under 5 cm/s): one shared condition, no hand lets go before the others. An item not at
- * rest there SETTLING s after `until` throws (a goal out of the arms' reach).
+ * rest there RESTING s after `until` throws (a goal out of the arms' reach).
  */
 export function carry<W>(h: Humanoid<W>, loads: readonly (readonly [Item, Grips, Live<Placement, W>])[], options: { until?: (f: Frame<W>) => boolean; motion?: Motion } = {}): Behaviour<W> {
   return function* () {
@@ -132,7 +132,7 @@ export function carry<W>(h: Humanoid<W>, loads: readonly (readonly [Item, Grips,
       if (options.until && !options.until(f)) return false;
       if (Number.isNaN(since)) since = f.time;
       if (loads.every(([item, , to]) => atRest(item, live(to, f), f.dt))) return true;
-      if (f.time - since > SETTLING) throw new Error(`a carried item did not come to rest at its goal in ${SETTLING} s`);
+      if (f.time - since > RESTING) throw new Error(`a carried item did not come to rest at its goal in ${RESTING} s`);
       return false;
     };
     yield* parallel<Frame<W>>('all', ...loads.map(([item, grips, to]) => hold(h, item, grips, { to, motion: options.motion, until: there })));
