@@ -26,6 +26,8 @@ export interface Gait {
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
   velocity: Vector3;
+  /** seconds until the walk goal is reached: Infinity without a goal, 0 when there; published by walkTo */
+  eta: number;
   /** a walk is under way */
   moving: boolean;
   /** come to rest: no walk under way, both feet planted a while and none wanting to step */
@@ -34,7 +36,7 @@ export interface Gait {
   thoraxYaw: number;
 }
 
-export const createGait = (facing: number): Gait => ({ phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, thoraxYaw: 0 });
+export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, thoraxYaw: 0 });
 
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
 const LOWER = { accel: 3, speed: 0.6 };

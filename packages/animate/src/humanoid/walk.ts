@@ -15,28 +15,17 @@ const ARRIVED = { distance: 0.15, yaw: 0.15 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
 const CLOSE = 1;
 
-/**
- * How soon a walk arrives (s): written by the walk every sub-step (an estimate from the way and the
- * turn left at the pace it goes), 0 once it has ended, Infinity before it sets out. Read it to set
- * off what comes next before the walk is over (`overlap` with `before`).
- */
-export interface Eta {
-  seconds: number;
-}
+/** a condition: the body's current walk arrives within `seconds` (or has) */
+export const arriving =
+  <W>(h: Humanoid<W>, seconds: number) =>
+  (_f: Frame<W>): boolean =>
+    h.gait.eta <= seconds;
 
-/** a condition: the walk `eta` tells of arrives within `seconds` (or has) */
-export const before =
-  (eta: Eta, seconds: number) =>
-  (): boolean =>
-    eta.seconds <= seconds;
-
-/** walking, about how fast the body turns to its facing (rad/s), and how fast it goes at least when it has yet to set off (m/s): for an `Eta` */
+/** about how fast the body turns (rad/s), and its minimum estimated starting pace (m/s) */
 const TURNING = 2;
 const SETTING_OFF = 0.5;
 
 export interface WalkOptions<W> {
-  /** how soon it arrives, written every sub-step */
-  eta?: Eta;
   /** where to go, on the floor (default: where it stands: a turn in place) */
   to?: Live<Vector3, W>;
   /** the facing to arrive with (rad; default the way it arrives, or toward `to` with `within`) */
@@ -82,11 +71,14 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
       return yaw;
     };
     yield* action<Frame<W>>({
+      init: () => () => {
+        h.gait.eta = Infinity;
+      },
       update: (f) => {
         const yaw = where(f);
         h.asks.go = go;
         if (options.stance) h.asks.stance = options.stance;
-        if (options.eta) options.eta.seconds = etaOf(h, f.prev.com(_com), go, yaw);
+        h.gait.eta = etaOf(h, f.prev.com(_com), go, yaw);
         if (yaw === null) return;
         face.yaw = yaw;
         h.asks.face = face;
@@ -101,7 +93,7 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
         return there && turned && h.gait.settled;
       },
     });
-    if (options.eta) options.eta.seconds = 0;
+    h.gait.eta = 0;
   };
 }
 

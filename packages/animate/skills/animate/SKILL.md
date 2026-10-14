@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer; a humanoid base (`idle`: balance, free arms, gaze) with tasks over it (`walkTo`, `handTo`, `headTo`, `grab`, `carry`, `hold`, `wear`, `release`, `withGaze`, `ask`) chained so each flows into the next (`overlap`, a walk's `Eta`), and the generic pieces under them (`follow`, `Glide`, `TrackedPoint` / `TrackedRotation`, `ChainTip` / `chainTo`, `lookAt`, carriers). Use when writing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer; a humanoid base (`idle`: balance, free arms, gaze) with tasks over it (`walkTo`, `handTo`, `headTo`, `grab`, `carry`, `hold`, `wear`, `release`, `withGaze`, `ask`) chained so each flows into the next (`when`, `arriving`), and the generic pieces under them (`follow`, `Glide`, `TrackedPoint` / `TrackedRotation`, `ChainTip` / `chainTo`, `lookAt`, carriers). Use when writing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -42,7 +42,7 @@ body.update(delta); // every frame
 **Tasks never write the root, legs or trunk (but `headTo`, which places the spine under the eyes): they ask `balance` through `h.asks`** (`go`, `face`, `lower`, `bow`, …). Each field is last-writer-wins and must be rewritten every sub-step the task wants it; `balance` reads and clears the asks at the start of its update, so it acts on them a sub-step late. `lean`, `onto` and taken feet are not taken yet (`balance` throws on them).
 
 Tasks:
-- `walkTo` walks to a point (a live one is followed), turns to `face`, or both; it ends once the body has settled on squared feet. Give it `until` to keep following a point that moves on (it then ends only when `until` is met). `within` stops short of the point, squarely before it. Give it an `eta` to read how soon it arrives (see Anticipation below).
+- `walkTo` walks to a point (a live one is followed), turns to `face`, or both; it ends once the body has settled on squared feet. Give it `until` to keep following a point that moves on (it then ends only when `until` is met). `within` stops short of the point, squarely before it.
 - `handTo` moves a wrist (and, given a rotation, the hand) to a target at a calm everyday pace by default (`CALM`), the clavicle shrugging and the elbow swivelling as the target asks; a target below the arm's reach asks `balance` to bow and squat, one above to go up on the toes (`lead: false`: the hand only follows, as a tracked controller does under a tracked head). Endless, or `until: 'reached'`. A target that moves fast wants brisker joints too (`turnAccel`), or the arm swings behind it. For a discrete reach give it `seconds`: the hand glides there along a minimum-jerk path (a bell of speed, no snap as it sets off) — `reachFor` times its reaches so, by how far they go; a hand left to `CALM` alone gets there as fast as it may, which reads as mechanical.
 - `headTo` puts the eyes (and turns the head) where a tracker says, through the spine; with `lead` the body comes along under the head — turning round once it is turned past what the trunk and neck take, bowing and squatting for it, stepping where the eyes go. It writes the spine and the chest: put it after `idle` and before the hand tasks, which hang off the chest it places.
 - `release` lets go: the hands open and go off what they held, carried on the way they were going and out from the item (or each its own way, `away`, in the body's frame), as near as the arm reaches as the body stands (it never bows after them) — then the free arms take them. It ends by itself after a moment, so a next task may take a hand on its way off.
@@ -67,10 +67,18 @@ Tasks:
 
 People never finish one thing, stand still, and start the next: coming up to something they already look at it, turn to it and reach for it; letting go of one thing their eyes are on the next. Doing tasks strictly one after another is what makes motion read as mechanical. Chain them so the next one's opening runs while the current one ends:
 
-- `overlap(first, next, at)` runs `first` and sets `next` off while `first` still runs, once `at` holds (or `first` has ended); it ends when both have. Nothing fades: `next` is layered after `first`, and each follows its own goals from history, so it simply begins following them. `next` wins where both write, so give it an opening that leaves `first`'s bones alone until `first` is done with them (eyes and feet first; hands once the last hands are free).
-- What to wait for: a walk's `Eta` (`walkTo({ eta })`, `before(eta, seconds)`) — the eyes about 0.6–1 s before arriving, the hands about half a second; a beat's work done, while its hands `release` (the next starts with its eyes and feet, its hands taking over a hand on its way off); a carried thing coming upright, a course nearly over.
-- `grab` already overlaps its approach with its gaze and reach; between standing tasks, overlap each one's `release` with the next.
-- Never start a stage on elapsed time where an arrival condition exists: `timePassed` makes every beat open with the same still prelude.
+Run the current task first in `parallel('all', …)`, then a branch that waits with `when` and starts the next task. Conditions are plain functions of the frame: use `arriving` for a walk, or write your own for a released hand, a lifted item, or work completed.
+
+```ts
+yield* parallel<Frame>('all', walkTo(h, { to: stand }), function* () {
+  yield* when(arriving(h, 0.6));
+  yield* grab(h, holds)();
+});
+```
+
+The walk's destination should put the grips within reach. `grab` joins a walk already running and anticipates it with gaze, hands and lowering; on its own it walks up automatically. Put the walk before the waiting branch so the condition reads its current arrival estimate.
+
+A later task wins where both write bones, so give it an opening that leaves the current task's bones alone until they are free. Between standing tasks, start the next task's eyes and feet as the current hands release. Use arrival conditions where available rather than a fixed elapsed delay.
 
 ## Any rig
 

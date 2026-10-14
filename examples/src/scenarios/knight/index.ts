@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { createWorld, idle, INDEX, overlap, wear, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
+import { createWorld, idle, INDEX, when, wear, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
 import { forwardOf, leftOf } from '../../math';
 import { Report } from '../../report';
 import type { Prop, Scenario } from '../../scenario';
@@ -112,7 +112,10 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
               upright = true;
               yield* bearLance(k, gear.lance.item)();
             };
-            yield* parallel<Frame<World>>('all', bearShield(k), overlap(lance, walkOut(k, yard, 0, SIGHTS), () => upright));
+            yield* parallel<Frame<World>>('all', bearShield(k), lance, function* () {
+              yield* when(() => upright);
+              yield* walkOut(k, yard, 0, SIGHTS)();
+            });
           };
           yield* flow(
             k,

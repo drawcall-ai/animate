@@ -10,7 +10,7 @@ export { ChainTip, chainTo, reached, type TipOptions } from './core/tip';
 export { TrackedPoint, TrackedRotation } from './core/track';
 export { gazeOff, GLANCE, lookAt, SHIFT, type Gazer } from './core/gaze';
 export { clampRotation, beyond } from './core/limits';
-export { overlap } from './core/overlap';
+export { when } from './core/when';
 export { Glide } from './core/glide';
 
 // The humanoid layer: a viverse character model as a body.
@@ -32,7 +32,7 @@ export { HEADSET, headTo, type HeadOptions } from './humanoid/head';
 export { pelvisTo, trunkTo } from './humanoid/trunk';
 export { lookAround, withGaze } from './humanoid/look';
 export { idle } from './humanoid/idle';
-export { before, walkTo, type Eta, type WalkOptions } from './humanoid/walk';
+export { arriving, walkTo, type WalkOptions } from './humanoid/walk';
 export { defaultStance, type Stance } from './humanoid/stance';
 export { createSkeletonModel } from './humanoid/model';
 export { landmarksOf, pointsOf, type BonePoint, type Landmark, type LandmarkName, type PointName } from './humanoid/landmarks';

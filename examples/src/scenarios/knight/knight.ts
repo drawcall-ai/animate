@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { action, timePassed } from '@pmndrs/timeline';
-import { before, carry, grab, INDEX, onBone, overlap, release, walkTo, withGaze, type Behaviour, type Eta, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
+import { arriving, carry, grab, INDEX, onBone, when, release, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
@@ -42,7 +42,7 @@ export type Beat = [work: Behaviour<World>, sides: readonly Side[], away?: Parti
 
 /**
  * `beats` one after another, then `then`, each flowing into the next: as a beat's hands let go of
- * what they did (`release`), the next sets off (`overlap`) — its eyes and its feet on their way
+ * what they did (`release`), the next sets off (with `when`) — its eyes and its feet on their way
  * while the hands come off
  */
 export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>): Behaviour<World> {
@@ -54,7 +54,12 @@ export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>):
       done = true;
       yield* busy(k, release(k.h, sides, { away }))();
     };
-    return overlap(beat, next, () => done);
+    return function* () {
+      yield* parallel('all', beat, function* () {
+        yield* when(() => done);
+        yield* next();
+      });
+    };
   }, then);
 }
 
@@ -74,10 +79,12 @@ const LOOKING = 1;
 /** Out to the yard: walking there, and looking round it, a while at each of `sights` — the eyes on the first LOOKING s before he stops. */
 export function walkOut(k: Knight, yard: Vector3, face: number, sights: readonly Vector3[]): Behaviour<World> {
   return function* () {
-    const eta: Eta = { seconds: Infinity };
     const look = function* () {
       for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4))();
     };
-    yield* overlap(walkTo(k.h, { to: yard, face, eta }), look, before(eta, LOOKING))();
+    yield* parallel('all', walkTo(k.h, { to: yard, face }), function* () {
+      yield* when(arriving(k.h, LOOKING));
+      yield* look();
+    });
   };
 }
