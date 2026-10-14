@@ -225,8 +225,9 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
  * Letting go with the hands `sides`: they open and go off what they held, together (one shared
  * condition), each by `away` (m; in the body's frame facing as it does: left +x, up +y, ahead +z;
  * default back and down by AWAY), as near as its arm reaches (never folded on itself nor
- * stretched out; the body not bowing nor rising after it); then the free arms take them. A hand
- * not off within `limit` s throws.
+ * stretched out; the body not bowing nor rising after it); then the free arms take them. What
+ * they let go of that nothing else holds or wears rests where it was put (`supported`: on a shelf,
+ * a table). A hand not off within `limit` s throws.
  */
 export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>>; limit?: number } = {}): Behaviour<W> {
   const { limit = REACHING } = options;
@@ -247,7 +248,9 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
       if (time > limit) throw new Error(`the hands did not get off what they held in ${limit} s`);
       return false;
     };
+    const loose = sides.flatMap((side) => h.holding[side]?.item ?? []);
     for (const side of sides) yield* openHand(h, side)();
+    for (const item of loose) if (!h.worn.has(item) && !SIDES.some((s) => h.holding[s]?.item === item)) item.supported = true;
     yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, targets[k], { lead: false, until })));
   };
 }

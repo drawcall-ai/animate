@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { action, parallel } from '@pmndrs/timeline';
-import { carry, closeHand, idle, INDEX, Item, reachFor, release, takeOff, wear, type Behaviour, type Frame } from '../../src';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
+import { carry, closeHand, hold, idle, INDEX, Item, reachFor, release, takeOff, wear, type Behaviour, type Frame } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
@@ -63,6 +63,30 @@ describe('items on the body', () => {
     expect(scabbard.current.position.distanceTo(at)).toBeLessThan(1e-3);
     expect(sword.current.position.distanceTo(scabbard.current.position)).toBeCloseTo(0.1, 3);
     expect([...h.worn.keys()]).toEqual([sword, scabbard]);
+  });
+
+  it('bears what it carries off its support, none of it once put down again', () => {
+    const load = box(new Vector3(0, 1.0, 0.4), 4);
+    const kg = { carried: -1, down: -1 };
+    const h = run(
+      (h) =>
+        function* () {
+          yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
+          yield* carry(h, [[load, { left: 'left', right: 'right' }, { position: new Vector3(0, 1.05, 0.35) }]])();
+          yield* parallel<Frame>('race', hold(h, load, { left: 'left', right: 'right' }), function* () {
+            yield* action({ until: timePassed(1, 'seconds') });
+          });
+          kg.carried = h.borne.get(load)?.kg ?? 0;
+          yield* release(h, ['left', 'right'])();
+          yield* action({ until: timePassed(1, 'seconds') });
+          kg.down = h.borne.get(load)?.kg ?? 0;
+        },
+      8,
+    );
+    expect(load.supported).toBe(true);
+    expect(kg.carried).toBeCloseTo(4, 3);
+    expect(kg.down).toBe(0);
+    expect(h.borne.has(load)).toBe(false);
   });
 
   it('throws on a second mover, on items worn on each other, and taking off what is not worn', () => {
