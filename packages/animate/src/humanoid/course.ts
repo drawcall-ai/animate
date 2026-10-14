@@ -20,10 +20,11 @@ export interface Course<W = unknown> {
  * (centripetal Catmull–Rom, the rotation turned along it), timed by one minimum-jerk profile over
  * its whole length that takes as long as its legs together, `pace` times as fast as they say: it
  * passes its placements on the way without stopping and comes to rest only at the end — and where
- * a leg holds still (`still`) or the way turns back on itself (more than a right angle: the hand
+ * a leg holds still (`still`) or the way turns back on itself (by more than 135°: the hand
  * stops to reverse), it comes to rest there and sets off again.
+ * It sets off `delay` s after it is first read.
  */
-export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs: readonly Leg[], { scale = 1, pace = 1 } = {}): Course<W> {
+export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs: readonly Leg[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
   let start = NaN;
   let runs: Run[] = [];
   const total = legs.reduce((sum, [seconds]) => sum + seconds / pace, 0);
@@ -42,7 +43,7 @@ export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs:
       }
       runs = runsOf(stops, legs.map(([seconds]) => seconds / pace));
     }
-    let t = f.time - start;
+    let t = Math.max(0, f.time - start - delay);
     let i = 0;
     while (i < runs.length - 1 && t > runs[i].seconds) t -= runs[i++].seconds;
     const { position, quaternion } = runs[i].at(minimumJerk(t / runs[i].seconds), _at);
@@ -51,7 +52,7 @@ export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs:
       quaternion: at.quaternion.clone().multiply(quaternion),
     };
   };
-  return { to, over: (f) => !Number.isNaN(start) && f.time - start >= total };
+  return { to, over: (f) => !Number.isNaN(start) && f.time - start >= delay + total };
 }
 
 /** a leg that stays where the one before ended: a moment held still */
@@ -65,8 +66,8 @@ interface Run {
 
 /** how far a turn counts as going along a course (m per rad): a hand turning what it holds about its grip moves its far side about so much */
 const TURN = 0.1;
-/** how sharply the way may bend at a placement and still be passed without stopping (rad) */
-const REVERSE = Math.PI / 2;
+/** how sharply the way may bend at a placement and still be passed without stopping (rad): a hand sweeps round a bend, but stops to go back the way it came */
+const REVERSE = (3 * Math.PI) / 4;
 
 /** the course through `stops`, each leg taking `seconds`, cut into runs where it holds still or turns back on itself */
 function runsOf(stops: readonly Required<Placement>[], seconds: readonly number[]): Run[] {

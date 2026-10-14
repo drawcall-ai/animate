@@ -3,6 +3,7 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { lookAt, SHIFT } from '../core/gaze';
 import { live, type Behaviour, type Live } from '../core/goal';
+import { seeded } from '../core/random';
 import type { Humanoid } from './humanoid';
 import { forwardOf, lerp, smoothstep } from './math';
 
@@ -20,7 +21,7 @@ const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
  */
 export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): Behaviour<W> {
   return function* () {
-    const rand = mulberry32(options.seed ?? 1);
+    const rand = seeded(options.seed ?? 1);
     const target = new Vector3();
     let next = lerp(GLANCES.every[0], GLANCES.every[1], rand());
     let until = 0;
@@ -44,18 +45,6 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
         const yaw = g.facing + HEAD_SHARE * g.thoraxYaw + glance * aside;
         return target.copy(f.prev.com(_com)).setY(height).addScaledVector(forwardOf(yaw, _v), distance);
     })();
-  };
-}
-
-/** a seeded uniform [0, 1) (mulberry32) */
-function mulberry32(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 

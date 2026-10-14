@@ -1,8 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
-import { action, parallel } from '@pmndrs/timeline';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { Carrier, type Item } from '../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from '../core/goal';
+import { seeded, seedOf } from '../core/random';
 import { ChainTip, reached } from '../core/tip';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import { CALM, handStep, handTo } from './arms';
@@ -10,7 +11,7 @@ import { course, type Leg } from './course';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { withGaze } from './look';
-import { forwardOf, headingOf, leftOf, wrapAngle } from './math';
+import { forwardOf, headingOf, leftOf, lerp, wrapAngle } from './math';
 import { walkTo } from './walk';
 
 /** Which of an item's grips each hand takes (by name). */
@@ -126,8 +127,9 @@ function middleOf(holds: Holds): Vector3 {
 
 /**
  * The hands open, go to their grips together (one shared condition: each stays on its way until
- * every one is there; the body bowing and bending as low as they are) and close on them. A hand
- * not there within `limit` s throws.
+ * every one is there; the body bowing and bending as low as they are) and close on them. Both
+ * going, the right hand leads and the left sets off a moment after it, a little slower (`LEADING`,
+ * seeded by what it goes for). A hand not there within `limit` s throws.
  */
 export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } = {}): Behaviour<W> {
   const hands = held(holds);
@@ -137,9 +139,20 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
     if (time > limit) throw new Error(`the hands did not get to their grips in ${limit} s`);
     return false;
   };
+  // (both hands going: the other a moment after the leading one, a little slower)
+  const lagging = hands.length > 1;
+  const reach = (side: Side, item: Item, grip: string): Behaviour<W> => {
+    if (!lagging || side === LEADING) return handTo(h, side, gripOf(item, grip), { on: item, until });
+    const { delay, slower } = following(item, { [side]: grip });
+    const motion = { accel: CALM.accel * (1 - slower) ** 2, speed: CALM.speed * (1 - slower) };
+    return function* () {
+      yield* action({ until: timePassed(delay, 'seconds') });
+      yield* handTo(h, side, gripOf(item, grip), { on: item, until, ...motion })();
+    };
+  };
   return function* () {
     for (const { side } of hands) yield* openHand(h, side)();
-    yield* parallel<Frame<W>>('all', ...hands.map(({ side, item, grip }) => handTo(h, side, gripOf(item, grip), { on: item, until })));
+    yield* parallel<Frame<W>>('all', ...hands.map(({ side, item, grip }) => reach(side, item, grip)));
     for (const { side, item, grip } of hands) yield* closeHand(h, side, item, grip)();
   };
 }
@@ -147,7 +160,9 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
 /**
  * Items carried, each by the hands on its grips along its course through `frame` (`course`: its
  * legs' placements in that frame, m × `scale`, default the body's), together: every course from
- * where its item is when it sets off, timed by its legs, `pace` times as fast. It ends once every
+ * where its item is when it sets off, timed by its legs, `pace` times as fast (an item in the left
+ * hand alone while the right carries another a moment later and a little slower: `reachFor`'s
+ * lead). It ends once every
  * course is over and every item has come to rest at its end (within 1 cm, under 5 cm/s): one shared
  * condition, no hand lets go before the others. An item not at rest there `limit` s after its course
  * is over throws (a course out of the arms' reach).
@@ -155,7 +170,13 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
 export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, loads: readonly (readonly [Item, Grips, readonly Leg[]])[], options: { scale?: number; pace?: number; motion?: Motion; limit?: number } = {}): Behaviour<W> {
   const { scale = h.proportions.scale, pace = 1, limit = RESTING } = options;
   return function* () {
-    const courses = loads.map(([item, , legs]) => course(item, frame, legs, { scale, pace }));
+    // (an item in the other hand alone, while the leading hand carries one too, goes a little after it)
+    const leads = loads.some(([, grips]) => grips[LEADING] !== undefined);
+    const courses = loads.map(([item, grips, legs]) => {
+      if (!leads || grips[LEADING] !== undefined) return course(item, frame, legs, { scale, pace });
+      const { delay, slower } = following(item, grips);
+      return course(item, frame, legs, { scale, pace: pace * (1 - slower), delay });
+    });
     let since = NaN;
     const there = (f: Frame<W>) => {
       if (!courses.every((c) => c.over(f))) return false;
@@ -166,6 +187,22 @@ export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, lo
     };
     yield* parallel<Frame<W>>('all', ...loads.map(([item, grips], i) => hold(h, item, grips, { to: courses[i].to, motion: options.motion, until: there })));
   };
+}
+
+/** the hand that leads where both work (a right-handed body): the other goes a moment after it, a little slower */
+const LEADING: Side = 'right';
+/**
+ * how much later (s) and slower (share of its pace) the other hand goes: not the leading hand's
+ * mirror image. (Hands reaching together start within a few tens of ms of each other — Kelso,
+ * Southard & Goodman 1979, recalled, not checked; this is a little more, so the two read apart.)
+ */
+const FOLLOWING = { delay: [0.06, 0.12], slower: [0.05, 0.1] };
+
+/** how much later and slower the other hand goes for `item` by `grips` (seeded by them and where it is: the same each run) */
+function following(item: Item, grips: Grips) {
+  const at = item.current.position;
+  const rand = seeded(seedOf(...SIDES.map((s) => grips[s] ?? ''), Math.round(at.x * 1000), Math.round(at.y * 1000), Math.round(at.z * 1000)));
+  return { delay: lerp(FOLLOWING.delay[0], FOLLOWING.delay[1], rand()), slower: lerp(FOLLOWING.slower[0], FOLLOWING.slower[1], rand()) };
 }
 
 /** `item` at `at`, and still (within 1 cm, under 5 cm/s) */
