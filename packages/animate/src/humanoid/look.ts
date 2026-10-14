@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { lookAt } from '../core/gaze';
-import type { Behaviour, Live } from '../core/goal';
+import { live, type Behaviour, type Live } from '../core/goal';
 import type { Humanoid } from './humanoid';
 import { forwardOf, lerp, smoothstep } from './math';
 
@@ -65,10 +65,30 @@ const _v = new Vector3();
 /**
  * `task` with the eyes on `at` first: they go there `lead` s before it sets off (people fixate what
  * they reach for ~0.5–1 s before the hand gets there: Land & Hayhoe 2001) and stay till it ends.
- * Put it after the base (its `lookAt` overrides `lookAround`'s).
+ * For a point further below the eyes than the neck pitches the head, the body bows to see it (asks
+ * `balance`), or at least `bow` (rad: work at the waist, the eyes over the hands). Put it after the
+ * base (its `lookAt` overrides `lookAround`'s).
  */
-export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number } = {}): Behaviour<W> {
-  const { lead = 0.5 } = options;
+export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number } = {}): Behaviour<W> {
+  const { lead = 0.5, bow = 0 } = options;
+  const bowing = (f: Frame<W>) => {
+    // (as the hips stand: how far ahead of them and below the eyes the point is; then the bow under
+    // which the head, pitched as far as the neck takes it on top of the bow, comes nearest to it —
+    // bowing too far puts the eyes past a point close to the body)
+    const p = h.proportions;
+    const hips = f.prev.position(0);
+    const ahead = _to.subVectors(live(at, f), hips).dot(forwardOf(h.gait.facing, _eyes));
+    const height = live(at, f).y - hips.y;
+    const above = p.eyeHeight - p.hipHeight;
+    let best = 0;
+    let least = Infinity;
+    for (let b = 0; b <= MOST_BOW + 1e-9; b += MOST_BOW / 7) {
+      const pitch = Math.atan2(above * Math.cos(b) - height, ahead - EYES_AHEAD * p.scale - above * Math.sin(b));
+      const off = Math.abs(pitch - Math.min(pitch, NECK_PITCH + b));
+      if (off < least - 1e-3) [least, best] = [off, b];
+    }
+    h.asks.bow = Math.max(h.asks.bow, bow, best);
+  };
   return function* () {
     yield* parallel<Frame<W>>(
       'race',
@@ -76,7 +96,18 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
         yield* action({ until: timePassed(lead, 'seconds') });
         yield* task();
       },
-      lookAt(h.gazer, at),
+      lookAt(h.gazer, at, SHIFT),
+      action<Frame<W>>({ update: bowing }),
     );
   };
 }
+
+/** looking down: how far the head pitches on the neck (rad, ~57°: the neck's flexion short of its end), and how far the body bows to see lower at most (rad) */
+const NECK_PITCH = 1.0;
+/** how fast the head turns to what the hands go for (rad/s², rad/s): a large gaze shift's head, ~3400°/s² and ~340°/s at its peak (Guitton & Volle 1987) */
+const SHIFT = { turnAccel: 60, turnSpeed: 6 };
+const MOST_BOW = 0.35;
+/** how far ahead of the hips the eyes are standing (m, default body) */
+const EYES_AHEAD = 0.09;
+const _eyes = new Vector3();
+const _to = new Vector3();

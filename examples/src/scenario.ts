@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { Behaviour, Humanoid, Item, World } from '@drawcall/animate';
+import type { Behaviour, Dressed, Humanoid, Item, Proportions, World } from '@drawcall/animate';
 import type { Report } from './report';
 
 export const FIXED_DT = 1 / 60;
@@ -23,6 +23,8 @@ export interface Stage {
   props(t: number): Prop[];
   /** whether the run did what the scenario is for (asked at its end) */
   done(): boolean;
+  /** what actor `index` wears from the start, for its proportions (made with it: worn and borne from its first sub-step) */
+  wearing?(index: number, p: Proportions): readonly Dressed[];
   /** what must keep out of the first actor's body as things are now: the items it handles (for the metrics) */
   solids?(): Solid[];
   /** moves the scenario's own carriers to time `t` (s), before the bodies step (they read them there) */

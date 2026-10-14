@@ -22,7 +22,7 @@ export class Simulation {
     this.world = this.stage.world;
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
-      cast.push(new Humanoid(model(role), (h) => this.stage.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw }));
+      cast.push(new Humanoid(model(role), (h) => this.stage.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [] }));
     });
     this.bodies = cast.map((h) => h.snapshot());
     this.world.bodies = this.bodies;

@@ -1,10 +1,14 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { createWorld, idle, INDEX, wear, type BoneName, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
+import { createWorld, idle, INDEX, wear, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
 import { forwardOf, leftOf } from '../../math';
 import { Report } from '../../report';
 import type { Prop, Scenario } from '../../scenario';
-import { bearLance, bearShield, buckle, checkDraw, don, hangSword, inHarness, pause, putOnHelmet, takeLance, takeShield, walkOut, type Knight } from './arming';
+import { bearLance, bearShield, takeLance, takeShield } from './arms';
+import { don } from './gauntlets';
+import { putOnHelmet } from './helm';
+import { pause, walkOut, type Knight } from './knight';
+import { buckle, checkDraw, hangSword } from './sword';
 import { beltEnd, drawn, gauntlet, harness, helmet, lance, scabbard, shield, solidsOf, strap, sword, type Gear } from './gear';
 
 /**
@@ -94,10 +98,9 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       };
       const all: Gear[] = [gear.buckle, gear.tongue, gear.scabbard, gear.sword, gear.gauntlets.left, gear.gauntlets.right, gear.helmet, gear.shield, gear.lance];
       let knight: Knight | null = null;
-      let pieces: { bone: BoneName; gear: Gear }[] = [];
+      let pieces: Gear[] = [];
       const story = (k: Knight) =>
         function* () {
-          yield* inHarness(k, pieces.map(({ bone, gear }) => ({ bone, item: gear.item })))();
           yield* wear(k.h, gear.sword.item, gear.scabbard.item)();
           yield* pause(k, 0.8)();
           yield* buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, AT_TABLE)();
@@ -118,16 +121,21 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
         report,
         done: () => !!knight && armed(knight.h, gear, yard),
         props: () => {
-          const props: Prop[] = [...armoury(top, stand, wall, rack, rise), ...all.flatMap(drawn), ...pieces.flatMap(({ gear }) => drawn(gear))];
+          const props: Prop[] = [...armoury(top, stand, wall, rack, rise), ...all.flatMap(drawn), ...pieces.flatMap(drawn)];
           const body = knight?.h;
           const hips = body ? body.pose.position(INDEX.hips).clone().addScaledVector(UP, 0.05 * body.proportions.scale) : new Vector3(0, -10, 0);
           props.push(...strap(gear.buckle.item.current.position, gear.tongue.item.current.position, hips, body?.gait.facing ?? 0, { height: top, away: new Vector3(0, 0, 1) }));
           return props;
         },
         solids: () => all.flatMap(solidsOf),
+        // (in harness from the start: its pieces on their bones, borne)
+        wearing: (_, p) => {
+          const dressed = harness(p);
+          pieces = dressed.map(({ gear }) => gear);
+          return dressed.map(({ bone, gear }) => ({ item: gear.item, on: INDEX[bone], at: { position: new Vector3() } }));
+        },
         script: (h: Humanoid<World>) => {
           const k: Knight = (knight = { h, report, pace });
-          pieces = harness(h.proportions);
           return function* () {
             yield* parallel<Frame<World>>('all', idle(h), story(k));
           };

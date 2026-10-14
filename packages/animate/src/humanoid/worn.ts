@@ -1,178 +1,197 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
+import type { Pose } from '../core/pose';
 import type { Item } from '../core/carrier';
 import { follow, followRotation } from '../core/follow';
 import type { Behaviour, Motion, Placement } from '../core/goal';
 import { INDEX, SIDES } from './bones';
 import type { Humanoid } from './humanoid';
 
-/** An item a body wears: what it is worn on (a bone, or another item: a sword in its scabbard), and where it settles to there, if anywhere. */
+/**
+ * An item a body wears (`Humanoid.worn`): what it is worn on (a bone, or another item: a sword in
+ * its scabbard), where it settles to there if anywhere (`to`, in that frame; for a bone, scaled with
+ * the body) and how; and where it sits there now (null until the body first carries it), with the
+ * two sub-steps before.
+ */
 export interface Wearing {
   readonly on: number | Item;
-  /** where it settles in `on`'s frame (m; for a bone, scaled with the body) */
   readonly to: Placement | null;
   readonly motion: Motion;
+  sits: { position: Vector3; quaternion: Quaternion; prev: Vector3; prev2: Vector3; prevQ: Quaternion; prev2Q: Quaternion } | null;
 }
 
-/** what a worn item keeps: where it sits in its carrier's frame, now and the two sub-steps before (null until it is first carried) */
-interface Fit extends Wearing {
-  at: { position: Vector3; quaternion: Quaternion; prev: Vector3; prev2: Vector3; prevQ: Quaternion; prev2Q: Quaternion } | null;
+/**
+ * How much of an item's weight a body bears (`Humanoid.borne`): its share (0 … 1) now and the two
+ * sub-steps before, its mass borne (kg), and the bones it bears on (or last bore on).
+ */
+export interface Bearing {
+  share: number;
+  prev: number;
+  prev2: number;
+  kg: number;
+  bones: number[];
 }
 
 /** how a worn item settles where it goes unless asked otherwise (m/s², m/s, rad/s², rad/s): gently, as a helm onto the head */
 const SETTLING = { accel: 2, speed: 0.4, turnAccel: 8, turnSpeed: 2 } satisfies Motion;
-
-/** how long the body takes to take up an item's weight, or to give it up (s): as long as a lift takes to come off its support */
-const BEARING = 0.4;
-
-const fits = new WeakMap<object, Map<Item, Fit>>();
-const weights = new WeakMap<object, Map<Item, number>>();
-
-/** what `h` wears (`Humanoid.worn`) */
-export function wornBy<W>(h: Humanoid<W>): Map<Item, Fit> {
-  let worn = fits.get(h);
-  if (!worn) fits.set(h, (worn = new Map()));
-  return worn;
-}
-
-/** how much of each item's weight `h` bears (kg; `Humanoid.borne`) */
-export function borneBy<W>(h: Humanoid<W>): Map<Item, number> {
-  let borne = weights.get(h);
-  if (!borne) weights.set(h, (borne = new Map()));
-  return borne;
-}
+/** how the share of an item's weight a body bears follows what it bears (1/s², 1/s): all of it taken up from rest in ~0.5 s (a lift coming off its support), given up as fast */
+const BEARING = { accel: 16, speed: 4 };
 
 /**
  * `item` worn on `on` (a bone, or another item) from this sub-step on: it goes with it as it sat
- * when put on, or, given `to` (in `on`'s frame; for a bone scaled with the body), it settles
- * there at `motion`'s pace (a helm onto the head, a sword home into its scabbard). The body moves it from then on, after its behaviour each sub-step:
- * nothing else may (a second mover throws). At once.
+ * when put on, or, given `to` (in `on`'s frame; for a bone scaled with the body), it settles there
+ * at `motion`'s pace (a helm onto the head, a sword home into its scabbard). The body moves it from
+ * then on, after its behaviour each sub-step: nothing else may (a second mover throws); it bears
+ * its weight (taking it up as it does what it holds). What it wears from the start, it is made with
+ * (`HumanoidOptions.wearing`). At once.
  */
 export function wear<W>(h: Humanoid<W>, item: Item, on: number | Item, options: { to?: Placement; motion?: Motion } = {}): Behaviour<W> {
   return function* () {
-    const worn = wornBy(h);
-    if (worn.has(item)) throw new Error('the item is worn already');
+    if (h.worn.has(item)) throw new Error('the item is worn already');
     if (on === item) throw new Error('an item cannot be worn on itself');
     const to = options.to && typeof on === 'number' ? { position: options.to.position.clone().multiplyScalar(h.proportions.scale), quaternion: options.to.quaternion } : (options.to ?? null);
-    worn.set(item, { on, to, motion: options.motion ?? SETTLING, at: null });
-    depthOf(worn, item);
+    h.worn.set(item, { on, to, motion: options.motion ?? SETTLING, sits: null });
+    depthOf(h.worn, item);
+    item.supported = false;
   };
 }
 
 /** `item` taken off: from this sub-step on, whatever moves it next (the hands that hold it). At once. */
 export function takeOff<W>(h: Humanoid<W>, item: Item): Behaviour<W> {
   return function* () {
-    if (!wornBy(h).delete(item)) throw new Error('the item is not worn');
+    if (!h.worn.delete(item)) throw new Error('the item is not worn');
   };
 }
 
 /**
  * The worn items carried (each where its carrier is now, those worn on bones first, then those on
- * them, …) and what the body carries loaded onto its bones (held items in the hands that hold
- * them, worn ones on the bone their carriers are worn on; an item's weight taken up over BEARING s
- * as it is taken, given up as it is let go of: its centre of mass moves on, it does not jump),
- * every sub-step, endless: the `Humanoid` runs it after its behaviour.
+ * them, …) and what the body bears loaded onto its bones — what it wears on the bone its carriers
+ * are worn on, what it holds off its support in the hands that hold it — its share of each item's
+ * weight followed from its history (taken up as a lift comes off its support, given up as it is
+ * let go of: the centre of mass moves on, it does not jump), every sub-step, endless: the
+ * `Humanoid` runs it after its behaviour.
  */
 export function carryWorn<W>(h: Humanoid<W>): Behaviour<W> {
   return function* () {
     yield* action<Frame<W>>({
       update: (f) => {
-        const worn = wornBy(h);
-        const order = [...worn.keys()].sort((a, b) => depthOf(worn, a) - depthOf(worn, b));
+        const order = [...h.worn.keys()].sort((a, b) => depthOf(h.worn, a) - depthOf(h.worn, b));
         for (const item of order) {
-          const fit = worn.get(item);
-          if (fit) place(f, item, fit, worn);
+          const wearing = h.worn.get(item);
+          if (wearing) place(f, item, wearing, h.worn);
         }
-        load(h, f, worn, borneBy(h));
+        load(h, f);
       },
     });
   };
 }
 
 /** how deep `item` is worn: 1 on a bone (or on something not worn), 2 on that, …; throws on a loop */
-function depthOf(worn: Map<Item, Fit>, item: Item): number {
+function depthOf(worn: ReadonlyMap<Item, Wearing>, item: Item): number {
   let depth = 0;
   let at: number | Item = item;
   while (typeof at !== 'number') {
-    const fit = worn.get(at);
-    if (!fit) break;
+    const wearing = worn.get(at);
+    if (!wearing) break;
     if (++depth > worn.size) throw new Error('items worn on each other in a loop');
-    at = fit.on;
+    at = wearing.on;
   }
   return depth;
 }
 
 /** `item` moved to where it sits on its carrier now (put on: as it sits there now; settling: on toward where it goes) */
-function place<W>(f: Frame<W>, item: Item, fit: Fit, worn: Map<Item, Fit>) {
-  const [position, quaternion] = carrierAt(f, fit.on);
-  if (!fit.at) {
+function place<W>(f: Frame<W>, item: Item, wearing: Wearing, worn: ReadonlyMap<Item, Wearing>) {
+  const on = wearing.on;
+  const [position, quaternion] = typeof on === 'number' ? [f.current.position(on), _r.copy(f.current.rotation(on))] : [on.current.position, _r.copy(on.current.quaternion)];
+  if (!wearing.sits) {
     // (as it sits, its carrier as it was when the item was last moved: a bone as last posed, an item worn as before it was moved this sub-step)
-    const on = fit.on;
     const [was, wasQ] = typeof on === 'number' ? [f.prev.position(on), f.prev.rotation(on)] : worn.has(on) ? [on.prev.position, on.prev.quaternion] : [position, quaternion];
     const inverse = wasQ.clone().invert();
     const local = item.current.position.clone().sub(was).applyQuaternion(inverse);
     const turned = inverse.multiply(item.current.quaternion);
-    fit.at = { position: local, quaternion: turned, prev: local.clone(), prev2: local.clone(), prevQ: turned.clone(), prev2Q: turned.clone() };
+    wearing.sits = { position: local, quaternion: turned, prev: local.clone(), prev2: local.clone(), prevQ: turned.clone(), prev2Q: turned.clone() };
   }
-  const at = fit.at;
-  if (fit.to) {
+  const at = wearing.sits;
+  if (wearing.to) {
     at.prev2.copy(at.prev);
     at.prev.copy(at.position);
-    follow(at.prev2, at.prev, fit.to.position, fit.motion, f.dt, at.position);
-    if (fit.to.quaternion) {
+    follow(at.prev2, at.prev, wearing.to.position, wearing.motion, f.dt, at.position);
+    if (wearing.to.quaternion) {
       at.prev2Q.copy(at.prevQ);
       at.prevQ.copy(at.quaternion);
-      followRotation(at.prev2Q, at.prevQ, fit.to.quaternion, { accel: fit.motion.turnAccel ?? SETTLING.turnAccel, speed: fit.motion.turnSpeed }, f.dt, at.quaternion);
+      followRotation(at.prev2Q, at.prevQ, wearing.to.quaternion, { accel: wearing.motion.turnAccel ?? SETTLING.turnAccel, speed: wearing.motion.turnSpeed }, f.dt, at.quaternion);
     }
   }
   item.move(f.time, _p.copy(at.position).applyQuaternion(quaternion).add(position), _q.copy(quaternion).multiply(at.quaternion));
 }
 
-/** where a carrier is now: a bone as posed this sub-step, an item as it was last moved */
-function carrierAt<W>(f: Frame<W>, on: number | Item): [Readonly<Vector3>, Quaternion] {
-  if (typeof on === 'number') return [f.current.position(on), _r.copy(f.current.rotation(on))];
-  return [on.current.position, _r.copy(on.current.quaternion)];
+/** What a body wears from the start (`HumanoidOptions.wearing`): an item, the bone it is on, and where it sits in that bone's frame. */
+export interface Dressed {
+  item: Item;
+  on: number;
+  at: Placement;
 }
 
-/** the masses the body carries, loaded onto its bones in this sub-step's pose */
-function load<W>(h: Humanoid<W>, f: Frame<W>, worn: Map<Item, Fit>, borne: Map<Item, number>) {
-  const pose = f.current;
-  const mass = new Map<number, number>();
-  const moment = new Map<number, Vector3>();
-  const add = (bone: number, m: number, at: Vector3) => {
-    mass.set(bone, (mass.get(bone) ?? 0) + m);
-    let sum = moment.get(bone);
-    if (!sum) moment.set(bone, (sum = new Vector3()));
-    sum.addScaledVector(at, m);
-  };
-  /** the bones `item` bears on: the one it is worn on (through what it hangs from), or the hands holding it (or what it hangs from) */
+/** `wearing` worn and borne from the start, each item placed where it sits on its bone in `pose` (the body's first) and its weight loaded there */
+export function dress<W>(h: Humanoid<W>, pose: Pose, wearing: readonly Dressed[]) {
+  for (const { item, on, at } of wearing) {
+    const position = at.position.clone();
+    const quaternion = at.quaternion?.clone() ?? new Quaternion();
+    h.worn.set(item, { on, to: null, motion: SETTLING, sits: { position, quaternion, prev: position.clone(), prev2: position.clone(), prevQ: quaternion.clone(), prev2Q: quaternion.clone() } });
+    item.supported = false;
+    item.move(0, position.clone().applyQuaternion(pose.rotation(on)).add(pose.position(on)), pose.rotation(on).clone().multiply(quaternion));
+    h.borne.set(item, { share: 1, prev: 1, prev2: 1, kg: item.mass, bones: [on] });
+  }
+  loadBones(h, pose);
+}
+
+/** the weight the body bears, its share of each item's followed on, loaded onto its bones in this sub-step's pose */
+function load<W>(h: Humanoid<W>, f: Frame<W>) {
+  /** the bones `item` bears on: the one it is worn on (through what it hangs from), or the hands holding it (or what it hangs from) off its support */
   const bearers = (item: Item): number[] => {
     let at: number | Item = item;
     for (;;) {
       if (typeof at === 'number') return [at];
-      const fit = worn.get(at);
-      if (!fit) break;
-      at = fit.on;
+      const wearing = h.worn.get(at);
+      if (!wearing) break;
+      at = wearing.on;
     }
     const top = at;
+    if (top.supported) return [];
     return SIDES.filter((s) => h.holding[s]?.item === top).map((s) => INDEX[`${s}Hand`]);
   };
-  const items = new Set<Item>([...worn.keys(), ...SIDES.flatMap((s) => h.holding[s]?.item ?? []), ...borne.keys()]);
+  const items = new Set<Item>([...h.worn.keys(), ...SIDES.flatMap((s) => h.holding[s]?.item ?? []), ...h.borne.keys()]);
   for (const item of items) {
     if (item.mass === 0) continue;
     const bones = bearers(item);
-    // (the weight taken up, or given up, at a steady rate: put down, it bears on the last bones it bore on)
-    const kg = Math.min(item.mass, Math.max(0, (borne.get(item) ?? 0) + ((bones.length > 0 ? 1 : -1) * item.mass * f.dt) / BEARING));
-    if (bones.length > 0) last.set(item, bones);
-    if (kg === 0) {
-      borne.delete(item);
+    let bearing = h.borne.get(item);
+    if (!bearing) h.borne.set(item, (bearing = { share: 0, prev: 0, prev2: 0, kg: 0, bones }));
+    // (followed from its history: taken up, or given up, within an acceleration)
+    [bearing.prev2, bearing.prev] = [bearing.prev, bearing.share];
+    bearing.share = Math.min(1, Math.max(0, follow(bearing.prev2, bearing.prev, bones.length > 0 ? 1 : 0, BEARING, f.dt)));
+    if (bones.length > 0) bearing.bones = bones;
+    if (bearing.share === 0 && bones.length === 0) {
+      h.borne.delete(item);
       continue;
     }
-    borne.set(item, kg);
+    bearing.kg = bearing.share * item.mass;
+  }
+  loadBones(h, f.current);
+}
+
+/** what the body bears (`borne`) loaded onto the bones bearing it in `pose`, each item's at its centre of mass */
+function loadBones<W>(h: Humanoid<W>, pose: Pose) {
+  const mass = new Map<number, number>();
+  const moment = new Map<number, Vector3>();
+  for (const [item, bearing] of h.borne) {
     const centre = _c.copy(item.centre).applyQuaternion(item.current.quaternion).add(item.current.position);
-    const on = bones.length > 0 ? bones : (last.get(item) ?? []);
-    for (const bone of on) add(bone, kg / on.length, centre);
+    for (const bone of bearing.bones) {
+      mass.set(bone, (mass.get(bone) ?? 0) + bearing.kg / bearing.bones.length);
+      let sum = moment.get(bone);
+      if (!sum) moment.set(bone, (sum = new Vector3()));
+      sum.addScaledVector(centre, bearing.kg / bearing.bones.length);
+    }
   }
   for (let bone = 0; bone < pose.skeleton.bones.length; bone++) {
     const m = mass.get(bone) ?? 0;
@@ -185,8 +204,6 @@ function load<W>(h: Humanoid<W>, f: Frame<W>, worn: Map<Item, Fit>, borne: Map<I
   }
 }
 
-/** the bones each item last bore on */
-const last = new WeakMap<Item, number[]>();
 const ZERO = new Vector3();
 const _p = new Vector3();
 const _c = new Vector3();

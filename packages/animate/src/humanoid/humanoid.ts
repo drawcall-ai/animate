@@ -17,7 +17,7 @@ import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
 import { Rig, yawOf } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
-import { borneBy, carryWorn, wornBy, type Wearing } from './worn';
+import { carryWorn, dress, type Bearing, type Dressed, type Wearing } from './worn';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -25,6 +25,8 @@ export interface HumanoidOptions<W> {
   position?: { x: number; z: number };
   /** its facing about +Y (0 faces +Z) */
   yaw?: number;
+  /** what it wears from the start, for its proportions (harness it stands in: worn and borne from the first sub-step, where each piece sits on its bone) */
+  wearing?: (p: Proportions) => readonly Dressed[];
 }
 
 /**
@@ -46,6 +48,10 @@ export class Humanoid<W = unknown> {
   readonly gait: Gait;
   /** the neck and the eyes, for `lookAt` */
   readonly gazer: Gazer;
+  /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
+  readonly worn = new Map<Item, Wearing>();
+  /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it (kept by the body) */
+  readonly borne = new Map<Item, Bearing>();
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
   readonly holding: Record<Side, { item: Item; grip: string } | null> = { left: null, right: null };
   private readonly body: Body<W>;
@@ -64,6 +70,7 @@ export class Humanoid<W = unknown> {
     this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
     this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out) };
+    if (options.wearing) dress(this, start.pose, options.wearing(p));
     // (after the behaviour each sub-step, the body carries what it wears and holds)
     const script = behaviour(this);
     const carried = carryWorn(this);
@@ -75,16 +82,6 @@ export class Humanoid<W = unknown> {
       { world: options.world, pose: start.pose },
     );
     rig.write(this.body.pose, 0);
-  }
-
-  /** what it wears (`wear`, `takeOff`): each item and what it is worn on */
-  get worn(): ReadonlyMap<Item, Wearing> {
-    return wornBy(this);
-  }
-
-  /** how much of each item's weight it bears, held or worn (kg; taken up and given up over a moment), as its centre of mass counts it */
-  get borne(): ReadonlyMap<Item, number> {
-    return borneBy(this);
   }
 
   /** the last final pose */

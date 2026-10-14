@@ -13,6 +13,7 @@ export class Targets {
   private readonly wristPeak = new Peak();
   private readonly headPeak = new Peak();
   private readonly gazePeak = new Peak();
+  private readonly headOffPeak = new Peak();
   /** frames a gaze was asked, and frames it was judged in */
   asked = 0;
   judged = 0;
@@ -26,7 +27,7 @@ export class Targets {
   get wrist() {
     return this.wristPeak.value;
   }
-  /** the eyes off the gaze target asked (°), SETTLE after it last jumped, where it is in front of the chest */
+  /** how far beyond what the eyes turn comfortably in the head (EYES) the gaze target asked lies (°), SETTLE after it last jumped, where it is before the body (in front of the frontal plane through the hips) */
   get gaze() {
     return this.gazePeak.value;
   }
@@ -41,16 +42,19 @@ export class Targets {
       const head = h.model.scene.getObjectByName('head');
       if (!head) throw new Error('no head');
       const forward = new Vector3(0, 0, 1).applyQuaternion(head.getWorldQuaternion(new Quaternion()));
-      // (judged where a head can look: within a quarter turn of where the chest faces)
+      // (judged unless truly behind the body: behind the frontal plane through the hips — a bowed body's
+      // own buckle, below and behind its eyes, is judged)
       const toward = gaze.clone().sub(eyesOf(h));
-      const chest = h.model.scene.getObjectByName('chest');
-      if (!chest) throw new Error('no chest');
-      const facing = new Vector3(0, 0, 1).applyQuaternion(chest.getWorldQuaternion(new Quaternion())).setY(0);
-      const seen = facing.angleTo(toward.clone().setY(0)) < Math.PI / 2;
+      const hips = h.model.scene.getObjectByName('hips');
+      if (!hips) throw new Error('no hips');
+      const facing = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0);
+      const seen = gaze.clone().sub(hips.getWorldPosition(new Vector3())).dot(facing) > 0;
       this.asked++;
       if (seen && t - this.gazeAt.since > SETTLE) {
         this.judged++;
-        this.gazePeak.see((forward.angleTo(toward) * 180) / Math.PI, t);
+        const off = (forward.angleTo(toward) * 180) / Math.PI;
+        this.headOffPeak.see(off, t);
+        this.gazePeak.see(beyondEyes(toward.applyQuaternion(head.getWorldQuaternion(new Quaternion()).invert()), off), t);
       }
     }
     const head = positionOf(asked.get('head'));
@@ -79,7 +83,7 @@ export class Targets {
 
   toString() {
     const { asked, judged, head } = this.tracked;
-    return `max wrist err (held grips and tracked targets within arm+0.35m) ${this.wristPeak} (tracked: judged ${judged} of ${asked} frames asked), head (eyes) err ${this.headPeak} (${head} frames), gaze off its target ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
+    return `max wrist err (held grips and tracked targets within arm+0.35m) ${this.wristPeak} (tracked: judged ${judged} of ${asked} frames asked), head (eyes) err ${this.headPeak} (${head} frames), gaze beyond the eyes' comfortable turn ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s, the head off its target ${this.headOffPeak.value.toFixed(1)}° @${this.headOffPeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
   }
 }
 
@@ -91,6 +95,26 @@ function positionOf(goal: unknown): Vector3 | null {
 }
 
 const _v = new Vector3();
+/**
+ * How far the eyes turn in the head comfortably (°): down to the preferred declination of the line
+ * of sight below the head's (~29°, Hill & Kroemer 1986, Human Factors 28:127), up and to the side
+ * the eye-only range of head-free gaze shifts (~20°, Stahl 1999, Exp Brain Res 126:41) — an
+ * ellipse round the head's forward.
+ */
+const EYES = { down: 30, up: 20, side: 20 };
+
+/**
+ * how far (°) a target the head faces `off` (°) away from, at `local` in the head's frame (+z
+ * ahead, +y up), lies beyond what the eyes turn comfortably (`EYES`): 0 within it
+ */
+export function beyondEyes(local: Vector3, off: number): number {
+  if (local.z <= 0) return off - EYES.side;
+  const side = (Math.atan2(local.x, local.z) * 180) / Math.PI;
+  const down = (Math.atan2(-local.y, Math.hypot(local.x, local.z)) * 180) / Math.PI;
+  const s = Math.hypot(side / EYES.side, down / (down > 0 ? EYES.down : EYES.up));
+  return s > 1 ? off * (1 - 1 / s) : 0;
+}
+
 /** how long a gaze target stays put before the eyes are judged on it (s): a gaze shift takes ~0.3–0.5 s */
 const SETTLE = 0.6;
 /** how far a gaze target moves in one step to count as a new one (m): a jump, not a motion (5 cm in 1/60 s is 3 m/s) */

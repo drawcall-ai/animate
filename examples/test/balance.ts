@@ -176,7 +176,7 @@ export function comOf(h: Actor): Vector3 {
     sum.addScaledVector(offset.subVectors(at(j, skull), hips), share * body);
     total += share * body;
   }
-  for (const [item, kg] of h.borne) {
+  for (const [item, { kg }] of h.borne) {
     const centre = item.centre.clone().applyQuaternion(item.current.quaternion).add(item.current.position);
     sum.addScaledVector(offset.subVectors(centre, hips), kg);
     total += kg;

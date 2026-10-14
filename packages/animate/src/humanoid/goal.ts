@@ -10,12 +10,11 @@ import type { Humanoid } from './humanoid';
  * task's are placed by then).
  */
 export function onBone<W>(h: Humanoid<W>, bone: number, local: Placement, options: { facing?: boolean } = {}): (f: Frame<W>) => Required<Placement> {
-  const out = { position: new Vector3(), quaternion: new Quaternion() };
   return (f) => {
-    const turned = options.facing ? out.quaternion.setFromAxisAngle(UP, h.gait.facing) : out.quaternion.copy(f.current.rotation(bone));
-    out.position.copy(local.position).multiplyScalar(h.proportions.scale).applyQuaternion(turned).add(f.current.position(bone));
-    if (local.quaternion) turned.multiply(local.quaternion);
-    return out;
+    const quaternion = options.facing ? new Quaternion().setFromAxisAngle(UP, h.gait.facing) : f.current.rotation(bone).clone();
+    const position = local.position.clone().multiplyScalar(h.proportions.scale).applyQuaternion(quaternion).add(f.current.position(bone));
+    if (local.quaternion) quaternion.multiply(local.quaternion);
+    return { position, quaternion };
   };
 }
 

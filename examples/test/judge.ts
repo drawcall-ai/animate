@@ -217,8 +217,8 @@ const ON_TOES = 0.3;
 const FLOOR_SINK = 0.025;
 /** how far a landing may still move in the last 40% of a swing (m): later reads as a stumble */
 const LATE_RETARGET = 0.03;
-/** how far the head may face off what the eyes are asked to look at, once it stays put (°): the eyes turn the rest in their sockets (~35° each way at most, the comfortable range half that; measured 20–23°) */
-const GAZE = 25;
+/** how far what the eyes are asked to look at may lie beyond what they turn comfortably in the head (°, targets.ts EYES), once it stays put: the head faces it within that */
+const GAZE = 5;
 /** the widest a slow step lands the feet apart (× the stance's width) */
 const WIDE = 1.5;
 /** the most a steady stride's two step lengths differ (share of their mean) */
@@ -286,7 +286,7 @@ export function judge(m: Measured, limit: Limits) {
   // (what is tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
   if (limit.head !== undefined) expect(m.targets.tracked.head, 'head: frames judged').toBeGreaterThan(0);
   expect(m.targets.tracked.judged, 'tracked wrists: frames judged').toBeGreaterThanOrEqual(TRACKED * m.targets.tracked.asked);
-  expect(m.targets.gaze, 'gaze: head off the target asked (°)').toBeLessThan(GAZE);
+  expect(m.targets.gaze, "gaze: the target beyond the eyes' comfortable turn (°)").toBeLessThan(GAZE);
   // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
   if (m.targets.asked > 0) expect(m.targets.judged, 'gaze: frames judged').toBeGreaterThan(0);
   if (limit.strides) {

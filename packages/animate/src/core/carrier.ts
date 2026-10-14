@@ -54,10 +54,11 @@ export class Carrier {
   }
 }
 
-/** An item's mass (kg; default none) and where its centre of mass is in its frame (default its origin). */
+/** An item's mass (kg; default none), where its centre of mass is in its frame (default its origin), and whether it rests on something (default true). */
 export interface ItemOptions {
   mass?: number;
   centre?: Vector3;
+  supported?: boolean;
 }
 
 /**
@@ -67,24 +68,26 @@ export interface ItemOptions {
 export class Item extends Carrier {
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
+  /** it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`, `carry`) or wearing it clears this */
+  supported: boolean;
 
   constructor(
     position: Vector3,
     quaternion: Quaternion,
     readonly grips: Readonly<Record<string, Target>>,
-    { mass = 0, centre = new Vector3() }: ItemOptions = {},
+    { mass = 0, centre = new Vector3(), supported = true }: ItemOptions = {},
   ) {
     super(position, quaternion);
     if (!(mass >= 0 && Number.isFinite(mass))) throw new Error(`an item of mass ${mass}`);
     this.mass = mass;
     this.centre = centre.clone();
+    this.supported = supported;
   }
 }
 
 /** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
 export function onItem<W>(item: Carrier, local: Placement): (f: Frame<W>) => Target {
-  const out: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-  return () => item.toWorld(local, out);
+  return () => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() });
 }
 
 function copy(to: Required<Placement>, from: Required<Placement>) {
