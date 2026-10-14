@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, gazeOff, grab, hold, idle, INDEX, Item, reachFor, release, type Behaviour, type Frame, type Leg } from '../../src';
+import { carry, gazeOff, grab, handTo, hold, idle, INDEX, Item, reachFor, release, type Behaviour, type Frame, type Leg } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
@@ -12,7 +12,7 @@ const box = (at: Vector3) => new Item(at, new Quaternion(), { left: { position: 
 /** hand `side` in the hips' frame: where it is moved to, not carried along by the body */
 const onHips = (h: Humanoid, side: Side) => h.pose.position(INDEX[`${side}Hand`]).clone().sub(h.pose.position(INDEX.hips)).applyQuaternion(h.pose.rotation(INDEX.hips).clone().invert());
 
-/** each hand's speed (m/s) at each sub-step of `behaviour` (over the base), from when `mark` is called in it, in the hips' frame */
+/** each hand's speed (m/s) at each sub-step of `behaviour` (over the base, the body standing), from when `mark` is called in it */
 function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds: number): Record<Side, number[]> {
   const v: Record<Side, number[]> = { left: [], right: [] };
   let marked = false;
@@ -25,13 +25,13 @@ function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds
         idle(h),
         behaviour(h, () => {
           marked = true;
-          for (const side of ['left', 'right'] as const) was[side].copy(onHips(h, side));
+          for (const side of ['left', 'right'] as const) was[side].copy(h.pose.position(INDEX[`${side}Hand`]));
         }),
         action<Frame>({
           update: () => {
             if (!marked) return;
             for (const side of ['left', 'right'] as const) {
-              const at = onHips(h, side);
+              const at = h.pose.position(INDEX[`${side}Hand`]);
               v[side].push(at.distanceTo(was[side]) * 60);
               was[side].copy(at);
             }
@@ -44,7 +44,11 @@ function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds
   return v;
 }
 
-const start = (v: number[]) => v.findIndex((x) => x > 0.05) / 60;
+/** when a hand has gone `m` (s) */
+const gone = (v: number[], m: number) => {
+  let path = 0;
+  return v.findIndex((x) => (path += x / 60) > m) / 60;
+};
 const peak = (v: number[]) => v.indexOf(Math.max(...v)) / 60;
 
 describe('grab', () => {
@@ -142,8 +146,28 @@ describe('two hands', () => {
         },
       4,
     );
-    expect(start(v.left) - start(v.right)).toBeGreaterThanOrEqual(0.05);
-    expect(start(v.left) - start(v.right)).toBeLessThanOrEqual(0.13);
+    // (10 cm on its way 60–120 ms after the right, give or take a sub-step or two)
+    const lag = gone(v.left, 0.1) - gone(v.right, 0.1);
+    expect(lag).toBeGreaterThanOrEqual(0.04);
+    expect(lag).toBeLessThanOrEqual(0.15);
+  });
+
+  it('the following hand waits where it is: held out, it does not drop toward its hang before it sets off', () => {
+    const load = box(new Vector3(0, 0.95, 0.5));
+    const out = (side: Side) => ({ position: new Vector3(side === 'left' ? 0.2 : -0.2, 1.05, 0.3) });
+    const v = speeds(
+      (h, mark) =>
+        function* () {
+          // (both hands held out before them, then gone for the box from there)
+          yield* parallel<Frame>('race', handTo(h, 'left', out('left'), { lead: false }), handTo(h, 'right', out('right'), { lead: false }), action({ until: timePassed(1.5, 'seconds') }));
+          mark();
+          yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
+        },
+      4,
+    );
+    // (until the right hand is well under way, the left keeps still)
+    const under = v.right.findIndex((x) => x > 0.3);
+    expect(Math.max(...v.left.slice(0, under))).toBeLessThan(0.1);
   });
 
   it('carrying an item each: the left goes a moment after the right', () => {

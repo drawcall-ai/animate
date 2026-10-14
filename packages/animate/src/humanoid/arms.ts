@@ -91,6 +91,8 @@ export interface HandOptions<W> extends Partial<Motion> {
   lead?: boolean;
   /** a reach that takes this long (s): the hand goes along a minimum-jerk path to the target (`Glide`: a bell of speed), then stays on it */
   seconds?: number;
+  /** with `seconds`: the reach sets off this long after (s), the arm kept as it is till then */
+  after?: number;
   until?: Until<W>;
 }
 
@@ -103,15 +105,26 @@ export interface HandOptions<W> extends Partial<Motion> {
  * toes (`h.asks`).
  */
 export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, options: HandOptions<W> = {}): Behaviour<W> {
-  const { until, seconds } = options;
+  const { until, seconds, after = 0 } = options;
   return function* () {
     const arm = new ChainTip(`${side}Arm`);
     const glide = seconds === undefined ? null : new Glide(seconds);
     const bone = INDEX[`${side}Hand`];
+    let waiting = after;
+    // (waiting, the arm's joints kept as they were when it began, come to rest there: the hand
+    // stays where it is on the body, neither dropped to its hang nor taken up by the arm's solve)
+    let kept: [number, Quaternion][] | null = null;
+    const joints = new Map<number, TrackedRotation>();
     yield* action<Frame<W>>({
       update: (f) => {
         const goal = live(target, f);
         if (!glide) return void handStep(h, f, side, goal, options, arm);
+        if (waiting > 0) {
+          waiting -= f.dt;
+          kept ??= ARM.map((b) => [INDEX[`${side}${b}`], f.prev.local(INDEX[`${side}${b}`]).clone()]);
+          for (const [b, q] of kept) set(f, joints, b, q);
+          return;
+        }
         // (the target in the world, the hand gliding to it from where it is and how it moves)
         const on = options.on;
         const world = on ? { ...on.toWorld(goal, _world), axis: goal.axis && _axis.copy(goal.axis).applyQuaternion(on.current.quaternion) } : { ...goal, velocity: goal.velocity ?? ZERO };
@@ -207,6 +220,8 @@ function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonl
   if (rise > 0 && asks.lower <= 0) asks.lower = Math.min(asks.lower, -Math.min(rise, TIPTOE * p.scale));
 }
 
+/** an arm's joints, from the clavicle out */
+const ARM = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const;
 const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
 const Z = new Vector3(0, 0, 1);

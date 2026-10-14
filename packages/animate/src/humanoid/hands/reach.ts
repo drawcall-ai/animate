@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { action, parallel, timePassed } from '@pmndrs/timeline';
+import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import type { Behaviour, Target } from '../../core/goal';
@@ -20,7 +20,7 @@ const REACHING = 4;
  * The hands open, go to their grips together (one shared condition: each stays on its way until
  * every one is there; the body bowing and bending as low as they are) and close on them. Both
  * going, the right hand leads and the left sets off a moment after it, a little slower (`LEADING`,
- * seeded by what it goes for). A hand not there within `limit` s throws.
+ * seeded by what it goes for), its arm kept as it is till then. A hand not there within `limit` s throws.
  */
 export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } = {}): Behaviour<W> {
   const hands = held(holds);
@@ -36,10 +36,9 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
   const reach = (side: Side, item: Item, grip: string): Behaviour<W> =>
     function* () {
       const { delay, slower } = lagging && side !== LEADING ? following(item, { [side]: grip }) : { delay: 0, slower: 0 };
-      if (delay > 0) yield* action({ until: timePassed(delay, 'seconds') });
       const at = item.toWorld(gripOf(item, grip), _world).position;
       const seconds = reachTime(h.pose.position(INDEX[`${side}Hand`]).distanceTo(at) / h.proportions.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
-      yield* handTo(h, side, gripOf(item, grip), { on: item, until, seconds })();
+      yield* handTo(h, side, gripOf(item, grip), { on: item, until, seconds, after: delay })();
     };
   return function* () {
     for (const { side } of hands) yield* openHand(h, side)();
