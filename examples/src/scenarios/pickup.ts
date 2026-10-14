@@ -86,10 +86,11 @@ function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size:
   const turned = goal.quaternion?.clone() ?? new Quaternion();
   return function* () {
     // up in front of the knees, then in close in front of the chest, turning square with the body
-    const hips = h.pose.position(0);
+    // (the chest as the body will stand: its hips over the feet, not back where they squat)
+    const feet = h.feet[0].position.clone().add(h.feet[1].position).multiplyScalar(0.5);
     const ahead = forwardOf(h.gait.facing);
     const from = goal.position.clone();
-    const lift = path(from, from.clone().addScaledVector(ahead, 0.12).setY(0.6), hips.clone().addScaledVector(ahead, CARRIED.ahead).setY(CARRIED.height), duration);
+    const lift = path(from, from.clone().addScaledVector(ahead, 0.12).setY(0.6), feet.addScaledVector(ahead, CARRIED.ahead).setY(CARRIED.height), duration);
     let began = -1;
     yield* action<Frame<World>>({
       update: (f) => {

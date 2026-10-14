@@ -1,6 +1,6 @@
 import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { ask, CALM, createWorld, handTo, headTo, idle, lookAt, reached, release, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
+import { ask, CALM, createWorld, handTo, headTo, idle, lookAt, reached, release, SHIFT, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
 import { destination, route, scalar, type Way } from '../keys';
 import { leftOf, wrapAngle } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -359,7 +359,7 @@ export function reach(v: Variation = {}): Scenario {
                 // (the body ahead of the hand: turned and stepped to where it is going)
                 ask(h, comeAlong(h, 'right', (f) => play.place(going(play.time(f.time), ahead)), pace)),
                 // (the eyes lead the hand: where it is going a moment on)
-                lookAt(h.gazer, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look))),
+                lookAt(h.gazer, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look)), SHIFT),
               );
               yield* reporting(report, ['rightHand'], release(h, ['right'], { away: { right: new Vector3(0, -0.3, -0.3) } }))();
               released = true;
