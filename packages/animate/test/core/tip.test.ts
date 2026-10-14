@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { Body, chainTo, lookAt, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
+import { Body, chainTo, lookAt, SHIFT, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
 import { spinOf } from '../../src/core/rotation';
 import { leg, turn } from './rigs';
 
@@ -51,7 +51,7 @@ describe('TrackedRotation', () => {
 });
 
 describe('lookAt', () => {
-  it("turns a gazer's head, upright, until its eyes are on the point", () => {
+  it("turns a gazer's head, upright, until its eyes are on the point: the head most of the way, the eyes the rest (a few degrees)", () => {
     const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
     const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
     const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
@@ -61,7 +61,10 @@ describe('lookAt', () => {
     const head = body.pose.rotation(2);
     const forward = new Vector3(0, 0, 1).applyQuaternion(head);
     const eyes = gazer.eyes(body.pose, new Vector3());
-    expect(forward.angleTo(point.clone().sub(eyes))).toBeLessThan(0.02);
+    // (the eyes take a quarter of the turn, at most 0.3 of their range to the side or up: 0.105 rad)
+    const off = forward.angleTo(point.clone().sub(eyes));
+    expect(off).toBeGreaterThan(0.08);
+    expect(off).toBeLessThan(0.3 * 0.35 + 0.01);
     expect(new Vector3(1, 0, 0).applyQuaternion(head).y).toBeCloseTo(0, 6);
   });
 
@@ -96,8 +99,38 @@ describe('lookAt', () => {
       const eyes = gazer.eyes(body.pose, new Vector3());
       if (k >= 60) missed = Math.max(missed, new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(2)).angleTo(point.clone().sub(eyes)));
     }
-    // (on it, the head turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
-    expect(missed).toBeLessThan(0.03);
+    // (on it but for the eyes' share, the head turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
+    expect(missed).toBeLessThan(0.3 * 0.35 + 0.03);
     expect(Math.max(...heads.slice(61).map((q, k) => q.angleTo(heads[60 + k])))).toBeLessThan(0.02);
+  });
+
+  it('turns the head as fast as the gaze shift is large (its main sequence), a bell, however many joints share the turn', () => {
+    const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
+    const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
+    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
+    /** the head's speed (rad/s) every step of a look `yaw` aside, and how far it turned */
+    const look = (yaw: number) => {
+      const eyes = new Vector3(0, 1.65, 0.08);
+      const body = new Body(skeleton, lookAt(gazer, eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3)), SHIFT));
+      const speeds: number[] = [];
+      let last = new Quaternion();
+      for (let k = 0; k < 180; k++) {
+        body.update(dt);
+        speeds.push(body.pose.rotation(2).angleTo(last) / dt);
+        last = body.pose.rotation(2).clone();
+      }
+      return { speeds: speeds.slice(1), turned: last.angleTo(new Quaternion()) };
+    };
+    const small = look(0.35);
+    const large = look(1.4);
+    const peak = (s: number[]) => Math.max(...s);
+    // (100°/s + 2.3°/s per degree turned at the peak: the large shift's head about twice as fast, neither at SHIFT's 6 rad/s)
+    expect(peak(large.speeds) / peak(small.speeds)).toBeGreaterThan(1.8);
+    expect(peak(large.speeds)).toBeLessThan(1.75 + 2.5 * large.turned);
+    expect(peak(small.speeds)).toBeLessThan(1.75 + 2.5 * small.turned);
+    // (a bell: up to its peak and down from it, no plateau at a cap)
+    const top = large.speeds.indexOf(peak(large.speeds));
+    expect(large.speeds.filter((v) => v > 0.95 * peak(large.speeds)).length).toBeLessThan(0.25 * large.speeds.filter((v) => v > 0.05).length);
+    expect(top).toBeGreaterThan(3);
   });
 });

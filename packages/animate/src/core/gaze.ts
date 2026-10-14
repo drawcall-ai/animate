@@ -4,6 +4,7 @@ import type { Frame } from './body';
 import { followRotation } from './follow';
 import { live, type Behaviour, type Live, type Motion } from './goal';
 import { clampRotation } from './limits';
+import { spinOf } from './rotation';
 import type { ReadonlyPose } from './pose';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
@@ -16,31 +17,44 @@ export interface Gazer {
   range: { down: number; up: number; side: number };
 }
 
-/** how fast a head turns to look about (rad/s², rad/s): a glance aside */
+/** the most a head turns to look about (rad/s², rad/s): a glance aside, at most */
 export const GLANCE = { turnAccel: 40, turnSpeed: 6 };
 /**
- * how fast a head turns to what the hands go for (rad/s², rad/s): a large gaze shift's head,
+ * the most a head turns to what the hands go for (rad/s², rad/s): a large brisk gaze shift's head,
  * ~3400°/s² and ~340°/s at its peak (recalled from Guitton & Volle 1987, J Neurophysiol 58:427,
- * not checked against the paper; head peaks in large shifts grow ~2.3°/s per degree of the
- * shift, 100–350°/s)
+ * not checked against the paper)
  */
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
 /**
  * The gazer's eyes on `target` (world), the head upright (rest: facing +Z, +Y up), every sub-step,
- * endless: the turn from the neck's parent shared evenly over the neck chain's bones, each within
- * its limit and turned on from its history at `motion`'s pace.
+ * endless. The head turns most of the way and the eyes the rest (a quarter, a few degrees at most:
+ * a large shift ends with the eyes a little off the head's line). The neck's whole turn is followed
+ * from its history as fast as the gaze shift is large (the head's main sequence: a small look
+ * slowly, a large one briskly, a bell either way), at most at `motion`'s pace, and shared evenly
+ * over the neck chain's bones, each within its limit.
  */
 export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour<W> {
-  const turn = { accel: motion.turnAccel, speed: motion.turnSpeed };
   return function* () {
     /** looking over the top: pitched back past straight down or up rather than turned toward the target (null: not chosen yet) */
     let over: boolean | null = null;
+    /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
+    let shift = 0;
+    /** the head's goal the sub-step before (null: none yet) */
+    let seen: Quaternion | null = null;
+    /** the target's turn followed the sub-step before (rad/s) */
+    const pursued = new Vector3();
+    /** where the target was the sub-step before (null: not yet seen) */
+    let aimed: Vector3 | null = null;
     yield* action<Frame<W>>({
       update: (f) => {
         const pose = f.current;
         const bones = pose.skeleton.chain(gazer.neck);
-        const d = _d.subVectors(live(target, f), gazer.eyes(pose, _eyes)).normalize();
+        const point = live(target, f);
+        // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
+        const jumped = !aimed || aimed.distanceTo(point) > JUMP * f.dt;
+        (aimed ??= new Vector3()).copy(point);
+        const d = _d.subVectors(point, gazer.eyes(pose, _eyes)).normalize();
         if (d.lengthSq() === 0) return;
         // upright: turned about the vertical, then pitched (+ down); looking nearly straight up or
         // down, the way it faces eases to the neck's parent's (the target's own heading flips
@@ -49,32 +63,99 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         const parent = pose.skeleton.bones[bones[0]].parent;
         const ahead = _f.set(0, 0, 1).applyQuaternion(pose.rotation(parent));
         const facing = Math.atan2(ahead.x, ahead.z);
-        const vertical = smoothstep(0.1, 0.35, Math.hypot(d.x, d.z));
-        const toward = wrap(Math.atan2(d.x, d.z) - facing);
-        upright(d, facing + toward * vertical, _q);
-        upright(d, facing + wrap(toward + Math.PI) * vertical, _o);
+        const ways = (line: Vector3) => {
+          const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
+          const toward = wrap(Math.atan2(line.x, line.z) - facing);
+          upright(line, facing + toward * vertical, _q);
+          upright(line, facing + wrap(toward + Math.PI) * vertical, _o);
+        };
+        ways(d);
         // (of the two, first the lesser turn from the neck's parent; then the one taken kept until the
         // other, within the neck's range, leaves the eyes HYSTERESIS less of their range to turn: it
         // never alternates between them as the body sways)
         const turned = pose.rotation(parent);
         over ??= _o.angleTo(turned) < _q.angleTo(turned);
         const [kept, other] = over ? [_o, _q] : [_q, _o];
-        if (strain(gazer, pose, bones, turned, other, d) < strain(gazer, pose, bones, turned, kept, d) - HYSTERESIS) over = !over;
-        // (the turn from the neck's parent shared evenly down the neck, followed once from the
-        // first bone's history: every joint turns at `motion`'s pace, stopped at its range's end)
-        const share = _share.identity().slerp(_rel.copy(turned).invert().multiply(over ? _o : _q), 1 / bones.length);
-        const first = pose.skeleton.limits[bones[0]];
-        if (first) clampRotation(share, first);
-        const followed = followRotation(f.prev2.local(bones[0]), f.prev.local(bones[0]), share, turn, f.dt, _out);
+        const strained = strain(gazer, pose, bones, turned, kept, d);
+        if (strain(gazer, pose, bones, turned, other, d) < strained - HYSTERESIS) over = !over;
+        // (the head's line, the way taken: the eyes take the rest of a turn aside, EYES of it from
+        // where the neck's parent faces and no more than EYES_MOST of what is left of their range
+        // where the neck stops short — a large shift ends with the eyes a little off the head's
+        // line; up or down, and looking over the top, the head all the way: the neck pitches
+        // nearer its stops, and the eyes have little to spare there)
+        const aside = wrap(Math.atan2(d.x, d.z) - facing);
+        const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained));
+        if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
+        const whole = _rel.copy(turned).invert().multiply(over ? _o : _q);
+        // (the whole turn followed once from the neck's history, then shared evenly down it, each
+        // joint stopped at its range's end: the head turns at the gaze shift's pace, however many
+        // joints share it — as fast as the shift is large (`headPace`), at most `motion`'s)
+        const last = bones[bones.length - 1];
+        const was = relative(f.prev, parent, last, _was);
+        const gap = was.angleTo(whole);
+        shift = gap > shift || gap < SETTLED ? gap : shift;
+        // (a target moving smoothly is pursued: its own turn followed without lag, at most at
+        // `motion`'s speed; and as it speeds up or slows, the head with it: its own acceleration on
+        // top of the shift's)
+        const pursuit = jumped || !seen ? _spin.set(0, 0, 0) : spinOf(seen, whole, f.dt, _spin).clampLength(0, motion.turnSpeed ?? Infinity);
+        (seen ??= new Quaternion()).copy(whole);
+        const speeding = pursuit.distanceTo(pursued) / f.dt;
+        pursued.copy(pursuit);
+        const pace = headPace(shift, motion);
+        pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
+        const followed = followRotation(relative(f.prev2, parent, last, _was2), was, whole, { ...pace, velocity: pursuit }, f.dt, _out);
+        const share = _share.identity().slerp(followed, 1 / bones.length);
         for (const b of bones) {
           const limit = pose.skeleton.limits[b];
-          const local = _goal.copy(followed);
+          const local = _goal.copy(share);
           if (limit) clampRotation(local, limit);
           pose.setLocal(b, local);
         }
       },
     });
   };
+}
+
+/** how far (rad) a gazer's eyes are off `point` (world): the head's line off it, less what the eyes take of a gaze shift at most (`lookAt`) */
+export function gazeOff(gazer: Gazer, pose: ReadonlyPose, point: Readonly<Vector3>): number {
+  const bones = pose.skeleton.chain(gazer.neck);
+  const ahead = _f.set(0, 0, 1).applyQuaternion(pose.rotation(bones[bones.length - 1]));
+  return Math.max(0, ahead.angleTo(_d.subVectors(point, gazer.eyes(pose, _eyes))) - EYES_MOST * gazer.range.side);
+}
+
+/** how much of a gaze shift the eyes take (the head turns the rest: 70–80% of a large shift), and how much of their comfortable range at most */
+const EYES = 0.25;
+const EYES_MOST = 0.3;
+/** a gaze shift is over once the head is this near where it goes (rad): the next sets its own pace */
+const SETTLED = (2 * Math.PI) / 180;
+/** how fast a target moves at most and is still pursued (m/s): faster, it jumped (5 cm in a 60 Hz step) */
+const JUMP = 3;
+/**
+ * a head's peak speed in a gaze shift (its main sequence): `least` (rad/s) and `slope` more per
+ * radian of the shift — 100°/s and 2.3°/s per degree, so 150°/s for 20°, 300°/s for 90° (recalled,
+ * not checked: Guitton & Volle 1987, head peaks 100–350°/s growing ~2.3°/s per degree in large
+ * shifts; read: in active tasks head speeds of ~90–180°/s, Freedman 2008's review via its summary.
+ * Self-paced shifts can be slower: Bayer & Zimmermann 2024, R Soc Open Sci 11:231545, read, the
+ * head 18.8° at 37°/s — a body looking at what it works on is not idling)
+ */
+const HEAD_SEQUENCE = { least: 1.75, slope: 2.3 };
+/**
+ * the pace of a head turning a gaze shift of `shift` (rad): its peak speed as the shift is large
+ * (`HEAD_SEQUENCE`), and the acceleration that reaches it halfway, braking from there (v² / shift:
+ * a triangle, peaking at 2× its mean speed, near a minimum-jerk bell's 1.875×, with no plateau at a
+ * cap) — within `motion`'s
+ */
+function headPace(shift: number, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'>): { accel: number; speed: number } {
+  const speed = Math.min(motion.turnSpeed ?? Infinity, HEAD_SEQUENCE.least + HEAD_SEQUENCE.slope * shift);
+  return { speed, accel: Math.min(motion.turnAccel, Math.max((speed * speed) / Math.max(shift, 1e-3), BRAKE)) };
+}
+
+/** the least acceleration a head turns with (rad/s²): what brings it to rest on a target that moves on */
+const BRAKE = 4;
+
+/** the turn from bone `from` to bone `to` in `pose` (into `out`) */
+function relative(pose: ReadonlyPose, from: number, to: number, out: Quaternion): Quaternion {
+  return out.copy(pose.rotation(from)).invert().multiply(pose.rotation(to));
 }
 
 /** how much less of the eyes' range (share of it) the other way of looking at a point must leave them to be taken */
@@ -135,3 +216,7 @@ const _share = new Quaternion();
 const _goal = new Quaternion();
 const _out = new Quaternion();
 const _within = new Quaternion();
+const _line = new Vector3();
+const _spin = new Vector3();
+const _was = new Quaternion();
+const _was2 = new Quaternion();
