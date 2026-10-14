@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer; a humanoid base (`idle`: balance, free arms, gaze) with tasks over it (`walkTo`, `handTo`, `headTo`, `grab`, `hold`, `release`, `ask`), and the generic pieces under them (`follow`, `TrackedPoint` / `TrackedRotation`, `ChainTip` / `chainTo`, `lookAt`, carriers). Use when writing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a body (a humanoid from a @pmndrs/viverse model, or any articulated rig) moved by behaviours written as @pmndrs/timeline timelines that write its pose layer by layer; a humanoid base (`idle`: balance, free arms, gaze) with tasks over it (`walkTo`, `handTo`, `headTo`, `grab`, `carry`, `hold`, `wear`, `release`, `withGaze`, `ask`), and the generic pieces under them (`follow`, `TrackedPoint` / `TrackedRotation`, `ChainTip` / `chainTo`, `lookAt`, carriers). Use when writing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -35,7 +35,7 @@ const body = new Humanoid(model, (h) =>
 body.update(delta); // every frame
 ```
 
-`new Humanoid(model, behaviour, { world, position, yaw })` starts standing relaxed in its stance; without a model file, `createSkeletonModel(height)` gives a bare-bones one. Read back `body.pose`, `body.feet`, `body.gait`, `body.holding`, `body.proportions`.
+`new Humanoid(model, behaviour, { world, position, yaw })` starts standing relaxed in its stance; without a model file, `createSkeletonModel(height)` gives a bare-bones one. Read back `body.pose`, `body.feet`, `body.gait`, `body.holding`, `body.worn`, `body.borne`, `body.proportions`.
 
 **The root is always `parallel('all', idle(h), tasks)`.** `idle(h)` is the endless base, root to tip: `balance` (the only writer of the root, the legs and the trunk's posture: it stands, keeps the extrapolated centre of mass over the feet with a step when it would fall, walks (turning where it stands first for a goal far off its facing, no faster round a bend than the feet hold it, stopping over two or three shortening steps and only then turning to a facing asked), lowers and bows, squares the feet when it stops; walking only, running is not judged yet), `hangArms` (arms hanging, swinging with the steps) and `lookAround` (eyes on the way ahead, a glance now and then standing still). Tasks run after it and win on what they write; when they end, the base takes their bones back on.
 
@@ -45,16 +45,20 @@ Tasks:
 - `walkTo` walks to a point (a live one is followed), turns to `face`, or both; it ends once the body has settled on squared feet. Give it `until` to keep following a point that moves on (it then ends only when `until` is met). `within` stops short of the point, squarely before it.
 - `handTo` moves a wrist (and, given a rotation, the hand) to a target at a calm everyday pace by default (`CALM`), the clavicle shrugging and the elbow swivelling as the target asks; a target below the arm's reach asks `balance` to bow and squat, one above to go up on the toes (`lead: false`: the hand only follows, as a tracked controller does under a tracked head). Endless, or `until: 'reached'`. A target that moves fast wants brisker joints too (`turnAccel`), or the arm swings behind it.
 - `headTo` puts the eyes (and turns the head) where a tracker says, through the spine; with `lead` the body comes along under the head — turning round once it is turned past what the trunk and neck take, bowing and squatting for it, stepping where the eyes go. It writes the spine and the chest: put it after `idle` and before the hand tasks, which hang off the chest it places.
-- `release` lets go: the hands open and draw back off what they held, then the free arms take them.
+- `release` lets go: the hands open and go off what they held — back and down, or each its own way (`away`, in the body's frame), as near as the arm reaches — then the free arms take them.
 - `ask` asks `balance` for what no task asks (a facing while the hands work, how low to stand), every sub-step it runs; a live value is read every sub-step.
-- `grab` walks to an `Item`, reaches both hands to its grips together (one shared condition: no hand goes before all are there) and closes them; then hold on with `hold`, which keeps the hands on the grips. With `to`, the hands carry it there (no further out than they reach) and the item is fitted to the wrists every sub-step: `hold` is its one mover, so it never leaves the hands. `openHand` / `closeHand` only mark what a hand holds (`h.holding`): there are no fingers.
+- `grab` takes hold of items, each hand its own (`{ left: [item, grip], right: [item, grip] }`): it walks up to stand before them (`approach`; no step when they are in reach already; facing so the left hand's grip is on the left, or as `face` says; `stand` where), looks at them (`withGaze`) and puts the hands on their grips together (`reachFor`: one shared condition, no hand goes before all are there). Then hold on with `hold`, which keeps the hands on the grips; with `to`, the hands carry it there (no further out than they reach) and the item is fitted to the wrists every sub-step: `hold` is its one mover, so it never leaves the hands. `carry` holds several items toward their goals together and ends once every one has come to rest there. `openHand` / `closeHand` only mark what a hand holds (`h.holding`): there are no fingers.
+- `wear` puts an item on a bone, or on another worn item (a sword in its scabbard): from then on the body moves it with what it is worn on, after its behaviour every sub-step (`to`: it settles there; a second mover throws). `takeOff` gives it back to whatever moves it next — the hands that hold it. An `Item`'s `mass` counts in the body's centre of mass while it holds or wears it (`h.borne`: taken up and given up over a moment), so `balance` stands under it.
+- Goals that move with the body or an item: `onBone(h, bone, local, { facing })` (a placement on a bone, or at its joint turned as the body faces), `onItem(item, local)`.
+- A reach, a carry or a release that cannot get there throws: an unreachable goal fails visibly rather than waiting forever.
 - `lookAt(h.gazer, point)` turns the head to a point; put it after the base's `lookAround` (it overrides the neck and head) and it touches nothing below them.
 - `pelvisTo` (the root) and `trunkTo` (the chest) are for a task that owns the whole body; `pelvisTo` asks for both feet, which `balance` does not take yet, so neither runs under `idle` today.
 
 ## Composing tasks
 
+- Eyes before hands: `withGaze(h, at, task)` looks at `at` a moment before `task` sets off and until it ends (`grab` does).
 - End tasks with `until` conditions, not with an update returning false (that spends the frame). An action whose condition is met hands the frame on to what follows, so no sub-step goes unwritten; in a `race`, put the timeline whose condition ends it first, and what follows takes over in that same sub-step (put last, it takes over a sub-step later).
-- **Hands that work together share one `until`.** `parallel('all', handTo(a, { until: 'reached' }), handTo(b, { until: 'reached' }))` lets the first hand there go (and the base swing it away) while the other is still reaching; give both the same condition, `(f) => reached(…a…) && reached(…b…)`, as `grab` does.
+- **Hands that work together share one `until`.** `parallel('all', handTo(a, { until: 'reached' }), handTo(b, { until: 'reached' }))` lets the first hand there go (and the base swing it away) while the other is still reaching; give both the same condition, `(f) => reached(…a…) && reached(…b…)`, as `reachFor` and `carry` do.
 - A goal can be a value or a function of the frame (`Live`); a function is read every sub-step. Feed a moving goal's velocity in where a `Target` takes one, or it is followed with a lag.
 
 ## Any rig
