@@ -58,13 +58,26 @@ export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {
 }
 
 /**
- * Checking the sword draws: the eyes on the hilt, the left hand steadies the scabbard at its throat,
- * the right takes the hilt across the body, draws a hand's breadth and more of the blade (30 cm),
- * holds a moment and sheathes it again, home into the scabbard; the hands let go.
+ * the scabbard tilted to present the hilt (in the hips' frame, facing as the body does): the left
+ * hand below the locket pulls its throat forward and tips it over, the hilt forward and up before
+ * the belly, the chape back
+ */
+const PRESENTED = at(0.15, 0.06, 0.22, turn(1.0, 0, 0.3));
+
+/**
+ * Checking the sword draws, as one draws from the belt: the eyes on the hilt, the left hand grasps
+ * the scabbard below its locket and tilts it forward, presenting the hilt; the right takes the hilt
+ * across the body and draws a hand's breadth and more of the blade (30 cm) out along the scabbard,
+ * holds a moment and sheathes it again, home into it; the scabbard hung back as it was, the hands
+ * let go.
  */
 export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<World> {
   const hilt = onItem(sword, sword.grips.hilt);
   const sheath = onItem(scabbard, ORIGIN);
+  const hips = facingAt(k, 'hips');
+  const presented = course(scabbard, hips, [[0.6, PRESENTED]], { scale: k.h.proportions.scale, pace: k.pace });
+  // (held where it is presented while the right hand draws: the scabbard moved before the sword it carries)
+  const steady = hold(k.h, scabbard, { left: 'below' }, { to: presented.to });
   return busy(
     k,
     eyesOn(
@@ -72,12 +85,18 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<Wor
       (f) => hilt(f).position,
       function* () {
         yield* pause(k, SETTLE)();
-        yield* reachFor(k.h, { left: [scabbard, 'throat'], right: [sword, 'hilt'] })();
+        yield* reachFor(k.h, { left: [scabbard, 'below'] })();
+        yield* takeOff(k.h, scabbard)();
+        yield* carry(k.h, [[scabbard, { left: 'below' }, presented.to]], { until: presented.over })();
+        yield* parallel<F>('race', steady, reachFor(k.h, { right: [sword, 'hilt'] }));
         yield* takeOff(k.h, sword)();
         const drawn = course(sword, (f) => ({ position: sheath(f).position, quaternion: scabbard.current.quaternion.clone() }), [[0.7, at(0, 0.3, 0)], [0.5, still], [0.8, at(0, 0, 0)]], { pace: k.pace });
-        yield* parallel<F>('race', carry(k.h, [[sword, { right: 'hilt' }, drawn.to]], { until: drawn.over }), hold(k.h, scabbard, { left: 'throat' }));
+        yield* parallel<F>('race', steady, carry(k.h, [[sword, { right: 'hilt' }, drawn.to]], { until: drawn.over }));
         yield* wear(k.h, sword, scabbard, { to: { position: new Vector3(), quaternion: new Quaternion() } })();
-        yield* release(k.h, ['left', 'right'])();
+        yield* parallel<F>('race', release(k.h, ['right']), steady);
+        yield* along(k, hips, [[scabbard, { left: 'below' }, [[0.6, HANGING]]]])();
+        yield* wear(k.h, scabbard, INDEX.hips)();
+        yield* release(k.h, ['left'])();
       },
       0,
     ),

@@ -99,12 +99,14 @@ export const STRAP = 1.1;
 
 /**
  * A scabbard (~0.5 kg): origin at its throat, +y out of it (where the hilt comes out), 0.85 m long
- * down −y. Held by its throat (`throat`, from outside). Keeps out of the body below where the hands hold it.
+ * down −y, +x its outer side worn. Held by its throat (`throat`, from outside), or, worn, grasped
+ * below its locket (`below`: the left hand's from its outer side, to tilt it and present the hilt).
+ * Keeps out of the body below where the hands hold it.
  */
 export function scabbard(at: Placement): Gear {
   return piece(
     at,
-    { throat: { position: new Vector3(0, -0.06, 0.03) } },
+    { throat: { position: new Vector3(0, -0.06, 0.03) }, below: { position: new Vector3(0.045, -0.05, -0.02) } },
     0.5,
     [{ kind: 'cylinder', at: new Vector3(0, -SCABBARD / 2, 0), radius: 0.022, length: SCABBARD }],
     [{ a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -SCABBARD, 0), radius: 0.022, touches: [], name: 'scabbard' }],
