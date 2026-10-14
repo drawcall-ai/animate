@@ -1,13 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { createWorld, idle, INDEX, wear, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
+import { createWorld, idle, INDEX, overlap, wear, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
 import { forwardOf, leftOf } from '../../math';
 import { Report } from '../../report';
 import type { Prop, Scenario } from '../../scenario';
 import { bearLance, bearShield, takeLance, takeShield } from './arms';
 import { don } from './gauntlets';
 import { putOnHelmet } from './helm';
-import { pause, walkOut, type Knight } from './knight';
+import { flow, pause, walkOut, type Knight } from './knight';
 import { buckle, checkDraw, hangSword } from './sword';
 import { beltEnd, drawn, gauntlet, harness, helmet, lance, scabbard, shield, solidsOf, strap, sword, type Gear } from './gear';
 
@@ -103,18 +103,30 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
         function* () {
           yield* wear(k.h, gear.sword.item, gear.scabbard.item)();
           yield* pause(k, 0.8)();
-          yield* buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, AT_TABLE)();
-          yield* hangSword(k, gear.scabbard.item)();
-          yield* checkDraw(k, gear.sword.item, gear.scabbard.item)();
-          yield* putOnHelmet(k, gear.helmet.item)();
-          yield* don(k, gear.gauntlets.left.item, 'left', AT_TABLE)();
-          yield* don(k, gear.gauntlets.right.item, 'right', AT_TABLE)();
-          yield* takeShield(k, gear.shield.item)();
-          // (bearing the shield from here on; the lance too, once taken, out to the yard)
-          yield* parallel<Frame<World>>('all', bearShield(k), function* () {
-            yield* takeLance(k, gear.lance.item)();
-            yield* parallel<Frame<World>>('all', bearLance(k, gear.lance.item), walkOut(k, yard, 0, SIGHTS));
-          });
+          // (each thing flowing into the next: it sets off as the hands let go of the last)
+          const arms = function* () {
+            yield* takeShield(k, gear.shield.item)();
+            // (bearing the shield from here on; the lance too, once taken: out to the yard as it comes upright)
+            let upright = false;
+            const lance = function* () {
+              yield* takeLance(k, gear.lance.item)();
+              upright = true;
+              yield* bearLance(k, gear.lance.item)();
+            };
+            yield* parallel<Frame<World>>('all', bearShield(k), overlap(lance, walkOut(k, yard, 0, SIGHTS), () => upright));
+          };
+          yield* flow(
+            k,
+            [
+              [buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, AT_TABLE), ['left', 'right']],
+              [hangSword(k, gear.scabbard.item), ['left']],
+              [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left']],
+              [putOnHelmet(k, gear.helmet.item), ['left', 'right']],
+              [don(k, gear.gauntlets.left.item, 'left', AT_TABLE), ['right']],
+              [don(k, gear.gauntlets.right.item, 'right', AT_TABLE), ['left']],
+            ],
+            arms,
+          )();
         };
       return {
         world: createWorld(),

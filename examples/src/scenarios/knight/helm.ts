@@ -1,6 +1,6 @@
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { hold, INDEX, lookAt, onBone, reachFor, release, still, wear, type Behaviour, type Frame, type Item, type World } from '@drawcall/animate';
+import { hold, INDEX, lookAt, onBone, reachFor, still, wear, type Behaviour, type Frame, type Item, type World } from '@drawcall/animate';
 import { reported } from '../../report';
 import { along, at, busy, eyesOn, facingAt, ORIGIN, pause, take, type Knight } from './knight';
 
@@ -13,7 +13,7 @@ export const HELMED = at(0, 0.15, 0.02, new Quaternion());
  * The helm: taken off its stand in both hands (facing as its grips say), lifted before the face (a
  * look into it), raised over the head and lowered onto it slowly, the head bowed a little to take
  * it (the eyes ahead and down); worn on the head, settling onto it; the hands go to its chin
- * strap's ends, buckle it under the chin, and let go.
+ * strap's ends and buckle it under the chin; they let go as the next thing sets off (`flow`).
  */
 export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
   const grips = { left: 'left', right: 'right' };
@@ -33,7 +33,6 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
       yield* reachFor(k.h, { left: [helmet, 'strapLeft'], right: [helmet, 'strapRight'] })();
       yield* reachFor(k.h, { left: [helmet, 'chinLeft'], right: [helmet, 'chinRight'] })();
       yield* parallel<F>('race', pause(k, 0.6), hold(k.h, helmet, { left: 'chinLeft', right: 'chinRight' }));
-      yield* release(k.h, ['left', 'right'], { away: { left: new Vector3(0.1, -0.4, 0.05), right: new Vector3(-0.1, -0.4, 0.05) } })();
     })();
   };
 }

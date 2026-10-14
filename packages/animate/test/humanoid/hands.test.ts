@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, gazeOff, grab, idle, INDEX, Item, reachFor, type Behaviour, type Frame, type Leg } from '../../src';
+import { carry, gazeOff, grab, idle, INDEX, Item, reachFor, release, type Behaviour, type Frame, type Leg } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
@@ -80,6 +80,30 @@ describe('grab', () => {
     expect(at.eyes).toBeLessThan(at.stood);
     expect(at.hands).toBeLessThan(at.stood);
     expect(at.eyes).toBeLessThan(at.hands);
+  });
+});
+
+describe('release', () => {
+  it('follows through: a hand let go of something moving carries on its way, then off the item', () => {
+    const load = box(new Vector3(0, 1.0, 0.4));
+    const at = { let: new Vector3(), after: new Vector3() };
+    const h = new Humanoid(createSkeletonModel(), (h) =>
+      function* () {
+        yield* action({ until: () => true });
+        yield* parallel<Frame>('race', idle(h), function* () {
+          yield* reachFor(h, { right: [load, 'right'] })();
+          // (swept to the right, let go of halfway)
+          yield* parallel<Frame>('race', carry(h, WORLD, [[load, { right: 'right' }, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]]]), action({ until: timePassed(0.4, 'seconds') }));
+          at.let.copy(h.pose.position(INDEX.rightHand));
+          yield* parallel<Frame>('race', release(h, ['right']), action({ until: timePassed(0.4, 'seconds') }));
+          at.after.copy(h.pose.position(INDEX.rightHand));
+        });
+      },
+    );
+    for (let t = 0; t < 4; t += 1 / 60) h.update(1 / 60);
+    // (0.4 s after letting go, well on to the right, where it was carrying the box: not just coasting to a stop)
+    expect(at.let.x - at.after.x).toBeGreaterThan(0.04);
+    expect(h.holding.right).toBeNull();
   });
 });
 

@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, headingOf, hold, INDEX, onBone, onItem, release, wear, type Behaviour, type Frame, type Item, type Side, type Stand, type World } from '@drawcall/animate';
-import { along, at, busy, eyesOn, facingAt, take, turn, type Knight } from './knight';
+import { handTo, headingOf, hold, INDEX, onBone, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Stand, type World } from '@drawcall/animate';
+import { along, at, eyesOn, facingAt, take, turn, type Knight } from './knight';
 
 type F = Frame<World>;
 
@@ -14,8 +14,8 @@ const heldOpen = (side: Side) => {
 /**
  * A gauntlet on hand `side`: the other hand takes it off the table by its cuff (it lies on that
  * hand's side, fingers away: he faces the way they point) and holds it open before the belly; the
- * hand goes to its mouth and slides in (slowly, in line); worn on that hand, home on it, the other
- * lets go.
+ * hand goes to its mouth and slides in (slowly, in line); worn on that hand, home on it. The other
+ * hand is left holding the cuff: it lets go as the next thing sets off (`flow`).
  */
 export function don(k: Knight, gauntlet: Item, side: Side, stand: Stand): Behaviour<World> {
   const other: Side = side === 'left' ? 'right' : 'left';
@@ -27,7 +27,6 @@ export function don(k: Knight, gauntlet: Item, side: Side, stand: Stand): Behavi
     const open = onBone(k.h, INDEX.chest, heldOpen(side), { facing: true });
     yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, cuff, { to: open })), { first: false })();
     yield* wear(k.h, gauntlet, INDEX[`${side}Hand`], { to: { position: new Vector3(), quaternion: new Quaternion() } })();
-    yield* busy(k, release(k.h, [other]))();
   };
 }
 

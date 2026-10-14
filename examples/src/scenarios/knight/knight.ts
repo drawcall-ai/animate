@@ -1,13 +1,13 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, timePassed } from '@pmndrs/timeline';
-import { carry, grab, INDEX, onBone, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Stand, type World } from '@drawcall/animate';
+import { carry, grab, INDEX, onBone, overlap, release, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
 // are in the frame of the body part they go to (left +x, up +y, ahead +z; m, default body), timed at
 // a calm pace: a reach of 30–60 cm in about a second (Fitts' law at everyday precision), fine work (a
-// strap through a buckle, a hand into a gauntlet) at a third of that speed; a pause of half a
-// second between things.
+// strap through a buckle, a hand into a gauntlet) at a third of that speed. One thing flows into
+// the next: the next sets off as the hands let go of the last (`flow`).
 
 /** The knight: his body, the report his gaze and busy hands go to, and how fast he goes about it (1: as timed here). */
 export interface Knight {
@@ -15,9 +15,6 @@ export interface Knight {
   report: Report;
   pace: number;
 }
-
-/** a moment's pause (s at pace 1): the arms settling from what they did, before the next thing */
-export const SETTLE = 0.5;
 
 /** a while doing nothing new (s at pace 1) */
 export const pause = (k: Knight, seconds: number): Behaviour<World> =>
@@ -31,14 +28,34 @@ export const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => rep
 /** `task` with the eyes on `at` (`withGaze`: first, the task setting off once they are there, or with `first: false` at once; bowing at least `bow`), reported as the gaze */
 export const eyesOn = (k: Knight, at: Live<Vector3, World>, task: Behaviour<World>, options: { first?: boolean; bow?: number } = {}): Behaviour<World> => withGaze(k.h, reported(k.report, 'gaze', at), task, options);
 
-/** after a moment's pause, taking hold of `holds` (`grab`), the eyes on them reported */
+/** taking hold of `holds` (`grab`), the eyes on them reported */
 export function take(k: Knight, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<World> {
   return function* () {
-    yield* pause(k, SETTLE)();
     const grips = Object.values(holds).map(([item, grip]) => item.toWorld(item.grips[grip], { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position);
     const middle = grips.reduce((sum, g) => sum.add(g), new Vector3()).divideScalar(grips.length);
     yield* busy(k, grab(k.h, holds, { ...options, look: reported(k.report, 'gaze', middle) }))();
   };
+}
+
+/** A beat of the knight's work: what his hands do, and the hands that let go once it is done (going off as they `release` does, or `away`). */
+export type Beat = [work: Behaviour<World>, sides: readonly Side[], away?: Partial<Record<Side, Vector3>>];
+
+/**
+ * `beats` one after another, then `then`, each flowing into the next: as a beat's hands let go of
+ * what they did (`release`), the next sets off (`overlap`) — its eyes and its feet on their way
+ * while the hands come off
+ */
+export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>): Behaviour<World> {
+  return beats.reduceRight<Behaviour<World>>((next, [work, sides, away]) => {
+    let done = false;
+    const beat = function* () {
+      done = false;
+      yield* work();
+      done = true;
+      yield* busy(k, release(k.h, sides, { away }))();
+    };
+    return overlap(beat, next, () => done);
+  }, then);
 }
 
 /** `loads` carried along their courses' legs, through one moving frame, together, at the knight's pace (`carry`) */
@@ -54,7 +71,6 @@ export const turn = (x: number, y: number, z: number) => new Quaternion().setFro
 /** Out to the yard: walking there, then looking round it, a while at each of `sights`. */
 export function walkOut(k: Knight, yard: Vector3, face: number, sights: readonly Vector3[]): Behaviour<World> {
   return function* () {
-    yield* pause(k, SETTLE)();
     yield* walkTo(k.h, { to: yard, face })();
     for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4))();
   };

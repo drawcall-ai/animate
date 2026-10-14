@@ -37,7 +37,6 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, stand: S
     )();
     yield* wear(k.h, belt.buckle, INDEX.hips)();
     yield* wear(k.h, belt.tongue, INDEX.hips)();
-    yield* busy(k, release(k.h, ['left', 'right']))();
   };
 }
 
@@ -52,7 +51,6 @@ export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {
     yield* take(k, { left: [scabbard, 'throat'] }, { face: yawOf(scabbard.current.quaternion) })();
     yield* along(k, facingAt(k, 'hips'), [[scabbard, { left: 'throat' }, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]]]])();
     yield* wear(k.h, scabbard, INDEX.hips)();
-    yield* busy(k, release(k.h, ['left']))();
   };
 }
 
@@ -67,8 +65,8 @@ const PRESENTED = at(0.15, 0.06, 0.22, turn(1.0, 0, 0.3));
  * Checking the sword draws, as one draws from the belt: the eyes on the hilt, the left hand grasps
  * the scabbard below its locket and tilts it forward, presenting the hilt; the right takes the hilt
  * across the body and draws a hand's breadth and more of the blade (30 cm) out along the scabbard,
- * holds a moment and sheathes it again, home into it; the scabbard hung back as it was, the hands
- * let go.
+ * holds a moment and sheathes it again, home into it; the scabbard hung back as it was, the right
+ * hand off it. The left is left on the scabbard: it lets go as the next thing sets off (`flow`).
  */
 export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<World> {
   const hilt = onItem(sword, sword.grips.hilt);
@@ -95,7 +93,6 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<Wor
         yield* parallel<F>('race', release(k.h, ['right']), steady);
         yield* along(k, hips, [[scabbard, { left: 'below' }, [[0.6, HANGING]]]])();
         yield* wear(k.h, scabbard, INDEX.hips)();
-        yield* release(k.h, ['left'])();
       },
     ),
   );

@@ -66,7 +66,7 @@ export function closeHand<W>(h: Humanoid<W>, side: Side, item: Item, grip: strin
  * Taking hold of things, each step under way before the last is over: the body walks up to take
  * them (`approach`); LOOKING s before it arrives the eyes go to them (`withGaze`: on the grips'
  * middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
- * short of each grip, nearer its shoulder, asking the body to bow and bend as low as they go), and
+ * halfway from its shoulder to its grip: the walk is left to come to rest unbowed), and
  * once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`.
  */
@@ -205,8 +205,8 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
  * legs' placements in that frame, m × `scale`, default the body's), together: every course from
  * where its item is when it sets off, timed by its legs, `pace` times as fast (an item in the left
  * hand alone while the right carries another a moment later and a little slower: `reachFor`'s
- * lead). It ends once every
- * course is over and every item has come to rest at its end (within 1 cm, under 5 cm/s): one shared
+ * lead). It ends once every course is over and every item has come to rest at its end (within
+ * 1 cm, moving with it to within 5 cm/s: on a body that walks, the frame carries it on): one shared
  * condition, no hand lets go before the others. An item not at rest there `limit` s after its course
  * is over throws (a course out of the arms' reach).
  */
@@ -221,10 +221,11 @@ export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, lo
       return course(item, frame, legs, { scale, pace: pace * (1 - slower), delay });
     });
     let since = NaN;
+    const ends = loads.map(() => new TrackedEnd());
     const there = (f: Frame<W>) => {
       if (!courses.every((c) => c.over(f))) return false;
       if (Number.isNaN(since)) since = f.time;
-      if (loads.every(([item], i) => atRest(item, courses[i].to(f), f.dt))) return true;
+      if (loads.every(([item], i) => ends[i].holds(f, item, courses[i].to(f).position))) return true;
       if (f.time - since > limit) throw new Error(`a carried item did not come to rest at its course's end in ${limit} s`);
       return false;
     };
@@ -248,9 +249,30 @@ function following(item: Item, grips: Grips) {
   return { delay: lerp(FOLLOWING.delay[0], FOLLOWING.delay[1], rand()), slower: lerp(FOLLOWING.slower[0], FOLLOWING.slower[1], rand()) };
 }
 
-/** `item` at `at`, and still (within 1 cm, under 5 cm/s) */
-function atRest(item: Item, at: Placement, dt: number): boolean {
-  return item.current.position.distanceTo(at.position) < 0.01 && item.current.position.distanceTo(item.prev.position) / dt < 0.05;
+/**
+ * where a course ends, followed as its frame moves it: an item has come to rest there once within
+ * 1 cm of it and moving with it to within 5 cm/s — read as the item was last moved, a sub-step
+ * before (against where the end was then, and how fast it went)
+ */
+class TrackedEnd {
+  private time = NaN;
+  private readonly at = [new Vector3(), new Vector3()];
+  private readonly velocity = [new Vector3(), new Vector3()];
+
+  holds<W>(f: Frame<W>, item: Item, end: Readonly<Vector3>): boolean {
+    const [now, then] = this.at;
+    const [moving, was] = this.velocity;
+    if (this.time !== f.time) {
+      const next = Math.abs(f.time - f.dt - this.time) < 1e-9;
+      then.copy(next ? now : end);
+      was.copy(next ? moving : _v.set(0, 0, 0));
+      moving.copy(next ? _v.subVectors(end, now).divideScalar(f.dt) : _v.set(0, 0, 0));
+      now.copy(end);
+      this.time = f.time;
+    }
+    const off = _v.subVectors(item.current.position, item.prev.position).divideScalar(f.dt).sub(was);
+    return item.current.position.distanceTo(then) < 0.01 && off.length() < 0.05;
+  }
 }
 
 /** the holds, side by side */
@@ -311,41 +333,60 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
 }
 
 /**
- * Letting go with the hands `sides`: they open and go off what they held, together (one shared
- * condition), each by `away` (m; in the body's frame facing as it does: left +x, up +y, ahead +z;
- * default back and down by AWAY), as near as its arm reaches (never folded on itself nor
- * stretched out; the body not bowing nor rising after it); then the free arms take them. What
- * they let go of that nothing else holds or wears rests where it was put (`supported`: on a shelf,
- * a table). A hand not off within `limit` s throws.
+ * Letting go with the hands `sides`: they open and go off what they held, together, each carried
+ * on the way it was going (its follow-through) and away from what it held (out from the item's
+ * middle and back toward the shoulder, AWAY: how far seeded by the item and grip), or by `away`
+ * (m; in the body's frame facing as it does: left +x, up +y, ahead +z) — as near as its arm
+ * reaches (never folded on itself nor stretched out; the body not bowing nor rising after it).
+ * Once they are there, or `limit` s on (another task may take a hand on its way), the free arms
+ * take them. What they let go of that nothing else holds or wears rests where it was put
+ * (`supported`: on a shelf, a table).
  */
 export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>>; limit?: number } = {}): Behaviour<W> {
-  const { limit = REACHING } = options;
+  const { limit = LETTING_GO } = options;
   return function* () {
     const p = h.proportions;
-    const turned = _turned.setFromAxisAngle(UP, h.gait.facing);
-    const targets = sides.map((side) => {
-      const away = (options.away?.[side] ?? _away.set(0, -AWAY, -AWAY)).clone().multiplyScalar(p.scale).applyQuaternion(turned);
-      const at = h.pose.position(INDEX[`${side}Hand`]).clone().add(away);
-      // (within what the arm reaches from its shoulder)
-      const shoulder = h.pose.position(INDEX[`${side}UpperArm`]);
-      const out = at.sub(shoulder);
-      out.setLength(Math.min(Math.max(out.length(), FOLDED * p.armLength), OUTREACH * p.armLength));
-      return { position: out.add(shoulder) };
-    });
-    const until = (f: Frame<W>, _: unknown, time: number) => {
-      if (sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], targets[k]))) return true;
-      if (time > limit) throw new Error(`the hands did not get off what they held in ${limit} s`);
-      return false;
-    };
-    const loose = sides.flatMap((side) => h.holding[side]?.item ?? []);
+    const held = sides.map((side) => h.holding[side]);
+    let targets: Target[] | null = null;
+    // (where each hand goes, from how it moved as it let go)
+    const off = (f: Frame<W>): Target[] =>
+      (targets ??= sides.map((side, k) => {
+        const hand = f.prev.position(INDEX[`${side}Hand`]);
+        const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
+        const at = hand.clone();
+        const away = options.away?.[side];
+        if (away) at.add(away.clone().multiplyScalar(p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
+        else {
+          const grip = held[k];
+          const out = grip ? _d.subVectors(hand, grip.item.current.position).normalize() : _d.set(0, 0, 0);
+          const back = _e.subVectors(shoulder, hand).normalize();
+          const rand = seeded(seedOf(grip?.grip ?? side, Math.round(hand.x * 1000), Math.round(hand.z * 1000)));
+          at.addScaledVector(out.add(back).normalize(), lerp(AWAY[0], AWAY[1], rand()) * p.scale);
+          at.addScaledVector(_v.subVectors(hand, f.prev2.position(INDEX[`${side}Hand`])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH), FOLLOW_THROUGH);
+        }
+        // (within what the arm reaches from its shoulder)
+        const reach = at.sub(shoulder);
+        reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), OUTREACH * p.armLength));
+        return { position: reach.add(shoulder) };
+      }));
+    const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], off(f)[k]));
+    const loose = held.flatMap((grip) => grip?.item ?? []);
     for (const side of sides) yield* openHand(h, side)();
     for (const item of loose) if (!h.worn.has(item) && !SIDES.some((s) => h.holding[s]?.item === item)) item.supported = true;
-    yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, targets[k], { lead: false, until })));
+    yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
   };
 }
 
-/** how far the hands draw back and down letting go, unless asked otherwise (m, default body); how near its shoulder a hand going off is put at least (× the arm's length) */
-const AWAY = 0.1;
+/**
+ * letting go, how far a hand goes off what it held (m, default body; seeded between), how long its
+ * own motion carries it on (s) and how far at most (m), and how long it goes off before the free
+ * arms take it, unless told (s)
+ */
+const AWAY = [0.06, 0.12];
+const FOLLOW_THROUGH = 0.15;
+const FOLLOWING_ON = 0.08;
+const LETTING_GO = 1;
+/** how near its shoulder a hand going off is put at least (× the arm's length) */
 const FOLDED = 0.45;
 
 /**
@@ -407,7 +448,7 @@ function grip(grips: Grips, side: Side): string {
 
 const UP = new Vector3(0, 1, 0);
 const _turned = new Quaternion();
-const _away = new Vector3();
+const _v = new Vector3();
 const _com = new Vector3();
 const _d = new Vector3();
 const _e = new Vector3();
