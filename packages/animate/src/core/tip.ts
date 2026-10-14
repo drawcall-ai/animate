@@ -15,6 +15,11 @@ export interface TipOptions<W> extends Motion {
   pole?: Live<Vector3, W>;
   /** the target is on this carrier, in its frame: the tip goes with it */
   on?: Carrier;
+  /**
+   * a tip further out than all but the chain's full length as this sets off (an arm hanging all but
+   * straight) is not drawn in at once: it is let out as far as it was, never further, until it comes in
+   */
+  letOut?: boolean;
 }
 
 /**
@@ -31,6 +36,8 @@ export class ChainTip {
   private readonly joints = new Map<number, TrackedRotation>();
   /** where it moved the tip the last two sub-steps (world) and when last */
   private readonly moved = { before: new Vector3(), last: new Vector3(), time: NaN };
+  /** how far out from the chain's base it let the tip go last (m) */
+  private most = Infinity;
 
   constructor(readonly chain: string) {}
 
@@ -56,8 +63,10 @@ export class ChainTip {
     const base = f.current.position(bones[0]);
     let length = 0;
     for (let k = 1; k < bones.length; k++) length += skeleton.bones[bones[k]].offset.length();
+    const was = f.prev.position(tip).distanceTo(f.prev.position(bones[0]));
+    const most = (this.most = options.letOut ? Math.max(REACH * length, Math.min(length, was, own ? this.most : Infinity)) : REACH * length);
     const out = position.distanceTo(base);
-    if (out > REACH * length) position.sub(base).multiplyScalar((REACH * length) / out).add(base);
+    if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
     moved.before.copy(own ? moved.last : f.prev.position(tip));
     moved.last.copy(position);
     moved.time = f.time;

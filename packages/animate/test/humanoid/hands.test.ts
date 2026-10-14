@@ -134,6 +134,27 @@ describe('reachFor', () => {
   });
 });
 
+describe('reach onset', () => {
+  it('sets off toward the grip at once: the hand never first draws back from it', () => {
+    for (const at of [new Vector3(-0.1, 1.0, 0.45), new Vector3(-0.15, 0.3, 0.5), new Vector3(-0.3, 1.4, 0.3)]) {
+      const load = box(at);
+      const off: number[] = [];
+      speeds(
+        (h, mark) =>
+          function* () {
+            yield* action({ until: timePassed(1, 'seconds') });
+            mark();
+            yield* parallel<Frame>('race', reachFor(h, { right: [load, 'right'] }), action<Frame>({ update: () => void off.push(h.pose.position(INDEX.rightHand).distanceTo(load.toWorld(load.grips.right, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)) }));
+          },
+        2.5,
+      );
+      // (the first 0.3 s: never further off than it set off from)
+      const growth = Math.max(...off.slice(0, 18)) - off[0];
+      expect(growth).toBeLessThan(0.001);
+    }
+  });
+});
+
 describe('two hands', () => {
   it('reaching together are not mirror images: the left sets off a moment after the right, a little slower', () => {
     const load = box(new Vector3(0, 1.0, 0.45));
