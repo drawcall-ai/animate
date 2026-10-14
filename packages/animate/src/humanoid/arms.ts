@@ -3,6 +3,7 @@ import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import type { Carrier } from '../core/carrier';
 import { followRotation } from '../core/follow';
+import { Glide } from '../core/glide';
 import { live, type Behaviour, type Live, type Motion, type Target, type Until } from '../core/goal';
 import { clampRotation } from '../core/limits';
 import { ChainTip, reached } from '../core/tip';
@@ -88,6 +89,8 @@ export interface HandOptions<W> extends Partial<Motion> {
   on?: Carrier;
   /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default true); false: the hand only follows (a tracked controller: the head leads) */
   lead?: boolean;
+  /** a reach that takes this long (s): the hand goes along a minimum-jerk path to the target (`Glide`: a bell of speed), then stays on it */
+  seconds?: number;
   until?: Until<W>;
 }
 
@@ -100,11 +103,22 @@ export interface HandOptions<W> extends Partial<Motion> {
  * toes (`h.asks`).
  */
 export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, options: HandOptions<W> = {}): Behaviour<W> {
-  const { until } = options;
+  const { until, seconds } = options;
   return function* () {
     const arm = new ChainTip(`${side}Arm`);
+    const glide = seconds === undefined ? null : new Glide(seconds);
+    const bone = INDEX[`${side}Hand`];
     yield* action<Frame<W>>({
-      update: (f) => void handStep(h, f, side, live(target, f), options, arm),
+      update: (f) => {
+        const goal = live(target, f);
+        if (!glide) return void handStep(h, f, side, goal, options, arm);
+        // (the target in the world, the hand gliding to it from where it is and how it moves)
+        const on = options.on;
+        const world = on ? { ...on.toWorld(goal, _world), axis: goal.axis && _axis.copy(goal.axis).applyQuaternion(on.current.quaternion) } : { ...goal, velocity: goal.velocity ?? ZERO };
+        const moving = _m.subVectors(f.prev.position(bone), f.prev2.position(bone)).divideScalar(f.dt);
+        glide.step(f.prev.position(bone), moving, world.position, world.velocity ?? ZERO, f.dt, _glided);
+        handStep(h, f, side, { ...world, position: _glided.position, velocity: _glided.velocity }, { ...options, on: undefined }, arm);
+      },
       until: until === 'reached' ? (f) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], live(target, f), options.on) : until,
     });
   };
@@ -211,3 +225,7 @@ const _up = new Vector3();
 const _rest = new Vector3();
 const _pole = new Vector3();
 const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _m = new Vector3();
+const _axis = new Vector3();
+const _glided = { position: new Vector3(), velocity: new Vector3() };
+const ZERO = new Vector3();

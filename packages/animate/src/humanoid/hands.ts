@@ -182,17 +182,17 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
     if (time > limit) throw new Error(`the hands did not get to their grips in ${limit} s`);
     return false;
   };
-  // (both hands going: the other a moment after the leading one, a little slower)
+  // (each hand gliding to its grip in the time a reach that far takes; both going, the other a
+  // moment after the leading one, a little slower)
   const lagging = hands.length > 1;
-  const reach = (side: Side, item: Item, grip: string): Behaviour<W> => {
-    if (!lagging || side === LEADING) return handTo(h, side, gripOf(item, grip), { on: item, until });
-    const { delay, slower } = following(item, { [side]: grip });
-    const motion = { accel: CALM.accel * (1 - slower) ** 2, speed: CALM.speed * (1 - slower) };
-    return function* () {
-      yield* action({ until: timePassed(delay, 'seconds') });
-      yield* handTo(h, side, gripOf(item, grip), { on: item, until, ...motion })();
+  const reach = (side: Side, item: Item, grip: string): Behaviour<W> =>
+    function* () {
+      const { delay, slower } = lagging && side !== LEADING ? following(item, { [side]: grip }) : { delay: 0, slower: 0 };
+      if (delay > 0) yield* action({ until: timePassed(delay, 'seconds') });
+      const at = item.toWorld(gripOf(item, grip), _world).position;
+      const seconds = reachTime(h.pose.position(INDEX[`${side}Hand`]).distanceTo(at) / h.proportions.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
+      yield* handTo(h, side, gripOf(item, grip), { on: item, until, seconds })();
     };
-  };
   return function* () {
     for (const { side } of hands) yield* openHand(h, side)();
     yield* parallel<Frame<W>>('all', ...hands.map(({ side, item, grip }) => reach(side, item, grip)));
@@ -232,6 +232,19 @@ export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, lo
     yield* parallel<Frame<W>>('all', ...loads.map(([item, grips], i) => hold(h, item, grips, { to: courses[i].to, motion: options.motion, until: there })));
   };
 }
+
+/**
+ * how long a calm reach `distance` away to take something takes (s; m, default body): Fitts' law,
+ * MT = a + b · log2(2 D / W) (recalled, not checked: a ~0.25 s, b ~0.15 s/bit at everyday precision,
+ * a grip ~4 cm wide), varied ±10% (seeded by `seed`) — a 50 cm reach ~0.95 s peaking ~1 m/s, a
+ * 10 cm one ~0.6 s
+ */
+function reachTime(distance: number, seed: number): number {
+  const bits = Math.log2(Math.max(1, (2 * distance) / FITTS.width));
+  return (FITTS.a + FITTS.b * bits) * (1 + FITTS.vary * (2 * seeded(seed)() - 1));
+}
+
+const FITTS = { a: 0.25, b: 0.15, width: 0.04, vary: 0.1 };
 
 /** the hand that leads where both work (a right-handed body): the other goes a moment after it, a little slower */
 const LEADING: Side = 'right';

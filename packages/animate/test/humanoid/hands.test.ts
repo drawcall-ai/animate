@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, gazeOff, grab, idle, INDEX, Item, reachFor, release, type Behaviour, type Frame, type Leg } from '../../src';
+import { carry, gazeOff, grab, hold, idle, INDEX, Item, reachFor, release, type Behaviour, type Frame, type Leg } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
@@ -104,6 +104,29 @@ describe('release', () => {
     // (0.4 s after letting go, well on to the right, where it was carrying the box: not just coasting to a stop)
     expect(at.let.x - at.after.x).toBeGreaterThan(0.04);
     expect(h.holding.right).toBeNull();
+  });
+});
+
+describe('reachFor', () => {
+  it('takes as long as a reach that far takes (Fitts): longer for a farther grip', () => {
+    const reach = (at: Vector3) => {
+      const load = box(at);
+      const v = speeds(
+        (h, mark) =>
+          function* () {
+            yield* action({ until: timePassed(1, 'seconds') });
+            mark();
+            yield* reachFor(h, { right: [load, 'right'] })();
+            yield* hold(h, load, { right: 'right' })();
+          },
+        3.5,
+      );
+      const moving = v.right.filter((x) => x > 0.05);
+      return { took: moving.length / 60 };
+    };
+    const near = reach(new Vector3(-0.05, 1.0, 0.3));
+    const far = reach(new Vector3(-0.1, 1.05, 0.5));
+    expect(far.took).toBeGreaterThan(near.took);
   });
 });
 
