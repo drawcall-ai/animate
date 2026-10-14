@@ -50,7 +50,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
         report,
         // (the box let go of on the top board, where it was put)
         done: () => box.current.position.distanceTo(shelved) < 0.03,
-        props: () => [{ kind: 'box', position: box.current.position.clone(), size, yaw: facingOf(box.current.quaternion) }, ...shelf(SHELF.boards[3] - top)],
+        props: () => [{ kind: 'box', position: box.current.position.clone(), size, quaternion: box.current.quaternion.clone() }, ...shelf(SHELF.boards[3] - top)],
         script: (h) =>
           function* () {
             yield* parallel<Frame<World>>('all', idle(h), tasks(h, box, size, top, lift, report));
@@ -128,12 +128,6 @@ function carry(h: Humanoid<World>, goal: Placement, gaze: { on: Vector3 }, size:
 /** a grip on the middle of the box's face on side `sign` (+1 left): the wrist there, the hand turning as the arm brings it */
 function grip(size: Vector3, sign: 1 | -1): Target {
   return { position: new Vector3(sign * (size.x / 2 + 0.015), 0, 0) };
-}
-
-/** the facing (about +y) of a rotation */
-function facingOf(q: Quaternion): number {
-  const f = new Vector3(0, 0, 1).applyQuaternion(q);
-  return Math.atan2(f.x, f.z);
 }
 
 /** the shelf drawn: its sides and boards (`lower`: the boards that much lower) */

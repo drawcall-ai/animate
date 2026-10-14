@@ -1,4 +1,4 @@
-import type { Vector3 } from 'three';
+import type { Quaternion, Vector3 } from 'three';
 import type { Behaviour, Humanoid, World } from '@drawcall/animate';
 import type { Report } from './report';
 
@@ -10,6 +10,8 @@ export interface Role {
   position?: { x: number; z: number };
   /** facing about +Y (0 faces +Z) */
   yaw?: number;
+  /** standing height (m; default the model's) */
+  height?: number;
 }
 
 /** A run of a scenario: its world, its scenery and carriers, and its actors' behaviours (made fresh for every run). */
@@ -21,6 +23,8 @@ export interface Stage {
   props(t: number): Prop[];
   /** whether the run did what the scenario is for (asked at its end) */
   done(): boolean;
+  /** what must keep out of the first actor's body as things are now: the items it handles (for the metrics) */
+  solids?(): Solid[];
   /** moves the scenario's own carriers to time `t` (s), before the bodies step (they read them there) */
   move?(t: number): void;
   /**
@@ -52,5 +56,18 @@ export interface Scenario {
   environment?: { kind: 'boxing-arena'; center: [number, number, number] };
 }
 
-/** scenery a scenario shows (drawn only: the humanoids know of it only through their world and its carriers) */
-export type Prop = { kind: 'box'; position: Vector3; size: Vector3; yaw?: number } | { kind: 'ball'; position: Vector3; radius: number };
+/** scenery a scenario shows (drawn only: the humanoids know of it only through their world and its carriers); a cylinder's axis is its local +Y */
+export type Prop =
+  | { kind: 'box'; position: Vector3; size: Vector3; quaternion?: Quaternion }
+  | { kind: 'cylinder'; position: Vector3; radius: number; length: number; quaternion?: Quaternion }
+  | { kind: 'ball'; position: Vector3; radius: number };
+
+/** a segment `a`–`b` (world) thickened by `radius` that keeps out of a body but its bones `touches` (those that hold or wear it) */
+export interface Solid {
+  /** what it is (for the metrics' report) */
+  name: string;
+  a: Vector3;
+  b: Vector3;
+  radius: number;
+  touches: readonly string[];
+}

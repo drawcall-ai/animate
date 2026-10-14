@@ -6,6 +6,7 @@ import { createWorld, type Frame as BodyFrame, type World } from '@drawcall/anim
 import { expect, it } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
+import { knightArming } from '../src/scenarios/knight';
 import { stroll, walkThere } from '../src/scenarios/stroll';
 import { lookAround, reach, vr } from '../src/scenarios/tracking';
 import { Report } from '../src/report';
@@ -19,7 +20,8 @@ function* steps(sim: Simulation): Generator<Frame[]> {
   while (sim.t < sim.scenario.duration) {
     sim.step();
     const asked = sim.stage.report.at(sim.t);
-    yield sim.actors.map((h) => ({ t: sim.t, h, asked }));
+    const solids = sim.stage.solids?.() ?? [];
+    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
   }
 }
 
@@ -92,6 +94,16 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['reach, turned 0.3 rad right', reach({ turn: -0.3 })],
   ['reach, the hand 20% slower', reach({ pace: 0.8 })],
   ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
+  ['knight-arming, the stand, wall and rack 15 cm further left', knightArming({ shift: { x: 0.15, z: 0 } })],
+  ['knight-arming, the stand, wall and rack 15 cm further right', knightArming({ shift: { x: -0.15, z: 0 } })],
+  ['knight-arming, the stand, wall and rack 15 cm further on', knightArming({ shift: { x: 0, z: 0.15 } })],
+  ['knight-arming, the stand, wall and rack 15 cm nearer', knightArming({ shift: { x: 0, z: -0.15 } })],
+  ['knight-arming, the gear 10 cm higher', knightArming({ rise: 0.1 })],
+  ['knight-arming, the gear 10 cm lower', knightArming({ rise: -0.1 })],
+  ['knight-arming, the knight 5% taller', knightArming({ height: 1.75 * 1.05 })],
+  ['knight-arming, the knight 5% shorter', knightArming({ height: 1.75 * 0.95 })],
+  ['knight-arming, 20% quicker', knightArming({ pace: 1.2 })],
+  ['knight-arming, 20% slower', knightArming({ pace: 0.8 })],
 ];
 for (const [name, sc, strides] of VARIATIONS) it(name, () => judged(sc, strides));
 

@@ -66,7 +66,9 @@ export class Playback {
     const props = this.currentProps.map((p, i) => {
       const q = this.prevProps[i];
       if (!q || q.kind !== p.kind) return p;
-      return { ...p, position: q.position.clone().lerp(p.position, alpha) };
+      const position = q.position.clone().lerp(p.position, alpha);
+      if (p.kind === 'ball' || !p.quaternion || q.kind === 'ball' || !q.quaternion) return { ...p, position };
+      return { ...p, position, quaternion: q.quaternion.clone().slerp(p.quaternion, alpha) };
     });
     const root = this.prevRoot.clone().lerp(this.root(), alpha);
     return { props, root };
@@ -87,7 +89,7 @@ export class Playback {
       n.quaternion.toArray(this.current, 7 * i + 3);
     });
     // (copied: the scenarios move their props' vectors in place)
-    this.currentProps = this.sim.props().map((p) => ({ ...p, position: p.position.clone() }));
+    this.currentProps = this.sim.props().map((p) => (p.kind === 'ball' || !p.quaternion ? { ...p, position: p.position.clone() } : { ...p, position: p.position.clone(), quaternion: p.quaternion.clone() }));
   }
 
   /** the current state is where the next blend starts */

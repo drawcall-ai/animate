@@ -1,7 +1,7 @@
 import type { CharacterModel } from '@pmndrs/viverse';
 import { Humanoid, type Pose, type World } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
-import { FIXED_DT, type Prop, type Scenario, type Stage } from './scenario';
+import { FIXED_DT, type Prop, type Role, type Scenario, type Stage } from './scenario';
 
 /** Deterministic fixed-step run of a scenario: its carriers moved, then every actor stepped, at 60 Hz. */
 export class Simulation {
@@ -13,16 +13,16 @@ export class Simulation {
   /** s */
   t = 0;
 
-  /** `model` makes each actor's character model */
+  /** `model` makes each actor's character model for its role */
   constructor(
     readonly scenario: Scenario,
-    model: () => CharacterModel = () => createOpenPoseModel(),
+    model: (role: Role) => CharacterModel = (role) => createOpenPoseModel({ height: role.height }),
   ) {
     this.stage = scenario.stage();
     this.world = this.stage.world;
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
-      cast.push(new Humanoid(model(), (h) => this.stage.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw }));
+      cast.push(new Humanoid(model(role), (h) => this.stage.script(h, i, cast), { world: this.world, position: role.position, yaw: role.yaw }));
     });
     this.bodies = cast.map((h) => h.snapshot());
     this.world.bodies = this.bodies;

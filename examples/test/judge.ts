@@ -7,6 +7,7 @@
 import { expect } from 'vitest';
 import { ArmTurns, FreeArms } from './arms';
 import { Balance } from './balance';
+import { Clearance } from './clearance';
 import { Feet, FinalStance, Landings } from './body';
 import type { Frame } from './frame';
 import { GaitKinematics, RUNNING } from './gait';
@@ -56,6 +57,8 @@ export interface Limits {
    * acceleration (°/s²: pops)
    */
   board?: { contact: number; into: number; accel: number };
+  /** how deep the items handled reach into the body (m): judged where the scenario names what must keep out of it */
+  clearance?: number;
   /** joints (by bone) allowed beyond their range of motion (the humanoid's ranges; °): held limbs the solve takes past it (known, to fix) */
   rom?: Record<string, number>;
 }
@@ -130,6 +133,7 @@ export const LIMITS: Record<string, Limits> = {
   ladder: { rom: { leftLowerArm: 7, leftHand: 32, leftUpperLeg: 5, rightShoulder: 9, rightUpperArm: 8, rightHand: 60, rightUpperLeg: 14 }, joints: { knee: { accel: 113 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   push: { rom: { leftShoulder: 4, leftHand: 55, leftFoot: 17, rightShoulder: 4, rightHand: 55, rightFoot: 17 }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   reach: { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.15, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
+  'knight-arming': { xcomFrames: 0, com: 0, crossings: 0, wrist: 0.02, clearance: 0.02, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   'look-around': { xcomFrames: 0, com: 0, crossings: 0, head: 0.055, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   vr: { rom: { leftShoulder: 6, leftUpperArm: 59, leftFoot: 46, rightShoulder: 6, rightUpperArm: 59, rightUpperLeg: 34 }, ankle: [20, 154], xcomFrames: 0, com: 0, crossings: 0, wrist: 0.145, head: 0.145, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
   fight: { rom: { leftFoot: 2, rightUpperArm: 13, rightUpperLeg: 28, rightFoot: 14 }, joints: { elbow: { speed: 3500, accel: 210 } }, xcomFrames: 0, com: 0, crossings: 0, wrist: 0.44, startStop: null, jumps: 0, climbs: 0, vaults: 0 },
@@ -233,6 +237,7 @@ export function measure(id: string, steps: Iterable<readonly Frame[]>) {
   const stance = new FinalStance();
   const rates = new JointRates();
   const rom = new RangeOfMotion();
+  const clearance = new Clearance();
   let frames = 0;
   for (const step of steps) {
     frames++;
@@ -241,11 +246,11 @@ export function measure(id: string, steps: Iterable<readonly Frame[]>) {
       landings.see(f);
       balance.see(f);
       if (i > 0) return;
-      for (const m of [targets, gait, arms, turns, stance, rates, rom]) m.see(f);
+      for (const m of [targets, gait, arms, turns, stance, rates, rom, clearance]) m.see(f);
     });
   }
-  const report = [`== ${id} (${frames} frames)`, feet, landings, balance, targets, gait, arms, turns, stance, rates, rom].join('\n');
-  return { report, feet, landings, balance, targets, gait, arms, turns, stance, rates, rom };
+  const report = [`== ${id} (${frames} frames)`, feet, landings, balance, targets, gait, arms, turns, stance, rates, rom, clearance].join('\n');
+  return { report, feet, landings, balance, targets, gait, arms, turns, stance, rates, rom, clearance };
 }
 
 export type Measured = ReturnType<typeof measure>;
@@ -382,6 +387,11 @@ export function judge(m: Measured, limit: Limits) {
     expect(j.velocity.value, `${bone} angular speed (°/s; @${j.velocity.at.toFixed(2)}s)`).toBeLessThan(b.speed);
     expect(j.acceleration.value, `${bone} angular acceleration (°/s²; @${j.acceleration.at.toFixed(2)}s)`).toBeLessThan(b.accel * 1000);
   }
+  // what the body handles keeps out of it (the hands and arms holding or wearing it may touch it)
+  if (limit.clearance !== undefined) {
+    expect(m.clearance.frames, 'items: frames judged').toBeGreaterThan(0);
+    expect(m.clearance.depth, `items into the body (m; ${m.clearance.what} @${m.clearance.at.toFixed(2)}s)`).toBeLessThanOrEqual(limit.clearance);
+  } else expect(m.clearance.frames, 'items handled, unjudged').toBe(0);
   // every joint within its range of motion (clinical norms, the humanoid's ranges), but those a held
   // limb takes past it (rom)
   for (const [bone, j] of Object.entries(m.rom.joints)) {
