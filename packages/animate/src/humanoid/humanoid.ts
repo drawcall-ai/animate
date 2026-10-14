@@ -17,7 +17,7 @@ import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
 import { Rig, yawOf } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
-import { carryWorn, wornBy, type Wearing } from './worn';
+import { borneBy, carryWorn, wornBy, type Wearing } from './worn';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -80,6 +80,11 @@ export class Humanoid<W = unknown> {
   /** what it wears (`wear`, `takeOff`): each item and what it is worn on */
   get worn(): ReadonlyMap<Item, Wearing> {
     return wornBy(this);
+  }
+
+  /** how much of each item's weight it bears, held or worn (kg; taken up and given up over a moment), as its centre of mass counts it */
+  get borne(): ReadonlyMap<Item, number> {
+    return borneBy(this);
   }
 
   /** the last final pose */

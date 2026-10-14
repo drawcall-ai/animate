@@ -46,20 +46,20 @@ describe('items on the body', () => {
     expect(Math.abs(com.x - feet.x)).toBeLessThan(0.02);
   });
 
-  it('carries a worn item with its bone, settles it into a seat, and nests: a sword in a scabbard on the hips', () => {
+  it('carries a worn item with its bone, settles it where it goes, and nests: a sword in a scabbard on the hips', () => {
     const scabbard = box(new Vector3(0.2, 1, 0.1));
     const sword = box(new Vector3(0.2, 1.1, 0.1));
-    const seat = { position: new Vector3(0.2, 0.05, 0.1), quaternion: new Quaternion() };
+    const to = { position: new Vector3(0.2, 0.05, 0.1), quaternion: new Quaternion() };
     const h = run(
       (h) =>
         function* () {
           yield* wear(h, sword, scabbard)();
-          yield* wear(h, scabbard, INDEX.hips, { seat })();
+          yield* wear(h, scabbard, INDEX.hips, { to })();
         },
       2,
     );
     const hips = h.pose.position(INDEX.hips);
-    const at = seat.position.clone().multiplyScalar(h.proportions.scale).applyQuaternion(h.pose.rotation(INDEX.hips)).add(hips);
+    const at = to.position.clone().multiplyScalar(h.proportions.scale).applyQuaternion(h.pose.rotation(INDEX.hips)).add(hips);
     expect(scabbard.current.position.distanceTo(at)).toBeLessThan(1e-3);
     expect(sword.current.position.distanceTo(scabbard.current.position)).toBeCloseTo(0.1, 3);
     expect([...h.worn.keys()]).toEqual([sword, scabbard]);

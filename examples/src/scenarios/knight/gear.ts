@@ -1,25 +1,24 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { Item, type Placement, type Side, type Target } from '@drawcall/animate';
+import { Item, type BoneName, type Placement, type Proportions, type Side, type Target } from '@drawcall/animate';
 import type { Prop, Solid } from '../../scenario';
 
-// The knight's gear: each piece an item (its frame, its grips) with its mass, how it is drawn
-// (boxes and cylinders in its frame) and the solids that must keep out of the body.
+// The knight's gear: each piece an item (its frame, its grips, its mass), how it is drawn (boxes
+// and cylinders in its frame) and the solids that must keep out of the body.
 
 /** a shape of an item's drawing, in its frame (a cylinder's axis along +Y turned by `turn`) */
 type Part = { kind: 'box'; at: Vector3; size: Vector3; turn?: Euler } | { kind: 'cylinder'; at: Vector3; radius: number; length: number; turn?: Euler };
 
-/** A piece of gear: its item, mass (kg), drawing and solids. */
+/** A piece of gear: its item, drawing and solids. */
 export interface Gear {
   item: Item;
-  mass: number;
   parts: readonly Part[];
   /** in its frame */
   solids: readonly Solid[];
 }
 
-const piece = (at: Placement, grips: Record<string, Target>, mass: number, parts: Part[], solids: Solid[] = []): Gear => ({
-  item: new Item(at.position.clone(), at.quaternion?.clone() ?? new Quaternion(), grips),
-  mass,
+/** a piece of gear at `at`: its grips, mass (kg) and centre of mass (in its frame, default its origin), drawing and solids */
+const piece = (at: Placement, grips: Record<string, Target>, mass: number, parts: Part[], solids: Solid[] = [], centre?: Vector3): Gear => ({
+  item: new Item(at.position.clone(), at.quaternion?.clone() ?? new Quaternion(), grips, { mass, centre }),
   parts,
   solids,
 });
@@ -27,19 +26,31 @@ const piece = (at: Placement, grips: Record<string, Target>, mass: number, parts
 /**
  * A bascinet (~2.5 kg): a round-topped cap over the skull down to below the ears, open at the face
  * (a nasal before the nose), its frame the head's when worn (origin at its middle, +Z where the face
- * is); held low on its sides toward the front (the palms on it, the wrists out before the cheeks:
- * further back, the arms would fold past their range). Its crown and rim keep off the head.
+ * is); held low on its sides toward the front (the wrists out before the cheeks: further back, the arms would fold past their range); its chin strap's ends at the
+ * cheeks (`strapLeft`, `strapRight`), buckled under the chin (`chinLeft`, `chinRight`). Its crown
+ * and rim keep off the head.
  */
 export function helmet(at: Placement): Gear {
   const rim = -HELM.height / 2;
-  return piece(at, { left: { position: new Vector3(0.13, -0.15, 0.16) }, right: { position: new Vector3(-0.13, -0.15, 0.16) } }, 2.5, [
+  const grips = {
+    // (the hands turned as the arms bring them: a palm set flat on it turns the wrist past its range over the head)
+    left: { position: new Vector3(0.13, -0.15, 0.16) },
+    right: { position: new Vector3(-0.13, -0.15, 0.16) },
+    // (the chin strap: its ends hanging by the jaw, buckled under the chin — the wrists below and
+    // before them, the fingers up at the strap: any nearer the shoulders would fold the arms past their range)
+    strapLeft: { position: new Vector3(0.09, rim - 0.2, 0.2) },
+    strapRight: { position: new Vector3(-0.09, rim - 0.2, 0.2) },
+    chinLeft: { position: new Vector3(0.03, rim - 0.22, 0.22) },
+    chinRight: { position: new Vector3(-0.03, rim - 0.22, 0.22) },
+  };
+  return piece(at, grips, 2.5, [
     { kind: 'cylinder', at: new Vector3(0, 0, 0), radius: HELM.radius, length: HELM.height },
     { kind: 'cylinder', at: new Vector3(0, HELM.height / 2 + 0.02, -0.01), radius: 0.08, length: 0.04 },
     { kind: 'box', at: new Vector3(0, rim - 0.03, HELM.radius + 0.005), size: new Vector3(0.02, 0.08, 0.01) }, // the nasal
   ], [
     { a: new Vector3(-0.08, HELM.height / 2, 0), b: new Vector3(0.08, HELM.height / 2, 0), radius: 0.01, touches: [], name: 'helm crown' },
     // (its rim at the brow and behind the head: over the shoulders, where it and its mail rest on them, it may touch the upper arms)
-    ...[1, -1].map((z) => ({ a: new Vector3(-0.08, rim, z * HELM.radius), b: new Vector3(0.08, rim, z * HELM.radius), radius: 0.01, touches: ['leftUpperArm', 'rightUpperArm'], name: 'helm rim' })),
+    ...[1, -1].map((z) => ({ a: new Vector3(-0.08, rim, z * HELM.radius), b: new Vector3(0.08, rim, z * HELM.radius), radius: 0.01, touches: ['shoulders', 'leftUpperArm', 'rightUpperArm'], name: 'helm rim' })),
   ]);
 }
 
@@ -91,9 +102,14 @@ export const STRAP = 1.1;
  * down −y. Held by its throat (`throat`, from outside). Keeps out of the body below where the hands hold it.
  */
 export function scabbard(at: Placement): Gear {
-  return piece(at, { throat: { position: new Vector3(0, -0.06, 0.03) } }, 0.5, [{ kind: 'cylinder', at: new Vector3(0, -SCABBARD / 2, 0), radius: 0.022, length: SCABBARD }], [
-    { a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -SCABBARD, 0), radius: 0.022, touches: [], name: 'scabbard' },
-  ]);
+  return piece(
+    at,
+    { throat: { position: new Vector3(0, -0.06, 0.03) } },
+    0.5,
+    [{ kind: 'cylinder', at: new Vector3(0, -SCABBARD / 2, 0), radius: 0.022, length: SCABBARD }],
+    [{ a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -SCABBARD, 0), radius: 0.022, touches: [], name: 'scabbard' }],
+    new Vector3(0, -SCABBARD / 2, 0),
+  );
 }
 
 const SCABBARD = 0.85;
@@ -107,13 +123,13 @@ export function sword(at: Placement): Gear {
     { kind: 'cylinder', at: new Vector3(0, 0.1, 0), radius: 0.014, length: 0.16 },
     { kind: 'cylinder', at: new Vector3(0, 0.19, 0), radius: 0.022, length: 0.03 },
     { kind: 'box', at: new Vector3(0, -0.4, 0), size: new Vector3(0.045, 0.78, 0.006) },
-  ], [{ a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -0.78, 0), radius: 0.02, touches: ['leftHand', 'leftLowerArm'], name: 'blade' }]);
+  ], [{ a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -0.78, 0), radius: 0.02, touches: ['leftHand', 'leftLowerArm'], name: 'blade' }], new Vector3(0, -0.12, 0));
 }
 
 /**
  * A heater shield (~3.5 kg, 0.5 × 0.7 m): origin at the hand grip on its back, +x along the forearm
  * through its enarmes (the arm strap 17 cm back toward the elbow), +y its top, +z out of its back
- * (toward the arm), its face 5 cm out the other way. Grips: `rim` (its top edge, from behind),
+ * (toward the arm), its face 5 cm out the other way. Grips: `edge` (its forward edge, from behind),
  * `enter` (the wrist before the strap, in line) and `grip` (the fist round the handle, thumb up).
  * Its face keeps out of the body but the arm it is on (its top edge, where the other hand holds it, left out).
  */
@@ -123,7 +139,7 @@ export function shield(at: Placement): Gear {
   return piece(
     at,
     {
-      rim: { position: new Vector3(-0.06, 0.29, face + 0.03) },
+      edge: { position: new Vector3(0.22, 0.04, face + 0.03) },
       enter: { position: new Vector3(-0.3, 0, 0.02), quaternion: fist },
       grip: { position: new Vector3(), quaternion: fist },
     },
@@ -135,6 +151,7 @@ export function shield(at: Placement): Gear {
       { kind: 'box', at: new Vector3(-0.17, 0, 0.005), size: new Vector3(0.03, 0.07, 0.012) }, // the arm strap
     ],
     [-0.12, 0.03, 0.18].map((y) => ({ a: new Vector3(-0.28, y, face), b: new Vector3(0.16, y, face), radius: 0.01, touches: ['leftLowerArm', 'leftHand'], name: 'shield' })),
+    new Vector3(-0.06, 0.04, face),
   );
 }
 
@@ -143,7 +160,40 @@ export function lance(at: Placement): Gear {
   return piece(at, { grip: { position: new Vector3() } }, 5, [
     { kind: 'cylinder', at: new Vector3(0, LANCE.tip - LANCE.length / 2, 0), radius: 0.025, length: LANCE.length },
     { kind: 'cylinder', at: new Vector3(0, 0.12, 0), radius: 0.05, length: 0.14 }, // the vamplate
-  ], [{ a: new Vector3(0, LANCE.tip - LANCE.length, 0), b: new Vector3(0, LANCE.tip, 0), radius: 0.025, touches: ['rightHand', 'rightLowerArm'], name: 'lance' }]);
+  ], [{ a: new Vector3(0, LANCE.tip - LANCE.length, 0), b: new Vector3(0, LANCE.tip, 0), radius: 0.025, touches: ['rightHand', 'rightLowerArm'], name: 'lance' }], new Vector3(0, LANCE.tip - LANCE.length / 2, 0));
+}
+
+/**
+ * The harness he stands in before he arms (a squire's work: its straps are behind him): a cuirass
+ * and its fauld, arm and leg harness, sabatons, ~23 kg in all — a complete 15th-century field
+ * harness weighs 25–30 kg with its helm and gauntlets (Williams, The Knight and the Blast
+ * Furnace, 2003; the Wallace Collection's A21 ~27 kg). Each piece on its bone (in its frame at
+ * rest, the body's proportions `p`), drawn as a plate round it; none keeps out of the body (it
+ * is on it).
+ */
+export function harness(p: Proportions): { bone: BoneName; gear: Gear }[] {
+  const along = (length: number, radius: number, axis: 'x' | 'y' | '-x' | '-y', mass: number): Gear => {
+    const dir = { x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), '-x': new Vector3(-1, 0, 0), '-y': new Vector3(0, -1, 0) }[axis];
+    const middle = dir.multiplyScalar(length / 2);
+    const turn = axis === 'x' || axis === '-x' ? new Euler(0, 0, Math.PI / 2) : undefined;
+    return piece({ position: new Vector3() }, {}, mass, [{ kind: 'cylinder', at: middle, radius, length: length * 0.8, turn }], [], middle);
+  };
+  const plate = (at: Vector3, size: Vector3, mass: number): Gear => piece({ position: new Vector3() }, {}, mass, [{ kind: 'box', at, size }], [], at);
+  const H = p.height;
+  return [
+    { bone: 'chest', gear: plate(new Vector3(0, 0.05 * H, 0.005 * H), new Vector3(0.2 * H, 0.17 * H, 0.14 * H), 8) },
+    { bone: 'hips', gear: plate(new Vector3(0, 0.02 * H, 0.005 * H), new Vector3(0.21 * H, 0.06 * H, 0.15 * H), 3) },
+    ...(['left', 'right'] as const).flatMap((side) => {
+      const out = side === 'left' ? 'x' : '-x';
+      return [
+        { bone: `${side}UpperArm` as const, gear: along(p.upperArm, 0.034 * H, out, 1.2) },
+        { bone: `${side}LowerArm` as const, gear: along(p.forearm, 0.028 * H, out, 0.8) },
+        { bone: `${side}UpperLeg` as const, gear: along(p.thigh, 0.045 * H, '-y', 2) },
+        { bone: `${side}LowerLeg` as const, gear: along(p.shin, 0.035 * H, '-y', 1.5) },
+        { bone: `${side}Foot` as const, gear: plate(new Vector3(0, -0.01 * H, 0.04 * H), new Vector3(0.06 * H, 0.04 * H, 0.14 * H), 0.5) },
+      ];
+    }),
+  ];
 }
 
 /** the lance's length and its tip above the grip (m) */
@@ -214,5 +264,5 @@ export function drawn(gear: Gear): Prop[] {
 export function solidsOf(gear: Gear): Solid[] {
   const { position, quaternion } = gear.item.current;
   const world = (v: Vector3) => v.clone().applyQuaternion(quaternion).add(position);
-  return gear.solids.map((s) => ({ ...s, a: world(s.a), b: world(s.b) }));
+  return gear.solids.map((s) => ({ ...s, a: world(s.a), b: world(s.b), item: gear.item }));
 }

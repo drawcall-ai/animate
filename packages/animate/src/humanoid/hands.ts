@@ -29,7 +29,7 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 /** how far (× the arm's length) before what it takes the body stands */
 const WITHIN = 0.6;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
-const IN_REACH = 0.75;
+const IN_REACH = 0.65;
 const SQUARE = 0.3;
 /** arrived where it stands to take something: this near (m, default body), and come to rest or stood still this long (s) */
 const ARRIVED = 0.12;
@@ -55,34 +55,48 @@ export function closeHand<W>(h: Humanoid<W>, side: Side, item: Item, grip: strin
 }
 
 /**
- * Taking hold of things: the body walks up to stand facing `face` with the grips' middle `stand`
- * before it (default: in reach, squarely; facing so the left hand's grip is on the left, or toward
- * a single grip) — no step if every grip is in reach of its shoulder already — then, the eyes on
- * them first (`look`, default true: `withGaze`), the hands take hold (`reachFor`). It ends with
- * the hands on the grips: hold on with `hold` or `carry`.
+ * Taking hold of things: the body walks up to take them (`approach`), then, the eyes on them first
+ * (`look`, default true: `withGaze`), the hands take hold (`reachFor`). It ends with the hands on
+ * the grips: hold on with `hold` or `carry`.
  */
 export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean } = {}): Behaviour<W> {
+  return function* () {
+    yield* approach(h, holds, options)();
+    yield* (options.look ?? true ? withGaze(h, middleOf(holds), reachFor(h, holds)) : reachFor(h, holds))();
+  };
+}
+
+/**
+ * Walking up to take hold of things: to stand facing `face` with the grips' middle `stand` before
+ * the body (default: in reach, squarely; facing so the left hand's grip is on the left, or toward a
+ * single grip) — no step if every grip is in reach of its shoulder already; it ends there, turned
+ * and come to rest (or stood still on planted feet a while: a step of a few cm `balance` may not
+ * take). The first half of `grab`.
+ */
+export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
   const { ahead = WITHIN, aside = 0 } = options.stand ?? {};
   return function* () {
     const grips = held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
-    const middle = grips.reduce((sum, g) => sum.add(g.at), new Vector3()).divideScalar(grips.length);
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
-    const inReach = () => turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength);
-    const to = middle.clone().addScaledVector(leftOf(face), -aside);
+    if (turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) return;
+    const to = middleOf(holds).addScaledVector(leftOf(face), -aside);
     const there = to.clone().addScaledVector(forwardOf(face), -ahead * p.armLength);
-    // (there, turned and come to rest — or stood still on planted feet a while: a step of a few cm
-    // `balance` may not take)
     let still = 0;
     const arrived = (f: Frame<W>) => {
       const planted = !h.gait.moving && h.feet.every((foot) => foot.phase === 'planted');
       still = planted ? still + f.dt : 0;
       return turned() && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || still > STILL);
     };
-    if (!inReach()) yield* walkTo(h, { to, face, within: ahead * p.armLength, until: arrived })();
-    yield* (options.look ?? true ? withGaze(h, middle, reachFor(h, holds)) : reachFor(h, holds))();
+    yield* walkTo(h, { to, face, within: ahead * p.armLength, until: arrived })();
   };
+}
+
+/** the middle of the grips `holds` take, where they are now */
+function middleOf(holds: Holds): Vector3 {
+  const hands = held(holds);
+  return hands.reduce((sum, { item, grip }) => sum.add(item.toWorld(gripOf(item, grip), _world).position), new Vector3()).divideScalar(hands.length);
 }
 
 /**

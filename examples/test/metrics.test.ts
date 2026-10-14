@@ -99,6 +99,11 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
   ['knight-arming, the knight 5% shorter', knightArming({ height: 1.75 * 0.95 })],
   ['knight-arming, 20% quicker', knightArming({ pace: 1.2 })],
   ['knight-arming, 20% slower', knightArming({ pace: 0.8 })],
+  ['knight-arming, the stand, wall and rack on the other sides', knightArming({ mirror: true })],
+  ['knight-arming, the helm turned a quarter on its stand', knightArming({ helmTurn: Math.PI / 2 })],
+  ['knight-arming, the helm turned a quarter the other way', knightArming({ helmTurn: -Math.PI / 2 })],
+  ['knight-arming, the shield\'s wall turned 0.4 rad', knightArming({ wallTurn: 0.4 })],
+  ['knight-arming, the shield\'s wall turned −0.4 rad', knightArming({ wallTurn: -0.4 })],
 ];
 for (const [name, sc, strides] of VARIATIONS) it(name, () => judged(sc, strides));
 

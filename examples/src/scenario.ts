@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { Behaviour, Humanoid, World } from '@drawcall/animate';
+import type { Behaviour, Humanoid, Item, World } from '@drawcall/animate';
 import type { Report } from './report';
 
 export const FIXED_DT = 1 / 60;
@@ -62,10 +62,12 @@ export type Prop =
   | { kind: 'cylinder'; position: Vector3; radius: number; length: number; quaternion?: Quaternion }
   | { kind: 'ball'; position: Vector3; radius: number };
 
-/** a segment `a`–`b` (world) thickened by `radius` that keeps out of a body but its bones `touches` (those that hold or wear it) */
+/** a segment `a`–`b` (world) thickened by `radius` that keeps out of a body but its parts `touches` (those that wear or bear it) and the hands holding its item */
 export interface Solid {
   /** what it is (for the metrics' report) */
   name: string;
+  /** the item it is of: a hand holding it (and its forearm) may touch it */
+  item?: Item;
   a: Vector3;
   b: Vector3;
   radius: number;

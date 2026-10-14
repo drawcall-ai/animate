@@ -157,8 +157,8 @@ const SEGMENTS: [mass: number, at: (j: Joints, skull: Vector3) => Vector3][] = [
 
 /**
  * the body's centre of mass: the mass-weighted mean of its segments (Dempster's, from the posed
- * joints, its mass a body mass index of 22's) and of the items it holds and wears (each where its
- * centre is). Summed relative to the hips, so the result does not depend on where in the world the
+ * joints, its mass a body mass index of 22's) and of what it bears of the items it holds and wears
+ * (each where its centre is). Summed relative to the hips, so the result does not depend on where in the world the
  * body stands.
  */
 export function comOf(h: Actor): Vector3 {
@@ -176,11 +176,10 @@ export function comOf(h: Actor): Vector3 {
     sum.addScaledVector(offset.subVectors(at(j, skull), hips), share * body);
     total += share * body;
   }
-  const items = new Set([...h.worn.keys(), ...(['left', 'right'] as const).flatMap((s) => h.holding[s]?.item ?? [])]);
-  for (const item of items) {
+  for (const [item, kg] of h.borne) {
     const centre = item.centre.clone().applyQuaternion(item.current.quaternion).add(item.current.position);
-    sum.addScaledVector(offset.subVectors(centre, hips), item.mass);
-    total += item.mass;
+    sum.addScaledVector(offset.subVectors(centre, hips), kg);
+    total += kg;
   }
   return sum.divideScalar(total).add(hips);
 }

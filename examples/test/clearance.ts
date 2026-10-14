@@ -4,29 +4,31 @@ import type { Frame } from './frame';
 
 /**
  * The body as capsules between joints (radii × height: a lean adult's limbs and trunk; Winter's
- * segment girths), each named by the bone it starts at; the head a ball round the skull's centre.
+ * segment girths), each by its own name (a limb's that of the bone it starts at); the hands out
+ * from the wrists along the forearms (the hand's length 0.108 H, Drillis & Contini); the head a
+ * ball round the skull's centre.
  */
-const LIMBS: [from: string, to: string, radius: number][] = [
-  ['hips', 'chest', 0.06],
-  ['chest', 'neck', 0.045],
-  ['neck', 'head', 0.03],
-  ['leftUpperLeg', 'rightUpperLeg', 0.045],
-  ['leftUpperArm', 'rightUpperArm', 0.035],
-  ['leftUpperArm', 'leftLowerArm', 0.026],
-  ['rightUpperArm', 'rightLowerArm', 0.026],
-  ['leftLowerArm', 'leftHand', 0.022],
-  ['rightLowerArm', 'rightHand', 0.022],
-  ['leftUpperLeg', 'leftLowerLeg', 0.038],
-  ['rightUpperLeg', 'rightLowerLeg', 0.038],
-  ['leftLowerLeg', 'leftFoot', 0.028],
-  ['rightLowerLeg', 'rightFoot', 0.028],
+const LIMBS: [name: string, from: string, to: string, radius: number][] = [
+  ['trunk', 'hips', 'chest', 0.06],
+  ['thorax', 'chest', 'neck', 0.045],
+  ['neck', 'neck', 'head', 0.03],
+  ['pelvis', 'leftUpperLeg', 'rightUpperLeg', 0.045],
+  ['shoulders', 'leftUpperArm', 'rightUpperArm', 0.035],
+  ...(['left', 'right'] as const).flatMap((s): [string, string, string, number][] => [
+    [`${s}UpperArm`, `${s}UpperArm`, `${s}LowerArm`, 0.026],
+    [`${s}LowerArm`, `${s}LowerArm`, `${s}Hand`, 0.022],
+    [`${s}UpperLeg`, `${s}UpperLeg`, `${s}LowerLeg`, 0.038],
+    [`${s}LowerLeg`, `${s}LowerLeg`, `${s}Foot`, 0.028],
+  ]),
 ];
+/** a hand: how far it reaches out from the wrist along the forearm, and its half-thickness (× height) */
+const HAND = { length: 0.08, radius: 0.013 };
 /** the skull: its centre in the head bone's frame and its radius (× height) */
 const SKULL = { centre: new Vector3(0, 0.063, 0.011), radius: 0.06 };
 
 /**
  * How far the items a body handles reach into it: each solid (a thickened segment the scenario
- * gives, `Stage.solids`) against each body capsule but those of the bones that hold or wear it; the
+ * gives, `Stage.solids`) against each body capsule but those it may touch (that wear or bear it, a hand holding it and its forearm); the
  * deepest overlap (m), what and where, and the frames judged.
  */
 export class Clearance {
@@ -42,13 +44,14 @@ export class Clearance {
     const head = h.model.scene.getObjectByName('head');
     if (!head) throw new Error('no head');
     const skull = SKULL.centre.clone().multiplyScalar(H).applyQuaternion(head.getWorldQuaternion(new Quaternion())).add(head.getWorldPosition(new Vector3()));
-    const parts = [
-      ...LIMBS.map(([from, to, r]) => ({ name: from === 'hips' ? 'trunk' : from === 'chest' ? 'thorax' : from, a: jointOf(h, from), b: jointOf(h, to), r: r * H })),
-      { name: 'head', a: skull, b: skull, r: SKULL.radius * H },
-    ];
+    const hand = (s: 'left' | 'right') => {
+      const wrist = jointOf(h, `${s}Hand`);
+      return { name: `${s}Hand`, a: wrist, b: wrist.clone().sub(jointOf(h, `${s}LowerArm`)).setLength(HAND.length * H).add(wrist), r: HAND.radius * H };
+    };
+    const parts = [...LIMBS.map(([name, from, to, r]) => ({ name, a: jointOf(h, from), b: jointOf(h, to), r: r * H })), hand('left'), hand('right'), { name: 'head', a: skull, b: skull, r: SKULL.radius * H }];
     for (const s of solids) {
       for (const p of parts) {
-        if (s.touches.includes(p.name)) continue;
+        if (s.touches.includes(p.name) || (['left', 'right'] as const).some((side) => (p.name === `${side}Hand` || p.name === `${side}LowerArm`) && s.item && h.holding[side]?.item === s.item)) continue;
         const depth = s.radius + p.r - segmentDistance(s.a, s.b, p.a, p.b);
         if (depth <= this.depth) continue;
         [this.depth, this.at, this.what] = [depth, t, `${s.name} into ${p.name}`];
