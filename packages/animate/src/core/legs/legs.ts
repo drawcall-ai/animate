@@ -115,7 +115,7 @@ export class Legs {
   /**
    * Preflight the next update's landing reserve without posing or advancing the engine.
    * Call after earlier body writers, before update, with the same frame and root/speed forecast.
-   * False: revise the forecast (e.g. lower its root height) and retry. At most ten reach
+   * False: revise the forecast (e.g. adjust the root's height or slow down) and retry. At most ten reach
    * solves per leg, with no foothold search. True guarantees the proposed-stance check;
    * it does not certify existing contacts, swing clearance or balance.
    */

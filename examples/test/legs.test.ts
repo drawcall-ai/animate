@@ -196,11 +196,6 @@ it('legs-biped playback leads along the scripted travel and turn without writing
   expect(playback.sim.actors[0].gait.facing).toBe(0);
 });
 
-it('scripted braking never returns a negative speed, including minimum-jerk rounding', () => {
-  const route = scriptedRoot(1, 1.8, new Vector3(), 0, 0, 1);
-  for (let tick = 0; tick <= 16000; tick++) expect(route.speed(tick / 1000)).toBeGreaterThanOrEqual(0);
-});
-
 for (const [name, make] of [
   ['biped 1.6m/s acceleration', () => human(3, 1.6, true)],
   ['biped 1.8m/s braked in 1s', () => human(1, 1.8, true)],

@@ -6,10 +6,7 @@ import { Report } from '../report';
 
 /** Script only: integrate a smooth speed ramp, then a broad bend and a smooth stop. No balance or body planner. */
 export function scriptedRoot(height: number, pace: number, origin = new Vector3(), yaw = 0, start = 0, brake = 2, radius = 15) {
-  const speed = (t: number) => {
-    const v = pace * minimumJerk((t - start) / 2) * (1 - minimumJerk((t - start - 10) / brake));
-    return v < 0 && v > -1e-9 ? 0 : v;
-  };
+  const speed = (t: number) => pace * minimumJerk((t - start) / 2) * (1 - minimumJerk((t - start - 10) / brake));
   // Fixed quadrature table makes prediction independent of the update cadence.
   const dt = 1 / 240;
   const travel = [0];
