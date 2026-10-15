@@ -7,7 +7,9 @@ export function run(sc: Scenario): LogEntry[] {
   const sim = new Simulation(sc, undefined, true);
   while (sim.t < sc.duration) sim.step();
   sim.step();
-  return sim.actors.flatMap((h, i) => h.log.map((entry) => ({ ...entry, where: `actor ${i}: ${entry.where}` })));
+  const extra = sim.stage.bodies?.flatMap((b, i) => b.log.map((entry) => ({ ...entry, where: `body ${i}: ${entry.where}` }))) ?? [];
+  if (!sim.actors.length && !sim.stage.done()) extra.push({ time: sim.t, beat: '', check: `${sc.id}: scenario unfinished`, value: 1, limit: 0, where: sc.id });
+  return [...extra, ...sim.actors.flatMap((h, i) => h.log.map((entry) => ({ ...entry, where: `actor ${i}: ${entry.where}` })))];
 }
 
 /** a seeded variation of `sc`: each actor starting up to 10 cm off, turned up to 0.15 rad and up to 4% taller or shorter — what no script may hang on */

@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { Behaviour, Dressed, Humanoid, Item, Proportions, World } from '@drawcall/animate';
+import type { Body, Behaviour, Dressed, Humanoid, Item, Proportions, World } from '@drawcall/animate';
 import type { Report } from './report';
 
 export const FIXED_DT = 1 / 60;
@@ -17,6 +17,8 @@ export interface Role {
 /** A run of a scenario: its world, its scenery and carriers, and its actors' behaviours (made fresh for every run). */
 export interface Stage {
   world: World;
+  /** Generic articulated bodies stepped alongside the humanoid cast. */
+  bodies?: readonly Body[];
   /** what the script asked of the first actor, for the metrics */
   report: Report;
   /** the scenery drawn at time `t` (s) */
@@ -44,7 +46,7 @@ export interface Scenario {
   /** s */
   duration: number;
   actors: readonly Role[];
-  stage(): Stage;
+  stage(dev?: boolean): Stage;
   cameraDistance?: number;
   /** the facing (yaw) the camera shots are taken against, held fixed; defaults to the first actor's */
   facing?: number;

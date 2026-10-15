@@ -120,15 +120,15 @@ function sync(alpha = 1, dt = 1 / 60) {
   stage.env?.update(sim.t);
   const still = capture && !video;
   if (still) framing.set(between.root, facing());
-  else framing.follow(between.root, sim.actors[0].gait.velocity, facing(), dt);
+  else framing.follow(between.root, playback.velocity, facing(), dt);
   panel.showTime(sim.t, s.duration);
   caption.textContent = still ? `${s.id}  t=${sim.t.toFixed(2)}s  ${settings.view}` : '';
 }
 
 /** the way the shots are taken against: the way the body faces, as balance has it (not the hips' twist as they step or swing) */
 function facing() {
-  const { scenario: s, actors } = playback.sim;
-  return (s.facing ?? actors[0].gait.facing) + turn;
+  const { scenario: s } = playback.sim;
+  return (s.facing ?? playback.facing) + turn;
 }
 
 /** aims the camera at the framing (which is smoothed already) */

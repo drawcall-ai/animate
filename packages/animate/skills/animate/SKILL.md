@@ -99,6 +99,12 @@ Bones are listed parents first, bone 0 the root; rest rotations are identity (+Y
 - `lookAt` turns a `Gazer`'s neck chain so its eyes are on a point, upright (for a point below and behind, pitched down past straight down rather than turned round, whichever leaves the eyes less to turn; it keeps to that way as the body sways).
 - A `Carrier` is a rigid frame with the same history as a body (a cart, a held `Item`): its one mover moves it once per sub-step, **before** anything that reads it moves (a second move in a sub-step throws). Several bodies share a `World`; set `world.bodies` to each one's last pose (copies) before updating them, so the order they update in changes nothing.
 
+## Building a creature's legs
+
+Use `Legs` when a creature behaviour needs locomotion under a root path it already owns. Keep one engine per body; write the root before updating its legs each sub-step. Give it connected chains, skeleton joint ranges, foot geometry, a gait contact table and reference joint cycles. The shipped human and horse data are starting points for those inputs.
+
+Supply the full future root placement for footholds and landing poses, and a speed function when accelerating or stopping. Planted contacts and committed swing footholds stay fixed; turn by curving the supplied root path. Read per-leg phase, planted state and foothold, or consume the current update's lift/land events. Keep balance and body-height planning in the creature behaviour: an unreachable root path produces contact errors. Enable the body's dev mode to check completed poses, including later layers' writes; provide joint snap ceilings on a custom skeleton. The humanoid's existing `walkTo` continues to use its own balance layer.
+
 ## Checking a scene
 
 Enable `{ dev: true }` while developing and read `h.log`. Checks report problems in the

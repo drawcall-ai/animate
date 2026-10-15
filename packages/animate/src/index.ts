@@ -46,3 +46,10 @@ export { createWorld, type World } from './humanoid/world';
 
 export { named, watch, type Problem, type LogEntry, type WatchFrame } from './core/dev';
 export { eyesOnBefore } from './humanoid/watch';
+
+export { Legs, type Leg as LegChain, type LegState, type LegStep, type ContactEvent } from './core/legs/legs';
+export type { LegGait } from './core/legs/gait';
+export type { Cycle as JointCycle } from './core/legs/cycle';
+export { humanLegs, humanGait } from './core/legs/data/human';
+export { horseLegs, HORSE_WALK, HORSE_TROT } from './core/legs/data/horse';
+export { SKELETON as HORSE_SKELETON } from './core/legs/data/horse-skeleton';

@@ -20,7 +20,7 @@ export class Simulation {
     model: (role: Role) => CharacterModel = (role) => createOpenPoseModel({ height: role.height }),
     dev = false,
   ) {
-    this.stage = scenario.stage();
+    this.stage = scenario.stage(dev);
     this.world = this.stage.world;
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
@@ -41,6 +41,7 @@ export class Simulation {
     this.stage.move?.(this.t + FIXED_DT);
     this.actors.forEach((h, i) => this.bodies[i].copy(h.pose));
     for (const h of this.actors) h.update(FIXED_DT);
+    this.stage.bodies?.forEach((b) => b.update(FIXED_DT));
     this.t += FIXED_DT;
   }
 
