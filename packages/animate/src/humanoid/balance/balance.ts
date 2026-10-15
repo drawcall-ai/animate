@@ -11,6 +11,8 @@ import { INDEX, SIDES } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { yawOf } from '../../core/math';
 import { defaultStance, type Stance } from '../stance';
+import { seedOf } from '../../core/random';
+import { Life } from './life';
 import { Carriage } from './carriage';
 import { checkFeet, plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
 import { Posture, type Trunk } from './posture';
@@ -63,15 +65,16 @@ const SETTLED = 0.4;
  * roll and push off; arriving it squares the feet into the stance. It reads and clears `h.asks` at
  * the start of every sub-step, and writes `h.feet` and `h.gait`. Put it first: it writes the root.
  */
-export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> } = {}): Behaviour<W> {
+export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number; life?: boolean } = {}): Behaviour<W> {
   return function* () {
     const p = h.proportions;
     const base: Stance = { ...defaultStance(p), ...options.stance };
     const c = new Carriage(p, base, h.feet);
     const posture = new Posture();
+    const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
-    const asked = { lower: [0, 0], bow: [0, 0] };
+    const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)
     const pelvis = { along: new TrackedPoint(), up: new TrackedPoint(), rotation: new TrackedRotation(), trunk: [new TrackedRotation(), new TrackedRotation()] };
     const feet: [FootPose, FootPose] = [footPose(), footPose()];
@@ -84,7 +87,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
         }
         const dt = f.dt;
         takeAsks(h.asks, asks);
-        if (asks.lean || asks.onto || asks.taken[0] || asks.taken[1]) throw new Error('balance takes no lean, onto or taken feet yet');
+        if (asks.lean || asks.taken[0] || asks.taken[1]) throw new Error('balance takes no lean or taken feet yet');
         c.stance = asks.stance ? { ...base, ...asks.stance } : base;
         if (!started) {
           started = true;
@@ -103,10 +106,17 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
         const stepped = stepFeet(f, c, xcom);
 
         // the pelvis and the trunk over the feet, lowered and bowed as asked
-        const lower = followed(asked.lower, asks.lower, LOWER, dt);
+        // Recalled staging: anticipate with up to 15 cm of squat; go deeper as the last foot lands.
+        const grounded = !c.moving && c.steps.every((st) => !st.swing || st.swing.progress > 0.7);
+        const lowerGoal = grounded ? asks.lower : Math.min(asks.lower, Math.max(0.15 * p.scale, asked.lower[1]));
+        const lower = followed(asked.lower, lowerGoal, LOWER, dt);
         c.lowered = Math.abs(lower) > LOWERED * p.scale;
         const bow = followed(asked.bow, asks.bow, BOW, dt);
-        posture.carry(f, c, lower, bow, trunk);
+        const task = Math.abs(asks.bow) + Math.abs(asks.lower) / p.height + (h.holding.left || h.holding.right ? 1 : 0);
+        const amount = options.life === false ? 0 : (1 - c.walk) / (1 + 4 * task);
+        life.update(dt, !go && !c.moving && task < 0.01 && options.life !== false, amount);
+        const twist = followed(asked.twist, asks.twist, BOW, dt);
+        posture.carry(f, c, lower, bow, trunk, twist, life, asks.onto ?? life.onto);
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = pelvis.up.follow(_a.set(0, f.prev2.position(0).y, 0), _b.set(0, f.prev.position(0).y, 0), _g.set(0, c.pelvis.y, 0), PELVIS, dt, _up);
         c.pelvis.copy(at).setY(up.y);

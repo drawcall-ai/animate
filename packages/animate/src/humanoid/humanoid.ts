@@ -15,6 +15,7 @@ import { INDEX, SIDES, type Side } from './bones';
 import { forwardOf, leftOf } from '../core/math';
 import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
+import { gazeAsks } from './look';
 import { Rig } from './rig';
 import { yawOf } from '../core/math';
 import { defaultStance, footYaw, stanceFeet } from './stance';
@@ -72,7 +73,11 @@ export class Humanoid<W = unknown> {
     this.feet = start.feet;
     this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
-    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES };
+    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES,
+      // Recalled staging: cap downward head pitch at 89°; the eyes have 30° of declination (read below).
+      down: 89 * Math.PI / 180,
+      lead: (pose, point) => gazeAsks(this, pose, point),
+    };
     if (options.wearing) dress(this, start.pose, options.wearing(p));
     // (after the behaviour each sub-step, the body carries what it wears and holds)
     const script = behaviour(this);

@@ -122,7 +122,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
             [
               [buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, AT_TABLE), ['left', 'right']],
               [hangSword(k, gear.scabbard.item), ['left']],
-              [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left'], { left: new Vector3(0.15, 0.05, 0.05) }],
+              [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left'], { left: new Vector3(0.3, 0.2, 0.1) }],
               [putOnHelmet(k, gear.helmet.item), ['left', 'right']],
               [don(k, gear.gauntlets.left.item, 'left', AT_TABLE), ['right']],
               // (the left letting go of the right gauntlet's cuff out to its own side, clear of the sword's hilt as it comes down)

@@ -40,10 +40,7 @@ describe('items on the body', () => {
     expect(com.distanceTo(segments.addScaledVector(load.current.position, 10).divideScalar(body + 10))).toBeLessThan(1e-6);
   });
 
-  // (known, for `balance`: its posture stands the segments' centre of mass over the feet, not the
-  // loaded one (balance/posture.ts `offsetOf`); only its extrapolated centre of mass, kept within the
-  // support, counts the load — here 3.9 cm off the feet's middle)
-  it.fails('stands the loaded centre of mass over its feet (known)', () => {
+  it('stands the loaded centre of mass over its feet', () => {
     const { com, feet } = loaded();
     expect(Math.abs(com.x - feet.x)).toBeLessThan(0.02);
   });

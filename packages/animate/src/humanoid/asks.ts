@@ -30,6 +30,8 @@ export interface Asks {
   lower: number;
   /** bend the trunk forward at the hips and lower back (rad) */
   bow: number;
+  /** axial chest turn from the standing facing (rad) */
+  twist: number;
   /** hold the centre of mass off the feet's middle (m, on the floor): leaning into a force */
   lean: Vector3 | null;
   /** the weight over one foot */
@@ -41,13 +43,13 @@ export interface Asks {
 }
 
 /** nothing asked */
-export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, lean: null, onto: null, taken: [false, false], stance: null });
+export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, twist: 0, lean: null, onto: null, taken: [false, false], stance: null });
 
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {
-  [into.go, into.face, into.lower, into.bow, into.lean, into.onto, into.stance] = [asks.go, asks.face, asks.lower, asks.bow, asks.lean, asks.onto, asks.stance];
+  [into.go, into.face, into.lower, into.bow, into.twist, into.lean, into.onto, into.stance] = [asks.go, asks.face, asks.lower, asks.bow, asks.twist, asks.lean, asks.onto, asks.stance];
   [into.taken[0], into.taken[1]] = asks.taken;
-  [asks.go, asks.face, asks.lower, asks.bow, asks.lean, asks.onto, asks.stance] = [null, null, 0, 0, null, null, null];
+  [asks.go, asks.face, asks.lower, asks.bow, asks.twist, asks.lean, asks.onto, asks.stance] = [null, null, 0, 0, 0, null, null, null];
   [asks.taken[0], asks.taken[1]] = [false, false];
   return into;
 }

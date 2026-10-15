@@ -41,7 +41,7 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, stand: S
 }
 
 /** where the scabbard's throat hangs on the belt: before the left hip, the hilt up and forward, the scabbard down and back 35° and its chape out 13° (clear of the thigh swinging back and of the arm hanging beside it) */
-const HANGING = at(0.165, 0.03, 0.12, turn(0.6, 0, 0.22));
+const HANGING = at(0.165, 0.03, 0.1, turn(0.6, 0, 0.22));
 
 /** The sword, in its scabbard, taken by the throat (left hand) where it leans (facing the way it leans), hung on the belt at the left hip, worn there. */
 export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {

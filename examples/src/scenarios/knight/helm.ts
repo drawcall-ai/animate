@@ -23,7 +23,7 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
   const down = onBone(k.h, INDEX.hips, at(0, 0.15, 1.6), { facing: true });
   return function* () {
     // (its grips are toward its front, away from him: he stands back from them)
-    yield* take(k, { left: [helmet, 'left'], right: [helmet, 'right'] }, { stand: { ahead: 0.9 } })();
+    yield* take(k, { left: [helmet, 'left'], right: [helmet, 'right'] }, { stand: { ahead: 0.95 } })();
     yield* eyesOn(k, () => helmet.current.position, along(k, level, [[helmet, grips, [[1.0, at(0, 0.14, 0.3, new Quaternion())], [0.4, still]]]]), { first: false })();
     yield* along(k, level, [[helmet, grips, [[0.7, at(0, 0.42, 0.26)], [0.6, at(0, 0.4, 0.02)]]]])();
     yield* parallel<F>('race', along(k, head, [[helmet, grips, [[1.2, HELMED]]]]), lookAt(k.h.gazer, reported(k.report, 'gaze', (f) => down(f).position)));

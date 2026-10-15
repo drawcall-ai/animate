@@ -5,8 +5,10 @@ import { gazeOff, lookAt, SHIFT } from '../core/gaze';
 import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
+import { INDEX, SIDES } from './bones';
 import type { Humanoid } from './humanoid';
-import { forwardOf, lerp, smoothstep } from '../core/math';
+import type { ReadonlyPose } from '../core/pose';
+import { clamp, forwardOf, lerp, smoothstep, wrapAngle } from '../core/math';
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
 const HEAD_SHARE = 0.55;
@@ -32,7 +34,14 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
     yield* lookAt<W>(h.gazer, (f) => {
         const g = h.gait;
         // (glances only standing still: walking, the eyes are on the way)
-        if (g.walk > 0.05) next = Math.max(next, f.time + GLANCES.every[0]);
+        const working = h.holding.left || h.holding.right || SIDES.some((side) => {
+          const hand = INDEX[`${side}Hand`];
+          return f.prev.position(hand).distanceTo(f.prev2.position(hand)) > 0.05 * f.dt;
+        });
+        if (g.walk > 0.05 || working) {
+          next = Math.max(next, f.time + GLANCES.every[0]);
+          until = 0;
+        }
         if (f.time >= next) {
           until = f.time + lerp(GLANCES.hold[0], GLANCES.hold[1], rand());
           next = until + lerp(GLANCES.every[0], GLANCES.every[1], rand());
@@ -63,24 +72,6 @@ const _v = new Vector3();
  */
 export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour<W> {
   const { bow = 0, first = true } = options;
-  const bowing = (f: Frame<W>) => {
-    // (as the hips stand: how far ahead of them and below the eyes the point is; then the bow under
-    // which the head, pitched as far as the neck takes it on top of the bow, comes nearest to it —
-    // bowing too far puts the eyes past a point close to the body)
-    const p = h.proportions;
-    const hips = f.prev.position(0);
-    const ahead = _to.subVectors(live(at, f), hips).dot(forwardOf(h.gait.facing, _eyes));
-    const height = live(at, f).y - hips.y;
-    const above = p.eyeHeight - p.hipHeight;
-    let best = 0;
-    let least = Infinity;
-    for (let b = 0; b <= MOST_BOW + 1e-9; b += MOST_BOW / 7) {
-      const pitch = Math.atan2(above * Math.cos(b) - height, ahead - EYES_AHEAD * p.scale - above * Math.sin(b));
-      const off = Math.abs(pitch - Math.min(pitch, NECK_PITCH + b));
-      if (off < least - 1e-3) [least, best] = [off, b];
-    }
-    h.asks.bow = Math.max(h.asks.bow, bow, best);
-  };
   return function* () {
     let lead = options.lead ?? NaN;
     yield* parallel<Frame<W>>(
@@ -97,7 +88,7 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
         yield* task();
       },
       lookAt(h.gazer, at, SHIFT),
-      action<Frame<W>>({ update: bowing }),
+      action<Frame<W>>({ update: () => { h.asks.bow = Math.max(h.asks.bow, bow); } }),
     );
   };
 }
@@ -106,9 +97,31 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
 const ARRIVED = (10 * Math.PI) / 180;
 const LONGEST = 1.2;
 const LEAD = [0.1, 0.3];
-/** looking down: how far the head pitches on the neck (rad, ~57°: the neck's flexion short of its end), and how far the body bows to see lower at most (rad) */
-const NECK_PITCH = 1.0;
-const MOST_BOW = 0.35;
+/** Recalled comfort choices: 55° of cervical flexion plus the read 30° eye declination; at most 35° of postural bow. */
+const NECK_PITCH = 85 * Math.PI / 180;
+const MOST_BOW = 0.6;
+
+/** Postural requests shared by idle gaze and explicit lookAt, without writing the trunk. */
+export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>) {
+  const hips = pose.position(0);
+  const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.gait.facing);
+  // Read profile: ~75° cervical rotation; eyes take a little more, then the trunk joins.
+  if (Math.abs(bearing) > 1.45) h.asks.twist = clamp(bearing - Math.sign(bearing) * 1.45, -0.6, 0.6);
+  const p = h.proportions;
+  const ahead = _to.subVectors(point, hips).dot(forwardOf(h.gait.facing, _eyes));
+  const height = point.y - hips.y;
+  const above = p.eyeHeight - p.hipHeight;
+  let best = 0;
+  let least = Infinity;
+  // Choose a bow from standing geometry: reacting to the current head position chases its own bow.
+  for (let b = 0; b <= MOST_BOW + 1e-9; b += MOST_BOW / 12) {
+    const pitch = Math.atan2(above * Math.cos(b) - height, ahead - EYES_AHEAD * p.scale - above * Math.sin(b));
+    const off = Math.max(0, pitch - Math.min(NECK_PITCH + b, 119 * Math.PI / 180));
+    if (off < least - 1e-3) [least, best] = [off, b];
+  }
+  h.asks.bow = Math.max(h.asks.bow, best);
+}
+
 /** how far ahead of the hips the eyes are standing (m, default body) */
 const EYES_AHEAD = 0.09;
 const _eyes = new Vector3();

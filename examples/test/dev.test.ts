@@ -9,7 +9,7 @@ for (const sc of SCENARIOS) {
   });
 }
 
-for (const sc of SCENARIOS.filter((sc) => sc.id === 'reach' || sc.id === 'knight-arming')) {
+for (const sc of SCENARIOS.filter((sc) => ['reach', 'knight-arming', 'pickup-shelf'].includes(sc.id))) {
   it.each([1, 2, 3, 4])(`${sc.id}: variation #%s final-pose dev checks`, (seed) => {
     expect(run(vary(sc, seed))).toEqual([]);
   });

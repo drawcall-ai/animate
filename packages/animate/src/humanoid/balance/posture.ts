@@ -3,7 +3,8 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
-import { INDEX, SIDES } from '../bones';
+import type { Life } from './life';
+import { INDEX, SIDES, type Side } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, softplus, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
@@ -63,9 +64,10 @@ export class Posture {
   phase = 0;
   /** a runner's leg compression through stance (0 … 1) */
   private comp = 0;
+  private readonly weight = new Vector3();
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Frame<unknown>, c: Carriage, lower: number, bow: number, out: Trunk) {
+  carry(f: Frame<unknown>, c: Carriage, lower: number, bow: number, out: Trunk, twist = 0, life?: Life, onto: Side | null = null) {
     const { p } = c;
     const H = p.height;
     const dt = f.dt;
@@ -106,11 +108,22 @@ export class Posture {
     const offset = offsetOf(f.prev, p, _o);
     const pelvis = c.pelvis.copy(c.root).add(offset).addScaledVector(left, side).addScaledVector(fwd, shift);
     quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
+    if (life) {
+      pelvis.addScaledVector(left, life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
+    }
+    const weight = _v.set(0, 0, 0);
+    if (onto && !c.moving) {
+      weight.addVectors(c.feet[0].position, c.feet[1].position).multiplyScalar(0.5);
+      weight.subVectors(c.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(0.65);
+    }
+    this.weight.lerp(weight, 1 - Math.exp(-dt));
+    pelvis.add(this.weight);
     const standing = p.hipHeight - c.stance.crouch - lower + lift;
     pelvis.y = softMin(standing, reachLimit(c, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower)), 0.015);
 
     // the trunk: the thorax counter-rotating and rolling, leaning, nodding and bowing
-    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow, thoraxRoll, out.chest);
+    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + (life?.breath ?? 0), thoraxRoll, out.chest);
+    out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     out.thoraxYaw = thoraxYaw;
   }
 
@@ -123,7 +136,7 @@ export class Posture {
   }
 }
 
-/** of a bow, the share the hips take (the pelvis tipping forward), let down `lower` by the knees: squatting, the pelvis tips back under, half of it going to the lower back */
+/** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
 const hingeOf = (p: Proportions, lower: number) => HINGE * (1 - 0.5 * smoothstep(0, SQUAT * p.height, lower));
 
 /**
@@ -132,10 +145,10 @@ const hingeOf = (p: Proportions, lower: number) => HINGE * (1 - 0.5 * smoothstep
  * ends; past the squat, the trunk bows further (738b439:procedures/bow.ts, `lowering`). What to ask
  * `balance`: `lower` (m) and `bow` (rad).
  */
-export function lowering(p: Proportions, drop: number): { lower: number; bow: number } {
+export function lowering(p: Proportions, drop: number, deep = 0): { lower: number; bow: number } {
   const H = p.height;
   const first = softMin(drop, FIRST_BOW * H, BEND * H);
-  const lower = softMin(softplus(drop - first - BEND * H, BEND * H), SQUAT * H, BEND * H);
+  const lower = softMin(softplus(drop - first - BEND * H, BEND * H), (SQUAT + deep) * H, BEND * H);
   // (the bow that brings the shoulders down the rest, as far as a trunk bows)
   let [lo, hi] = [0, MOST_BOW];
   for (let i = 0; i < 20; i++) {
@@ -174,13 +187,38 @@ function offsetOf(pose: ReadonlyPose, p: Proportions, out: Vector3): Vector3 {
   out.set(0, 0, 0);
   let mass = 0;
   pose.skeleton.bones.forEach((b, i) => {
-    if (b.mass === 0) return;
     const along = LEGS.get(i);
-    const at = along === undefined ? pose.point(i, b.com, _v) : _v.lerpVectors(pose.position(along.hip), pose.position(along.ankle), along.share(p));
+    const actual = pose.point(i, b.com, _v);
+    const at = along === undefined ? actual : _projected.lerpVectors(pose.position(along.hip), pose.position(along.ankle), along.share(p));
+    const load = pose.load(i);
+    if (load.mass > 0) {
+      // Leg armour follows the same straight-leg projection as its segment; knee flexion must
+      // not feed itself back through the pelvis's centring goal.
+      const loaded = pose.point(i, load.at, _load).sub(actual).add(at);
+      out.addScaledVector(loaded.sub(hips), load.mass);
+      mass += load.mass;
+    }
+    if (b.mass === 0) return;
     out.addScaledVector(at.sub(hips), b.mass);
     mass += b.mass;
   });
   return out.divideScalar(-mass).setY(0);
+}
+
+/** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
+function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>): number {
+  const hips = pose.position(0);
+  let moment = 0;
+  let mass = 0;
+  pose.skeleton.bones.forEach((bone, i) => {
+    const load = pose.load(i);
+    mass += bone.mass + load.mass;
+    if (!load.mass || (i !== INDEX.leftHand && i !== INDEX.rightHand)) return;
+    const at = pose.point(i, load.at, _v).sub(hips);
+    moment += load.mass * (at.x * forward.x + at.z * forward.z);
+  });
+  // Geometry, not an empirical timing law: a modest opposing angle about a trunk-length lever.
+  return clamp(Math.atan2(moment, mass * (p.eyeHeight - p.hipHeight)), -0.12, 0.12);
 }
 
 /** each leg segment's centre of mass on its hip–ankle line: as a share of the way (Dempster: thigh 0.433, shank 0.433 of theirs; the foot at the ankle) */
@@ -239,9 +277,13 @@ function highest(hip: Readonly<Vector3>, ankle: Vector3, reach: number): number 
   return ankle.y + Math.sqrt(Math.max(1e-4, h2));
 }
 
+const UP = new Vector3(0, 1, 0);
+const _twist = new Quaternion();
 const _f = new Vector3();
 const _l = new Vector3();
 const _v = new Vector3();
 const _o = new Vector3();
+const _projected = new Vector3();
+const _load = new Vector3();
 const _hip = new Vector3();
 const _ankle = new Vector3();

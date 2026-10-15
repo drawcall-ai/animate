@@ -83,7 +83,7 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
         // (the eyes on to the board as the box comes up past the knees)
         const board = new Vector3(SHELF.x, top, SHELF.z);
         const up = () => box.current.position.y > KNEES;
-        yield* parallel<Frame<World>>('all', carry(h, WORLD, [[box, grips, lifted(h, lift)]]), function* () {
+        yield* parallel<Frame<World>>('all', carry(h, WORLD, [[box, grips, lifted(h, lift)]], { scale: 1 }), function* () {
           yield* when(up);
           gaze.on = board;
         });
@@ -136,7 +136,7 @@ function shelve(h: Humanoid<World>, box: Item, grips: Grips, size: Vector3, top:
       walkTo(h, { to: stand, face: 0 }),
       function* () {
         yield* hold(h, box, grips, { to: carried, until: () => h.gait.eta === Infinity || arrived() })();
-        yield* carry(h, WORLD, [[box, grips, up]])();
+        yield* carry(h, WORLD, [[box, grips, up]], { scale: 1 })();
       },
     );
   };

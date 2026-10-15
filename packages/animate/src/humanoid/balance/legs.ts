@@ -200,13 +200,14 @@ export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootP
   // (the foot's heading by its sideways axis, which its pitch leaves level: a foot rolled up onto its toes points nearly down)
   const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
   const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
-  // Preserve knee twist through lift-off and ankle-limit crossings; re-splitting it jumps the shin.
+  // Keep loaded tibial twist while the foot is planted; relax it off the floor, where it cannot flip the contact solve.
   // (never pulled quite straight: a straight knee bends either way on the slightest wobble)
   const ankle = withinReach(hip, _a.copy(pose.ankle), STRAIGHT * c.p.legLength);
   const knee = INDEX[`${side}LowerLeg`];
   const limit = f.prev.skeleton.limits[knee];
   // The distal segment points down, opposite the knee limit's +y twist axis.
-  const twist = limit ? -coordinatesOf(f.prev.local(knee), limit).value[2] * Math.exp(-f.dt / TWIST_RELEASE) : 0;
+  const release = c.steps[side === 'left' ? 0 : 1].swing ? Math.exp(-f.dt / TWIST_RELEASE) : 1;
+  const twist = limit ? -coordinatesOf(f.prev.local(knee), limit).value[2] * release : 0;
   solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole, twist });
   const foot = INDEX[`${side}Foot`];
   const toes = INDEX[`${side}Toes`];

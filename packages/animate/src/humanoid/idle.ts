@@ -10,10 +10,11 @@ import type { Stance } from './stance';
 /**
  * The humanoid's base, endless, root to tip: `balance` (root, legs, trunk), `hangArms`,
  * `lookAround`. Run the tasks after it, in parallel: what a task writes wins, and what it lets go
- * of these take back on from where it is.
+ * of these take back on from where it is. Standing life is enabled by default; `life: false`
+ * disables sway, breathing and spontaneous weight shifts. `seed` fixes their variation.
  */
-export function idle<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour<W> {
+export function idle<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number; life?: boolean } = {}): Behaviour<W> {
   return function* () {
-    yield* parallel<Frame<W>>('all', balance(h, { stance: options.stance }), hangArms(h), lookAround(h, { seed: options.seed }));
+    yield* parallel<Frame<W>>('all', balance(h, options), hangArms(h), lookAround(h, { seed: options.seed }));
   };
 }
