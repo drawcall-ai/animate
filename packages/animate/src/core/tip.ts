@@ -38,6 +38,7 @@ export class ChainTip {
   private readonly moved = { before: new Vector3(), last: new Vector3(), placed: new Vector3(), time: NaN };
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
+  private on?: Carrier;
 
   constructor(readonly chain: string) {}
 
@@ -49,7 +50,8 @@ export class ChainTip {
     const { on, accel, speed, turnAccel, turnSpeed } = options;
     // Resume the intended path unless another layer changed the last applied pose.
     const { moved } = this;
-    const own = Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
+    const own = this.on === on && Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
+    this.on = on;
     const prev2 = own ? moved.before : f.prev2.position(tip);
     const prev = own ? moved.last : f.prev.position(tip);
     const position = follow(prev2, prev, target.position, { accel, speed, velocity: target.velocity, on }, f.dt, _position);

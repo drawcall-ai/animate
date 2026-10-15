@@ -1,17 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
-import type { Motion as RootMotion, Placement, Target } from '../goal';
+import type { Motion, Placement, Target } from '../goal';
 import type { ReadonlyPose } from '../pose';
 import type { JointCycle } from './cycle';
 import { checkGait, offsetAt, strideAt, speedOf, type LegGait } from './gait';
 import { rootPlan } from './root';
-import { Limb, type Motion } from './limb';
+import { HORIZON, Limb, type Walker } from './limb';
 import { yawOf } from '../math';
-
-/** Terminal pitch keys `[stance fraction, degrees]`, minimum-jerk between keys, without wrapping. */
-export interface Rocker {
-  keys: readonly (readonly [number, number])[];
-}
 
 /** A connected chain with joint coordinates (ordered y, z, −x rotations) and foot geometry. Ranges come from the pose's skeleton. */
 export interface LegChain {
@@ -23,7 +18,7 @@ export interface LegChain {
   /** Lateral foothold offset in the root frame (m). Omitted: rest offset. */
   width?: number;
   /** Terminal pitch through stance, degrees, positive toes up. */
-  rocker: Rocker;
+  rocker: readonly (readonly [number, number])[];
 }
 
 export interface LegState {
@@ -35,7 +30,7 @@ export interface LegState {
 }
 
 /** Engine scheduling state; public legs expose only phase, contact and foothold. */
-export interface LegTiming extends LegState {
+interface LegTiming extends LegState {
   footfall: number;
   lift: number;
 }
@@ -66,12 +61,12 @@ export class Legs {
   private readonly limbs: Limb[];
 
   constructor(pose: ReadonlyPose, private readonly chains: readonly LegChain[], private gait: LegGait) {
+    if (!chains.length) throw new Error('legs needs at least one chain');
     this.standingHeight = pose.position(0).y;
     checkGait(gait, chains.length);
     const bones = chains.flatMap((leg) => [...leg.joints.map((j) => j.bone), ...(leg.toes ? [leg.toes.bone] : [])]);
     if (new Set(bones).size !== bones.length) throw new Error('leg chains must not share bones');
     this.limbs = chains.map((leg) => new Limb(leg, pose));
-    if (!chains.length) throw new Error('legs needs at least one chain');
     this.states = this.limbs.map((limb, i) => ({ planted: true, phase: 0, foothold: limb.standing(pose), footfall: before(offsetAt(gait, 0, i), 0), lift: 0 }));
     this.legs = this.states;
   }
@@ -82,7 +77,7 @@ export class Legs {
    * Motion values belong to the caller; this controller has no species-specific gains.
    * Goals outside the forward cone brake and wait until they move ahead. Throws only if no supported forecast exists.
    */
-  toward(f: Frame, goal: Pick<Target, 'position' | 'velocity'>, motion: RootMotion): void {
+  toward(f: Frame, goal: Pick<Target, 'position' | 'velocity'>, motion: Motion): void {
     if (!(motion.accel > 0 && Number.isFinite(motion.accel)) || (motion.speed !== undefined && !(motion.speed >= 0 && Number.isFinite(motion.speed)))) throw new Error('root motion needs finite positive acceleration and nonnegative speed');
     if (![goal.position.x, goal.position.y, goal.position.z, ...(goal.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error('root goal must be finite');
     if ([motion.turnAccel, motion.turnSpeed].some((value) => value !== undefined && !(value >= 0 && Number.isFinite(value)))) throw new Error('root turn motion must be finite and nonnegative');
@@ -100,10 +95,11 @@ export class Legs {
       return this.states.every((state, i) => {
         const walker = walkers[i];
         const left = (state.footfall - walker.phase) / walker.stride.frequency;
-        return state.planted || left > 0.1 || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold);
+        return state.planted || left > HORIZON || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold);
       });
     };
-    // Search the nearest supported height, then shorten travel if height alone cannot support it.
+    // Tuned bounded search: ±12 cm in 2 mm increments; 24 geometric travel
+    // reductions cover shares down to ~0.0013. Every candidate meets the same support checks.
     let found = false;
     for (let retry = 0; retry < 24 && !found; retry++) {
       for (let k = 0; k <= 60 && !found; k++) {
@@ -193,7 +189,7 @@ export class Legs {
 
   private motion(f: Frame, step: LegStep) {
     const gait = step.gait ?? this.gait;
-    checkGait(gait, this.chains.length);
+    if (gait !== this.gait) checkGait(gait, this.chains.length);
     const input = step.speed;
     const speedAt = (t: number) => speedOf(typeof input === 'number' ? input : input(t));
     const speed = speedAt(f.time);
@@ -208,7 +204,7 @@ export class Legs {
       }
       return phases.findIndex((value) => value >= cycles - 1e-9) * STEP;
     };
-    const walkers: Motion[] = strides.map((stride) => ({
+    const walkers: Walker[] = strides.map((stride) => ({
       phase, stride,
       rootAt: (ahead, position, turn) => {
         const root = step.root(f.time + seconds(ahead * stride.frequency));
@@ -219,7 +215,7 @@ export class Legs {
     return { speed, walkers, gait };
   }
 
-  private landing(walker: Motion, state: LegTiming, next: number, i: number) {
+  private landing(walker: Walker, state: LegTiming, next: number, i: number) {
     const { frequency, duty, stepping } = walker.stride;
     const limb = this.limbs[i];
     const position = new Vector3();

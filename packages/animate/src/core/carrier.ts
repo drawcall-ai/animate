@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { STEP } from './body';
 import type { Frame } from './body';
 import type { Placement, Target } from './goal';
-import { log } from './rotation';
+import { spinOf } from './rotation';
 import type { Wearer } from './worn';
 
 /**
@@ -42,7 +42,7 @@ export class Carrier {
   }
 
   spin(out: Vector3): Vector3 {
-    return log(_q.copy(this.prev.quaternion).invert().premultiply(this.current.quaternion), out).divideScalar(STEP);
+    return spinOf(this.prev.quaternion, this.current.quaternion, STEP, out);
   }
 
   /** `local` (in its frame) in the world as it is now, into `out`: moving with it (v + ω × r) */
@@ -105,11 +105,5 @@ function copy(to: Required<Placement>, from: Required<Placement>) {
   to.quaternion.copy(from.quaternion);
 }
 
-const _q = new Quaternion();
 const _r = new Vector3();
 const _v = new Vector3();
-
-/** Shared motion scale for load (kg), a design choice; a bimanual item counts once. */
-export function loadFactor(mass: number): number {
-  return Math.sqrt(1 + mass / 10);
-}

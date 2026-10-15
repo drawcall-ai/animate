@@ -1,7 +1,8 @@
+import { HORSE_TROT } from '../../packages/animate/src/horse/legs';
 import { expect, it } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, HORSE_TROT, HORSE_WALK, Humanoid, Legs, Pose, beyond, horseLegs, humanGait, humanLegs, type Frame, type LegGait, type LegStep } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, HORSE_WALK, Humanoid, Legs, Pose, beyond, horseLegs, humanGait, humanLegs, type Frame, type LegGait, type LegStep } from '@drawcall/animate';
 import { createOpenPoseModel } from '../src/openpose';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';

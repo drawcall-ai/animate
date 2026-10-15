@@ -5,12 +5,17 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
 import type { Pose, ReadonlyPose } from '../pose';
 import { angleAt, cycleAt, DEG, type JointCycle } from './cycle';
-import type { LegChain, LegTiming } from './legs';
+import type { LegChain, LegState } from './legs';
 import { boundSwing, quintic, type Swing } from './swing';
 import type { Stride } from './gait';
 import { Solver, type Target } from './solve';
 
-export interface Motion {
+type Timing = LegState & { footfall: number; lift: number };
+
+/** Tuned forecast horizon: verify the next 100 ms before committing support. */
+export const HORIZON = 0.1;
+
+export interface Walker {
   phase: number;
   stride: Stride;
   rootAt(ahead: number, position: Vector3, turn: Quaternion): void;
@@ -75,15 +80,16 @@ export class Limb {
   }
 
   /** Reach must outlast the next few ticks, before extension makes the stance singular. */
-  supports(p: Pose, state: LegTiming, walker: Motion): boolean {
+  supports(p: Pose, state: Timing, walker: Walker): boolean {
     const { duty, frequency, stepping } = walker.stride;
-    this.refs(walker.phase - state.footfall, duty, stepping, walker.stride.referenceBlend);
-    const targets = [0, 0.1].map((ahead): [number, number] => [ahead, this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping)]);
+    this.refs(walker.phase - state.footfall, walker.stride);
+    const targets = [0, HORIZON].map((ahead): [number, number] => [ahead, this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping)]);
+    // Existing stance reserve: 10 µm; a new committed landing uses the tighter 1 µm stop.
     return this.reserve(p, walker, state.foothold, targets, 1e-5);
   }
 
   /** Shorten a proposed step until its landing is reachable, before committing the foothold. */
-  foothold(p: Pose, walker: Motion, ahead: number, contact: LegTiming['foothold']): void {
+  foothold(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): void {
     const standing = this.standingAt(walker, ahead, contact.position.y);
     const desired = contact.position.clone();
     const reaches = (t: number) => {
@@ -103,22 +109,22 @@ export class Limb {
     contact.position.lerpVectors(standing, desired, lo);
   }
 
-  standingAt(walker: Motion, ahead: number, height: number): Vector3 {
+  standingAt(walker: Walker, ahead: number, height: number): Vector3 {
     walker.rootAt(ahead, _root, _rootTurn);
     return this.anchor.clone().applyQuaternion(_rootTurn).add(_root).setY(height);
   }
 
   /** The same reserve used by preflight and the foothold search. */
-  landingSupported(p: Pose, walker: Motion, ahead: number, contact: LegTiming['foothold']): boolean {
-    this.refs(0, walker.stride.duty, walker.stride.stepping, walker.stride.referenceBlend);
-    const targets = [ahead, ahead + 0.1].flatMap((time): [number, number][] => [
+  landingSupported(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): boolean {
+    this.refs(0, walker.stride);
+    const targets = [ahead, ahead + HORIZON].flatMap((time): [number, number][] => [
       [time, 0], [time, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)],
     ]);
     return this.reserve(p, walker, contact, targets, 1e-6);
   }
 
   /** Identical bases and pitches have identical reserve solves; stationary forecasts repeat them. */
-  private reserve(p: Pose, walker: Motion, contact: LegTiming['foothold'], targets: readonly (readonly [number, number])[], limit: number): boolean {
+  private reserve(p: Pose, walker: Walker, contact: Timing['foothold'], targets: readonly (readonly [number, number])[], limit: number): boolean {
     const top = new Vector3();
     const turn = new Quaternion();
     let lastPitch = NaN;
@@ -140,7 +146,7 @@ export class Limb {
   }
 
   /** the leg posed for `state` at the walker's phase, its swing clearing the ground by `clearance` (m) */
-  pose(f: Frame<unknown>, walker: Motion, state: LegTiming, clearance: number) {
+  pose(f: Frame<unknown>, walker: Walker, state: Timing, clearance: number) {
     const { leg, solver } = this;
     const { duty, stepping } = walker.stride;
     const p = f.current;
@@ -149,7 +155,7 @@ export class Limb {
     if (!state.planted) return this.swung(f, walker, state, clearance);
     this.swing = null;
     const u = walker.phase - state.footfall;
-    this.refs(u, duty, stepping, walker.stride.referenceBlend);
+    this.refs(u, walker.stride);
     const pitch = this.pitch(Math.min(1, u / duty), stepping);
     const target = this.planted(state.foothold, pitch, _target);
     this.held = { position: target.position.clone(), rotation: target.rotation.clone() };
@@ -158,19 +164,20 @@ export class Limb {
   }
 
   /** each joint's reference: its cycle at leg phase `u`, the rest at standing */
-  private refs(u: number, duty: number, stepping: number, blend = 0) {
+  private refs(u: number, stride: Stride) {
+    const { duty, stepping, referenceBlend: blend = 0 } = stride;
     for (let j = 0; j < this.solver.n; j++) {
       const c = this.cycles[j];
-      this.setRef(j, (c ? angleAt(c, u, duty, blend) * stepping : 0) + this.rest[j] * (1 - stepping), blend);
+      this.setRef(j, (c ? angleAt(c, u, duty, blend) * stepping : 0) + this.rest[j] * (1 - stepping), stride);
     }
   }
 
-  private setRef(j: number, value: number, blend = 0) {
+  private setRef(j: number, value: number, { referenceBlend: blend = 0 }: Stride) {
     this.solver.setRef(j, value, 1 + ((this.cycles[j]?.alternateWeight ?? 1) - 1) * blend);
   }
 
   /** the swing this tick: its plan stepped toward the landing as now seen, its shape over it, the ground kept */
-  private swung(f: Frame<unknown>, walker: Motion, state: LegTiming, clearance: number) {
+  private swung(f: Frame<unknown>, walker: Walker, state: Timing, clearance: number) {
     const { leg, solver } = this;
     const { frequency } = walker.stride;
     const p = f.current;
@@ -183,7 +190,7 @@ export class Limb {
     for (let j = 0; j < solver.n; j++) boundSwing(swing, j, left + f.dt, solver.lo[j], solver.hi[j]);
     for (let j = 0; j < solver.n; j++) [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], swing.land[j], left + f.dt, f.dt);
     this.lifting = false;
-    for (let j = 0; j < solver.n; j++) this.setRef(j, swing.x[j] + this.shape(j, s, walker.stride.referenceBlend), walker.stride.referenceBlend);
+    for (let j = 0; j < solver.n; j++) this.setRef(j, swing.x[j] + this.shape(j, s, walker.stride), walker.stride);
     _swingTarget.above = this.aboveAt(s);
     // C² at both contacts, with the full sole clearance at mid-swing.
     _swingTarget.floor = clearance * 64 * s ** 3 * (1 - s) ** 3;
@@ -206,7 +213,7 @@ export class Limb {
   }
 
   /** the swing setting off from how the joints have gone these three ticks */
-  private lifted(p: Pose, walker: Motion): Swing {
+  private lifted(p: Pose, walker: Walker): Swing {
     const { q, q1 } = this.solver;
     const dt = STEP;
     const stepping = walker.stride.stepping;
@@ -225,7 +232,7 @@ export class Limb {
    * chord between its ends (the knee's bump, the carpus's fold), eased in and out (16 s²(1 − s)²:
    * none of it at either end, nor its rate or acceleration, the plan's own there)
    */
-  private shape(j: number, s: number, blend = 0): number {
+  private shape(j: number, s: number, { referenceBlend: blend = 0 }: Stride): number {
     const c = this.cycles[j];
     const swing = this.swing;
     if (!c || !swing) return 0;
@@ -236,18 +243,18 @@ export class Limb {
   }
 
   /** the landing solved ahead: the joints that stand on the contact `left` s from now, the root where it is planned then (from the last tick's) */
-  private landing(p: Pose, walker: Motion, state: LegTiming, left: number) {
+  private landing(p: Pose, walker: Walker, state: Timing, left: number) {
     const swing = this.swing;
     if (!swing) throw new Error('a landing without a swing');
-    const { duty, stepping } = walker.stride;
-    this.refs(0, duty, stepping, walker.stride.referenceBlend);
+    const { stepping } = walker.stride;
+    this.refs(0, walker.stride);
     this.baseAt(p, walker, left, _turn, _top);
     const target = this.planted(state.foothold, this.pitch(0, stepping), _target);
     this.solver.reach(_turn, _top, target, swing.land);
   }
 
   /** the top joint's parent's turn and the top joint's position `ahead` s from now: off the root as now, the root where it is planned then */
-  private baseAt(p: Pose, walker: Motion, ahead: number, turn: Quaternion, top: Vector3) {
+  private baseAt(p: Pose, walker: Walker, ahead: number, turn: Quaternion, top: Vector3) {
     const parent = p.skeleton.bones[this.top].parent;
     walker.rootAt(ahead, _root, _rootTurn);
     const inverse = _a.copy(p.rotation(0)).invert();
@@ -257,7 +264,7 @@ export class Limb {
 
   /** the rocker's pitch of the terminal `us` (0 … 1) through its stance (rad, + toes up), as far as it steps: minimum-jerk between its keys (a spline's overshoot would lift a flat hoof's toe) */
   private pitch(us: number, stepping: number): number {
-    const keys = this.leg.rocker.keys;
+    const keys = this.leg.rocker;
     let k = 0;
     while (k < keys.length - 2 && us >= keys[k + 1][0]) k++;
     const [[u0, a], [u1, b]] = [keys[k], keys[k + 1]];

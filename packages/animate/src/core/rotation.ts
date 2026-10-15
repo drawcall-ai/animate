@@ -33,8 +33,7 @@ export function checkSnaps(f: Frame, dev: Dev): void {
   const history = dev.velocities;
   f.prev.skeleton.bones.forEach((bone, i) => {
     if (!bone.snap) return;
-    const d = _q.copy(f.prev2.local(i)).invert().multiply(f.prev.local(i));
-    const omega = log(d, new Vector3()).divideScalar(f.dt);
+    const omega = spinOf(f.prev2.local(i), f.prev.local(i), f.dt, new Vector3());
     const speed = omega.length() * 180 / Math.PI;
     if (speed > bone.snap.speed) dev.append(f.time, { check: 'joint speed (°/s)', value: speed, limit: bone.snap.speed, where: bone.name });
     const before = history[i];
@@ -46,4 +45,3 @@ export function checkSnaps(f: Frame, dev: Dev): void {
     history[i] = omega;
   });
 }
-const _q = new Quaternion();

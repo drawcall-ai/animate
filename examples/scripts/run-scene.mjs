@@ -17,19 +17,8 @@ if (!id || positionals.length !== 1 || !Number.isInteger(count) || count < 0) {
   throw new Error('usage: pnpm run-scene <id> [--vary N] [--json]');
 }
 const root = fileURLToPath(new URL('..', import.meta.url));
-const tracer = fileURLToPath(new URL('./beats.ts', import.meta.url));
-const labels = {
-  name: 'labels',
-  enforce: 'pre',
-  resolveId(source, importer) {
-    if (source === '@drawcall/animate' && importer !== tracer && importer?.includes('/src/scenarios/')) {
-      return tracer;
-    }
-  },
-};
 const server = await createServer({
   root,
-  plugins: [labels],
   logLevel: 'error',
   server: { middlewareMode: true, hmr: false, ws: false },
   appType: 'custom',

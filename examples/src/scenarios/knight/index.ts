@@ -121,11 +121,11 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
             [
               [buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, atTable), ['left', 'right']],
               [hangSword(k, gear.scabbard.item), ['left']],
-              [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left'], { left: new Vector3(0.3, 0.2, 0.1) }],
+              [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left'], { left: new Vector3(0.35, -0.15, 0.25) }],
               [putOnHelmet(k, gear.helmet.item), ['left', 'right']],
               [don(k, gear.gauntlets.left.item, 'left', atTable), ['right']],
-              // (the left letting go of the right gauntlet's cuff out to its own side, clear of the sword's hilt as it comes down)
-              [don(k, gear.gauntlets.right.item, 'right', atTable), ['left'], { left: new Vector3(0.15, 0.05, 0.05) }],
+              // Release below and ahead of the sword hilt before the free arm joins the walk.
+              [don(k, gear.gauntlets.right.item, 'right', atTable), ['left'], { left: new Vector3(0.25, -0.1, 0.25) }],
             ],
             arms,
           )();

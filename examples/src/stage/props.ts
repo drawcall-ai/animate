@@ -1,4 +1,5 @@
-import { BoxGeometry, CylinderGeometry, EdgesGeometry, Group, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, SphereGeometry, type BufferGeometry, type Quaternion, type Vector3 } from 'three';
+import type { ReadonlyPose } from '@drawcall/animate';
+import { BoxGeometry, CylinderGeometry, EdgesGeometry, Group, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, SphereGeometry, type BufferGeometry, Quaternion, Vector3 } from 'three';
 import type { Prop } from '../scenario';
 
 const edgeMat = new LineBasicMaterial({ color: 0x6b6b75 });
@@ -32,3 +33,13 @@ export function drawProps(group: Group, props: Prop[]) {
     }
   }
 }
+
+export function line(a: Vector3, b: Vector3, radius: number, color: number): Prop {
+  const delta = b.clone().sub(a);
+  return { kind: 'cylinder', position: a.clone().lerp(b, 0.5), radius, length: delta.length(), quaternion: new Quaternion().setFromUnitVectors(UP, delta.normalize()), color };
+}
+
+export function skeletonProps(pose: ReadonlyPose): Prop[] {
+  return pose.skeleton.bones.flatMap((bone, i) => bone.parent < 0 ? [] : [line(pose.position(bone.parent), pose.position(i), 0.035, 0xdba66b)]);
+}
+const UP = new Vector3(0, 1, 0);

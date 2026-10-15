@@ -1,4 +1,4 @@
-import { yawOf } from '@drawcall/animate';
+import { Humanoid, yawOf, type Body, type World } from '@drawcall/animate';
 import { Bone, Quaternion, Vector3, type Object3D } from 'three';
 import type { Prop } from './scenario';
 import type { Simulation } from './simulation';
@@ -100,30 +100,28 @@ export class Playback {
     this.prevRoot.copy(this.root());
   }
 
+  private subject(): Humanoid<World> | Body {
+    const body = this.sim.actors[0] ?? this.sim.stage.bodies?.[0];
+    if (!body) throw new Error('playback needs a humanoid or an articulated body');
+    return body;
+  }
+
   get velocity(): Vector3 {
-    const h = this.sim.actors[0];
-    if (h) return new Vector3().copy(h.velocity);
-    const body = this.sim.stage.bodies?.[0];
-    if (!body) throw new Error('playback needs an actor');
-    return new Vector3().subVectors(body.frame.prev.position(0), body.frame.prev2.position(0)).divideScalar(body.frame.dt);
+    const body = this.subject();
+    if (body instanceof Humanoid) return new Vector3().copy(body.velocity);
+    const { frame } = body;
+    return new Vector3().subVectors(frame.prev.position(0), frame.prev2.position(0)).divideScalar(frame.dt);
   }
 
   get facing(): number {
-    const h = this.sim.actors[0];
-    if (h) return h.yaw;
-    const body = this.sim.stage.bodies?.[0];
-    if (!body) throw new Error('playback needs an actor');
-    return yawOf(body.pose.rotation(0));
+    return yawOf(this.subject().pose.rotation(0));
   }
 
   private root() {
     const focus = this.sim.stage.focus?.();
     if (focus) return focus;
-    const h = this.sim.actors[0];
-    if (h) return h.model.scene.position.clone().setY(FOCUS_HEIGHT * h.proportions.height);
-    const body = this.sim.stage.bodies?.[0];
-    if (!body) throw new Error('playback needs a humanoid or an articulated body');
-    return body.pose.position(0).clone();
+    const body = this.subject();
+    return body instanceof Humanoid ? body.model.scene.position.clone().setY(FOCUS_HEIGHT * body.proportions.height) : body.pose.position(0).clone();
   }
 }
 

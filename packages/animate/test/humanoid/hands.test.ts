@@ -62,7 +62,7 @@ describe('grab', () => {
           'race',
           idle(h),
           function* () {
-            yield* grab(h, { left: [load, 'left'], right: [load, 'right'] })();
+            yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { first: true })();
           },
           action<Frame>({
             update: (f) => {
@@ -94,7 +94,7 @@ describe('grab low', () => {
     let standing = NaN;
     const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
-        yield* parallel<Frame>('race', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }), action<Frame>({
+        yield* parallel<Frame>('race', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }, { first: true }), action<Frame>({
           update: (f) => {
             const hips = f.prev.position(INDEX.hips).y;
             standing = Number.isNaN(standing) ? hips : standing;

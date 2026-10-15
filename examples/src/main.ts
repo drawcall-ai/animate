@@ -127,8 +127,7 @@ function sync(alpha = 1, dt = 1 / 60) {
 
 /** the way the shots are taken against: the way the body faces, as balance has it (not the hips' twist as they step or swing) */
 function facing() {
-  const { scenario: s } = playback.sim;
-  return (s.facing ?? playback.facing) + turn;
+  return playback.facing + turn;
 }
 
 /** aims the camera at the framing (which is smoothed already) */

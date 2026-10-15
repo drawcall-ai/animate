@@ -1,3 +1,4 @@
+import { clamp, smoothstep } from './math';
 import { Quaternion } from 'three';
 import type { Limit } from './skeleton';
 import type { ReadonlyPose } from './pose';
@@ -39,7 +40,7 @@ export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = co
 
 /** the twist's range at a swing of `phi` (rad) */
 function twistRange({ twist: [lo, hi] }: Limit, phi: number): [number, number] {
-  const open = smooth((phi - TWIST_FADE) / (Math.PI - TWIST_FADE));
+  const open = smoothstep(TWIST_FADE, Math.PI, phi);
   return [lo - (Math.PI + lo) * open, hi + (Math.PI - hi) * open];
 }
 
@@ -54,13 +55,13 @@ export const coordinates = (): Coordinates => ({ value: [0, 0, 0], range: [[0, 0
 /** Clamps `q`, a bone's rotation in its parent's frame, into `limit` (see `coordinatesOf`); returns whether it moved `q`. */
 export function clampRotation(q: Quaternion, limit: Limit): boolean {
   const { value, range } = coordinatesOf(q, limit, _c);
-  let t1 = clamp(value[0], range[0]);
-  let t2 = clamp(value[1], range[1]);
+  let t1 = clamp(value[0], ...range[0]);
+  let t2 = clamp(value[1], ...range[1]);
   // (a swing of more than half a turn is the other way round: its coordinates would not come back)
   const swing = Math.hypot(t1, t2);
   if (swing > Math.PI) [t1, t2] = [(t1 * Math.PI) / swing, (t2 * Math.PI) / swing];
   // the twist's range as the clamped swing has it
-  const tt = clamp(value[2], twistRange(limit, Math.min(swing, Math.PI)));
+  const tt = clamp(value[2], ...twistRange(limit, Math.min(swing, Math.PI)));
   if (t1 === value[0] && t2 === value[1] && tt === value[2]) return false;
   // swing · twist, from the swing's rotation vector and the twist's angle
   const i = limit.axis;
@@ -92,8 +93,6 @@ export function beyond(q: Quaternion, limit: Limit): number {
 
 /** the swing (rad) from which the twist's range opens up, to all of it at the opposite turn */
 const TWIST_FADE = 0.75 * Math.PI;
-const clamp = (x: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, x));
-const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 const _q = new Quaternion();
 const _c = coordinates();

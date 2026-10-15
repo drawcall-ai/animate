@@ -1,6 +1,8 @@
+import type { Vector3 } from 'three';
+import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import type { Behaviour, Target } from '../../core/goal';
-import { SIDES, type Side } from '../bones';
+import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 
 // Grips: what each hand takes hold of, and the hands closing and opening on them.
@@ -45,4 +47,21 @@ export function grip(grips: Grips, side: Side): string {
   const name = grips[side];
   if (name === undefined) throw new Error(`no grip for the ${side} hand`);
   return name;
+}
+
+/** Grips of one item currently taken by this body. */
+export function gripsOf<W>(h: Humanoid<W>, item: Item): Grips {
+  return Object.fromEntries(SIDES.flatMap((side) => h.holding[side]?.item === item ? [[side, h.holding[side]?.grip]] : []));
+}
+
+/** Held items, counting a two-handed load once. */
+export function heldItems<W>(h: Humanoid<W>): Item[] {
+  return [...new Set(SIDES.flatMap((side) => h.holding[side]?.item ?? []))];
+}
+
+/** Grip errors in the completed pose. */
+export function offGrips<W>(f: Frame<W>, hands: readonly { side: Side; item: Item; grip: string; at: Readonly<Vector3> }[]): string[] {
+  return hands.map(({ side, item, grip, at }) => {
+    return `"${item.name}" ${side} grip "${grip}": ${f.prev.position(INDEX[`${side}Hand`]).distanceTo(at).toFixed(3)} m off`;
+  });
 }

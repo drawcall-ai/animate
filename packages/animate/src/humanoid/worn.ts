@@ -3,8 +3,10 @@ import type { Frame } from '../core/body';
 import type { Pose } from '../core/pose';
 import type { Item } from '../core/carrier';
 import { follow } from '../core/follow';
-import type { Dressed, Wearing } from '../core/worn';
-import { SETTLING } from '../core/worn';
+import type { Wearing } from '../core/worn';
+import type { Placement } from '../core/goal';
+import { heldItems } from './hands/grips';
+import { SETTLING, sitsAt } from '../core/worn';
 import { INDEX, SIDES } from './bones';
 import type { Humanoid } from './humanoid';
 
@@ -28,7 +30,7 @@ export function dress<W>(h: Humanoid<W>, pose: Pose, wearing: readonly Dressed[]
   for (const { item, on, at } of wearing) {
     const position = at.position.clone();
     const quaternion = at.quaternion?.clone() ?? new Quaternion();
-    worn.set(item, { on, to: null, motion: SETTLING, sits: { position, quaternion, prev: position.clone(), prev2: position.clone(), prevQ: quaternion.clone(), prev2Q: quaternion.clone() } });
+    worn.set(item, { on, to: null, motion: SETTLING, sits: sitsAt(position, quaternion) });
     item.wornBy = h;
     item.supported = false;
     item.move(0, position.clone().applyQuaternion(pose.rotation(on)).add(pose.position(on)), pose.rotation(on).clone().multiply(quaternion));
@@ -53,7 +55,7 @@ export function load<W>(h: Humanoid<W>, f: Frame<W>) {
     if (top.supported || top.wornBy) return [];
     return SIDES.filter((s) => h.holding[s]?.item === top).map((s) => INDEX[`${s}Hand`]);
   };
-  const items = new Set<Item>([...h.worn.keys(), ...SIDES.flatMap((s) => h.holding[s]?.item ?? []), ...h.borne.keys()]);
+  const items = new Set<Item>([...h.worn.keys(), ...heldItems(h), ...h.borne.keys()]);
   for (const item of items) {
     if (item.mass === 0) continue;
     const bones = bearers(item);
@@ -99,3 +101,10 @@ function loadBones<W>(h: Humanoid<W>, pose: Pose) {
 const ZERO = new Vector3();
 const _c = new Vector3();
 const _q = new Quaternion();
+
+/** What a body wears from the start (`HumanoidOptions.wearing`): an item, the bone it is on, and where it sits in that bone's frame. */
+export interface Dressed {
+  item: Item;
+  on: number;
+  at: Placement;
+}

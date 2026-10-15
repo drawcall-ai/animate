@@ -47,10 +47,8 @@ export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0,
 
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {
-  [into.go, into.face, into.lower, into.bow, into.twist, into.lean, into.onto, into.stance] = [asks.go, asks.face, asks.lower, asks.bow, asks.twist, asks.lean, asks.onto, asks.stance];
-  [into.taken[0], into.taken[1]] = asks.taken;
-  [asks.go, asks.face, asks.lower, asks.bow, asks.twist, asks.lean, asks.onto, asks.stance] = [null, null, 0, 0, 0, null, null, null];
-  [asks.taken[0], asks.taken[1]] = [false, false];
+  Object.assign(into, asks);
+  Object.assign(asks, createAsks());
   return into;
 }
 

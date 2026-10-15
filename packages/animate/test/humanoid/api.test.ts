@@ -1,15 +1,15 @@
+import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import {
   Body, Humanoid, INDEX, Item, STEP, approach, carryTogether, createSkeletonModel,
-  idle, named, onBone, reachFor, wear, when, type Frame,
+  named, onBone, reachFor, wear, when, type Frame,
 } from '../../src';
 import { leg } from '../core/rigs';
 
-it('reads one final-pose path on any body, with velocity, and rejects facing without a gait', () => {
+it('reads one final-pose path on any body, with velocity', () => {
   const body = new Body(leg(), () => action<Frame>({ update: (f) => f.current.setRoot(new Vector3(f.time, 1, 0)) }));
-  expect(() => onBone(body, 0, { position: new Vector3() }, { facing: true })).toThrow('facing requires a body with a gait');
   const goal = onBone(body, 0, { position: new Vector3() });
   body.update(STEP);
   body.frame.current.setRoot(new Vector3(10, 1, 0));
@@ -43,12 +43,10 @@ it('follows a grip worn by another body without asking the humanoid to lower for
   wearer.update(STEP);
   let done = false;
   let lower = 0;
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), function* () {
+  const h = standing((h) => [function* () {
       yield* reachFor(h, { left: [item, 'grip'] })();
       done = true;
-    }, action<Frame>({ update: () => { lower = Math.max(lower, h.asks.lower); } }));
-  });
+    }, action<Frame>({ update: () => { lower = Math.max(lower, h.asks.lower); } })]);
   for (let i = 0; i < 180; i++) h.update(STEP);
   expect(done).toBe(true);
   expect(lower).toBe(0);
@@ -108,12 +106,10 @@ it('clears the development beat when nothing is running', () => {
 
 it.each([new Vector3(1, 1.25, 2), new Vector3(-1, 1.4, 2)])('approaches a placing point squarely by default: %s', (point) => {
   let done = false;
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), function* () {
+  const h = standing((h) => [function* () {
       yield* approach(h, point)();
       done = true;
-    });
-  });
+    }]);
   for (let tick = 0; tick < 12 * 60; tick++) h.update(STEP);
   const middle = h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
   const delta = point.clone().sub(middle);

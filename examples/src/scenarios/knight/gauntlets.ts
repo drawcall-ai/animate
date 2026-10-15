@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, headingOf, hold, INDEX, onBone, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Stand, type World } from '@drawcall/animate';
+import { handTo, headingOf, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Stand, type World } from '@drawcall/animate';
 import { along, at, eyesOn, take, turn, type Knight } from './knight';
 
 type F = Frame<World>;
@@ -23,8 +23,8 @@ export function don(k: Knight, gauntlet: Item, side: Side, stand: Stand): Behavi
   return function* () {
     yield* take(k, { [other]: [gauntlet, 'cuff'] }, { face: headingOf(fingers.x, fingers.z), stand: { ...stand, aside: side === 'left' ? -0.1 : 0.1 } })();
     yield* along(k, gauntlet, [[1.0, heldOpen(side)]], { on: INDEX.chest })();
-    const open = onBone(k.h, INDEX.chest, heldOpen(side), { facing: true });
-    yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, { to: open })), { first: false })();
+    const open = facingAt(k.h, INDEX.chest, heldOpen(side));
+    yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, { to: open })))();
     yield* wear(k.h, gauntlet, INDEX[`${side}Hand`], { to: { position: new Vector3(), quaternion: new Quaternion() } })();
   };
 }

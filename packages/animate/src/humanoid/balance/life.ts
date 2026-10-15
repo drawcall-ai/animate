@@ -1,3 +1,5 @@
+import type { Asks } from '../asks';
+import type { Humanoid } from '../humanoid';
 import { Vector3 } from 'three';
 import { lerp, smoothstep } from '../../core/math';
 import { seeded } from '../../core/random';
@@ -19,6 +21,7 @@ export class Life {
   constructor(seed: number) {
     this.rand = seeded(seed);
     this.phase = this.rand() * 2 * Math.PI;
+    // Tuned first shift: leave a 10–20 s observation window before changing support.
     this.next = lerp(10, 20, this.rand());
   }
 
@@ -26,12 +29,18 @@ export class Life {
     return this.time < this.until ? this.side : null;
   }
 
+  quiet<W>(asks: Asks, h: Humanoid<W>): boolean {
+    return !asks.go && !h.gait.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0;
+  }
+
   update(dt: number, quiet: boolean, speed: number) {
     this.time += dt;
     this.quietTime = quiet ? this.quietTime + dt : 0;
+    // Tuned: half quiet motion at 0.1 m/s, recovered with a 0.5 s time constant.
     const amount = 1 / (1 + speed / 0.1);
     this.amount += (amount - this.amount) * (1 - Math.exp(-2 * dt));
     if (!quiet) {
+      // Tuned: ten quiet seconds after activity before a spontaneous shift.
       this.next = this.time + 10;
       this.until = 0;
     }

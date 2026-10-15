@@ -2,7 +2,6 @@
 // limbs/legs.ts; as adapted in 738b439:packages/animate/src/humanoid/gait/roll.ts,
 // procedures/step.ts, procedures/legs.ts).
 import { Quaternion, Vector3 } from 'three';
-import type { Dev } from '../../core/dev';
 import type { Frame } from '../../core/body';
 import { solveChain, type ChainGoal } from '../../core/chain';
 import { follow } from '../../core/follow';
@@ -10,7 +9,6 @@ import { clampRotation, coordinatesOf } from '../../core/limits';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, SIDES, type Side } from '../bones';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle } from '../../core/math';
-import type { Humanoid } from '../humanoid';
 import type { Proportions } from '../proportions';
 import type { Carriage, Swing } from './carriage';
 import { ankleFor, ballOf, footRotation, heelOf, swingHump, swingProgress, type Foot } from './foot';
@@ -296,30 +294,18 @@ const _q = new Quaternion();
 const _spin = new Quaternion();
 const _arc = new Quaternion();
 
-/** Read the final planted foot, allowing its roll about the heel or ball, never the solve's goal. */
-export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
-  if (f.time <= f.dt) return;
+/** The folded end of the same hip–ankle reach constraint as full extension. */
+export function foldedFloor<W>(f: Frame<W>, c: Carriage, feet: readonly FootPose[]): number {
+  let floor = -Infinity;
   SIDES.forEach((side, s) => {
-    const foot = h.feet[s];
-    if (foot.phase !== 'planted') return;
-    const bone = INDEX[`${side}Foot`];
-    const q = f.prev.rotation(bone);
-    const forward = new Vector3(0, 0, 1).applyQuaternion(q);
-    const pitch = Math.atan2(forward.y, Math.hypot(forward.x, forward.z));
-    const slide = (pivot: Vector3) => {
-      const actual = f.prev.point(bone, pivot, new Vector3());
-      const anchor = pivot.clone().applyQuaternion(footRotation(foot.yaw, 0)).add(foot.position);
-      return Math.hypot(actual.x - anchor.x, actual.z - anchor.z);
-    };
-    const heel = heelOf(h.proportions);
-    const ball = ballOf(h.proportions, side);
-    const value = Math.abs(pitch) < 0.05 ? Math.max(slide(heel), slide(ball)) : slide(pitch > 0 ? heel : ball);
-    if (value > 0.01) dev.append(f.time - f.dt, { check: 'planted foot slide (m)', value, limit: 0.01, where: `${side}Foot` });
-    const sole = (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
-      const point = h.rig.points[`${side}${name}`];
-      return f.prev.point(point.bone, point.at, new Vector3()).y;
-    });
-    const sink = foot.position.y - h.proportions.ankleHeight - Math.min(...sole);
-    if (sink > 0.01) dev.append(f.time - f.dt, { check: 'planted foot sink (m)', value: sink, limit: 0.01, where: `${side}Foot` });
+    const hip = f.current.position(INDEX[`${side}UpperLeg`]);
+    const ankle = feet[s].ankle;
+    // A free ankle needs 5° of knee reserve to align before landing.
+    const reserve = c.steps[s].swing ? 5 * Math.PI / 180 : 0;
+    const bend = (f.current.skeleton.limits[INDEX[`${side}LowerLeg`]]?.swing[1][1] ?? Math.PI) - reserve;
+    const span2 = foldedReach(c.p, bend) ** 2;
+    const across2 = (hip.x - ankle.x) ** 2 + (hip.z - ankle.z) ** 2;
+    floor = Math.max(floor, ankle.y + Math.sqrt(Math.max(0, span2 - across2)) + c.pelvis.y - hip.y);
   });
+  return floor;
 }

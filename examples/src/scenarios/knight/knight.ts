@@ -25,7 +25,7 @@ export const pause = (k: Knight, seconds: number): Behaviour<World> =>
 /** the hands busy while `task` runs (the metrics judge the arms nobody asks anything of as free) */
 export const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => reporting(k.report, ['leftHand', 'rightHand'], task);
 
-/** `task` with the eyes on `at` (`withGaze`: first, the task setting off once they are there, or with `first: false` at once; bowing at least `bow`), reported as the gaze */
+/** `task` with the eyes on `at` (`withGaze`: concurrent by default, or with `first: true` once they are there; bowing at least `bow`), reported as the gaze */
 export const eyesOn = (k: Knight, at: Live<Vector3, World>, task: Behaviour<World>, options: { first?: boolean; bow?: number } = {}): Behaviour<World> => withGaze(k.h, reported(k.report, 'gaze', at), task, options);
 
 /** taking hold of `holds` (`grab`), the eyes on them reported */
@@ -33,7 +33,7 @@ export function take(k: Knight, holds: Holds, options: { face?: number; stand?: 
   return function* () {
     const grips = Object.values(holds).map(([item, grip]) => item.toWorld(item.grips[grip], { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position);
     const middle = grips.reduce((sum, g) => sum.add(g), new Vector3()).divideScalar(grips.length);
-    yield* busy(k, grab(k.h, holds, { ...options, look: reported(k.report, 'gaze', middle) }))();
+    yield* busy(k, grab(k.h, holds, { ...options, look: reported(k.report, 'gaze', middle), first: true }))();
   };
 }
 
@@ -64,7 +64,7 @@ export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>):
 }
 
 /** A held item carried along its course at the knight’s pace. */
-export const along = (k: Knight, item: Item, legs: readonly Leg[], options: { on: number | Item | readonly [Humanoid<World>, number] }): Behaviour<World> => carry(k.h, item, legs, { ...options, facing: typeof options.on === 'number', pace: k.pace });
+export const along = (k: Knight, item: Item, legs: readonly Leg[], options: { on: number | Item | Live<Required<Placement>, World> }): Behaviour<World> => carry(k.h, item, legs, { ...options, pace: k.pace });
 
 export const at = (x: number, y: number, z: number, quaternion?: Quaternion): Placement => ({ position: new Vector3(x, y, z), quaternion });
 export const turn = (x: number, y: number, z: number) => new Quaternion().setFromEuler(new Euler(x, y, z, 'YXZ'));
@@ -76,7 +76,7 @@ const LOOKING = 1;
 export function walkOut(k: Knight, yard: Vector3, face: number, sights: readonly Vector3[]): Behaviour<World> {
   return function* () {
     const look = function* () {
-      for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4))();
+      for (const sight of sights) yield* eyesOn(k, sight, pause(k, 1.4), { first: true })();
     };
     yield* parallel('all', walkTo(k.h, { to: yard, face }), function* () {
       yield* when(arriving(k.h, LOOKING));

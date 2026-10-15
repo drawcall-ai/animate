@@ -33,7 +33,7 @@ export const reachAround: Scenario = {
             yield* reporting(report, ['rightHand'], withGaze(h, position, () => parallel<Frame<World>>('all',
               walkTo(h, { to: position, within: 0.4 }),
               handTo(h, 'right', reported(report, 'rightWrist', { position }), { seconds: 1, until: 'reached' }),
-            ), { first: false }))();
+            )))();
           }
           done = true;
         });
@@ -60,7 +60,7 @@ export const liftHeavy: Scenario = {
       done: () => done,
       script: (h) => function* () {
         yield* parallel<Frame<World>>('all', idle(h), function* () {
-          yield* reporting(report, ['leftHand', 'rightHand'], grab(h, { left: [box, 'left'], right: [box, 'right'] }))();
+          yield* reporting(report, ['leftHand', 'rightHand'], grab(h, { left: [box, 'left'], right: [box, 'right'] }, { first: true }))();
           yield* carry(h, box, [[1.5, carried(h)]])();
           const there = h.pose.com(new Vector3()).setY(0).addScaledVector(forwardOf(h.gait.facing), 3);
           yield* parallel<Frame<World>>('race', hold(h, box, { to: carried(h) }), walkTo(h, { to: there }));

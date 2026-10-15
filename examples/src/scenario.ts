@@ -52,8 +52,6 @@ export interface Scenario {
   cameraDistance?: number;
   /** World yaw of a fixed shot, overriding its usual body-relative bearing. */
   cameraAngles?: Partial<Record<'front' | 'side', number>>;
-  /** the facing (yaw) the camera shots are taken against, held fixed; defaults to the first actor's */
-  facing?: number;
   /** the actors' character model: OpenPose skeletons (default), or a viverse character — a model file, or viverse's mannequin without `url` */
   body?: 'openpose' | { url?: string };
   /** false: no plain grid (the scenario draws its own ground, a slope) */

@@ -1,6 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import type { Dev } from '../../core/dev';
 import type { Frame } from '../../core/body';
 import { follow } from '../../core/follow';
 import type { Behaviour } from '../../core/goal';
@@ -14,11 +13,10 @@ import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
 import { seedOf } from '../../core/random';
 import { Life } from './life';
 import { Carriage } from './carriage';
-import { checkFeet, foldedReach, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
+import { foldedFloor, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
 import { LOWER, Posture, TIPTOE, type Trunk } from './posture';
 import { stepFeet } from './steps';
-import { footprint } from './foot';
-import { hullOf, outside } from './support';
+import { checkFeet, checkSupport } from './checks';
 
 
 /** What `balance` reports of the walk it carries the body on (its output: read it, never write it). */
@@ -117,7 +115,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
           const hand = INDEX[`${side}Hand`];
           return f.prev.position(hand).distanceTo(f.prev2.position(hand)) / dt;
         }));
-        life?.update(dt, !go && !c.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0, speed);
+        life?.update(dt, life.quiet(asks, h), speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
         quiet.drift.copy(life?.drift ?? ZERO);
         quiet.breath = life?.breath ?? 0;
@@ -145,18 +143,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
           if (st.swing) swingPose(f, c, s, pose);
           else plantedPose(p, side, h.feet[s], rollFoot(f, c, s), pose);
         });
-        // The folded reach is the other end of the same hip–ankle constraint as full extension.
-        let floor = -Infinity;
-        SIDES.forEach((side, s) => {
-          const hip = f.current.position(INDEX[`${side}UpperLeg`]);
-          const ankle = feet[s].ankle;
-          // The free ankle needs 5° of knee flexion reserve to align before landing.
-          const reserve = c.steps[s].swing ? 5 * Math.PI / 180 : 0;
-          const bend = (f.current.skeleton.limits[INDEX[`${side}LowerLeg`]]?.swing[1][1] ?? Math.PI) - reserve;
-          const span2 = foldedReach(p, bend) ** 2;
-          const across2 = (hip.x - ankle.x) ** 2 + (hip.z - ankle.z) ** 2;
-          floor = Math.max(floor, ankle.y + Math.sqrt(Math.max(0, span2 - across2)) + c.pelvis.y - hip.y);
-        });
+        const floor = foldedFloor(f, c, feet);
         const raised = floor > c.pelvis.y;
         c.pelvis.y = Math.max(c.pelvis.y, floor);
         f.current.setRoot(c.pelvis);
@@ -197,29 +184,5 @@ const _up = new Vector3();
 const _half = new Quaternion();
 const _q = new Quaternion();
 const _local = new Quaternion();
-
-/** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
-function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
-  if (f.time <= f.dt) return;
-  const com = f.prev.com(new Vector3());
-  const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
-  const xcom = com.clone().addScaledVector(velocity, 1 / Math.sqrt(9.81 / h.proportions.legLength));
-  const support = h.feet.flatMap((foot, s) => {
-    if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
-    const side = SIDES[s];
-    return (['Heel', 'BigToe', 'SmallToe'] as const).map((name): [number, number] => {
-      const point = h.rig.points[`${side}${name}`];
-      const at = f.prev.point(point.bone, point.at, new Vector3());
-      return [at.x, at.z];
-    });
-  });
-  const hull = hullOf(support);
-  if (h.gait.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {
-    const value = outside(hull, com);
-    if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
-  }
-  const value = outside(hull, xcom);
-  if (value > 0.1) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
-}
 
 const ZERO = new Vector3();

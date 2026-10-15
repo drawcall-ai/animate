@@ -1,15 +1,15 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import {
-  Body, HORSE_SKELETON, HORSE_WALK, Item, Legs, Pose,
+  Body, MUZZLE, HORSE_SKELETON, HORSE_WALK, Item, Legs, Pose,
   approach, arriving, carried, carry, createWorld, eyesOnBefore, grab, handTo, hold, horseLegs, horseCarriage, horsePelvis, idle,
-  named, onBone, openHand, wear, when, walkTo, withGaze,
+  named, onBone, release, wear, when, walkTo, withGaze,
   type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
-import { skeletonProps } from './legs';
+import { skeletonProps, line } from '../stage/props';
 
 const UP = new Vector3(0, 1, 0);
 // Tuned: 3 cm below square standing, rather than an 8 cm crouch; contacts plan further reserve.
@@ -20,6 +20,11 @@ const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
 const INSPECT = 0.85;
+// Tuned straight gate lane: pursuit lag v²/(2a) leaves slack beside the handler.
+const LEADING = { speed: 0.95, accel: 0.65 };
+const LEAD_OFFSET = 1.6;
+// Tuned: a slack lead rests 24 cm below the carry pose, within an upright arm's reach.
+const LEAD_DROP = 0.24;
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -29,7 +34,7 @@ export function stableMorning(): Scenario {
     id: 'stable-morning', title: 'Cold morning in the stable yard',
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
     duration: 50, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
-    cameraDistance: 4.8, facing: -Math.PI / 3,
+    cameraDistance: 4.8,
     cameraAngles: { front: -Math.PI / 12, side: -11 * Math.PI / 18 },
     stage: (dev = false) => {
       const report = new Report();
@@ -49,13 +54,13 @@ export function stableMorning(): Scenario {
       const horse = new Body(HORSE_SKELETON, () => action<Frame>({ update: (f) => {
         // Muzzle is 1.63 m ahead of the root. At 0.95 m/s the pursuit lag is
         // v²/(2a) = 0.69 m: a 1.6 m offset leaves about 0.66 m of lead, beside the handler.
-        const ahead = leading && handler ? Math.max(0, handler.pose.position(0).z - HORSE.z - 1.6) : 0;
+        const ahead = leading && handler ? Math.max(0, handler.pose.position(0).z - HORSE.z - LEAD_OFFSET) : 0;
         // The gate and horse share this straight lane; do not chase the handler's pelvic sway.
         const target = new Vector3(HORSE.x, HORSE.y, HORSE.z + ahead);
         const velocity = leading && handler ? new Vector3(0, 0, handler.gait.velocity.z) : new Vector3();
         if (ahead === 0) velocity.set(0, 0, 0);
         horsePelvis(f, legs);
-        legs.toward(f, { position: target, velocity }, { speed: 0.95, accel: 0.65 });
+        legs.toward(f, { position: target, velocity }, LEADING);
         horseCarriage(f, legs, handler?.pose.position(handler.pose.skeleton.index('head')));
       } }), { pose, dev });
 
@@ -63,13 +68,13 @@ export function stableMorning(): Scenario {
       const gate = new Vector3(0.2, 0, 8.2);
       const tasks = (h: Humanoid<World>): Behaviour<World> => function* () {
         // A breath and a look across the yard; idle supplies the movement underneath.
-        yield* named('cold air at the door', withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.9, 5)), () => when(timePassed(1.3, 'seconds'))))();
-        yield* named('cross the yard', withGaze(h, reported(report, 'gaze', new Vector3(0.2, 1.4, 4)), walkTo(h, { to: new Vector3(0.2, 0, 2.5), face: 0 }), { first: false }))();
+        yield* named('cold air at the door', withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.9, 5)), () => when(timePassed(1.3, 'seconds')), { first: true }))();
+        yield* named('cross the yard', withGaze(h, reported(report, 'gaze', new Vector3(0.2, 1.4, 4)), walkTo(h, { to: new Vector3(0.2, 0, 2.5), face: 0 })))();
         yield* named('notice the horse', withGaze(h, reported(report, 'gaze', () => horse.pose.position(HEAD).clone()),
-          () => when(timePassed(0.65, 'seconds')), { first: false }))();
+          () => when(timePassed(0.65, 'seconds'))))();
         yield* named('fetch the saddle', reporting(report, HANDS,
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
-            face: -Math.PI / 2, stand: { ahead: 1.05 * h.proportions.armLength }, look: reported(report, 'gaze', () => saddle.current.position), first: false,
+            face: -Math.PI / 2, stand: { ahead: 1.05 * h.proportions.armLength }, look: reported(report, 'gaze', () => saddle.current.position),
           })))();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
           withGaze(h, reported(report, 'gaze', () => saddlePlace(horse.frame).position), function* () {
@@ -81,22 +86,20 @@ export function stableMorning(): Scenario {
                 yield* carry(h, saddle, [
                   [1.1, { position: SADDLED.clone().add(new Vector3(-0.24, 0.21, 0)), quaternion: yaw(Math.PI / 2) }],
                   [0.75, { position: SADDLED, quaternion: yaw(Math.PI / 2) }],
-                ], { on: [horse, 0], support: true })();
+                ], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }), support: true })();
               },
             );
-          }, { first: false })))();
+          })))();
         yield* named('hands off, check the fit', function* () {
           yield* wear(horse, saddle, 0, { to: { position: SADDLED, quaternion: yaw(Math.PI / 2) } })();
-          // The right hand immediately inspects; don't give release a competing arm target.
-          yield* openHand(h, 'left')();
-          yield* openHand(h, 'right')();
+          yield* release(h, ['left', 'right'], { away: null })();
           let start: number | null = null;
           yield* parallel<Frame<World>>('all',
             withGaze(h, reported(report, 'gaze', (f) => {
               start ??= f.time;
               const u = Math.min(1, (f.time - start) / INSPECT);
               return saddle.current.position.clone().add(new Vector3(0, 0.12 - 0.37 * u, 0.65 - 1.3 * u));
-            }), () => when(timePassed(INSPECT, 'seconds')), { first: false }),
+            }), () => when(timePassed(INSPECT, 'seconds'))),
             function* () {
               yield* parallel<Frame<World>>('race',
                 () => when(timePassed(INSPECT, 'seconds')),
@@ -106,7 +109,7 @@ export function stableMorning(): Scenario {
           );
         })();
         yield* named('untie the rail knot', reporting(report, ['rightHand'], function* () {
-          yield* grab(h, { right: [rope, 'knot'] }, { face: 0, stand: { ahead: 0.4, aside: -0.4 }, look: reported(report, 'gaze', KNOT), first: false })();
+          yield* grab(h, { right: [rope, 'knot'] }, { face: 0, stand: { ahead: 0.4, aside: -0.4 }, look: reported(report, 'gaze', KNOT) })();
           yield* withGaze(h, reported(report, 'gaze', KNOT), function* () {
             const pulls: [number, Vector3][] = [
               [0.55, new Vector3(-0.12, 0.25, -0.25)],
@@ -118,32 +121,29 @@ export function stableMorning(): Scenario {
             for (const [seconds, offset] of pulls) {
               yield* carry(h, rope, [[seconds, { position: KNOT.clone().add(offset) }]])();
             }
-          }, { first: false })();
+          })();
         }))();
         yield* named('lead out through the gate', reporting(report, ['rightHand'], function* () {
           const beside = carried(h, 'right');
           const low = (f: Frame<World>) => {
             const goal = beside(f);
             // A slack lead rests just below the hip, within an upright arm's reach.
-            goal.position.y -= 0.24 * h.scale;
+            goal.position.y -= LEAD_DROP * h.scale;
             return goal;
           };
           let stopped: Vector3 | null = null;
           yield* parallel<Frame<World>>('all',
             hold(h, rope, { to: (f) => stopped ? { position: stopped } : low(f) }),
             function* () {
-              yield* walkTo(h, { to: new Vector3(0.2, 0, gate.z - 2.5), face: -0.6, speed: 0.95 })();
+              yield* walkTo(h, { to: new Vector3(0.2, 0, gate.z - 2.5), face: -0.6, speed: LEADING.speed })();
               stopped = rope.current.position.clone();
-              yield* parallel<Frame<World>>('race',
-                withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.75, -0.65)),
-                  () => when(timePassed(1.5, 'seconds')), { lead: 0 }),
-                action<Frame<World>>({ update: (_, __, time) => { if (time < 0.3) h.asks.twist = 0; } }),
-              );
+              yield* withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.75, -0.65)),
+                () => when(timePassed(1.5, 'seconds')), { lead: 0, first: true })();
               stopped = null;
               lookedBack = true;
               leading = true;
               yield* withGaze(h, reported(report, 'gaze', (f) => f.prev.position(0).clone().add(new Vector3(0, 0.5, 4))),
-                walkTo(h, { to: new Vector3(0.2, 0, 30), speed: 0.95 }), { first: false })();
+                walkTo(h, { to: new Vector3(0.2, 0, 30), speed: LEADING.speed }))();
             },
           );
         }))();
@@ -164,7 +164,7 @@ export function stableMorning(): Scenario {
         done: () => saddle.wornBy === horse && lookedBack && horse.pose.position(0).clone().sub(gate).dot(forwardOf(0)) > 0,
         props: () => {
           const root = horse.pose.position(0);
-          const muzzle = horse.pose.point(HEAD, new Vector3(0, -0.42, 0.33), new Vector3());
+          const muzzle = horse.pose.point(HEAD, MUZZLE, new Vector3());
           const poll = horse.pose.position(HEAD);
           const props: Prop[] = [...yard(), ...skeletonProps(horse.pose),
             line(horse.pose.position(NECK), poll, 0.1, 0x9b744c),
@@ -198,10 +198,6 @@ export function stableMorning(): Scenario {
 
 function box(position: Vector3, x: number, y: number, z: number, quaternion?: Quaternion): Prop {
   return { kind: 'box', position, size: new Vector3(x, y, z), quaternion };
-}
-function line(a: Vector3, b: Vector3, radius: number, color: number): Prop {
-  const delta = b.clone().sub(a);
-  return { kind: 'cylinder', position: a.clone().lerp(b, 0.5), radius, length: delta.length(), quaternion: new Quaternion().setFromUnitVectors(UP, delta.normalize()), color };
 }
 function yard(): Prop[] {
   return [

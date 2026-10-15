@@ -5,15 +5,13 @@ import { Vector3 } from 'three';
 import { Skeleton, type BoneDef, type Limit } from '../core/skeleton';
 
 /** a leg, as the legs are listed everywhere: [leftFore, rightFore, leftHind, rightHind] */
-export type LegName = 'leftFore' | 'rightFore' | 'leftHind' | 'rightHind';
-export const LEG_NAMES: readonly LegName[] = ['leftFore', 'rightFore', 'leftHind', 'rightHind'];
 
 /**
  * A leg's bones: its chain (named as the leg) of two segments from the shoulder or hip down to the
  * carpus or hock, the scapula above a foreleg's, and the cannon, pastern and hoof below.
  */
 export interface HorseLeg {
-  name: LegName;
+  name: string;
   fore: boolean;
   /** +1 left, −1 right */
   side: 1 | -1;
@@ -138,7 +136,7 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
       legs.push({ name: `${name}${end}`, fore, side, scapula, upper, middle, cannon, pastern, hoof, sole: m(sole).sub(m(coffin)), toe: m(sole).sub(m(coffin)).add(TOE), heel: m(sole).sub(m(coffin)).add(HEEL) });
     }
   }
-  return { bones, legs: LEG_NAMES.map((n) => legs.find((l) => l.name === n) ?? fail(n)) };
+  return { bones, legs: ['leftFore', 'rightFore', 'leftHind', 'rightHind'].map((n) => legs.find((l) => l.name === n) ?? fail(n)) };
 }
 
 /** the toe ahead of the sole's middle and the heel behind it (m): a shod hoof ~14 cm long */
@@ -202,7 +200,8 @@ function limitsOf(bones: readonly BoneDef[]): Limit[] {
 const built = build();
 // Tuned diagnostics only: a whole ROM traversed in 30 ms is a gross discontinuity.
 // This follows the existing humanoid snap heuristic; it never limits the solver's rates.
-for (const limit of limitsOf(built.bones)) {
+const limits = limitsOf(built.bones);
+for (const limit of limits) {
   const span = Math.max(...[...limit.swing, limit.twist].map(([lo, hi]) => hi - lo)) / DEG;
   const speed = span / 0.03;
   built.bones[limit.bone].snap = { speed, accel: speed / 0.03 };
@@ -213,16 +212,13 @@ const names = (k: number) => built.bones[k].name;
  * Warmblood landmarks: root bone `trunk` (index 0) on the spine under the saddle, `neck` at its base,
  * `head` at the poll; muzzle offset from head is (0, -0.42, 0.33) m. */
 export const SKELETON = new Skeleton(built.bones, {
-  limits: limitsOf(built.bones),
+  limits,
   chains: Object.fromEntries([...built.legs.map((l) => [l.name, [l.upper, l.middle, l.cannon].map(names)]), ['neck', ['neck', 'head']]]),
 });
-/** the legs, as LEG_NAMES lists them */
+/** the legs, in fore-left, fore-right, hind-left, hind-right order */
 export const LEGS: readonly HorseLeg[] = built.legs;
-export const TRUNK = 0;
 export const PELVIS = SKELETON.index('pelvis');
 export const NECK = SKELETON.index('neck');
 export const HEAD = SKELETON.index('head');
-/** the eyes' midpoint (in the head's frame) */
-export const EYES = v(0, -0.15, 0.13);
 /** the muzzle (in the head's frame) */
 export const MUZZLE = AT.muzzle.clone().sub(AT.poll);

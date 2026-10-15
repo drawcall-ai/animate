@@ -3,9 +3,8 @@ import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import type { Humanoid } from '../humanoid';
 import { SIDES } from '../bones';
-import { HOLD, handStep } from '../arms';
-import { ChainTip } from '../../core/tip';
-import { gripOf } from './grips';
+import { heldItems } from './grips';
+import { holdHand } from './hold';
 
 /** The last hold pose carried by the root, unless another mover owns this step. */
 function passive<W>(item: Item, f: Frame<W>) {
@@ -18,18 +17,12 @@ function passive<W>(item: Item, f: Frame<W>) {
 
 /** Explicit movers run first; only an otherwise unsupported hold inherits body travel. */
 export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
-  const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
   return (f) => {
-    const items = new Set(SIDES.flatMap((side) => h.holding[side]?.item ?? []));
-    for (const item of items) {
+    for (const item of heldItems(h)) {
       if (item.supported || item.wornBy || item.moved(f.time)) continue;
       const at = passive(item, f);
       item.move(f.time, at.position, at.quaternion);
-      for (const side of SIDES) {
-        const held = h.holding[side];
-        if (held?.item !== item) continue;
-        handStep(h, f, side, gripOf(item, held.grip), { on: item, ...HOLD }, arms[side]);
-      }
     }
+    for (const side of SIDES) holdHand(h, f, side);
   };
 }

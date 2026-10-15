@@ -4,10 +4,10 @@ import type { Frame } from '../../core/body';
 import type { Behaviour, Target } from '../../core/goal';
 import { reached } from '../../core/tip';
 import { ARM_REACH, handTo } from '../arms';
-import { INDEX, SIDES, type Side } from '../bones';
+import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { onBone } from '../goal';
-import { openHand } from './grips';
+import { facingAt } from '../goal';
+import { heldItems, openHand } from './grips';
 
 // Letting go.
 
@@ -18,17 +18,20 @@ import { openHand } from './grips';
  * reaches (never folded on itself nor stretched out; the body not bowing nor rising after it).
  * Once they are there, or `limit` s on (another task may take a hand on its way), the free arms
  * take them. What they let go of that nothing else holds or wears rests where it was put
- * (`supported`: on a shelf, a table).
+ * (`supported`: on a shelf, a table). With `away: null`, only open: the next task owns the hands.
  */
-export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>>; limit?: number } = {}): Behaviour<W> {
+export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number } = {}): Behaviour<W> {
   const { limit = LETTING_GO } = options;
   return function* () {
     const p = h.proportions;
     const held = sides.map((side) => h.holding[side]);
     let targets: ((f: Frame<W>) => Target)[] | null = null;
+    let time = NaN;
+    let goals: Target[] = [];
     // (where each hand goes, from how it moved as it let go)
-    const off = (f: Frame<W>): Target[] =>
-      (targets ??= sides.map((side) => {
+    const off = (f: Frame<W>): Target[] => {
+      if (time === f.time) return goals;
+      targets ??= sides.map((side) => {
         const hand = f.prev.position(INDEX[`${side}Hand`]);
         const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
         const at = hand.clone();
@@ -43,16 +46,20 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         const reach = at.sub(shoulder);
         reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), ARM_REACH * p.armLength));
         const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -h.gait.facing)).divideScalar(p.scale);
-        const following = onBone(h, INDEX.hips, { position: local }, { facing: true });
-        return (frame: Frame<W>) => {
-          const { position, velocity } = following(frame);
-          return { position, velocity };
-        };
-      })).map((target) => target(f));
+        return facingAt<W>(h, INDEX.hips, { position: local });
+      });
+      time = f.time;
+      goals = targets.map((target) => {
+        const { position, velocity } = target(f);
+        return { position, velocity };
+      });
+      return goals;
+    };
     const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], off(f)[k]));
     const loose = held.flatMap((grip) => grip?.item ?? []);
     for (const side of sides) yield* openHand(h, side)();
-    for (const item of loose) if (!item.wornBy && !SIDES.some((s) => h.holding[s]?.item === item)) item.supported = true;
+    for (const item of loose) if (!item.wornBy && !heldItems(h).includes(item)) item.supported = true;
+    if (options.away === null) return;
     yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
   };
 }
@@ -67,7 +74,7 @@ const LETTING_GO = 1;
 /** how near its shoulder a hand going off is put at least (× the arm's length) */
 const FOLDED = 0.45;
 
-// Recalled release tuning: a relaxed wrist beside the thigh, elbow slightly bent; metres except the arm-length share.
+// Tuned release staging: a relaxed wrist beside the thigh, elbow slightly bent; metres except the arm-length share.
 const REST_ASIDE = 0.12;
 const REST_DOWN = 0.88;
 const REST_AHEAD = 0.08;

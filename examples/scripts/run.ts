@@ -8,7 +8,7 @@ export function run(sc: Scenario): LogEntry[] {
   while (sim.t < sc.duration) sim.step();
   sim.step();
   const extra = sim.stage.bodies?.flatMap((b, i) => b.log.map((entry) => ({ ...entry, where: `body ${i}: ${entry.where}` }))) ?? [];
-  if (!sim.actors.length && !sim.stage.done()) extra.push({ time: sim.t, beat: '', check: `${sc.id}: scenario unfinished`, value: 1, limit: 0, where: sc.id });
+  if (!sim.stage.done()) extra.push({ time: sim.t, beat: '', check: `${sc.id}: scenario unfinished`, value: 1, limit: 0, where: sim.actors.length ? `actor 0: ${sc.id}` : sc.id });
   return [...extra, ...sim.actors.flatMap((h, i) => h.log.map((entry) => ({ ...entry, where: `actor ${i}: ${entry.where}` })))];
 }
 

@@ -1,7 +1,9 @@
+import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
+import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, HORSE_TROT, HORSE_WALK, Legs, Pose, createWorld, horseLegs, humanGait, humanLegs, minimumJerk, yawOf, type Frame, type LegGait, type ReadonlyPose, type World } from '@drawcall/animate';
-import type { Prop, Scenario } from '../scenario';
+import { Body, HORSE_SKELETON, HORSE_WALK, Legs, Pose, createWorld, horseLegs, humanGait, humanLegs, minimumJerk, yawOf, type Frame, type LegGait, type ReadonlyPose, type World } from '@drawcall/animate';
+import type { Scenario } from '../scenario';
 import { Report } from '../report';
 
 /** Script only: integrate a smooth speed ramp, then a broad bend and a smooth stop. No balance or body planner. */
@@ -96,13 +98,4 @@ export function legsHorse(): Scenario {
   };
 }
 
-export function skeletonProps(pose: ReadonlyPose): Prop[] {
-  return pose.skeleton.bones.flatMap((b, i): Prop[] => {
-    if (b.parent < 0) return [];
-    const a = pose.position(b.parent);
-    const end = pose.position(i);
-    const delta = new Vector3().subVectors(end, a);
-    return [{ kind: 'cylinder', color: 0xdba66b, position: end.clone().add(a).multiplyScalar(0.5), radius: 0.035, length: delta.length(), quaternion: new Quaternion().setFromUnitVectors(UP, delta.normalize()) }];
-  });
-}
 const UP = new Vector3(0, 1, 0);

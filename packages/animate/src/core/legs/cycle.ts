@@ -17,7 +17,7 @@ export interface JointCycle {
 }
 
 /** the curve at `u` (0 … 1, wrapping) */
-export function valueAt(keys: JointCycle['keys'], u: number): number {
+function valueAt(keys: JointCycle['keys'], u: number): number {
   const n = keys.length;
   if (n === 0) throw new Error('a cycle without keys');
   const x = u - Math.floor(u);
@@ -39,7 +39,7 @@ export function valueAt(keys: JointCycle['keys'], u: number): number {
  * stance and the swing each stretched onto the cycle's own (a reference curve keeps its shape over
  * contact, whatever the speed's duty)
  */
-export function cyclePhase(u: number, duty: number, cycleDuty: number): number {
+function cyclePhase(u: number, duty: number, cycleDuty: number): number {
   const x = u - Math.floor(u);
   if (x < duty) return (x / duty) * cycleDuty;
   return cycleDuty + ((x - duty) / (1 - duty)) * (1 - cycleDuty);

@@ -1,3 +1,5 @@
+import type { ReadonlyPose } from '../core/pose';
+import type { Humanoid } from './humanoid';
 import { Vector3 } from 'three';
 import { INDEX, type ChildBone, type Side } from './bones';
 import type { Proportions } from './proportions';
@@ -87,4 +89,12 @@ export function pointsOf(p: Proportions): Record<PointName, BonePoint> {
     leftPalm: on('leftHand', palmOf(p, 'left')),
     rightPalm: on('rightHand', palmOf(p, 'right')),
   };
+}
+
+/** The three support points of one sole, in world space. */
+export function solePoints<W>(h: Humanoid<W>, pose: ReadonlyPose, side: Side): Vector3[] {
+  return (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
+    const point = h.rig.points[`${side}${name}`];
+    return pose.point(point.bone, point.at, new Vector3());
+  });
 }

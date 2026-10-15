@@ -9,7 +9,7 @@ import { handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { lerp } from '../../core/math';
-import { closeHand, gripOf, held, openHand, type Grips, type Holds } from './grips';
+import { closeHand, offGrips, gripOf, held, openHand, type Grips, type Holds } from './grips';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
 
@@ -28,10 +28,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
   const until = (f: Frame<W>, _: unknown, time: number) => {
     if (there(f)) return true;
     if (time > limit) {
-      const off = hands.map(({ side, item, grip }) => {
-        const at = item.toWorld(gripOf(item, grip), _world).position;
-        return `"${item.name}" ${side} grip "${grip}": ${f.prev.position(INDEX[`${side}Hand`]).distanceTo(at).toFixed(3)} m off`;
-      });
+      const off = offGrips(f, hands.map((hand) => ({ ...hand, at: hand.item.toWorld(gripOf(hand.item, hand.grip), _world).position.clone() })));
       throw new Error(`${off.join('; ')} after ${limit} s`);
     }
     return false;

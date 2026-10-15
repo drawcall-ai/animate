@@ -75,7 +75,7 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
       'race',
       reporting(report, HANDS, function* () {
         // (its eyes on the box as it comes up to it: it bows to see it, the head turned by the gaze below)
-        yield* grab(h, { left: [box, 'left'], right: [box, 'right'] }, { look: () => gaze.on })();
+        yield* grab(h, { left: [box, 'left'], right: [box, 'right'] }, { look: () => gaze.on, first: true })();
         // (the eyes on to the board as the box comes up past the knees)
         const board = new Vector3(SHELF.x, top, SHELF.z);
         const up = () => box.current.position.y > KNEES;

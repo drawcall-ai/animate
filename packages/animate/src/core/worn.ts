@@ -83,7 +83,7 @@ function place<W>(f: Frame<W>, item: Item, wearing: Wearing, worn: ReadonlyMap<I
     const inverse = wasQ.clone().invert();
     const local = item.current.position.clone().sub(was).applyQuaternion(inverse);
     const turned = inverse.multiply(item.current.quaternion);
-    wearing.sits = { position: local, quaternion: turned, prev: local.clone(), prev2: local.clone(), prevQ: turned.clone(), prev2Q: turned.clone() };
+    wearing.sits = sitsAt(local, turned);
   }
   const at = wearing.sits;
   if (wearing.to) {
@@ -99,11 +99,9 @@ function place<W>(f: Frame<W>, item: Item, wearing: Wearing, worn: ReadonlyMap<I
   item.move(f.time, _p.copy(at.position).applyQuaternion(quaternion).add(position), _q.copy(quaternion).multiply(at.quaternion));
 }
 
-/** What a body wears from the start (`HumanoidOptions.wearing`): an item, the bone it is on, and where it sits in that bone's frame. */
-export interface Dressed {
-  item: Item;
-  on: number;
-  at: Placement;
+/** Attachment history starts stationary at this local placement. */
+export function sitsAt(position: Vector3, quaternion: Quaternion): NonNullable<Wearing['sits']> {
+  return { position, quaternion, prev: position.clone(), prev2: position.clone(), prevQ: quaternion.clone(), prev2Q: quaternion.clone() };
 }
 
 const _p = new Vector3();

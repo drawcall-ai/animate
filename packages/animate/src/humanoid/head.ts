@@ -5,20 +5,19 @@ import { live, type Behaviour, type Live, type Motion, type Placement } from '..
 import { clampRotation } from '../core/limits';
 import type { Pose } from '../core/pose';
 import { TrackedPoint, TrackedRotation } from '../core/track';
-import { TIPTOE } from './balance/posture';
+import { lowering, LOWER } from './balance/posture';
 import { INDEX } from './bones';
 import type { Humanoid } from './humanoid';
-import { clamp, forwardOf, wrapAngle } from '../core/math';
-import type { Proportions } from './proportions';
-import { yawOf } from '../core/math';
+import { forwardOf, wrapAngle, yawOf } from '../core/math';
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
-export const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
+const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
 /** how fast the spine's joints may change their motion (rad/s²): braked only where the solve kinks */
 const JOINTS = { accel: 200 };
 /** of the head's turn and bend from the pelvis, the share each joint takes first, lumbar to skull (old core: the trunk 0.3, the neck 0.35 more, the head the rest) */
 const SHARE = [0.15, 0.15, 0.35, 0.35];
-/** the spine's solve: how many times the trunk swings the head over and the neck turns it again */
+/** Tuned: eight passes converge low tracked targets within the head-position gate; four left a residual.
+ * The spine's solve: how many times the trunk swings the head over and the neck turns it again */
 const PASSES = 8;
 /**
  * Leading: once the head is turned this far off the body's facing (rad), for this long (s), the body
@@ -31,11 +30,6 @@ const SQUARED = 0.15;
 /** how far ahead of the centre of mass the eyes are standing upright (m, default body), and the share of a bow's sweep that takes them further ahead (the hips go back the rest) */
 const EYES_AHEAD = 0.085;
 const BOW_AHEAD = 0.5;
-/** the furthest the trunk bows before the body steps closer (rad) */
-const MOST_BOW = 1.0;
-/** how far the knees let the pelvis down at most (× height), and how fast `balance` changes it (m/s²): balance/posture.ts `SQUAT`, balance/balance.ts `LOWER.accel` */
-const SQUAT = 0.25;
-const KNEES = 3;
 /** how quickly the way where the body stands moves is picked up (1/s) */
 const SPOT_RATE = 10;
 /** how fast the body walks round and over under a head (m/s, m/s²) */
@@ -121,10 +115,10 @@ class Under<W> {
     // own pace, so the pelvis lags one moving at v by about v² / 2a)
     const rising = Number.isNaN(this.height) ? 0 : (eyes.y - this.height) / f.dt;
     this.height = eyes.y;
-    const drop = p.eyeHeight - eyes.y - (rising * Math.abs(rising)) / (2 * KNEES);
+    const drop = p.eyeHeight - eyes.y - (rising * Math.abs(rising)) / (2 * LOWER.accel);
     const fwd = forwardOf(yaw, _v);
     const com = f.prev.com(_c);
-    const { lower, bow } = stoop(p, (eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z, drop);
+    const { lower, bow } = lowering(p, { height: p.eyeHeight, ahead: ((eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z - EYES_AHEAD * p.scale) / BOW_AHEAD, drop });
     // (standing where that bow puts the eyes: where it stands now, unless they are further ahead or
     // behind than it takes them; and how fast that moves: a head going off is stepped after as it goes)
     const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
@@ -135,23 +129,6 @@ class Under<W> {
 }
 
 const SPINE = [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head];
-
-/**
- * how a standing body brings its eyes `ahead` of its centre of mass (m) and `drop` below standing
- * (m): bowed (rad) as far as takes them that far ahead (the hips going back the rest), no further than
- * lets them down that far on straight knees, nor than MOST_BOW; the knees bent (`lower`, m) for
- * the rest of the drop as far as they bend, bowed further past that; up on the toes for eyes above
- * standing
- */
-function stoop(p: Proportions, ahead: number, drop: number): { lower: number; bow: number } {
-  const above = p.eyeHeight - p.hipHeight;
-  const reach = (ahead - EYES_AHEAD * p.scale) / (BOW_AHEAD * above);
-  const bow = Math.min(Math.asin(clamp(reach, 0, 1)), Math.acos(1 - clamp(drop / above, 0, 1)), MOST_BOW);
-  const lower = drop - above * (1 - Math.cos(bow));
-  if (lower < 0) return { lower: Math.max(lower, -TIPTOE * p.scale), bow };
-  if (lower <= SQUAT * p.height) return { lower, bow };
-  return { lower: SQUAT * p.height, bow: Math.acos(1 - clamp((drop - SQUAT * p.height) / above, 0, 1)) };
-}
 
 /**
  * the spine (lumbar to skull) placed in `pose` so the eyes (`eyes`, in the head's frame) are at

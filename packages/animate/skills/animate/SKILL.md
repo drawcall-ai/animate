@@ -32,14 +32,11 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
       const back = horse.pose.point(0, onBack.position, new Vector3());
       yield* parallel<Frame>('all', approach(h, back, { face: Math.PI / 2 }), withGaze(h, back, function* () {
         yield* hold(h, saddle, { to: carried(h), until: arriving(h, 0.3) })(); // lifted, carried along
-        yield* carry(h, saddle, [[1.1, { position: new Vector3(-0.25, 0.45, 0), quaternion: across }], [0.75, onBack]], { on: [horse, 0] })();
-      }, { first: false }));
+        yield* carry(h, saddle, [[1.1, { position: new Vector3(-0.25, 0.45, 0), quaternion: across }], [0.75, onBack]], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }) })();
+      }));
       yield* wear(horse, saddle, 0)(); // the horse moves it from now on
     })();
-    yield* named('check the fit', () => parallel<Frame>('all',
-      release(h, ['left', 'right']),
-      scan(h, [() => saddle.current.position, () => horse.pose.position(HEAD)]),
-    ))();
+    yield* named('check the fit', withGaze(h, () => horse.pose.position(HEAD), release(h, ['left', 'right'])))();
     yield* named('lead out', function* () {
       yield* grab(h, { right: [rope, 'knot'] })();
       yield* parallel<Frame>('race', hold(h, rope, { to: carried(h, 'right') }), walkTo(h, { to: gate }));
@@ -64,7 +61,7 @@ yield* parallel<Frame>('all', release(h, ['left', 'right']), grab(h, { right: [r
 yield* grab(h, { right: [rope, 'knot'] })();
 
 // within a motion: one course through several places passes them without stopping
-yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: [horse, 0] })();
+yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }) })();
 // not carry(…[[1.1, over]]) then carry(…[[0.75, onBack]]): the saddle stops dead above the back
 ```
 
@@ -72,7 +69,7 @@ yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: [horse, 0] })();
 
 ## Units, frames and goals
 
-Metres, seconds, radians; +Y up, the floor at y = 0; yaw 0 faces +Z and +X is then the body's left. Goals live in one of three frames: the world (the default), a bone (`onBone(body, bone, local, { facing })`, `carry(…, { on: [body, bone] })`; lengths there scale with that body), or an item (`onItem(item, local)`, `carry(…, { on: item })`). Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
+Metres, seconds, radians; +Y up, the floor at y = 0; yaw 0 faces +Z and +X is then the body's left. Goals live in one of three frames: the world (the default), a bone (`onBone(body, bone, local)` or `facingAt(h, bone, local)`; for a carry on another body, pass `onBone(body, bone, { position: new Vector3(), quaternion: new Quaternion() })` as `on`; bone goals scale with the body, live carry frames use metres), or an item (`onItem(item, local)`, `carry(…, { on: item })`). Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
 
 Place what belongs to a body in its frame: `carried(h)` rather than a carry height like `y: 1.08` (right for one stature only), `onBone(horse, …)` rather than the horse's position plus an offset (right only while it stands still). Time beats by task conditions or distances to props, not raw coordinates such as `root.z > 8.2`.
 

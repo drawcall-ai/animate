@@ -38,6 +38,8 @@ export interface Proportions extends Rest {
   readonly armLength: number;
   /** upper-arm joint sideways from the midline, at rest */
   readonly shoulderHalfWidth: number;
+  /** upper-arm joint above the floor, standing */
+  readonly shoulderHeight: number;
   /** skull centre in the head bone's frame (balance, self-collision) */
   readonly headCenter: Vector3;
   /** eye midpoint in the head bone's frame: where a head target puts the head */
@@ -124,6 +126,7 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Pro
     upperArm,
     forearm,
     armLength: upperArm + forearm,
+    shoulderHeight: rest.hips.y + o.spine.y + o.chest.y + o.leftShoulder.y + o.leftUpperArm.y,
     shoulderHalfWidth: Math.abs(o.leftShoulder.x + o.leftUpperArm.x),
     headCenter: new Vector3(0, 0.05 * H, 0.015 * H),
     eyes: new Vector3(0, head.eye.y, head.eye.z),

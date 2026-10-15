@@ -2,7 +2,7 @@
 // for the bounds): the terminal's position and turn stiff targets (a contact, a landing), or free in swing
 // (joint references shape it while the sole clears the ground); each joint's reference a soft target weighted by
 // the rig's own range for it; the ground a stiff one-sided target; every joint within its range.
-import { solveFree } from './linear';
+import { solveFree } from './cholesky';
 import { Quaternion, Vector3 } from 'three';
 import { beyond, clampRotation } from '../limits';
 import type { Pose } from '../pose';

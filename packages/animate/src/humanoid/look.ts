@@ -5,10 +5,8 @@ import { gazeOff, lookAt, SHIFT } from '../core/gaze';
 import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
-import { NECK_PITCH } from './profile/limits';
 import type { Humanoid } from './humanoid';
-import type { ReadonlyPose } from '../core/pose';
-import { clamp, forwardOf, lerp, smoothstep, wrapAngle } from '../core/math';
+import { forwardOf, lerp, smoothstep } from '../core/math';
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
 const HEAD_SHARE = 0.55;
@@ -58,16 +56,16 @@ const _com = new Vector3();
 const _v = new Vector3();
 
 /**
- * `task` with the eyes on `at` first: `task` sets off once they are within 1° of comfortable eye range or after 1.2 s, and
+ * `task` with the eyes on `at`. With `first: true`, `task` sets off once they are within 1° of comfortable eye range or after 1.2 s, and
  * a moment more, `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the
  * hand goes for ~0.5 s before it (Land & Hayhoe 2001) — and they stay till it ends. For a point
  * further below the eyes than the neck pitches the head, the body bows to see it (asks `balance`),
- * or at least `bow` (rad: work at the waist, the eyes over the hands). With `first: false` the eyes
- * do not lead: `task` sets off at once (the eyes on what the hands already work). Put it after the
+ * or at least `bow` (rad: work at the waist, the eyes over the hands). By default
+ * `task` sets off at once (the eyes on what the hands already work). Put it after the
  * base (its `lookAt` overrides `lookAround`'s).
  */
 export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour<W> {
-  const { bow = 0, first = true } = options;
+  const { bow = 0, first = false } = options;
   return function* () {
     let lead = options.lead ?? NaN;
     yield* parallel<Frame<W>>(
@@ -89,51 +87,7 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
   };
 }
 
-/** Inspect a path of live attention points, continuously moving the gaze between them.
- * Segment duration is staging, not a physiological constant. Eyes and trunk share the usual limits.
- */
-export function scan<W>(h: Humanoid<W>, points: readonly Live<Vector3, W>[], seconds = 0.6): Behaviour<W> {
-  if (points.length < 2 || !(seconds > 0)) throw new Error('scan needs two points and a positive segment duration');
-  return function* () {
-    let start: number | null = null;
-    yield* withGaze(h, (f) => {
-      start ??= f.time;
-      const along = Math.min(points.length - 1, (f.time - start) / seconds);
-      const i = Math.min(points.length - 2, Math.floor(along));
-      return live(points[i], f).clone().lerp(live(points[i + 1], f), smoothstep(0, 1, along - i));
-    }, () => when(timePassed((points.length - 1) * seconds, 'seconds')), { first: false })();
-  };
-}
-
 /** the eyes have got where they look: within this of it (rad, 1°), or looked toward it this long (s: a point the head cannot turn to); and how long after that a task they lead sets off (s) */
 const ARRIVED = Math.PI / 180;
 const LONGEST = 1.2;
 const LEAD = [0.1, 0.3];
-/** The trunk supplies downward gaze beyond comfortable cervical flexion and eye declination. */
-const MOST_BOW = (90 - NECK_PITCH) * Math.PI / 180;
-
-/** Postural requests shared by idle gaze and explicit lookAt, without writing the trunk. */
-export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>) {
-  const hips = pose.position(0);
-  const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.gait.facing);
-  // Read profile: ~75° cervical rotation is a limit. Recruit the trunk from 63°
-  // rather than waiting until the neck is already at its limit.
-  if (Math.abs(bearing) > 1.1) h.asks.twist = clamp(bearing - Math.sign(bearing) * 1.1, -0.6, 0.6);
-  const p = h.proportions;
-  const ahead = Math.hypot(point.x - hips.x, point.z - hips.z);
-  const height = point.y - hips.y;
-  const neck = NECK_PITCH * Math.PI / 180;
-  const trunk = p.offsets.spine.y + p.offsets.chest.y + p.offsets.neck.y;
-  const head = p.offsets.head.y;
-  let best = 0;
-  let least = Infinity;
-  // Choose a bow from standing geometry: reacting to the current head position chases its own bow.
-  for (let b = 0; b <= MOST_BOW + 1e-9; b += MOST_BOW / 12) {
-    const eyeUp = trunk * Math.cos(b) + head * Math.cos(b + neck / 2) + p.eyes.y * Math.cos(b + neck) - p.eyes.z * Math.sin(b + neck);
-    const eyeAhead = trunk * Math.sin(b) + head * Math.sin(b + neck / 2) + p.eyes.y * Math.sin(b + neck) + p.eyes.z * Math.cos(b + neck);
-    const pitch = Math.atan2(eyeUp - height, ahead - eyeAhead);
-    const off = Math.max(0, pitch - (neck + h.gazer.range.down + b));
-    if (off < least - 1e-3) [least, best] = [off, b];
-  }
-  h.asks.bow = Math.max(h.asks.bow, best);
-}

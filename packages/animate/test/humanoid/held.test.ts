@@ -1,9 +1,9 @@
+import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
-import { action, parallel, timePassed } from '@pmndrs/timeline';
+import { action, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import {
-  Body, Carrier, Humanoid, INDEX, Item, STEP, carried, carry, createSkeletonModel,
-  hold, idle, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze,
+  Body, Carrier, INDEX, Item, STEP, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze,
   type Frame,
 } from '../../src';
 import { leg } from '../core/rigs';
@@ -14,8 +14,7 @@ it('keeps an unsupported grip through the next task’s gaze opening, then relea
   let samples = 0;
   let off = 0;
   let released = false;
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), function* () {
+  const h = standing((h) => [function* () {
       yield* reachFor(h, { right: [item, 'handle'] })();
       yield* hold(h, item, { to: carried(h, 'right'), until: timePassed(1, 'seconds') })();
       gap = true;
@@ -23,13 +22,12 @@ it('keeps an unsupported grip through the next task’s gaze opening, then relea
         gap = false;
         yield* release(h, ['right'])();
         released = true;
-      })();
+      }, { first: true })();
     }, action<Frame>({ update: (f) => {
       if (!gap) return;
       samples++;
       off = Math.max(off, f.current.position(INDEX.rightHand).distanceTo(item.current.position));
-    } }));
-  });
+    } })]);
   for (let i = 0; i < 420; i++) h.update(STEP);
   expect(samples).toBeGreaterThan(5);
   expect(off).toBeLessThan(0.03);
@@ -44,15 +42,13 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
   const goal = new Vector3(-0.15, 1.1, 0.35);
   let world = new Vector3();
   let done = false;
-  const h = new Humanoid(createSkeletonModel(height), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), function* () {
+  const h = standing((h) => [function* () {
       yield* reachFor(h, { right: [item, 'handle'] })();
       yield* carry(h, item, [[0.5, { position: goal }]])();
       world = item.current.position.clone();
       yield* carry(h, item, [[0.5, { position: new Vector3(-0.15, 0.15, 0.3) }]], { on: frame })();
       done = true;
-    });
-  });
+    }], height);
   for (let i = 0; i < 360; i++) h.update(STEP);
   expect(done).toBe(true);
   expect(world.distanceTo(goal)).toBeLessThan(0.011);
@@ -81,9 +77,7 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
 
 it('reports time, beat, cause, item, grip and distance with dev off', () => {
   const item = new Item(new Vector3(0, 1, 4), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'saddle' });
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 })));
-  });
+  const h = standing((h) => [named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 }))]);
   let caught: unknown;
   try { h.update(1); } catch (cause) { caught = cause; }
   expect(caught).toBeInstanceOf(Error);
@@ -104,19 +98,17 @@ it('an unsupported hold travels with the body between carries, and an explicit m
   let off = 0;
   let travelling = false;
   const goal = new Vector3(-0.2, 1.15, 2.3);
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), function* () {
+  const h = standing((h) => [function* () {
       yield* reachFor(h, { right: [item, 'grip'] })();
       yield* carry(h, item, [[0.5, carried(h, 'right')]])();
       start = item.current.position.clone();
       travelling = true;
-      yield* withGaze(h, new Vector3(1, 1.5, 3), walkTo(h, { to: new Vector3(0, 0, 2) }))();
+      yield* withGaze(h, new Vector3(1, 1.5, 3), walkTo(h, { to: new Vector3(0, 0, 2) }), { first: true })();
       travelling = false;
       end = item.current.position.clone();
       yield* carry(h, item, [[0.5, { position: goal }]])();
       done = true;
-    });
-  });
+    }]);
   for (let tick = 0; tick < 12 * 60; tick++) {
     h.update(STEP);
     if (travelling) off = Math.max(off, h.pose.position(INDEX.rightHand).distanceTo(item.current.position));

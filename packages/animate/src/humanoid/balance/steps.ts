@@ -4,8 +4,7 @@
 import { Vector3 } from 'three';
 import { coordinatesOf } from '../../core/limits';
 import { INDEX, type Side } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../../core/math';
-import { yawOf } from '../../core/math';
+import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../core/math';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import type { Carriage } from './carriage';
 import { ankleFor, footprint } from './foot';
@@ -21,6 +20,7 @@ const SLOW = [0.1, 0.2] as const;
 /** how far a runner's leg reaches back to its planted foot before it goes (× its length) */
 const RUN_REACH = 0.93;
 /** how far the extrapolated centre of mass may leave the feet before a walking step catches it at once (m, default body) */
+// Tuned: catch at 5 cm rather than 6 cm, retaining reserve during loaded reaches.
 const FALL = 0.05;
 /** how long a standing body must have been falling before it steps (s) */
 const STILL_FALL = 0.1;
@@ -337,6 +337,7 @@ function placeFoot(c: Carriage, s: number, lead: number, out: Vector3): number {
   }
   // (the facing turns with a curving path: by 2·arc then)
   // (no further round than a step turns a foot: the curve's turn and the facing asked are not added up past it)
+  // Tuned 0.6 rad foot-heading cap: a turn is shared across steps instead of twisting one stance.
   const yaw = c.yaw + clamp(2 * arc + clamp(wrapAngle(c.goalYaw - c.yaw), -1.2, 1.2) * clamp(lead * 2.5, 0, 1), -0.6, 0.6);
   const narrow = smoothstep(0.1, 0.6, c.speed) * (stance.stagger === 0 ? 1 : 0.3);
   const width = lerp(stance.width, Math.min(stance.width, 0.036 * p.height), narrow);

@@ -24,12 +24,12 @@ export interface Stride {
 }
 
 export function checkGait(gait: LegGait, count: number): void {
+  if (gait.referenceBlend !== undefined && !(gait.referenceBlend >= 0 && gait.referenceBlend <= 1)) throw new Error('reference blend must be in [0, 1]');
   if (!(gait.height > 0 && Number.isFinite(gait.height) && gait.slowest > 0 && Number.isFinite(gait.slowest)) || (gait.referenceSpeed !== undefined && !(gait.referenceSpeed > 0 && Number.isFinite(gait.referenceSpeed))) || gait.contacts.length !== count || gait.clearance.length !== count) throw new Error('gait and chains do not match');
 }
 
 export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
   speed = speedOf(speed);
-  if (gait.referenceBlend !== undefined && !(gait.referenceBlend >= 0 && gait.referenceBlend <= 1)) throw new Error('reference blend must be in [0, 1]');
   if (!(speed >= 0 && Number.isFinite(speed))) throw new Error('leg speed must be finite and nonnegative');
   const v = Math.max(gait.slowest, speed);
   const froude = v * v / (GRAVITY * gait.height);

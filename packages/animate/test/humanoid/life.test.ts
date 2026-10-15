@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, onBone, type Behaviour, type Frame, type Side } from '../../src';
+import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
 import { Life } from '../../src/humanoid/balance/life';
 
 function body(task: (h: Humanoid) => Behaviour, life = true) {
@@ -46,8 +46,8 @@ it('turns the trunk for an across-body reach and for an over-shoulder look withi
 it('grabs a floor grip while the gaze stays in range in a deep squat', () => {
   const item = new Item(new Vector3(-0.1, 0.03, 0.45), new Quaternion(), { grip: { position: new Vector3() } });
   const h = body((h) => function* () {
-    yield* grab(h, { right: [item, 'grip'] })();
-    yield* withGaze(h, item.current.position, hold(h, item), { first: false })();
+    yield* grab(h, { right: [item, 'grip'] }, { first: true })();
+    yield* withGaze(h, item.current.position, hold(h, item))();
   });
   for (let i = 0; i < 360; i++) {
     h.update(1 / 60);
@@ -66,7 +66,7 @@ it('prepares a heavy lift before support leaves, and carries it slower than a li
     const item = new Item(new Vector3(-0.15, 1, 0.4), new Quaternion(), { grip: { position: new Vector3() } }, { mass });
     let start = 0, off = 0, down = 0, preparation = 0, end = 0;
     const h = body((h) => function* () {
-      yield* grab(h, { right: [item, 'grip'] })();
+      yield* grab(h, { right: [item, 'grip'] }, { first: true })();
       const hips = h.pose.position(0).y;
       yield* parallel<Frame>('all', function* () {
         yield* action<Frame>({ update: (f) => { start = f.time; }, until: timePassed(1 / 60, 'seconds') });
@@ -139,7 +139,7 @@ it('keeps sway and breathing after a loaded walk, without spontaneous weight shi
   const item = new Item(new Vector3(-0.15, 1.05, 0.35), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 5, supported: false });
   const h = body((h) => function* () {
     yield* reachFor(h, { right: [item, 'grip'] })();
-    const carrying = hold(h, item, { to: onBone(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }, { facing: true }) });
+    const carrying = hold(h, item, { to: facingAt(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }) });
     yield* parallel<Frame>('race', carrying, walkTo(h, { to: new Vector3(0, 0, 2) }));
     yield* carrying();
   });
@@ -176,7 +176,7 @@ it('takes an 8 kg waist-height grip with a bow and standing knees', () => {
     left: { position: new Vector3(0.18, 0, 0) }, right: { position: new Vector3(-0.18, 0, 0) },
   }, { mass: 8 });
   const h = body((h) => function* () {
-    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] }, { first: true })();
     yield* hold(h, item)();
   });
   let lower = 0;

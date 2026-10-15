@@ -3,7 +3,7 @@ import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
 import { strideAt } from '../../src/core/legs/gait';
-import { Limb, type Motion } from '../../src/core/legs/limb';
+import { Limb, type Walker } from '../../src/core/legs/limb';
 import { Solver } from '../../src/core/legs/solve';
 import { Legs } from '../../src/core/legs/legs';
 import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
@@ -70,7 +70,7 @@ it('shortens a long foothold with at most 40 reach solves and keeps its verified
   pose.setRoot(new Vector3(0, 1.32, 0));
   const limb = new Limb(horseLegs()[0], pose);
   const root = pose.position(0).clone();
-  const walker: Motion = { phase: 0, stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
+  const walker: Walker = { phase: 0, stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
     position.copy(root);
     turn.identity();
   } };

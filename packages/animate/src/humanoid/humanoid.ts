@@ -12,16 +12,15 @@ import { createGait, type Gait } from './balance/balance';
 import { footRotation, type Foot } from './balance/foot';
 import { legOf, STANDING_REACH } from './balance/legs';
 import { INDEX, SIDES, type Side } from './bones';
-import { forwardOf, leftOf } from '../core/math';
+import { forwardOf, leftOf, yawOf } from '../core/math';
 import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
-import { gazeAsks } from './look';
+import { gazeAsks } from './reach-posture';
 import { Rig } from './rig';
-import { yawOf } from '../core/math';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { load, dress, type Bearing } from './worn';
 import { followHeld } from './hands/passive';
-import type { Dressed } from '../core/worn';
+import type { Dressed } from './worn';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -59,7 +58,7 @@ export class Humanoid<W = unknown> {
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it (kept by the body) */
   readonly borne = new Map<Item, Bearing>();
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
-  readonly holding: Record<Side, { item: Item; grip: string } | null> = { left: null, right: null };
+  readonly holding: Record<Side, { item: Item; grip: string; time?: number } | null> = { left: null, right: null };
   private readonly body: Body<W>;
   private readonly ground = new Vector3();
 
@@ -83,7 +82,7 @@ export class Humanoid<W = unknown> {
     this.body = new Body(
       rig.skeleton,
       behaviour(this),
-      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn, after: (f) => { moveHeld(f); load(this, f); } },
+      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn, afterWorn: (f) => { moveHeld(f); load(this, f); } },
     );
     rig.write(this.body.pose, 0);
   }

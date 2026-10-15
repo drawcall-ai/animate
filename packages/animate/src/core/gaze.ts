@@ -1,3 +1,4 @@
+import { wrapAngle, smoothstep } from './math';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from './body';
@@ -81,9 +82,9 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         const eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
         const ways = (line: Vector3) => {
           const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
-          const toward = wrap(Math.atan2(line.x, line.z) - facing);
+          const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
           upright(line, facing + toward * vertical, _q);
-          upright(line, facing + wrap(toward + Math.PI) * vertical, _o);
+          upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
           _q.multiply(_p.setFromAxisAngle(X, -eyePitch));
           _o.multiply(_p);
         };
@@ -97,7 +98,7 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         // where the neck stops short — a large shift ends with the eyes a little off the head's
         // line; up or down, and looking over the top, the head all the way: the neck pitches
         // nearer its stops, and the eyes have little to spare there)
-        const aside = wrap(Math.atan2(d.x, d.z) - facing);
+        const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
         const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2)));
         if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
         // Follow in world space so the trunk can move beneath a steady gaze.
@@ -219,11 +220,7 @@ const _q = new Quaternion();
 const _p = new Quaternion();
 const _f = new Vector3();
 const _l = new Vector3();
-const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
-const smoothstep = (lo: number, hi: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo)));
-  return t * t * (3 - 2 * t);
-};
+
 const _rel = new Quaternion();
 const _share = new Quaternion();
 const _goal = new Quaternion();

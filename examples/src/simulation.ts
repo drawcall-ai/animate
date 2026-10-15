@@ -1,6 +1,5 @@
-import { parallel } from '@pmndrs/timeline';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Humanoid, watch, type Frame, type Pose, type World } from '@drawcall/animate';
+import { Humanoid, type Pose, type World } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
 import { FIXED_DT, type Prop, type Role, type Scenario, type Stage } from './scenario';
 
@@ -25,11 +24,7 @@ export class Simulation {
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
       cast.push(new Humanoid(model(role), (h) => {
-        const story = this.stage.script(h, i, cast);
-        if (!dev) return story;
-        const finished = watch<World>(scenario.id, (f) => f.time + 1e-9 >= scenario.duration && !this.stage.done()
-          ? { check: 'scenario unfinished', value: 1, limit: 0, where: scenario.id } : null);
-        return function* () { yield* parallel<Frame<World>>('all', finished, story); };
+        return this.stage.script(h, i, cast);
       }, { dev, world: this.world, position: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [] }));
     });
     this.bodies = cast.map((h) => h.snapshot());

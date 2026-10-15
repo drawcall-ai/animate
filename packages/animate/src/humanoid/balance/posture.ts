@@ -36,6 +36,8 @@ export const TIPTOE = 0.07;
 const MOST_DROP = 0.035;
 /** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; how far the knees let the pelvis down at most (× height): a squat */
 const HINGE = 0.6;
+// Tuned quiet shift: unload one knee while keeping both soles planted.
+const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
 export const SQUAT = 0.38;
 /** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
 export const LOWER = { accel: 3, speed: 0.6 };
@@ -120,15 +122,15 @@ export class Posture {
     const weight = _v.set(0, 0, 0);
     if (onto && !c.moving) {
       weight.addVectors(c.feet[0].position, c.feet[1].position).multiplyScalar(0.5);
-      weight.subVectors(c.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(0.65);
+      weight.subVectors(c.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(SHIFT.share);
     }
     this.weight.lerp(weight, 1 - Math.exp(-dt));
     pelvis.add(this.quiet.add(this.weight));
     // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
     const shifted = this.weight.dot(left) / Math.max(p.hipHalfWidth, 1e-6);
-    roll += 0.06 * shifted;
+    roll += SHIFT.roll * shifted;
     quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
-    const standing = p.hipHeight - c.stance.crouch - lower + lift - 0.012 * p.scale * Math.abs(shifted);
+    const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
     pelvis.y = softMin(standing, reachLimit(c, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower)), 0.015);
 
     // the trunk: the thorax counter-rotating and rolling, leaning, nodding and bowing
@@ -151,30 +153,25 @@ const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(
 
 /**
  * Bring the shoulders down by `drop` (m): mostly through the knees, with bow growing smoothly
- * into a deep squat. Both stay within their comfortable stops.
+ * into a deep squat. `height` is the target joint’s standing height, so the same
+ * solve applies to shoulders and eyes. Both stay within their comfortable stops.
  */
-export function lowering(p: Proportions, drop: number): { lower: number; bow: number } {
-  const H = p.height;
-  const bow = MOST_BOW * smoothstep(0, SQUAT * H, drop) ** 2;
-  const lower = softMin(Math.max(0, drop - bowDrop(p, SQUAT * H, bow)), SQUAT * H, BEND * H);
-  return { lower, bow };
+export function lowering(p: Proportions, { drop, ahead = 0, height }: { drop: number; ahead?: number; height: number }): { lower: number; bow: number } {
+  // Tuned articulated lever: 80% of the hip-to-target height; joints share the bow.
+  const lever = bowLever(p, height);
+  const aheadBow = Math.min(Math.asin(clamp(ahead / lever, 0, 1)), Math.acos(1 - clamp(drop / lever, 0, 1)));
+  // Prefer the knees for a vertical drop; recruit further bow once their reserve ends.
+  // A tuned 3° entry blend avoids a hard onset when the forward request is zero.
+  const deepBow = Math.acos(1 - clamp((drop - SQUAT * p.height) / lever, 0, 1));
+  const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * smoothstep(0, SQUAT * p.height, drop)));
+  const lower = clamp(drop - lever * (1 - Math.cos(bow)), 0, SQUAT * p.height);
+  return { lower: drop < 0 ? Math.max(drop, -TIPTOE * p.scale) : lower, bow };
 }
 
-/** The width of the squat's soft stop (× height), and its maximum trunk bow. */
-const BEND = 0.02;
+export const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
+
+/** Retain posture's tuned 60° stop for reach, gaze and tracked heads. */
 const MOST_BOW = NECK_PITCH * Math.PI / 180;
-
-/**
- * How far a bow of `bow` (rad) brings the shoulders down (m), let down `lower` by the knees: the
- * pelvis tipping its share, the lower back and the thorax half the rest each.
- */
-function bowDrop(p: Proportions, lower: number, bow: number): number {
-  const hinge = hingeOf(p, lower) * bow;
-  const { spine, chest, leftShoulder } = p.offsets;
-  const height = (a: number, b: number, c: number) => chest.y * Math.cos(a) + spine.y * Math.cos(b) + leftShoulder.y * Math.cos(c);
-  // (the spine's origin rides the pelvis, the chest's the lower back, the shoulders' the thorax)
-  return height(0, 0, 0) - height(hinge, hinge + (bow - hinge) / 2, bow);
-}
 
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
 function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>): number {

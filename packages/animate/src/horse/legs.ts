@@ -3,8 +3,8 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { Legs } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
-import type { LegChain, Rocker } from '../core/legs/legs';
-import { LEGS, PELVIS, NECK, HEAD } from './skeleton';
+import type { LegChain } from '../core/legs/legs';
+import { LEGS, PELVIS, NECK, HEAD, MUZZLE } from './skeleton';
 import { powerGait } from '../core/legs/schedule';
 
 // Recalled: hip height ~1.2 m, slow walk threshold 0.8 m/s (spike).
@@ -31,7 +31,7 @@ export const HORSE_TROT = powerGait(1.2, 0.8, [0.52, 0.02, 0, 0.5], 2.15, 0.3 * 
 // Recalled: trot curves below and the 1996 excursion values retained from the spike.
 // Read: Hodson et al. 2000 (doi:10.2746/042516400777032237): fore cannon vertical at 28% stride.
 // Tuned: walk keys implement those findings; they are not digitised paper data.
-const cycle = (keys: [number, number][], alternate: [number, number][] = keys, alternateWeight = 1): JointCycle => ({ duty: 0.45, keys, alternate, alternateWeight });
+const cycle = (keys: [number, number][], alternate?: [number, number][], alternateWeight = 1): JointCycle => ({ duty: 0.45, keys, alternate, alternateWeight });
 const FORE = {
   scapula: cycle([[0, 8], [0.22, 0], [0.45, -10], [0.7, 2], [0.9, 10]]),
   shoulder: cycle([[0, 5], [0.22, -3], [0.45, -15], [0.6, -5], [0.75, 15], [0.9, 15]]),
@@ -68,7 +68,7 @@ const HIND_COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]
   [[0, 0], [0.22, -5], [0.45, 10], [0.6, 35], [0.8, 15]]);
 /** the hoof flat on the ground, breaking over its toe at the end of the stance (°, + toe up) */
 // Tuned: finish the toe roll before lift-off, braking the downward spin inherited by swing.
-const BREAKOVER: Rocker = { keys: [[0, 0], [0.75, 0], [0.9, -25], [1, -25]] };
+const BREAKOVER: LegChain['rocker'] = [[0, 0], [0.75, 0], [0.9, -25], [1, -25]];
 
 /** the horse's body for the core */
 export function horseLegs(): readonly LegChain[] {
@@ -97,8 +97,7 @@ const fail = (what: string): never => { throw new Error(what); };
  * This rig has one pelvis joint, not separate thoracolumbar vertebrae.
  */
 export function horsePelvis(f: Frame, legs: Legs): void {
-  const speed = f.prev.position(0).distanceTo(f.prev2.position(0)) / f.dt;
-  const moving = Math.min(1, speed / 0.8);
+  const moving = walkBlend(f);
   const phase = 2 * Math.PI * legs.legs[2].phase;
   const wave = Math.sin(phase);
   f.current.setLocal(PELVIS, new Quaternion().setFromEuler(new Euler(
@@ -109,19 +108,23 @@ export function horsePelvis(f: Frame, legs: Legs): void {
 }
 
 /** Walk head carriage: two nods per stride, entrained to foreleg contact rather than wall time. */
-export function horseCarriage(f: Frame, legs: Legs, person?: Readonly<Vector3>): void {
-  const speed = f.prev.position(0).distanceTo(f.prev2.position(0)) / f.dt;
+export function horseCarriage(f: Frame, legs: Legs, avoid?: Readonly<Vector3>): void {
+  const moving = walkBlend(f);
   // Read: Loscher et al. 2016 (doi:10.1098/rspb.2016.1908), cranial excursion 9.1 ± 3.4 cm.
   // Tuned for scene legibility: 7 cm amplitude / 0.63 m neck lever = 0.111 rad.
   // The read 9.1 cm is peak-to-peak, not amplitude; this is deliberately larger.
-  const nod = 0.111 * Math.min(1, speed / 0.8) * Math.sin(4 * Math.PI * (legs.legs[0].phase - 0.15));
-  // Turn away from a nearby person's head, eased from the previous carriage.
-  const muzzle = f.prev.point(HEAD, new Vector3(0, -0.42, 0.33), new Vector3());
-  const distance = person ? muzzle.distanceTo(person) : Infinity;
-  const local = person ? new Vector3().copy(person).sub(f.prev.position(0)).applyQuaternion(f.prev.rotation(0).clone().invert()) : new Vector3();
+  // Tuned phase: peak nod between fore contacts rather than at hoof strike.
+  const nod = 0.111 * moving * Math.sin(4 * Math.PI * (legs.legs[0].phase - 0.15));
+  // Tuned clearance: turn up to 0.5 rad within 0.8 m, over a 0.3 m band,
+  // with a 0.25 s response. The caller supplies the point to avoid.
+  const muzzle = f.prev.point(HEAD, MUZZLE, new Vector3());
+  const distance = avoid ? muzzle.distanceTo(avoid) : Infinity;
+  const local = avoid ? new Vector3().copy(avoid).sub(f.prev.position(0)).applyQuaternion(f.prev.rotation(0).clone().invert()) : new Vector3();
   const away = -Math.sign(local.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3));
   const previous = new Vector3(0, 0, 1).applyQuaternion(f.prev.local(NECK));
   const turn = Math.atan2(previous.x, previous.z) + (away - Math.atan2(previous.x, previous.z)) * (1 - Math.exp(-4 * f.dt));
   f.current.setLocal(NECK, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), nod)));
   f.current.setLocal(HEAD, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -nod / 2));
 }
+
+const walkBlend = (f: Frame) => Math.min(1, f.prev.position(0).distanceTo(f.prev2.position(0)) / (f.dt * HORSE_WALK.slowest));
