@@ -105,3 +105,19 @@ it('clears the development beat when nothing is running', () => {
   body.update(STEP);
   expect(body.frame.dev?.beat).toBeUndefined();
 });
+
+it.each([new Vector3(1, 1.25, 2), new Vector3(-1, 1.4, 2)])('approaches a placing point squarely by default: %s', (point) => {
+  let done = false;
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', idle(h), function* () {
+      yield* approach(h, point)();
+      done = true;
+    });
+  });
+  for (let tick = 0; tick < 12 * 60; tick++) h.update(STEP);
+  const middle = h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
+  const delta = point.clone().sub(middle);
+  expect(done).toBe(true);
+  expect(delta.length()).toBeLessThan(0.95 * h.proportions.armLength);
+  expect(Math.abs(Math.atan2(delta.x, delta.z) - h.gait.facing)).toBeLessThan(0.3);
+});

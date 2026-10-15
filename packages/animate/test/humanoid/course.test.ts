@@ -59,3 +59,16 @@ describe('course', () => {
     expect(path.find((p) => Math.abs(p.t - 1.4) < STEP / 2)?.position.x).toBeCloseTo(0.1, 2);
   });
 });
+
+it('reads a live course endpoint throughout travel and after arrival', () => {
+  const item = new Item(new Vector3(), new Quaternion(), {});
+  let reads = 0;
+  const c = course(item, WORLD, [[1, (f) => { reads++; return { position: new Vector3(f.time, 0, 0) }; }]]);
+  const body = new Body(leg(), () => action<Frame>({ update: (f) => {
+    const at = c.to(f);
+    if (f.time > 1.1) expect(at.position.x).toBeCloseTo(f.time, 8);
+  } }));
+  for (let tick = 0; tick < 120; tick++) body.update(STEP);
+  expect(reads).toBe(120);
+  expect(c.over(body.frame)).toBe(true);
+});

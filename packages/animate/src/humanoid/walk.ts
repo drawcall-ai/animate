@@ -16,11 +16,20 @@ const ARRIVED = { distance: 0.15, yaw: 0.15 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
 const CLOSE = 1;
 
-/** a condition: the walk now running arrives within `seconds`; false when no walk is running */
-export const arriving =
-  <W>(h: Humanoid<W>, seconds: number) =>
-  (): boolean =>
-    h.gait.eta <= seconds;
+/** A walk arrives within `seconds`, or no walk runs and the body is settled.
+ * Observe an idle body on two sub-steps so a parallel walk can publish its goal first.
+ */
+export function arriving<W>(h: Humanoid<W>, seconds: number) {
+  let idleAt = NaN;
+  return (f: Frame<W>): boolean => {
+    if (h.gait.eta !== Infinity) {
+      idleAt = NaN;
+      return h.gait.eta <= seconds;
+    }
+    if (Number.isNaN(idleAt)) idleAt = f.time;
+    return f.time > idleAt && h.gait.settled;
+  };
+}
 
 /** about how fast the body turns (rad/s), and its minimum estimated starting pace (m/s) */
 const TURNING = 2;

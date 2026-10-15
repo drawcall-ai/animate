@@ -80,11 +80,12 @@ export class Legs {
    * Braking speed follows v² = 2ad; heading turns no faster than a/v (lateral acceleration).
    * Target velocity predicts continuing travel until touchdown.
    * Motion values belong to the caller; this controller has no species-specific gains.
-   * Throws when no shortened forecast is supported, as for a goal beside or behind the root
-   * (no sideways or backward steps): pursue a goal ahead, or stand on the root's own position.
+   * Goals outside the forward cone brake and wait until they move ahead. Throws only if no supported forecast exists.
    */
   toward(f: Frame, goal: Pick<Target, 'position' | 'velocity'>, motion: RootMotion): void {
     if (!(motion.accel > 0 && Number.isFinite(motion.accel)) || (motion.speed !== undefined && !(motion.speed >= 0 && Number.isFinite(motion.speed)))) throw new Error('root motion needs finite positive acceleration and nonnegative speed');
+    if (![goal.position.x, goal.position.y, goal.position.z, ...(goal.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error('root goal must be finite');
+    if ([motion.turnAccel, motion.turnSpeed].some((value) => value !== undefined && !(value >= 0 && Number.isFinite(value)))) throw new Error('root turn motion must be finite and nonnegative');
     const geometry = {
       height: this.standingHeight,
       radius: Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z))),
@@ -116,8 +117,14 @@ export class Legs {
       }
       if (!found) share *= 0.75;
     }
-    if (!found) throw new Error('legs cannot support root follower');
     step = forecast();
+    if (!found) {
+      // A pursuit may be unsupported while standing remains possible. Wait on the same checks.
+      const position = f.prev.position(0).clone();
+      const quaternion = f.prev.rotation(0).clone();
+      step = { root: () => ({ position, quaternion }), speed: 0 };
+      if (!supported(step)) throw new Error('legs cannot support root follower');
+    }
     const at = step.root(f.time);
     f.current.setRoot(at.position);
     f.current.setLocal(0, at.quaternion);

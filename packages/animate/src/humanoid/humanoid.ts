@@ -20,6 +20,7 @@ import { Rig } from './rig';
 import { yawOf } from '../core/math';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { load, dress, type Bearing } from './worn';
+import { followHeld } from './hands/passive';
 import type { Dressed } from '../core/worn';
 
 export interface HumanoidOptions<W> {
@@ -78,10 +79,11 @@ export class Humanoid<W = unknown> {
       lead: (pose, point) => gazeAsks(this, pose, point),
     };
     const worn = dress(this, start.pose, options.wearing?.(p) ?? []);
+    const moveHeld = followHeld(this);
     this.body = new Body(
       rig.skeleton,
       behaviour(this),
-      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn, after: (f) => load(this, f) },
+      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn, after: (f) => { moveHeld(f); load(this, f); } },
     );
     rig.write(this.body.pose, 0);
   }

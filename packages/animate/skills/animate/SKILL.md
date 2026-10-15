@@ -68,7 +68,7 @@ yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: [horse, 0] })();
 // not carry(…[[1.1, over]]) then carry(…[[0.75, onBack]]): the saddle stops dead above the back
 ```
 
-`[seconds, still]` holds a course still on purpose. `arriving` waits while no walk runs, so use it where a walk will. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands. And keep a carried item's movers back to back in one branch (`hold` → `carry`, `withGaze(…, { first: false })` around both): while no task moves it, the hands stay on it but it hangs where it is in the world.
+`[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, after one idle sub-step, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands. Between movers, an unsupported held item keeps its last hold pose relative to the body; supported or worn items stay with their support or wearer.
 
 ## Units, frames and goals
 
@@ -78,7 +78,7 @@ Place what belongs to a body in its frame: `carried(h)` rather than a carry heig
 
 ## Leave placement to the library
 
-The defaults place and time things from the body, the load and the task; a hand-placed number usually reads worse and breaks for another body. Leave `stand` off `grab` and `approach` (they stand where the grips are in comfortable reach; give `face` when putting something onto something), options off `release` (it follows through and settles where the free arms take over), and `speed` off walks unless matching another body's pace. Give items their `mass` rather than slowing anything yourself: walks, holds and lifts slow and prepare for the load, and course seconds are written for an unloaded item. Carry poses come from `carried(h)` / `carried(h, 'right')`. To step back while facing something, `walkTo` a point a little behind with `face` (see `walkTo`).
+The defaults place and time things from the body, the load and the task; a hand-placed number usually reads worse and breaks for another body. Leave `stand` off `grab` and `approach` (they stand where the grips are in comfortable reach; placing points face squarely unless you give `face` for a particular orientation), options off `release` (it follows through and settles where the free arms take over), and `speed` off walks unless matching another body's pace. Give items their `mass` rather than slowing anything yourself: walks, holds and lifts slow and prepare for the load, and course seconds are written for an unloaded item. Carry poses come from `carried(h)` / `carried(h, 'right')`. To step back while keeping the facing, snapshot the target before walking: `const back = h.pose.position(0).clone().add(new Vector3(0, 0, -0.3).applyAxisAngle(new Vector3(0, 1, 0), h.gait.facing));` then `yield* walkTo(h, { to: back, face: h.gait.facing })();`.
 
 What you author: the scene, the order of beats, the places on props a course passes, and how long a pause lasts.
 
@@ -105,11 +105,11 @@ const horse = new Body(HORSE_SKELETON, function* () {
 }, { pose: start });
 ```
 
-`toward` throws when the legs cannot take the root where asked: give it a goal the creature pursues ahead of it or its own position, not one beside or behind it.
+`toward` brakes and waits for side or rear goals until they move into its forward cone; unsupported requests still throw.
 
 ## Checking
 
-Develop with `{ dev: true }` on every body: each sub-step checks the final pose (joint ranges and speeds, planted feet) and appends problems to `body.log`, each with its time and beat. `named('beat', task)` labels beats; thrown errors carry the label too:
+Develop with `{ dev: true }` on every body: each sub-step checks the final pose (joint ranges and speeds, planted feet) and appends problems to `body.log`, each with its time and beat. `named('beat', task)` labels beats; wrap a one-shot timeline as `named('beat', () => parallel<Frame>('all', a, b))`. Thrown errors carry the label too:
 
 ```text
 13.350 s, "saddle the horse": "saddle" left grip "left": 0.035 m off; right grip "right": 0.035 m off; 0.035 m off course end after 2 s

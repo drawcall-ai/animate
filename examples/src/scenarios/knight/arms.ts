@@ -54,7 +54,7 @@ const UPRIGHT = at(-0.27, 0.3, 0.1, new Quaternion());
 
 /** The lance out of its rack: the right hand takes it (the lance ahead of the right shoulder: the head clear of the shaft), lifts it out of its socket and brings it in upright by the right side. Then bear it (`bearLance`). */
 export function takeLance(k: Knight, lance: Item): Behaviour<World> {
-  const lift = (s: Required<Placement>) => at(s.position.x, s.position.y + 0.1, s.position.z);
+  const lift = (_f: Frame, s: Required<Placement>) => at(s.position.x, s.position.y + 0.1, s.position.z);
   return function* () {
     yield* take(k, { right: [lance, 'grip'] }, { stand: { aside: -0.22 } })();
     yield* along(k, lance, [[0.6, lift], [1.2, UPRIGHT]], { on: INDEX.hips })();

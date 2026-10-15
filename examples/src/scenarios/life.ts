@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { carried, carry, createWorld, grab, handTo, hold, idle, Item, walkTo, withGaze, type Leg, type Frame, type World } from '@drawcall/animate';
+import { carried, carry, createWorld, grab, handTo, hold, idle, Item, walkTo, withGaze, type Frame, type World } from '@drawcall/animate';
 import { forwardOf } from '../math';
 import type { Scenario } from '../scenario';
 import { Report, reported, reporting } from '../report';
@@ -61,9 +61,7 @@ export const liftHeavy: Scenario = {
       script: (h) => function* () {
         yield* parallel<Frame<World>>('all', idle(h), function* () {
           yield* reporting(report, ['leftHand', 'rightHand'], grab(h, { left: [box, 'left'], right: [box, 'right'] }))();
-          const lift: Leg[] = [];
-          yield (f) => { lift.push([1.5, carried(h)(f)]); return 'skipped'; };
-          yield* carry(h, box, lift)();
+          yield* carry(h, box, [[1.5, carried(h)]])();
           const there = h.pose.com(new Vector3()).setY(0).addScaledVector(forwardOf(h.gait.facing), 3);
           yield* parallel<Frame<World>>('race', hold(h, box, { to: carried(h) }), walkTo(h, { to: there }));
           done = true;

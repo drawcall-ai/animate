@@ -150,3 +150,46 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
   expect(Math.max(...column)).toBeLessThan(3);
   expect(body.log).toEqual([]);
 });
+
+it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goals (%s, %s), then follows their next position', (x, z) => {
+  const pose = new Pose(SKELETON);
+  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  const goal = new Vector3(x, pose.position(0).y, z);
+  const start = pose.position(0).clone();
+  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
+  } }), { pose, dev: true });
+  for (let tick = 0; tick < 120; tick++) body.update(1 / 60);
+  if (z <= 0) expect(body.pose.position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
+  goal.set(0, start.y, 3);
+  for (let tick = 0; tick < 240; tick++) body.update(1 / 60);
+  expect(body.pose.position(0).z).toBeGreaterThan(1);
+  expect(body.log).toEqual([]);
+});
+
+it('brakes for a moving goal that crosses behind a travelling root', () => {
+  const pose = new Pose(SKELETON);
+  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    const goal = f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2);
+    engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
+  } }), { pose, dev: true });
+  for (let tick = 0; tick < 480; tick++) body.update(1 / 60);
+  expect(body.pose.position(0).z).toBeGreaterThan(0.5);
+  expect(body.pose.position(0).z).toBeLessThan(3);
+  expect(body.log).toEqual([]);
+});
+
+it('rejects invalid follower goals and motion instead of waiting', () => {
+  for (const [position, motion] of [
+    [new Vector3(NaN, 0, 1), { accel: 1 }],
+    [new Vector3(0, 0, 1), { accel: 0 }],
+    [new Vector3(0, 0, 1), { accel: 1, speed: -1 }],
+    [new Vector3(0, 0, 1), { accel: 1, turnAccel: NaN }],
+  ] as const) {
+    const pose = new Pose(SKELETON);
+    const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+    const body = new Body(SKELETON, () => action<Frame>({ update: (f) => engine.toward(f, { position }, motion) }), { pose });
+    expect(() => body.update(1 / 60)).toThrow(/root (goal|motion|turn motion)/);
+  }
+});

@@ -5,8 +5,11 @@ import { live, type Live, type Placement } from '../core/goal';
 import { exp, log } from '../core/rotation';
 import { minimumJerk } from '../core/math';
 
-/** a leg of a course: how long it takes (s), and where it goes in the course's frame — or where, given where the course set out from and where the leg before ended (both in that frame) */
-export type Leg = [seconds: number, to: Placement | ((start: Required<Placement>, last: Required<Placement>) => Placement)];
+/** A leg's duration (s) and place in the course's frame, read every sub-step.
+ * A goal may also read the fixed course start and the preceding place in that frame.
+ * `still` pauses at the preceding place.
+ */
+export type Leg<W = unknown> = [seconds: number, to: Placement | ((f: Frame<W>, start: Required<Placement>, last: Required<Placement>) => Placement)];
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
 export interface Course<W = unknown> {
@@ -24,21 +27,25 @@ export interface Course<W = unknown> {
  * stops to reverse), it comes to rest there and sets off again.
  * It sets off `delay` s after it is first read.
  */
-export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs: readonly Leg[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
+export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs: readonly Leg<W>[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
   let start = NaN;
   let runs: Run[] = [];
+  let from: Required<Placement> | undefined;
+  const moving = legs.some(([, to]) => typeof to === 'function');
   const total = legs.reduce((sum, [seconds]) => sum + seconds / pace, 0);
   const to = (f: Frame<W>): Required<Placement> => {
     const at = live(frame, f);
-    if (Number.isNaN(start)) {
+    if (from === undefined) {
       start = f.time;
       const inverse = at.quaternion.clone().invert();
       // (where it sets out from, in the frame unscaled: the legs' placements are scaled)
-      const from = { position: item.current.position.clone().sub(at.position).applyQuaternion(inverse).divideScalar(scale), quaternion: inverse.multiply(item.current.quaternion) };
+      from = { position: item.current.position.clone().sub(at.position).applyQuaternion(inverse).divideScalar(scale), quaternion: inverse.multiply(item.current.quaternion) };
+    }
+    if (!runs.length || moving) {
       const stops: Required<Placement>[] = [from];
       for (const [, leg] of legs) {
         const last = stops[stops.length - 1];
-        const next = typeof leg === 'function' ? leg(from, last) : leg;
+        const next = typeof leg === 'function' ? leg(f, from, last) : leg;
         stops.push({ position: next.position.clone(), quaternion: (next.quaternion ?? last.quaternion).clone() });
       }
       runs = runsOf(stops, legs.map(([seconds]) => seconds / pace));
@@ -56,7 +63,7 @@ export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs:
 }
 
 /** a leg that stays where the one before ended: a moment held still */
-export const still = (_: Required<Placement>, last: Placement) => last;
+export const still = (_f: Frame, _start: Required<Placement>, last: Placement) => last;
 
 /** a stretch of a course gone without stopping: how long it takes (s), and where it is a share `s` of its length along */
 interface Run {

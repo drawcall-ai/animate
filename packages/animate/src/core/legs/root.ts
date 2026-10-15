@@ -28,7 +28,10 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const target = new Vector3().copy(goal).addScaledVector(velocity, ahead);
     const delta = target.sub(from.position).setY(0);
     const distance = delta.length();
-    const wanted = delta.setLength(distance > 1e-9 ? Math.min(speed, Math.sqrt(2 * accel * distance)) : 0);
+    const heading = distance > 1e-9 ? Math.atan2(delta.x, delta.z) : yawOf(from.quaternion);
+    const forward = Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
+    // These legs step fore/aft. Brake and wait for a goal outside the forward cone.
+    const wanted = delta.setLength(forward && distance > 1e-9 ? Math.min(speed, Math.sqrt(2 * accel * distance)) : 0);
     const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * STEP));
     const v = next.length();
     const yaw = yawOf(from.quaternion);

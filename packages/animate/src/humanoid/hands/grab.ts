@@ -73,7 +73,7 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
     };
     // (the eyes go once it is near and the head turns far enough to see it: turning to it, the body faces it first)
     const near = arriving(h, LOOKING);
-    const seen = (f: Frame<W>) => near() && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
+    const seen = (f: Frame<W>) => near(f) && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
     yield* parallel<Frame<W>>('all', walk, function* () {
       yield* when((f: Frame<W>) => stood || seen(f));
       yield* (look === false ? reach : withGaze(h, look === true ? middleOf(holds) : look, reach, { bow, first: options.first }))();

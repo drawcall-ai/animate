@@ -3,7 +3,7 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import {
   Body, Carrier, Humanoid, INDEX, Item, STEP, carried, carry, createSkeletonModel,
-  hold, idle, named, onBone, reachFor, release, takeOff, wear, when, withGaze,
+  hold, idle, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze,
   type Frame,
 } from '../../src';
 import { leg } from '../core/rigs';
@@ -94,4 +94,35 @@ it('reports time, beat, cause, item, grip and distance with dev off', () => {
   const cause = new Error('attachment failed');
   const instant = new Body(leg(), named('attach saddle', function* () { throw cause; }));
   expect(() => instant.update(STEP)).toThrow('0.017 s, "attach saddle": attachment failed');
+});
+
+it('an unsupported hold travels with the body between carries, and an explicit mover takes it over', () => {
+  const item = new Item(new Vector3(-0.15, 1.1, 0.3), new Quaternion(), { grip: { position: new Vector3() } });
+  let start = new Vector3();
+  let end = new Vector3();
+  let done = false;
+  let off = 0;
+  let travelling = false;
+  const goal = new Vector3(-0.2, 1.15, 2.3);
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', idle(h), function* () {
+      yield* reachFor(h, { right: [item, 'grip'] })();
+      yield* carry(h, item, [[0.5, carried(h, 'right')]])();
+      start = item.current.position.clone();
+      travelling = true;
+      yield* withGaze(h, new Vector3(1, 1.5, 3), walkTo(h, { to: new Vector3(0, 0, 2) }))();
+      travelling = false;
+      end = item.current.position.clone();
+      yield* carry(h, item, [[0.5, { position: goal }]])();
+      done = true;
+    });
+  });
+  for (let tick = 0; tick < 12 * 60; tick++) {
+    h.update(STEP);
+    if (travelling) off = Math.max(off, h.pose.position(INDEX.rightHand).distanceTo(item.current.position));
+  }
+  expect(done).toBe(true);
+  expect(end.z - start.z).toBeGreaterThan(1.5);
+  expect(off).toBeLessThan(0.03);
+  expect(item.current.position.distanceTo(goal)).toBeLessThan(0.03);
 });

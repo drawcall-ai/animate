@@ -17,6 +17,9 @@ export class Carrier {
   /** the time it was last moved to (s) */
   private time = -Infinity;
 
+  /** Whether a mover has already written this sub-step. */
+  moved(time: number): boolean { return this.time >= time - 1e-9; }
+
   constructor(position: Vector3, quaternion = new Quaternion()) {
     const at = () => ({ position: position.clone(), quaternion: quaternion.clone() });
     [this.prev2, this.prev, this.current] = [at(), at(), at()];

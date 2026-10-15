@@ -40,11 +40,11 @@ export interface CarryOptions {
  * the course end; throws after `limit` seconds of settling outside reach. With `support`, contact
  * within 1 cm of the endpoint arrests the item and ends the carry without waiting for free settling.
  */
-export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], options: CarryOptions = {}): Behaviour<W> {
+export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], options: CarryOptions = {}): Behaviour<W> {
   return carrying(h, item, legs, options);
 }
 
-function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], options: CarryOptions, together?: (ready: boolean) => boolean): Behaviour<W> {
+function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], options: CarryOptions, together?: (ready: boolean) => boolean): Behaviour<W> {
   return function* () {
     const { on, pace = 1, limit = RESTING } = options;
     if (options.facing && typeof on !== 'number') throw new Error('carry facing requires a bone number in on');
@@ -91,7 +91,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], options: 
 }
 
 /** Carry several held items together: each keeps its grips at its endpoint until every carry settles. */
-export function carryTogether<W>(h: Humanoid<W>, carries: readonly (readonly [Item, readonly Leg[]])[], options: CarryOptions = {}): Behaviour<W> {
+export function carryTogether<W>(h: Humanoid<W>, carries: readonly (readonly [Item, readonly Leg<W>[]])[], options: CarryOptions = {}): Behaviour<W> {
   return function* () {
     const ready = carries.map(() => false);
     yield* parallel<Frame<W>>('all', ...carries.map(([item, legs], i) => carrying(h, item, legs, options, (there) => {
@@ -129,7 +129,8 @@ class TrackedEnd {
 
 /**
  * The hands on `item`'s grips, every sub-step: endless, or until `until`. Without `to`, the hands go
- * where the item goes (another moves it). With `to`, the hands carry it there: they go for its grips
+ * where the item goes (another moves it, or an unsupported hold inherits body travel). With `to`,
+ * the hands carry it there: they go for its grips
  * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward) and kept
  * within the arms' reach, and the item is put where the hands are (fitted to the wrists: its one
  * mover), so it never leaves them.

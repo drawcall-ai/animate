@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { arriving, createSkeletonModel, grab, Humanoid, idle, Item, walkTo, when, type Frame } from '../../src';
+import { approach, arriving, carried, hold, reachFor, createSkeletonModel, grab, Humanoid, idle, Item, walkTo, when, type Frame } from '../../src';
 
 it('publishes arrival and starts a waiting grab before the walk ends without replacing its goal', () => {
   const to = new Vector3(0, 0, 2);
@@ -41,10 +41,13 @@ it('publishes arrival and starts a waiting grab before the walk ends without rep
 
 it('clears the estimate when a walk is cancelled', () => {
   let cancelled = false;
+  let near = true;
   const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), function* () {
       yield* parallel<Frame>('race', walkTo(h, { to: new Vector3(0, 0, 10) }), when(timePassed(0.5, 'seconds')));
       cancelled = true;
+      const arrival = arriving(h, 1);
+      yield* action<Frame>({ update: (f) => { near = arrival(f); } });
     });
   });
   h.update(0.25);
@@ -52,7 +55,7 @@ it('clears the estimate when a walk is cancelled', () => {
   h.update(0.5);
   expect(cancelled).toBe(true);
   expect(h.gait.eta).toBe(Infinity);
-  expect(arriving(h, 1)()).toBe(false);
+  expect(near).toBe(false);
 });
 
 it('grabs an item in reach without a walk running', () => {
@@ -113,4 +116,20 @@ it('honors facing and standing after joining a walk', () => {
   expect(Math.abs(h.gait.facing - face)).toBeLessThan(0.3);
   const expected = new Vector3(-Math.cos(face) * stand.aside - Math.sin(face) * ahead, 0, 2.35 + Math.sin(face) * stand.aside - Math.cos(face) * ahead);
   expect(Math.hypot(body.x - expected.x, body.z - expected.z)).toBeLessThan(0.12);
+});
+
+it('ends an arrival hold when approach finds the body already in reach', () => {
+  const item = new Item(new Vector3(-0.15, 1.1, 0.3), new Quaternion(), { grip: { position: new Vector3() } });
+  let finished = false;
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', idle(h), function* () {
+      yield* reachFor(h, { right: [item, 'grip'] })();
+      yield* parallel<Frame>('all', approach(h, item.current.position, { face: 0 }),
+        hold(h, item, { to: carried(h, 'right'), until: arriving(h, 0.3) }));
+      finished = true;
+    });
+  });
+  for (let tick = 0; tick < 300; tick++) h.update(1 / 60);
+  expect(finished).toBe(true);
+  expect(h.gait.eta).toBe(Infinity);
 });

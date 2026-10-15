@@ -40,7 +40,7 @@ const HANGING = at(0.165, 0.03, 0.1, turn(0.6, 0, 0.22));
 /** The sword, in its scabbard, taken by the throat (left hand) where it leans (facing the way it leans), hung on the belt at the left hip, worn there. */
 export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {
   // (straight up first: its chape on the floor by the feet; out to the side upright, turned to hang there, then in to the hip: round the outside of the thigh)
-  const up = (s: Required<Placement>) => at(s.position.x, s.position.y + 0.3, s.position.z);
+  const up = (_f: Frame, s: Required<Placement>) => at(s.position.x, s.position.y + 0.3, s.position.z);
   return function* () {
     yield* take(k, { left: [scabbard, 'throat'] }, { face: yawOf(scabbard.current.quaternion), stand: { aside: k.h.proportions.shoulderHalfWidth } })();
     yield* along(k, scabbard, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]], { on: INDEX.hips })();

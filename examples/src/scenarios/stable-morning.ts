@@ -4,7 +4,7 @@ import {
   Body, HORSE_SKELETON, HORSE_WALK, Item, Legs, Pose,
   approach, arriving, carried, carry, createWorld, eyesOnBefore, grab, handTo, hold, horseLegs, horseCarriage, idle,
   named, onBone, openHand, wear, when, walkTo, withGaze,
-  type Behaviour, type Leg, type Frame, type Humanoid, type World,
+  type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -75,9 +75,7 @@ export function stableMorning(): Scenario {
             yield* parallel<Frame<World>>('all',
               approach(h, saddlePlace(horse.frame).position, { face: Math.PI / 2 }),
               function* () {
-                const lift: Leg[] = [];
-                yield (f) => { lift.push([0.35, carried(h)(f)]); return 'skipped'; };
-                yield* carry(h, saddle, lift)();
+                yield* carry(h, saddle, [[0.35, carried(h)]])();
                 yield* hold(h, saddle, { to: carried(h), until: arriving(h, 0.25) })();
                 yield* carry(h, saddle, [
                   [1.1, { position: SADDLED.clone().add(new Vector3(-0.24, 0.21, 0)), quaternion: yaw(Math.PI / 2) }],
