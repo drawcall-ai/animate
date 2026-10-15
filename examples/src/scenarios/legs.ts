@@ -96,7 +96,7 @@ export function legsHorse(): Scenario {
   };
 }
 
-function skeletonProps(pose: ReadonlyPose): Prop[] {
+export function skeletonProps(pose: ReadonlyPose): Prop[] {
   return pose.skeleton.bones.flatMap((b, i): Prop[] => {
     if (b.parent < 0) return [];
     const a = pose.position(b.parent);
