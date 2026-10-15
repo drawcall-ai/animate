@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, gazeOff, grab, handTo, hold, idle, INDEX, Item, reachFor, release, type Behaviour, type Frame, type Leg } from '../../src';
+import { carry, gazeOff, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
@@ -18,7 +18,7 @@ function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds
   let marked = false;
   const h = new Humanoid(createSkeletonModel(), (h) =>
     function* () {
-      yield* action({ until: () => true });
+      yield* when(() => true);
       const was = { left: new Vector3(), right: new Vector3() };
       yield* parallel<Frame>(
         'all',
@@ -57,7 +57,7 @@ describe('grab', () => {
     const at = { eyes: NaN, hands: NaN, stood: NaN };
     const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
-        yield* action({ until: () => true });
+        yield* when(() => true);
         const was = new Vector3();
         yield* parallel<Frame>(
           'race',
@@ -120,13 +120,13 @@ describe('release', () => {
     const at = { let: new Vector3(), after: new Vector3() };
     const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
-        yield* action({ until: () => true });
+        yield* when(() => true);
         yield* parallel<Frame>('race', idle(h), function* () {
           yield* reachFor(h, { right: [load, 'right'] })();
           // (swept to the right, let go of halfway)
-          yield* parallel<Frame>('race', carry(h, WORLD, [[load, { right: 'right' }, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]]]), action({ until: timePassed(0.4, 'seconds') }));
+          yield* parallel<Frame>('race', carry(h, WORLD, [[load, { right: 'right' }, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]]]), when(timePassed(0.4, 'seconds')));
           at.let.copy(h.pose.position(INDEX.rightHand));
-          yield* parallel<Frame>('race', release(h, ['right']), action({ until: timePassed(0.4, 'seconds') }));
+          yield* parallel<Frame>('race', release(h, ['right']), when(timePassed(0.4, 'seconds')));
           at.after.copy(h.pose.position(INDEX.rightHand));
         });
       },
@@ -145,7 +145,7 @@ describe('reachFor', () => {
       const v = speeds(
         (h, mark) =>
           function* () {
-            yield* action({ until: timePassed(1, 'seconds') });
+            yield* when(timePassed(1, 'seconds'));
             mark();
             yield* reachFor(h, { right: [load, 'right'] })();
             yield* hold(h, load, { right: 'right' })();
@@ -169,7 +169,7 @@ describe('reach onset', () => {
       speeds(
         (h, mark) =>
           function* () {
-            yield* action({ until: timePassed(1, 'seconds') });
+            yield* when(timePassed(1, 'seconds'));
             mark();
             yield* parallel<Frame>('race', reachFor(h, { right: [load, 'right'] }), action<Frame>({ update: () => void off.push(h.pose.position(INDEX.rightHand).distanceTo(load.toWorld(load.grips.right, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)) }));
           },
@@ -188,7 +188,7 @@ describe('two hands', () => {
     const v = speeds(
       (h, mark) =>
         function* () {
-          yield* action({ until: timePassed(1, 'seconds') });
+          yield* when(timePassed(1, 'seconds'));
           mark();
           yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
         },
@@ -207,7 +207,7 @@ describe('two hands', () => {
       (h, mark) =>
         function* () {
           // (both hands held out before them, then gone for the box from there)
-          yield* parallel<Frame>('race', handTo(h, 'left', out('left'), { lead: false }), handTo(h, 'right', out('right'), { lead: false }), action({ until: timePassed(1.5, 'seconds') }));
+          yield* parallel<Frame>('race', handTo(h, 'left', out('left'), { lead: false }), handTo(h, 'right', out('right'), { lead: false }), when(timePassed(1.5, 'seconds')));
           mark();
           yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
         },

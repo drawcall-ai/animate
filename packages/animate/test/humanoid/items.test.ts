@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, closeHand, hold, idle, INDEX, Item, reachFor, release, takeOff, wear, type Behaviour, type Frame } from '../../src';
+import { carry, closeHand, hold, idle, INDEX, Item, reachFor, release, takeOff, wear, when, type Behaviour, type Frame } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
@@ -10,7 +10,7 @@ function run(behaviour: (h: Humanoid) => Behaviour, seconds: number): Humanoid {
   // (from the first sub-step on: a timeline starts running as its body is made, before the body is there to read)
   const h = new Humanoid(createSkeletonModel(), (h) =>
     function* () {
-      yield* action({ until: () => true });
+      yield* when(() => true);
       yield* parallel<Frame>('all', idle(h), behaviour(h));
     },
   );
@@ -76,11 +76,11 @@ describe('items on the body', () => {
           yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
           yield* carry(h, WORLD, [[load, { left: 'left', right: 'right' }, [[1, { position: new Vector3(0, 1.05, 0.35) }]]]])();
           yield* parallel<Frame>('race', hold(h, load, { left: 'left', right: 'right' }), function* () {
-            yield* action({ until: timePassed(1, 'seconds') });
+            yield* when(timePassed(1, 'seconds'));
           });
           kg.carried = h.borne.get(load)?.kg ?? 0;
           yield* release(h, ['left', 'right'])();
-          yield* action({ until: timePassed(1, 'seconds') });
+          yield* when(timePassed(1, 'seconds'));
           kg.down = h.borne.get(load)?.kg ?? 0;
         },
       8,

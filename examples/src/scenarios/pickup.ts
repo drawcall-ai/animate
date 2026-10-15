@@ -1,6 +1,6 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { approach, arriving, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
+import { arriving, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -79,11 +79,7 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
       'race',
       reporting(report, HANDS, function* () {
         // (its eyes on the box as it comes up to it: it bows to see it, the head turned by the gaze below)
-        const holds = { left: [box, 'left'], right: [box, 'right'] } as const;
-        yield* parallel<Frame<World>>('all', approach(h, holds), function* () {
-          yield* when(arriving(h, 0.6));
-          yield* grab(h, holds, { look: () => gaze.on })();
-        });
+        yield* grab(h, { left: [box, 'left'], right: [box, 'right'] }, { look: () => gaze.on })();
         // (the eyes on to the board as the box comes up past the knees)
         const board = new Vector3(SHELF.x, top, SHELF.z);
         const up = () => box.current.position.y > KNEES;

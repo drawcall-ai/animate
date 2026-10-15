@@ -26,7 +26,7 @@ export interface Gait {
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
   velocity: Vector3;
-  /** seconds until the walk goal is reached: Infinity without a goal, 0 when there; published by walkTo */
+  /** seconds until the walk now running arrives; Infinity when no walk is running; published by walkTo */
   eta: number;
   /** a walk is under way */
   moving: boolean;

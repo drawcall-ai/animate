@@ -15,10 +15,10 @@ const ARRIVED = { distance: 0.15, yaw: 0.15 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
 const CLOSE = 1;
 
-/** a condition: the body's current walk arrives within `seconds` (or has) */
+/** a condition: the walk now running arrives within `seconds`; false when no walk is running */
 export const arriving =
   <W>(h: Humanoid<W>, seconds: number) =>
-  (_f: Frame<W>): boolean =>
+  (): boolean =>
     h.gait.eta <= seconds;
 
 /** about how fast the body turns (rad/s), and its minimum estimated starting pace (m/s) */
@@ -93,7 +93,6 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
         return there && turned && h.gait.settled;
       },
     });
-    h.gait.eta = 0;
   };
 }
 

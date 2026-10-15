@@ -2,6 +2,7 @@ import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { gazeOff, lookAt, SHIFT } from '../core/gaze';
+import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
 import type { Humanoid } from './humanoid';
@@ -86,14 +87,12 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
       'race',
       function* () {
         if (first) {
-          yield* action<Frame<W>>({
-            until: (f, _, time) => {
-              const point = live(at, f);
-              if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
-              return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
-            },
+          yield* when<W>((f, _, time) => {
+            const point = live(at, f);
+            if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
+            return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
           });
-          yield* action({ until: timePassed(lead, 'seconds') });
+          yield* when(timePassed(lead, 'seconds'));
         }
         yield* task();
       },

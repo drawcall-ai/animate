@@ -52,7 +52,7 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
       // its last step; it stands, they take hold)
       yield* parallel<Frame<W>>(
         'race',
-        action({ until: () => stood }),
+        when(() => stood),
         function* () {
           yield* when(arriving(h, REACHING_OUT));
           yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
@@ -66,13 +66,13 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
     };
     const walk = function* () {
       // A walk earlier in this frame already owns the feet; join its arrival.
-      if (h.asks.go) yield* when((f: Frame<W>) => arriving(h, 0)(f) && !h.asks.go);
-      else yield* approach(h, holds, options)();
+      if (h.asks.go) yield* when(() => h.gait.eta === Infinity);
+      yield* approach(h, holds, options)();
       stood = true;
     };
     // (the eyes go once it is near and the head turns far enough to see it: turning to it, the body faces it first)
     const near = arriving(h, LOOKING);
-    const seen = (f: Frame<W>) => near(f) && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
+    const seen = (f: Frame<W>) => near() && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
     yield* parallel<Frame<W>>('all', walk, function* () {
       yield* when((f: Frame<W>) => stood || seen(f));
       yield* (look === false ? reach : withGaze(h, look === true ? middleOf(holds) : look, reach, { bow }))();
@@ -124,8 +124,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: numb
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
-    if (turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) {
-      h.gait.eta = 0;
+    if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) {
       return;
     }
     const to = middleOf(holds).addScaledVector(leftOf(face), -aside);

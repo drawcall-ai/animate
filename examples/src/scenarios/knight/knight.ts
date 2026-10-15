@@ -42,7 +42,7 @@ export type Beat = [work: Behaviour<World>, sides: readonly Side[], away?: Parti
 
 /**
  * `beats` one after another, then `then`, each flowing into the next: as a beat's hands let go of
- * what they did (`release`), the next sets off (with `when`) — its eyes and its feet on their way
+ * what they did (`release`), the next sets off — its eyes and its feet on their way
  * while the hands come off
  */
 export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>): Behaviour<World> {

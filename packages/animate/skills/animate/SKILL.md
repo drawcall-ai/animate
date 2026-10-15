@@ -67,16 +67,16 @@ Tasks:
 
 People never finish one thing, stand still, and start the next: coming up to something they already look at it, turn to it and reach for it; letting go of one thing their eyes are on the next. Doing tasks strictly one after another is what makes motion read as mechanical. Chain them so the next one's opening runs while the current one ends:
 
-Run the current task first in `parallel('all', …)`, then a branch that waits with `when` and starts the next task. Conditions are plain functions of the frame: use `arriving` for a walk, or write your own for a released hand, a lifted item, or work completed.
+Run the current task in `parallel('all', …)` alongside a branch that waits with `when` and starts the next task. Conditions are plain functions: use `arriving` for a walk, or write your own for a released hand, a lifted item, or work completed.
 
 ```ts
-yield* parallel<Frame>('all', walkTo(h, { to: stand }), function* () {
-  yield* when(arriving(h, 0.6));
-  yield* grab(h, holds)();
+yield* parallel<Frame>('all', walkTo(h, { to: door }), function* () {
+  yield* when(arriving(h, 1));
+  yield* lookAt(h.gazer, handle);
 });
 ```
 
-The walk's destination should put the grips within reach. `grab` joins a walk already running and anticipates it with gaze, hands and lowering; on its own it walks up automatically. Put the walk before the waiting branch so the condition reads its current arrival estimate.
+`arriving` reads the estimate for the walk now running; without a walk it waits, regardless of branch order. `grab` already anticipates with gaze, hands and lowering: call it directly and it walks up automatically, or joins a walk already running before approaching the grips.
 
 A later task wins where both write bones, so give it an opening that leaves the current task's bones alone until they are free. Between standing tasks, start the next task's eyes and feet as the current hands release. Use arrival conditions where available rather than a fixed elapsed delay.
 
