@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { carry, hold, INDEX, onBone, onItem, reachFor, release, still, takeOff, wear, yawOf, type Behaviour, type Frame, type Item, type Leg, type Placement, type Stand, type World } from '@drawcall/animate';
-import { along, at, busy, eyesOn, facingAt, ORIGIN, take, turn, type Knight } from './knight';
+import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
 // The sword belt and the sword: buckled on, hung at the left hip, its draw checked.
 
@@ -17,22 +17,16 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, stand: S
     [1.0, at(0.3 * s, 0.14, 0.34)], // off the table, out in front
     [1.1, at(0.26 * s, 0.07, -0.05)], // out round the hips: the strap behind them
   ];
-  const hips = facingAt(k, 'hips');
+  const hips = INDEX.hips;
   const front = onBone(k.h, INDEX.hips, at(0, 0.07, 0.27), { facing: true });
   return function* () {
     yield* take(k, { left: [belt.buckle, 'end'], right: [belt.tongue, 'end'] }, { stand })();
-    yield* along(k, hips, [
-      [belt.buckle, { left: 'end' }, round(1)],
-      [belt.tongue, { right: 'end' }, round(-1)],
-    ])();
+    yield* parallel('all', along(k, belt.buckle, round(1), { on: hips }), along(k, belt.tongue, round(-1), { on: hips }));
     // (drawn round to before the belly, the ends together, the tongue through the buckle and pulled tight)
     yield* eyesOn(
       k,
       (f) => front(f).position,
-      along(k, hips, [
-        [belt.buckle, { left: 'end' }, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]]],
-        [belt.tongue, { right: 'end' }, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]]],
-      ]),
+      () => parallel('all', along(k, belt.buckle, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]], { on: hips }), along(k, belt.tongue, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]], { on: hips })),
       { first: false },
     )();
     yield* wear(k.h, belt.buckle, INDEX.hips)();
@@ -49,7 +43,7 @@ export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {
   const up = (s: Required<Placement>) => at(s.position.x, s.position.y + 0.3, s.position.z);
   return function* () {
     yield* take(k, { left: [scabbard, 'throat'] }, { face: yawOf(scabbard.current.quaternion), stand: { aside: k.h.proportions.shoulderHalfWidth } })();
-    yield* along(k, facingAt(k, 'hips'), [[scabbard, { left: 'throat' }, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]]]])();
+    yield* along(k, scabbard, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]], { on: INDEX.hips })();
     yield* wear(k.h, scabbard, INDEX.hips)();
   };
 }
@@ -70,11 +64,9 @@ const PRESENTED = at(0.15, 0.06, 0.22, turn(1.0, 0, 0.3));
  */
 export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<World> {
   const hilt = onItem(sword, sword.grips.hilt);
-  const sheath = onItem(scabbard, ORIGIN);
-  const hips = facingAt(k, 'hips');
+  const hips = INDEX.hips;
   // (held where it is presented while the right hand draws: the scabbard moved before the sword it carries)
-  const steady = hold(k.h, scabbard, { left: 'below' }, { to: onBone(k.h, INDEX.hips, PRESENTED, { facing: true }) });
-  const sheathed = (f: F): Required<Placement> => ({ position: sheath(f).position, quaternion: scabbard.current.quaternion.clone() });
+  const steady = hold(k.h, scabbard, { to: onBone(k.h, INDEX.hips, PRESENTED, { facing: true }) });
   return busy(
     k,
     eyesOn(
@@ -83,15 +75,15 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<Wor
       function* () {
         yield* reachFor(k.h, { left: [scabbard, 'below'] })();
         yield* takeOff(k.h, scabbard)();
-        yield* along(k, hips, [[scabbard, { left: 'below' }, [[0.6, PRESENTED]]]])();
+        yield* along(k, scabbard, [[0.6, PRESENTED]], { on: hips })();
         yield* parallel<F>('race', steady, reachFor(k.h, { right: [sword, 'hilt'] }));
         yield* takeOff(k.h, sword)();
         // (out along the scabbard and home again: the sword's own length, not scaled with the body)
         const draw: Leg[] = [[0.7, at(0, 0.3, 0)], [0.5, still], [0.8, at(0, 0, 0)]];
-        yield* parallel<F>('race', steady, carry(k.h, sheathed, [[sword, { right: 'hilt' }, draw]], { scale: 1, pace: k.pace }));
+        yield* parallel<F>('race', steady, carry(k.h, sword, draw, { on: scabbard,  pace: k.pace }));
         yield* wear(k.h, sword, scabbard, { to: { position: new Vector3(), quaternion: new Quaternion() } })();
         yield* parallel<F>('race', release(k.h, ['right']), steady);
-        yield* along(k, hips, [[scabbard, { left: 'below' }, [[0.6, HANGING]]]])();
+        yield* along(k, scabbard, [[0.6, HANGING]], { on: hips })();
         yield* wear(k.h, scabbard, INDEX.hips)();
       },
     ),

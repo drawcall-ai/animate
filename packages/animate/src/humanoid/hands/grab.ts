@@ -15,14 +15,14 @@ import { reachFor } from './reach';
 
 // Taking hold of things: walking up to them, the eyes and hands going ahead.
 
-/** Where the body stands to take something: its grips' middle `ahead` of it (× the arm's length) and `aside` to its left (m; negative: its right). */
+/** Where the body stands to take something: its grips' middle `ahead` of it (m) and `aside` to its left (m; negative: its right). */
 export interface Stand {
   ahead?: number;
   aside?: number;
 }
 
 /** how far (× the arm's length) before what it takes the body stands */
-const WITHIN = 0.6;
+const WITHIN = 0.8;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
 const SQUARE = 0.3;
@@ -110,27 +110,27 @@ function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
 }
 
 /**
- * Walking up to take hold of things: to stand facing `face` with the grips' middle `stand` before
+ * Walking up to grips or a placing point: to stand facing `face` with the grips' middle `stand` before
  * the body (default: in reach, squarely; facing so the left hand's grip is on the left, or toward a
  * single grip) — no step if every grip is in reach of its shoulder already; round what it takes if
  * the way there passes it (by a point ROUND beside it, on the side the way runs); it ends there, turned and come to rest (or
  * stood still on planted feet a while: a step of a few cm `balance` may not take). The first half
  * of `grab`.
  */
-export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
+export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
   const { aside = 0 } = options.stand ?? {};
   return function* () {
-    const grips = held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
+    const grips = holds instanceof Vector3 ? [{ side: 'left' as const, at: holds.clone() }] : held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
-    const ahead = options.stand?.ahead ?? Math.min(WITHIN, (p.toeFront + Math.max(0, height - p.ankleHeight)) / p.armLength);
+    const ahead = options.stand?.ahead ?? Math.min(WITHIN * p.armLength, p.toeFront + Math.max(0, height - p.ankleHeight));
     const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
     if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) {
       return;
     }
     const to = middleOf(holds).addScaledVector(leftOf(face), -aside);
-    const there = to.clone().addScaledVector(forwardOf(face), -ahead * p.armLength);
+    const there = to.clone().addScaledVector(forwardOf(face), -ahead);
     // (round it: the way from where the body stands to there passing nearer its grips than ROUND)
     const body = h.pose.com(new Vector3()).setY(0);
     const middle = middleOf(holds).setY(0);
@@ -153,12 +153,13 @@ export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: numb
       still = planted ? still + f.dt : 0;
       return turned() && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || still > STILL);
     };
-    yield* walkTo(h, { to, face, within: ahead * p.armLength, until: arrived })();
+    yield* walkTo(h, { to, face, within: ahead, until: arrived })();
   };
 }
 
 /** the middle of the grips `holds` take, where they are now */
-function middleOf(holds: Holds): Vector3 {
+function middleOf(holds: Holds | Vector3): Vector3 {
+  if (holds instanceof Vector3) return holds.clone();
   const hands = held(holds);
   return hands.reduce((sum, { item, grip }) => sum.add(item.toWorld(gripOf(item, grip), _world).position), new Vector3()).divideScalar(hands.length);
 }

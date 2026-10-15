@@ -6,7 +6,6 @@ import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
 
-const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 const box = (at: Vector3) => new Item(at, new Quaternion(), { left: { position: new Vector3(0.15, 0, 0) }, right: { position: new Vector3(-0.15, 0, 0) } });
 
 /** hand `side` in the hips' frame: where it is moved to, not carried along by the body */
@@ -124,7 +123,7 @@ describe('release', () => {
         yield* parallel<Frame>('race', idle(h), function* () {
           yield* reachFor(h, { right: [load, 'right'] })();
           // (swept to the right, let go of halfway)
-          yield* parallel<Frame>('race', carry(h, WORLD, [[load, { right: 'right' }, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]]]), when(timePassed(0.4, 'seconds')));
+          yield* parallel<Frame>('race', carry(h, load, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]), when(timePassed(0.4, 'seconds')));
           at.let.copy(h.pose.position(INDEX.rightHand));
           yield* parallel<Frame>('race', release(h, ['right']), when(timePassed(0.4, 'seconds')));
           at.after.copy(h.pose.position(INDEX.rightHand));
@@ -148,7 +147,7 @@ describe('reachFor', () => {
             yield* when(timePassed(1, 'seconds'));
             mark();
             yield* reachFor(h, { right: [load, 'right'] })();
-            yield* hold(h, load, { right: 'right' })();
+            yield* hold(h, load)();
           },
         3.5,
       );
@@ -228,7 +227,7 @@ describe('two hands', () => {
       (h) =>
         function* () {
           yield* reachFor(h, { left: [a, 'right'], right: [b, 'left'] })();
-          yield* parallel<Frame>('race', carry(h, WORLD, [[a, { left: 'right' }, legs(0.35)], [b, { right: 'left' }, legs(-0.35)]]), action<Frame>({
+          yield* parallel<Frame>('race', parallel('all', carry(h, a, legs(0.35)), carry(h, b, legs(-0.35))), action<Frame>({
             update: () => {
               v.left.push(a.current.position.distanceTo(a.prev.position) * 60);
               v.right.push(b.current.position.distanceTo(b.prev.position) * 60);

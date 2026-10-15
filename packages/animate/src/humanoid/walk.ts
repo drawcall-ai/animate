@@ -49,7 +49,8 @@ export interface WalkOptions<W> {
  * (`h.asks.go`, `h.asks.face`), and ends once the body has arrived, turned and settled on its
  * squared feet (`h.gait.settled`); given `until`, when that is met instead (a point that moves on is followed). It writes no
  * bones. With `within`, it stops short with the point that far ahead, facing `face` (default:
- * facing the point).
+ * facing the point). A goal moving slower than 0.08 m/s, less than 0.6 m behind, at an actual travel speed below
+ * 0.6 m/s, permits stepping back while keeping the facing.
  */
 export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W> {
   const { within = 0, speed = STROLL.speed, accel = STROLL.accel, plant } = options;

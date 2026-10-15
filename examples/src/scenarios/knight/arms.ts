@@ -3,7 +3,7 @@ import { parallel } from '@pmndrs/timeline';
 import { closeHand, handTo, hold, INDEX, onBone, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement, type World } from '@drawcall/animate';
 import { forwardOf } from '../../math';
 import { slideIn } from './gauntlets';
-import { along, at, busy, eyesOn, facingAt, take, turn, type Knight } from './knight';
+import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
 // Shield and lance: taken up and borne.
 
@@ -23,11 +23,11 @@ const FIST = at(0.1, 0.16, 0.32, turn(0, Math.PI + 0.35, 0).multiply(new Quatern
  * it off the peg and draws it back. Then bear it (`bearShield`).
  */
 export function takeShield(k: Knight, shield: Item): Behaviour<World> {
-  const steady = hold(k.h, shield, { right: 'edge' });
+  const steady = hold(k.h, shield);
   return function* () {
     // Both grips must be in reach, with room between the shield's face and the sword at the hip.
     const aside = (shield.grips.enter.position.x - shield.grips.edge.position.x) / 2;
-    yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI, stand: { aside, ahead: 0.75 } })();
+    yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI, stand: { aside, ahead: 0.75 * k.h.proportions.armLength } })();
     yield* eyesOn(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady), { first: false })();
     yield* wear(k.h, shield, INDEX.leftLowerArm)();
     yield* closeHand(k.h, 'left', shield, 'grip')();
@@ -57,11 +57,11 @@ export function takeLance(k: Knight, lance: Item): Behaviour<World> {
   const lift = (s: Required<Placement>) => at(s.position.x, s.position.y + 0.1, s.position.z);
   return function* () {
     yield* take(k, { right: [lance, 'grip'] }, { stand: { aside: -0.22 } })();
-    yield* along(k, facingAt(k, 'hips'), [[lance, { right: 'grip' }, [[0.6, lift], [1.2, UPRIGHT]]]])();
+    yield* along(k, lance, [[0.6, lift], [1.2, UPRIGHT]], { on: INDEX.hips })();
   };
 }
 
 /** the lance borne upright by the right side: endless */
-export const bearLance = (k: Knight, lance: Item): Behaviour<World> => hold(k.h, lance, { right: 'grip' }, { to: onBone(k.h, INDEX.hips, UPRIGHT, { facing: true }) });
+export const bearLance = (k: Knight, lance: Item): Behaviour<World> => hold(k.h, lance, { to: onBone(k.h, INDEX.hips, UPRIGHT, { facing: true }) });
 
 const UP = new Vector3(0, 1, 0);

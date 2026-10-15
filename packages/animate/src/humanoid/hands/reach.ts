@@ -27,7 +27,13 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
   const there = (f: Frame<W>) => hands.every(({ side, item, grip }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], gripOf(item, grip), item));
   const until = (f: Frame<W>, _: unknown, time: number) => {
     if (there(f)) return true;
-    if (time > limit) throw new Error(`the hands did not get to their grips in ${limit} s`);
+    if (time > limit) {
+      const off = hands.map(({ side, item, grip }) => {
+        const at = item.toWorld(gripOf(item, grip), _world).position;
+        return `"${item.name}" ${side} grip "${grip}": ${f.prev.position(INDEX[`${side}Hand`]).distanceTo(at).toFixed(3)} m off`;
+      });
+      throw new Error(`${off.join('; ')} after ${limit} s`);
+    }
     return false;
   };
   // (each hand gliding to its grip in the time a reach that far takes; both going, the other a

@@ -107,7 +107,7 @@ it('honors facing and standing after joining a walk', () => {
   });
   for (let t = 0; t < 10; t += 1 / 60) h.update(1 / 60);
   const body = h.pose.com(new Vector3());
-  const ahead = stand.ahead * h.proportions.armLength;
+  const ahead = stand.ahead;
   expect(finished).toBe(true);
   expect(h.holding.right?.item).toBe(item);
   expect(Math.abs(h.gait.facing - face)).toBeLessThan(0.3);

@@ -1,15 +1,16 @@
 import { Quaternion, Vector3 } from 'three';
-import { action, parallel, timePassed } from '@pmndrs/timeline';
-import type { Frame } from '../../core/body';
+import { action, timePassed } from '@pmndrs/timeline';
+import type { Body, Frame } from '../../core/body';
 import { Carrier, loadFactor, type Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Until } from '../../core/goal';
 import { ChainTip } from '../../core/tip';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
-import { ARM_REACH, bringShoulder, CALM, handStep } from '../arms';
+import { ARM_REACH, bringShoulder, HOLD, handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import { course, type Leg } from '../course';
 import type { Humanoid } from '../humanoid';
 import { grip, gripOf, type Grips } from './grips';
+import { onBone } from '../goal';
 import { following, LEADING } from './reach';
 
 // Holding and carrying: the hands on an item's grips, carrying it where it goes.
@@ -20,39 +21,50 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 /** the longest a carried item takes to come to rest at its course's end once it is over, unless told (s) */
 const RESTING = 2;
 
-/** a hand on a grip it holds follows it briskly, its joints too (they lag the solve no more than a few cm): a held thing goes where it is carried */
-const HOLD = { ...CALM, accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
-
 /**
- * Items carried, each by the hands on its grips along its course through `frame` (`course`: its
- * legs' placements in that frame, m × `scale`, default the body's), together: every course from
- * where its item is when it sets off, timed by its legs, `pace` times as fast (an item in the left
- * hand alone while the right carries another a moment later and a little slower: `reachFor`'s
- * lead). It ends once every course is over and every item has come to rest at its end (within
- * 1 cm, moving with it to within 5 cm/s: on a body that walks, the frame carries it on): one shared
- * condition, no hand lets go before the others. An item not at rest there `limit` s after its course
- * is over throws (a course out of the arms' reach).
+ * Carry a held item along `legs`, in metres in the world by default. `on` selects an item frame
+ * or a bone frame (only bone distances scale with that body). A bone number uses this body’s
+ * facing at that joint; `[body, bone]` follows the bone’s rotation. Leg seconds describe an unloaded
+ * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 1 cm and 5 cm/s of
+ * the course end; throws after `limit` seconds of settling outside reach.
  */
-export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, loads: readonly (readonly [Item, Grips, readonly Leg[]])[], options: { scale?: number; pace?: number; motion?: Motion; limit?: number } = {}): Behaviour<W> {
-  const { scale = h.proportions.scale, pace = 1, limit = RESTING } = options;
+export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], options: { on?: number | Carrier | readonly [Pick<Body, 'pose' | 'scale'>, number]; pace?: number; motion?: Motion; limit?: number } = {}): Behaviour<W> {
   return function* () {
-    // (an item in the other hand alone, while the leading hand carries one too, goes a little after it)
-    const leads = loads.some(([, grips]) => grips[LEADING] !== undefined);
-    const courses = loads.map(([item, grips, legs]) => {
-      if (!leads || grips[LEADING] !== undefined) return course(item, frame, legs, { scale, pace: pace / loadFactor(item.mass) });
-      const { delay, slower } = following(item, grips);
-      return course(item, frame, legs, { scale, pace: pace * (1 - slower) / loadFactor(item.mass), delay });
-    });
+    const { on, pace = 1, limit = RESTING } = options;
+    let frame: Live<Required<Placement>, W> = WORLD;
+    let scale = 1;
+    if (typeof on === 'number') {
+      frame = onBone<W>(h, on, WORLD, { facing: true });
+      scale = h.scale;
+    } else if (on instanceof Carrier) frame = () => on.current;
+    else if (on) {
+      frame = onBone<W>(on[0], on[1], WORLD);
+      scale = on[0].scale;
+    }
+    const grips: Grips = {};
+    for (const side of SIDES) if (h.holding[side]?.item === item) grips[side] = h.holding[side]?.grip;
+    const lag = grips[LEADING] === undefined && h.holding[LEADING] ? following(item, grips) : { delay: 0, slower: 0 };
+    const path = course(item, frame, legs, { scale, pace: pace * (1 - lag.slower) / loadFactor(item.mass), delay: lag.delay });
+    const end = new TrackedEnd();
     let since = NaN;
-    const ends = loads.map(() => new TrackedEnd());
     const there = (f: Frame<W>) => {
-      if (!courses.every((c) => c.over(f))) return false;
+      if (!path.over(f)) return false;
       if (Number.isNaN(since)) since = f.time;
-      if (loads.every(([item], i) => ends[i].holds(f, item, courses[i].to(f).position))) return true;
-      if (f.time - since > limit) throw new Error(`a carried item did not come to rest at its course's end in ${limit} s`);
+      const placement = path.to(f);
+      const goal = placement.position;
+      if (end.holds(f, item, goal)) return true;
+      if (f.time - since > limit) {
+        const off = SIDES.flatMap((side) => {
+          const held = h.holding[side];
+          if (held?.item !== item) return [];
+          const at = gripOf(item, held.grip).position.clone().applyQuaternion(placement.quaternion).add(goal);
+          return [`${side} grip "${held.grip}": ${f.prev.position(INDEX[`${side}Hand`]).distanceTo(at).toFixed(3)} m off`];
+        });
+        throw new Error(`"${item.name}" ${off.join('; ')}; ${item.current.position.distanceTo(goal).toFixed(3)} m off course end after ${limit} s`);
+      }
       return false;
     };
-    yield* parallel<Frame<W>>('all', ...loads.map(([item, grips], i) => hold(h, item, grips, { to: courses[i].to, motion: options.motion, until: there })));
+    yield* hold(h, item, { to: path.to, motion: options.motion, until: there })();
   };
 }
 
@@ -89,14 +101,20 @@ class TrackedEnd {
  * within the arms' reach, and the item is put where the hands are (fitted to the wrists: its one
  * mover), so it never leaves them.
  */
-export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
+export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
   const { to } = options;
   // Recalled design tuning, not a measured law: load slows carrying with the same factor as its course and walking.
   const factor = loadFactor(item.mass);
   const pace = options.motion ?? CARRYING;
   const motion = { ...pace, accel: pace.accel / factor };
-  const sides = SIDES.filter((s) => grips[s] !== undefined);
   return function* () {
+    const grips: Grips = {};
+    for (const side of SIDES) {
+      const held = h.holding[side];
+      if (held?.item === item) grips[side] = held.grip;
+    }
+    const sides = SIDES.filter((s) => grips[s] !== undefined);
+    if (!sides.length) throw new Error(`"${item.name}" is not held by either hand`);
     const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
     // (where the hands carry the item: followed toward `to`)
     const aim = new Carrier(item.current.position, item.current.quaternion);
@@ -184,3 +202,5 @@ const _w1 = new Vector3();
 const _w2 = new Vector3();
 const _q = new Quaternion();
 const _turn = new Quaternion();
+
+const WORLD = { position: new Vector3(), quaternion: new Quaternion() };

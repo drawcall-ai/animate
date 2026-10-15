@@ -47,7 +47,7 @@ it('grabs a floor grip while the gaze stays in range in a deep squat', () => {
   const item = new Item(new Vector3(-0.1, 0.03, 0.45), new Quaternion(), { grip: { position: new Vector3() } });
   const h = body((h) => function* () {
     yield* grab(h, { right: [item, 'grip'] })();
-    yield* withGaze(h, item.current.position, hold(h, item, { right: 'grip' }), { first: false })();
+    yield* withGaze(h, item.current.position, hold(h, item), { first: false })();
   });
   for (let i = 0; i < 360; i++) {
     h.update(1 / 60);
@@ -70,7 +70,7 @@ it('prepares a heavy lift before support leaves, and carries it slower than a li
       const hips = h.pose.position(0).y;
       yield* parallel<Frame>('all', function* () {
         yield* action<Frame>({ update: (f) => { start = f.time; }, until: timePassed(1 / 60, 'seconds') });
-        yield* carry(h, { position: new Vector3(), quaternion: new Quaternion() }, [[item, { right: 'grip' }, [[1, { position: new Vector3(-0.15, 1.2, 0.4) }]]]])();
+        yield* carry(h, item, [[1, { position: new Vector3(-0.15, 1.2, 0.4) }]])();
         yield* action<Frame>({ update: (f) => { end = f.time; }, until: timePassed(1 / 60, 'seconds') });
       }, action<Frame>({ update: (f) => {
         if (item.supported) {
@@ -79,7 +79,7 @@ it('prepares a heavy lift before support leaves, and carries it slower than a li
         }
         if (!item.supported && !off) off = f.time;
       }, until: () => end !== 0 }));
-      yield* hold(h, item, { right: 'grip' })();
+      yield* hold(h, item)();
     });
     step(h, 5);
     expect(h.log).toEqual([]);
@@ -100,14 +100,13 @@ it('slows the default walk under load, counting a bimanual item once', () => {
     const item = new Item(new Vector3(0, 1, 0.4), new Quaternion(), {
       left: { position: new Vector3(0.15, 0, 0) }, right: { position: new Vector3(-0.15, 0, 0) },
     }, { mass, supported: false });
-    const grips = both ? { left: 'left', right: 'right' } : { right: 'right' };
     let speed = 0;
     const h = body((h) => function* () {
       yield* reachFor(h, both ? { left: [item, 'left'], right: [item, 'right'] } : { right: [item, 'right'] })();
-      yield* parallel<Frame>('race', hold(h, item, grips), walkTo(h, { to: new Vector3(0, 0, 3) }), action<Frame>({
+      yield* parallel<Frame>('race', hold(h, item), walkTo(h, { to: new Vector3(0, 0, 3) }), action<Frame>({
         update: () => { if (h.asks.go) speed = h.asks.go.speed; }, until: timePassed(0.2, 'seconds'),
       }));
-      yield* hold(h, item, grips)();
+      yield* hold(h, item)();
     });
     step(h, 4);
     expect(h.log).toEqual([]);
@@ -140,7 +139,7 @@ it('keeps sway and breathing after a loaded walk, without spontaneous weight shi
   const item = new Item(new Vector3(-0.15, 1.05, 0.35), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 5, supported: false });
   const h = body((h) => function* () {
     yield* reachFor(h, { right: [item, 'grip'] })();
-    const carrying = hold(h, item, { right: 'grip' }, { to: onBone(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }, { facing: true }) });
+    const carrying = hold(h, item, { to: onBone(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }, { facing: true }) });
     yield* parallel<Frame>('race', carrying, walkTo(h, { to: new Vector3(0, 0, 2) }));
     yield* carrying();
   });

@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { arriving, carry, grab, INDEX, onBone, when, release, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
+import { arriving, carry, grab, when, release, walkTo, withGaze, type Behaviour, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
@@ -63,13 +63,9 @@ export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>):
   }, then);
 }
 
-/** `loads` carried along their courses' legs, through one moving frame, together, at the knight's pace (`carry`) */
-export const along = (k: Knight, frame: Live<Required<Placement>, World>, loads: readonly [Item, Grips, readonly Leg[]][]): Behaviour<World> => carry(k.h, frame, loads, { pace: k.pace });
+/** A held item carried along its course at the knight’s pace. */
+export const along = (k: Knight, item: Item, legs: readonly Leg[], options: { on: number | Item | readonly [Humanoid<World>, number] }): Behaviour<World> => carry(k.h, item, legs, { ...options, pace: k.pace });
 
-/** a frame at bone `bone`'s joint, turned as the body faces */
-export const facingAt = (k: Knight, bone: BoneName) => onBone(k.h, INDEX[bone], ORIGIN, { facing: true });
-
-export const ORIGIN: Placement = { position: new Vector3() };
 export const at = (x: number, y: number, z: number, quaternion?: Quaternion): Placement => ({ position: new Vector3(x, y, z), quaternion });
 export const turn = (x: number, y: number, z: number) => new Quaternion().setFromEuler(new Euler(x, y, z, 'YXZ'));
 

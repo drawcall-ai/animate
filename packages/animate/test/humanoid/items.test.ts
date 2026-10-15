@@ -18,8 +18,6 @@ function run(behaviour: (h: Humanoid) => Behaviour, seconds: number): Humanoid {
   return h;
 }
 
-/** the world as a course's frame */
-const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 const box = (at: Vector3, mass = 0) => new Item(at, new Quaternion(), { left: { position: new Vector3(0.15, 0, 0) }, right: { position: new Vector3(-0.15, 0, 0) } }, { mass });
 
 describe('items on the body', () => {
@@ -71,8 +69,8 @@ describe('items on the body', () => {
       (h) =>
         function* () {
           yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
-          yield* carry(h, WORLD, [[load, { left: 'left', right: 'right' }, [[1, { position: new Vector3(0, 1.05, 0.35) }]]]])();
-          yield* parallel<Frame>('race', hold(h, load, { left: 'left', right: 'right' }), function* () {
+          yield* carry(h, load, [[1, { position: new Vector3(0, 1.05, 0.35) }]])();
+          yield* parallel<Frame>('race', hold(h, load), function* () {
             yield* when(timePassed(1, 'seconds'));
           });
           kg.carried = h.borne.get(load)?.kg ?? 0;
@@ -89,7 +87,7 @@ describe('items on the body', () => {
   });
 
   it('throws on a second mover, on items worn on each other, and taking off what is not worn', () => {
-    const a = box(new Vector3(0, 1, 0.3));
+    let a = box(new Vector3(0, 1, 0.3));
     const b = box(new Vector3(0, 1, 0.4));
     expect(() =>
       run(
@@ -101,6 +99,7 @@ describe('items on the body', () => {
         0.1,
       ),
     ).toThrow(/twice/);
+    a = box(new Vector3(0, 1, 0.3));
     expect(() =>
       run(
         (h) =>
@@ -118,7 +117,7 @@ describe('items on the body', () => {
 describe('hands that cannot get there', () => {
   it('fail visibly: a reach and a carry out of the arms throw, a release off a folded arm does not hang', () => {
     const far = box(new Vector3(0, 1, 3));
-    expect(() => run((h) => reachFor(h, { left: [far, 'left'], right: [far, 'right'] }), 6)).toThrow(/did not get to their grips/);
+    expect(() => run((h) => reachFor(h, { left: [far, 'left'], right: [far, 'right'] }), 6)).toThrow(/grip "left": [\d.]+ m off/);
     const held = box(new Vector3(0, 1.1, 0.35));
     const goal = { position: new Vector3(0, 1.1, 3) };
     expect(() =>
@@ -126,11 +125,11 @@ describe('hands that cannot get there', () => {
         (h) =>
           function* () {
             yield* reachFor(h, { left: [held, 'left'], right: [held, 'right'] })();
-            yield* carry(h, WORLD, [[held, { left: 'left', right: 'right' }, [[1, goal]]]])();
+            yield* carry(h, held, [[1, goal]])();
           },
         12,
       ),
-    ).toThrow(/did not come to rest/);
+    ).toThrow(/m off course end/);
     // (the hand at the shoulder: back and down from there is behind it)
     let done = false;
     run(

@@ -26,8 +26,9 @@ export { closeHand, openHand, type Grips, type Holds } from './humanoid/hands/gr
 export { reachFor } from './humanoid/hands/reach';
 export { release } from './humanoid/hands/release';
 export { course, still, type Course, type Leg } from './humanoid/course';
-export { onBone } from './humanoid/goal';
-export { takeOff, wear, type Bearing, type Dressed, type Wearing } from './humanoid/worn';
+export { onBone, carried } from './humanoid/goal';
+export { takeOff, wear, type Dressed, type Wearing } from './core/worn';
+export type { Bearing } from './humanoid/worn';
 export { HEADSET, headTo, type HeadOptions } from './humanoid/head';
 export { pelvisTo, trunkTo } from './humanoid/trunk';
 export { lookAround, withGaze } from './humanoid/look';

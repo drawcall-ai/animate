@@ -36,7 +36,7 @@ export function held(holds: Holds) {
 /** grip `name` of `item`: a target in its frame */
 export function gripOf(item: Item, name: string): Target {
   const g = item.grips[name];
-  if (!g) throw new Error(`the item has no grip "${name}"`);
+  if (!g) throw new Error(`"${item.name}" has no grip "${name}"`);
   return g;
 }
 

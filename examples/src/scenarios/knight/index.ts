@@ -48,8 +48,6 @@ const RACK = { x: -1.5, z: 2.6, facing: -Math.PI / 2, grip: 1.2 };
 /** the yard he walks out to (far enough for a few steady strides), the way he faces there, and where he looks round it: the gate, the stables, the sky over the lists */
 const YARD = new Vector3(-0.5, 0, 11);
 const SIGHTS = [new Vector3(-4, 2.2, 15), new Vector3(3.5, 1.4, 13.5), new Vector3(0, 2.5, 19)];
-/** where he stands at the table (the grips' middle × the arm's length ahead): close, not bowing far over it */
-const AT_TABLE = { ahead: 0.45 };
 /** the sword in its scabbard leaning on the table's edge, nearly upright */
 const LEANING = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.06);
 
@@ -72,8 +70,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
     title: 'A knight arming',
     description:
       'In his armoury a knight in harness buckles on his sword belt, hangs his sword on it and checks it draws, puts on his helm and buckles its strap, pulls on his gauntlets, takes his shield onto his left arm and his lance in his right hand, and walks out into the yard, looking round.',
-    // (the walking keeps its own pace; a moment over looking round the yard, whatever the variation)
-    duration: 46 + 24 / pace,
+    // Walking keeps its own pace; leave time for hands to settle to rest between tasks and a look round the yard.
+    duration: 50 + 24 / pace,
     actors: [{ height }],
     cameraDistance: 4.2,
     stage: () => {
@@ -101,6 +99,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       let pieces: Gear[] = [];
       const story = (k: Knight) =>
         function* () {
+          const atTable = { ahead: 0.45 * k.h.proportions.armLength };
           yield* wear(k.h, gear.sword.item, gear.scabbard.item)();
           // (each thing flowing into the next: it sets off as the hands let go of the last)
           const arms = function* () {
@@ -120,13 +119,13 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           yield* flow(
             k,
             [
-              [buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, AT_TABLE), ['left', 'right']],
+              [buckle(k, { buckle: gear.buckle.item, tongue: gear.tongue.item }, atTable), ['left', 'right']],
               [hangSword(k, gear.scabbard.item), ['left']],
               [checkDraw(k, gear.sword.item, gear.scabbard.item), ['left'], { left: new Vector3(0.3, 0.2, 0.1) }],
               [putOnHelmet(k, gear.helmet.item), ['left', 'right']],
-              [don(k, gear.gauntlets.left.item, 'left', AT_TABLE), ['right']],
+              [don(k, gear.gauntlets.left.item, 'left', atTable), ['right']],
               // (the left letting go of the right gauntlet's cuff out to its own side, clear of the sword's hilt as it comes down)
-              [don(k, gear.gauntlets.right.item, 'right', AT_TABLE), ['left'], { left: new Vector3(0.15, 0.05, 0.05) }],
+              [don(k, gear.gauntlets.right.item, 'right', atTable), ['left'], { left: new Vector3(0.15, 0.05, 0.05) }],
             ],
             arms,
           )();

@@ -13,6 +13,7 @@ import type { Humanoid } from './humanoid';
 import { lowering, TIPTOE } from './balance/posture';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle } from '../core/math';
 import { yawOf } from '../core/math';
+import { gripOf } from './hands/grips';
 import type { Proportions } from './proportions';
 
 /** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm behind it (share of a step; CMU mocap) */
@@ -25,6 +26,8 @@ const CLEAR = 0.055;
 const SWING = { accel: 25, speed: 2.5 };
 /** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
 export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
+/** A held grip follows briskly enough that solved joints stay within a few cm. */
+export const HOLD = { ...CALM, accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
@@ -36,11 +39,12 @@ const OUT = 0.5;
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
  * steps as a pendulum (`h.gait`'s stride), opposite the legs, wider and bent walking faster; the
  * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
- * task let go of swings back into it.
+ * task let go of swings back into it. A hand still holding an item follows its grip until release.
  */
 export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
   return function* () {
     const goals = new Map<number, TrackedRotation>();
+    const heldArms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
     yield* action<Frame<W>>({
       update: (f) => {
         const g = h.gait;
@@ -50,6 +54,11 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
         const hips = f.current.position(0);
         const left = leftOf(yaw, _left);
         SIDES.forEach((side, s) => {
+          const held = h.holding[side];
+          if (held) {
+            handStep(h, f, side, gripOf(held.item, held.grip), { on: held.item, ...HOLD, lead: !h.worn.has(held.item) }, heldArms[side]);
+            return;
+          }
           const sign = s === 0 ? 1 : -1;
           // (the left arm in front as the left foot lifts, the right behind)
           // (growing in as the walk does: setting off, the first steps barely swing them)

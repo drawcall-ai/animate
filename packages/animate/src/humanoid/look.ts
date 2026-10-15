@@ -58,7 +58,7 @@ const _com = new Vector3();
 const _v = new Vector3();
 
 /**
- * `task` with the eyes on `at` first: `task` sets off once they have got there (within ARRIVED) and
+ * `task` with the eyes on `at` first: `task` sets off once they are within 10° or after 1.2 s, and
  * a moment more, `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the
  * hand goes for ~0.5 s before it (Land & Hayhoe 2001) — and they stay till it ends. For a point
  * further below the eyes than the neck pitches the head, the body bows to see it (asks `balance`),

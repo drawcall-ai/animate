@@ -20,7 +20,8 @@ import { gazeAsks } from './look';
 import { Rig } from './rig';
 import { yawOf } from '../core/math';
 import { defaultStance, footYaw, stanceFeet } from './stance';
-import { carryWorn, dress, type Bearing, type Dressed, type Wearing } from './worn';
+import { carryWorn, dress, type Bearing } from './worn';
+import type { Dressed, Wearing } from '../core/worn';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -86,10 +87,12 @@ export class Humanoid<W = unknown> {
       function* () {
         yield* parallel<Frame<W>>('all', script, carried);
       },
-      { world: options.world, pose: start.pose, dev: options.dev },
+      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale },
     );
     rig.write(this.body.pose, 0);
   }
+
+  get scale(): number { return this.proportions.scale; }
 
   /** Development problems from checks and watchers. */
   get log() { return this.body.log; }

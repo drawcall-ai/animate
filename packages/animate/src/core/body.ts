@@ -4,6 +4,8 @@ import type { Skeleton } from './skeleton';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
 import { checkSnaps } from './rotation';
+import { moveWorn, type Wearing } from './worn';
+import type { Item } from './carrier';
 
 /** the sub-step (s): fixed, so that what behaviours read off the history (velocities) does not depend on the frame rate */
 export const STEP = 1 / 60;
@@ -28,10 +30,14 @@ export interface Frame<W = unknown> {
   /** this sub-step's pose, as written so far */
   current: Pose;
   readonly dev?: Dev;
+  /** Active named contributions, also recorded with dev off. */
+  readonly beats: Set<string>;
 }
 
 export interface BodyOptions<W> {
   world?: W;
+  /** Scale applied only to placements in bone frames. */
+  scale?: number;
   /** Checks final poses and records problems; default off. */
   dev?: boolean;
   /** the pose it starts at, still (default the skeleton's rest pose) */
@@ -47,6 +53,8 @@ export interface BodyOptions<W> {
 export class Body<W = unknown> {
   /** after an update: `prev` is the final pose, `prev2` the one before, `dt` the last sub-step */
   readonly frame: Frame<W>;
+  readonly worn: Map<Item, Wearing>;
+  readonly scale: number;
   /** the poses `frame` shows, as [prev2, prev, current] */
   private poses: [Pose, Pose, Pose];
   private readonly behaviour: ReusableTimeline<Frame<W>>;
@@ -57,6 +65,8 @@ export class Body<W = unknown> {
   private pending = 0;
 
   constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame<W>>, options: BodyOptions<W> = {}) {
+    this.worn = new Map();
+    this.scale = options.scale ?? 1;
     const start = new Pose(skeleton);
     if (options.pose) start.copy(options.pose);
     start.forward();
@@ -64,6 +74,7 @@ export class Body<W = unknown> {
     const { world } = options;
     this.frame = {
       dev: options.dev ? new Dev() : undefined,
+      beats: new Set(),
       dt: STEP,
       time: 0,
       get world() {
@@ -92,7 +103,12 @@ export class Body<W = unknown> {
     // (1e-9: 1/30 is a hair under two sub-steps of 1/60 in floating point)
     const steps = Math.floor(this.pending / STEP + 1e-9);
     this.pending = Math.max(0, this.pending - steps * STEP);
-    for (let i = 0; i < steps; i++) this.step();
+    try {
+      for (let i = 0; i < steps; i++) this.step();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(`${this.frame.time.toFixed(3)} s, "${[...this.frame.beats].join(' ∥ ')}": ${message}`, { cause });
+    }
   }
 
   private step(): void {
@@ -104,12 +120,13 @@ export class Body<W = unknown> {
     if (frame.dev && frame.time > 0) {
       checkLimits(frame.prev, frame.dev, frame.time);
       checkSnaps(frame, frame.dev);
-      frame.dev.beats.clear();
     }
+    frame.beats.clear();
     frame.time += dt;
     clock.delta = dt;
     (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
-    if (frame.dev) frame.dev.beat = [...frame.dev.beats].join(' ∥ ');
+    if (frame.dev) frame.dev.beat = [...frame.beats].join(' ∥ ');
+    moveWorn(this, frame);
     clock.prevDelta = dt;
     clock.frame++;
     current.forward();

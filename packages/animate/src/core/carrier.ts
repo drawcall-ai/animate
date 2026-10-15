@@ -3,6 +3,7 @@ import { STEP } from './body';
 import type { Frame } from './body';
 import type { Placement, Target } from './goal';
 import { log } from './rotation';
+import type { Wearer } from './worn';
 
 /**
  * A rigid frame things move on (a cart, a board, a held box), with a history like a body's:
@@ -56,6 +57,8 @@ export class Carrier {
 
 /** An item's mass (kg; default none), where its centre of mass is in its frame (default its origin), and whether it rests on something (default true). */
 export interface ItemOptions {
+  /** Identifies the item in reach and carry errors. */
+  name?: string;
   mass?: number;
   centre?: Vector3;
   supported?: boolean;
@@ -66,6 +69,9 @@ export interface ItemOptions {
  * its normal, `axis`), with a mass: a body that holds or wears it carries it (its centre of mass).
  */
 export class Item extends Carrier {
+  readonly name: string;
+  /** Which body wears it; null while unattached. */
+  wornBy: Wearer | null = null;
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
   /** it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`, `carry`) or wearing it clears this, letting go of it where nothing else holds or wears it (`release`: put down) sets it */
@@ -75,10 +81,11 @@ export class Item extends Carrier {
     position: Vector3,
     quaternion: Quaternion,
     readonly grips: Readonly<Record<string, Target>>,
-    { mass = 0, centre = new Vector3(), supported = true }: ItemOptions = {},
+    { name = "item", mass = 0, centre = new Vector3(), supported = true }: ItemOptions = {},
   ) {
     super(position, quaternion);
     if (!(mass >= 0 && Number.isFinite(mass))) throw new Error(`an item of mass ${mass}`);
+    this.name = name;
     this.mass = mass;
     this.centre = centre.clone();
     this.supported = supported;

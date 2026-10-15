@@ -1,14 +1,14 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { arriving, eyesOnBefore, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
+import { approach, arriving, carried, eyesOnBefore, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, type Behaviour, type Frame, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
 
 /** the box's width, height and depth (m) */
 const BOX = new Vector3(0.34, 0.26, 0.26);
-/** the shelf: where its middle stands on the floor, its boards' heights, its width and depth (m); the body stands this far before its middle to put things up */
-const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34, stand: 0.35 };
+/** the shelf: where its middle stands on the floor, its boards' heights, its width and depth (m) */
+const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34 };
 /** how long the box takes from the floor up to the chest, and up over the board's front edge and onto it (s) */
 const LIFT = 1.8;
 const PLACE = { over: 1.1, onto: 0.7 };
@@ -17,9 +17,6 @@ const RAISED = 0.2;
 const RAISING = 1;
 /** lifted past the knees (m): the eyes go on from the box to the board it is for */
 const KNEES = 0.6;
-const WORLD: Required<Placement> = { position: new Vector3(), quaternion: new Quaternion() };
-/** carried: the box this far in front of the hips and this high (m) */
-const CARRIED = { ahead: 0.36, height: 1.05 };
 const UP = new Vector3(0, 1, 0);
 const HANDS = ['leftHand', 'rightHand'];
 
@@ -71,7 +68,6 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
  * way up onto the board; then it lets go
  */
 function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: number, report: Report): Behaviour<World> {
-  const grips: Grips = { left: 'left', right: 'right' };
   return function* () {
     // (the eyes on the box until it is up, then on the board it goes to)
     const gaze = { on: box.current.position };
@@ -83,11 +79,11 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
         // (the eyes on to the board as the box comes up past the knees)
         const board = new Vector3(SHELF.x, top, SHELF.z);
         const up = () => box.current.position.y > KNEES;
-        yield* parallel<Frame<World>>('all', carry(h, WORLD, [[box, grips, lifted(h, lift)]], { scale: 1 }), function* () {
+        yield* parallel<Frame<World>>('all', carry(h, box, lifted(h, lift)), function* () {
           yield* when(up);
           gaze.on = board;
         });
-        yield* shelve(h, box, grips, size, top)();
+        yield* shelve(h, box, size, top)();
       }),
       lookAt(h.gazer, reported(report, 'gaze', () => gaze.on)),
     );
@@ -101,11 +97,10 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
  * over the feet, not back where they squat)
  */
 function lifted(h: Humanoid<World>, seconds: number): Leg[] {
-  const feet = h.feet[0].position.clone().add(h.feet[1].position).multiplyScalar(0.5);
   const ahead = forwardOf(h.gait.facing);
   return [
     [seconds / 2, (start) => ({ position: start.position.clone().addScaledVector(ahead, 0.12).setY(KNEES) })],
-    [seconds / 2, { position: feet.addScaledVector(ahead, CARRIED.ahead).setY(CARRIED.height), quaternion: new Quaternion().setFromAxisAngle(UP, h.gait.facing) }],
+    [seconds / 2, carried(h)()],
   ];
 }
 
@@ -114,18 +109,15 @@ function lifted(h: Humanoid<World>, seconds: number): Leg[] {
  * to it (from RAISING s before it stands there), and once it is there (its feet may still be
  * settling), up over the board's front edge and onto it: its course ends on the board, where it rests
  */
-function shelve(h: Humanoid<World>, box: Item, grips: Grips, size: Vector3, top: number): Behaviour<World> {
-  const stand = new Vector3(SHELF.x, 0, SHELF.z - SHELF.stand);
+function shelve(h: Humanoid<World>, box: Item, size: Vector3, top: number): Behaviour<World> {
   const arrived = arriving(h, 0.05);
   const front = SHELF.z - SHELF.depth / 2;
-  const carried = (f: Frame<World>): Placement => ({
-    position: f.prev
-      .position(0)
-      .clone()
-      .addScaledVector(forwardOf(h.gait.facing), CARRIED.ahead)
-      .setY(CARRIED.height + RAISED * (1 - MathUtils.smoothstep(h.gait.eta, 0, RAISING))),
-    quaternion: new Quaternion().setFromAxisAngle(UP, h.gait.facing),
-  });
+  const carryPose = carried(h);
+  const raised = (f: Frame<World>): Placement => {
+    const at = carryPose(f);
+    at.position.y += RAISED * (1 - MathUtils.smoothstep(h.gait.eta, 0, RAISING));
+    return at;
+  };
   const up: Leg[] = [
     [PLACE.over, { position: new Vector3(SHELF.x, top + size.y / 2 + 0.03, front - 0.02), quaternion: new Quaternion() }],
     [PLACE.onto, { position: new Vector3(SHELF.x, top + size.y / 2 + 0.005, front + size.z / 2 + 0.01) }],
@@ -133,10 +125,10 @@ function shelve(h: Humanoid<World>, box: Item, grips: Grips, size: Vector3, top:
   return function* () {
     yield* parallel<Frame<World>>(
       'all',
-      walkTo(h, { to: stand, face: 0 }),
+      approach(h, new Vector3(SHELF.x, top + size.y / 2, SHELF.z), { face: 0 }),
       function* () {
-        yield* hold(h, box, grips, { to: carried, until: () => h.gait.eta === Infinity || arrived() })();
-        yield* carry(h, WORLD, [[box, grips, up]], { scale: 1 })();
+        yield* hold(h, box, { to: raised, until: () => h.gait.eta === Infinity || arrived() })();
+        yield* carry(h, box, up)();
       },
     );
   };

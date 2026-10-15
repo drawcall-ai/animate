@@ -120,6 +120,6 @@ it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as co
   // The other foot is outside this pivot check.
   h.feet[1].phase = 'swing';
   const dev = new Dev();
-  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, world: undefined }, dev);
+  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, beats: new Set(), world: undefined }, dev);
   expect(dev.log).toContainEqual(expect.objectContaining({ check: 'planted foot slide (m)', where: 'leftFoot', limit: 0.01 }));
 });
