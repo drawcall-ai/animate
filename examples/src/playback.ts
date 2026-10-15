@@ -102,7 +102,7 @@ export class Playback {
 
   get velocity(): Vector3 {
     const h = this.sim.actors[0];
-    if (h) return h.gait.velocity;
+    if (h) return this.sim.scenario.id === 'legs-biped' ? new Vector3().copy(h.velocity) : h.gait.velocity;
     const body = this.sim.stage.bodies?.[0];
     if (!body) throw new Error('playback needs an actor');
     return new Vector3().subVectors(body.frame.prev.position(0), body.frame.prev2.position(0)).divideScalar(body.frame.dt);
@@ -110,7 +110,7 @@ export class Playback {
 
   get facing(): number {
     const h = this.sim.actors[0];
-    if (h) return h.gait.facing;
+    if (h) return this.sim.scenario.id === 'legs-biped' ? yawOf(h.pose.rotation(0)) : h.gait.facing;
     const body = this.sim.stage.bodies?.[0];
     if (!body) throw new Error('playback needs an actor');
     return yawOf(body.pose.rotation(0));

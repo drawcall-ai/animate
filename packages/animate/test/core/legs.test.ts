@@ -1,7 +1,10 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
+import { strideAt } from '../../src/core/legs/gait';
+import { Limb, type Motion } from '../../src/core/legs/limb';
+import { Solver } from '../../src/core/legs/solve';
 import { Legs } from '../../src/core/legs/legs';
 import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
 import { HORSE_WALK, horseLegs } from '../../src/horse/legs';
@@ -48,4 +51,41 @@ it('leg contact checks read the final pose after a later writer, and disappear w
   expect(checks).toContain('leg contact turn (rad)');
   expect(checks).toContain('leg ground (m)');
   expect(run(false)).toEqual([]);
+});
+
+it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', () => {
+  expect(strideAt(HORSE_WALK, -8.9e-16, 0)).toEqual(strideAt(HORSE_WALK, 0, 0));
+  for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(HORSE_WALK, speed, 0)).toThrow('leg speed');
+  const pose = new Pose(SKELETON);
+  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  const root = { position: pose.position(0).clone(), quaternion: new Quaternion() };
+  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    engine.update(f, { root: () => root, speed: () => -8.9e-16 });
+  } }), { pose });
+  for (let tick = 0; tick < 60; tick++) body.update(1 / 60);
+});
+
+it('shortens a long foothold with at most 40 reach solves and keeps its verified endpoint', () => {
+  const pose = new Pose(SKELETON);
+  pose.setRoot(new Vector3(0, 1.32, 0));
+  const limb = new Limb(horseLegs()[0], pose);
+  const root = pose.position(0).clone();
+  const walker: Motion = { phase: 0, stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
+    position.copy(root);
+    turn.identity();
+  } };
+  const contact = limb.standing(pose);
+  const standing = contact.position.clone();
+  contact.position.z += 2;
+  const reach = vi.spyOn(Solver.prototype, 'reach');
+  try {
+    limb.foothold(pose, walker, 0.4, contact);
+    expect(reach.mock.calls.length).toBeLessThanOrEqual(40);
+    expect(reach.mock.calls.length).toBeGreaterThan(8);
+    expect(contact.position.z).toBeGreaterThanOrEqual(standing.z);
+    expect(contact.position.z).toBeLessThan(standing.z + 2);
+    expect(limb.landingSupported(pose, walker, 0.4, contact)).toBe(true);
+  } finally {
+    reach.mockRestore();
+  }
 });

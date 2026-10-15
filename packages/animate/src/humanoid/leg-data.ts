@@ -2,7 +2,7 @@
 import type { Proportions } from './proportions';
 import { INDEX, SIDES } from './bones';
 import type { JointCycle } from '../core/legs/cycle';
-import type { LegChain } from '../core/legs/legs';
+import type { LegChain, Rocker } from '../core/legs/legs';
 import type { LegGait } from '../core/legs/gait';
 import { powerGait } from '../core/legs/schedule';
 
@@ -19,7 +19,7 @@ const KNEE = cycle([[0, -3], [0.12, -18], [0.25, -12], [0.4, -4], [0.5, -8], [0.
 /** Recalled: the ankle (+ dorsiflexed): plantarflexing 6° after heel strike, ~10° dorsiflexed late in stance, ~18° plantarflexed at toe-off, neutral in the swing */
 const ANKLE = cycle([[0, 0], [0.07, -6], [0.3, 8], [0.48, 10], [0.62, -18], [0.7, -12], [0.85, 0], [0.95, 1]]);
 /** Recalled: the foot to the floor over the stance (+ toes up): ~18° at heel strike, flat from ~10% to ~31% (heel-off), ~40° heel-up at toe-off (the three rockers) */
-const ROCKER: JointCycle = { duty: 1, keys: [[0, 18], [0.1, 7], [0.17, 0], [0.5, 0], [0.62, -4], [0.8, -16], [0.92, -30], [1, -40]] };
+const ROCKER: Rocker = { keys: [[0, 18], [0.1, 7], [0.17, 0], [0.5, 0], [0.62, -4], [0.8, -16], [0.92, -30], [1, -40]] };
 // Recalled: ~12 cm between heels at 1.75 m, ~7° toe-out, Perry-shaped stance.
 const WIDTH = 0.06;
 const TOE_OUT = 0.12;

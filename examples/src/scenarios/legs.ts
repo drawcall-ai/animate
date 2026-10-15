@@ -6,7 +6,10 @@ import { Report } from '../report';
 
 /** Script only: integrate a smooth speed ramp, then a broad bend and a smooth stop. No balance or body planner. */
 export function scriptedRoot(height: number, pace: number, origin = new Vector3(), yaw = 0, start = 0, brake = 2, radius = 15) {
-  const speed = (t: number) => pace * minimumJerk((t - start) / 2) * (1 - minimumJerk((t - start - 10) / brake));
+  const speed = (t: number) => {
+    const v = pace * minimumJerk((t - start) / 2) * (1 - minimumJerk((t - start - 10) / brake));
+    return v < 0 && v > -1e-9 ? 0 : v;
+  };
   // Fixed quadrature table makes prediction independent of the update cadence.
   const dt = 1 / 240;
   const travel = [0];
@@ -28,10 +31,10 @@ export function scriptedRoot(height: number, pace: number, origin = new Vector3(
 
 /** Scene proxy: 3 cm below standing, on the scale of walking COM excursions (2.74–4.83 cm).
  * Orendurff et al. (2004), doi:10.1682/JRRD.2003.10.0150; this fixed root is not a COM trajectory. */
-export function bipedRoot(pose: ReadonlyPose, scale: number, brake = 3) {
+export function bipedRoot(pose: ReadonlyPose, scale: number, brake = 3, pace = 1.3) {
   const initial = pose.position(0).y;
   const height = initial - 0.03 * scale;
-  const route = scriptedRoot(height, 1.3, pose.position(0).clone().setY(0), yawOf(pose.rotation(0)), 1, brake);
+  const route = scriptedRoot(height, pace, pose.position(0).clone().setY(0), yawOf(pose.rotation(0)), 1, brake);
   return { speed: route.speed, at(t: number) {
     const at = route.at(t);
     const u = Math.min(1, t);

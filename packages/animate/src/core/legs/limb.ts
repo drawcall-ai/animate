@@ -10,7 +10,7 @@ import { boundSwing, quintic, type Swing } from './swing';
 import type { Stride } from './gait';
 import { Solver, type Target } from './solve';
 
-interface Motion {
+export interface Motion {
   phase: number;
   stride: Stride;
   rootAt(ahead: number, position: Vector3, turn: Quaternion): void;
@@ -25,6 +25,7 @@ export class Limb {
   /** each coordinate's cycle (or none) */
   private readonly cycles: (JointCycle | null)[];
   private readonly rest: Float64Array;
+  private readonly trial: Float64Array;
   private swing: Swing | null = null;
   private lifting = false;
   private ready = false;
@@ -55,6 +56,7 @@ export class Limb {
   ) {
     const s = rest.skeleton;
     this.solver = new Solver(s, leg.joints);
+    this.trial = new Float64Array(this.solver.n);
     this.top = leg.joints[0].bone;
     this.terminal = leg.joints[leg.joints.length - 1].bone;
     this.anchor.copy(rest.position(this.terminal)).sub(rest.position(0)).applyQuaternion(_q.copy(rest.rotation(0)).invert());
@@ -80,40 +82,48 @@ export class Limb {
       this.baseAt(p, walker, ahead, _turn, _top);
       const pitch = this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping);
       const target = this.planted(state.foothold, pitch, _target);
-      if (this.solver.reach(_turn, _top, target, Float64Array.from(this.solver.q)) >= 1e-5) return false;
+      if (this.solver.reach(_turn, _top, target, this.trial) >= 1e-5) return false;
     }
     return true;
   }
 
   /** Shorten a proposed step until its landing is reachable, before committing the foothold. */
   foothold(p: Pose, walker: Motion, ahead: number, contact: LegTiming['foothold']): void {
-    this.refs(0, walker.stride.duty, walker.stride.stepping);
-    walker.rootAt(ahead, _root, _rootTurn);
-    const standing = this.anchor.clone().applyQuaternion(_rootTurn).add(_root).setY(contact.position.y);
+    const standing = this.standingAt(walker, ahead, contact.position.y);
     const desired = contact.position.clone();
-    const q = Float64Array.from(this.solver.q);
     const reaches = (t: number) => {
       contact.position.lerpVectors(standing, desired, t);
-      // Reserve the first stance ticks, with either a flat foot or its full landing rocker.
-      for (const time of [ahead, ahead + 0.1]) {
-        this.baseAt(p, walker, time, _turn, _top);
-        for (const pitch of [0, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)]) {
-          const target = this.planted(contact, pitch, _target);
-          if (this.solver.reach(_turn, _top, target, q) >= 1e-6) return false;
-        }
-      }
-      return true;
+      return this.landingSupported(p, walker, ahead, contact);
     };
     if (reaches(1)) return;
     if (!reaches(0)) throw new Error('root does not support the proposed stance');
     let lo = 0;
     let hi = 1;
-    for (let i = 0; i < 20; i++) {
+    // Eight bisections retain a verified reachable endpoint, within 1/256 of the step.
+    for (let i = 0; i < 8; i++) {
       const mid = (lo + hi) / 2;
       if (reaches(mid)) lo = mid;
       else hi = mid;
     }
-    reaches(lo);
+    contact.position.lerpVectors(standing, desired, lo);
+  }
+
+  standingAt(walker: Motion, ahead: number, height: number): Vector3 {
+    walker.rootAt(ahead, _root, _rootTurn);
+    return this.anchor.clone().applyQuaternion(_rootTurn).add(_root).setY(height);
+  }
+
+  /** The same reserve used by preflight and the foothold search. */
+  landingSupported(p: Pose, walker: Motion, ahead: number, contact: LegTiming['foothold']): boolean {
+    this.refs(0, walker.stride.duty, walker.stride.stepping);
+    for (const time of [ahead, ahead + 0.1]) {
+      this.baseAt(p, walker, time, _turn, _top);
+      for (const pitch of [0, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)]) {
+        const target = this.planted(contact, pitch, _target);
+        if (this.solver.reach(_turn, _top, target, this.trial) >= 1e-6) return false;
+      }
+    }
+    return true;
   }
 
   /** the swing starts: it is taken from where the terminal is as it poses next */

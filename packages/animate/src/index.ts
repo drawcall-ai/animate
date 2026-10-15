@@ -47,7 +47,7 @@ export { createWorld, type World } from './humanoid/world';
 export { named, watch, type Problem, type LogEntry, type WatchFrame } from './core/dev';
 export { eyesOnBefore } from './humanoid/watch';
 
-export { Legs, type LegChain, type LegState, type LegStep, type ContactEvent } from './core/legs/legs';
+export { Legs, type LegChain, type Rocker, type LegState, type LegStep, type ContactEvent } from './core/legs/legs';
 export type { LegGait } from './core/legs/gait';
 export type { JointCycle } from './core/legs/cycle';
 export { humanLegs, humanGait } from './humanoid/leg-data';

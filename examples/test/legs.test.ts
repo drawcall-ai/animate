@@ -1,39 +1,95 @@
 import { expect, it } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, HORSE_TROT, HORSE_WALK, Humanoid, Legs, Pose, beyond, horseLegs, humanGait, humanLegs, type Frame, type LegGait } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, HORSE_TROT, HORSE_WALK, Humanoid, Legs, Pose, beyond, horseLegs, humanGait, humanLegs, type Frame, type LegGait, type LegStep } from '@drawcall/animate';
 import { createOpenPoseModel } from '../src/openpose';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
-import { bipedRoot, legsHorse, scriptedRoot } from '../src/scenarios/legs';
+import { bipedRoot, legsBiped, legsHorse, scriptedRoot } from '../src/scenarios/legs';
 
-function human(brake = 3) {
+function human(brake = 3, pace = 1.3, supported = false) {
   let engine: Legs | undefined;
+  let move: ReturnType<typeof supportRoute> | null = null;
   const body = new Humanoid(createOpenPoseModel(), (h) => function* () {
-    const route = bipedRoot(h.pose, h.proportions.scale, brake);
+    const route = bipedRoot(h.pose, h.proportions.scale, brake, pace);
     engine = new Legs(h.pose, humanLegs(h.proportions), humanGait(h.proportions));
+    move = supported ? supportRoute(engine, route) : null;
     yield* action<Frame>({ update: (f) => {
+      if (move) return move.update(f);
       const at = route.at(f.time);
       f.current.setRoot(at.position);
       f.current.setLocal(0, at.quaternion);
       engine?.update(f, { root: route.at, speed: route.speed });
     } });
   }, { dev: true });
-  return { body, engine: () => { if (!engine) throw new Error('human has not stepped'); return engine; } };
+  return { body, motion: () => move, engine: () => { if (!engine) throw new Error('human has not stepped'); return engine; } };
 }
 
-function horse(gait: LegGait, pace: number, brake = 2, radius = 15) {
+function horse(gait: LegGait, pace: number, brake = 2, radius = 15, supported = false) {
   const pose = new Pose(HORSE_SKELETON);
   const route = scriptedRoot(1.32, pace, new Vector3(), 0, 0, brake, radius);
   pose.setRoot(route.at(0).position);
   const engine = new Legs(pose, horseLegs(), gait);
+  const move = supported ? supportRoute(engine, route) : null;
   const body = new Body(HORSE_SKELETON, () => action<Frame>({ update: (f) => {
+    if (move) return move.update(f);
     const at = route.at(f.time);
     f.current.setRoot(at.position);
     f.current.setLocal(0, at.quaternion);
     engine.update(f, { root: route.at, speed: route.speed });
   } }), { pose, dev: true });
-  return { body, engine: () => engine };
+  return { body, motion: () => move, engine: () => engine };
+}
+
+// The caller adjusts height and, for tight turns, traversal speed in the same root forecast.
+function supportRoute(engine: Legs, route: ReturnType<typeof scriptedRoot>) {
+  let drop = 0.04;
+  let time = 1 / 60;
+  let rate = 1;
+  let peak = 0;
+  let rejected = 0;
+  return {
+    get time() { return time; },
+    get rate() { return rate; },
+    get peak() { return peak; },
+    get rejected() { return rejected; },
+    update(f: Frame) {
+      const atTime = (t: number) => time + rate * (t - f.time);
+      const step: LegStep = { speed: (t) => rate * route.speed(atTime(t)), root: (t) => {
+        const at = route.at(atTime(t));
+        at.position.y -= drop;
+        return at;
+      } };
+      const states = JSON.stringify(engine.legs);
+      const events = JSON.stringify(engine.events);
+      const root = f.current.position(0).clone();
+      const previous = drop;
+      let found = engine.supports(f, step);
+      if (!found) rejected++;
+      for (let offset = 0.002; !found && offset <= 0.2; offset += 0.002) {
+        for (const direction of [1, -1]) {
+          drop = previous + direction * offset;
+          if (!engine.supports(f, step)) continue;
+          found = true;
+          break;
+        }
+      }
+      if (!found) drop = previous;
+      while (!engine.supports(f, step)) {
+        rate *= 0.9;
+        if (rate < 0.1) throw new Error(`no supported root at ${f.time}`);
+      }
+      expect(JSON.stringify(engine.legs)).toBe(states);
+      expect(JSON.stringify(engine.events)).toBe(events);
+      expect(f.current.position(0).equals(root)).toBe(true);
+      const at = step.root(f.time);
+      f.current.setRoot(at.position);
+      f.current.setLocal(0, at.quaternion);
+      engine.update(f, step);
+      peak = Math.max(peak, rate * route.speed(time));
+      time += rate * f.dt;
+    },
+  };
 }
 
 for (const [name, make] of [['human', human], ['horse walk', () => horse(HORSE_WALK, 1.6)], ['horse trot 2s brake', () => horse(HORSE_TROT, 3.7)], ['horse trot 3s brake', () => horse(HORSE_TROT, 3.7, 3)], ['horse walk 3m turn', () => horse(HORSE_WALK, 1.6, 2, 3)], ['human hard stop', () => human(0.5)]] as const) {
@@ -129,3 +185,37 @@ it('shows a generic body without assuming a humanoid cast', () => {
   expect(Number.isFinite(shown.root.z + playback.facing + playback.velocity.length())).toBe(true);
   expect(playback.sim.stage.bodies?.every((b) => b.frame.dev === undefined)).toBe(true);
 });
+
+it('legs-biped playback leads along the scripted travel and turn without writing gait', () => {
+  const playback = new Playback(new Simulation(legsBiped()));
+  playback.advanceTo(8);
+  expect(playback.velocity.length()).toBeGreaterThan(1);
+  expect(playback.facing).toBeGreaterThan(0.1);
+  expect(playback.facing).toBeCloseTo(playback.sim.actors[0].yaw, 10);
+  expect(playback.sim.actors[0].gait.velocity.length()).toBe(0);
+  expect(playback.sim.actors[0].gait.facing).toBe(0);
+});
+
+it('scripted braking never returns a negative speed, including minimum-jerk rounding', () => {
+  const route = scriptedRoot(1, 1.8, new Vector3(), 0, 0, 1);
+  for (let tick = 0; tick <= 16000; tick++) expect(route.speed(tick / 1000)).toBeGreaterThanOrEqual(0);
+});
+
+for (const [name, make] of [
+  ['biped 1.6m/s acceleration', () => human(3, 1.6, true)],
+  ['biped 1.8m/s braked in 1s', () => human(1, 1.8, true)],
+  ['horse walk R=2m turn', () => horse(HORSE_WALK, 1.6, 2, 2, true)],
+] as const) {
+  it(`${name}: caller preflights its root and never trips the stance guard`, () => {
+    const { body, engine, motion } = make();
+    const duration = name.startsWith('biped') ? 16 : 32;
+    for (let tick = 0; tick < duration * 60; tick++) body.update(1 / 60);
+    const travelled = motion();
+    if (!travelled) throw new Error('missing preflight caller');
+    expect(travelled.time).toBeGreaterThan(16);
+    expect(travelled.rejected).toBeGreaterThan(0);
+    expect(travelled.peak).toBeCloseTo(name.includes('1.8m/s') ? 1.8 : 1.6, 5);
+    if (name.startsWith('biped')) expect(travelled.rate).toBe(1);
+    expect(engine().legs.every((leg) => leg.planted)).toBe(true);
+  }, 15000);
+}

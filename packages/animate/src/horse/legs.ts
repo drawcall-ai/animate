@@ -1,6 +1,6 @@
 // Recalled: Back et al. (1995), Hodson (2000/2001), Clayton (2004) curves as retained by the spike.
 import type { JointCycle } from '../core/legs/cycle';
-import type { LegChain } from '../core/legs/legs';
+import type { LegChain, Rocker } from '../core/legs/legs';
 import { LEGS } from './skeleton';
 import { powerGait } from '../core/legs/schedule';
 
@@ -33,7 +33,7 @@ const HIND = {
 const FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -55], [0.82, -20], [0.95, 0]]);
 const COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]]);
 /** the hoof flat on the ground, breaking over its toe at the end of the stance (°, + toe up) */
-const BREAKOVER: JointCycle = { duty: 1, keys: [[0, 0], [0.8, 0], [1, -25]] };
+const BREAKOVER: Rocker = { keys: [[0, 0], [0.8, 0], [1, -25]] };
 
 /** the horse's body for the core */
 export function horseLegs(): readonly LegChain[] {

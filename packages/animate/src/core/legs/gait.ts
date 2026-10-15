@@ -21,6 +21,7 @@ export function checkGait(gait: LegGait, count: number): void {
 }
 
 export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
+  speed = speedOf(speed);
   if (!(speed >= 0 && Number.isFinite(speed))) throw new Error('leg speed must be finite and nonnegative');
   const v = Math.max(gait.slowest, speed);
   const froude = v * v / (GRAVITY * gait.height);
@@ -36,3 +37,6 @@ export function offsetAt(gait: LegGait, speed: number, leg: number): number {
   if (!(value >= 0 && value < 1)) throw new Error('a gait offset must be in [0, 1)');
   return value;
 }
+
+/** Round only negative speed noise; real reverse speeds still fail validation. */
+export const speedOf = (speed: number) => speed < 0 && speed > -1e-9 ? 0 : speed;

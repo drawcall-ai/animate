@@ -1,11 +1,16 @@
-import type { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
 import type { Placement } from '../goal';
 import type { ReadonlyPose } from '../pose';
 import type { JointCycle } from './cycle';
-import { checkGait, offsetAt, strideAt, type LegGait, type Stride } from './gait';
-import { Limb } from './limb';
+import { checkGait, offsetAt, strideAt, speedOf, type LegGait } from './gait';
+import { Limb, type Motion } from './limb';
 import { yawOf } from '../math';
+
+/** Terminal pitch keys `[stance fraction, degrees]`, minimum-jerk between keys, without wrapping. */
+export interface Rocker {
+  keys: readonly (readonly [number, number])[];
+}
 
 /** A connected chain with joint coordinates (ordered y, z, −x rotations) and foot geometry. Ranges come from the pose's skeleton. */
 export interface LegChain {
@@ -17,7 +22,7 @@ export interface LegChain {
   /** Lateral foothold offset in the root frame (m). Omitted: rest offset. */
   width?: number;
   /** Terminal pitch through stance, degrees, positive toes up. */
-  rocker: JointCycle;
+  rocker: Rocker;
 }
 
 export interface LegState {
@@ -57,23 +62,18 @@ export class Legs {
   /** Events from the last update only. No ETA or event history. */
   readonly events: ContactEvent[] = [];
   private readonly limbs: Limb[];
-  private readonly strides: Stride[];
 
   constructor(pose: ReadonlyPose, private readonly chains: readonly LegChain[], private gait: LegGait) {
     checkGait(gait, chains.length);
     const bones = chains.flatMap((leg) => [...leg.joints.map((j) => j.bone), ...(leg.toes ? [leg.toes.bone] : [])]);
     if (new Set(bones).size !== bones.length) throw new Error('leg chains must not share bones');
     this.limbs = chains.map((leg) => new Limb(leg, pose));
-    this.strides = chains.map((_, i) => strideAt(gait, 0, i));
-    if (!this.strides.length) throw new Error('legs needs at least one chain');
+    if (!chains.length) throw new Error('legs needs at least one chain');
     this.states = this.limbs.map((limb, i) => ({ planted: true, phase: 0, foothold: limb.standing(pose), footfall: before(offsetAt(gait, 0, i), 0), lift: 0 }));
     this.legs = this.states;
   }
 
   update(f: Frame, step: LegStep): void {
-    const inputSpeed = step.speed;
-    const speedAt = typeof inputSpeed === 'number' ? () => inputSpeed : inputSpeed;
-    const speed = speedAt(f.time);
     if (step.gait && step.gait !== this.gait) {
       checkGait(step.gait, this.chains.length);
       this.gait = step.gait;
@@ -81,39 +81,20 @@ export class Legs {
     this.limbs.forEach((limb) => limb.check(f));
     this.time = f.time;
     this.events.length = 0;
-    this.states.forEach((_, i) => { this.strides[i] = strideAt(this.gait, speed, i); });
-    // Predict with the same fixed ticks as update, including the landing tick's phase overshoot.
-    const phases = [0];
-    const seconds = (cycles: number) => {
-      while (phases[phases.length - 1] < cycles - 1e-9) {
-        const t = f.time + phases.length * STEP;
-        phases.push(phases[phases.length - 1] + strideAt(this.gait, speedAt(t), 0).frequency * STEP);
-      }
-      return phases.findIndex((phase) => phase >= cycles - 1e-9) * STEP;
-    };
-    this.phase += this.strides[0].frequency * f.dt;
+    const { speed, walkers } = this.motion(f, step);
+    this.phase = walkers[0].phase;
     this.states.forEach((state, i) => {
-      const stride = this.strides[i];
-      const { frequency, duty, stepping } = stride;
-      const walker = { phase: this.phase, stride, rootAt: (ahead: number, position: Vector3, turn: Quaternion) => {
-        const root = step.root(f.time + seconds(ahead * frequency));
-        position.copy(root.position);
-        turn.copy(root.quaternion);
-      } };
+      const walker = walkers[i];
+      const { duty } = walker.stride;
       const offset = offsetAt(this.gait, speed, i);
       if (!state.planted && this.phase >= state.footfall) {
         state.planted = true;
         this.event(i, 'land');
       } else if (state.planted && (this.phase - state.footfall >= duty || !this.limbs[i].supports(f.current, state, walker))) {
         const next = before(offset, this.phase) + 1;
-        const ahead = (next + duty / 2 - this.phase) / frequency;
-        const root = step.root(f.time + seconds(ahead * frequency));
+        const { landing, contact } = this.landing(walker, state, next, i);
         const limb = this.limbs[i];
-        const anchor = limb.anchor.clone();
-        if (limb.leg.width !== undefined) anchor.x += (limb.leg.width - anchor.x) * stepping;
-        const to = anchor.applyQuaternion(root.quaternion).add(root.position).setY(state.foothold.position.y);
-        const landing = (next - this.phase) / frequency;
-        const yaw = yawOf(root.quaternion) + limb.leg.toeOut;
+        const { position: to, yaw } = contact;
         limb.foothold(f.current, walker, landing, { position: to, yaw });
         // Numerical identity only: a stopped root takes no new steps.
         if (to.distanceTo(state.foothold.position) > 1e-6 || Math.abs(yaw - state.foothold.yaw) > 1e-6) {
@@ -129,6 +110,67 @@ export class Legs {
       state.phase = this.phase - state.footfall + (state.planted ? 0 : 1);
       this.limbs[i].pose(f, walker, state, this.gait.clearance[i]);
     });
+  }
+
+  /**
+   * Preflight the next update's landing reserve without posing or advancing the engine.
+   * Call after earlier body writers, before update, with the same frame and root/speed forecast.
+   * False: revise the forecast (e.g. lower its root height) and retry. At most ten reach
+   * solves per leg, with no foothold search. True guarantees the proposed-stance check;
+   * it does not certify existing contacts, swing clearance or balance.
+   */
+  supports(f: Frame, step: LegStep): boolean {
+    const { speed, walkers, gait } = this.motion(f, step);
+    return this.states.every((state, i) => {
+      if (!state.planted) return true;
+      const walker = walkers[i];
+      if (walker.phase - state.footfall < walker.stride.duty && this.limbs[i].supports(f.current, state, walker)) return true;
+      const next = before(offsetAt(gait, speed, i), walker.phase) + 1;
+      const { landing, contact } = this.landing(walker, state, next, i);
+      if (this.limbs[i].landingSupported(f.current, walker, landing, contact)) return true;
+      contact.position.copy(this.limbs[i].standingAt(walker, landing, contact.position.y));
+      return this.limbs[i].landingSupported(f.current, walker, landing, contact);
+    });
+  }
+
+  private motion(f: Frame, step: LegStep) {
+    const gait = step.gait ?? this.gait;
+    checkGait(gait, this.chains.length);
+    const input = step.speed;
+    const speedAt = (t: number) => speedOf(typeof input === 'number' ? input : input(t));
+    const speed = speedAt(f.time);
+    const strides = this.chains.map((_, i) => strideAt(gait, speed, i));
+    const phase = this.phase + strides[0].frequency * f.dt;
+    // Include the landing tick's phase overshoot, exactly as update does.
+    const phases = [0];
+    const seconds = (cycles: number) => {
+      while (phases[phases.length - 1] < cycles - 1e-9) {
+        const t = f.time + phases.length * STEP;
+        phases.push(phases[phases.length - 1] + strideAt(gait, speedAt(t), 0).frequency * STEP);
+      }
+      return phases.findIndex((value) => value >= cycles - 1e-9) * STEP;
+    };
+    const walkers: Motion[] = strides.map((stride) => ({
+      phase, stride,
+      rootAt: (ahead, position, turn) => {
+        const root = step.root(f.time + seconds(ahead * stride.frequency));
+        position.copy(root.position);
+        turn.copy(root.quaternion);
+      },
+    }));
+    return { speed, walkers, gait };
+  }
+
+  private landing(walker: Motion, state: LegTiming, next: number, i: number) {
+    const { frequency, duty, stepping } = walker.stride;
+    const limb = this.limbs[i];
+    const position = new Vector3();
+    const turn = new Quaternion();
+    walker.rootAt((next + duty / 2 - walker.phase) / frequency, position, turn);
+    const anchor = limb.anchor.clone();
+    if (limb.leg.width !== undefined) anchor.x += (limb.leg.width - anchor.x) * stepping;
+    const to = anchor.applyQuaternion(turn).add(position).setY(state.foothold.position.y);
+    return { landing: (next - walker.phase) / frequency, contact: { position: to, yaw: yawOf(turn) + limb.leg.toeOut } };
   }
 
   private event(leg: number, type: ContactEvent['type']): void {
