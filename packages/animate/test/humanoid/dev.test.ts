@@ -1,9 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
-import { Body, Humanoid, Item, eyesOnBefore, INDEX, STEP, createSkeletonModel, idle, named, watch, type Frame } from '../../src';
-import * as limits from '../../src/core/limits';
-import * as rotation from '../../src/core/rotation';
+import { Body, Humanoid, Item, eyesOnBefore, INDEX, STEP, Pose, createSkeletonModel, idle, named, watch, type Frame } from '../../src';
+import { checkFeet } from '../../src/humanoid/balance/legs';
+import { ballOf, footRotation } from '../../src/humanoid/balance/foot';
+import { Dev } from '../../src/core/dev';
 import { leg } from '../core/rigs';
 
 it('checks a planted foot in the final pose after a later writer moved it', () => {
@@ -31,23 +32,28 @@ it('attributes a watcher to the beat that made the previous final pose, even on 
   }, { dev: true });
   body.update(3 * STEP);
   expect(body.log.filter((e) => e.check === 'scene: too far')).toEqual([
-    { time: expect.closeTo(STEP, 10), check: 'scene: too far', value: 2, limit: 1, where: 'root', beat: 'first', severity: 'error' },
-    { time: expect.closeTo(2 * STEP, 10), check: 'scene: too far', value: 3, limit: 1, where: 'root', beat: 'second', severity: 'error' },
+    { time: expect.closeTo(STEP, 10), check: 'scene: too far', value: 2, limit: 1, where: 'root', beat: 'first' },
+    { time: expect.closeTo(2 * STEP, 10), check: 'scene: too far', value: 3, limit: 1, where: 'root', beat: 'second' },
   ]);
 });
 
-it('does no checking or watcher reads with dev off', () => {
+it.each([false, true])('checks and reads watchers only with dev on (%s)', (dev) => {
   const read = vi.fn(() => ({ check: 'bad', value: 1, limit: 0, where: 'root' }));
-  const body = new Body(leg(), watch('scene', read));
-  const range = vi.spyOn(limits, 'checkLimits');
-  const snaps = vi.spyOn(rotation, 'checkSnaps');
-  body.update(3 * STEP);
-  expect(body.frame.dev).toBeUndefined();
-  expect(body.log).toEqual([]);
-  expect(read).not.toHaveBeenCalled();
-  expect(range).not.toHaveBeenCalled();
-  expect(snaps).not.toHaveBeenCalled();
-  vi.restoreAllMocks();
+  const h = new Humanoid(createSkeletonModel(), () => function* () {
+    yield* parallel<Frame>('all', watch('scene', read), function* () {
+      yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time > STEP ? 2 : 0)) });
+    });
+  }, { dev });
+  h.update(3 * STEP);
+  if (dev) {
+    expect(read).toHaveBeenCalled();
+    for (const check of ['joint range (°)', 'joint speed (°/s)', 'joint acceleration (°/s²)', 'scene: bad']) {
+      expect(h.log).toContainEqual(expect.objectContaining({ check }));
+    }
+  } else {
+    expect(h.log).toEqual([]);
+    expect(read).not.toHaveBeenCalled();
+  }
 });
 
 it('catches a later joint writer and a snap from final rotations', () => {
@@ -74,4 +80,46 @@ it('a gaze watcher distinguishes a look that leads a grip from one that arrives 
   };
   expect(run(0.5)).toEqual([]);
   expect(run(STEP)).toContainEqual(expect.objectContaining({ check: 'eyesOnBefore: gaze lead shortfall (s)', value: 0.4, beat: 'take' }));
+});
+
+it('checks sustained joint speed even when acceleration is below its ceiling', () => {
+  const h = new Humanoid(createSkeletonModel(), () => function* () {
+    yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 15 * f.time)) });
+  }, { dev: true });
+  h.update(4 * STEP);
+  const log = h.log.filter((entry) => entry.time > STEP);
+  expect(log).toContainEqual(expect.objectContaining({ check: 'joint speed (°/s)', limit: 700 }));
+  expect(log.some((entry) => entry.check === 'joint acceleration (°/s²)')).toBe(false);
+});
+
+it('checks standing CoM against the soles once the final pose is still', () => {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    const pose = new Pose(h.rig.skeleton).copy(h.pose);
+    // Shift the segment's mass without moving the standing pose or its soles.
+    h.rig.skeleton.bones[INDEX.hips].com.x = 3;
+    yield* parallel<Frame>('all', idle(h), function* () {
+      yield* action<Frame>({ update: (f) => {
+        f.current.copy(pose);
+        h.gait.settled = true;
+        for (const foot of h.feet) foot.phase = 'planted';
+      } });
+    });
+  }, { dev: true });
+  h.update(3 * STEP);
+  expect(h.log).toContainEqual(expect.objectContaining({ check: 'standing CoM outside the feet (m)', limit: 0.001 }));
+});
+
+it.each([-1e-9, 1e-9])('allows either pivot for a nearly flat foot (pitch %s)', (pitch) => {
+  const h = new Humanoid(createSkeletonModel(), () => function* () {});
+  const pose = new Pose(h.rig.skeleton).copy(h.pose);
+  const ball = ballOf(h.proportions, 'left');
+  const anchor = pose.point(INDEX.leftFoot, ball, new Vector3());
+  pose.setRotation(INDEX.leftFoot, footRotation(h.feet[0].yaw + 0.5, pitch));
+  const delta = anchor.sub(pose.point(INDEX.leftFoot, ball, new Vector3()));
+  pose.setRoot(pose.position(0).clone().add(delta));
+  // The other foot is outside this pivot check.
+  h.feet[1].phase = 'swing';
+  const dev = new Dev();
+  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, world: undefined }, dev);
+  expect(dev.log.filter((entry) => entry.check === 'planted foot slide (m)')).toEqual([]);
 });

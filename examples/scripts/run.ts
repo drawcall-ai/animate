@@ -1,17 +1,6 @@
 import { DEFAULT_HEIGHT, type LogEntry } from '@drawcall/animate';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
-import type { Frame } from './frame';
-
-/** Frames for the remaining scenario metrics, after each fixed step. */
-export function* steps(sim: Simulation): Generator<Frame[]> {
-  while (sim.t < sim.scenario.duration) {
-    sim.step();
-    const asked = sim.stage.report.at(sim.t);
-    const solids = sim.stage.solids?.() ?? [];
-    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
-  }
-}
 
 /** Run with in-code checks; one extra step lets observers read the last final pose. */
 export function run(sc: Scenario): LogEntry[] {

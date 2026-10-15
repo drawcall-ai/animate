@@ -1,3 +1,4 @@
+import type { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from './body';
 import type { Behaviour } from './goal';
@@ -7,13 +8,11 @@ export interface Problem {
   value: number;
   limit: number;
   where: string;
-  severity?: 'error' | 'warning';
 }
 
 export interface LogEntry extends Problem {
   time: number;
   beat: string;
-  severity: 'error' | 'warning';
 }
 
 /** Watchers read the last final poses; they cannot write this step's pose. */
@@ -24,9 +23,10 @@ export class Dev {
   readonly log: LogEntry[] = [];
   readonly beats = new Set<string>();
   beat = '';
+  readonly velocities: Vector3[] = [];
 
   append(time: number, problem: Problem): void {
-    this.log.push({ ...problem, severity: problem.severity ?? 'error', time, beat: this.beat });
+    this.log.push({ ...problem, time, beat: this.beat });
   }
 }
 

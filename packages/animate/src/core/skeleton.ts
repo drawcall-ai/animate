@@ -3,6 +3,8 @@ import type { Quaternion, Vector3 } from 'three';
 /** A bone of a rig: rest local rotation is identity (+Y up, facing +Z, left +X). */
 export interface BoneDef {
   name: string;
+  /** Development snap ceilings: angular speed (°/s) and acceleration (°/s²). */
+  snap?: { speed: number; accel: number };
   /** index of the parent bone, -1 for the root (only bone 0); parents come before children */
   parent: number;
   /** rest offset of the bone's origin in its parent's frame (m); the root's is its default position in the world */

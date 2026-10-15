@@ -101,17 +101,10 @@ Bones are listed parents first, bone 0 the root; rest rotations are identity (+Y
 
 ## Checking a scene
 
-Enable `{ dev: true }` while developing and read `body.log`. Checks report problems in the
+Enable `{ dev: true }` while developing and read `h.log`. Checks report problems in the
 last final pose, so writes by later layers are included. Give story behaviours useful labels
 with `named('shelve the box', task)`; overlapping tasks share attribution.
 
 Compose `watch('expectation', f => problemOrNull)` before the story in a `parallel`: it reads
-final poses without a writable pose. `eyesOnBefore` checks that gaze leads a grip; `planted`
-can require an ankle to stay put during a standing beat. Scope `stillFor` to beats where motion
-is expected, using a `race` with the task so intentional resting does not count as dead time.
-Watchers share the body's log and do no reads with dev off. Item penetration still needs a
-scene's geometry and a watcher.
-
-In this repository, run `pnpm run-scene <id> [--vary N] [--json]` headlessly. It prints the log,
-grouped worst first with time and beat; errors give a non-zero exit. Variations perturb the
-actors' starting position, facing and height.
+final poses without a writable pose. `eyesOnBefore` checks that gaze leads a grip.
+Watchers share the body's log and do no reads with dev off.

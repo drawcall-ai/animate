@@ -12,7 +12,6 @@ export interface MetricsOptions {
   head?: number;
   startStop: number | null;
   clearance?: number;
-  ankle?: [number, number];
 }
 const TRACKED = 0.8;
 const LATE_RETARGET = 0.03;
@@ -61,7 +60,7 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   const add = (what: string, value: number, bound: Check['bound'], lim: number, at?: number, where?: string) => void out.push({ what, value, bound, limit: lim, at, where });
   add('planted foothold out of reach (m)', m.feet.reach.value, 'max', 0.3, m.feet.reach.at);
   add('knee-backward frames', m.feet.hyper, 'max', 0);
-  const [pointed, flexed] = limit.ankle ?? [20, 125];
+  const [pointed, flexed] = [20, 125];
   add('ankle pointed (°)', 180 - m.feet.ankle.min.value, 'min', pointed - 1, m.feet.ankle.min.at);
   add('ankle flexed up (°)', m.feet.ankle.max.value, 'max', flexed + 1, m.feet.ankle.max.at);
   add('late landing retarget (m)', m.landings.late.value, 'max', LATE_RETARGET, m.landings.late.at);

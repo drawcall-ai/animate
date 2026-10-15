@@ -14,12 +14,15 @@ export function main(id: string, options: { vary: number; json: boolean }): bool
       const key = `${entry.check}|${entry.where}|${entry.beat}`;
       const group = groups.get(key);
       if (!group) groups.set(key, { worst: entry, count: 1 });
-      else { group.count++; if (entry.value > group.worst.value) group.worst = entry; }
+      else {
+        group.count++;
+        if (entry.value > group.worst.value) group.worst = entry;
+      }
     }
     console.log(`${id}${i ? ` #${i}` : ''}: ${log.length ? `${log.length} entries` : 'clean log'}`);
     const sorted = [...groups.values()].sort((a, b) => score(b.worst) - score(a.worst));
-    for (const { worst: e, count } of sorted) console.log(`  ${e.severity} ${e.check}: ${e.value.toPrecision(3)} > ${e.limit} @${e.time.toFixed(2)}s ${e.where} [${e.beat || 'unlabelled'}] (${count})`);
+    for (const { worst: e, count } of sorted) console.log(`  ${e.check}: ${e.value.toPrecision(3)} > ${e.limit} @${e.time.toFixed(2)}s ${e.where} [${e.beat || 'unlabelled'}] (${count})`);
   });
-  return logs.some((log) => log.some((e) => e.severity === 'error'));
+  return logs.some((log) => log.length > 0);
 }
 const score = (e: LogEntry) => e.value / Math.max(e.limit, 1e-3);

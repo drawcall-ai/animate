@@ -2,6 +2,7 @@
 // limbs/legs.ts; as adapted in 738b439:packages/animate/src/humanoid/gait/roll.ts,
 // procedures/step.ts, procedures/legs.ts).
 import { Quaternion, Vector3 } from 'three';
+import type { Dev } from '../../core/dev';
 import type { Frame } from '../../core/body';
 import { solveChain } from '../../core/chain';
 import { clampRotation } from '../../core/limits';
@@ -255,19 +256,23 @@ const _spin = new Quaternion();
 const _arc = new Quaternion();
 
 /** Read the final planted foot, allowing its roll about the heel or ball, never the solve's goal. */
-export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>): void {
-  const dev = f.dev;
-  if (!dev || f.time <= f.dt) return;
+export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
+  if (f.time <= f.dt) return;
   SIDES.forEach((side, s) => {
     const foot = h.feet[s];
     if (foot.phase !== 'planted') return;
     const bone = INDEX[`${side}Foot`];
     const q = f.prev.rotation(bone);
     const forward = new Vector3(0, 0, 1).applyQuaternion(q);
-    const pivot = forward.y >= 0 ? heelOf(h.proportions) : ballOf(h.proportions, side);
-    const actual = f.prev.point(bone, pivot, new Vector3());
-    const anchor = pivot.clone().applyQuaternion(footRotation(foot.yaw, 0)).add(foot.position);
-    const value = Math.hypot(actual.x - anchor.x, actual.z - anchor.z);
+    const pitch = Math.atan2(forward.y, Math.hypot(forward.x, forward.z));
+    const slide = (pivot: Vector3) => {
+      const actual = f.prev.point(bone, pivot, new Vector3());
+      const anchor = pivot.clone().applyQuaternion(footRotation(foot.yaw, 0)).add(foot.position);
+      return Math.hypot(actual.x - anchor.x, actual.z - anchor.z);
+    };
+    const heel = heelOf(h.proportions);
+    const ball = ballOf(h.proportions, side);
+    const value = Math.abs(pitch) < 0.05 ? Math.min(slide(heel), slide(ball)) : slide(pitch > 0 ? heel : ball);
     if (value > 0.01) dev.append(f.time - f.dt, { check: 'planted foot slide (m)', value, limit: 0.01, where: `${side}Foot` });
     const sole = (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
       const point = h.rig.points[`${side}${name}`];

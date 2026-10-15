@@ -3,35 +3,7 @@ import { watch } from '../core/dev';
 import type { Item } from '../core/carrier';
 import type { Behaviour } from '../core/goal';
 import type { Humanoid } from './humanoid';
-import { INDEX, type Side } from './bones';
-
-/** Warns when every bone stays below 5 cm/s for longer than seconds. Scope it to a beat where motion is expected. */
-export function stillFor<W>(seconds: number): Behaviour<W> {
-  return function* () {
-    let since: number | null = null;
-    yield* watch<W>('stillFor', (f) => {
-      const still = f.prev.skeleton.bones.every((_, i) => f.prev.position(i).distanceTo(f.prev2.position(i)) / f.dt < 0.05 && f.prev.local(i).angleTo(f.prev2.local(i)) / f.dt < 0.05);
-      if (!still) { since = null; return null; }
-      since ??= f.time;
-      const value = f.time - since;
-      return value > seconds ? { check: 'dead time (s)', value, limit: seconds, where: 'body', severity: 'warning' } : null;
-    })();
-  };
-}
-
-/** A scene's expectation that this ankle stays in place through a standing beat, including across balance steps. */
-export function planted<W>(h: Humanoid<W>, side: Side): Behaviour<W> {
-  return function* () {
-    const bone = h.rig.skeleton.index(`${side}Foot`);
-    let anchor: Vector3 | null = null;
-    yield* watch<W>('planted', (f) => {
-      const at = f.prev.position(bone);
-      anchor ??= at.clone();
-      const value = anchor.distanceTo(at);
-      return value > 0.01 ? { check: 'foot moved (m)', value, limit: 0.01, where: `${side}Foot` } : null;
-    })();
-  };
-}
+import { INDEX } from './bones';
 
 /**
  * Eyes should lead a new grip by seconds (0.4–0.6 s in Land, Mennie & Rusted 1999).

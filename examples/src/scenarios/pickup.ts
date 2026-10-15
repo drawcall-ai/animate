@@ -123,7 +123,7 @@ function shelve(h: Humanoid<World>, box: Item, grips: Grips, size: Vector3, top:
       .position(0)
       .clone()
       .addScaledVector(forwardOf(h.gait.facing), CARRIED.ahead)
-      .setY(CARRIED.height + RAISED * (1 - MathUtils.smoothstep(Number.isFinite(h.gait.eta) ? h.gait.eta : RAISING, 0, RAISING))),
+      .setY(CARRIED.height + RAISED * (1 - MathUtils.smoothstep(h.gait.eta, 0, RAISING))),
     quaternion: new Quaternion().setFromAxisAngle(UP, h.gait.facing),
   });
   const up: Leg[] = [

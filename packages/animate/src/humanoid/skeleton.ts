@@ -60,12 +60,30 @@ export type Chain = keyof typeof CHAINS;
 export function skeletonOf(p: Proportions, mass = massFor(p.height)): BoneDef[] {
   return BONES.map((name) => {
     const segment = SEGMENT[name];
+    const speed = snapSpeed(name);
     return {
       name,
+      snap: { speed, accel: speed / 0.03 },
       parent: name === 'hips' ? -1 : INDEX[PARENT[name]],
       offset: name === 'hips' ? p.hips.clone() : p.offsets[name].clone(),
       mass: segment ? segment.mass * mass : 0,
       com: segment ? segment.com(p) : new Vector3(),
     };
   });
+}
+
+/**
+ * A snap heuristic: elite joint speeds divided by 30 ms, slightly shorter than a throw's
+ * ~50 ms acceleration phase (Fleisig 1999). Reuses the former run judge's ceilings;
+ * these are generous fault detectors, not clinical limits. Speeds below are in °/s.
+ */
+function snapSpeed(name: BoneName): number {
+  if (/UpperArm/.test(name)) return 7500;
+  if (/LowerArm/.test(name)) return 2900;
+  if (/Hand/.test(name)) return 3000;
+  if (/UpperLeg/.test(name)) return 2000;
+  if (/LowerLeg|Foot|Toes/.test(name)) return 2500;
+  if (/Shoulder/.test(name)) return 1000;
+  if (/neck|head/.test(name)) return 700;
+  return 1200;
 }

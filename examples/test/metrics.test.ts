@@ -12,19 +12,30 @@ import { Report } from '../src/report';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
-import { steps } from './run';
+import type { Frame } from './frame';
+
+/** Frames for the remaining scenario metrics, after each fixed step. */
+function* steps(sim: Simulation): Generator<Frame[]> {
+  while (sim.t < sim.scenario.duration) {
+    sim.step();
+    const asked = sim.stage.report.at(sim.t);
+    const solids = sim.stage.solids?.() ?? [];
+    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
+  }
+}
 
 /** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
 function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   const sim = new Simulation(sc);
   const m = measure(sc.id, steps(sim));
   const options: MetricsOptions = { startStop: null, strides };
+  // Gait coverage and start/stop blending are run-level regressions.
   if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = 1.25; }
-  if (sc.id === 'pickup-shelf') options.wrist = 0.04;
+  // Keep the known tracking misses below and item clearance; neither has a built-in check.
   if (sc.id === 'reach') options.wrist = 0.17;
   if (sc.id === 'look-around') options.head = 0.075;
-  if (sc.id === 'vr') { options.wrist = 0.165; options.head = 0.165; options.ankle = [20, 154]; }
-  if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
+  if (sc.id === 'vr') { options.wrist = 0.165; options.head = 0.165; }
+  if (sc.id === 'knight-arming') { options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
   expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
   const fails = checks(m, options).filter(failed).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
   expect(fails).toEqual([]);

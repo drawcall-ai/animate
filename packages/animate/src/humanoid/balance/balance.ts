@@ -1,5 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
+import type { Dev } from '../../core/dev';
 import type { Frame } from '../../core/body';
 import { follow } from '../../core/follow';
 import type { Behaviour } from '../../core/goal';
@@ -78,8 +79,8 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
     yield* action<Frame<W>>({
       update: (f) => {
         if (f.dev) {
-          checkFeet(h, f);
-          checkSupport(h, f);
+          checkFeet(h, f, f.dev);
+          checkSupport(h, f, f.dev);
         }
         const dt = f.dt;
         takeAsks(h.asks, asks);
@@ -163,11 +164,11 @@ const _q = new Quaternion();
 const _local = new Quaternion();
 
 /** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
-function checkSupport<W>(h: Humanoid<W>, f: Frame<W>): void {
-  if (!f.dev || f.time <= f.dt) return;
+function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
+  if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
-  const xcom = com.addScaledVector(velocity, 1 / Math.sqrt(9.81 / h.proportions.legLength));
+  const xcom = com.clone().addScaledVector(velocity, 1 / Math.sqrt(9.81 / h.proportions.legLength));
   const support = h.feet.flatMap((foot, s) => {
     if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
     const side = SIDES[s];
@@ -177,6 +178,11 @@ function checkSupport<W>(h: Humanoid<W>, f: Frame<W>): void {
       return [at.x, at.z];
     });
   });
-  const value = outside(hullOf(support), xcom);
-  if (value > 0.1) f.dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
+  const hull = hullOf(support);
+  if (h.gait.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {
+    const value = outside(hull, com);
+    if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
+  }
+  const value = outside(hull, xcom);
+  if (value > 0.1) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
 }

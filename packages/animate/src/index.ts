@@ -45,4 +45,4 @@ export { CHAINS, massFor, skeletonOf, type Chain } from './humanoid/skeleton';
 export { createWorld, type World } from './humanoid/world';
 
 export { named, watch, type Problem, type LogEntry, type WatchFrame } from './core/dev';
-export { eyesOnBefore, stillFor, planted } from './humanoid/watch';
+export { eyesOnBefore } from './humanoid/watch';
