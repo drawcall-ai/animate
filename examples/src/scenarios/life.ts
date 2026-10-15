@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { parallel, timePassed } from '@pmndrs/timeline';
+import { parallel } from '@pmndrs/timeline';
 import { carry, createWorld, grab, handTo, hold, idle, Item, walkTo, withGaze, type Frame, type World } from '@drawcall/animate';
 import { forwardOf } from '../math';
 import type { Scenario } from '../scenario';
@@ -29,7 +29,7 @@ export const reachAround: Scenario = {
       done: () => done,
       script: (h) => function* () {
         yield* parallel<Frame<World>>('all', idle(h), function* () {
-          for (const position of points) yield* reporting(report, ['rightHand'], withGaze(h, position, handTo(h, 'right', reported(report, 'rightWrist', { position }), { seconds: 1, until: timePassed(3, 'seconds') }), { first: false }))();
+          for (const position of points) yield* reporting(report, ['rightHand'], withGaze(h, position, handTo(h, 'right', reported(report, 'rightWrist', { position }), { seconds: 1, until: 'reached' }), { first: false }))();
           done = true;
         });
       },

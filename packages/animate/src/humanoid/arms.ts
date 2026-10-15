@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
-import { Item, type Carrier } from '../core/carrier';
+import type { Carrier } from '../core/carrier';
 import { followRotation } from '../core/follow';
 import { Glide } from '../core/glide';
 import { live, type Behaviour, type Live, type Motion, type Target, type Until } from '../core/goal';
@@ -11,7 +11,7 @@ import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { lowering, TIPTOE } from './balance/posture';
-import { clamp, leftOf, lerp, smoothstep } from '../core/math';
+import { clamp, leftOf, lerp, smoothstep, wrapAngle } from '../core/math';
 import { yawOf } from '../core/math';
 import type { Proportions } from './proportions';
 
@@ -28,8 +28,7 @@ export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satis
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
-const ARM_REACH = 0.9;
-const OUT = 0.5;
+export const ARM_REACH = 0.95;
 
 /**
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
@@ -147,7 +146,7 @@ export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, o
         }
         const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(world.position) / start.off) : 1;
         const pole = options.pole === undefined ? elbowPole(f, h.proportions, side, world.position, _pole).lerp(_bend.copy(start.elbow).applyQuaternion(chest).add(shoulder), 1 - share) : live(options.pole, f);
-        handStep(h, f, side, { ...world, position: _glided.position, velocity: _glided.velocity }, { ...options, on: undefined, pole }, arm, { at: world.position, center: on instanceof Item ? on.current.position : undefined, clavicle: start.clavicle, share });
+        handStep(h, f, side, { ...world, position: _glided.position, velocity: _glided.velocity }, { ...options, on: undefined, pole }, arm, { at: world.position, center: on?.current.position, clavicle: start.clavicle, share });
       },
       until: until === 'reached' ? (f) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], live(target, f), options.on) : until,
     });
@@ -162,15 +161,14 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
   const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
   // (gliding from where the hand is: an arm hanging all but straight is not drawn in at once)
   arm.to(f, target, { ...CALM, ...options, pole, letOut: toward !== undefined });
-  // (gliding up from below what it goes for, the body is not asked to come down for where the hand
-  // still is: a hand setting off from its hang does not bow the trunk)
+  // The body joins a glide with the hand, rather than moving for its starting hang.
   if (options.lead ?? true) {
-    bringShoulder(h, f, side, toward && toward.at.y > at.y ? toward.at : at);
-    const goal = options.on instanceof Item ? options.on.current.position : toward?.center ?? toward?.at ?? at;
-    const local = _d.subVectors(goal, f.current.position(INDEX.chest)).applyQuaternion(_c.copy(f.current.rotation(INDEX.chest)).invert());
-    const bearing = Math.atan2(local.x, local.z);
+    bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1);
+    const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
+    const hips = f.current.position(0);
+    const bearing = wrapAngle(Math.atan2(goal.x - hips.x, goal.z - hips.z) - h.gait.facing);
     // Recalled design share from the brief: trunk joins a reach; 20% of bearing, at most 20°.
-    h.asks.twist = clamp(0.2 * bearing, -Math.PI / 9, Math.PI / 9) * smoothstep(0.35, 0.7, Math.abs(bearing));
+    h.asks.twist = clamp(0.2 * bearing, -Math.PI / 9, Math.PI / 9) * smoothstep(0.35, 0.7, Math.abs(bearing)) * (toward?.share ?? 1);
   }
 }
 
@@ -229,21 +227,19 @@ function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Ve
  * for one below (`lowering`), up on the toes for one above. Of two hands asking (both arms on
  * something low), the one needing more wins: each sub-step's asks start cleared.
  */
-export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>) {
+export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>, share = 1) {
   const p = h.proportions;
   const { asks } = h;
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
   const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
   const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
-  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), OUT * p.armLength);
+  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), ARM_REACH * p.armLength);
   const below = Math.sqrt((ARM_REACH * p.armLength) ** 2 - across * across);
   const drop = high - hand.y - below;
   if (drop > 0) {
-    // Recalled staging: the last few cm to a floor grip need a deeper squat.
-    const deep = !h.gait.moving && h.feet.every((foot) => foot.phase === 'planted') ? 0.03 * (1 - smoothstep(0.03, 0.08, hand.y / p.scale)) : 0;
-    const { lower, bow } = lowering(p, drop, deep);
-    asks.lower = Math.max(asks.lower, lower);
-    asks.bow = Math.max(asks.bow, bow);
+    const { lower, bow } = lowering(p, drop);
+    asks.lower = Math.max(asks.lower, lower * share);
+    asks.bow = Math.max(asks.bow, bow * share);
     return;
   }
   const rise = hand.y - (high + below);

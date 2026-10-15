@@ -1,3 +1,4 @@
+import { NECK_PITCH } from './profile/limits';
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { CharacterModel } from '@pmndrs/viverse';
@@ -73,9 +74,7 @@ export class Humanoid<W = unknown> {
     this.feet = start.feet;
     this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
-    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES,
-      // Recalled staging: cap downward head pitch at 89°; the eyes have 30° of declination (read below).
-      down: 89 * Math.PI / 180,
+    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180,
       lead: (pose, point) => gazeAsks(this, pose, point),
     };
     if (options.wearing) dress(this, start.pose, options.wearing(p));

@@ -21,8 +21,9 @@ export class Life {
     this.next = lerp(10, 20, this.rand());
   }
 
-  update(dt: number, quiet: boolean, amount: number) {
+  update(dt: number, quiet: boolean, speed: number) {
     this.time += dt;
+    const amount = 1 / (1 + speed / 0.1);
     this.amount += (amount - this.amount) * (1 - Math.exp(-2 * dt));
     if (!quiet) {
       this.next = this.time + 10;
@@ -30,14 +31,15 @@ export class Life {
     }
     if (quiet && this.time >= this.next) {
       this.onto = this.rand() < 0.5 ? 'left' : 'right';
-      this.until = this.time + 4;
+      this.until = this.time + lerp(20, 40, this.rand());
       // Recalled in the research brief: spontaneous shifts roughly every 10–30 s.
-      this.next = this.time + lerp(10, 30, this.rand());
+      this.next = this.until + lerp(10, 30, this.rand());
     }
     if (this.time >= this.until) this.onto = null;
     const t = this.time;
-    // Recalled: a few mm sway, mostly below 1 Hz. Two slow components avoid a repeated orbit.
-    this.drift.set(0.003 * Math.sin(2 * Math.PI * 0.13 * t + this.phase), 0, 0.005 * Math.sin(2 * Math.PI * 0.21 * t + this.phase)).multiplyScalar(this.amount);
+    // Seeded smooth drift: incommensurate components, 5–10 mm of quiet CoM travel.
+    const noise = (a: number, b: number, c: number) => (Math.sin(a * t + this.phase) + 0.5 * Math.sin(b * t + 2 * this.phase) + 0.25 * Math.sin(c * t + 3 * this.phase)) / 1.75;
+    this.drift.set(0.007 * noise(0.79, 1.37, 2.11), 0, 0.009 * noise(0.93, 1.61, 2.47)).multiplyScalar(this.amount);
     // Read in the brief: breathing 12–20/min (PMC5973601); 1° pitch is a recalled animation amplitude.
     this.breath = Math.sin(2 * Math.PI * 0.25 * t + this.phase) * Math.PI / 180 * this.amount;
   }

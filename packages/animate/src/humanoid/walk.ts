@@ -3,6 +3,7 @@ import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { live, type Behaviour, type Live } from '../core/goal';
 import type { UntilCondition } from '@pmndrs/timeline';
+import { loadFactor } from '../core/carrier';
 import type { Go } from './asks';
 import { SIDES } from './bones';
 import type { Humanoid } from './humanoid';
@@ -55,7 +56,6 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
   return function* () {
     const go: Go = { to: new Vector3(), speed, accel, plant };
     const face = { yaw: 0 };
-    const bodyMass = h.rig.skeleton.bones.reduce((sum, bone) => sum + bone.mass, 0);
     let at: Vector3 | null = null;
     // (within reach, the way to the point is fixed once close: from where the body then stands it
     // would drift as the body settles off the line to it)
@@ -64,7 +64,7 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
       const items = new Set(SIDES.flatMap((side) => h.holding[side]?.item ?? []));
       const mass = [...items].reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
       // Recalled tuning: added weight lowers the default walk's pace; an explicit pace is kept.
-      const effort = 1 + mass / bodyMass;
+      const effort = loadFactor(mass);
       go.speed = options.speed ?? speed / effort;
       go.accel = options.accel ?? accel / effort;
       const body = f.prev.com(_com).setY(0);

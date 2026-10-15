@@ -98,3 +98,8 @@ function copy(to: Required<Placement>, from: Required<Placement>) {
 const _q = new Quaternion();
 const _r = new Vector3();
 const _v = new Vector3();
+
+/** Shared motion scale for load (kg), a design choice; a bimanual item counts once. */
+export function loadFactor(mass: number): number {
+  return Math.sqrt(1 + mass / 10);
+}

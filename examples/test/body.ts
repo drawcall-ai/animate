@@ -129,9 +129,10 @@ export class FinalStance {
     }) as [number, number];
     this.rest = {
       heels: heels[0].distanceTo(heels[1]) / h.proportions.height,
-      aside: -com.dot(left),
-      ahead: -com.dot(fwd),
-      pelvis: j('hips').sub(mid).dot(left),
+      // A deliberate quiet displacement changes the stance's requested centre, not its tolerance.
+      aside: -com.clone().sub(h.gait.quiet).dot(left),
+      ahead: -com.clone().sub(h.gait.quiet).dot(fwd),
+      pelvis: j('hips').sub(mid).sub(h.gait.quiet).dot(left),
       toeOut,
     };
   }

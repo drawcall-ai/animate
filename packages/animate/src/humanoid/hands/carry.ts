@@ -1,11 +1,11 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
-import { Carrier, type Item } from '../../core/carrier';
+import { Carrier, loadFactor, type Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Until } from '../../core/goal';
 import { ChainTip } from '../../core/tip';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
-import { CALM, handStep } from '../arms';
+import { ARM_REACH, bringShoulder, CALM, handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import { course, type Leg } from '../course';
 import type { Humanoid } from '../humanoid';
@@ -39,9 +39,9 @@ export function carry<W>(h: Humanoid<W>, frame: Live<Required<Placement>, W>, lo
     // (an item in the other hand alone, while the leading hand carries one too, goes a little after it)
     const leads = loads.some(([, grips]) => grips[LEADING] !== undefined);
     const courses = loads.map(([item, grips, legs]) => {
-      if (!leads || grips[LEADING] !== undefined) return course(item, frame, legs, { scale, pace: pace / Math.sqrt(1 + item.mass / 3) });
+      if (!leads || grips[LEADING] !== undefined) return course(item, frame, legs, { scale, pace: pace / loadFactor(item.mass) });
       const { delay, slower } = following(item, grips);
-      return course(item, frame, legs, { scale, pace: pace * (1 - slower) / Math.sqrt(1 + item.mass / 3), delay });
+      return course(item, frame, legs, { scale, pace: pace * (1 - slower) / loadFactor(item.mass), delay });
     });
     let since = NaN;
     const ends = loads.map(() => new TrackedEnd());
@@ -91,8 +91,8 @@ class TrackedEnd {
  */
 export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
   const { to } = options;
-  // Recalled design tuning, not a measured law: a 3 kg load halves the carrying acceleration.
-  const factor = 1 + item.mass / 3;
+  // Recalled design tuning, not a measured law: load slows carrying with the same factor as its course and walking.
+  const factor = loadFactor(item.mass);
   const pace = options.motion ?? CARRYING;
   const motion = { ...pace, accel: pace.accel / factor };
   const sides = SIDES.filter((s) => grips[s] !== undefined);
@@ -103,14 +103,11 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
     const position = new TrackedPoint();
     const rotation = new TrackedRotation();
     if (to && item.supported && item.mass > 2) {
-      const lower = Math.max(0, h.proportions.hipHeight - h.pose.position(0).y);
-      const bow = h.asks.bow;
-      // Read brief: APAs precede movement by 50–150 ms; recalled staging here: 0.2 s, 2.5 cm dip.
+      // Anticipatory preparation: 100 ms, with a small (5 mm) knee release.
       yield* action<Frame<W>>({ update: (f) => {
-        for (const side of sides) handStep(h, f, side, gripOf(item, grip(grips, side)), { on: item, ...HOLD }, arms[side]);
-        h.asks.lower = Math.max(h.asks.lower, lower + 0.025 * h.proportions.scale);
-        h.asks.bow = Math.max(h.asks.bow, bow);
-      }, until: timePassed(0.2, 'seconds') });
+        for (const side of sides) handStep(h, f, side, gripOf(item, grip(grips, side)), { on: item, ...HOLD, lead: !h.worn.has(item) }, arms[side]);
+        h.asks.lower += 0.005 * h.proportions.scale;
+      }, until: timePassed(0.1, 'seconds') });
     }
     // (carried off whatever it rested on)
     if (to) item.supported = false;
@@ -121,10 +118,11 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
           const goal = live(to, f);
           // (on from where the item is, fitted to the wrists: arms lagging the aim do not pull it apart from them)
           const turned = rotation.follow(item.prev.quaternion, item.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
+          if (!h.worn.has(item)) for (const side of sides) bringShoulder(h, f, side, _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(goal.position));
           const within = inReach(h, f, item, grips, sides, _at.copy(goal.position), turned);
           aim.move(f.time, position.follow(item.prev.position, item.current.position, within, motion, f.dt, _p), turned);
         }
-        for (const side of sides) handStep(h, f, side, gripOf(item, grip(grips, side)), { on, ...HOLD }, arms[side]);
+        for (const side of sides) handStep(h, f, side, gripOf(item, grip(grips, side)), { on, ...HOLD, lead: !h.worn.has(item) }, arms[side]);
         if (to) fit(f, item, aim, grips, sides);
       },
       until: options.until,
@@ -134,11 +132,10 @@ export function hold<W>(h: Humanoid<W>, item: Item, grips: Grips, options: { to?
 
 /**
  * `at`, where the item is to go turned `turned`, drawn toward the shoulders as far as a grip would be
- * out of its arm's reach (OUTREACH of its length): the hands carry it no further than they reach
+ * out of its arm's reach (ARM_REACH of its length): the hands carry it no further than they reach
  */
 function inReach<W>(h: Humanoid<W>, f: Frame<W>, item: Item, grips: Grips, sides: readonly Side[], at: Vector3, turned: Quaternion): Vector3 {
-  // Recalled staging: overhead placement extends the arms further than carrying at the waist.
-  const most = (at.y > h.proportions.height ? 0.95 : OUTREACH) * h.proportions.armLength;
+  const most = ARM_REACH * h.proportions.armLength;
   for (const side of sides) {
     const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
     const out = _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(at).sub(shoulder);
@@ -147,9 +144,6 @@ function inReach<W>(h: Humanoid<W>, f: Frame<W>, item: Item, grips: Grips, sides
   }
   return at;
 }
-
-/** how far out a hand carries what it holds, or is put going off it (× the arm's length) */
-export const OUTREACH = 0.9;
 
 /**
  * `item` moved (at `f`'s time) where the wrists hold it: as `aim` has it, carried along with the

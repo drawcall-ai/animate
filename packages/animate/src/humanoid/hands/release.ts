@@ -4,11 +4,11 @@ import type { Frame } from '../../core/body';
 import type { Behaviour, Target } from '../../core/goal';
 import { seeded, seedOf } from '../../core/random';
 import { reached } from '../../core/tip';
-import { handTo } from '../arms';
+import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { lerp } from '../../core/math';
-import { OUTREACH } from './carry';
+import { onBone } from '../goal';
 import { openHand } from './grips';
 
 // Letting go.
@@ -28,7 +28,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
   return function* () {
     const p = h.proportions;
     const held = sides.map((side) => h.holding[side]);
-    let targets: Target[] | null = null;
+    let targets: ((f: Frame<W>) => Target)[] | null = null;
     // (where each hand goes, from how it moved as it let go)
     const off = (f: Frame<W>): Target[] =>
       (targets ??= sides.map((side, k) => {
@@ -47,9 +47,14 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         }
         // (within what the arm reaches from its shoulder)
         const reach = at.sub(shoulder);
-        reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), OUTREACH * p.armLength));
-        return { position: reach.add(shoulder) };
-      }));
+        reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), ARM_REACH * p.armLength));
+        const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -h.gait.facing)).divideScalar(p.scale);
+        const following = onBone(h, INDEX.hips, { position: local }, { facing: true });
+        return (frame: Frame<W>) => {
+          const { position, velocity } = following(frame);
+          return { position, velocity };
+        };
+      })).map((target) => target(f));
     const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], off(f)[k]));
     const loose = held.flatMap((grip) => grip?.item ?? []);
     for (const side of sides) yield* openHand(h, side)();

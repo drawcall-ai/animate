@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, type Behaviour, type Frame } from '../../src';
+import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, onBone, type Behaviour, type Frame } from '../../src';
 
 function body(task: (h: Humanoid) => Behaviour, life = true) {
   return new Humanoid(createSkeletonModel(), (h) => function* () { yield* parallel<Frame>('all', idle(h, { life }), task(h)); }, { dev: true });
@@ -63,7 +63,7 @@ it('grabs a floor grip while the gaze stays in range in a deep squat', () => {
 it('prepares a heavy lift before support leaves, and carries it slower than a light item', () => {
   const run = (mass: number) => {
     const item = new Item(new Vector3(-0.15, 1, 0.4), new Quaternion(), { grip: { position: new Vector3() } }, { mass });
-    let start = 0, off = 0, down = 0, end = 0;
+    let start = 0, off = 0, down = 0, preparation = 0, end = 0;
     const h = body((h) => function* () {
       yield* grab(h, { right: [item, 'grip'] })();
       const hips = h.pose.position(0).y;
@@ -72,18 +72,24 @@ it('prepares a heavy lift before support leaves, and carries it slower than a li
         yield* carry(h, { position: new Vector3(), quaternion: new Quaternion() }, [[item, { right: 'grip' }, [[1, { position: new Vector3(-0.15, 1.2, 0.4) }]]]])();
         yield* action<Frame>({ update: (f) => { end = f.time; }, until: timePassed(1 / 60, 'seconds') });
       }, action<Frame>({ update: (f) => {
-        down = Math.max(down, hips - f.current.position(0).y);
+        if (item.supported) {
+          down = Math.max(down, hips - f.current.position(0).y);
+          preparation = Math.max(preparation, h.asks.lower);
+        }
         if (!item.supported && !off) off = f.time;
       }, until: () => end !== 0 }));
       yield* hold(h, item, { right: 'grip' })();
     });
     step(h, 5);
     expect(h.log).toEqual([]);
-    return { delay: off - start, down, duration: end - off, pitch: new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x };
+    return { delay: off - start, down, preparation, duration: end - off, pitch: new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x };
   };
   const light = run(0), heavy = run(5);
-  expect(heavy.delay - light.delay).toBeGreaterThanOrEqual(0.18);
-  expect(heavy.down).toBeGreaterThan(0.015);
+  // The requested APA contract replaces the former 200 ms / 25 mm staging.
+  expect(heavy.delay - light.delay).toBeGreaterThanOrEqual(0.05);
+  expect(heavy.delay - light.delay).toBeLessThanOrEqual(0.15);
+  expect(heavy.preparation).toBeGreaterThanOrEqual(0.005);
+  expect(heavy.down).toBeLessThan(0.01);
   expect(heavy.duration).toBeGreaterThan(light.duration + 0.2);
   expect(heavy.pitch).toBeLessThan(light.pitch - 0.01);
 });
@@ -110,4 +116,42 @@ it('slows the default walk under load, counting a bimanual item once', () => {
   expect(heavy).toBeGreaterThan(0);
   expect(heavy).toBeLessThan(light);
   expect(pace(5, true)).toBeCloseTo(heavy, 8);
+});
+
+it('holds a quiet weight shift with the unloaded knee soft and that side of the pelvis lower', () => {
+  const h = body(() => function* () {});
+  step(h, 25);
+  const sign = Math.sign(h.gait.quiet.x);
+  expect(Math.abs(h.gait.quiet.x)).toBeGreaterThan(0.04);
+  const loaded = sign > 0 ? 'left' : 'right';
+  const unloaded = sign > 0 ? 'right' : 'left';
+  const hip = (side: 'left' | 'right') => h.pose.position(INDEX[`${side}UpperLeg`]).y;
+  const knee = (side: 'left' | 'right') => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
+  expect(hip(unloaded)).toBeLessThan(hip(loaded) - 0.005);
+  expect(knee(unloaded)).toBeGreaterThan(0.2);
+  expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
+  step(h, 3);
+  expect(h.gait.quiet.x * sign).toBeGreaterThan(0.04);
+  expect(h.log).toEqual([]);
+});
+
+it('keeps sway and breathing after a loaded walk, without spontaneous weight shifts', () => {
+  const item = new Item(new Vector3(-0.15, 1.05, 0.35), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 5, supported: false });
+  const h = body((h) => function* () {
+    yield* reachFor(h, { right: [item, 'grip'] })();
+    const carrying = hold(h, item, { right: 'grip' }, { to: onBone(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }, { facing: true }) });
+    yield* parallel<Frame>('race', carrying, walkTo(h, { to: new Vector3(0, 0, 2) }));
+    yield* carrying();
+  });
+  step(h, 8);
+  const sway: number[] = [], breath: number[] = [];
+  for (let i = 0; i < 900; i++) {
+    h.update(1 / 60);
+    sway.push(h.pose.com(new Vector3()).x);
+    breath.push(new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
+    expect(h.gait.quiet.length()).toBeLessThan(0.02);
+  }
+  expect(Math.max(...sway) - Math.min(...sway)).toBeGreaterThan(0.004);
+  expect(Math.max(...breath) - Math.min(...breath)).toBeGreaterThan(0.02);
+  expect(h.log).toEqual([]);
 });

@@ -118,11 +118,13 @@ function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
  * of `grab`.
  */
 export function approach<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
-  const { ahead = WITHIN, aside = 0 } = options.stand ?? {};
+  const { aside = 0 } = options.stand ?? {};
   return function* () {
     const grips = held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
+    const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
+    const ahead = options.stand?.ahead ?? Math.min(WITHIN, (p.toeFront + Math.max(0, height - p.ankleHeight)) / p.armLength);
     const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
     if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(h.pose.position(INDEX[`${side}UpperArm`]), at) < IN_REACH * p.armLength)) {
       return;

@@ -4,8 +4,8 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
-import { INDEX, SIDES, type Side } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, softplus, wrapAngle } from '../../core/math';
+import { INDEX } from '../bones';
+import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
 import { ankleFor } from './foot';
@@ -35,7 +35,9 @@ export const TIPTOE = 0.07;
 const MOST_DROP = 0.035;
 /** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; how far the knees let the pelvis down at most (× height): a squat */
 const HINGE = 0.6;
-const SQUAT = 0.25;
+export const SQUAT = 0.38;
+/** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
+export const LOWER = { accel: 3, speed: 0.6 };
 /**
  * a landing foot holds the pelvis down from this far through its swing on, fully by this far, and
  * by this much less before (× height); a foot just lifted still holds it, less and less, this far through its swing
@@ -65,9 +67,12 @@ export class Posture {
   /** a runner's leg compression through stance (0 … 1) */
   private comp = 0;
   private readonly weight = new Vector3();
+  readonly quiet = new Vector3();
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Frame<unknown>, c: Carriage, lower: number, bow: number, out: Trunk, twist = 0, life?: Life, onto: Side | null = null) {
+  carry(f: Frame<unknown>, c: Carriage, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>) {
+    const { lower, bow, twist } = asks;
+    const { onto } = life;
     const { p } = c;
     const H = p.height;
     const dt = f.dt;
@@ -92,7 +97,7 @@ export class Posture {
     }
     // pelvic list and sway: one sinusoid a stride, in step with the feet
     const stride = this.stride(c, dt);
-    const roll = -LIST * Math.sin(stride) * (1 - run) * walk;
+    let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
     const side = -lerp(SWAY, RUN_SWAY, run) * H * Math.sin(stride) * walk;
     // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
     const walkLift = -(0.001 + BOB * (1 - bob)) * H * walk;
@@ -105,24 +110,25 @@ export class Posture {
 
     // the pelvis where it puts the centre of mass over the root (its ground point, swayed, shifted
     // back under a nod), as high as the legs reach, and as low as asked
-    const offset = offsetOf(f.prev, p, _o);
+    const offset = f.prev.com(_o).sub(f.prev.position(0)).negate().setY(0);
     const pelvis = c.pelvis.copy(c.root).add(offset).addScaledVector(left, side).addScaledVector(fwd, shift);
-    quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
-    if (life) {
-      pelvis.addScaledVector(left, life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
-    }
+    this.quiet.copy(left).multiplyScalar(life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
     const weight = _v.set(0, 0, 0);
     if (onto && !c.moving) {
       weight.addVectors(c.feet[0].position, c.feet[1].position).multiplyScalar(0.5);
       weight.subVectors(c.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(0.65);
     }
     this.weight.lerp(weight, 1 - Math.exp(-dt));
-    pelvis.add(this.weight);
-    const standing = p.hipHeight - c.stance.crouch - lower + lift;
+    pelvis.add(this.quiet.add(this.weight));
+    // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
+    const shifted = this.weight.dot(left) / Math.max(p.hipHalfWidth, 1e-6);
+    roll += 0.06 * shifted;
+    quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
+    const standing = p.hipHeight - c.stance.crouch - lower + lift - 0.012 * p.scale * Math.abs(shifted);
     pelvis.y = softMin(standing, reachLimit(c, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower)), 0.015);
 
     // the trunk: the thorax counter-rotating and rolling, leaning, nodding and bowing
-    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + (life?.breath ?? 0), thoraxRoll, out.chest);
+    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + life.breath, thoraxRoll, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     out.thoraxYaw = thoraxYaw;
   }
@@ -137,32 +143,22 @@ export class Posture {
 }
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
-const hingeOf = (p: Proportions, lower: number) => HINGE * (1 - 0.5 * smoothstep(0, SQUAT * p.height, lower));
+const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, SQUAT * p.height, lower));
 
 /**
- * How a standing body brings its shoulders down by `drop` (m): the trunk bows (at the hips and the
- * lower back) for the first of it, the knees bend for the rest, smoothly into and out of the squat's
- * ends; past the squat, the trunk bows further (738b439:procedures/bow.ts, `lowering`). What to ask
- * `balance`: `lower` (m) and `bow` (rad).
+ * Bring the shoulders down by `drop` (m): mostly through the knees, with bow growing smoothly
+ * into a deep squat. Both stay within their comfortable stops.
  */
-export function lowering(p: Proportions, drop: number, deep = 0): { lower: number; bow: number } {
+export function lowering(p: Proportions, drop: number): { lower: number; bow: number } {
   const H = p.height;
-  const first = softMin(drop, FIRST_BOW * H, BEND * H);
-  const lower = softMin(softplus(drop - first - BEND * H, BEND * H), (SQUAT + deep) * H, BEND * H);
-  // (the bow that brings the shoulders down the rest, as far as a trunk bows)
-  let [lo, hi] = [0, MOST_BOW];
-  for (let i = 0; i < 20; i++) {
-    const mid = (lo + hi) / 2;
-    if (bowDrop(p, lower, mid) < drop - lower) lo = mid;
-    else hi = mid;
-  }
-  return { lower, bow: lo };
+  const bow = MOST_BOW * smoothstep(0, SQUAT * H, drop) ** 2;
+  const lower = softMin(Math.max(0, drop - bowDrop(p, SQUAT * H, bow)), SQUAT * H, BEND * H);
+  return { lower, bow };
 }
 
-/** how far the trunk's bow takes the shoulders down before the knees bend, and over how much of the drop they start and stop (× height); the furthest the trunk bows (rad) */
-const FIRST_BOW = 0.08;
+/** The width of the squat's soft stop (× height), and its maximum trunk bow. */
 const BEND = 0.02;
-const MOST_BOW = 1.6;
+const MOST_BOW = Math.PI / 3;
 
 /**
  * How far a bow of `bow` (rad) brings the shoulders down (m), let down `lower` by the knees: the
@@ -174,35 +170,6 @@ function bowDrop(p: Proportions, lower: number, bow: number): number {
   const height = (a: number, b: number, c: number) => chest.y * Math.cos(a) + spine.y * Math.cos(b) + leftShoulder.y * Math.cos(c);
   // (the spine's origin rides the pelvis, the chest's the lower back, the shoulders' the thorax)
   return height(0, 0, 0) - height(hinge, hinge + (bow - hinge) / 2, bow);
-}
-
-/**
- * the pelvis's horizontal offset from the centre of mass in `pose` (into `out`), the legs' segments
- * counted on the straight line from each hip to its ankle: what the feet's placing and the upper
- * body carry off the pelvis, not how far the knees bend (a pelvis carried lower bends them forward,
- * which would carry it further back)
- */
-function offsetOf(pose: ReadonlyPose, p: Proportions, out: Vector3): Vector3 {
-  const hips = pose.position(0);
-  out.set(0, 0, 0);
-  let mass = 0;
-  pose.skeleton.bones.forEach((b, i) => {
-    const along = LEGS.get(i);
-    const actual = pose.point(i, b.com, _v);
-    const at = along === undefined ? actual : _projected.lerpVectors(pose.position(along.hip), pose.position(along.ankle), along.share(p));
-    const load = pose.load(i);
-    if (load.mass > 0) {
-      // Leg armour follows the same straight-leg projection as its segment; knee flexion must
-      // not feed itself back through the pelvis's centring goal.
-      const loaded = pose.point(i, load.at, _load).sub(actual).add(at);
-      out.addScaledVector(loaded.sub(hips), load.mass);
-      mass += load.mass;
-    }
-    if (b.mass === 0) return;
-    out.addScaledVector(at.sub(hips), b.mass);
-    mass += b.mass;
-  });
-  return out.divideScalar(-mass).setY(0);
 }
 
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
@@ -220,18 +187,6 @@ function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>
   // Geometry, not an empirical timing law: a modest opposing angle about a trunk-length lever.
   return clamp(Math.atan2(moment, mass * (p.eyeHeight - p.hipHeight)), -0.12, 0.12);
 }
-
-/** each leg segment's centre of mass on its hip–ankle line: as a share of the way (Dempster: thigh 0.433, shank 0.433 of theirs; the foot at the ankle) */
-const LEGS = new Map(
-  SIDES.flatMap((s) => {
-    const leg = { hip: INDEX[`${s}UpperLeg`], ankle: INDEX[`${s}Foot`] };
-    return [
-      [INDEX[`${s}UpperLeg`], { ...leg, share: (p: Proportions) => (0.433 * p.thigh) / p.legLength }],
-      [INDEX[`${s}LowerLeg`], { ...leg, share: (p: Proportions) => (p.thigh + 0.433 * p.shin) / p.legLength }],
-      [INDEX[`${s}Foot`], { ...leg, share: () => 1 }],
-    ] as const;
-  }),
-);
 
 /**
  * The highest the pelvis may be (as planned, over its ground point) with every foot still in its
@@ -283,7 +238,5 @@ const _f = new Vector3();
 const _l = new Vector3();
 const _v = new Vector3();
 const _o = new Vector3();
-const _projected = new Vector3();
-const _load = new Vector3();
 const _hip = new Vector3();
 const _ankle = new Vector3();

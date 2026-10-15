@@ -89,6 +89,7 @@ const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
   ['look-around, looking down 10 cm lower', lookAround({ rise: -0.1 })],
   ['look-around, turned 0.3 rad left', lookAround({ turn: 0.3 })],
   ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
+  ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
   ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
   ['reach, the targets 10 cm to the right', reach({ shift: { x: -0.1, z: 0 } })],
   ['reach, the targets 10 cm higher', reach({ rise: 0.1 })],
@@ -127,10 +128,6 @@ const KNOWN: [string, Scenario][] = [
   ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
   ['look-around, looking down 10 cm higher', lookAround({ rise: 0.1 })],
   ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
-  // the body turns back from the target across it to where the hand is going (the floor) as the hand
-  // sets off, the hand still across the body: carried off its way by the turn (0.19 m at 5.4 s; holding
-  // the turn until the hand has crossed the midline leaves this and breaks the targets 10 cm right)
-  ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
   // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),
   // so the body comes under the head late; and a controller on the floor turned off the body's facing,
   // or brought in close while rising to the cheer, is missed by more than the floor's own 15 cm

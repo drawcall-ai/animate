@@ -5,7 +5,7 @@ import { gazeOff, lookAt, SHIFT } from '../core/gaze';
 import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
-import { INDEX, SIDES } from './bones';
+import { NECK_PITCH } from './profile/limits';
 import type { Humanoid } from './humanoid';
 import type { ReadonlyPose } from '../core/pose';
 import { clamp, forwardOf, lerp, smoothstep, wrapAngle } from '../core/math';
@@ -34,11 +34,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
     yield* lookAt<W>(h.gazer, (f) => {
         const g = h.gait;
         // (glances only standing still: walking, the eyes are on the way)
-        const working = h.holding.left || h.holding.right || SIDES.some((side) => {
-          const hand = INDEX[`${side}Hand`];
-          return f.prev.position(hand).distanceTo(f.prev2.position(hand)) > 0.05 * f.dt;
-        });
-        if (g.walk > 0.05 || working) {
+        if (g.walk > 0.05) {
           next = Math.max(next, f.time + GLANCES.every[0]);
           until = 0;
         }
@@ -97,9 +93,8 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
 const ARRIVED = (10 * Math.PI) / 180;
 const LONGEST = 1.2;
 const LEAD = [0.1, 0.3];
-/** Recalled comfort choices: 55° of cervical flexion plus the read 30° eye declination; at most 35° of postural bow. */
-const NECK_PITCH = 85 * Math.PI / 180;
-const MOST_BOW = 0.6;
+/** The trunk supplies downward gaze beyond comfortable cervical flexion and eye declination. */
+const MOST_BOW = (90 - NECK_PITCH) * Math.PI / 180;
 
 /** Postural requests shared by idle gaze and explicit lookAt, without writing the trunk. */
 export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>) {
@@ -108,21 +103,20 @@ export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<
   // Read profile: ~75° cervical rotation; eyes take a little more, then the trunk joins.
   if (Math.abs(bearing) > 1.45) h.asks.twist = clamp(bearing - Math.sign(bearing) * 1.45, -0.6, 0.6);
   const p = h.proportions;
-  const ahead = _to.subVectors(point, hips).dot(forwardOf(h.gait.facing, _eyes));
+  const ahead = Math.hypot(point.x - hips.x, point.z - hips.z);
   const height = point.y - hips.y;
-  const above = p.eyeHeight - p.hipHeight;
+  const neck = NECK_PITCH * Math.PI / 180;
+  const trunk = p.offsets.spine.y + p.offsets.chest.y + p.offsets.neck.y;
+  const head = p.offsets.head.y;
   let best = 0;
   let least = Infinity;
   // Choose a bow from standing geometry: reacting to the current head position chases its own bow.
   for (let b = 0; b <= MOST_BOW + 1e-9; b += MOST_BOW / 12) {
-    const pitch = Math.atan2(above * Math.cos(b) - height, ahead - EYES_AHEAD * p.scale - above * Math.sin(b));
-    const off = Math.max(0, pitch - Math.min(NECK_PITCH + b, 119 * Math.PI / 180));
+    const eyeUp = trunk * Math.cos(b) + head * Math.cos(b + neck / 2) + p.eyes.y * Math.cos(b + neck) - p.eyes.z * Math.sin(b + neck);
+    const eyeAhead = trunk * Math.sin(b) + head * Math.sin(b + neck / 2) + p.eyes.y * Math.sin(b + neck) + p.eyes.z * Math.cos(b + neck);
+    const pitch = Math.atan2(eyeUp - height, ahead - eyeAhead);
+    const off = Math.max(0, pitch - (neck + h.gazer.range.down + b));
     if (off < least - 1e-3) [least, best] = [off, b];
   }
   h.asks.bow = Math.max(h.asks.bow, best);
 }
-
-/** how far ahead of the hips the eyes are standing (m, default body) */
-const EYES_AHEAD = 0.09;
-const _eyes = new Vector3();
-const _to = new Vector3();

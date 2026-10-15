@@ -334,7 +334,7 @@ function placeFoot(c: Carriage, s: number, lead: number, out: Vector3): number {
   }
   // (the facing turns with a curving path: by 2·arc then)
   // (no further round than a step turns a foot: the curve's turn and the facing asked are not added up past it)
-  const yaw = c.yaw + clamp(2 * arc + clamp(wrapAngle(c.goalYaw - c.yaw), -1.2, 1.2) * clamp(lead * 2.5, 0, 1), -0.9, 0.9);
+  const yaw = c.yaw + clamp(2 * arc + clamp(wrapAngle(c.goalYaw - c.yaw), -1.2, 1.2) * clamp(lead * 2.5, 0, 1), -0.6, 0.6);
   const narrow = smoothstep(0.1, 0.6, c.speed) * (stance.stagger === 0 ? 1 : 0.3);
   const width = lerp(stance.width, Math.min(stance.width, 0.036 * p.height), narrow);
   stanceFeet(root.x + px, root.z + pz, forwardOf(yaw, _f), leftOf(yaw, _l), p, stance, _homes, width);

@@ -9,13 +9,13 @@ import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks } from '../asks';
 import { INDEX, SIDES } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { yawOf } from '../../core/math';
-import { defaultStance, type Stance } from '../stance';
+import { forwardOf, smoothstep, yawOf } from '../../core/math';
+import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
 import { seedOf } from '../../core/random';
 import { Life } from './life';
 import { Carriage } from './carriage';
 import { checkFeet, plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
-import { Posture, type Trunk } from './posture';
+import { LOWER, Posture, TIPTOE, type Trunk } from './posture';
 import { stepFeet } from './steps';
 import { footprint } from './foot';
 import { hullOf, outside } from './support';
@@ -39,12 +39,13 @@ export interface Gait {
   settled: boolean;
   /** the thorax's rotation with the stride (rad, + to the left) */
   thoraxYaw: number;
+  /** the requested quiet stance displacement from the centred stance (m, world) */
+  quiet: Vector3;
 }
 
-export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, thoraxYaw: 0 });
+export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, thoraxYaw: 0, quiet: new Vector3() });
 
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
-const LOWER = { accel: 3, speed: 0.6 };
 const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 };
@@ -71,8 +72,9 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
     const base: Stance = { ...defaultStance(p), ...options.stance };
     const c = new Carriage(p, base, h.feet);
     const posture = new Posture();
-    const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
+    const life = options.life === false ? undefined : new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
+    const quiet: Pick<Life, 'drift' | 'breath' | 'onto'> = { drift: new Vector3(), breath: 0, onto: null };
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
     const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)
@@ -102,21 +104,27 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         if (go) [c.maxSpeed, c.accel, c.plant] = [go.speed, go.accel, go.plant ?? true];
         c.turnSpeed = asks.face?.rate;
         c.aim(go?.to ?? null, go?.velocity ?? null, asks.face?.yaw ?? null, dt);
-        c.update(dt, xcom, c.over(_over));
+        const over = c.over(_over);
+        const toes = (p.offsets.leftToes.z + p.offsets.rightToes.z) / 2;
+        over.addScaledVector(forwardOf(c.yaw, _v), (toes - OVER_ANKLES * p.scale) * smoothstep(0, TIPTOE * p.scale, -asked.lower[1]));
+        c.update(dt, xcom, over);
         const stepped = stepFeet(f, c, xcom);
 
         // the pelvis and the trunk over the feet, lowered and bowed as asked
-        // Recalled staging: anticipate with up to 15 cm of squat; go deeper as the last foot lands.
-        const grounded = !c.moving && c.steps.every((st) => !st.swing || st.swing.progress > 0.7);
-        const lowerGoal = grounded ? asks.lower : Math.min(asks.lower, Math.max(0.15 * p.scale, asked.lower[1]));
-        const lower = followed(asked.lower, lowerGoal, LOWER, dt);
+        const lower = followed(asked.lower, asks.lower, LOWER, dt);
         c.lowered = Math.abs(lower) > LOWERED * p.scale;
         const bow = followed(asked.bow, asks.bow, BOW, dt);
-        const task = Math.abs(asks.bow) + Math.abs(asks.lower) / p.height + (h.holding.left || h.holding.right ? 1 : 0);
-        const amount = options.life === false ? 0 : (1 - c.walk) / (1 + 4 * task);
-        life.update(dt, !go && !c.moving && task < 0.01 && options.life !== false, amount);
+        // Motion blends quiet stance out; a stationary load retains breathing and sway.
+        const speed = Math.max(c.speed, ...SIDES.map((side) => {
+          const hand = INDEX[`${side}Hand`];
+          return f.prev.position(hand).distanceTo(f.prev2.position(hand)) / dt;
+        }));
+        life?.update(dt, !go && !c.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0, speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
-        posture.carry(f, c, lower, bow, trunk, twist, life, asks.onto ?? life.onto);
+        quiet.drift.copy(life?.drift ?? ZERO);
+        quiet.breath = life?.breath ?? 0;
+        quiet.onto = asks.onto ?? life?.onto ?? null;
+        posture.carry(f, c, { lower, bow, twist }, trunk, quiet);
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = pelvis.up.follow(_a.set(0, f.prev2.position(0).y, 0), _b.set(0, f.prev.position(0).y, 0), _g.set(0, c.pelvis.y, 0), PELVIS, dt, _up);
         c.pelvis.copy(at).setY(up.y);
@@ -145,6 +153,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
         g.settled = !c.moving && !stepped && c.steps.every((st) => !st.swing && st.plantedTime > SETTLED);
         g.velocity.copy(c.velocity);
+        g.quiet.copy(posture.quiet);
       },
     });
   };
@@ -196,3 +205,5 @@ function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
   const value = outside(hull, xcom);
   if (value > 0.1) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
 }
+
+const ZERO = new Vector3();
