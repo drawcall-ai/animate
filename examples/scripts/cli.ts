@@ -4,6 +4,7 @@ import { knownFailure, run, vary } from './run';
 
 /** Print the body's log, grouping repeated problems by their worst sample. */
 export function main(id: string, options: { vary: number; json: boolean }): boolean {
+  if (id === 'all') return SCENARIOS.map((sc) => main(sc.id, options)).some(Boolean);
   const sc = SCENARIOS.find((s) => s.id === id);
   if (!sc) throw new Error(`no scenario "${id}" (known: ${SCENARIOS.map((s) => s.id).join(', ')})`);
   const logs = [run(sc), ...Array.from({ length: options.vary }, (_, i) => run(vary(sc, i + 1)))];

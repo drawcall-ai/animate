@@ -78,13 +78,8 @@ export class Limb {
   supports(p: Pose, state: LegTiming, walker: Motion): boolean {
     const { duty, frequency, stepping } = walker.stride;
     this.refs(walker.phase - state.footfall, duty, stepping);
-    for (const ahead of [0, 0.1]) {
-      this.baseAt(p, walker, ahead, _turn, _top);
-      const pitch = this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping);
-      const target = this.planted(state.foothold, pitch, _target);
-      if (this.solver.reach(_turn, _top, target, this.trial) >= 1e-5) return false;
-    }
-    return true;
+    const targets = [0, 0.1].map((ahead): [number, number] => [ahead, this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping)]);
+    return this.reserve(p, walker, state.foothold, targets, 1e-5);
   }
 
   /** Shorten a proposed step until its landing is reachable, before committing the foothold. */
@@ -116,12 +111,25 @@ export class Limb {
   /** The same reserve used by preflight and the foothold search. */
   landingSupported(p: Pose, walker: Motion, ahead: number, contact: LegTiming['foothold']): boolean {
     this.refs(0, walker.stride.duty, walker.stride.stepping);
-    for (const time of [ahead, ahead + 0.1]) {
+    const targets = [ahead, ahead + 0.1].flatMap((time): [number, number][] => [
+      [time, 0], [time, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)],
+    ]);
+    return this.reserve(p, walker, contact, targets, 1e-6);
+  }
+
+  /** Identical bases and pitches have identical reserve solves; stationary forecasts repeat them. */
+  private reserve(p: Pose, walker: Motion, contact: LegTiming['foothold'], targets: readonly (readonly [number, number])[], limit: number): boolean {
+    const top = new Vector3();
+    const turn = new Quaternion();
+    let lastPitch = NaN;
+    for (const [time, pitch] of targets) {
       this.baseAt(p, walker, time, _turn, _top);
-      for (const pitch of [0, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)]) {
-        const target = this.planted(contact, pitch, _target);
-        if (this.solver.reach(_turn, _top, target, this.trial) >= 1e-6) return false;
-      }
+      if (pitch === lastPitch && top.equals(_top) && turn.equals(_turn)) continue;
+      const target = this.planted(contact, pitch, _target);
+      if (this.solver.reach(_turn, _top, target, this.trial) >= limit) return false;
+      top.copy(_top);
+      turn.copy(_turn);
+      lastPitch = pitch;
     }
     return true;
   }

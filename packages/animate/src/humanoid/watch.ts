@@ -27,7 +27,7 @@ export function eyesOnBefore<W>(h: Humanoid<W>, item: Item, seconds: number): Be
       const holding = h.holding.left?.item === item || h.holding.right?.item === item;
       const took = holding && !held;
       held = holding;
-      if (!took || h.worn.has(item)) return null;
+      if (!took || item.wornBy === h) return null;
       const value = since === null ? 0 : f.time - since;
       return value + 1e-9 < seconds ? { check: 'gaze lead shortfall (s)', value: seconds - value, limit: 0, where: 'head' } : null;
     })();

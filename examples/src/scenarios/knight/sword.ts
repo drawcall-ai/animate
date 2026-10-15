@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { carry, hold, INDEX, onBone, onItem, reachFor, release, still, takeOff, wear, yawOf, type Behaviour, type Frame, type Item, type Leg, type Placement, type Stand, type World } from '@drawcall/animate';
+import { carry, carryTogether, hold, INDEX, onBone, onItem, reachFor, release, still, takeOff, wear, yawOf, type Behaviour, type Frame, type Item, type Leg, type Placement, type Stand, type World } from '@drawcall/animate';
 import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
 // The sword belt and the sword: buckled on, hung at the left hip, its draw checked.
@@ -21,12 +21,12 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, stand: S
   const front = onBone(k.h, INDEX.hips, at(0, 0.07, 0.27), { facing: true });
   return function* () {
     yield* take(k, { left: [belt.buckle, 'end'], right: [belt.tongue, 'end'] }, { stand })();
-    yield* parallel('all', along(k, belt.buckle, round(1), { on: hips }), along(k, belt.tongue, round(-1), { on: hips }));
+    yield* carryTogether(k.h, [[belt.buckle, round(1)], [belt.tongue, round(-1)]], { on: hips, facing: true, pace: k.pace })();
     // (drawn round to before the belly, the ends together, the tongue through the buckle and pulled tight)
     yield* eyesOn(
       k,
       (f) => front(f).position,
-      () => parallel('all', along(k, belt.buckle, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]], { on: hips }), along(k, belt.tongue, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]], { on: hips })),
+      carryTogether(k.h, [[belt.buckle, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]]], [belt.tongue, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]]]], { on: hips, facing: true, pace: k.pace }),
       { first: false },
     )();
     yield* wear(k.h, belt.buckle, INDEX.hips)();

@@ -4,7 +4,7 @@ import {
   Body, HORSE_SKELETON, HORSE_WALK, Item, Legs, Pose,
   approach, arriving, carried, carry, createWorld, eyesOnBefore, grab, hold, horseLegs, horseCarriage, idle, scan,
   named, onBone, release, wear, when, walkTo, withGaze,
-  type Behaviour, type Frame, type Humanoid, type World,
+  type Behaviour, type Leg, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -12,7 +12,8 @@ import type { Prop, Scenario } from '../scenario';
 import { skeletonProps } from './legs';
 
 const UP = new Vector3(0, 1, 0);
-const HORSE = new Vector3(1.2, 1.4, 3);
+// Tuned 8 cm stance reserve, as in legs-horse: avoid requesting the straight-legged rest height every tick.
+const HORSE = new Vector3(1.2, 1.32, 3);
 const RACK = new Vector3(-1.1, 0.88, 2);
 const KNOT = new Vector3(-0.05, 1.12, 4.45);
 const HEAD = HORSE_SKELETON.index('head');
@@ -62,7 +63,7 @@ export function stableMorning(): Scenario {
         horseCarriage(f, legs);
       } }), { pose, dev });
 
-      const saddlePlace = onBone<World>(horse, 0, { position: SADDLED, quaternion: yaw(Math.PI / 2) });
+      const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(Math.PI / 2) });
       const gate = new Vector3(0.2, 0, 8.2);
       const tasks = (h: Humanoid<World>): Behaviour<World> => function* () {
         // A breath and a look across the yard; idle supplies the movement underneath.
@@ -85,11 +86,13 @@ export function stableMorning(): Scenario {
             face: Math.PI / 2, look: reported(report, 'gaze', () => saddle.current.position),
           })))();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
-          withGaze(h, reported(report, 'gaze', () => saddlePlace().position), function* () {
+          withGaze(h, reported(report, 'gaze', () => saddlePlace(horse.frame).position), function* () {
             yield* parallel<Frame<World>>('all',
-              approach(h, saddlePlace().position, { face: Math.PI / 2 }),
+              approach(h, saddlePlace(horse.frame).position, { face: Math.PI / 2 }),
               function* () {
-                yield* carry(h, saddle, [[0.6, carried(h)()]])();
+                const lift: Leg[] = [];
+                yield (f) => { lift.push([0.6, carried(h)(f)]); return 'skipped'; };
+                yield* carry(h, saddle, lift)();
                 yield* hold(h, saddle, { to: carried(h), until: arriving(h, 0.25) })();
                 yield* carry(h, saddle, [
                   [1.1, { position: SADDLED.clone().add(new Vector3(-0.24, 0.21, 0)), quaternion: yaw(Math.PI / 2) }],
@@ -140,7 +143,7 @@ export function stableMorning(): Scenario {
       };
       return {
         world: createWorld(), report, bodies: [horse],
-        done: () => horse.worn.has(saddle) && lookedBack && horse.pose.position(0).clone().sub(gate).dot(forwardOf(0)) > 0,
+        done: () => saddle.wornBy === horse && lookedBack && horse.pose.position(0).clone().sub(gate).dot(forwardOf(0)) > 0,
         props: () => {
           const root = horse.pose.position(0);
           const muzzle = horse.pose.point(HEAD, new Vector3(0, -0.42, 0.33), new Vector3());

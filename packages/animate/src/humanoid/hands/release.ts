@@ -36,7 +36,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         if (away) at.add(away.clone().multiplyScalar(p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
         else {
           const sign = side === 'left' ? 1 : -1;
-          at.copy(shoulder).add(new Vector3(sign * 0.12 * p.scale, -0.88 * p.armLength, 0.08 * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
+          at.copy(shoulder).add(new Vector3(sign * REST_ASIDE * p.scale, -REST_DOWN * p.armLength, REST_AHEAD * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
           at.addScaledVector(_v.subVectors(hand, f.prev2.position(INDEX[`${side}Hand`])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH), FOLLOW_THROUGH);
         }
         // (within what the arm reaches from its shoulder)
@@ -66,6 +66,11 @@ const FOLLOWING_ON = 0.08;
 const LETTING_GO = 1;
 /** how near its shoulder a hand going off is put at least (× the arm's length) */
 const FOLDED = 0.45;
+
+// Recalled release tuning: a relaxed wrist beside the thigh, elbow slightly bent; metres except the arm-length share.
+const REST_ASIDE = 0.12;
+const REST_DOWN = 0.88;
+const REST_AHEAD = 0.08;
 
 const UP = new Vector3(0, 1, 0);
 const _turned = new Quaternion();

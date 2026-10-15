@@ -1,12 +1,10 @@
 import { Vector3, Quaternion } from 'three';
-import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import type { Pose } from '../core/pose';
 import type { Item } from '../core/carrier';
 import { follow } from '../core/follow';
-import type { Behaviour } from '../core/goal';
-import type { Dressed } from '../core/worn';
-import { moveWorn, SETTLING } from '../core/worn';
+import type { Dressed, Wearing } from '../core/worn';
+import { SETTLING } from '../core/worn';
 import { INDEX, SIDES } from './bones';
 import type { Humanoid } from './humanoid';
 
@@ -24,29 +22,24 @@ export interface Bearing {
 
 const BEARING = { accel: 16, speed: 4 };
 
-/** Load held and worn items onto the humanoid's bones after its tasks. */
-export function carryWorn<W>(h: Humanoid<W>): Behaviour<W> {
-  return function* () {
-    yield* action<Frame<W>>({ update: (f) => { moveWorn(h, f); load(h, f); } });
-  };
-}
-
 /** `wearing` worn and borne from the start, each item placed where it sits on its bone in `pose` (the body's first) and its weight loaded there */
-export function dress<W>(h: Humanoid<W>, pose: Pose, wearing: readonly Dressed[]) {
+export function dress<W>(h: Humanoid<W>, pose: Pose, wearing: readonly Dressed[]): Map<Item, Wearing> {
+  const worn = new Map<Item, Wearing>();
   for (const { item, on, at } of wearing) {
     const position = at.position.clone();
     const quaternion = at.quaternion?.clone() ?? new Quaternion();
-    h.worn.set(item, { on, to: null, motion: SETTLING, sits: { position, quaternion, prev: position.clone(), prev2: position.clone(), prevQ: quaternion.clone(), prev2Q: quaternion.clone() } });
+    worn.set(item, { on, to: null, motion: SETTLING, sits: { position, quaternion, prev: position.clone(), prev2: position.clone(), prevQ: quaternion.clone(), prev2Q: quaternion.clone() } });
     item.wornBy = h;
     item.supported = false;
     item.move(0, position.clone().applyQuaternion(pose.rotation(on)).add(pose.position(on)), pose.rotation(on).clone().multiply(quaternion));
     h.borne.set(item, { share: 1, prev: 1, prev2: 1, kg: item.mass, bones: [on] });
   }
   loadBones(h, pose);
+  return worn;
 }
 
 /** the weight the body bears, its share of each item's followed on, loaded onto its bones in this sub-step's pose */
-function load<W>(h: Humanoid<W>, f: Frame<W>) {
+export function load<W>(h: Humanoid<W>, f: Frame<W>) {
   /** the bones `item` bears on: the one it is worn on (through what it hangs from), or the hands holding it (or what it hangs from) off its support */
   const bearers = (item: Item): number[] => {
     let at: number | Item = item;
@@ -57,7 +50,7 @@ function load<W>(h: Humanoid<W>, f: Frame<W>) {
       at = wearing.on;
     }
     const top = at;
-    if (top.supported) return [];
+    if (top.supported || top.wornBy) return [];
     return SIDES.filter((s) => h.holding[s]?.item === top).map((s) => INDEX[`${s}Hand`]);
   };
   const items = new Set<Item>([...h.worn.keys(), ...SIDES.flatMap((s) => h.holding[s]?.item ?? []), ...h.borne.keys()]);

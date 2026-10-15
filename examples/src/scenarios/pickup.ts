@@ -79,7 +79,9 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
         // (the eyes on to the board as the box comes up past the knees)
         const board = new Vector3(SHELF.x, top, SHELF.z);
         const up = () => box.current.position.y > KNEES;
-        yield* parallel<Frame<World>>('all', carry(h, box, lifted(h, lift)), function* () {
+        const lifting: Leg[] = [];
+        yield (f) => { lifting.push(...lifted(h, lift, f)); return 'skipped'; };
+        yield* parallel<Frame<World>>('all', carry(h, box, lifting), function* () {
           yield* when(up);
           gaze.on = board;
         });
@@ -96,11 +98,11 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
  * front of the chest, turning square with the body (the chest as the body will stand: its hips
  * over the feet, not back where they squat)
  */
-function lifted(h: Humanoid<World>, seconds: number): Leg[] {
+function lifted(h: Humanoid<World>, seconds: number, f: Frame<World>): Leg[] {
   const ahead = forwardOf(h.gait.facing);
   return [
     [seconds / 2, (start) => ({ position: start.position.clone().addScaledVector(ahead, 0.12).setY(KNEES) })],
-    [seconds / 2, carried(h)()],
+    [seconds / 2, carried(h)(f)],
   ];
 }
 

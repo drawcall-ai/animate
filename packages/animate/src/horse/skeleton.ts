@@ -209,8 +209,8 @@ for (const limit of limitsOf(built.bones)) {
 }
 const names = (k: number) => built.bones[k].name;
 
-/** the horse's skeleton: its limits, a chain per leg (named as the leg) and the neck's */
-/** Warmblood landmarks: root bone `trunk` (index 0) on the spine under the saddle, `neck` at its base,
+/** The horse's skeleton: its limits, a chain per leg (named as the leg) and the neck's.
+ * Warmblood landmarks: root bone `trunk` (index 0) on the spine under the saddle, `neck` at its base,
  * `head` at the poll; muzzle offset from head is (0, -0.42, 0.33) m. */
 export const SKELETON = new Skeleton(built.bones, {
   limits: limitsOf(built.bones),

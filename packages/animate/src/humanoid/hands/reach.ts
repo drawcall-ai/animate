@@ -45,7 +45,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
       const at = item.toWorld(gripOf(item, grip), _world).position;
       const seconds = reachTime(h.pose.position(INDEX[`${side}Hand`]).distanceTo(at) / h.proportions.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
       // A target worn on this body must not be chased with that same body's posture.
-      yield* handTo(h, side, gripOf(item, grip), { on: item, until, seconds, after: delay, lead: !h.worn.has(item) })();
+      yield* handTo(h, side, gripOf(item, grip), { on: item, until, seconds, after: delay, lead: !item.wornBy })();
     };
   return function* () {
     for (const { side } of hands) yield* openHand(h, side)();

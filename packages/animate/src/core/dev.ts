@@ -16,7 +16,7 @@ export interface Problem {
 
 export interface LogEntry extends Problem {
   time: number;
-  beat: string;
+  beat?: string;
 }
 
 /** Watchers read the last final poses; they cannot write this step's pose. */
@@ -25,11 +25,11 @@ export type WatchFrame<W = unknown> = Readonly<Omit<Frame<W>, 'current' | 'dev' 
 /** One body's development log. Absent entirely when dev is off. */
 export class Dev {
   readonly log: LogEntry[] = [];
-  beat = '';
+  beat?: string;
   readonly velocities: Vector3[] = [];
 
   append(time: number, problem: Problem): void {
-    this.log.push({ ...problem, time, beat: this.beat });
+    this.log.push({ ...problem, time, ...(this.beat === undefined ? {} : { beat: this.beat }) });
   }
 }
 

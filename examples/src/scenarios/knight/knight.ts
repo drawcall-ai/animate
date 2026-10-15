@@ -64,7 +64,7 @@ export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>):
 }
 
 /** A held item carried along its course at the knight’s pace. */
-export const along = (k: Knight, item: Item, legs: readonly Leg[], options: { on: number | Item | readonly [Humanoid<World>, number] }): Behaviour<World> => carry(k.h, item, legs, { ...options, pace: k.pace });
+export const along = (k: Knight, item: Item, legs: readonly Leg[], options: { on: number | Item | readonly [Humanoid<World>, number] }): Behaviour<World> => carry(k.h, item, legs, { ...options, facing: typeof options.on === 'number', pace: k.pace });
 
 export const at = (x: number, y: number, z: number, quaternion?: Quaternion): Placement => ({ position: new Vector3(x, y, z), quaternion });
 export const turn = (x: number, y: number, z: number) => new Quaternion().setFromEuler(new Euler(x, y, z, 'YXZ'));

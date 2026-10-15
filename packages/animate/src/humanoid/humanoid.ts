@@ -1,8 +1,7 @@
 import { NECK_PITCH } from './profile/limits';
 import { Quaternion, Vector3 } from 'three';
-import { parallel } from '@pmndrs/timeline';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Body, type Frame } from '../core/body';
+import { Body } from '../core/body';
 import type { Item } from '../core/carrier';
 import { solveChain } from '../core/chain';
 import type { Gazer } from '../core/gaze';
@@ -20,8 +19,8 @@ import { gazeAsks } from './look';
 import { Rig } from './rig';
 import { yawOf } from '../core/math';
 import { defaultStance, footYaw, stanceFeet } from './stance';
-import { carryWorn, dress, type Bearing } from './worn';
-import type { Dressed, Wearing } from '../core/worn';
+import { load, dress, type Bearing } from './worn';
+import type { Dressed } from '../core/worn';
 
 export interface HumanoidOptions<W> {
   world?: W;
@@ -55,7 +54,7 @@ export class Humanoid<W = unknown> {
   /** the neck and the eyes, for `lookAt` */
   readonly gazer: Gazer;
   /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
-  readonly worn = new Map<Item, Wearing>();
+  get worn() { return this.body.worn; }
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it (kept by the body) */
   readonly borne = new Map<Item, Bearing>();
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
@@ -78,16 +77,11 @@ export class Humanoid<W = unknown> {
     this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180,
       lead: (pose, point) => gazeAsks(this, pose, point),
     };
-    if (options.wearing) dress(this, start.pose, options.wearing(p));
-    // (after the behaviour each sub-step, the body carries what it wears and holds)
-    const script = behaviour(this);
-    const carried = carryWorn(this);
+    const worn = dress(this, start.pose, options.wearing?.(p) ?? []);
     this.body = new Body(
       rig.skeleton,
-      function* () {
-        yield* parallel<Frame<W>>('all', script, carried);
-      },
-      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale },
+      behaviour(this),
+      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn, after: (f) => load(this, f) },
     );
     rig.write(this.body.pose, 0);
   }

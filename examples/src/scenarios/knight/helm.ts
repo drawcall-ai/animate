@@ -23,8 +23,7 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
   return function* () {
     // (its grips are toward its front, away from him: he stands back from them)
     const hands: Holds = { left: [helmet, 'left'], right: [helmet, 'right'] };
-    const stand = { ahead: 0.95 * k.h.proportions.armLength };
-    yield* approach(k.h, hands, { stand })();
+    yield* approach(k.h, hands, { stand: { ahead: 'reach' } })();
     // Reach around the sides of the crown, with the elbows outside the helmet.
     const there = (f: F) => (['left', 'right'] as const).every((side) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], helmet.grips[side], helmet));
     yield* busy(k, eyesOn(k, () => helmet.current.position, () => parallel<F>('all', ...(['left', 'right'] as const).map((side) => handTo(k.h, side, helmet.grips[side], {

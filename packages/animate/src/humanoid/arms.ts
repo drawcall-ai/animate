@@ -39,7 +39,7 @@ const OUT = 0.5;
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
  * steps as a pendulum (`h.gait`'s stride), opposite the legs, wider and bent walking faster; the
  * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
- * task let go of swings back into it. A hand still holding an item follows its grip until release.
+ * task let go of swings back into it. A hand holding any item follows its grip until release, including supported and worn items.
  */
 export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
   return function* () {
@@ -59,7 +59,7 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
         SIDES.forEach((side, s) => {
           const held = h.holding[side];
           if (held) {
-            handStep(h, f, side, gripOf(held.item, held.grip), { on: held.item, ...HOLD, lead: !h.worn.has(held.item) }, heldArms[side]);
+            handStep(h, f, side, gripOf(held.item, held.grip), { on: held.item, ...HOLD, lead: !held.item.wornBy }, heldArms[side]);
             return;
           }
           const sign = s === 0 ? 1 : -1;

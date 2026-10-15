@@ -21,7 +21,7 @@ export { balance, type Gait } from './humanoid/balance/balance';
 export type { Foot, FootPhase } from './humanoid/balance/foot';
 export { CALM, handTo, hangArms, type HandOptions } from './humanoid/arms';
 export { approach, grab, type Stand } from './humanoid/hands/grab';
-export { CARRYING, carry, hold } from './humanoid/hands/carry';
+export { CARRYING, carry, carryTogether, hold, type CarryOptions } from './humanoid/hands/carry';
 export { closeHand, openHand, type Grips, type Holds } from './humanoid/hands/grips';
 export { reachFor } from './humanoid/hands/reach';
 export { release } from './humanoid/hands/release';

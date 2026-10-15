@@ -42,6 +42,10 @@ export interface BodyOptions<W> {
   dev?: boolean;
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;
+  /** Initial attachments; ownership of this map passes to the body. */
+  worn?: Map<Item, Wearing>;
+  /** Runs after worn items move, before the final pose becomes history. */
+  after?: (f: Frame<W>) => void;
 }
 
 /**
@@ -63,9 +67,11 @@ export class Body<W = unknown> {
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
+  private readonly after?: (f: Frame<W>) => void;
 
   constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame<W>>, options: BodyOptions<W> = {}) {
-    this.worn = new Map();
+    this.worn = options.worn ?? new Map();
+    this.after = options.after;
     this.scale = options.scale ?? 1;
     const start = new Pose(skeleton);
     if (options.pose) start.copy(options.pose);
@@ -125,8 +131,9 @@ export class Body<W = unknown> {
     frame.time += dt;
     clock.delta = dt;
     (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
-    if (frame.dev) frame.dev.beat = [...frame.beats].join(' ∥ ');
+    if (frame.dev) frame.dev.beat = frame.beats.size ? [...frame.beats].join(' ∥ ') : undefined;
     moveWorn(this, frame);
+    this.after?.(frame);
     clock.prevDelta = dt;
     clock.frame++;
     current.forward();
