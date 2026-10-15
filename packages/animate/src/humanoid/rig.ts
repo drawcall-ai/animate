@@ -1,3 +1,4 @@
+import { yawOf } from '../core/math';
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import type { ReadonlyPose } from '../core/pose';
@@ -9,13 +10,6 @@ import { derive, type Proportions } from './proportions';
 import { CHAINS, skeletonOf } from './skeleton';
 
 const UP = new Vector3(0, 1, 0);
-const _left = new Vector3();
-
-/** the facing of a pelvis turned by `q`: its yaw about +Y (0 faces +Z), from its left (steady as it bends forward or sits) */
-export function yawOf(q: Quaternion): number {
-  const left = _left.set(1, 0, 0).applyQuaternion(q);
-  return Math.atan2(-left.z, left.x);
-}
 
 /** the part of three-vrm's VRM used: viverse loads .vrm files as VRM instances */
 interface VRMLike {

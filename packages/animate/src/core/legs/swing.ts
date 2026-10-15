@@ -1,11 +1,5 @@
 import type { Quaternion } from 'three';
 
-/** Flash & Hogan's minimum-jerk profile, `t` in [0, 1] */
-export const minimumJerk = (t: number) => {
-  const s = Math.min(1, Math.max(0, t));
-  return s * s * s * (10 - 15 * s + 6 * s * s);
-};
-
 /** a swing's plan, per coordinate (rad, rad/s, rad/s²) */
 export interface Swing {
   /** the plan's state: lift-off to landing, minimum jerk, re-planned each tick toward the landing as it is seen then */

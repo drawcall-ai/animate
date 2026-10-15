@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Side } from '../bones';
-import { clamp, lerp, quatYXZ } from '../math';
+import { clamp, lerp, quatYXZ } from '../../core/math';
 import type { Proportions } from '../proportions';
 
 /** planted: bearing weight on the floor; swing: stepping */

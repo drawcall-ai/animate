@@ -7,7 +7,7 @@ import { reached } from '../../core/tip';
 import { handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { lerp } from '../math';
+import { lerp } from '../../core/math';
 import { OUTREACH } from './carry';
 import { openHand } from './grips';
 

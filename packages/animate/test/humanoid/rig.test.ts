@@ -5,7 +5,8 @@ import { Pose } from '../../src';
 import { BONES, CHILD_BONES, INDEX, PARENT, type BoneName } from '../../src/humanoid/bones';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../../src/humanoid/proportions';
-import { Rig, yawOf } from '../../src/humanoid/rig';
+import { Rig } from '../../src/humanoid/rig';
+import { yawOf } from '../../src/core/math';
 import { massFor } from '../../src/humanoid/skeleton';
 import { rng, turnUpTo, vrmOf } from './fixtures';
 

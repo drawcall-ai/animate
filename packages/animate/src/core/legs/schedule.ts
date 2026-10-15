@@ -1,4 +1,4 @@
-import type { LegGait } from '../gait';
+import type { LegGait } from './gait';
 
 /** Recalled: Alexander & Jayes (1983) λ/h=c·Fr^0.3; Hodson et al. stance=a·v^−0.7. */
 export function powerGait(height: number, slowest: number, offsets: readonly number[], stride: number, stance: number, clearance: readonly number[]): LegGait {

@@ -2,7 +2,7 @@
 // The horse: a ~500 kg warmblood of 1.60 m at the withers (16 hands), standing square at rest:
 // +Y up, facing +Z, its left +X; the root (the trunk) on the spine under the saddle.
 import { Vector3 } from 'three';
-import { Skeleton, type BoneDef, type Limit } from '../../skeleton';
+import { Skeleton, type BoneDef, type Limit } from '../core/skeleton';
 
 /** a leg, as the legs are listed everywhere: [leftFore, rightFore, leftHind, rightHind] */
 export type LegName = 'leftFore' | 'rightFore' | 'leftHind' | 'rightHind';
@@ -12,7 +12,7 @@ export const LEG_NAMES: readonly LegName[] = ['leftFore', 'rightFore', 'leftHind
  * A leg's bones: its chain (named as the leg) of two segments from the shoulder or hip down to the
  * carpus or hock, the scapula above a foreleg's, and the cannon, pastern and hoof below.
  */
-export interface Leg {
+export interface HorseLeg {
   name: LegName;
   fore: boolean;
   /** +1 left, −1 right */
@@ -96,7 +96,7 @@ const AT = {
 };
 
 /** the bones, parents first: the trunk (root), pelvis, neck, head, then each leg's */
-function build(): { bones: BoneDef[]; legs: Leg[] } {
+function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
   const bones: BoneDef[] = [];
   const at: Vector3[] = [];
   /** a bone with its joint at `joint` (world, rest), of `mass` centred `k` of the way to `to` */
@@ -109,7 +109,7 @@ function build(): { bones: BoneDef[]; legs: Leg[] } {
   const pelvis = add('pelvis', trunk, AT.pelvis, MASS.pelvis, v(0, 1.27, -0.68), 1);
   const neck = add('neck', trunk, AT.neck, MASS.neck, AT.poll, 0.45);
   add('head', neck, AT.poll, MASS.head, AT.muzzle, 0.4);
-  const legs: Leg[] = [];
+  const legs: HorseLeg[] = [];
   for (const [fore, end] of [[true, 'Fore'], [false, 'Hind']] as const) {
     for (const side of [1, -1] as const) {
       const m = (p: Vector3) => v(side * p.x, p.y, p.z);
@@ -212,7 +212,7 @@ export const SKELETON = new Skeleton(built.bones, {
   chains: Object.fromEntries([...built.legs.map((l) => [l.name, [l.upper, l.middle, l.cannon].map(names)]), ['neck', ['neck', 'head']]]),
 });
 /** the legs, as LEG_NAMES lists them */
-export const LEGS: readonly Leg[] = built.legs;
+export const LEGS: readonly HorseLeg[] = built.legs;
 export const TRUNK = 0;
 export const PELVIS = SKELETON.index('pelvis');
 export const NECK = SKELETON.index('neck');

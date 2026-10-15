@@ -3,7 +3,7 @@ import type { Frame } from '../core/body';
 import type { Item } from '../core/carrier';
 import { live, type Live, type Placement } from '../core/goal';
 import { exp, log } from '../core/rotation';
-import { minimumJerk } from './math';
+import { minimumJerk } from '../core/math';
 
 /** a leg of a course: how long it takes (s), and where it goes in the course's frame — or where, given where the course set out from and where the leg before ended (both in that frame) */
 export type Leg = [seconds: number, to: Placement | ((start: Required<Placement>, last: Required<Placement>) => Placement)];

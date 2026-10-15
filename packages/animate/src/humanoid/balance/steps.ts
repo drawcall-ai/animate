@@ -4,8 +4,8 @@
 import { Vector3 } from 'three';
 import { coordinatesOf } from '../../core/limits';
 import { INDEX, type Side } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../math';
-import { yawOf } from '../rig';
+import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../../core/math';
+import { yawOf } from '../../core/math';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import type { Carriage } from './carriage';
 import { ankleFor, footprint } from './foot';

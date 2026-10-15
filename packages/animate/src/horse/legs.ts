@@ -1,8 +1,8 @@
 // Recalled: Back et al. (1995), Hodson (2000/2001), Clayton (2004) curves as retained by the spike.
-import type { Cycle } from '../cycle';
-import type { Leg } from '../legs';
-import { LEGS } from './horse-skeleton';
-import { powerGait } from './schedule';
+import type { JointCycle } from '../core/legs/cycle';
+import type { LegChain } from '../core/legs/legs';
+import { LEGS } from './skeleton';
+import { powerGait } from '../core/legs/schedule';
 
 // Recalled: hip height ~1.2 m, slow walk threshold 0.8 m/s (spike).
 // Recalled: Hildebrand lateral walk sequence and Clayton/Hobbs diagonal trot offsets.
@@ -17,7 +17,7 @@ export const HORSE_TROT = powerGait(1.2, 0.8, [0.52, 0.02, 0, 0.5], 2.15, 0.3 * 
  * (Equine Vet J 27:31, 27:39; recalled, not re-read: the amplitudes to the excursions horse-v4's
  * judge bands hold, Back 1995 and Hodson 2000/2001), the same for the walk (warped to its duty)
  */
-const cycle = (keys: [number, number][]): Cycle => ({ duty: 0.45, keys });
+const cycle = (keys: [number, number][]): JointCycle => ({ duty: 0.45, keys });
 const FORE = {
   scapula: cycle([[0, 8], [0.22, 0], [0.45, -10], [0.7, 2], [0.9, 10]]),
   shoulder: cycle([[0, 5], [0.22, -3], [0.45, -15], [0.6, -5], [0.75, 15], [0.9, 15]]),
@@ -33,40 +33,24 @@ const HIND = {
 const FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -55], [0.82, -20], [0.95, 0]]);
 const COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]]);
 /** the hoof flat on the ground, breaking over its toe at the end of the stance (°, + toe up) */
-const BREAKOVER: Cycle = { duty: 1, keys: [[0, 0], [0.8, 0], [1, -25]] };
+const BREAKOVER: JointCycle = { duty: 1, keys: [[0, 0], [0.8, 0], [1, -25]] };
 
 /** the horse's body for the core */
-export function horseLegs(): readonly Leg[] {
-  const legs = LEGS.map((leg): Leg => {
-    const cycles = new Map<number, Cycle>(
-      leg.fore
-        ? [
-            [leg.scapula ?? fail('a foreleg without a scapula'), FORE.scapula],
-            [leg.upper, FORE.shoulder],
-            [leg.middle, FORE.elbow],
-            [leg.cannon, FORE.carpus],
-          ]
-        : [
-            [leg.upper, HIND.hip],
-            [leg.middle, HIND.stifle],
-            [leg.cannon, HIND.hock],
-          ],
-    );
-    cycles.set(leg.pastern, FETLOCK);
-    cycles.set(leg.hoof, COFFIN);
-    const distal = [leg.upper, leg.middle, leg.cannon, leg.pastern, leg.hoof];
-    return {
-      bones: leg.fore ? [leg.scapula ?? fail('a foreleg without a scapula'), ...distal] : distal,
-      axes: [...(leg.fore ? ['x'] : []), 'yzx', 'x', 'x', 'zx', 'x'],
-      heel: leg.heel.clone(),
-      toe: leg.toe.clone(),
-      toeOut: 0,
-      cycles,
-      rocker: BREAKOVER,
-    };
-  });
-  return legs;
+export function horseLegs(): readonly LegChain[] {
+  return LEGS.map((leg): LegChain => ({
+    joints: [
+      ...(leg.fore ? [{ bone: leg.scapula ?? fail('a foreleg without a scapula'), axes: 'x', cycle: FORE.scapula }] : []),
+      { bone: leg.upper, axes: 'yzx', cycle: leg.fore ? FORE.shoulder : HIND.hip },
+      { bone: leg.middle, axes: 'x', cycle: leg.fore ? FORE.elbow : HIND.stifle },
+      { bone: leg.cannon, axes: 'x', cycle: leg.fore ? FORE.carpus : HIND.hock },
+      { bone: leg.pastern, axes: 'zx', cycle: FETLOCK },
+      { bone: leg.hoof, axes: 'x', cycle: COFFIN },
+    ],
+    heel: leg.heel.clone(),
+    toe: leg.toe.clone(),
+    toeOut: 0,
+    rocker: BREAKOVER,
+  }));
 }
-
 
 const fail = (what: string): never => { throw new Error(what); };

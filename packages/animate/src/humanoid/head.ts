@@ -8,9 +8,9 @@ import { TrackedPoint, TrackedRotation } from '../core/track';
 import { TIPTOE } from './balance/posture';
 import { INDEX } from './bones';
 import type { Humanoid } from './humanoid';
-import { clamp, forwardOf, wrapAngle } from './math';
+import { clamp, forwardOf, wrapAngle } from '../core/math';
 import type { Proportions } from './proportions';
-import { yawOf } from './rig';
+import { yawOf } from '../core/math';
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
 export const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;

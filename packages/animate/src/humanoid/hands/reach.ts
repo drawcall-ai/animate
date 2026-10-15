@@ -8,7 +8,7 @@ import { reached } from '../../core/tip';
 import { handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { lerp } from '../math';
+import { lerp } from '../../core/math';
 import { closeHand, gripOf, held, openHand, type Grips, type Holds } from './grips';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.

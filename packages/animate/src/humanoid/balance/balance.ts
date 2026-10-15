@@ -9,7 +9,7 @@ import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks } from '../asks';
 import { INDEX, SIDES } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { yawOf } from '../rig';
+import { yawOf } from '../../core/math';
 import { defaultStance, type Stance } from '../stance';
 import { Carriage } from './carriage';
 import { checkFeet, plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';

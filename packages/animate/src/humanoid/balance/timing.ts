@@ -1,6 +1,6 @@
 // From the old core (a801be4:packages/core/src/gait/timing.ts).
 import { DEFAULT_HEIGHT, type Proportions } from '../proportions';
-import { clamp, lerp, smoothstep } from '../math';
+import { clamp, lerp, smoothstep } from '../../core/math';
 
 /** A step's timing at some speed (s). */
 export interface Timing {

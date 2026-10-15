@@ -6,7 +6,7 @@ import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
 import type { Humanoid } from './humanoid';
-import { forwardOf, lerp, smoothstep } from './math';
+import { forwardOf, lerp, smoothstep } from '../core/math';
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
 const HEAD_SHARE = 0.55;

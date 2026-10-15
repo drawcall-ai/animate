@@ -4,7 +4,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, SIDES } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, softplus, wrapAngle } from '../math';
+import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, softplus, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
 import { ankleFor } from './foot';

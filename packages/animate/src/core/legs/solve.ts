@@ -1,14 +1,17 @@
 // A leg's joints posed as one bounded least-squares problem (Levenberg-Marquardt, an active set
-// for the bounds): the terminal's position and turn stiff targets (a contact, a landing), or none
-// (a swing: the joints on their planned values); each joint's reference a soft target weighted by
+// for the bounds): the terminal's position and turn stiff targets (a contact, a landing), or orientation alone
+// (a swing keeps its planned foot turn while clearing the ground); each joint's reference a soft target weighted by
 // the rig's own range for it; the ground a stiff one-sided target; every joint within its range.
 import { solveFree } from './linear';
 import { Quaternion, Vector3 } from 'three';
 import { beyond, clampRotation } from '../limits';
 import type { Pose } from '../pose';
 import type { Skeleton } from '../skeleton';
+import type { LegChain } from './legs';
 
-/** a joint's axes, as named in `Solver`'s `axes`: y turns it, z swings it aside, x bends it (+ its far end forward) */
+/** Euler products supply analytic per-axis Jacobians; limits.coordinatesOf uses swing/twist
+ * coordinates for combined ROM instead, enforced by bound() below.
+ * A joint's axes, as named in `Solver`'s `axes`: y turns it, z swings it aside, x bends it (+ its far end forward) */
 const AXIS = { x: new Vector3(-1, 0, 0), y: new Vector3(0, 1, 0), z: new Vector3(0, 0, 1) } as const;
 const axisOf = (name: string): Vector3 => {
   if (name === 'x' || name === 'y' || name === 'z') return AXIS[name];
@@ -18,15 +21,12 @@ const axisOf = (name: string): Vector3 => {
 /** how stiff the terminal's targets are (per m², per rad²) against a joint's reference (per its range's square): ~32 µm off a target costs what a joint's whole range off its reference does */
 const STIFF = 1e9;
 /** Levenberg steps a solve, and the step (rad) below which it has converged */
-// Tuned: 24 (spike: 12) settles the trot's most folded contact below 0.01 mm.
+// Tuned: 24 iterations settle the trot's most folded contact below 0.01 mm.
 const STEPS = 24;
 const CONVERGED = 1e-7;
-/** a held target missed by more than this (m) is solved again from the references */
-const MISSED = 1e-6;
-
-/** Full terminal contact (world), or a free swing with only one-sided ground constraints. */
+/** Full terminal contact (world), or a swing with its reference orientation and one-sided ground constraints. */
 export interface Target {
-  /** false: the terminal free (the joints on their references, the ground alone held) */
+  /** false: position is free; ground correction keeps the reference foot orientation. */
   held: boolean;
   position: Vector3;
   rotation: Quaternion;
@@ -70,17 +70,16 @@ export class Solver {
   private readonly rotations: Quaternion[];
   private readonly positions: Vector3[];
 
-  constructor(skeleton: Skeleton, bones: readonly number[], axes: readonly string[]) {
-    if (axes.length !== bones.length) throw new Error(`${axes.length} axis sets for ${bones.length} bones`);
+  constructor(skeleton: Skeleton, joints: LegChain['joints']) {
+    const bones = joints.map((j) => j.bone);
     if (bones.length < 2 || bones.some((b, k) => !skeleton.bones[b] || (k > 0 && skeleton.bones[b].parent !== bones[k - 1]))) throw new Error('legs need connected chains of at least two bones');
     if (skeleton.bones[bones[0]].parent < 0) throw new Error('a leg cannot include the root');
     this.skeleton = skeleton;
     this.bones = bones;
     const of: number[] = [];
     const list: Vector3[] = [];
-    axes.forEach((set, k) => {
+    joints.forEach(({ axes: set }, k) => {
       for (const a of set) {
-        if (!(a in AXIS)) throw new Error(`no axis "${a}"`);
         of.push(k);
         list.push(axisOf(a));
       }
@@ -94,10 +93,10 @@ export class Solver {
     this.weight = new Float64Array(n);
     for (let j = 0; j < n; j++) {
       const [lo, hi] = rangeOf(skeleton, bones[of[j]], list[j]);
+      this.weight[j] = 1 / ((hi - lo) * (hi - lo));
       this.lo[j] = lo;
       this.hi[j] = hi;
       if (hi <= lo) throw new Error('a leg coordinate needs a nonzero range');
-      this.weight[j] = 1 / ((hi - lo) * (hi - lo));
     }
     this.q = new Float64Array(n);
     this.q1 = new Float64Array(n);
@@ -123,27 +122,20 @@ export class Solver {
     this.ref[j] = Math.min(this.hi[j], Math.max(this.lo[j], value));
   }
 
-  /** coordinate `j`'s bone (an index into `bones`) */
-  boneOf(j: number): number {
-    return this.of[j];
-  }
-
-  /** the coordinates of bone `k` (an index into `bones`) about `axis` (−1: none) */
-  coordinate(k: number, axis: string): number {
-    for (let j = 0; j < this.n; j++) if (this.of[j] === k && this.axes[j] === axisOf(axis)) return j;
-    return -1;
-  }
-
   /**
    * The joints posed for `target` this tick, off `pose`'s posed parents, written into it (the
-   * previous coordinates kept), solved from where they were (or, `fresh`, from their references: the nearest
-   * to them that holds the target). Returns the terminal's miss (m).
+   * previous coordinates kept). Start from bent references to avoid the straight-hinge saddle. Returns the terminal's miss (m).
    */
-  solve(pose: Pose, target: Target, fresh = false): number {
+  solve(pose: Pose, target: Target): number {
     this.q1.set(this.q);
-    if (fresh) this.q.set(this.ref);
+    this.q.set(this.ref);
     this.base(pose.rotation(pose.skeleton.bones[this.bones[0]].parent), pose.position(this.bones[0]));
-    const miss = this.settle(target);
+    if (!target.held) {
+      // A free orientation lets the ground solve flip the pastern through a different bend.
+      this.forward();
+      target.rotation.copy(this.rotations[this.bones.length - 1]);
+    }
+    const miss = this.iterate(target);
     this.write(pose);
     return miss;
   }
@@ -152,9 +144,9 @@ export class Solver {
   reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: Target, q: Float64Array): number {
     const was = _was.subarray(0, this.n);
     was.set(this.q);
-    this.q.set(q);
+    this.q.set(this.ref);
     this.base(turn, top);
-    const miss = this.settle(target);
+    const miss = this.iterate(target);
     q.set(this.q);
     this.q.set(was);
     return miss;
@@ -172,20 +164,6 @@ export class Solver {
     let low = Infinity;
     for (const point of points) low = Math.min(low, _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y);
     return low;
-  }
-
-  /** iterated from the coordinates as they are; missing a held target, again from the references (a straight hinge's saddle holds a solve, its target behind it), the better kept */
-  private settle(target: Target): number {
-    const miss = this.iterate(target);
-    if (!target.held || miss < MISSED) return miss;
-    const kept = _kept.subarray(0, this.n);
-    kept.set(this.q);
-    this.q.set(this.ref);
-    const again = this.iterate(target);
-    if (again < miss) return again;
-    this.q.set(kept);
-    this.forward();
-    return miss;
   }
 
   private base(turn: Readonly<Quaternion>, top: Readonly<Vector3>) {
@@ -211,12 +189,12 @@ export class Solver {
       for (let i = 0; i < n; i++) {
         for (let k = i; k < n; k++) {
           let s = 0;
-          for (let m = 0; m < 6; m++) s += wp * J[m * n + i] * J[m * n + k];
+          for (let m = 0; m < 6; m++) s += (m < 3 ? wp : STIFF) * J[m * n + i] * J[m * n + k];
           H[i * n + k] = H[k * n + i] = s;
         }
         H[i * n + i] += weight[i];
         let s = weight[i] * (q[i] - ref[i]);
-        for (let m = 0; m < 6; m++) s += wp * J[m * n + i] * r[m];
+        for (let m = 0; m < 6; m++) s += (m < 3 ? wp : STIFF) * J[m * n + i] * r[m];
         g[i] = s;
       }
       // the ground: each point below it pulled up, hard (its row: the height's rate per coordinate)
@@ -306,9 +284,7 @@ export class Solver {
   private cost(target: Target, r: Float64Array): number {
     this.residual(target, r);
     let c = 0;
-    if (target.held) {
-      for (const value of r) c += STIFF * value * value;
-    }
+    for (let m = target.held ? 0 : 3; m < 6; m++) c += STIFF * r[m] * r[m];
     for (let j = 0; j < this.n; j++) c += this.weight[j] * (this.q[j] - this.ref[j]) ** 2;
     const last = this.bones.length - 1;
     for (const point of target.above) {
@@ -411,5 +387,3 @@ const _v = new Vector3();
 const _p = new Vector3();
 const _r = new Float64Array(6);
 const _was = new Float64Array(16);
-const _kept = new Float64Array(16);
-

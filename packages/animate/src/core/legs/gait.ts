@@ -1,11 +1,13 @@
+import { GRAVITY } from '../math';
+
 /** A contact table, in leg order. All functions read speed (m/s) and Froude v²/(g·height). */
 export interface LegGait {
   frequency(speed: number, froude: number): number;
-  contacts: readonly { offset: number | ((speed: number, froude: number) => number); duty(speed: number, froude: number): number }[];
+  readonly contacts: readonly { offset: number | ((speed: number, froude: number) => number); duty(speed: number, froude: number): number }[];
   /** Below this speed the cycle keeps its cadence but shortens its motion. */
-  slowest: number;
-  height: number;
-  clearance: readonly number[];
+  readonly slowest: number;
+  readonly height: number;
+  readonly clearance: readonly number[];
 }
 
 export interface Stride {
@@ -14,11 +16,12 @@ export interface Stride {
   stepping: number;
 }
 
-/** Read: standard gravity in m/s², for dynamic similarity. */
-const GRAVITY = 9.81;
+export function checkGait(gait: LegGait, count: number): void {
+  if (!(gait.height > 0 && Number.isFinite(gait.height) && gait.slowest > 0 && Number.isFinite(gait.slowest)) || gait.contacts.length !== count || gait.clearance.length !== count) throw new Error('gait and chains do not match');
+}
 
 export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
-  if (!(speed >= 0 && Number.isFinite(speed) && gait.height > 0 && gait.slowest > 0)) throw new Error('gait height/slowest and speed must be finite positive values (speed may be zero)');
+  if (!(speed >= 0 && Number.isFinite(speed))) throw new Error('leg speed must be finite and nonnegative');
   const v = Math.max(gait.slowest, speed);
   const froude = v * v / (GRAVITY * gait.height);
   const frequency = gait.frequency(v, froude);

@@ -1,6 +1,6 @@
 // From the old core (a801be4:packages/core/src/stance.ts).
 import type { Vector3 } from 'three';
-import { wrapAngle } from './math';
+import { wrapAngle } from '../core/math';
 import type { Proportions } from './proportions';
 
 /** How the body stands when nothing asks for more. */

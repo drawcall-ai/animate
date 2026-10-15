@@ -8,7 +8,7 @@ import { solveChain } from '../../core/chain';
 import { clampRotation, coordinatesOf } from '../../core/limits';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, SIDES, type Side } from '../bones';
-import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softplus, wrapAngle } from '../math';
+import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softplus, wrapAngle } from '../../core/math';
 import type { Humanoid } from '../humanoid';
 import type { Proportions } from '../proportions';
 import type { Carriage, Swing } from './carriage';

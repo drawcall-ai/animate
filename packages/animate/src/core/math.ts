@@ -44,3 +44,11 @@ export function softMin(a: number, b: number, k: number): number {
 
 /** a smooth max(0, x), blending over `k` */
 export const softplus = (x: number, k: number) => (x / k > 30 ? x : k * Math.log1p(Math.exp(x / k)));
+
+const _left = new Vector3();
+
+/** Yaw from the left axis stays steady through forward pitch. */
+export function yawOf(q: Readonly<Quaternion>): number {
+  const left = _left.set(1, 0, 0).applyQuaternion(q);
+  return Math.atan2(-left.z, left.x);
+}

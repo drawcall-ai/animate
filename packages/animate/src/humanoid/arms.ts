@@ -11,8 +11,8 @@ import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { lowering, TIPTOE } from './balance/posture';
-import { clamp, leftOf, lerp, smoothstep } from './math';
-import { yawOf } from './rig';
+import { clamp, leftOf, lerp, smoothstep } from '../core/math';
+import { yawOf } from '../core/math';
 import type { Proportions } from './proportions';
 
 /** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm behind it (share of a step; CMU mocap) */

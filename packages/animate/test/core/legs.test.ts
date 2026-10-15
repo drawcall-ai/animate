@@ -4,8 +4,8 @@ import { action } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
 import { Legs } from '../../src/core/legs/legs';
 import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
-import { HORSE_WALK, horseLegs } from '../../src/core/legs/data/horse';
-import { SKELETON } from '../../src/core/legs/data/horse-skeleton';
+import { HORSE_WALK, horseLegs } from '../../src/horse/legs';
+import { SKELETON } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
 
 it('a short swing with an outward lift-off derivative stays inside ROM and lands at rest', () => {
@@ -31,7 +31,8 @@ it('leg contact checks read the final pose after a later writer, and disappear w
     const pose = new Pose(SKELETON);
     const engine = new Legs(pose, horseLegs(), HORSE_WALK);
     const root = { position: pose.position(0).clone(), quaternion: new Quaternion() };
-    const terminal = engine.limbs[0].terminal;
+    const joints = horseLegs()[0].joints;
+    const terminal = joints[joints.length - 1].bone;
     const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
       engine.update(f, { root: () => root, speed: 0 });
       if (f.time > 0.05) {

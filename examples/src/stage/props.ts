@@ -3,11 +3,13 @@ import type { Prop } from '../scenario';
 
 const edgeMat = new LineBasicMaterial({ color: 0x6b6b75 });
 const faceMat = new MeshBasicMaterial({ color: 0x1a1a1f, transparent: true, opacity: 0.85 });
+const colors = new Map<number, MeshBasicMaterial>();
 const ballMat = new MeshBasicMaterial({ color: 0x777777, wireframe: true });
 
 /** a solid drawn with its outline (a cylinder's: only where its sides turn) */
-function solid(g: BufferGeometry, position: Vector3, quaternion?: Quaternion) {
-  const m = new Mesh(g, faceMat);
+function solid(g: BufferGeometry, position: Vector3, quaternion?: Quaternion, color?: number) {
+  if (color !== undefined && !colors.has(color)) colors.set(color, new MeshBasicMaterial({ color }));
+  const m = new Mesh(g, color === undefined ? faceMat : colors.get(color));
   m.add(new LineSegments(new EdgesGeometry(g, 30), edgeMat));
   m.position.copy(position);
   if (quaternion) m.quaternion.copy(quaternion);
@@ -22,7 +24,7 @@ export function drawProps(group: Group, props: Prop[]) {
   group.clear();
   for (const p of props) {
     if (p.kind === 'box') group.add(solid(new BoxGeometry(p.size.x, p.size.y, p.size.z), p.position, p.quaternion));
-    if (p.kind === 'cylinder') group.add(solid(new CylinderGeometry(p.radius, p.radius, p.length, 12), p.position, p.quaternion));
+    if (p.kind === 'cylinder') group.add(solid(new CylinderGeometry(p.radius, p.radius, p.length, 12), p.position, p.quaternion, p.color));
     if (p.kind === 'ball') {
       const m = new Mesh(new SphereGeometry(p.radius, 12, 8), ballMat);
       m.position.copy(p.position);

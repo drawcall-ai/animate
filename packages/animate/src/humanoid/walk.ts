@@ -5,7 +5,7 @@ import { live, type Behaviour, type Live } from '../core/goal';
 import type { UntilCondition } from '@pmndrs/timeline';
 import type { Go } from './asks';
 import type { Humanoid } from './humanoid';
-import { forwardOf, headingOf, wrapAngle } from './math';
+import { forwardOf, headingOf, wrapAngle } from '../core/math';
 import type { Stance } from './stance';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */

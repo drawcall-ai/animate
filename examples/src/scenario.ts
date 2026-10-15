@@ -61,7 +61,7 @@ export interface Scenario {
 /** scenery a scenario shows (drawn only: the humanoids know of it only through their world and its carriers); a cylinder's axis is its local +Y */
 export type Prop =
   | { kind: 'box'; position: Vector3; size: Vector3; quaternion?: Quaternion }
-  | { kind: 'cylinder'; position: Vector3; radius: number; length: number; quaternion?: Quaternion }
+  | { kind: 'cylinder'; color?: number; position: Vector3; radius: number; length: number; quaternion?: Quaternion }
   | { kind: 'ball'; position: Vector3; radius: number };
 
 /** a segment `a`–`b` (world) thickened by `radius` that keeps out of a body but its parts `touches` (those that wear or bear it) and the hands holding its item */

@@ -8,7 +8,7 @@ import { bringShoulder, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { withGaze } from '../look';
-import { forwardOf, headingOf, leftOf, wrapAngle } from '../math';
+import { forwardOf, headingOf, leftOf, wrapAngle } from '../../core/math';
 import { arriving, walkTo } from '../walk';
 import { gripOf, held, type Holds } from './grips';
 import { reachFor } from './reach';

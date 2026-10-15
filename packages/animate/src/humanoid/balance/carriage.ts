@@ -2,7 +2,7 @@
 // adapted in 738b439:packages/animate/src/humanoid/gait/gait.ts).
 import { Quaternion, Vector3 } from 'three';
 import type { Side } from '../bones';
-import { clamp, forwardOf, GRAVITY, headingOf, smoothstep, wrapAngle } from '../math';
+import { clamp, forwardOf, GRAVITY, headingOf, smoothstep, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import { bodyYaw, feetFacing, OVER_ANKLES, type Stance } from '../stance';
 import { FOOT_HALF_WIDTH, type Foot } from './foot';

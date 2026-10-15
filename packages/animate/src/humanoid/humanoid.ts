@@ -12,10 +12,11 @@ import { createGait, type Gait } from './balance/balance';
 import { footRotation, type Foot } from './balance/foot';
 import { legOf, STANDING_REACH } from './balance/legs';
 import { INDEX, SIDES, type Side } from './bones';
-import { forwardOf, leftOf } from './math';
+import { forwardOf, leftOf } from '../core/math';
 import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
-import { Rig, yawOf } from './rig';
+import { Rig } from './rig';
+import { yawOf } from '../core/math';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { carryWorn, dress, type Bearing, type Dressed, type Wearing } from './worn';
 
