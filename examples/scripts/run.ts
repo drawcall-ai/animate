@@ -36,7 +36,7 @@ function mulberry32(seed: number) {
   };
 }
 
-/** VR still misses underHead's 3 cm / settled / facing completion condition. */
+/** 2026-10-15: VR still misses underHead's 3 cm / settled / facing completion condition. */
 export function knownFailure(entry: LogEntry): boolean {
   return entry.check === 'vr: scenario unfinished' && entry.where === 'actor 0: vr';
 }

@@ -32,10 +32,11 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   // Gait coverage and start/stop blending are run-level regressions.
   if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = 1.25; }
   // Keep the known tracking misses below and item clearance; neither has a built-in check.
+  if (sc.id === 'pickup-shelf') options.wrist = 0.04;
   if (sc.id === 'reach') options.wrist = 0.17;
   if (sc.id === 'look-around') options.head = 0.075;
   if (sc.id === 'vr') { options.wrist = 0.165; options.head = 0.165; }
-  if (sc.id === 'knight-arming') { options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
+  if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
   expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
   const fails = checks(m, options).filter(failed).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
   expect(fails).toEqual([]);
@@ -93,6 +94,7 @@ const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
   ['reach, turned 0.3 rad right', reach({ turn: -0.3 })],
   ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
   ['reach, the hand 20% slower', reach({ pace: 0.8 })],
+  ['reach, the hand 20% faster', reach({ pace: 1.2 })],
   ['knight-arming, the stand, wall and rack 15 cm further left', knightArming({ shift: { x: 0.15, z: 0 } })],
   ['knight-arming, the stand, wall and rack 15 cm further right', knightArming({ shift: { x: -0.15, z: 0 } })],
   ['knight-arming, the stand, wall and rack 15 cm further on', knightArming({ shift: { x: 0, z: 0.15 } })],
@@ -127,9 +129,6 @@ const KNOWN: [string, Scenario][] = [
   // sets off, the hand still across the body: carried off its way by the turn (0.19 m at 5.4 s; holding
   // the turn until the hand has crossed the midline leaves this and breaks the targets 10 cm right)
   ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
-  // reach played 20% faster: the target swung out far ahead still outruns the body walking after it
-  // (its walk faster with the pace), beyond the arm but within the arm + 35 cm the wrist is judged in (0.23 m)
-  ['reach, the hand 20% faster', reach({ pace: 1.2 })],
   // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),
   // so the body comes under the head late; and a controller on the floor turned off the body's facing,
   // or brought in close while rising to the cheer, is missed by more than the floor's own 15 cm

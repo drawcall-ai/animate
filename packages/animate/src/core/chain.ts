@@ -13,6 +13,8 @@ export interface ChainGoal {
    * as it is now). The limb turns to it at once: move a pole that changes like any goal (`follow`).
    */
   pole?: Vector3;
+  /** preferred middle-joint twist about its distal segment (rad); default: half the tip's twist */
+  twist?: number;
 }
 
 /** the generic solver's sweeps at most; it stops sooner once a sweep brings the tip no closer than this (m) */
@@ -42,7 +44,7 @@ const LONGEST = 16;
 export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
   const { position: at, quaternion: turned } = goal.tip;
   const finite = (...xs: number[]) => xs.every(Number.isFinite);
-  if (!finite(at.x, at.y, at.z) || (turned && !finite(turned.x, turned.y, turned.z, turned.w)) || (goal.pole && !finite(goal.pole.x, goal.pole.y, goal.pole.z))) {
+  if (!finite(at.x, at.y, at.z) || (turned && !finite(turned.x, turned.y, turned.z, turned.w)) || (goal.pole && !finite(goal.pole.x, goal.pole.y, goal.pole.z)) || (goal.twist !== undefined && !finite(goal.twist))) {
     throw new Error(`chain "${chain}": a goal that is not finite`);
   }
   const pose = frame.current;
@@ -53,8 +55,9 @@ export function solveChain(frame: { current: Pose }, chain: string, goal: ChainG
   const c: Solving = { skeleton, bones, base: parent >= 0 ? _base.copy(pose.rotation(parent)) : _base.identity(), start: _start.copy(pose.position(bones[0])), local: _local };
   bones.forEach((b, k) => _local[k].copy(pose.local(b)));
   const { position, quaternion } = goal.tip;
-  if (bones.length === 3) limb(c, position, goal.pole, quaternion);
+  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist);
   else {
+    if (goal.twist !== undefined) throw new Error(`chain "${chain}": a preferred twist applies only to a two-segment chain`);
     if (goal.pole) throw new Error(`chain "${chain}" has ${bones.length - 1} segments: a pole bends only a two-segment chain`);
     descend(c, position);
     if (quaternion) {
@@ -76,7 +79,7 @@ interface Solving {
 }
 
 /** a limb: its middle joint as a hinge (bent to the distance), its first bone onto the goal and toward the pole, the middle joint aimed again */
-function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined) {
+function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined) {
   const { skeleton, bones, local, start } = c;
   const o1 = skeleton.bones[bones[1]].offset;
   const o2 = skeleton.bones[bones[2]].offset;
@@ -129,9 +132,9 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
       const first = swivelled(angle);
       const upper = _upper.copy(c.base).multiply(first);
       // (the first joint's limit before the tip's turn: it keeps the tip on the goal)
-      return 100 * excess(first, limits[0]) + (quaternion ? shared(upper, bent, a, quaternion, limits, search) : 0);
+      return 100 * excess(first, limits[0]) + (quaternion ? shared(upper, bent, a, quaternion, limits, search, twist) : 0);
     };
-    // as the pole has it, unless a swivel searched with the twist shared half and half fits better
+    // as the pole has it, unless a swivel searched with the preferred twist fits better
     let swivel = 0;
     let left = strain(0, true);
     if (left >= FITS) {
@@ -161,7 +164,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   if (!quaternion) return;
 
   // the tip's turn about the middle bone, shared between the middle bone and the tip
-  shared(r0, local[1], a, quaternion, limits, true);
+  shared(r0, local[1], a, quaternion, limits, true, twist);
   limited(skeleton, bones[1], local[1].copy(_twisted));
   limited(skeleton, bones[2], local[2].copy(r0).multiply(local[1]).invert().multiply(quaternion));
 }
@@ -173,17 +176,17 @@ function tipped(upper: Quaternion, middle: Quaternion, axis: Vector3, twist: num
 }
 
 /** how far the middle joint and the tip are outside their limits with the tip's twist split between them by their twist ranges (or, with `search`, as it best fits) */
-function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], search: boolean): number {
+function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], search: boolean, twist: number | undefined): number {
   const at = (twist: number) => {
     const tip = tipped(upper, middle, axis, twist, quaternion);
     return excess(_twisted, limits[1]) + excess(tip, limits[2]);
   };
-  // the twist halved, within the middle joint's twist range and leaving the tip's in its own
+  // the preferred twist, within the middle joint's twist range and leaving the tip's in its own
   const whole = twistAbout(tipped(upper, middle, axis, 0, quaternion), axis);
   const [lo, hi] = limits[1]?.twist ?? [-Math.PI, Math.PI];
   const [tipLo, tipHi] = limits[2]?.twist ?? [-Math.PI, Math.PI];
   const [from, to] = [Math.max(lo, whole - tipHi), Math.min(hi, whole - tipLo)];
-  const split = from <= to ? Math.min(to, Math.max(from, whole / 2)) : (from + to) / 2;
+  const split = from <= to ? Math.min(to, Math.max(from, twist ?? whole / 2)) : (from + to) / 2;
   return at(search ? least(at, lo, hi, split) : split);
 }
 

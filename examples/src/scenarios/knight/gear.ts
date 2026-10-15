@@ -141,7 +141,8 @@ export function shield(at: Placement): Gear {
   return piece(
     at,
     {
-      edge: { position: new Vector3(0.22, 0.04, face + 0.03) },
+      // The wrist stays outside the panel while the fingers reach round its edge.
+      edge: { position: new Vector3(0.26, 0.04, face + 0.03) },
       enter: { position: new Vector3(-0.3, 0, 0.02), quaternion: fist },
       grip: { position: new Vector3(), quaternion: fist },
     },

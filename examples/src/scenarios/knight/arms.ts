@@ -25,7 +25,9 @@ const FIST = at(0.1, 0.16, 0.32, turn(0, Math.PI + 0.35, 0).multiply(new Quatern
 export function takeShield(k: Knight, shield: Item): Behaviour<World> {
   const steady = hold(k.h, shield, { right: 'edge' });
   return function* () {
-    yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI })();
+    // Both grips must be in reach, with room between the shield's face and the sword at the hip.
+    const aside = (shield.grips.enter.position.x - shield.grips.edge.position.x) / 2;
+    yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI, stand: { aside, ahead: 0.75 } })();
     yield* eyesOn(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady), { first: false })();
     yield* wear(k.h, shield, INDEX.leftLowerArm)();
     yield* closeHand(k.h, 'left', shield, 'grip')();

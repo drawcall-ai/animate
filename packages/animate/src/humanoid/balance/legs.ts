@@ -5,7 +5,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Dev } from '../../core/dev';
 import type { Frame } from '../../core/body';
 import { solveChain } from '../../core/chain';
-import { clampRotation } from '../../core/limits';
+import { clampRotation, coordinatesOf } from '../../core/limits';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, SIDES, type Side } from '../bones';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softplus, wrapAngle } from '../math';
@@ -39,6 +39,8 @@ const LIFT_BLEND = 0.06;
 const SWING_START = 0.34;
 /** how long the foot's roll at toe-off carries on into the swing (s, time constant) */
 const ROLL_ON = 0.05;
+/** time constant for the knee to release axial twist when the ankle no longer needs it (s) */
+const TWIST_RELEASE = 0.05;
 /** the share of the swing from which the foot turns toes-up into the heel strike */
 const STRIKE_TURN = 0.5;
 /** the sole's clearance over the floor through the swing (m), coming in over this share of it */
@@ -198,24 +200,15 @@ export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootP
   // (the foot's heading by its sideways axis, which its pitch leaves level: a foot rolled up onto its toes points nearly down)
   const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
   const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
-  // Preserve the knee's pole while the ankle allows it. A planted foot keeps its world rotation:
-  // when the ankle binds, the leg must accommodate it instead of swivelling the sole.
+  // Preserve knee twist through lift-off and ankle-limit crossings; re-splitting it jumps the shin.
   // (never pulled quite straight: a straight knee bends either way on the slightest wobble)
   const ankle = withinReach(hip, _a.copy(pose.ankle), STRAIGHT * c.p.legLength);
-  solveChain(f, legOf(side), { tip: { position: ankle }, pole });
+  const knee = INDEX[`${side}LowerLeg`];
+  const limit = f.prev.skeleton.limits[knee];
+  // The distal segment points down, opposite the knee limit's +y twist axis.
+  const twist = limit ? -coordinatesOf(f.prev.local(knee), limit).value[2] * Math.exp(-f.dt / TWIST_RELEASE) : 0;
+  solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole, twist });
   const foot = INDEX[`${side}Foot`];
-  f.current.setRotation(foot, pose.foot);
-  const limit = f.current.skeleton.limits[foot];
-  if (limit && clampRotation(_r.copy(f.current.local(foot)), limit)) {
-    // Take up the landing's leg twist as its reach returns, rather than switching it on at touchdown.
-    const swing = c.steps[side === 'left' ? 0 : 1].swing;
-    const weight = swing ? smoothstep(1 - REACH_IN, 1, swing.progress) : 1;
-    if (weight > 0) {
-      solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole }, weight);
-      f.current.setRotation(foot, pose.foot);
-    }
-    if (swing && clampRotation(_r.copy(f.current.local(foot)), limit)) f.current.setLocal(foot, _r);
-  }
   const toes = INDEX[`${side}Toes`];
   const local = _q.copy(f.current.rotation(foot)).invert().multiply(pose.toes);
   const range = f.current.skeleton.limits[toes];
@@ -261,7 +254,6 @@ const _pole = new Vector3();
 const _leg = new Vector3();
 const _out = new Vector3();
 const _q = new Quaternion();
-const _r = new Quaternion();
 const _spin = new Quaternion();
 const _arc = new Quaternion();
 
@@ -282,7 +274,7 @@ export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
     };
     const heel = heelOf(h.proportions);
     const ball = ballOf(h.proportions, side);
-    const value = Math.abs(pitch) < 0.05 ? Math.min(slide(heel), slide(ball)) : slide(pitch > 0 ? heel : ball);
+    const value = Math.abs(pitch) < 0.05 ? Math.max(slide(heel), slide(ball)) : slide(pitch > 0 ? heel : ball);
     if (value > 0.01) dev.append(f.time - f.dt, { check: 'planted foot slide (m)', value, limit: 0.01, where: `${side}Foot` });
     const sole = (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
       const point = h.rig.points[`${side}${name}`];

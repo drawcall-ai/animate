@@ -3,7 +3,7 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
 import { Body, Humanoid, Item, eyesOnBefore, INDEX, STEP, Pose, createSkeletonModel, idle, named, watch, type Frame } from '../../src';
 import { checkFeet } from '../../src/humanoid/balance/legs';
-import { ballOf, footRotation } from '../../src/humanoid/balance/foot';
+import { ballOf, footRotation, heelOf } from '../../src/humanoid/balance/foot';
 import { Dev } from '../../src/core/dev';
 import { leg } from '../core/rigs';
 
@@ -109,17 +109,17 @@ it('checks standing CoM against the soles once the final pose is still', () => {
   expect(h.log).toContainEqual(expect.objectContaining({ check: 'standing CoM outside the feet (m)', limit: 0.001 }));
 });
 
-it.each([-1e-9, 1e-9])('allows either pivot for a nearly flat foot (pitch %s)', (pitch) => {
+it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as const)('rejects a flat foot swivelling about its %s (pitch %s)', (pivot, pitch) => {
   const h = new Humanoid(createSkeletonModel(), () => function* () {});
   const pose = new Pose(h.rig.skeleton).copy(h.pose);
-  const ball = ballOf(h.proportions, 'left');
-  const anchor = pose.point(INDEX.leftFoot, ball, new Vector3());
+  const contact = pivot === 'heel' ? heelOf(h.proportions) : ballOf(h.proportions, 'left');
+  const anchor = pose.point(INDEX.leftFoot, contact, new Vector3());
   pose.setRotation(INDEX.leftFoot, footRotation(h.feet[0].yaw + 0.5, pitch));
-  const delta = anchor.sub(pose.point(INDEX.leftFoot, ball, new Vector3()));
+  const delta = anchor.sub(pose.point(INDEX.leftFoot, contact, new Vector3()));
   pose.setRoot(pose.position(0).clone().add(delta));
   // The other foot is outside this pivot check.
   h.feet[1].phase = 'swing';
   const dev = new Dev();
   checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, world: undefined }, dev);
-  expect(dev.log.filter((entry) => entry.check === 'planted foot slide (m)')).toEqual([]);
+  expect(dev.log).toContainEqual(expect.objectContaining({ check: 'planted foot slide (m)', where: 'leftFoot', limit: 0.01 }));
 });

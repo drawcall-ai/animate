@@ -123,7 +123,7 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   }
   if (steps.some((f) => f.swing)) return null;
   const turn = wrapAngle(c.yaw + c.stance.blade - yawOf(f.prev.local(0)));
-  const margin = steps.map((st) => Math.abs(turn) > 1e-4 ? twistMargin(f, st.side, turn) : Infinity);
+  const margin = steps.map((st) => st.plantedTime >= t.doubleSupport && Math.abs(turn) > 1e-4 ? twistMargin(f, st.side, turn) : Infinity);
   const turning = margin[0] < margin[1] ? 0 : 1;
   if (margin[turning] < TWIST_MARGIN && (!c.starting || c.bent >= READY)) return lift(c, turning, t, xcom, true);
   // (walking: standing, a body raised onto its toes is not leaving its feet behind)
@@ -136,9 +136,8 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   const still = 1 - smoothstep(SLOW[0], SLOW[1], c.speed / c.p.scale);
   // (walking, the foot that just landed takes the weight for a double support first, the other
   // pushing off, unless the body is falling well past it)
-  // Foot placement already leads a moving goal: anticipate only the extra motion closing on it.
-  const ahead = c.speed > 0 ? dt * Math.max(0, 1 - c.goalSpeed / c.speed) : 0;
-  const out = uncaught(c, predictXcom(c, ahead, xcom, _to));
+  // Placement follows the goal; forecast one sub-step of XCoM motion relative to that goal.
+  const out = uncaught(c, _to.copy(xcom).addScaledVector(c.velocity, dt).addScaledVector(c.goalVelocity, -dt));
   c.falling = out > (1 - 2 * still) * CATCH * c.p.scale ? c.falling + dt : 0;
   // (round a bend the extrapolated centre of mass runs outside the path by (v/ω)²·κ/2 by design: that is no fall)
   const bend = (0.5 * (c.speed / c.omega) ** 2 * Math.abs(c.turnRate)) / Math.max(c.speed, 0.1);
@@ -248,8 +247,12 @@ function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Ve
   const lastLoaded = steps[last].plantedTime >= t.doubleSupport;
   const nextLoaded = steps[next].plantedTime >= t.doubleSupport;
   const progress = (s: number) => {
-    landing(c, s, lead, t.swing, xcom, _v);
-    return Math.hypot(_v.x - feet[s].position.x, _v.z - feet[s].position.z);
+    const { yaw } = landing(c, s, lead, t.swing, xcom, _v);
+    const distance = Math.hypot(_v.x - feet[s].position.x, _v.z - feet[s].position.z);
+    if (c.starting || c.speed > SLOW[1] * c.p.scale || c.goalSpeed > SLOW[0] * c.p.scale) return distance;
+    // A turn in place advances the foot's contacts even when its ankle stays put.
+    const turned = 2 * Math.max(c.p.toeFront, c.p.heelBack) * Math.sin(Math.abs(wrapAngle(yaw - feet[s].yaw)) / 2);
+    return Math.max(distance, turned);
   };
   if (c.starting && lastLoaded && nextLoaded && progress(next) >= 0.1) return next;
   const minMove = c.speed < 0.3 ? 0.05 : 0.02;
