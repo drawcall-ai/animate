@@ -7,7 +7,7 @@ import { Limb, type Motion } from '../../src/core/legs/limb';
 import { Solver } from '../../src/core/legs/solve';
 import { Legs } from '../../src/core/legs/legs';
 import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
-import { HORSE_WALK, horseLegs, horseCarriage } from '../../src/horse/legs';
+import { HORSE_WALK, horseLegs, horseCarriage, horsePelvis } from '../../src/horse/legs';
 import { SKELETON, LEGS, HEAD } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
 
@@ -110,6 +110,7 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
   pose.setRoot(new Vector3(0, 1.37, 0));
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
   const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    horsePelvis(f, engine);
     engine.toward(f, { position: new Vector3(0, 1.37, 20) }, { speed: 0.95, accel: 0.65 });
     horseCarriage(f, engine);
   } }), { pose, dev: true });

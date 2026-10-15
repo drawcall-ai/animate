@@ -52,5 +52,5 @@ export { Legs, type LegChain, type Rocker, type LegState, type LegStep, type Con
 export type { LegGait } from './core/legs/gait';
 export type { JointCycle } from './core/legs/cycle';
 export { humanLegs, humanGait } from './humanoid/leg-data';
-export { horseLegs, horseCarriage, HORSE_WALK, HORSE_TROT } from './horse/legs';
+export { horseLegs, horseCarriage, horsePelvis, HORSE_WALK, HORSE_TROT } from './horse/legs';
 export { SKELETON as HORSE_SKELETON } from './horse/skeleton';

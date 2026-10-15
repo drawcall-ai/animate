@@ -32,6 +32,7 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   // Gait coverage and start/stop blending are run-level regressions.
   if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = 1.25; }
   // Keep the known tracking misses below and item clearance; neither has a built-in check.
+  if (sc.id === 'stable-morning') options.clearance = 0;
   if (sc.id === 'pickup-shelf') options.wrist = 0.04;
   if (sc.id === 'reach') options.wrist = 0.17;
   if (sc.id === 'look-around') options.head = 0.075;

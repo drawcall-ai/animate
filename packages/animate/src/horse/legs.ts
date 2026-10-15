@@ -1,10 +1,10 @@
 // Recalled: Back et al. (1995), Hodson (2000/2001), Clayton (2004) curves as retained by the spike.
-import { Quaternion, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { Legs } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import type { LegChain, Rocker } from '../core/legs/legs';
-import { LEGS, NECK, HEAD } from './skeleton';
+import { LEGS, PELVIS, NECK, HEAD } from './skeleton';
 import { powerGait } from '../core/legs/schedule';
 
 // Recalled: hip height ~1.2 m, slow walk threshold 0.8 m/s (spike).
@@ -35,12 +35,18 @@ const FORE = {
   carpus: cycle([[0, 0], [0.4, 0], [0.5, -30], [0.62, -87.9], [0.75, -50], [0.88, -5]],
     [[0, 0], [0.4, 0], [0.5, -30 * 66 / 87.9], [0.62, -66], [0.75, -50 * 66 / 87.9], [0.88, -5 * 66 / 87.9]]),
 };
+// Read: Hodson 2001: maximal protraction shortly before swing ends; the stifle
+// starts flexing after 28% stride. The walk alternate begins folding before toe-off.
+// Hock target 43° approximates the read 42.4° walk ROM (125.2–167.6°), reproduced
+// in Mendez-Angulo, Effect of Water Level on Kinematics of Healthy Horses, Table 1.
+// These are soft references: report final solved excursion, not these target values.
 const HIND = {
-  hip: cycle([[0, 10], [0.22, 0], [0.45, -12], [0.6, -3], [0.78, 15], [0.92, 14]]),
+  hip: cycle([[0, 10], [0.22, 0], [0.45, -12], [0.6, -3], [0.78, 15], [0.92, 14]],
+    [[0, 10], [0.22, 0], [0.45, -12], [0.6, -3], [0.78, 8], [0.92, 15]]),
   stifle: cycle([[0, -5], [0.15, -12], [0.45, 0], [0.58, -30], [0.7, -45], [0.85, -20], [0.95, -5]],
-    [[0, 0], [0.07, -3], [0.22, 0], [0.45, -3], [0.58, -22], [0.7, -34], [0.85, -15], [0.95, 0]]),
+    [[0, 0], [0.07, -3], [0.22, 0], [0.45, -12], [0.58, -30], [0.7, -43], [0.85, -20], [0.95, 0]]),
   hock: cycle([[0, 5], [0.15, 15], [0.45, 0], [0.58, 30], [0.7, 45], [0.85, 20], [0.95, 5]],
-    [[0, 0], [0.07, 3], [0.22, 0], [0.45, 3], [0.58, 22], [0.7, 34], [0.85, 15], [0.95, 0]]),
+    [[0, 0], [0.07, 3], [0.22, 0], [0.45, 12], [0.58, 30], [0.7, 43], [0.85, 20], [0.95, 0]]),
 };
 // Tuned walk: spring under load, then a modest pastern fold. The trot's large
 // fetlock fold was turning the whole free hoof under, rather than clearing it.
@@ -75,6 +81,24 @@ export function horseLegs(): readonly LegChain[] {
 }
 
 const fail = (what: string): never => { throw new Error(what); };
+
+/** Pelvic walk motion, written before the leg solve so planted hooves stay fixed.
+ * Read: Egenvall et al. 2023, doi:10.1007/s11259-023-10132-y: circle walk
+ * roll ROM ~10°, yaw ~9°, pitch ~7°. Use conservative straight/slow-walk
+ * excursions of 6°, 5°, 4°; one roll/yaw cycle and two pitch cycles per stride.
+ * This rig has one pelvis joint, not separate thoracolumbar vertebrae.
+ */
+export function horsePelvis(f: Frame, legs: Legs): void {
+  const speed = f.prev.position(0).distanceTo(f.prev2.position(0)) / f.dt;
+  const moving = Math.min(1, speed / 0.8);
+  const phase = 2 * Math.PI * legs.legs[2].phase;
+  const wave = Math.sin(phase);
+  f.current.setLocal(PELVIS, new Quaternion().setFromEuler(new Euler(
+    2 * Math.PI / 180 * Math.sin(2 * phase) * moving,
+    2.5 * Math.PI / 180 * wave * moving,
+    3 * Math.PI / 180 * wave * moving, 'YXZ',
+  )));
+}
 
 /** Walk head carriage: two nods per stride, entrained to foreleg contact rather than wall time. */
 export function horseCarriage(f: Frame, legs: Legs, person?: Readonly<Vector3>): void {

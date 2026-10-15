@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import {
   Body, HORSE_SKELETON, HORSE_WALK, Item, Legs, Pose,
-  approach, arriving, carried, carry, createWorld, eyesOnBefore, grab, handTo, hold, horseLegs, horseCarriage, idle,
+  approach, arriving, carried, carry, createWorld, eyesOnBefore, grab, handTo, hold, horseLegs, horseCarriage, horsePelvis, idle,
   named, onBone, openHand, wear, when, walkTo, withGaze,
   type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
@@ -54,6 +54,7 @@ export function stableMorning(): Scenario {
         const target = new Vector3(HORSE.x, HORSE.y, HORSE.z + ahead);
         const velocity = leading && handler ? new Vector3(0, 0, handler.gait.velocity.z) : new Vector3();
         if (ahead === 0) velocity.set(0, 0, 0);
+        horsePelvis(f, legs);
         legs.toward(f, { position: target, velocity }, { speed: 0.95, accel: 0.65 });
         horseCarriage(f, legs, handler?.pose.position(handler.pose.skeleton.index('head')));
       } }), { pose, dev });
@@ -68,7 +69,7 @@ export function stableMorning(): Scenario {
           () => when(timePassed(0.65, 'seconds')), { first: false }))();
         yield* named('fetch the saddle', reporting(report, HANDS,
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
-            face: -Math.PI / 2, look: reported(report, 'gaze', () => saddle.current.position), first: false,
+            face: -Math.PI / 2, stand: { ahead: 1.05 * h.proportions.armLength }, look: reported(report, 'gaze', () => saddle.current.position), first: false,
           })))();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
           withGaze(h, reported(report, 'gaze', () => saddlePlace(horse.frame).position), function* () {
@@ -108,8 +109,10 @@ export function stableMorning(): Scenario {
           yield* grab(h, { right: [rope, 'knot'] }, { face: 0, stand: { ahead: 0.4, aside: -0.4 }, look: reported(report, 'gaze', KNOT), first: false })();
           yield* withGaze(h, reported(report, 'gaze', () => rope.current.position), function* () {
             yield* carry(h, rope, [
-              [0.35, { position: KNOT.clone().add(new Vector3(0.1, 0.12, -0.08)) }],
-              [0.45, { position: KNOT.clone().add(new Vector3(0.2, -0.1, -0.18)) }],
+              [0.55, { position: KNOT.clone().add(new Vector3(0.1, 0.12, -0.08)) }],
+              [0.5, { position: KNOT.clone().add(new Vector3(0.2, -0.1, -0.18)) }],
+              [0.45, { position: KNOT.clone().add(new Vector3(0.08, 0.08, -0.06)) }],
+              [0.5, { position: KNOT.clone().add(new Vector3(0.23, -0.12, -0.22)) }],
             ])();
           }, { first: false })();
         }))();
@@ -117,7 +120,8 @@ export function stableMorning(): Scenario {
           const beside = carried(h, 'right');
           const low = (f: Frame<World>) => {
             const goal = beside(f);
-            goal.position.y -= 0.24 * h.scale;
+            // A slack lead rests just below the hip, within an upright arm's reach.
+            goal.position.y -= 0.12 * h.scale;
             return goal;
           };
           let stopped: Vector3 | null = null;
@@ -142,6 +146,12 @@ export function stableMorning(): Scenario {
       };
       return {
         world: createWorld(), report, bodies: [horse],
+        solids: () => [-0.2, 0.2].map((x) => ({
+          name: 'saddle rack leg',
+          a: RACK.clone().add(new Vector3(x, 0, 0)).setY(0.03),
+          b: RACK.clone().add(new Vector3(x, 0, 0)).setY(0.71),
+          radius: Math.SQRT2 * 0.03, touches: [],
+        })),
         focus: () => {
           if (!handler) throw new Error('stable framing needs its handler');
           const at = handler.pose.position(0).clone().setY(0.54 * handler.proportions.height);
