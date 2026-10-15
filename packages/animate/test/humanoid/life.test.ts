@@ -170,3 +170,25 @@ it('seeds the first weight-shift side and alternates later shifts, including aft
     expect(shifts.every((side, i) => i === 0 || side !== shifts[i - 1])).toBe(true);
   }
 });
+
+it('takes an 8 kg waist-height grip with a bow and standing knees', () => {
+  const item = new Item(new Vector3(0, 0.88, 0.45), new Quaternion(), {
+    left: { position: new Vector3(0.18, 0, 0) }, right: { position: new Vector3(-0.18, 0, 0) },
+  }, { mass: 8 });
+  const h = body((h) => function* () {
+    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* hold(h, item)();
+  });
+  let lower = 0;
+  let bow = 0;
+  for (let tick = 0; tick < 6 * 60; tick++) {
+    h.update(1 / 60);
+    lower = Math.max(lower, h.asks.lower);
+    bow = Math.max(bow, h.asks.bow);
+  }
+  expect(h.holding.left?.item).toBe(item);
+  expect(h.holding.right?.item).toBe(item);
+  expect(lower).toBeLessThan(0.08);
+  expect(bow).toBeGreaterThan(0.2);
+  expect(h.log).toEqual([]);
+});

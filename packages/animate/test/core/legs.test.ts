@@ -16,7 +16,7 @@ it('a short swing with an outward lift-off derivative stays inside ROM and lands
     for (const velocity of [-40, 40]) {
       const s: Swing = {
         x: new Float64Array([0.99]), v: new Float64Array([velocity]), a: new Float64Array([velocity * 100]),
-        land: new Float64Array([-0.9]), stepping: 1, scale: 1, toes: new Quaternion(),
+        land: new Float64Array([-0.9]), stepping: 1, toes: new Quaternion(),
       };
       boundSwing(s, 0, T, -1, 1);
       for (let k = 0; k <= 200; k++) {
@@ -88,4 +88,19 @@ it('shortens a long foothold with at most 40 reach solves and keeps its verified
   } finally {
     reach.mockRestore();
   }
+});
+
+it('follows a moving goal with supported contacts and a root that turns toward its path', () => {
+  const pose = new Pose(SKELETON);
+  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  let turned = 0;
+  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    engine.toward(f, { position: new Vector3(0.05, pose.position(0).y, 2 + 0.75 * f.time), velocity: new Vector3(0, 0, 0.75) }, { speed: 0.95, accel: 0.65 });
+    turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w)));
+  } }), { pose, dev: true });
+  for (let tick = 0; tick < 8 * 60; tick++) body.update(1 / 60);
+  expect(body.pose.position(0).z).toBeGreaterThan(4);
+  expect(turned).toBeGreaterThan(0.01);
+  expect(turned).toBeLessThan(0.2);
+  expect(body.log).toEqual([]);
 });

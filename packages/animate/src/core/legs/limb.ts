@@ -1,6 +1,6 @@
 import { minimumJerk, yawOf } from '../math';
 // Stance pins the terminal; swing follows a quintic joint plan plus the reference cycle's shape.
-// Ground correction preserves that planned foot orientation.
+// The free terminal follows those references while its sole clears the ground.
 import { Euler, Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
 import type { Pose, ReadonlyPose } from '../pose';
@@ -170,10 +170,11 @@ export class Limb {
     this.landing(p, walker, state, left);
     for (let j = 0; j < solver.n; j++) boundSwing(swing, j, left + f.dt, solver.lo[j], solver.hi[j]);
     for (let j = 0; j < solver.n; j++) [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], swing.land[j], left + f.dt, f.dt);
-    if (this.lifting) this.fit(p, walker, state, clearance);
     this.lifting = false;
-    for (let j = 0; j < solver.n; j++) solver.setRef(j, swing.x[j] + swing.scale * this.shape(j, s));
+    for (let j = 0; j < solver.n; j++) solver.setRef(j, swing.x[j] + this.shape(j, s, walker.stride.duty));
     _swingTarget.above = this.aboveAt(s);
+    // C² at both contacts, with the full sole clearance at mid-swing.
+    _swingTarget.floor = clearance * 64 * s ** 3 * (1 - s) ** 3;
     solver.solve(p, _swingTarget);
     if (leg.toes) p.setLocal(leg.toes.bone, this.toesAt(s, _a));
   }
@@ -203,7 +204,6 @@ export class Limb {
       a: new Float64Array(q.length),
       land: Float64Array.from(q),
       stepping,
-      scale: 1,
       toes: this.leg.toes ? p.local(this.leg.toes.bone).clone() : new Quaternion(),
     };
   }
@@ -213,12 +213,14 @@ export class Limb {
    * chord between its ends (the knee's bump, the carpus's fold), eased in and out (16 s²(1 − s)²:
    * none of it at either end, nor its rate or acceleration, the plan's own there)
    */
-  private shape(j: number, s: number): number {
+  private shape(j: number, s: number, duty: number): number {
     const c = this.cycles[j];
     const swing = this.swing;
     if (!c || !swing) return 0;
     const [a, b] = [swingOf(c, 0), swingOf(c, 1)];
-    return (swingOf(c, s) - a - (b - a) * s) * swing.stepping * 16 * s * s * (1 - s) * (1 - s);
+    // For a folded limb, shortening is proportional to angle² near extension. Scale its
+    // flexion by sqrt(travel), preserving clearance as horizontal steps become shorter.
+    return (swingOf(c, s) - a - (b - a) * s) * (c.amplitude?.(duty) ?? 1) * Math.sqrt(swing.stepping) * 16 * s * s * (1 - s) * (1 - s);
   }
 
   /** the landing solved ahead: the joints that stand on the contact `left` s from now, the root where it is planned then (from the last tick's) */
@@ -239,32 +241,6 @@ export class Limb {
     const inverse = _a.copy(p.rotation(0)).invert();
     turn.copy(_rootTurn).multiply(_b.copy(inverse).multiply(p.rotation(parent)));
     top.copy(p.position(this.top)).sub(p.position(0)).applyQuaternion(inverse).applyQuaternion(_rootTurn).add(_root);
-  }
-
-  /** Scale down the reference shape only; its midpoint must clear the gait's ground margin. */
-  private fit(p: Pose, walker: Motion, state: LegTiming, clearance: number) {
-    const swing = this.swing;
-    if (!swing) throw new Error('a fit without a swing');
-    const { solver } = this;
-    const { frequency } = walker.stride;
-    const left = Math.max(0, (state.footfall - walker.phase) / frequency);
-    const ahead = Math.max(0, (state.lift + (state.footfall - state.lift) / 2 - walker.phase) / frequency);
-    this.baseAt(p, walker, ahead, _turn, _top);
-    const plan = Float64Array.from(swing.x, (x, j) => quintic(x, swing.v[j], swing.a[j], swing.land[j], left, ahead)[0]);
-    const q = new Float64Array(solver.n);
-    const clears = (scale: number) => {
-      for (let j = 0; j < solver.n; j++) q[j] = plan[j] + scale * this.shape(j, 0.5);
-      return solver.lowest(_turn, _top, q, this.aboveAt(0.5)) >= clearance;
-    };
-    let [lo, hi] = [0, 1];
-    if (clears(lo)) hi = lo;
-    else if (!clears(hi)) lo = hi;
-    while (hi - lo > 1e-3) {
-      const mid = (lo + hi) / 2;
-      if (clears(mid)) hi = mid;
-      else lo = mid;
-    }
-    swing.scale = hi;
   }
 
   /** the rocker's pitch of the terminal `us` (0 … 1) through its stance (rad, + toes up), as far as it steps: minimum-jerk between its keys (a spline's overshoot would lift a flat hoof's toe) */

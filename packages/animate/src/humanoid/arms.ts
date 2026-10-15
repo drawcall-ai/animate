@@ -11,7 +11,7 @@ import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { lowering, TIPTOE } from './balance/posture';
-import { clamp, leftOf, lerp, smoothstep, wrapAngle } from '../core/math';
+import { forwardOf, clamp, leftOf, lerp, smoothstep, wrapAngle } from '../core/math';
 import { yawOf } from '../core/math';
 import { gripOf } from './hands/grips';
 import type { Proportions } from './proportions';
@@ -44,10 +44,13 @@ const OUT = 0.5;
 export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
   return function* () {
     const goals = new Map<number, TrackedRotation>();
+    let phase = h.gait.phase;
     const heldArms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
     yield* action<Frame<W>>({
       update: (f) => {
         const g = h.gait;
+        // Recalled pendulum floor: at least 0.25 s between arm reversals, including entrainment.
+        phase += clamp(wrapAngle(g.phase - phase), 0, 4 * Math.PI * f.dt);
         const lead = lerp(LEAD.walk, LEAD.run, g.run);
         const p = h.proportions;
         const yaw = yawOf(_h.copy(f.current.local(0)));
@@ -62,7 +65,7 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
           const sign = s === 0 ? 1 : -1;
           // (the left arm in front as the left foot lifts, the right behind)
           // (growing in as the walk does: setting off, the first steps barely swing them)
-          const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * g.walk;
+          const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * g.walk;
           const a = swing(lead);
           const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
           // the arm hanging plumb from the shoulder (as it was last, whoever placed the chest after),
@@ -89,6 +92,8 @@ function set<W>(f: Frame<W>, joints: Map<number, TrackedRotation>, bone: number,
   let joint = joints.get(bone);
   if (!joint) joints.set(bone, (joint = new TrackedRotation()));
   const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
+  const limit = f.current.skeleton.limits[bone];
+  if (limit) clampRotation(q, limit);
   f.current.setLocal(bone, q);
 }
 
@@ -245,16 +250,42 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
   const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
   const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
-  // Cap outward reach at OUT; below that depth, low targets retain their horizontal demand for lowering.
+  // At waist height, solve a standing hinge before asking the knees to lower the body.
+  // Tuned blend across 12–32 cm below the hips; the 0.8 lever share approximates the articulated spine.
+  const waist = smoothstep(p.hipHeight - 0.32 * p.scale, p.hipHeight - 0.12 * p.scale, hand.y);
+  let hinge = 0;
+  let knees = 0;
+  if (waist > 0 && hand.y < high) {
+    const from = _d.copy(hand).sub(f.current.position(INDEX.hips));
+    const fwd = forwardOf(h.gait.facing, _w);
+    const ahead = from.dot(fwd);
+    const lateral = from.dot(leftOf(h.gait.facing, _left)) - (side === 'left' ? 1 : -1) * (p.offsets.leftShoulder.x + p.offsets.leftUpperArm.x);
+    const lever = high - p.hipHeight;
+    const reaches = (bow: number) => Math.hypot(lateral, ahead - lever * Math.sin(0.8 * bow), high - hand.y - lever * (1 - Math.cos(0.8 * bow))) <= ARM_REACH * p.armLength;
+    let lo = 0;
+    let hi = 0.65;
+    if (!reaches(0)) {
+      for (let i = 0; i < 12; i++) {
+        const mid = (lo + hi) / 2;
+        if (reaches(mid)) hi = mid;
+        else lo = mid;
+      }
+      hinge = hi;
+      const across = Math.hypot(lateral, ahead - lever * Math.sin(0.8 * hinge));
+      const below = Math.sqrt(Math.max(0, (ARM_REACH * p.armLength) ** 2 - across * across));
+      knees = Math.max(0, high - hand.y - lever * (1 - Math.cos(0.8 * hinge)) - below);
+    }
+  }
   const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), Math.max(OUT * p.armLength, high - hand.y));
   const below = Math.sqrt(Math.max(0, (ARM_REACH * p.armLength) ** 2 - across * across));
   const drop = high - hand.y - below;
   if (drop > 0) {
     const { lower, bow } = lowering(p, drop);
-    asks.lower = Math.max(asks.lower, lower * share);
-    asks.bow = Math.max(asks.bow, bow * share);
+    asks.lower = Math.max(asks.lower, lerp(lower, Math.min(lower, knees), waist) * share);
+    asks.bow = Math.max(asks.bow, lerp(bow, hinge, waist) * share);
     return;
   }
+  asks.bow = Math.max(asks.bow, hinge * waist * share);
   const rise = hand.y - (high + below);
   if (rise > 0 && asks.lower <= 0) asks.lower = Math.min(asks.lower, -Math.min(rise, TIPTOE * p.scale));
 }

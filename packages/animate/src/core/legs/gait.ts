@@ -6,6 +6,8 @@ export interface LegGait {
   readonly contacts: readonly { offset: number | ((speed: number, froude: number) => number); duty(speed: number, froude: number): number }[];
   /** Below this speed the cycle keeps its cadence but shortens its motion. */
   readonly slowest: number;
+  /** Speed at which the reference joint excursions were sampled; slow travel scales them down. */
+  readonly referenceSpeed?: number;
   readonly height: number;
   readonly clearance: readonly number[];
 }
@@ -17,7 +19,7 @@ export interface Stride {
 }
 
 export function checkGait(gait: LegGait, count: number): void {
-  if (!(gait.height > 0 && Number.isFinite(gait.height) && gait.slowest > 0 && Number.isFinite(gait.slowest)) || gait.contacts.length !== count || gait.clearance.length !== count) throw new Error('gait and chains do not match');
+  if (!(gait.height > 0 && Number.isFinite(gait.height) && gait.slowest > 0 && Number.isFinite(gait.slowest)) || (gait.referenceSpeed !== undefined && !(gait.referenceSpeed > 0 && Number.isFinite(gait.referenceSpeed))) || gait.contacts.length !== count || gait.clearance.length !== count) throw new Error('gait and chains do not match');
 }
 
 export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
@@ -28,7 +30,7 @@ export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
   const frequency = gait.frequency(v, froude);
   const duty = gait.contacts[leg].duty(v, froude);
   if (!(frequency > 0 && Number.isFinite(frequency) && duty > 0 && duty < 1)) throw new Error('a gait needs finite positive cadence and duty between 0 and 1');
-  return { frequency, duty, stepping: Math.min(1, speed / gait.slowest) };
+  return { frequency, duty, stepping: Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest)) };
 }
 
 export function offsetAt(gait: LegGait, speed: number, leg: number): number {

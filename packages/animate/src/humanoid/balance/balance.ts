@@ -150,13 +150,19 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         SIDES.forEach((side, s) => {
           const hip = f.current.position(INDEX[`${side}UpperLeg`]);
           const ankle = feet[s].ankle;
-          const bend = f.current.skeleton.limits[INDEX[`${side}LowerLeg`]]?.swing[1][1] ?? Math.PI;
+          // The free ankle needs 5° of knee flexion reserve to align before landing.
+          const reserve = c.steps[s].swing ? 5 * Math.PI / 180 : 0;
+          const bend = (f.current.skeleton.limits[INDEX[`${side}LowerLeg`]]?.swing[1][1] ?? Math.PI) - reserve;
           const span2 = foldedReach(p, bend) ** 2;
           const across2 = (hip.x - ankle.x) ** 2 + (hip.z - ankle.z) ** 2;
           floor = Math.max(floor, ankle.y + Math.sqrt(Math.max(0, span2 - across2)) + c.pelvis.y - hip.y);
         });
+        const raised = floor > c.pelvis.y;
         c.pelvis.y = Math.max(c.pelvis.y, floor);
         f.current.setRoot(c.pelvis);
+        // The free ankle was relaxed against the shank before the folded-reach correction.
+        // Recompute it on the corrected hip, rather than carrying a sideways foot into the final solve.
+        if (raised) SIDES.forEach((_, s) => { if (c.steps[s].swing) swingPose(f, c, s, feet[s]); });
         SIDES.forEach((side, s) => solveLeg(f, c, side, feet[s]));
 
         const g = h.gait;

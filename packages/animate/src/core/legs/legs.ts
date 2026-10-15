@@ -1,9 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
-import type { Placement } from '../goal';
+import type { Motion as RootMotion, Placement, Target } from '../goal';
 import type { ReadonlyPose } from '../pose';
 import type { JointCycle } from './cycle';
 import { checkGait, offsetAt, strideAt, speedOf, type LegGait } from './gait';
+import { rootPlan } from './root';
 import { Limb, type Motion } from './limb';
 import { yawOf } from '../math';
 
@@ -53,8 +54,9 @@ export interface LegStep {
   gait?: LegGait;
 }
 
-/** Stateful leg solver, like IK: write the root first, then update. Never writes the root or plans balance. Ground is y=0. */
+/** Stateful leg solver: write a root then `update`, or let `toward` preflight and move it. Ground is y=0. */
 export class Legs {
+  private readonly standingHeight: number;
   private phase = 0;
   private time = 0;
   readonly legs: readonly Readonly<LegState>[];
@@ -64,6 +66,7 @@ export class Legs {
   private readonly limbs: Limb[];
 
   constructor(pose: ReadonlyPose, private readonly chains: readonly LegChain[], private gait: LegGait) {
+    this.standingHeight = pose.position(0).y;
     checkGait(gait, chains.length);
     const bones = chains.flatMap((leg) => [...leg.joints.map((j) => j.bone), ...(leg.toes ? [leg.toes.bone] : [])]);
     if (new Set(bones).size !== bones.length) throw new Error('leg chains must not share bones');
@@ -71,6 +74,52 @@ export class Legs {
     if (!chains.length) throw new Error('legs needs at least one chain');
     this.states = this.limbs.map((limb, i) => ({ planted: true, phase: 0, foothold: limb.standing(pose), footfall: before(offsetAt(gait, 0, i), 0), lift: 0 }));
     this.legs = this.states;
+  }
+
+  /** Move and face a floor-plane goal, shortening the forecast until the legs support it.
+   * Braking speed follows v² = 2ad; heading turns no faster than a/v (lateral acceleration).
+   * Target velocity predicts continuing travel until touchdown.
+   * Motion values belong to the caller; this controller has no species-specific gains.
+   */
+  toward(f: Frame, goal: Pick<Target, 'position' | 'velocity'>, motion: RootMotion): void {
+    if (!(motion.accel > 0 && Number.isFinite(motion.accel)) || (motion.speed !== undefined && !(motion.speed >= 0 && Number.isFinite(motion.speed)))) throw new Error('root motion needs finite positive acceleration and nonnegative speed');
+    const geometry = {
+      height: this.standingHeight,
+      radius: Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z))),
+    };
+    let offset = 0;
+    let share = 1;
+    const forecast = () => rootPlan(f, goal.position, goal.velocity ?? new Vector3(), motion, this.gait, geometry, share, offset);
+    let step: LegStep;
+    const supported = (plan: LegStep) => {
+      if (!this.supports(f, plan)) return false;
+      const { walkers } = this.motion(f, plan);
+      return this.states.every((state, i) => {
+        const walker = walkers[i];
+        const left = (state.footfall - walker.phase) / walker.stride.frequency;
+        return state.planted || left > 0.1 || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold);
+      });
+    };
+    // Search the nearest supported height, then shorten travel if height alone cannot support it.
+    let found = false;
+    for (let retry = 0; retry < 24 && !found; retry++) {
+      for (let k = 0; k <= 60 && !found; k++) {
+        for (const direction of [1, -1]) {
+          offset = direction * k * 0.002;
+          step = forecast();
+          if (!supported(step)) continue;
+          found = true;
+          break;
+        }
+      }
+      if (!found) share *= 0.75;
+    }
+    if (!found) throw new Error('legs cannot support root follower');
+    step = forecast();
+    const at = step.root(f.time);
+    f.current.setRoot(at.position);
+    f.current.setLocal(0, at.quaternion);
+    this.update(f, step);
   }
 
   update(f: Frame, step: LegStep): void {

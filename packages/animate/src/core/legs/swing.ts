@@ -13,8 +13,6 @@ export interface Swing {
    */
   land: Float64Array;
   stepping: number;
-  /** how far the shape is scaled to clear the ground */
-  scale: number;
   toes: Quaternion;
 }
 

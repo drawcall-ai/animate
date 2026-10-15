@@ -26,9 +26,10 @@ const RESTING = 2;
  * or a bone frame (only bone distances scale with that body). A bone number uses this body’s
  * facing at that joint; `[body, bone]` follows the bone’s rotation. Leg seconds describe an unloaded
  * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 1 cm and 5 cm/s of
- * the course end; throws after `limit` seconds of settling outside reach.
+ * the course end; throws after `limit` seconds of settling outside reach. With `support`, contact
+ * within 1 cm of the endpoint arrests the item and ends the carry without waiting for free settling.
  */
-export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], options: { on?: number | Carrier | readonly [Pick<Body, 'pose' | 'scale'>, number]; pace?: number; motion?: Motion; limit?: number } = {}): Behaviour<W> {
+export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], options: { on?: number | Carrier | readonly [Pick<Body, 'pose' | 'scale'>, number]; pace?: number; support?: boolean; motion?: Motion; limit?: number } = {}): Behaviour<W> {
   return function* () {
     const { on, pace = 1, limit = RESTING } = options;
     let frame: Live<Required<Placement>, W> = WORLD;
@@ -52,6 +53,11 @@ export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg[], optio
       if (Number.isNaN(since)) since = f.time;
       const placement = path.to(f);
       const goal = placement.position;
+      // Support arrests the item on contact; an unsupported carry must settle under its own motion.
+      if (options.support && item.current.position.distanceTo(goal) < 0.01) {
+        item.supported = true;
+        return true;
+      }
       if (end.holds(f, item, goal)) return true;
       if (f.time - since > limit) {
         const off = SIDES.flatMap((side) => {

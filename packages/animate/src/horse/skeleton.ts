@@ -74,18 +74,21 @@ const MASS = {
  * (its hock ~0.5 m up). A leg so bent standing has the reserve to land straightened and push off
  * with its hock opened.
  */
+// Read: Hannoveraner breeding programme (2021), conformation: plumb cannons, pasterns 50–55°.
+// https://hanoverian.org.au/wp-content/uploads/2023/11/Breeding_Programme_of_the_Hannoveraner_breed_3.11.2021_01.pdf
+// Tuned carriage: poll 13 cm above the scapular top, muzzle 52° below horizontal.
 const AT = {
   trunk: v(0, 1.4, 0),
   pelvis: v(0, 1.42, -0.48),
-  neck: v(0, 1.25, 0.72),
-  poll: v(0, 1.75, 1.25),
-  muzzle: v(0, 1.33, 1.58),
+  neck: v(0, 1.39, 0.67),
+  poll: v(0, 1.57, 1.30),
+  muzzle: v(0, 1.15, 1.63),
   scapula: v(0.12, 1.44, 0.657),
   shoulder: v(0.17, 1.1, 0.857),
   elbow: v(0.17, 0.889, 0.63),
   carpus: v(0.17, 0.47, 0.63),
   foreFetlock: v(0.17, 0.24, 0.63),
-  foreCoffin: v(0.17, 0.097, 0.716),
+  foreCoffin: v(0.17, 0.097, 0.73),
   foreSole: v(0.17, 0, 0.7),
   hip: v(0.15, 1.24, -0.64),
   stifle: v(0.16, 0.852, -0.433),

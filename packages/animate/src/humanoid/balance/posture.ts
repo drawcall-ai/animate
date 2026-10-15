@@ -183,7 +183,8 @@ function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>
   let mass = 0;
   pose.skeleton.bones.forEach((bone, i) => {
     const load = pose.load(i);
-    mass += bone.mass + load.mass;
+    // The counter-moment comes from the trunk above the hips, not the whole body.
+    if (i === INDEX.spine || i === INDEX.chest || i === INDEX.neck || i === INDEX.head) mass += bone.mass;
     if (!load.mass || (i !== INDEX.leftHand && i !== INDEX.rightHand)) return;
     const at = pose.point(i, load.at, _v).sub(hips);
     moment += load.mass * (at.x * forward.x + at.z * forward.z);

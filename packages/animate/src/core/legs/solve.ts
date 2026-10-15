@@ -1,6 +1,6 @@
 // A leg's joints posed as one bounded least-squares problem (Levenberg-Marquardt, an active set
-// for the bounds): the terminal's position and turn stiff targets (a contact, a landing), or orientation alone
-// (a swing keeps its planned foot turn while clearing the ground); each joint's reference a soft target weighted by
+// for the bounds): the terminal's position and turn stiff targets (a contact, a landing), or free in swing
+// (joint references shape it while the sole clears the ground); each joint's reference a soft target weighted by
 // the rig's own range for it; the ground a stiff one-sided target; every joint within its range.
 import { solveFree } from './linear';
 import { Quaternion, Vector3 } from 'three';
@@ -26,12 +26,14 @@ const STEPS = 24;
 const CONVERGED = 1e-7;
 /** Full terminal contact (world), or a swing with its reference orientation and one-sided ground constraints. */
 export interface Target {
-  /** false: position is free; ground correction keeps the reference foot orientation. */
+  /** false: the terminal is free; references shape the swing and ground constrains its sole. */
   held: boolean;
   position: Vector3;
   rotation: Quaternion;
   /** points of the terminal (its frame) kept above the ground (y = 0), hard */
   above: readonly Vector3[];
+  /** Sole clearance during swing (m). */
+  floor?: number;
 }
 
 export class Solver {
@@ -46,6 +48,7 @@ export class Solver {
   readonly lo: Float64Array;
   readonly hi: Float64Array;
   private readonly weight: Float64Array;
+  private readonly turnWeight: number;
   /** the coordinates as last posed and a tick before */
   readonly q: Float64Array;
   readonly q1: Float64Array;
@@ -105,6 +108,10 @@ export class Solver {
     this.H = new Float64Array(n * n);
     this.g = new Float64Array(n);
     this.d = new Float64Array(n);
+    // Serial joint angle variances add: the free terminal's turn is a soft preference,
+    // rather than a second rigid copy of the joint references.
+    const variance = this.hi.reduce((sum, hi, j) => sum + (hi - this.lo[j]) ** 2, 0);
+    this.turnWeight = variance > 0 ? 1 / variance : 0;
     this.fixed = new Uint8Array(n);
     this.trial = new Float64Array(n);
     this.was = new Float64Array(n);
@@ -131,7 +138,6 @@ export class Solver {
     this.q.set(this.ref);
     this.base(pose.rotation(pose.skeleton.bones[this.bones[0]].parent), pose.position(this.bones[0]));
     if (!target.held) {
-      // A free orientation lets the ground solve flip the pastern through a different bend.
       this.forward();
       target.rotation.copy(this.rotations[this.bones.length - 1]);
     }
@@ -152,20 +158,6 @@ export class Solver {
     return miss;
   }
 
-  /** the lowest of the terminal's `points` (its frame) above the ground (m) with the joints at `q`, off a base turned `turn` at `top` */
-  lowest(turn: Readonly<Quaternion>, top: Readonly<Vector3>, q: Float64Array, points: readonly Vector3[]): number {
-    const was = _was.subarray(0, this.n);
-    was.set(this.q);
-    this.q.set(q);
-    this.base(turn, top);
-    this.forward();
-    this.q.set(was);
-    const last = this.bones.length - 1;
-    let low = Infinity;
-    for (const point of points) low = Math.min(low, _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y);
-    return low;
-  }
-
   private base(turn: Readonly<Quaternion>, top: Readonly<Vector3>) {
     this.baseTurn.copy(turn);
     this.basePosition.copy(top);
@@ -181,6 +173,7 @@ export class Solver {
     const r = _r;
     const hold = target.held ? 1 : 0;
     const wp = STIFF * hold;
+    const wr = target.held ? STIFF : this.turnWeight;
     let cost = this.cost(target, r);
     let damping = 1e-3;
     for (let step = 0; step < STEPS; step++) {
@@ -189,24 +182,25 @@ export class Solver {
       for (let i = 0; i < n; i++) {
         for (let k = i; k < n; k++) {
           let s = 0;
-          for (let m = 0; m < 6; m++) s += (m < 3 ? wp : STIFF) * J[m * n + i] * J[m * n + k];
+          for (let m = 0; m < 6; m++) s += (m < 3 ? wp : wr) * J[m * n + i] * J[m * n + k];
           H[i * n + k] = H[k * n + i] = s;
         }
         H[i * n + i] += weight[i];
         let s = weight[i] * (q[i] - ref[i]);
-        for (let m = 0; m < 6; m++) s += (m < 3 ? wp : STIFF) * J[m * n + i] * r[m];
+        for (let m = 0; m < 6; m++) s += (m < 3 ? wp : wr) * J[m * n + i] * r[m];
         g[i] = s;
       }
       // the ground: each point below it pulled up, hard (its row: the height's rate per coordinate)
       const last = this.bones.length - 1;
       for (const point of target.above) {
         const at = _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]);
-        if (at.y >= 0) continue;
+        const depth = at.y - (target.floor ?? 0);
+        if (depth >= 0) continue;
         const row = this.row;
         for (let j = 0; j < n; j++) row[j] = _v.subVectors(at, this.at[j]).cross(this.world[j]).y * -1;
         for (let i = 0; i < n; i++) {
           for (let k = 0; k < n; k++) H[i * n + k] += STIFF * row[i] * row[k];
-          g[i] += STIFF * row[i] * at.y;
+          g[i] += STIFF * row[i] * depth;
         }
       }
       for (let j = 0; j < n; j++) this.diagonal[j] = H[j * n + j];
@@ -284,11 +278,11 @@ export class Solver {
   private cost(target: Target, r: Float64Array): number {
     this.residual(target, r);
     let c = 0;
-    for (let m = target.held ? 0 : 3; m < 6; m++) c += STIFF * r[m] * r[m];
+    for (let m = target.held ? 0 : 3; m < 6; m++) c += (target.held ? STIFF : this.turnWeight) * r[m] * r[m];
     for (let j = 0; j < this.n; j++) c += this.weight[j] * (this.q[j] - this.ref[j]) ** 2;
     const last = this.bones.length - 1;
     for (const point of target.above) {
-      const y = _v.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y;
+      const y = _v.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y - (target.floor ?? 0);
       if (y < 0) c += STIFF * y * y;
     }
     return c;

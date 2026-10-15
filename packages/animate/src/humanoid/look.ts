@@ -58,7 +58,7 @@ const _com = new Vector3();
 const _v = new Vector3();
 
 /**
- * `task` with the eyes on `at` first: `task` sets off once they are within 10° or after 1.2 s, and
+ * `task` with the eyes on `at` first: `task` sets off once they are within 1° of comfortable eye range or after 1.2 s, and
  * a moment more, `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the
  * hand goes for ~0.5 s before it (Land & Hayhoe 2001) — and they stay till it ends. For a point
  * further below the eyes than the neck pitches the head, the body bows to see it (asks `balance`),
@@ -89,8 +89,24 @@ export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviou
   };
 }
 
-/** the eyes have got where they look: within this of it (rad, 10°), or looked toward it this long (s: a point the head cannot turn to); and how long after that a task they lead sets off (s) */
-const ARRIVED = (10 * Math.PI) / 180;
+/** Inspect a path of live attention points, continuously moving the gaze between them.
+ * Segment duration is staging, not a physiological constant. Eyes and trunk share the usual limits.
+ */
+export function scan<W>(h: Humanoid<W>, points: readonly Live<Vector3, W>[], seconds = 0.6): Behaviour<W> {
+  if (points.length < 2 || !(seconds > 0)) throw new Error('scan needs two points and a positive segment duration');
+  return function* () {
+    let start: number | null = null;
+    yield* withGaze(h, (f) => {
+      start ??= f.time;
+      const along = Math.min(points.length - 1, (f.time - start) / seconds);
+      const i = Math.min(points.length - 2, Math.floor(along));
+      return live(points[i], f).clone().lerp(live(points[i + 1], f), smoothstep(0, 1, along - i));
+    }, () => when(timePassed((points.length - 1) * seconds, 'seconds')), { first: false })();
+  };
+}
+
+/** the eyes have got where they look: within this of it (rad, 1°), or looked toward it this long (s: a point the head cannot turn to); and how long after that a task they lead sets off (s) */
+const ARRIVED = Math.PI / 180;
 const LONGEST = 1.2;
 const LEAD = [0.1, 0.3];
 /** The trunk supplies downward gaze beyond comfortable cervical flexion and eye declination. */

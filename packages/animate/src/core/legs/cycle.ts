@@ -9,6 +9,8 @@ export const DEG = Math.PI / 180;
  */
 export interface JointCycle {
   duty: number;
+  /** Swing excursion scale for the contact duty of a different gait. */
+  amplitude?: (duty: number) => number;
   keys: readonly (readonly [number, number])[];
 }
 

@@ -31,7 +31,7 @@ export { takeOff, wear, type Dressed, type Wearing } from './core/worn';
 export type { Bearing } from './humanoid/worn';
 export { HEADSET, headTo, type HeadOptions } from './humanoid/head';
 export { pelvisTo, trunkTo } from './humanoid/trunk';
-export { lookAround, withGaze } from './humanoid/look';
+export { lookAround, withGaze, scan } from './humanoid/look';
 export { idle } from './humanoid/idle';
 export { arriving, walkTo, type WalkOptions } from './humanoid/walk';
 export { defaultStance, type Stance } from './humanoid/stance';
@@ -52,5 +52,5 @@ export { Legs, type LegChain, type Rocker, type LegState, type LegStep, type Con
 export type { LegGait } from './core/legs/gait';
 export type { JointCycle } from './core/legs/cycle';
 export { humanLegs, humanGait } from './humanoid/leg-data';
-export { horseLegs, HORSE_WALK, HORSE_TROT } from './horse/legs';
+export { horseLegs, horseCarriage, HORSE_WALK, HORSE_TROT } from './horse/legs';
 export { SKELETON as HORSE_SKELETON } from './horse/skeleton';

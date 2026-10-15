@@ -21,7 +21,7 @@ const SLOW = [0.1, 0.2] as const;
 /** how far a runner's leg reaches back to its planted foot before it goes (× its length) */
 const RUN_REACH = 0.93;
 /** how far the extrapolated centre of mass may leave the feet before a walking step catches it at once (m, default body) */
-const FALL = 0.06;
+const FALL = 0.05;
 /** how long a standing body must have been falling before it steps (s) */
 const STILL_FALL = 0.1;
 /** how much better a step with the foot that just landed must catch the body to break the alternation (m, default body) */
