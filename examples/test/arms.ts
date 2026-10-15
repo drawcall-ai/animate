@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { jointOf } from '../src/joints';
 import { FIXED_DT } from '../src/scenario';
-import { comOf } from './balance';
+import { comOf } from './com';
 import { tasked, type Frame } from './frame';
 
 const DEG = 180 / Math.PI;

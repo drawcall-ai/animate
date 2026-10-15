@@ -11,9 +11,11 @@ import type { Humanoid } from '../humanoid';
 import { yawOf } from '../rig';
 import { defaultStance, type Stance } from '../stance';
 import { Carriage } from './carriage';
-import { plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
+import { checkFeet, plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
 import { Posture, type Trunk } from './posture';
 import { stepFeet } from './steps';
+import { footprint } from './foot';
+import { hullOf, outside } from './support';
 
 
 /** What `balance` reports of the walk it carries the body on (its output: read it, never write it). */
@@ -75,6 +77,10 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance> }
     let started = false;
     yield* action<Frame<W>>({
       update: (f) => {
+        if (f.dev) {
+          checkFeet(h, f);
+          checkSupport(h, f);
+        }
         const dt = f.dt;
         takeAsks(h.asks, asks);
         if (asks.lean || asks.onto || asks.taken[0] || asks.taken[1]) throw new Error('balance takes no lean, onto or taken feet yet');
@@ -155,3 +161,22 @@ const _up = new Vector3();
 const _half = new Quaternion();
 const _q = new Quaternion();
 const _local = new Quaternion();
+
+/** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
+function checkSupport<W>(h: Humanoid<W>, f: Frame<W>): void {
+  if (!f.dev || f.time <= f.dt) return;
+  const com = f.prev.com(new Vector3());
+  const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
+  const xcom = com.addScaledVector(velocity, 1 / Math.sqrt(9.81 / h.proportions.legLength));
+  const support = h.feet.flatMap((foot, s) => {
+    if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
+    const side = SIDES[s];
+    return (['Heel', 'BigToe', 'SmallToe'] as const).map((name): [number, number] => {
+      const point = h.rig.points[`${side}${name}`];
+      const at = f.prev.point(point.bone, point.at, new Vector3());
+      return [at.x, at.z];
+    });
+  });
+  const value = outside(hullOf(support), xcom);
+  if (value > 0.1) f.dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
+}

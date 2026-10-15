@@ -1,6 +1,6 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { arriving, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
+import { arriving, eyesOnBefore, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, walkTo, type Behaviour, type Frame, type Grips, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -58,7 +58,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
         props: () => [{ kind: 'box', position: box.current.position.clone(), size, quaternion: box.current.quaternion.clone() }, ...shelf(SHELF.boards[3] - top)],
         script: (h) =>
           function* () {
-            yield* parallel<Frame<World>>('all', idle(h), tasks(h, box, size, top, lift, report));
+            yield* parallel<Frame<World>>('all', eyesOnBefore(h, box, 0.4), idle(h), tasks(h, box, size, top, lift, report));
           },
       };
     },
@@ -116,13 +116,14 @@ function lifted(h: Humanoid<World>, seconds: number): Leg[] {
  */
 function shelve(h: Humanoid<World>, box: Item, grips: Grips, size: Vector3, top: number): Behaviour<World> {
   const stand = new Vector3(SHELF.x, 0, SHELF.z - SHELF.stand);
+  const arrived = arriving(h, 0.05);
   const front = SHELF.z - SHELF.depth / 2;
   const carried = (f: Frame<World>): Placement => ({
     position: f.prev
       .position(0)
       .clone()
       .addScaledVector(forwardOf(h.gait.facing), CARRIED.ahead)
-      .setY(CARRIED.height + RAISED * (1 - MathUtils.smoothstep(h.gait.eta, 0, RAISING))),
+      .setY(CARRIED.height + RAISED * (1 - MathUtils.smoothstep(Number.isFinite(h.gait.eta) ? h.gait.eta : RAISING, 0, RAISING))),
     quaternion: new Quaternion().setFromAxisAngle(UP, h.gait.facing),
   });
   const up: Leg[] = [
@@ -134,7 +135,7 @@ function shelve(h: Humanoid<World>, box: Item, grips: Grips, size: Vector3, top:
       'all',
       walkTo(h, { to: stand, face: 0 }),
       function* () {
-        yield* hold(h, box, grips, { to: carried, until: arriving(h, 0) })();
+        yield* hold(h, box, grips, { to: carried, until: () => h.gait.eta === Infinity || arrived() })();
         yield* carry(h, WORLD, [[box, grips, up]])();
       },
     );

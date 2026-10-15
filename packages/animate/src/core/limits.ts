@@ -1,5 +1,7 @@
 import { Quaternion } from 'three';
 import type { Limit } from './skeleton';
+import type { ReadonlyPose } from './pose';
+import type { Dev } from './dev';
 
 /**
  * Where `q`, a bone's rotation in its parent's frame, is in `limit`'s coordinates: its rotation
@@ -95,3 +97,13 @@ const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 const _q = new Quaternion();
 const _c = coordinates();
+
+/** Range checks read the completed pose, including writes after a solve. Half a degree allows numerical settling. */
+export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {
+  pose.skeleton.limits.forEach((limit, bone) => {
+    if (!limit) return;
+    const value = beyond(_checked.copy(pose.local(bone)), limit) * 180 / Math.PI;
+    if (value > 0.5) dev.append(time, { check: 'joint range (°)', value, limit: 0.5, where: pose.skeleton.bones[bone].name });
+  });
+}
+const _checked = new Quaternion();

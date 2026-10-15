@@ -6,8 +6,9 @@ import type { Frame } from '../../core/body';
 import { solveChain } from '../../core/chain';
 import { clampRotation } from '../../core/limits';
 import type { ReadonlyPose } from '../../core/pose';
-import { INDEX, type Side } from '../bones';
+import { INDEX, SIDES, type Side } from '../bones';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softplus, wrapAngle } from '../math';
+import type { Humanoid } from '../humanoid';
 import type { Proportions } from '../proportions';
 import type { Carriage, Swing } from './carriage';
 import { ankleFor, ballOf, footRotation, heelOf, swingHump, swingProgress, toeTipOf, type Foot } from './foot';
@@ -252,3 +253,27 @@ const _q = new Quaternion();
 const _r = new Quaternion();
 const _spin = new Quaternion();
 const _arc = new Quaternion();
+
+/** Read the final planted foot, allowing its roll about the heel or ball, never the solve's goal. */
+export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>): void {
+  const dev = f.dev;
+  if (!dev || f.time <= f.dt) return;
+  SIDES.forEach((side, s) => {
+    const foot = h.feet[s];
+    if (foot.phase !== 'planted') return;
+    const bone = INDEX[`${side}Foot`];
+    const q = f.prev.rotation(bone);
+    const forward = new Vector3(0, 0, 1).applyQuaternion(q);
+    const pivot = forward.y >= 0 ? heelOf(h.proportions) : ballOf(h.proportions, side);
+    const actual = f.prev.point(bone, pivot, new Vector3());
+    const anchor = pivot.clone().applyQuaternion(footRotation(foot.yaw, 0)).add(foot.position);
+    const value = Math.hypot(actual.x - anchor.x, actual.z - anchor.z);
+    if (value > 0.01) dev.append(f.time - f.dt, { check: 'planted foot slide (m)', value, limit: 0.01, where: `${side}Foot` });
+    const sole = (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
+      const point = h.rig.points[`${side}${name}`];
+      return f.prev.point(point.bone, point.at, new Vector3()).y;
+    });
+    const sink = foot.position.y - h.proportions.ankleHeight - Math.min(...sole);
+    if (sink > 0.01) dev.append(f.time - f.dt, { check: 'planted foot sink (m)', value: sink, limit: 0.01, where: `${side}Foot` });
+  });
+}

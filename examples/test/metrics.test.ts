@@ -1,5 +1,4 @@
-// Objective motion metrics per scenario, judged by the universal rules and the limits of its id
-// (judge.ts), and again under small changes to the scenarios. Run: pnpm metrics [-- -t <id>]
+// Scenario statistics and task accuracy under small changes. Run: pnpm metrics [-- -t <id>]
 import { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import { createWorld, type Frame as BodyFrame, type World } from '@drawcall/animate';
@@ -12,15 +11,22 @@ import { lookAround, reach, vr } from '../src/scenarios/tracking';
 import { Report } from '../src/report';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
-import { failed, LIMITS, measure, type Limits } from './judge';
-import { run, steps } from './run';
+import { checks, failed, measure, type MetricsOptions } from './metrics';
+import { steps } from './run';
 
-/** a run of `sc` measured, held to its own limits (the flow's sourced ones too), and to what it is for */
-function judged(sc: Scenario, strides?: Limits['strides']) {
-  const r = run(sc, strides && { strides });
-  console.log(r.m.report);
-  expect(r.own, `no limits for ${sc.id}`).toBe(true);
-  const fails = r.checks.filter((c) => failed(c) && !c.advisory).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit})${c.at === undefined ? '' : ` @${c.at.toFixed(2)}s`}${c.where ? ` ${c.where}` : ''}`);
+/** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
+function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
+  const sim = new Simulation(sc);
+  const m = measure(sc.id, steps(sim));
+  const options: MetricsOptions = { startStop: null, strides };
+  if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = 1.25; }
+  if (sc.id === 'pickup-shelf') options.wrist = 0.04;
+  if (sc.id === 'reach') options.wrist = 0.17;
+  if (sc.id === 'look-around') options.head = 0.075;
+  if (sc.id === 'vr') { options.wrist = 0.165; options.head = 0.165; options.ankle = [20, 154]; }
+  if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
+  expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
+  const fails = checks(m, options).filter(failed).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
   expect(fails).toEqual([]);
 }
 
@@ -29,22 +35,15 @@ it('lists each scenario once', () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
-// (the scenarios without limits are not judged yet: they only have to run; vr fails its
-// side-step until `balance` strafes, see KNOWN)
-const FAILING = new Set(['vr']);
 for (const sc of SCENARIOS) {
-  if (!(sc.id in LIMITS)) {
-    it(`${sc.id} runs`, () => console.log(measure(sc.id, steps(new Simulation(sc))).report));
-    continue;
-  }
-  if (FAILING.has(sc.id)) it.fails(`${sc.id} (known)`, () => judged(sc));
+  if (sc.id === 'vr') it.fails(`${sc.id} target tracking (known)`, () => judged(sc));
   else it(sc.id, () => judged(sc));
 }
 
 // the same limits a little off the script: no metric may hang on its exact numbers
 // (a variation that walks less than its scenario says how few strides it judges: none go unjudged silently)
 const NONE = { straight: 0, curve: 0 };
-const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
+const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
   ['stroll 15% slower', stroll({ speed: 0.85 })],
   ['stroll 15% faster', stroll({ speed: 1.15 })],
   ['stroll on a 20% tighter arc', stroll({ radius: 2.4 })],
@@ -103,11 +102,8 @@ const VARIATIONS: [string, Scenario, Limits['strides']?][] = [
 ];
 for (const [name, sc, strides] of VARIATIONS) it(name, () => judged(sc, strides));
 
-// known to fail, tracked until fixed (it.fails turns red once they pass): a brisk stroll's
-// arrival and a point stopping dead on a tight bend leave the extrapolated centre of mass out
+// Known task-accuracy failures, tracked until fixed (it.fails turns red once they pass).
 const KNOWN: [string, Scenario][] = [
-  ['stroll 40% faster (1.82 m/s)', stroll({ speed: 1.4 })],
-  ['stroll whose point stops dead on a 1.5 m bend', stroll({ radius: 1.5, halt: true })],
   // a head bent down off the line the body faces, or a little further than it bows to, is reached by
   // the spine alone: `balance` carries the centre of mass toward it only by walking, and walks only
   // to a goal 14 cm off (asks.lean, being built, is the way: the weight shifted within the feet).
@@ -116,10 +112,6 @@ const KNOWN: [string, Scenario][] = [
   ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
   ['look-around, looking down 10 cm higher', lookAround({ rise: 0.1 })],
   ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
-  // `balance` stepping round in a full squat, bowed: the swinging leg's hip twists to and fro (125k°/s²
-  // at 8.2 s; repro: idle, ask lower 0.44 and bow 1.6, then from 1.5 s face −1.8 rad at 2.5 rad/s and
-  // go to (−0.2, 0, 0.3): leftUpperLeg 77k°/s² at 2.13 s, over the 67k°/s² a joint may reach)
-  ['reach, the targets 10 cm further out', reach({ shift: { x: 0, z: 0.1 } })],
   // the body turns back from the target across it to where the hand is going (the floor) as the hand
   // sets off, the hand still across the body: carried off its way by the turn (0.19 m at 5.4 s; holding
   // the turn until the hand has crossed the midline leaves this and breaks the targets 10 cm right)
@@ -147,7 +139,8 @@ it.fails('stroll: the pelvis bobs on a bend within 1 cm of walking straight (kno
   const straight = m.gait.summary(false, false);
   const curve = m.gait.summary(true, false);
   expect(straight && curve).toBeTruthy();
-  expect(curve!.pelvisUp, 'curve pelvis vertical (m)').toBeLessThanOrEqual(straight!.pelvisUp + 0.01);
+  if (!straight || !curve) throw new Error('no steady strides');
+  expect(curve.pelvisUp, 'curve pelvis vertical (m)').toBeLessThanOrEqual(straight.pelvisUp + 0.01);
 });
 
 it('runs a scenario through the metrics: two actors standing still, relaxed, each reading the other', () => {
@@ -169,10 +162,6 @@ it('runs a scenario through the metrics: two actors standing still, relaxed, eac
     }),
   };
   const m = measure(still.id, steps(new Simulation(still)));
-  expect(m.rates.velocity.knee.value).toBe(0);
-  expect(m.rom.worst.value).toBe(0);
-  expect(m.feet.slide).toBe(0);
-  expect(m.balance.xcomFrames).toBe(0);
   expect(seen.length).toBe(2 * 30);
   expect(seen.every((x, i) => Math.abs(x - (i % 2 === 0 ? 1 : -1)) < 0.05)).toBe(true);
   expect(m.report).toContain('== still (30 frames)');

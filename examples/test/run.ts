@@ -1,15 +1,11 @@
-import { DEFAULT_HEIGHT } from '@drawcall/animate';
-import { FIXED_DT, type Scenario } from '../src/scenario';
+import { DEFAULT_HEIGHT, type LogEntry } from '@drawcall/animate';
+import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
-import { beats, label, running, type Beat } from './beats';
-import { flowChecks, type FlowReport } from './flow';
 import type { Frame } from './frame';
-import { checks, limitsFor, measure, type Check, type Limits, type Measured } from './judge';
 
-/** each fixed step's frames of a run `sim` (OpenPose models, read without rendering); the beats' clock at the sub-step about to run */
+/** Frames for the remaining scenario metrics, after each fixed step. */
 export function* steps(sim: Simulation): Generator<Frame[]> {
   while (sim.t < sim.scenario.duration) {
-    beats.t = sim.t + FIXED_DT;
     sim.step();
     const asked = sim.stage.report.at(sim.t);
     const solids = sim.stage.solids?.() ?? [];
@@ -17,40 +13,13 @@ export function* steps(sim: Simulation): Generator<Frame[]> {
   }
 }
 
-/** a run of a scenario judged: what it measured, every check (the flow's too, and whether it did what it is for), its flow and beats */
-export interface Run {
-  scenario: Scenario;
-  m: Measured;
-  checks: Check[];
-  flow: FlowReport;
-  beats: Beat[];
-  /** whether its limits are its own (else the universal defaults) */
-  own: boolean;
-  /** whether it did what it is for */
-  done: boolean;
+/** Run with in-code checks; one extra step lets observers read the last final pose. */
+export function run(sc: Scenario): LogEntry[] {
+  const sim = new Simulation(sc, undefined, true);
+  while (sim.t < sc.duration) sim.step();
+  sim.step();
+  return sim.actors.flatMap((h, i) => h.log.map((entry) => ({ ...entry, where: `actor ${i}: ${entry.where}` })));
 }
-
-/** runs `sc` and judges it (`adjust`: over its limits) */
-export function run(sc: Scenario, adjust: Partial<Limits> = {}): Run {
-  beats.log = [];
-  const sim = new Simulation(sc);
-  const m = measure(sc.id, steps(sim));
-  const log = beats.log;
-  const { limits, own } = limitsFor(sc.id, m);
-  // (the flow over the span the tasks run in: from the first's start to the last's end, the run's end for one that never ends)
-  const tasks = log.filter((b) => b.task !== 'idle');
-  const from = tasks.length ? Math.min(...tasks.map((b) => b.start)) : 0;
-  const to = tasks.length ? Math.max(...tasks.map((b) => b.end ?? sc.duration)) : sc.duration;
-  // (the hands at work: a task that moves them running; without beats, always)
-  const working = (t: number) => !tasks.length || running(log, t).some((b) => HANDS.has(b.task));
-  const flow = m.flow.report(from, to, working);
-  const done = sim.stage.done();
-  const did: Check = { what: 'done: the scenario did what it is for', value: Number(done), bound: 'is', limit: 1, at: sim.t, fix: "a task never finished (its condition is never met) or `duration` is too short; `done()` is asked at the end" };
-  return { scenario: sc, m, checks: [did, ...checks(m, { ...limits, ...adjust }), ...flowChecks(flow)], flow, beats: log, own, done };
-}
-
-/** the tasks that move the hands */
-const HANDS = new Set(['grab', 'reachFor', 'handTo', 'carry', 'hold', 'release', 'wear', 'takeOff']);
 
 /** a seeded variation of `sc`: each actor starting up to 10 cm off, turned up to 0.15 rad and up to 4% taller or shorter — what no script may hang on */
 export function vary(sc: Scenario, seed: number): Scenario {
@@ -64,12 +33,6 @@ export function vary(sc: Scenario, seed: number): Scenario {
       height: (r.height ?? DEFAULT_HEIGHT) * (1 + jitter(0.04)),
     })),
   };
-}
-
-/** the beats running at `t`, as a short label: the latest started two */
-export function beatAt(log: readonly Beat[], t: number | undefined): string {
-  if (t === undefined) return '';
-  return running(log, t).slice(0, 2).map(label).join(' ∥ ');
 }
 
 /** a small seeded generator of uniform numbers in [0, 1) */

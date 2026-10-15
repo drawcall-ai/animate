@@ -65,7 +65,7 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
       yield* reachFor(h, holds)();
     };
     const walk = function* () {
-      // A walk earlier in this frame already owns the feet; join its arrival.
+      // A walk earlier in this frame already owns the feet; wait until the joined walk ends.
       if (h.asks.go) yield* when(() => h.gait.eta === Infinity);
       yield* approach(h, holds, options)();
       stood = true;

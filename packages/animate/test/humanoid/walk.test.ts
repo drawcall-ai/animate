@@ -111,5 +111,6 @@ it('honors facing and standing after joining a walk', () => {
   expect(finished).toBe(true);
   expect(h.holding.right?.item).toBe(item);
   expect(Math.abs(h.gait.facing - face)).toBeLessThan(0.3);
-  expect(Math.hypot(body.x - (-Math.cos(face) * stand.aside - Math.sin(face) * ahead), body.z - (2.35 + Math.sin(face) * stand.aside - Math.cos(face) * ahead))).toBeLessThan(0.12);
+  const expected = new Vector3(-Math.cos(face) * stand.aside - Math.sin(face) * ahead, 0, 2.35 + Math.sin(face) * stand.aside - Math.cos(face) * ahead);
+  expect(Math.hypot(body.x - expected.x, body.z - expected.z)).toBeLessThan(0.12);
 });

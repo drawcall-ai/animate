@@ -7,10 +7,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc && tsc -p test/tsconfig.json && tsc -p bench/tsconfig.json",
-    "test": "vitest run openpose",
-    "metrics": "vitest run metrics flow",
-    "judge": "node scripts/judge.mjs",
-    "bench": "vite build --ssr bench/node.ts --outDir node_modules/.bench --logLevel warn && node --expose-gc node_modules/.bench/node.js"
+    "test": "vitest run",
+    "metrics": "vitest run metrics",
+    "bench": "vite build --ssr bench/node.ts --outDir node_modules/.bench --logLevel warn && node --expose-gc node_modules/.bench/node.js",
+    "run-scene": "node scripts/run-scene.mjs"
   },
   "dependencies": {
     "@drawcall/animate": "workspace:*",

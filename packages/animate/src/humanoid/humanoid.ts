@@ -21,6 +21,8 @@ import { carryWorn, dress, type Bearing, type Dressed, type Wearing } from './wo
 
 export interface HumanoidOptions<W> {
   world?: W;
+  /** Enable final-pose checks and read-only watchers. Default off. */
+  dev?: boolean;
   /** where the body stands (on the floor, y = 0) */
   position?: { x: number; z: number };
   /** its facing about +Y (0 faces +Z) */
@@ -79,10 +81,13 @@ export class Humanoid<W = unknown> {
       function* () {
         yield* parallel<Frame<W>>('all', script, carried);
       },
-      { world: options.world, pose: start.pose },
+      { world: options.world, pose: start.pose, dev: options.dev },
     );
     rig.write(this.body.pose, 0);
   }
+
+  /** Development problems from checks and watchers. */
+  get log() { return this.body.log; }
 
   /** the last final pose */
   get pose(): ReadonlyPose {

@@ -1,18 +1,12 @@
 import { Vector3 } from 'three';
-import type { FootPhase } from '@drawcall/animate';
 import { jointOf } from '../src/joints';
 import { forwardOf, leftOf } from '../src/math';
-import { comOf } from './balance';
+import { comOf } from './com';
 import { Peak, type Frame, type Actor } from './frame';
 
-const SOLE = ['leftHeel', 'leftBigToe', 'leftSmallToe', 'rightHeel', 'rightBigToe', 'rightSmallToe'] as const;
 
-/** the feet: planted ones stay put (where `balance` reports them, and the ankles there), none sinks into the floor, knees don't bend backwards, legs don't cross */
+/** Foot geometry regressions that a joint-local range check cannot express. */
 export class Feet {
-  slide = 0;
-  /** the most a planted foot's ankle is off where it is reported planted, beyond the foot's roll about its heel or ball (m) */
-  readonly off = new Peak();
-  lowest = 0;
   hyper = 0;
   crossings = 0;
   /** the most a planted foothold (its flat-foot ankle) is out of the leg's reach (m): the foot dangles off it */
@@ -22,10 +16,7 @@ export class Feet {
    * standing; smaller pointed (plantarflexed), larger flexed up (dorsiflexed)
    */
   readonly ankle = { min: new Peak(), max: new Peak() };
-  private readonly prev = new Map<Actor, { phase: FootPhase; position: Vector3 }[]>();
-
   see({ t, h }: Frame) {
-    for (const p of SOLE.map((j) => jointOf(h, j))) this.lowest = Math.min(this.lowest, p.y);
     for (const s of ['left', 'right'] as const) {
       const hip = jointOf(h, `${s}UpperLeg`);
       const knee = jointOf(h, `${s}LowerLeg`);
@@ -42,23 +33,14 @@ export class Feet {
       this.ankle.max.see(a, t);
       this.ankle.min.see(180 - a, t);
     }
-    const prev = this.prev.get(h);
     h.feet.forEach((f, s) => {
-      if (prev && f.phase === 'planted' && prev[s].phase === 'planted') this.slide = Math.max(this.slide, f.position.distanceTo(prev[s].position));
-      // (the ankle stays over its foothold as the foot rolls: off it by no more than the roll takes it, along the foot)
-      if (f.phase === 'planted') {
-        const d = jointOf(h, s === 0 ? 'leftFoot' : 'rightFoot').sub(f.position).setY(0);
-        const along = d.dot(forwardOf(f.yaw));
-        this.off.see(Math.hypot(Math.max(0, along - h.proportions.toeFront, -along - h.proportions.heelBack), d.dot(leftOf(f.yaw))), t);
-      }
       if (f.phase === 'planted') this.reach.see(jointOf(h, s === 0 ? 'leftUpperLeg' : 'rightUpperLeg').distanceTo(f.position) - h.proportions.legLength, t);
     });
-    this.prev.set(h, h.feet.map((f) => ({ phase: f.phase, position: f.position.clone() })));
     if (jointOf(h, 'leftFoot').sub(jointOf(h, 'rightFoot')).dot(leftOf(h.gait.facing)) < 0.02) this.crossings++;
   }
 
   toString() {
-    return `min foot y ${this.lowest.toFixed(3)}, planted ankle off its foothold ${this.off}, planted slide ${this.slide.toExponential(1)}, planted foothold out of reach ${this.reach}, knee-backward frames ${this.hyper}, ankle ${(180 - this.ankle.min.value).toFixed(0)}° (@${this.ankle.min.at.toFixed(2)}s) … ${this.ankle.max.value.toFixed(0)}° (@${this.ankle.max.at.toFixed(2)}s), leg-crossing frames ${this.crossings}`;
+    return `planted foothold out of reach ${this.reach}, knee-backward frames ${this.hyper}, ankle ${(180 - this.ankle.min.value).toFixed(0)}° (@${this.ankle.min.at.toFixed(2)}s) … ${this.ankle.max.value.toFixed(0)}° (@${this.ankle.max.at.toFixed(2)}s), leg-crossing frames ${this.crossings}`;
   }
 }
 

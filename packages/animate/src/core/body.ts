@@ -1,6 +1,9 @@
 import { TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
+import { Dev, type LogEntry } from './dev';
+import { checkLimits } from './limits';
+import { checkSnaps } from './rotation';
 
 /** the sub-step (s): fixed, so that what behaviours read off the history (velocities) does not depend on the frame rate */
 export const STEP = 1 / 60;
@@ -24,10 +27,13 @@ export interface Frame<W = unknown> {
   prev: ReadonlyPose;
   /** this sub-step's pose, as written so far */
   current: Pose;
+  readonly dev?: Dev;
 }
 
 export interface BodyOptions<W> {
   world?: W;
+  /** Checks final poses and records problems; default off. */
+  dev?: boolean;
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;
 }
@@ -57,6 +63,7 @@ export class Body<W = unknown> {
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const { world } = options;
     this.frame = {
+      dev: options.dev ? new Dev() : undefined,
       dt: STEP,
       time: 0,
       get world() {
@@ -69,6 +76,9 @@ export class Body<W = unknown> {
     };
     this.behaviour = behaviour;
   }
+
+  /** Development problems; empty when dev is off. */
+  get log(): readonly LogEntry[] { return this.frame.dev?.log ?? EMPTY_LOG; }
 
   /** the last final pose */
   get pose(): ReadonlyPose {
@@ -91,9 +101,15 @@ export class Body<W = unknown> {
     const [prev2, prev, current] = this.poses;
     current.copy(prev);
     frame.dt = dt;
+    if (frame.dev && frame.time > 0) {
+      checkLimits(frame.prev, frame.dev, frame.time);
+      checkSnaps(frame, frame.dev);
+      frame.dev.beats.clear();
+    }
     frame.time += dt;
     clock.delta = dt;
     (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
+    if (frame.dev) frame.dev.beat = [...frame.dev.beats].join(' ∥ ');
     clock.prevDelta = dt;
     clock.frame++;
     current.forward();
@@ -101,3 +117,5 @@ export class Body<W = unknown> {
     [frame.prev2, frame.prev, frame.current] = this.poses;
   }
 }
+
+const EMPTY_LOG: readonly LogEntry[] = Object.freeze([]);
