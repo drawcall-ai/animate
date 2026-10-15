@@ -198,14 +198,21 @@ export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootP
   // (the foot's heading by its sideways axis, which its pitch leaves level: a foot rolled up onto its toes points nearly down)
   const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
   const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
-  // (the ankle placed by the hip and knee alone, the foot turned after, within its range: a foot
-  // turned with the leg would swivel the knee to and fro where the ankle's range binds)
+  // Preserve the knee's pole while the ankle allows it. A planted foot keeps its world rotation:
+  // when the ankle binds, the leg must accommodate it instead of swivelling the sole.
   // (never pulled quite straight: a straight knee bends either way on the slightest wobble)
-  solveChain(f, legOf(side), { tip: { position: withinReach(hip, _a.copy(pose.ankle), STRAIGHT * c.p.legLength) }, pole });
+  const ankle = withinReach(hip, _a.copy(pose.ankle), STRAIGHT * c.p.legLength);
+  solveChain(f, legOf(side), { tip: { position: ankle }, pole });
   const foot = INDEX[`${side}Foot`];
   f.current.setRotation(foot, pose.foot);
   const limit = f.current.skeleton.limits[foot];
-  if (limit) f.current.setLocal(foot, clampRotation(_r.copy(f.current.local(foot)), limit) ? _r : f.current.local(foot));
+  if (limit && clampRotation(_r.copy(f.current.local(foot)), limit)) {
+    if (c.feet[side === 'left' ? 0 : 1].phase === 'swing') f.current.setLocal(foot, _r);
+    else {
+      solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole });
+      f.current.setRotation(foot, pose.foot);
+    }
+  }
   const toes = INDEX[`${side}Toes`];
   const local = _q.copy(f.current.rotation(foot)).invert().multiply(pose.toes);
   const range = f.current.skeleton.limits[toes];

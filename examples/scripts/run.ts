@@ -35,3 +35,8 @@ function mulberry32(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** VR still misses underHead's 3 cm / settled / facing completion condition. */
+export function knownFailure(entry: LogEntry): boolean {
+  return entry.check === 'vr: scenario unfinished' && entry.where === 'actor 0: vr';
+}

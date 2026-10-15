@@ -2,7 +2,10 @@
 // placement.ts; as adapted in 738b439:packages/animate/src/humanoid/gait/trigger.ts, placement.ts):
 // Raibert-style placement under where the body will be, Hof's capture rule, the human limits on a step.
 import { Vector3 } from 'three';
+import { coordinatesOf } from '../../core/limits';
+import { INDEX, type Side } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../math';
+import { yawOf } from '../rig';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import type { Carriage } from './carriage';
 import { ankleFor, footprint } from './foot';
@@ -31,6 +34,8 @@ const SQUARE = { stopped: 0.05, standing: 0.45 };
 const MAX_DEVIATION = 0.42;
 /** how far the knees have given before the first step */
 const READY = 0.85;
+/** twist left at the ankle or hip when a turning step starts (rad) */
+const TWIST_MARGIN = 0.12;
 /** a foot this far behind the body steps next walking (m, default body) */
 const BEHIND = 0.2;
 /** how far out to its own side of the body a foot lands, at least (m, default body) */
@@ -86,7 +91,7 @@ export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>
     foot.position.lerp(_to, k);
     foot.yaw += wrapAngle(yaw - foot.yaw) * k;
   });
-  const lift = nextStep(c, xcom, f.dt);
+  const lift = nextStep(f, c, xcom);
   if (!lift) return false;
   const st = c.steps[lift.s];
   const foot = c.feet[lift.s];
@@ -103,8 +108,9 @@ export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>
 /** how quickly a swinging foot's landing is fine-tuned (1/s), until this share of its swing on (then it stays) */
 const ADAPT = { rate: 20, until: [0.4, 0.75] as const };
 
-/** the step to take now (null: none), the body's extrapolated centre of mass at `xcom`, `dt` s on */
-function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null {
+/** the step to take now (null: none), from the last final pose and the body's extrapolated centre of mass */
+function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift | null {
+  const dt = f.dt;
   const t = c.timing();
   const { steps } = c;
   if (t.run > 0.5) {
@@ -116,6 +122,10 @@ function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null
     return null;
   }
   if (steps.some((f) => f.swing)) return null;
+  const turn = wrapAngle(c.yaw + c.stance.blade - yawOf(f.prev.local(0)));
+  const margin = steps.map((st) => Math.abs(turn) > 1e-4 ? twistMargin(f, st.side, turn) : Infinity);
+  const turning = margin[0] < margin[1] ? 0 : 1;
+  if (margin[turning] < TWIST_MARGIN && (!c.starting || c.bent >= READY)) return lift(c, turning, t, xcom, true);
   // (walking: standing, a body raised onto its toes is not leaving its feet behind)
   if (c.moving) for (let s = 0; s < 2; s++) if (steps[s].plantedTime > t.doubleSupport && overstretched(c, s, dt)) return lift(c, s, t, xcom, true);
   // (setting off, the knees give before a foot leaves: off a straight leg there is no stepping)
@@ -126,7 +136,7 @@ function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null
   const still = 1 - smoothstep(SLOW[0], SLOW[1], c.speed / c.p.scale);
   // (walking, the foot that just landed takes the weight for a double support first, the other
   // pushing off, unless the body is falling well past it)
-  const out = uncaught(c, xcom);
+  const out = uncaught(c, predictXcom(c, dt, xcom, _to));
   c.falling = out > (1 - 2 * still) * CATCH * c.p.scale ? c.falling + dt : 0;
   // (round a bend the extrapolated centre of mass runs outside the path by (v/ω)²·κ/2 by design: that is no fall)
   const bend = (0.5 * (c.speed / c.omega) ** 2 * Math.abs(c.turnRate)) / Math.max(c.speed, 0.1);
@@ -134,6 +144,18 @@ function nextStep(c: Carriage, xcom: Readonly<Vector3>, dt: number): Lift | null
   const falling = c.falling > (c.moving ? 0 : STILL_FALL) && loaded;
   const pick = falling ? catching(c, t, lead, xcom) : balanced(c, pickFoot(c, t, lead, xcom), t, lead, xcom);
   return pick < 0 ? null : lift(c, pick, t, xcom, falling);
+}
+
+/** Twist left in the direction the body is turning (rad); the foot and knee lag behind it. */
+function twistMargin(f: Frame<unknown>, side: Side, turn: number): number {
+  let margin = Infinity;
+  for (const bone of [INDEX[`${side}UpperLeg`], INDEX[`${side}Foot`]]) {
+    const limit = f.prev.skeleton.limits[bone];
+    if (!limit) continue;
+    const { value, range } = coordinatesOf(f.prev.local(bone), limit);
+    margin = Math.min(margin, turn > 0 ? value[2] - range[2][0] : range[2][1] - value[2]);
+  }
+  return margin;
 }
 
 /** where foot `s` lands (into `out`), heading which way, the step landing `ahead` s from now; and how far the body's extrapolated centre of mass is left uncaught */

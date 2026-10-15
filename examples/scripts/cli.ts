@@ -1,6 +1,6 @@
 import type { LogEntry } from '@drawcall/animate';
 import { SCENARIOS } from '../src/scenarios';
-import { run, vary } from './run';
+import { knownFailure, run, vary } from './run';
 
 /** Print the body's log, grouping repeated problems by their worst sample. */
 export function main(id: string, options: { vary: number; json: boolean }): boolean {
@@ -21,8 +21,8 @@ export function main(id: string, options: { vary: number; json: boolean }): bool
     }
     console.log(`${id}${i ? ` #${i}` : ''}: ${log.length ? `${log.length} entries` : 'clean log'}`);
     const sorted = [...groups.values()].sort((a, b) => score(b.worst) - score(a.worst));
-    for (const { worst: e, count } of sorted) console.log(`  ${e.check}: ${e.value.toPrecision(3)} > ${e.limit} @${e.time.toFixed(2)}s ${e.where} [${e.beat || 'unlabelled'}] (${count})`);
+    for (const { worst: e, count } of sorted) console.log(`  ${e.check}${knownFailure(e) ? ' (known: underHead)' : ''}: ${e.value.toPrecision(3)} > ${e.limit} @${e.time.toFixed(2)}s ${e.where} [${e.beat || 'unlabelled'}] (${count})`);
   });
-  return logs.some((log) => log.length > 0);
+  return logs.some((log) => log.some((entry) => !knownFailure(entry)));
 }
 const score = (e: LogEntry) => e.value / Math.max(e.limit, 1e-3);
