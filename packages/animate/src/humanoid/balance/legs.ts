@@ -207,11 +207,14 @@ export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootP
   f.current.setRotation(foot, pose.foot);
   const limit = f.current.skeleton.limits[foot];
   if (limit && clampRotation(_r.copy(f.current.local(foot)), limit)) {
-    if (c.feet[side === 'left' ? 0 : 1].phase === 'swing') f.current.setLocal(foot, _r);
-    else {
-      solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole });
+    // Take up the landing's leg twist as its reach returns, rather than switching it on at touchdown.
+    const swing = c.steps[side === 'left' ? 0 : 1].swing;
+    const weight = swing ? smoothstep(1 - REACH_IN, 1, swing.progress) : 1;
+    if (weight > 0) {
+      solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole }, weight);
       f.current.setRotation(foot, pose.foot);
     }
+    if (swing && clampRotation(_r.copy(f.current.local(foot)), limit)) f.current.setLocal(foot, _r);
   }
   const toes = INDEX[`${side}Toes`];
   const local = _q.copy(f.current.rotation(foot)).invert().multiply(pose.toes);

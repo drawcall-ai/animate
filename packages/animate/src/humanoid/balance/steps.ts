@@ -136,7 +136,9 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   const still = 1 - smoothstep(SLOW[0], SLOW[1], c.speed / c.p.scale);
   // (walking, the foot that just landed takes the weight for a double support first, the other
   // pushing off, unless the body is falling well past it)
-  const out = uncaught(c, predictXcom(c, dt, xcom, _to));
+  // Foot placement already leads a moving goal: anticipate only the extra motion closing on it.
+  const ahead = c.speed > 0 ? dt * Math.max(0, 1 - c.goalSpeed / c.speed) : 0;
+  const out = uncaught(c, predictXcom(c, ahead, xcom, _to));
   c.falling = out > (1 - 2 * still) * CATCH * c.p.scale ? c.falling + dt : 0;
   // (round a bend the extrapolated centre of mass runs outside the path by (v/ω)²·κ/2 by design: that is no fall)
   const bend = (0.5 * (c.speed / c.omega) ** 2 * Math.abs(c.turnRate)) / Math.max(c.speed, 0.1);
