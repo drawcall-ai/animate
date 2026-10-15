@@ -11,6 +11,8 @@ export interface JointCycle {
   duty: number;
   /** A second reference shape; the gait selects its share independently of contact timing. */
   alternate?: JointCycle['keys'];
+  /** Soft reference stiffness at full alternate blend (default 1); contact constraints stay exact. */
+  alternateWeight?: number;
   keys: readonly (readonly [number, number])[];
 }
 

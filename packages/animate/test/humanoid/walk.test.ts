@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { approach, arriving, carried, hold, reachFor, createSkeletonModel, grab, Humanoid, idle, Item, walkTo, when, type Frame } from '../../src';
+import { approach, arriving, carried, hold, handTo, INDEX, reachFor, createSkeletonModel, grab, Humanoid, idle, Item, walkTo, when, type Frame } from '../../src';
 
 it('publishes arrival and starts a waiting grab before the walk ends without replacing its goal', () => {
   const to = new Vector3(0, 0, 2);
@@ -132,4 +132,38 @@ it('ends an arrival hold when approach finds the body already in reach', () => {
   for (let tick = 0; tick < 300; tick++) h.update(1 / 60);
   expect(finished).toBe(true);
   expect(h.gait.eta).toBe(Infinity);
+});
+
+
+it.each([
+  { height: 1.4, walking: true, deficit: 0.02 },
+  { height: 1.8, walking: true, deficit: 0.02 },
+  { height: 2.1, walking: true, deficit: 0.02 },
+  { height: 1.8, walking: false, deficit: 0.02 },
+  { height: 1.8, walking: true, deficit: 0.18 },
+])('brings the body only beyond walking allowance ($height m, walking $walking, deficit $deficit m)', ({ height, walking, deficit }) => {
+  const bow: number[] = [], lower: number[] = [];
+  const h = new Humanoid(createSkeletonModel(height), (h) => function* () {
+    yield* parallel<Frame>('all', idle(h), walkTo(h, { to: new Vector3(0, 0, walking ? 10 : 0), speed: 0.95 }),
+      handTo(h, 'right', (f) => {
+        const p = h.proportions;
+        const shoulder = f.current.position(INDEX.rightUpperArm);
+        return { position: new Vector3(shoulder.x, p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.rightShoulder.y + p.offsets.rightUpperArm.y - p.armLength - deficit * h.scale, shoulder.z) };
+      }));
+  });
+  for (let tick = 0; tick < 240; tick++) {
+    h.update(1 / 60);
+    if (tick < 120) continue;
+    bow.push(h.asks.bow);
+    lower.push(h.asks.lower);
+  }
+  expect(h.gait.moving).toBe(walking);
+  expect(bow).toHaveLength(120);
+  if (walking && deficit < 0.06) {
+    expect(Math.max(...bow)).toBe(0);
+    expect(Math.max(...lower)).toBe(0);
+  } else {
+    expect(Math.max(...bow)).toBeGreaterThan(0);
+    if (deficit > 0.06) expect(Math.max(...lower)).toBeGreaterThan(0);
+  }
 });

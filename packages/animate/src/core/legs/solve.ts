@@ -125,7 +125,9 @@ export class Solver {
   }
 
   /** the coordinates' reference (rad) for coordinate `j`, held within its range */
-  setRef(j: number, value: number) {
+  setRef(j: number, value: number, weight = 1) {
+    if (!(weight > 0 && Number.isFinite(weight))) throw new Error('a joint reference needs finite positive weight');
+    this.weight[j] = weight / (this.hi[j] - this.lo[j]) ** 2;
     this.ref[j] = Math.min(this.hi[j], Math.max(this.lo[j], value));
   }
 

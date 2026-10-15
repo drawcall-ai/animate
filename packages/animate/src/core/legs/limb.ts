@@ -161,8 +161,12 @@ export class Limb {
   private refs(u: number, duty: number, stepping: number, blend = 0) {
     for (let j = 0; j < this.solver.n; j++) {
       const c = this.cycles[j];
-      this.solver.setRef(j, (c ? angleAt(c, u, duty, blend) * stepping : 0) + this.rest[j] * (1 - stepping));
+      this.setRef(j, (c ? angleAt(c, u, duty, blend) * stepping : 0) + this.rest[j] * (1 - stepping), blend);
     }
+  }
+
+  private setRef(j: number, value: number, blend = 0) {
+    this.solver.setRef(j, value, 1 + ((this.cycles[j]?.alternateWeight ?? 1) - 1) * blend);
   }
 
   /** the swing this tick: its plan stepped toward the landing as now seen, its shape over it, the ground kept */
@@ -179,7 +183,7 @@ export class Limb {
     for (let j = 0; j < solver.n; j++) boundSwing(swing, j, left + f.dt, solver.lo[j], solver.hi[j]);
     for (let j = 0; j < solver.n; j++) [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], swing.land[j], left + f.dt, f.dt);
     this.lifting = false;
-    for (let j = 0; j < solver.n; j++) solver.setRef(j, swing.x[j] + this.shape(j, s, walker.stride.referenceBlend));
+    for (let j = 0; j < solver.n; j++) this.setRef(j, swing.x[j] + this.shape(j, s, walker.stride.referenceBlend), walker.stride.referenceBlend);
     _swingTarget.above = this.aboveAt(s);
     // C² at both contacts, with the full sole clearance at mid-swing.
     _swingTarget.floor = clearance * 64 * s ** 3 * (1 - s) ** 3;

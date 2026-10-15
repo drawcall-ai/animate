@@ -30,7 +30,7 @@ export function stableMorning(): Scenario {
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
     duration: 50, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
     cameraDistance: 4.8, facing: -Math.PI / 3,
-    cameraAngles: { front: -Math.PI / 3, side: -11 * Math.PI / 18 },
+    cameraAngles: { front: -Math.PI / 12, side: -11 * Math.PI / 18 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(-Math.PI / 2), {
@@ -107,13 +107,17 @@ export function stableMorning(): Scenario {
         })();
         yield* named('untie the rail knot', reporting(report, ['rightHand'], function* () {
           yield* grab(h, { right: [rope, 'knot'] }, { face: 0, stand: { ahead: 0.4, aside: -0.4 }, look: reported(report, 'gaze', KNOT), first: false })();
-          yield* withGaze(h, reported(report, 'gaze', () => rope.current.position), function* () {
-            yield* carry(h, rope, [
-              [0.55, { position: KNOT.clone().add(new Vector3(0.1, 0.12, -0.08)) }],
-              [0.5, { position: KNOT.clone().add(new Vector3(0.2, -0.1, -0.18)) }],
-              [0.45, { position: KNOT.clone().add(new Vector3(0.08, 0.08, -0.06)) }],
-              [0.5, { position: KNOT.clone().add(new Vector3(0.23, -0.12, -0.22)) }],
-            ])();
+          yield* withGaze(h, reported(report, 'gaze', KNOT), function* () {
+            const pulls: [number, Vector3][] = [
+              [0.55, new Vector3(-0.12, 0.25, -0.25)],
+              [0.5, new Vector3(-0.02, 0, -0.02)],
+              [0.55, new Vector3(-0.15, 0.25, -0.25)],
+              [0.5, new Vector3(-0.18, -0.06, -0.3)],
+            ];
+            // Settle each reversal so both pulls reach their up-and-back endpoint.
+            for (const [seconds, offset] of pulls) {
+              yield* carry(h, rope, [[seconds, { position: KNOT.clone().add(offset) }]])();
+            }
           }, { first: false })();
         }))();
         yield* named('lead out through the gate', reporting(report, ['rightHand'], function* () {
@@ -121,7 +125,7 @@ export function stableMorning(): Scenario {
           const low = (f: Frame<World>) => {
             const goal = beside(f);
             // A slack lead rests just below the hip, within an upright arm's reach.
-            goal.position.y -= 0.12 * h.scale;
+            goal.position.y -= 0.24 * h.scale;
             return goal;
           };
           let stopped: Vector3 | null = null;

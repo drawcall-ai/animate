@@ -250,6 +250,10 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
   const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
   const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
+  // A walking arm absorbs a small reach deficit through clavicle motion or terminal clamping;
+  // asking balance to chase it bows the whole body on every stride.
+  const margin = 0.06 * p.scale;
+  if (h.gait.moving && hand.y < shoulder.y && shoulder.distanceTo(hand) <= p.armLength + margin) return;
   // At waist height, solve a standing hinge before asking the knees to lower the body.
   // Tuned blend across 12–32 cm below the hips; the 0.8 lever share approximates the articulated spine.
   const waist = smoothstep(p.hipHeight - 0.32 * p.scale, p.hipHeight - 0.12 * p.scale, hand.y);

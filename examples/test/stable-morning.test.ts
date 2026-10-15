@@ -6,6 +6,7 @@ import { stableMorning } from '../src/scenarios/stable-morning';
 it('leads upright with a free swinging arm and an articulated pelvis', () => {
   const sim = new Simulation(stableMorning(), undefined, true);
   const chest: number[] = [], arm: number[] = [], roll: number[] = [];
+  const hip: number[][] = [[], []];
   while (sim.t < 50) {
     sim.step();
     if (sim.t < 35) continue;
@@ -20,12 +21,20 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
     arm.push(Math.atan2(upper.dot(forward), -upper.y));
     const horse = sim.stage.bodies?.[0];
     if (!horse) throw new Error('missing horse');
+    for (const [i, side] of ['left', 'right'].entries()) {
+      hip[i].push(new Euler().setFromQuaternion(horse.pose.local(horse.pose.skeleton.index(`${side}Femur`)), 'YZX').x);
+    }
     roll.push(new Euler().setFromQuaternion(horse.pose.local(horse.pose.skeleton.index('pelvis')), 'YXZ').z);
   }
   const degrees = 180 / Math.PI;
   expect(Math.max(...chest.map(Math.abs)) * degrees).toBeLessThan(5);
   expect((Math.max(...arm) - Math.min(...arm)) * degrees).toBeGreaterThan(30);
   expect((Math.max(...roll) - Math.min(...roll)) * degrees).toBeGreaterThan(5.5);
+  for (const angles of hip) {
+    const excursion = (Math.max(...angles) - Math.min(...angles)) * degrees;
+    expect(excursion).toBeGreaterThan(17);
+    expect(excursion).toBeLessThan(21);
+  }
   expect(sim.actors[0].log).toEqual([]);
   expect(sim.stage.bodies?.[0].log).toEqual([]);
   expect(sim.stage.done()).toBe(true);

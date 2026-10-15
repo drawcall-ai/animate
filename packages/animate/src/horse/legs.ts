@@ -15,7 +15,12 @@ const walk = powerGait(1.2, 0.8, [0.25, 0.75, 0, 0.5], 2.3, 0.68 * Math.pow(1.6,
 export const HORSE_WALK = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
   // Tuned from the read 28% fore-cannon crossing, allowing for the coffin's forward offset.
-  contacts: walk.contacts.map((contact, i) => ({ ...contact, stanceCenter: i < 2 ? 0.31 : undefined })),
+  contacts: walk.contacts.map((contact, i) => ({
+    ...contact,
+    // Tuned: hinds release earlier, before the planted hoof draws the hip into excessive retraction.
+    duty: i < 2 ? contact.duty : (v: number, fr: number) => 0.9 * contact.duty(v, fr),
+    stanceCenter: i < 2 ? 0.31 : undefined,
+  })),
 };
 export const HORSE_TROT = powerGait(1.2, 0.8, [0.52, 0.02, 0, 0.5], 2.15, 0.3 * Math.pow(3.7, 0.7), [0.035, 0.035, 0, 0]);
 
@@ -26,7 +31,7 @@ export const HORSE_TROT = powerGait(1.2, 0.8, [0.52, 0.02, 0, 0.5], 2.15, 0.3 * 
 // Recalled: trot curves below and the 1996 excursion values retained from the spike.
 // Read: Hodson et al. 2000 (doi:10.2746/042516400777032237): fore cannon vertical at 28% stride.
 // Tuned: walk keys implement those findings; they are not digitised paper data.
-const cycle = (keys: [number, number][], alternate: [number, number][] = keys): JointCycle => ({ duty: 0.45, keys, alternate });
+const cycle = (keys: [number, number][], alternate: [number, number][] = keys, alternateWeight = 1): JointCycle => ({ duty: 0.45, keys, alternate, alternateWeight });
 const FORE = {
   scapula: cycle([[0, 8], [0.22, 0], [0.45, -10], [0.7, 2], [0.9, 10]]),
   shoulder: cycle([[0, 5], [0.22, -3], [0.45, -15], [0.6, -5], [0.75, 15], [0.9, 15]]),
@@ -39,14 +44,17 @@ const FORE = {
 // starts flexing after 28% stride. The walk alternate begins folding before toe-off.
 // Hock target 43° approximates the read 42.4° walk ROM (125.2–167.6°), reproduced
 // in Mendez-Angulo, Effect of Water Level on Kinematics of Healthy Horses, Table 1.
-// These are soft references: report final solved excursion, not these target values.
+// Read: Egenvall et al. 2023, doi:10.7717/peerj.16373: circle-walk hip ROM 16.8–20.7°.
+// Tuned: smaller hip references and a stronger hip preference distribute contact corrections
+// into the distal joints. Hock keys counter that redistribution during support; they are not
+// measured joint angles. These are soft references: report solved excursions, not target values.
 const HIND = {
   hip: cycle([[0, 10], [0.22, 0], [0.45, -12], [0.6, -3], [0.78, 15], [0.92, 14]],
-    [[0, 10], [0.22, 0], [0.45, -12], [0.6, -3], [0.78, 8], [0.92, 15]]),
+    [[0, 12], [0.22, 5], [0.45, -5], [0.6, -1], [0.78, 3], [0.92, 9]], 14),
   stifle: cycle([[0, -5], [0.15, -12], [0.45, 0], [0.58, -30], [0.7, -45], [0.85, -20], [0.95, -5]],
     [[0, 0], [0.07, -3], [0.22, 0], [0.45, -12], [0.58, -30], [0.7, -43], [0.85, -20], [0.95, 0]]),
   hock: cycle([[0, 5], [0.15, 15], [0.45, 0], [0.58, 30], [0.7, 45], [0.85, 20], [0.95, 5]],
-    [[0, 0], [0.07, 3], [0.22, 0], [0.45, 12], [0.58, 30], [0.7, 43], [0.85, 20], [0.95, 0]]),
+    [[0, -12], [0.07, -12], [0.14, -20], [0.22, 35], [0.45, 30], [0.58, 30], [0.7, 43], [0.85, 20], [0.95, -12]]),
 };
 // Tuned walk: spring under load, then a modest pastern fold. The trot's large
 // fetlock fold was turning the whole free hoof under, rather than clearing it.
@@ -55,9 +63,9 @@ const FORE_FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -
 const FORE_COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]],
   [[0, 0], [0.22, -5], [0.45, 10], [0.6, 8], [0.8, 4]]);
 const HIND_FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -55], [0.82, -20], [0.95, 0]],
-  [[0, 5], [0.22, 30], [0.45, 0], [0.55, -20], [0.68, -30], [0.82, -10], [0.95, 0]]);
+  [[0, 5], [0.22, 30], [0.45, 0], [0.55, -18], [0.68, -27], [0.82, -9], [0.95, 0]]);
 const HIND_COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]],
-  [[0, 0], [0.22, -5], [0.45, 10], [0.6, 25], [0.8, 10]]);
+  [[0, 0], [0.22, -5], [0.45, 10], [0.6, 35], [0.8, 15]]);
 /** the hoof flat on the ground, breaking over its toe at the end of the stance (°, + toe up) */
 // Tuned: finish the toe roll before lift-off, braking the downward spin inherited by swing.
 const BREAKOVER: Rocker = { keys: [[0, 0], [0.75, 0], [0.9, -25], [1, -25]] };
