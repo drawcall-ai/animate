@@ -49,14 +49,15 @@ export const liftHeavy: Scenario = {
     }, { mass: 5 });
     const grips = { left: 'left', right: 'right' };
     let done = false;
+    const report = new Report();
     return {
-      world: createWorld(), report: new Report(),
+      world: createWorld(), report,
       props: () => [{ kind: 'box', position: box.current.position.clone(), quaternion: box.current.quaternion.clone(), size }],
       done: () => done,
       script: (h) => function* () {
         const carried = () => ({ position: h.pose.position(0).clone().addScaledVector(forwardOf(h.gait.facing), 0.36).setY(1.05) });
         yield* parallel<Frame<World>>('all', idle(h), function* () {
-          yield* grab(h, { left: [box, 'left'], right: [box, 'right'] })();
+          yield* reporting(report, ['leftHand', 'rightHand'], grab(h, { left: [box, 'left'], right: [box, 'right'] }))();
           yield* carry(h, { position: new Vector3(), quaternion: new Quaternion() }, [[box, grips, [[1.5, { position: h.pose.com(new Vector3()).addScaledVector(forwardOf(h.gait.facing), 0.36).setY(1.05) }]]]], { scale: 1 })();
           const there = h.pose.com(new Vector3()).setY(0).addScaledVector(forwardOf(h.gait.facing), 3);
           yield* parallel<Frame<World>>('race', hold(h, box, grips, { to: carried }), walkTo(h, { to: there }));

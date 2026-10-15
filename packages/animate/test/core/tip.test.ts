@@ -25,6 +25,22 @@ describe('chainTo', () => {
     const spins = knee.slice(1).map((q, k) => spinOf(knee[k], q, dt, new Vector3()));
     expect(Math.max(...spins.slice(1).map((w, k) => w.distanceTo(spins[k]) / dt))).toBeLessThan(40 + 1e-6);
   });
+
+  it('keeps its intended path when a moving base brings an unreachable goal into reach', () => {
+    const ease = (t: number) => {
+      const u = Math.max(0, Math.min(1, t));
+      return u ** 3 * (10 - 15 * u + 6 * u * u);
+    };
+    const body = new Body(leg(), () => parallel<Frame>('all',
+      action({ update: (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)) }),
+      chainTo('leg', (f) => {
+        const u = Math.max(0, Math.min(1, f.time - 1));
+        return { position: new Vector3(0.1, 0.1 + 0.6 * ease(u), 0.5), velocity: new Vector3(0, 18 * u * u * (1 - u) ** 2, 0) };
+      }, { accel: 8, speed: 2 }),
+    ));
+    for (let k = 0; k < 90; k++) body.update(dt);
+    expect(body.pose.position(3).distanceTo(new Vector3(0.1, 0.4, 0.5))).toBeLessThan(0.01);
+  });
 });
 
 describe('TrackedRotation', () => {

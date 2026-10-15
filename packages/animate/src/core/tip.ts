@@ -27,15 +27,15 @@ export interface TipOptions<W> extends Motion {
  * history (`follow`; a rotation needs `turnAccel`, `followRotation`), out to all but the chain's
  * full length; the chain is solved to it (`solveChain`); and, with `turnAccel`, every joint of the
  * chain is braked to it: each follows what the solve gives it, a joint the solve swivels faster than
- * `turnSpeed` braked, and stops at the end of its range. While the tip is within OWN of where it
- * moved it, it moves on from there (the joints' lag behind the solve is not read as the tip's
- * motion); further off, from where the tip is. One per behaviour moving the chain (it keeps the
- * joints' goals and the tip's path).
+ * `turnSpeed` braked, and stops at the end of its range. Its intended path continues while no later
+ * layer moved the tip after its write; projection into reach and joint lag do not change that
+ * path's velocity. After another layer's intervention it sets off from the actual tip. One per
+ * behaviour moving the chain (it keeps the joints' goals and the tip's path).
  */
 export class ChainTip {
   private readonly joints = new Map<number, TrackedRotation>();
   /** where it moved the tip the last two sub-steps (world) and when last */
-  private readonly moved = { before: new Vector3(), last: new Vector3(), time: NaN };
+  private readonly moved = { before: new Vector3(), last: new Vector3(), placed: new Vector3(), time: NaN };
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
 
@@ -47,9 +47,9 @@ export class ChainTip {
     const bones = skeleton.chain(chain);
     const tip = bones[bones.length - 1];
     const { on, accel, speed, turnAccel, turnSpeed } = options;
-    // (on from where it moved the tip while the tip is (all but) there: the joints' lag is not the tip's motion)
+    // Resume the intended path unless another layer changed the last applied pose.
     const { moved } = this;
-    const own = Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.last.distanceTo(f.prev.position(tip)) < OWN && moved.before.distanceTo(f.prev2.position(tip)) < OWN;
+    const own = Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
     const prev2 = own ? moved.before : f.prev2.position(tip);
     const prev = own ? moved.last : f.prev.position(tip);
     const position = follow(prev2, prev, target.position, { accel, speed, velocity: target.velocity, on }, f.dt, _position);
@@ -59,6 +59,9 @@ export class ChainTip {
       const goal = target.axis ? rolled(target.quaternion, target.axis, near(f.prev.rotation(tip), on)) : target.quaternion;
       quaternion = followRotation(f.prev2.rotation(tip), f.prev.rotation(tip), goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on }, f.dt, _quaternion);
     }
+    moved.before.copy(own ? moved.last : f.prev.position(tip));
+    moved.last.copy(position);
+    moved.time = f.time;
     // (no further than all but the chain's full length: a chain pulled straight swivels on any wobble)
     const base = f.current.position(bones[0]);
     let length = 0;
@@ -67,20 +70,19 @@ export class ChainTip {
     const most = (this.most = options.letOut ? Math.max(REACH * length, Math.min(length, was, own ? this.most : Infinity)) : REACH * length);
     const out = position.distanceTo(base);
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
-    moved.before.copy(own ? moved.last : f.prev.position(tip));
-    moved.last.copy(position);
-    moved.time = f.time;
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : live(options.pole, f) });
-    if (turnAccel === undefined) return;
-    for (const b of bones) {
-      let joint = this.joints.get(b);
-      if (!joint) this.joints.set(b, (joint = new TrackedRotation()));
-      const q = joint.follow(f.prev2.local(b), f.prev.local(b), f.current.local(b), { accel: turnAccel, speed: turnSpeed }, f.dt, _joint);
-      // (carried on by its motion, a joint stops at the end of its range)
-      const limit = skeleton.limits[b];
-      if (limit) clampRotation(q, limit);
-      f.current.setLocal(b, q);
+    if (turnAccel !== undefined) {
+      for (const b of bones) {
+        let joint = this.joints.get(b);
+        if (!joint) this.joints.set(b, (joint = new TrackedRotation()));
+        const q = joint.follow(f.prev2.local(b), f.prev.local(b), f.current.local(b), { accel: turnAccel, speed: turnSpeed }, f.dt, _joint);
+        // (carried on by its motion, a joint stops at the end of its range)
+        const limit = skeleton.limits[b];
+        if (limit) clampRotation(q, limit);
+        f.current.setLocal(b, q);
+      }
     }
+    moved.placed.copy(f.current.position(tip));
   }
 }
 
@@ -131,8 +133,6 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
   return _roll.setFromAxisAngle(a, angle).multiply(q);
 }
 
-/** how near the tip a chain's tip moves on from where it last moved it (m): further off, something else moved it */
-const OWN = 0.03;
 /** the share of a chain's length its tip is moved out to at most */
 const REACH = 0.98;
 const ZERO = new Vector3();

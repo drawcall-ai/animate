@@ -22,9 +22,6 @@ export const heelOf = (p: Proportions, out = new Vector3()) => out.copy(p.sole.h
 /** the ball of the foot (the toes bone's origin) in the foot bone's frame */
 export const ballOf = (p: Proportions, side: Side, out = new Vector3()) => out.copy(p.offsets[`${side}Toes`]);
 
-/** the toe tip in the foot bone's frame (the toes in line with the foot) */
-export const toeTipOf = (p: Proportions, out = new Vector3()) => out.set(0, -0.85 * p.ankleHeight, p.toeFront);
-
 /** a foot heading `yaw`, pitched by `pitch` (+ toes up, − heel up), as a world rotation */
 export const footRotation = (yaw: number, pitch: number, out = new Quaternion()) => quatYXZ(yaw, -pitch, 0, out);
 

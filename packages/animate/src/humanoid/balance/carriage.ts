@@ -78,10 +78,9 @@ export interface Swing {
   strike: number;
   /** a step from standing: lifted gently and carried level */
   standing: boolean;
-  /** how the foot left the floor: its ankle's angle to the shank and roll rate (rad, rad/s), the toes' pitch, the ankle's velocity off its path, the hip then and where it will be on landing */
+  /** how the foot left the floor: its ankle's angle to the shank and roll rate (rad, rad/s), the ankle's velocity off its path, the hip then and where it will be on landing */
   liftAnkle: number;
   liftRate: number;
-  liftToes: number;
   liftVelocity: Vector3;
   hip: Vector3;
   hipLanding: Vector3;

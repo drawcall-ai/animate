@@ -5,6 +5,7 @@ import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
+import { NECK_PITCH } from '../profile/limits';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
@@ -67,6 +68,7 @@ export class Posture {
   /** a runner's leg compression through stance (0 … 1) */
   private comp = 0;
   private readonly weight = new Vector3();
+  private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
@@ -111,7 +113,9 @@ export class Posture {
     // the pelvis where it puts the centre of mass over the root (its ground point, swayed, shifted
     // back under a nod), as high as the legs reach, and as low as asked
     const offset = f.prev.com(_o).sub(f.prev.position(0)).negate().setY(0);
-    const pelvis = c.pelvis.copy(c.root).add(offset).addScaledVector(left, side).addScaledVector(fwd, shift);
+    // Under-relax the pose-to-CoM feedback rather than apply the full knee response again.
+    (this.offset ??= offset.clone()).lerp(offset, 0.95);
+    const pelvis = c.pelvis.copy(c.root).add(this.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
     this.quiet.copy(left).multiplyScalar(life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
     const weight = _v.set(0, 0, 0);
     if (onto && !c.moving) {
@@ -158,7 +162,7 @@ export function lowering(p: Proportions, drop: number): { lower: number; bow: nu
 
 /** The width of the squat's soft stop (× height), and its maximum trunk bow. */
 const BEND = 0.02;
-const MOST_BOW = Math.PI / 3;
+const MOST_BOW = NECK_PITCH * Math.PI / 180;
 
 /**
  * How far a bow of `bow` (rad) brings the shoulders down (m), let down `lower` by the knees: the

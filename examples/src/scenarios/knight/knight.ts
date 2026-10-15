@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { arriving, carry, grab, INDEX, onBone, when, release, walkTo, withGaze, type Behaviour, type BoneName, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
+import { arriving, carry, grab, handTo, INDEX, onBone, when, release, SIDES, walkTo, withGaze, type Behaviour, type BoneName, type Frame, type Grips, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
@@ -24,6 +24,13 @@ export const pause = (k: Knight, seconds: number): Behaviour<World> =>
 
 /** the hands busy while `task` runs (the metrics judge the arms nobody asks anything of as free) */
 export const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => reporting(k.report, ['leftHand', 'rightHand'], task);
+
+/** Hands waiting for a task stay in front of the belt, clear of the worn sword. */
+export const ready = (k: Knight, task: Behaviour<World>, sides: readonly Side[] = SIDES): Behaviour<World> =>
+  busy(k, () => parallel<Frame<World>>('race',
+    ...sides.map((side) => handTo(k.h, side, onBone(k.h, INDEX.chest, at(side === 'left' ? 0.2 : -0.2, -0.2, 0.3), { facing: true }), { lead: false })),
+    task,
+  ));
 
 /** `task` with the eyes on `at` (`withGaze`: first, the task setting off once they are there, or with `first: false` at once; bowing at least `bow`), reported as the gaze */
 export const eyesOn = (k: Knight, at: Live<Vector3, World>, task: Behaviour<World>, options: { first?: boolean; bow?: number } = {}): Behaviour<World> => withGaze(k.h, reported(k.report, 'gaze', at), task, options);

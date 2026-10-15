@@ -4,15 +4,19 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Dev } from '../../core/dev';
 import type { Frame } from '../../core/body';
-import { solveChain } from '../../core/chain';
+import { solveChain, type ChainGoal } from '../../core/chain';
+import { follow } from '../../core/follow';
 import { clampRotation, coordinatesOf } from '../../core/limits';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, SIDES, type Side } from '../bones';
-import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softplus, wrapAngle } from '../../core/math';
+import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle } from '../../core/math';
 import type { Humanoid } from '../humanoid';
 import type { Proportions } from '../proportions';
 import type { Carriage, Swing } from './carriage';
-import { ankleFor, ballOf, footRotation, heelOf, swingHump, swingProgress, toeTipOf, type Foot } from './foot';
+import { ankleFor, ballOf, footRotation, heelOf, swingHump, swingProgress, type Foot } from './foot';
+
+/** how fast a planted foot rolls (rad/s², rad/s), within the ankle's range */
+const ROLL = { accel: 300, speed: 8 };
 
 /** time over which the foot rolls flat about the heel after heel strike (s) */
 const HEEL_ROCKER = 0.12;
@@ -69,16 +73,33 @@ export function shankTilt(pose: ReadonlyPose, side: Side, yaw: number): number {
   return Math.atan2(shin.x * Math.sin(yaw) + shin.z * Math.cos(yaw), shin.y);
 }
 
+/** The shortest hip–ankle span permitted by the knee's flexion limit. */
+export const foldedReach = (p: Proportions, bend: number) => Math.sqrt(p.thigh ** 2 + p.shin ** 2 + 2 * p.thigh * p.shin * Math.cos(bend));
+
+/** Follow the foot's roll, then enforce the ankle constraint on the applied pitch. */
+export function rollFoot(f: Frame<unknown>, c: Carriage, s: number): number {
+  const st = c.steps[s];
+  const goal = plantedPitch(f, c, s);
+  let pitch = follow(st.roll[0], st.roll[1], goal, ROLL, f.dt);
+  const range = f.prev.skeleton.limits[INDEX[`${st.side}Foot`]];
+  if (range) {
+    const tilt = shankTilt(f.prev, st.side, c.feet[s].yaw);
+    pitch = Math.max(-range.swing[1][1] - tilt, Math.min(-range.swing[1][0] - tilt, pitch));
+  }
+  st.roll = [st.roll[1], pitch];
+  return pitch;
+}
+
 /**
  * How a planted foot `s` is rolled (+ toes up, − heel up): landed on the heel, it rolls flat; its
  * heel rises once the shank tilts past what the ankle allows, more as it pushes off (walking
  * through the double support, running through the stance's second half); up onto the ball whenever
  * the leg could not otherwise reach the hip as it is carried.
  */
-export function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number {
+function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number {
   const st = c.steps[s];
   const foot = c.feet[s];
-  if (st.plantedTime < HEEL_ROCKER && st.landPitch !== 0) return st.landPitch * (1 - smoothstep(0, HEEL_ROCKER, st.plantedTime));
+  const strike = st.landPitch * (1 - smoothstep(0, HEEL_ROCKER, st.plantedTime));
   const t = c.timing();
   const other = c.steps[1 - s];
   const trailing = !other.swing && other.plantedTime < st.plantedTime;
@@ -86,7 +107,7 @@ export function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number 
   const runPush = smoothstep(0.45, 1, st.plantedTime / t.stance);
   const limit = lerp(lerp(HEEL_OFF.stand, HEEL_OFF.walk, c.walk), HEEL_OFF.run, t.run);
   const ankle = limit - lerp(PUSH.walk * walkPush, PUSH.run * runPush, t.run) * c.walk;
-  const pitch = Math.max(-MAX_HEEL, Math.min(0, ankle - shankTilt(f.prev, st.side, foot.yaw)));
+  const pitch = Math.max(-MAX_HEEL, Math.min(strike, ankle - shankTilt(f.prev, st.side, foot.yaw)));
   const hip = c.hip(st.side, _hip);
   const reach = lerp(STANDING_REACH, REACH, c.bent) * c.p.legLength;
   if (hip.distanceTo(ankleFor(c.p, st.side, foot.position, foot.yaw, pitch, _a)) <= reach) return pitch;
@@ -123,7 +144,6 @@ export function liftOff(f: Frame<unknown>, side: Side, fromYaw: number, to: Read
     progress: 0,
     liftAnkle: pitch + shankTilt(f.prev, side, fromYaw),
     liftRate: -rate,
-    liftToes: Math.max(0, pitch),
     liftVelocity,
     hip: hip.clone(),
     hipLanding: hip.clone().addScaledVector(velocity, swing.duration),
@@ -171,15 +191,24 @@ export function swingPose(f: Frame<unknown>, c: Carriage, s: number, out: FootPo
   const rolled = w.liftAnkle + w.liftRate * ROLL_ON * (1 - Math.exp(-t / ROLL_ON));
   const angle = lerp(rolled, SWING_ANKLE, minimumJerk((k - SWING_RETURN[0]) / (SWING_RETURN[1] - SWING_RETURN[0])));
   const pitch = w.standing ? w.strike * smoothstep(STRIKE_TURN, 1, k) : Math.min(lerp(angle - tilt, w.strike, smoothstep(STRIKE_TURN, 1, k)), DORSIFLEXION - tilt);
-  const toes = lerp(w.liftToes, pitch, smoothstep(0, TOES_RELAX, k));
-  // the sole never goes through the floor, and clears it by a little through the swing
   footRotation(yaw, pitch, out.foot);
-  footRotation(yaw, toes, out.toes);
-  const ball = ballOf(p, st.side, _a).applyQuaternion(out.foot);
-  const tip = toeTipOf(p, _b).sub(ballOf(p, st.side, _l)).applyQuaternion(out.toes).add(ball).y;
+  const goal = legGoal(f, c, st.side, out);
+  // Predict the shank before asking the free ankle to relax on it.
+  solveChain(f, legOf(st.side), { ...goal, tip: { position: goal.tip.position } });
+  const local = _q.copy(f.prev.local(INDEX[`${st.side}Foot`])).slerp(_spin.setFromAxisAngle(_v.set(1, 0, 0), -SWING_ANKLE), smoothstep(0, SWING_RETURN[1], k));
+  out.foot.slerp(_spin.copy(f.current.rotation(INDEX[`${st.side}LowerLeg`])).multiply(local), 1 - smoothstep(STRIKE_TURN, 1, k));
+  const toes = _q.copy(f.prev.local(INDEX[`${st.side}Toes`])).slerp(_spin.identity(), smoothstep(0, TOES_RELAX, k));
+  const toeRange = f.current.skeleton.limits[INDEX[`${st.side}Toes`]];
+  if (toeRange) clampRotation(toes, toeRange);
+  out.toes.copy(out.foot).multiply(toes);
+  // Clear the actual three sole landmarks after planning the ankle and toes.
+  const ball = ballOf(p, st.side, _a).applyQuaternion(out.foot).y;
   const heel = heelOf(p, _a).applyQuaternion(out.foot).y;
-  const low = ankle.y + Math.min(tip, heel) - (foot.position.y - p.ankleHeight);
-  ankle.y += softplus(SOLE_CLEARANCE * Math.sin(Math.PI * k) - low, 0.004) * smoothstep(0, CLEARING, k);
+  const big = _b.copy(p.sole.bigToe).setX(p.sole.bigToe.x * st.sign).applyQuaternion(out.toes).y + ball;
+  const small = _b.copy(p.sole.smallToe).setX(p.sole.smallToe.x * st.sign).applyQuaternion(out.toes).y + ball;
+  const soft = 0.004 * Math.sin(Math.PI * k) ** 2 + Number.EPSILON;
+  const low = ankle.y + softMin(heel, softMin(big, small, soft), soft) - (foot.position.y - p.ankleHeight);
+  ankle.y += softplus(SOLE_CLEARANCE * Math.sin(Math.PI * k) * smoothstep(0, CLEARING, k) - low, soft);
   // never out of the leg's reach: taken in from the floor and given back to it
   const reach = lerp(LANDING_REACH, SWING_REACH, run * smoothstep(0, 0.2, k) * (1 - smoothstep(0.6, 1, k))) * p.legLength;
   ankle.lerp(withinReach(hip, _a.copy(ankle), reach), smoothstep(0, REACH_IN, k) * (1 - smoothstep(1 - REACH_IN, 1, k)));
@@ -194,21 +223,24 @@ export function plantedPose(p: Proportions, side: Side, foot: Foot, pitch: numbe
   return out;
 }
 
-/** leg `side` solved down to `pose` (its knee bent over the toes), the toes turned to it */
-export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose) {
+/** The shared hip, knee and ankle constraints for a leg pose. */
+function legGoal(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose): ChainGoal {
   const hip = c.hip(side, _hip);
-  // (the foot's heading by its sideways axis, which its pitch leaves level: a foot rolled up onto its toes points nearly down)
   const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
   const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
-  // Keep loaded tibial twist while the foot is planted; relax it off the floor, where it cannot flip the contact solve.
-  // (never pulled quite straight: a straight knee bends either way on the slightest wobble)
   const ankle = withinReach(hip, _a.copy(pose.ankle), STRAIGHT * c.p.legLength);
   const knee = INDEX[`${side}LowerLeg`];
   const limit = f.prev.skeleton.limits[knee];
+  const swing = c.steps[side === 'left' ? 0 : 1].swing;
+  const release = swing ? Math.exp(-f.dt / TWIST_RELEASE) : 1;
   // The distal segment points down, opposite the knee limit's +y twist axis.
-  const release = c.steps[side === 'left' ? 0 : 1].swing ? Math.exp(-f.dt / TWIST_RELEASE) : 1;
   const twist = limit ? -coordinatesOf(f.prev.local(knee), limit).value[2] * release : 0;
-  solveChain(f, legOf(side), { tip: { position: ankle, quaternion: pose.foot }, pole, twist });
+  return { tip: { position: ankle, quaternion: pose.foot }, pole, twist };
+}
+
+/** leg `side` solved down to the foot's pose, with toes turned to their world goal */
+export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose) {
+  solveChain(f, legOf(side), legGoal(f, c, side, pose));
   const foot = INDEX[`${side}Foot`];
   const toes = INDEX[`${side}Toes`];
   const local = _q.copy(f.current.rotation(foot)).invert().multiply(pose.toes);

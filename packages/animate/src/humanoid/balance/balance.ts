@@ -14,7 +14,7 @@ import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
 import { seedOf } from '../../core/random';
 import { Life } from './life';
 import { Carriage } from './carriage';
-import { checkFeet, plantedPitch, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
+import { checkFeet, foldedReach, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
 import { LOWER, Posture, TIPTOE, type Trunk } from './posture';
 import { stepFeet } from './steps';
 import { footprint } from './foot';
@@ -50,8 +50,6 @@ const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 };
 const TURN = { accel: 60 };
-/** how fast a planted foot rolls (rad/s², rad/s) */
-const ROLL = { accel: 300, speed: 8 };
 /** let down or up this far (m, default body), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /** how long both feet stand before the body has settled (s): a squaring step comes before */
@@ -145,9 +143,21 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
           const st = c.steps[s];
           const pose = feet[s];
           if (st.swing) swingPose(f, c, s, pose);
-          else plantedPose(p, side, h.feet[s], followed(st.roll, plantedPitch(f, c, s), ROLL, dt), pose);
-          solveLeg(f, c, side, pose);
+          else plantedPose(p, side, h.feet[s], rollFoot(f, c, s), pose);
         });
+        // The folded reach is the other end of the same hip–ankle constraint as full extension.
+        let floor = -Infinity;
+        SIDES.forEach((side, s) => {
+          const hip = f.current.position(INDEX[`${side}UpperLeg`]);
+          const ankle = feet[s].ankle;
+          const bend = f.current.skeleton.limits[INDEX[`${side}LowerLeg`]]?.swing[1][1] ?? Math.PI;
+          const span2 = foldedReach(p, bend) ** 2;
+          const across2 = (hip.x - ankle.x) ** 2 + (hip.z - ankle.z) ** 2;
+          floor = Math.max(floor, ankle.y + Math.sqrt(Math.max(0, span2 - across2)) + c.pelvis.y - hip.y);
+        });
+        c.pelvis.y = Math.max(c.pelvis.y, floor);
+        f.current.setRoot(c.pelvis);
+        SIDES.forEach((side, s) => solveLeg(f, c, side, feet[s]));
 
         const g = h.gait;
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];

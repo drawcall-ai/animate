@@ -51,7 +51,7 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
           const sign = s === 0 ? 1 : -1;
           // (the left arm in front as the left foot lifts, the right behind)
           // (growing in as the walk does: setting off, the first steps barely swing them)
-          const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * smoothstep(0.3, 1, g.walk);
+          const swing = (at: number) => (sign * Math.cos(g.phase + Math.PI * at) * lerp(0.33, 0.42, g.run) + 0.02) * g.walk;
           const a = swing(lead);
           const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
           // the arm hanging plumb from the shoulder (as it was last, whoever placed the chest after),
@@ -64,7 +64,7 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
           const clear = (thigh + CLEAR * p.height - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / p.armLength;
           const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1)));
           const hang = _q.setFromAxisAngle(Y, yaw).multiply(_h.setFromAxisAngle(X, -a)).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out)));
-          set(f, goals, INDEX[`${side}UpperArm`], hang.premultiply(_h.copy(f.prev.rotation(INDEX[`${side}Shoulder`])).invert()));
+          set(f, goals, INDEX[`${side}UpperArm`], hang.premultiply(_h.copy(f.current.rotation(INDEX[`${side}Shoulder`])).invert()));
           set(f, goals, INDEX[`${side}LowerArm`], _q.setFromAxisAngle(Y, -sign * flex));
           set(f, goals, INDEX[`${side}Hand`], IDENTITY);
         });
@@ -77,7 +77,10 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
 function set<W>(f: Frame<W>, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion) {
   let joint = joints.get(bone);
   if (!joint) joints.set(bone, (joint = new TrackedRotation()));
-  f.current.setLocal(bone, joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r));
+  const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
+  const limit = f.current.skeleton.limits[bone];
+  if (limit) clampRotation(q, limit);
+  f.current.setLocal(bone, q);
 }
 
 /** How a hand goes to its target. */
@@ -168,7 +171,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
     const hips = f.current.position(0);
     const bearing = wrapAngle(Math.atan2(goal.x - hips.x, goal.z - hips.z) - h.gait.facing);
     // Recalled design share from the brief: trunk joins a reach; 20% of bearing, at most 20°.
-    h.asks.twist = clamp(0.2 * bearing, -Math.PI / 9, Math.PI / 9) * smoothstep(0.35, 0.7, Math.abs(bearing)) * (toward?.share ?? 1);
+    h.asks.twist = clamp(0.2 * bearing, -Math.PI / 9, Math.PI / 9) * (toward?.share ?? 1);
   }
 }
 

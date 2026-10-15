@@ -15,7 +15,7 @@ export interface Gazer {
   eyes(pose: ReadonlyPose, out: Vector3): Vector3;
   /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
   range: { down: number; up: number; side: number };
-  /** Comfortable cervical pitch (rad); unbounded for a chain without a posture preference. */
+  /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
   pitch?: number;
   /** Ask the body to help before aiming the head. */
   lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
@@ -60,7 +60,10 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         const jumped = distance > JUMP * f.dt;
         (aimed ??= new Vector3()).copy(point);
         // Carry the last final eyes forward one step; an earlier layer's temporary head pose is not the gaze being overridden.
-        const origin = gazer.eyes(f.prev, _eyes).add(pose.position(bones[0])).sub(f.prev.position(bones[0]));
+        const base = bones[0];
+        const parentBone = pose.skeleton.bones[base].parent;
+        const carried = _rel.copy(pose.rotation(parentBone)).multiply(_p.copy(f.prev.rotation(parentBone)).invert());
+        const origin = gazer.eyes(f.prev, _eyes).sub(f.prev.position(base)).applyQuaternion(carried).add(pose.position(base));
         const d = _d.subVectors(point, origin).normalize();
         if (d.lengthSq() === 0) return;
         // upright: turned about the vertical, then pitched (+ down); looking nearly straight up or
@@ -72,10 +75,10 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         const facing = Math.atan2(-right.z, right.x);
         const turned = pose.rotation(parent);
         const local = _line.copy(d).applyQuaternion(_rel.copy(turned).invert());
-        const pitch = Math.atan2(-local.y, Math.hypot(local.x, local.z));
-        const effort = Math.min(1, Math.abs(pitch) / (gazer.pitch ?? Infinity));
-        const eyeRange = pitch > 0 ? gazer.range.down : gazer.range.up;
-        const eyePitch = Math.sign(pitch) * Math.min(eyeRange, Math.max(EYES * Math.abs(pitch) * effort, eyeRange * effort ** 2));
+        // Preferred eye declination saves neck flexion; upward shifts retain the eyes' pursuit range.
+        const down = Math.max(0, Math.atan2(-local.y, Math.hypot(local.x, local.z)));
+        const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
+        const eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
         const ways = (line: Vector3) => {
           const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
           const toward = wrap(Math.atan2(line.x, line.z) - facing);
@@ -95,7 +98,7 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         // line; up or down, and looking over the top, the head all the way: the neck pitches
         // nearer its stops, and the eyes have little to spare there)
         const aside = wrap(Math.atan2(d.x, d.z) - facing);
-        const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / eyeRange) ** 2)));
+        const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2)));
         if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
         // Follow in world space so the trunk can move beneath a steady gaze.
         const whole = _whole.copy(over ? _o : _q);

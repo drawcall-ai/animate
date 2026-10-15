@@ -19,7 +19,7 @@ const JOINTS = { accel: 200 };
 /** of the head's turn and bend from the pelvis, the share each joint takes first, lumbar to skull (old core: the trunk 0.3, the neck 0.35 more, the head the rest) */
 const SHARE = [0.15, 0.15, 0.35, 0.35];
 /** the spine's solve: how many times the trunk swings the head over and the neck turns it again */
-const PASSES = 4;
+const PASSES = 8;
 /**
  * Leading: once the head is turned this far off the body's facing (rad), for this long (s), the body
  * turns after it, until it faces the head to within SQUARED (rad) and has settled: the trunk and

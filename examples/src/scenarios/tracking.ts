@@ -260,8 +260,8 @@ const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 1.05, stand: 0.55, speed
 function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame<World>) => Vector3, pace: number): (f: Frame<World>) => Partial<Asks> {
   const p = h.proportions;
   const sign = side === 'left' ? 1 : -1;
-  const go = { to: new Vector3(NaN, 0, 0), speed: LEADS.speed * pace, accel: LEADS.accel * pace };
-  const face = { yaw: NaN, rate: LEADS.turn };
+  const go = { to: new Vector3(NaN, 0, 0), speed: LEADS.speed * pace, accel: LEADS.accel * pace ** 2 };
+  const face = { yaw: NaN, rate: LEADS.turn * pace };
   let turning = false;
   return (f) => {
     const spot = go.to;

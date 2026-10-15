@@ -128,18 +128,18 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     // with a tip rotation the middle joint's and the tip's as they would share its twist
     const bent = _bent.setFromAxisAngle(h, bend).multiply(neutral);
     const swivelled = (angle: number) => local[0].copy(c.base).invert().multiply(_q.setFromAxisAngle(T, angle)).multiply(r0);
-    const strain = (angle: number, search = false) => {
+    const strain = (angle: number) => {
       const first = swivelled(angle);
       const upper = _upper.copy(c.base).multiply(first);
       // (the first joint's limit before the tip's turn: it keeps the tip on the goal)
-      return 100 * excess(first, limits[0]) + (quaternion ? shared(upper, bent, a, quaternion, limits, search, twist) : 0);
+      return 100 * excess(first, limits[0]) + (quaternion ? shared(upper, bent, a, quaternion, limits, twist) : 0);
     };
     // as the pole has it, unless a swivel searched with the preferred twist fits better
     let swivel = 0;
-    let left = strain(0, true);
+    let left = strain(0);
     if (left >= FITS) {
       const searched = least(strain, -Math.PI, Math.PI, 0);
-      const there = strain(searched, true);
+      const there = strain(searched);
       if (there < left) [swivel, left] = [searched, there];
     }
     swivelled(swivel);
@@ -161,10 +161,13 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   q.addScaledVector(h, -q.dot(h));
   if (q.lengthSq() > 1e-18) bend = clampBend(signedAngle(vp, q, h), hinge);
   local[1].setFromAxisAngle(h, bend).multiply(neutral);
-  if (!quaternion) return;
+  if (!quaternion) {
+    if (twist !== undefined) limited(skeleton, bones[1], local[1].multiply(_q2.setFromAxisAngle(a, twist)));
+    return;
+  }
 
   // the tip's turn about the middle bone, shared between the middle bone and the tip
-  shared(r0, local[1], a, quaternion, limits, true, twist);
+  shared(r0, local[1], a, quaternion, limits, twist);
   limited(skeleton, bones[1], local[1].copy(_twisted));
   limited(skeleton, bones[2], local[2].copy(r0).multiply(local[1]).invert().multiply(quaternion));
 }
@@ -175,19 +178,18 @@ function tipped(upper: Quaternion, middle: Quaternion, axis: Vector3, twist: num
   return _tip.copy(upper).multiply(_twisted).invert().multiply(quaternion);
 }
 
-/** how far the middle joint and the tip are outside their limits with the tip's twist split between them by their twist ranges (or, with `search`, as it best fits) */
-function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], search: boolean, twist: number | undefined): number {
+/** The best joint fit and cost of leaving the preferred twist, used by both twist and swivel searches. */
+function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], twist: number | undefined): number {
   const at = (twist: number) => {
     const tip = tipped(upper, middle, axis, twist, quaternion);
     return excess(_twisted, limits[1]) + excess(tip, limits[2]);
   };
-  // the preferred twist, within the middle joint's twist range and leaving the tip's in its own
+  // Both joints' limits are evaluated together, from the preferred twist or an even split.
   const whole = twistAbout(tipped(upper, middle, axis, 0, quaternion), axis);
   const [lo, hi] = limits[1]?.twist ?? [-Math.PI, Math.PI];
-  const [tipLo, tipHi] = limits[2]?.twist ?? [-Math.PI, Math.PI];
-  const [from, to] = [Math.max(lo, whole - tipHi), Math.min(hi, whole - tipLo)];
-  const split = from <= to ? Math.min(to, Math.max(from, twist ?? whole / 2)) : (from + to) / 2;
-  return at(search ? least(at, lo, hi, split) : split);
+  const split = Math.min(hi, Math.max(lo, twist ?? whole / 2));
+  const fitted = least(at, lo, hi, split);
+  return at(fitted) + NEAREST * Math.abs(fitted - split);
 }
 
 /** a middle joint as a hinge: its axis and range in its parent's frame, the rotation it bends from, and how far it is bent now */
@@ -226,11 +228,13 @@ function nearest(a: number, b: number, hinge: Hinge): number {
  * refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than it must)
  */
 function least(f: (x: number) => number, lo: number, hi: number, start: number): number {
+  start = Math.min(hi, Math.max(lo, start));
   const g = (x: number) => f(x) + NEAREST * Math.abs(x - start);
   let best = start;
   let low = g(start);
   if (low < FITS) return start;
   const see = (x: number) => {
+    x = Math.min(hi, Math.max(lo, x));
     const e = g(x);
     if (e < low) [low, best] = [e, x];
   };
