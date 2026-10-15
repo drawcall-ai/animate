@@ -3,7 +3,6 @@ import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { live, type Behaviour, type Live } from '../core/goal';
 import type { UntilCondition } from '@pmndrs/timeline';
-import { loadFactor } from '../core/carrier';
 import type { Go } from './asks';
 import { SIDES } from './bones';
 import type { Humanoid } from './humanoid';
@@ -64,8 +63,10 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
     const where = (f: Frame<W>) => {
       const items = new Set(SIDES.flatMap((side) => h.holding[side]?.item ?? []));
       const mass = [...items].reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
-      // Recalled tuning: added weight lowers the default walk's pace; an explicit pace is kept.
-      const effort = loadFactor(mass);
+      // Read: Wall-Scheffler & Myers 2013, frontal loads reduced preferred speed
+      // by 6% at 8% body mass and 17% at 16%. Tuned more cautiously for bulky
+      // hand loads: 8 kg gives 0.85 m/s from 1.3; explicit scene paces are kept.
+      const effort = 1 + mass / 15;
       go.speed = options.speed ?? speed / effort;
       go.accel = options.accel ?? accel / effort;
       const body = f.prev.com(_com).setY(0);

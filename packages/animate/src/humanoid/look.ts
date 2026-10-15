@@ -116,8 +116,9 @@ const MOST_BOW = (90 - NECK_PITCH) * Math.PI / 180;
 export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>) {
   const hips = pose.position(0);
   const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.gait.facing);
-  // Read profile: ~75° cervical rotation; eyes take a little more, then the trunk joins.
-  if (Math.abs(bearing) > 1.45) h.asks.twist = clamp(bearing - Math.sign(bearing) * 1.45, -0.6, 0.6);
+  // Read profile: ~75° cervical rotation is a limit. Recruit the trunk from 63°
+  // rather than waiting until the neck is already at its limit.
+  if (Math.abs(bearing) > 1.1) h.asks.twist = clamp(bearing - Math.sign(bearing) * 1.1, -0.6, 0.6);
   const p = h.proportions;
   const ahead = Math.hypot(point.x - hips.x, point.z - hips.z);
   const height = point.y - hips.y;

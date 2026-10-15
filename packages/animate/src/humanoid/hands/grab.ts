@@ -42,9 +42,9 @@ const STILL = 0.5;
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
  * halfway from its shoulder to its grip); LOWERING s before, as it plants its last step, the body
  * starts to bow and bend for them; once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
- * `hold` or `carry`.
+ * `hold` or `carry`. With `first: false`, gaze and reach prepare together once the grips enter view.
  */
-export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number } = {}): Behaviour<W> {
+export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number; first?: boolean } = {}): Behaviour<W> {
   const { look = true, bow } = options;
   return function* () {
     let stood = false;
@@ -76,7 +76,7 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
     const seen = (f: Frame<W>) => near() && Math.abs(wrapAngle(headingOf(...flatTo(f, middleOf(holds))) - h.gait.facing)) < IN_VIEW;
     yield* parallel<Frame<W>>('all', walk, function* () {
       yield* when((f: Frame<W>) => stood || seen(f));
-      yield* (look === false ? reach : withGaze(h, look === true ? middleOf(holds) : look, reach, { bow }))();
+      yield* (look === false ? reach : withGaze(h, look === true ? middleOf(holds) : look, reach, { bow, first: options.first }))();
     });
   };
 }

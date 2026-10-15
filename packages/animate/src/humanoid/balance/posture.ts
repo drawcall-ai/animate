@@ -189,8 +189,10 @@ function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>
     const at = pose.point(i, load.at, _v).sub(hips);
     moment += load.mass * (at.x * forward.x + at.z * forward.z);
   });
-  // Geometry, not an empirical timing law: a modest opposing angle about a trunk-length lever.
-  return clamp(Math.atan2(moment, mass * (p.eyeHeight - p.hipHeight)), -0.12, 0.12);
+  // Read: Anderson et al. 2007, doi:10.1080/00140130701403005, Fig. 5: anterior
+  // loads produce trunk extension. Tuned effective trunk CoM lever (80% of its height),
+  // capped at 10.3 degrees; the study is not an 8 kg dose-response law.
+  return clamp(Math.atan2(moment, mass * (p.eyeHeight - p.hipHeight) * 0.8), -0.18, 0.18);
 }
 
 /**

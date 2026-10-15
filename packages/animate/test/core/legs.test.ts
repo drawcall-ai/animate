@@ -7,8 +7,8 @@ import { Limb, type Motion } from '../../src/core/legs/limb';
 import { Solver } from '../../src/core/legs/solve';
 import { Legs } from '../../src/core/legs/legs';
 import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
-import { HORSE_WALK, horseLegs } from '../../src/horse/legs';
-import { SKELETON } from '../../src/horse/skeleton';
+import { HORSE_WALK, horseLegs, horseCarriage } from '../../src/horse/legs';
+import { SKELETON, LEGS, HEAD } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
 
 it('a short swing with an outward lift-off derivative stays inside ROM and lands at rest', () => {
@@ -102,5 +102,31 @@ it('follows a moving goal with supported contacts and a root that turns toward i
   expect(body.pose.position(0).z).toBeGreaterThan(4);
   expect(turned).toBeGreaterThan(0.01);
   expect(turned).toBeLessThan(0.2);
+  expect(body.log).toEqual([]);
+});
+
+it('a slow horse walk supports on an extended carpus, folds in swing and visibly nods', () => {
+  const pose = new Pose(SKELETON);
+  pose.setRoot(new Vector3(0, 1.37, 0));
+  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    engine.toward(f, { position: new Vector3(0, 1.37, 20) }, { speed: 0.95, accel: 0.65 });
+    horseCarriage(f, engine);
+  } }), { pose, dev: true });
+  const support: number[] = [], swing: number[] = [], poll: number[] = [];
+  for (let tick = 0; tick < 480; tick++) {
+    body.update(1 / 60);
+    if (tick < 180) continue;
+    const state = engine.legs[0];
+    const q = body.pose.local(LEGS[0].cannon);
+    const angle = Math.abs(2 * Math.atan2(q.x, q.w)) * 180 / Math.PI;
+    if (state.planted && state.phase > 0.15 && state.phase < 0.45) support.push(angle);
+    if (!state.planted) swing.push(angle);
+    poll.push(body.pose.position(HEAD).y);
+  }
+  expect(support.length).toBeGreaterThan(30);
+  expect(Math.max(...support)).toBeLessThan(3);
+  expect(Math.max(...swing)).toBeGreaterThan(25);
+  expect(Math.max(...poll) - Math.min(...poll)).toBeGreaterThan(0.12);
   expect(body.log).toEqual([]);
 });
