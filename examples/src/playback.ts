@@ -117,6 +117,8 @@ export class Playback {
   }
 
   private root() {
+    const focus = this.sim.stage.focus?.();
+    if (focus) return focus;
     const h = this.sim.actors[0];
     if (h) return h.model.scene.position.clone().setY(FOCUS_HEIGHT * h.proportions.height);
     const body = this.sim.stage.bodies?.[0];

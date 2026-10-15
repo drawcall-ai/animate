@@ -136,7 +136,11 @@ function aim() {
   if (settings.view === 'orbit') {
     stage.controls.target.copy(framing.focus);
     stage.controls.update();
-  } else placeCamera(stage.camera, settings.view, framing, distance());
+  } else {
+    const angles = playback.sim.scenario.cameraAngles;
+    const bearing = settings.view === 'front' || settings.view === 'side' ? angles?.[settings.view] : undefined;
+    placeCamera(stage.camera, settings.view, framing, distance(), bearing);
+  }
 }
 
 function draw() {

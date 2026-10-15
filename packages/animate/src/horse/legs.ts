@@ -5,47 +5,56 @@ import type { Legs } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import type { LegChain, Rocker } from '../core/legs/legs';
 import { LEGS, NECK, HEAD } from './skeleton';
-import { strideAt } from '../core/legs/gait';
 import { powerGait } from '../core/legs/schedule';
 
 // Recalled: hip height ~1.2 m, slow walk threshold 0.8 m/s (spike).
 // Recalled: Hildebrand lateral walk sequence and Clayton/Hobbs diagonal trot offsets.
 // Recalled: Alexander/Jayes stride coefficients; Hodson stance at 1.6 / 3.7 m/s.
 // Tuned: 5 cm walk clearance for the proxy hoof; trot retains the recalled spike margins.
-export const HORSE_WALK = { ...powerGait(1.2, 0.8, [0.25, 0.75, 0, 0.5], 2.3, 0.68 * Math.pow(1.6, 0.7), [0.05, 0.05, 0.05, 0.05]), referenceSpeed: 1.6 };
+const walk = powerGait(1.2, 0.8, [0.25, 0.75, 0, 0.5], 2.3, 0.68 * Math.pow(1.6, 0.7), [0.05, 0.05, 0.05, 0.05]);
+export const HORSE_WALK = {
+  ...walk, referenceSpeed: 1.6, referenceBlend: 1,
+  // Tuned from the read 28% fore-cannon crossing, allowing for the coffin's forward offset.
+  contacts: walk.contacts.map((contact, i) => ({ ...contact, stanceCenter: i < 2 ? 0.31 : undefined })),
+};
 export const HORSE_TROT = powerGait(1.2, 0.8, [0.52, 0.02, 0, 0.5], 2.15, 0.3 * Math.pow(3.7, 0.7), [0.035, 0.035, 0, 0]);
 
-/**
- * Each joint's angle over a stride off standing square (°, + its segment's far end forward), the
- * stance to 45%: the shapes of the sagittal joint angles at the trot read off Back et al. 1995
- * (Equine Vet J 27:31, 27:39; recalled, not re-read: the amplitudes to the excursions horse-v4's
- * judge bands hold, Back 1995 and Hodson 2000/2001), the same for the walk (warped to its duty)
- */
-const walkDuty = strideAt(HORSE_WALK, 1.6, 0).duty;
-const trotDuty = strideAt(HORSE_TROT, 3.7, 0).duty;
-// Read: Back et al. 1996, doi:10.1080/01652176.1996.9694699, Table 1.
-// Derived walk/trot excursion ratios from Tables 1–2; duty interpolates the two gaits, not their timing.
-const cycle = (keys: [number, number][], walk = 1): JointCycle => ({
-  duty: 0.45, keys,
-  amplitude: (duty) => 1 + (walk - 1) * Math.max(0, Math.min(1, (duty - trotDuty) / (walkDuty - trotDuty))),
-});
+// Read: Back et al. 1995 fore/hind abstracts describe TROT at 4 m/s, not walk.
+// Recalled: Back et al. 1996 comparison: walk stance has less shoulder/stifle/hock flexion.
+// Read: Hodson et al. 2001 abstract (doi:10.2746/042516401776767485): loading
+// flexion in the first 10%, stifle flexion after 28%, coordinated stifle/hock swing.
+// Recalled: trot curves below and the 1996 excursion values retained from the spike.
+// Read: Hodson et al. 2000 (doi:10.2746/042516400777032237): fore cannon vertical at 28% stride.
+// Tuned: walk keys implement those findings; they are not digitised paper data.
+const cycle = (keys: [number, number][], alternate: [number, number][] = keys): JointCycle => ({ duty: 0.45, keys, alternate });
 const FORE = {
   scapula: cycle([[0, 8], [0.22, 0], [0.45, -10], [0.7, 2], [0.9, 10]]),
   shoulder: cycle([[0, 5], [0.22, -3], [0.45, -15], [0.6, -5], [0.75, 15], [0.9, 15]]),
-  elbow: cycle([[0, -5], [0.22, -12], [0.45, -5], [0.58, 35], [0.7, 55], [0.85, 20], [0.95, 0]], 75.2 / 84.7),
-  carpus: cycle([[0, 0], [0.4, 0], [0.5, -30], [0.62, -87.9], [0.75, -50], [0.88, -5]], 69.9 / 87.9),
+  elbow: cycle([[0, -5], [0.22, -12], [0.45, -5], [0.58, 35], [0.7, 55], [0.85, 20], [0.95, 0]],
+    [[0, -5], [0.22, -12], [0.45, -5], [0.58, 35 * 75.2 / 84.7], [0.7, 55 * 75.2 / 84.7], [0.85, 20 * 75.2 / 84.7], [0.95, 0]]),
+  carpus: cycle([[0, 0], [0.4, 0], [0.5, -30], [0.62, -87.9], [0.75, -50], [0.88, -5]],
+    [[0, 0], [0.4, 0], [0.5, -30 * 66 / 87.9], [0.62, -66], [0.75, -50 * 66 / 87.9], [0.88, -5 * 66 / 87.9]]),
 };
 const HIND = {
   hip: cycle([[0, 10], [0.22, 0], [0.45, -12], [0.6, -3], [0.78, 15], [0.92, 14]]),
-  stifle: cycle([[0, -5], [0.15, -12], [0.45, 0], [0.58, -30], [0.7, -45], [0.85, -20], [0.95, -5]], 46.1 / 58.3),
-  hock: cycle([[0, 5], [0.15, 15], [0.45, 0], [0.58, 30], [0.7, 45], [0.85, 20], [0.95, 5]], 46 / 65.7),
+  stifle: cycle([[0, -5], [0.15, -12], [0.45, 0], [0.58, -30], [0.7, -45], [0.85, -20], [0.95, -5]],
+    [[0, 0], [0.07, -3], [0.22, 0], [0.45, -3], [0.58, -22], [0.7, -34], [0.85, -15], [0.95, 0]]),
+  hock: cycle([[0, 5], [0.15, 15], [0.45, 0], [0.58, 30], [0.7, 45], [0.85, 20], [0.95, 5]],
+    [[0, 0], [0.07, 3], [0.22, 0], [0.45, 3], [0.58, 22], [0.7, 34], [0.85, 15], [0.95, 0]]),
 };
-/** the fetlock sinking under the load and folding in the swing, the coffin joint a little either way */
-// These are rotations off the sloping standing pastern, not the table's absolute joint angles.
-const FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -55], [0.82, -20], [0.95, 0]]);
-const COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]]);
+// Tuned walk: spring under load, then a modest pastern fold. The trot's large
+// fetlock fold was turning the whole free hoof under, rather than clearing it.
+const FORE_FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -55], [0.82, -20], [0.95, 0]],
+  [[0, 5], [0.22, 30], [0.45, 0], [0.55, -30 * 35 / 55], [0.68, -35], [0.82, -20 * 35 / 55], [0.95, 0]]);
+const FORE_COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]],
+  [[0, 0], [0.22, -5], [0.45, 10], [0.6, 8], [0.8, 4]]);
+const HIND_FETLOCK = cycle([[0, 5], [0.22, 30], [0.45, 0], [0.55, -30], [0.68, -55], [0.82, -20], [0.95, 0]],
+  [[0, 5], [0.22, 30], [0.45, 0], [0.55, -20], [0.68, -30], [0.82, -10], [0.95, 0]]);
+const HIND_COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]],
+  [[0, 0], [0.22, -5], [0.45, 10], [0.6, 25], [0.8, 10]]);
 /** the hoof flat on the ground, breaking over its toe at the end of the stance (°, + toe up) */
-const BREAKOVER: Rocker = { keys: [[0, 0], [0.8, 0], [1, -25]] };
+// Tuned: finish the toe roll before lift-off, braking the downward spin inherited by swing.
+const BREAKOVER: Rocker = { keys: [[0, 0], [0.75, 0], [0.9, -25], [1, -25]] };
 
 /** the horse's body for the core */
 export function horseLegs(): readonly LegChain[] {
@@ -55,8 +64,8 @@ export function horseLegs(): readonly LegChain[] {
       { bone: leg.upper, axes: 'yzx', cycle: leg.fore ? FORE.shoulder : HIND.hip },
       { bone: leg.middle, axes: 'x', cycle: leg.fore ? FORE.elbow : HIND.stifle },
       { bone: leg.cannon, axes: 'x', cycle: leg.fore ? FORE.carpus : HIND.hock },
-      { bone: leg.pastern, axes: 'zx', cycle: FETLOCK },
-      { bone: leg.hoof, axes: 'x', cycle: COFFIN },
+      { bone: leg.pastern, axes: 'zx', cycle: leg.fore ? FORE_FETLOCK : HIND_FETLOCK },
+      { bone: leg.hoof, axes: 'x', cycle: leg.fore ? FORE_COFFIN : HIND_COFFIN },
     ],
     heel: leg.heel.clone(),
     toe: leg.toe.clone(),

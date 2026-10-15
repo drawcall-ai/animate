@@ -23,6 +23,8 @@ export interface Stage {
   report: Report;
   /** the scenery drawn at time `t` (s) */
   props(t: number): Prop[];
+  /** Optional scene focus, for framing an interaction across several bodies. */
+  focus?(): Vector3;
   /** whether the run did what the scenario is for (asked at its end) */
   done(): boolean;
   /** what actor `index` wears from the start, for its proportions (made with it: worn and borne from its first sub-step) */
@@ -48,6 +50,8 @@ export interface Scenario {
   actors: readonly Role[];
   stage(dev?: boolean): Stage;
   cameraDistance?: number;
+  /** World yaw of a fixed shot, overriding its usual body-relative bearing. */
+  cameraAngles?: Partial<Record<'front' | 'side', number>>;
   /** the facing (yaw) the camera shots are taken against, held fixed; defaults to the first actor's */
   facing?: number;
   /** the actors' character model: OpenPose skeletons (default), or a viverse character — a model file, or viverse's mannequin without `url` */

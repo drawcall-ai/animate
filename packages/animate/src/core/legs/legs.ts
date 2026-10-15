@@ -80,6 +80,8 @@ export class Legs {
    * Braking speed follows v² = 2ad; heading turns no faster than a/v (lateral acceleration).
    * Target velocity predicts continuing travel until touchdown.
    * Motion values belong to the caller; this controller has no species-specific gains.
+   * Throws when no shortened forecast is supported, as for a goal beside or behind the root
+   * (no sideways or backward steps): pursue a goal ahead, or stand on the root's own position.
    */
   toward(f: Frame, goal: Pick<Target, 'position' | 'velocity'>, motion: RootMotion): void {
     if (!(motion.accel > 0 && Number.isFinite(motion.accel)) || (motion.speed !== undefined && !(motion.speed >= 0 && Number.isFinite(motion.speed)))) throw new Error('root motion needs finite positive acceleration and nonnegative speed');
@@ -215,7 +217,7 @@ export class Legs {
     const limb = this.limbs[i];
     const position = new Vector3();
     const turn = new Quaternion();
-    walker.rootAt((next + duty / 2 - walker.phase) / frequency, position, turn);
+    walker.rootAt((next + (walker.stride.stanceCenter ?? duty / 2) - walker.phase) / frequency, position, turn);
     const anchor = limb.anchor.clone();
     if (limb.leg.width !== undefined) anchor.x += (limb.leg.width - anchor.x) * stepping;
     const to = anchor.applyQuaternion(turn).add(position).setY(state.foothold.position.y);

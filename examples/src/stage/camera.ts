@@ -43,7 +43,7 @@ export class Framing {
 const _f = new Vector3();
 
 /** Puts `camera` `distance` from the framing's focus, on `shot`'s side of the body, looking at it. */
-export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw }: Framing, distance: number) {
+export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw }: Framing, distance: number, bearing?: number) {
   const f = forwardOf(yaw);
   const l = leftOf(yaw);
   const dir = new Vector3();
@@ -53,6 +53,7 @@ export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw 
   if (shot === 'side') dir.copy(l).negate().setY(0.06);
   if (shot === 'three') dir.copy(f).multiplyScalar(0.75).addScaledVector(l, -0.66).normalize().setY(0.32);
   if (shot === 'top') dir.set(f.x * 0.02, 1, f.z * 0.02);
+  if (bearing !== undefined) dir.copy(forwardOf(bearing)).setY(0.06);
   dir.normalize();
   const target = focus.clone();
   if (shot === 'top') target.y = 0.5;

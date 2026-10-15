@@ -114,6 +114,7 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
     horseCarriage(f, engine);
   } }), { pose, dev: true });
   const support: number[] = [], swing: number[] = [], poll: number[] = [];
+  const hoofPitch: number[] = [], hindHock: number[] = [], column: number[] = [];
   for (let tick = 0; tick < 480; tick++) {
     body.update(1 / 60);
     if (tick < 180) continue;
@@ -123,10 +124,29 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
     if (state.planted && state.phase > 0.15 && state.phase < 0.45) support.push(angle);
     if (!state.planted) swing.push(angle);
     poll.push(body.pose.position(HEAD).y);
+    engine.legs.forEach((leg, i) => {
+      if (!leg.planted) {
+        const forward = new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(LEGS[i].hoof));
+        hoofPitch.push(Math.asin(forward.y) * 180 / Math.PI);
+      }
+      if (i < 2 && leg.planted && leg.phase > 0.26 && leg.phase < 0.3) {
+        const delta = body.pose.position(LEGS[i].pastern).clone().sub(body.pose.position(LEGS[i].cannon));
+        column.push(Math.abs(Math.atan2(delta.z, -delta.y)) * 180 / Math.PI);
+      }
+      if (i >= 2 && leg.planted && leg.phase > 0.2 && leg.phase < 0.45) {
+        const hock = body.pose.local(LEGS[i].cannon);
+        hindHock.push(Math.abs(2 * Math.atan2(hock.x, hock.w)) * 180 / Math.PI);
+      }
+    });
   }
   expect(support.length).toBeGreaterThan(30);
   expect(Math.max(...support)).toBeLessThan(3);
   expect(Math.max(...swing)).toBeGreaterThan(25);
   expect(Math.max(...poll) - Math.min(...poll)).toBeGreaterThan(0.12);
+  expect(hoofPitch.length).toBeGreaterThan(30);
+  expect(Math.min(...hoofPitch)).toBeGreaterThan(-25);
+  expect(Math.max(...hindHock)).toBeLessThan(6);
+  expect(column.length).toBeGreaterThan(5);
+  expect(Math.max(...column)).toBeLessThan(3);
   expect(body.log).toEqual([]);
 });

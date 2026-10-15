@@ -9,8 +9,8 @@ export const DEG = Math.PI / 180;
  */
 export interface JointCycle {
   duty: number;
-  /** Swing excursion scale for the contact duty of a different gait. */
-  amplitude?: (duty: number) => number;
+  /** A second reference shape; the gait selects its share independently of contact timing. */
+  alternate?: JointCycle['keys'];
   keys: readonly (readonly [number, number])[];
 }
 
@@ -44,4 +44,11 @@ export function cyclePhase(u: number, duty: number, cycleDuty: number): number {
 }
 
 /** the cycle at leg phase `u` of a stride whose stance lasts `duty` (rad: its keys are degrees) */
-export const angleAt = (c: JointCycle, u: number, duty: number) => valueAt(c.keys, cyclePhase(u, duty, c.duty)) * DEG;
+export const angleAt = (c: JointCycle, u: number, duty: number, blend = 0) => cycleAt(c, cyclePhase(u, duty, c.duty), blend);
+
+/** The reference at its own phase, independently of the contact schedule. */
+export function cycleAt(c: JointCycle, phase: number, blend = 0): number {
+  const base = valueAt(c.keys, phase);
+  if (!c.alternate || blend === 0) return base * DEG;
+  return (base + (valueAt(c.alternate, phase) - base) * blend) * DEG;
+}

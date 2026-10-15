@@ -4,7 +4,7 @@ import { minimumJerk, yawOf } from '../math';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
 import type { Pose, ReadonlyPose } from '../pose';
-import { angleAt, DEG, valueAt, type JointCycle } from './cycle';
+import { angleAt, cycleAt, DEG, type JointCycle } from './cycle';
 import type { LegChain, LegTiming } from './legs';
 import { boundSwing, quintic, type Swing } from './swing';
 import type { Stride } from './gait';
@@ -77,7 +77,7 @@ export class Limb {
   /** Reach must outlast the next few ticks, before extension makes the stance singular. */
   supports(p: Pose, state: LegTiming, walker: Motion): boolean {
     const { duty, frequency, stepping } = walker.stride;
-    this.refs(walker.phase - state.footfall, duty, stepping);
+    this.refs(walker.phase - state.footfall, duty, stepping, walker.stride.referenceBlend);
     const targets = [0, 0.1].map((ahead): [number, number] => [ahead, this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping)]);
     return this.reserve(p, walker, state.foothold, targets, 1e-5);
   }
@@ -110,7 +110,7 @@ export class Limb {
 
   /** The same reserve used by preflight and the foothold search. */
   landingSupported(p: Pose, walker: Motion, ahead: number, contact: LegTiming['foothold']): boolean {
-    this.refs(0, walker.stride.duty, walker.stride.stepping);
+    this.refs(0, walker.stride.duty, walker.stride.stepping, walker.stride.referenceBlend);
     const targets = [ahead, ahead + 0.1].flatMap((time): [number, number][] => [
       [time, 0], [time, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)],
     ]);
@@ -149,7 +149,7 @@ export class Limb {
     if (!state.planted) return this.swung(f, walker, state, clearance);
     this.swing = null;
     const u = walker.phase - state.footfall;
-    this.refs(u, duty, stepping);
+    this.refs(u, duty, stepping, walker.stride.referenceBlend);
     const pitch = this.pitch(Math.min(1, u / duty), stepping);
     const target = this.planted(state.foothold, pitch, _target);
     this.held = { position: target.position.clone(), rotation: target.rotation.clone() };
@@ -158,10 +158,10 @@ export class Limb {
   }
 
   /** each joint's reference: its cycle at leg phase `u`, the rest at standing */
-  private refs(u: number, duty: number, stepping: number) {
+  private refs(u: number, duty: number, stepping: number, blend = 0) {
     for (let j = 0; j < this.solver.n; j++) {
       const c = this.cycles[j];
-      this.solver.setRef(j, (c ? angleAt(c, u, duty) * stepping : 0) + this.rest[j] * (1 - stepping));
+      this.solver.setRef(j, (c ? angleAt(c, u, duty, blend) * stepping : 0) + this.rest[j] * (1 - stepping));
     }
   }
 
@@ -179,7 +179,7 @@ export class Limb {
     for (let j = 0; j < solver.n; j++) boundSwing(swing, j, left + f.dt, solver.lo[j], solver.hi[j]);
     for (let j = 0; j < solver.n; j++) [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], swing.land[j], left + f.dt, f.dt);
     this.lifting = false;
-    for (let j = 0; j < solver.n; j++) solver.setRef(j, swing.x[j] + this.shape(j, s, walker.stride.duty));
+    for (let j = 0; j < solver.n; j++) solver.setRef(j, swing.x[j] + this.shape(j, s, walker.stride.referenceBlend));
     _swingTarget.above = this.aboveAt(s);
     // C² at both contacts, with the full sole clearance at mid-swing.
     _swingTarget.floor = clearance * 64 * s ** 3 * (1 - s) ** 3;
@@ -221,14 +221,14 @@ export class Limb {
    * chord between its ends (the knee's bump, the carpus's fold), eased in and out (16 s²(1 − s)²:
    * none of it at either end, nor its rate or acceleration, the plan's own there)
    */
-  private shape(j: number, s: number, duty: number): number {
+  private shape(j: number, s: number, blend = 0): number {
     const c = this.cycles[j];
     const swing = this.swing;
     if (!c || !swing) return 0;
-    const [a, b] = [swingOf(c, 0), swingOf(c, 1)];
+    const [a, b] = [swingOf(c, 0, blend), swingOf(c, 1, blend)];
     // For a folded limb, shortening is proportional to angle² near extension. Scale its
     // flexion by sqrt(travel), preserving clearance as horizontal steps become shorter.
-    return (swingOf(c, s) - a - (b - a) * s) * (c.amplitude?.(duty) ?? 1) * Math.sqrt(swing.stepping) * 16 * s * s * (1 - s) * (1 - s);
+    return (swingOf(c, s, blend) - a - (b - a) * s) * Math.sqrt(swing.stepping) * 16 * s * s * (1 - s) * (1 - s);
   }
 
   /** the landing solved ahead: the joints that stand on the contact `left` s from now, the root where it is planned then (from the last tick's) */
@@ -236,7 +236,7 @@ export class Limb {
     const swing = this.swing;
     if (!swing) throw new Error('a landing without a swing');
     const { duty, stepping } = walker.stride;
-    this.refs(0, duty, stepping);
+    this.refs(0, duty, stepping, walker.stride.referenceBlend);
     this.baseAt(p, walker, left, _turn, _top);
     const target = this.planted(state.foothold, this.pitch(0, stepping), _target);
     this.solver.reach(_turn, _top, target, swing.land);
@@ -279,7 +279,7 @@ export class Limb {
 }
 
 /** a cycle's swing `s` (0 … 1) through it (rad): from its toe-off to its end */
-const swingOf = (c: JointCycle, s: number) => valueAt(c.keys, c.duty + s * (1 - c.duty)) * DEG;
+const swingOf = (c: JointCycle, s: number, blend: number) => cycleAt(c, c.duty + s * (1 - c.duty), blend);
 
 /** a rotation by `angle` (rad) in a bone's sagittal plane: its far end forward (about −X) */
 const sagittal = (angle: number, out: Quaternion) => out.setFromAxisAngle(X, -angle);
