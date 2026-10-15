@@ -30,6 +30,7 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
     const there = (f: F) => (['left', 'right'] as const).every((side) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], helmet.grips[side], helmet));
     yield* busy(k, eyesOn(k, () => helmet.current.position, () => parallel<F>('all', ...(['left', 'right'] as const).map((side) => handTo(k.h, side, helmet.grips[side], {
       on: helmet, seconds: 0.9 / k.pace, until: there,
+      // 0.45 m out keeps the forearms clear of the helmet rim as the hands close on the grips.
       pole: () => new Vector3(side === 'left' ? 0.45 : -0.45, -0.3, -0.1).applyQuaternion(helmet.current.quaternion).add(helmet.current.position),
     })))))();
     for (const side of ['left', 'right'] as const) yield* closeHand(k.h, side, helmet, side)();

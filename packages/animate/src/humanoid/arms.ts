@@ -29,7 +29,7 @@ export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satis
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 export const ARM_REACH = 0.95;
-/** horizontal reach used to decide whether a target needs lowering (× arm length) */
+/** outward reach used to decide whether a target needs lowering (× arm length) */
 const OUT = 0.5;
 
 /**
@@ -236,8 +236,9 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
   const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
   const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
-  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), OUT * p.armLength);
-  const below = Math.sqrt((ARM_REACH * p.armLength) ** 2 - across * across);
+  // Cap outward reach at OUT; below that depth, low targets retain their horizontal demand for lowering.
+  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), Math.max(OUT * p.armLength, high - hand.y));
+  const below = Math.sqrt(Math.max(0, (ARM_REACH * p.armLength) ** 2 - across * across));
   const drop = high - hand.y - below;
   if (drop > 0) {
     const { lower, bow } = lowering(p, drop);

@@ -1,7 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, onBone, type Behaviour, type Frame } from '../../src';
+import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, onBone, type Behaviour, type Frame, type Side } from '../../src';
+import { Life } from '../../src/humanoid/balance/life';
 
 function body(task: (h: Humanoid) => Behaviour, life = true) {
   return new Humanoid(createSkeletonModel(), (h) => function* () { yield* parallel<Frame>('all', idle(h, { life }), task(h)); }, { dev: true });
@@ -154,4 +155,19 @@ it('keeps sway and breathing after a loaded walk, without spontaneous weight shi
   expect(Math.max(...sway) - Math.min(...sway)).toBeGreaterThan(0.004);
   expect(Math.max(...breath) - Math.min(...breath)).toBeGreaterThan(0.02);
   expect(h.log).toEqual([]);
+});
+
+it('seeds the first weight-shift side and alternates later shifts, including after activity', () => {
+  for (const seed of [0, 1, 42]) {
+    const life = new Life(seed);
+    const shifts: Side[] = [];
+    let previous: Side | null = null;
+    for (let step = 0; step < 6000; step++) {
+      life.update(0.1, step < 2000 || step >= 2100, 0);
+      if (life.onto && life.onto !== previous) shifts.push(life.onto);
+      previous = life.onto;
+    }
+    expect(shifts.length).toBeGreaterThan(8);
+    expect(shifts.every((side, i) => i === 0 || side !== shifts[i - 1])).toBe(true);
+  }
 });

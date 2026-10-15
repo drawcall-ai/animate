@@ -44,8 +44,11 @@ const OWN_SIDE = 0.035;
 const COVER_MARGIN = 0.03;
 /** the turn rates (rad/s) over which a step catching the body moves only across the way, not along it */
 const BEND = [0.03, 0.1] as const;
-/** the widest the feet land apart walking slowly (× the stance's width), and the speeds (m/s) over which a walk's steps may go wider */
+/** the widest the feet land apart walking slowly (× stance span) */
 const SLOW_WIDTH = 1.15;
+/** Turning feet may straddle different headings; cap their separation in the body's frame too (× stance span). */
+const TURN_WIDTH = 1.4;
+/** speeds (m/s) over which walking steps may go wider */
 const WALKING = [0.6, 0.9] as const;
 /** the speeds (m/s, default body) over which a run turns into a bouncing gait, with flight phases */
 const BOUNCING = [2.2, 2.5] as const;
@@ -452,13 +455,14 @@ function limit(c: Carriage, s: number, to: Vector3, yaw: number, ahead: number) 
   const across = from + 0.5 * wrapAngle(bodyYaw(yaw, sign, c.stance) - from);
   const H = c.p.height;
   // (walking slowly, turning or stopping, the feet stay about a stance apart: no wide catching steps)
-  const widest = lerp(SLOW_WIDTH * 2 * c.stance.width, Math.max(0.05 * H + 0.3 * H, 2.3 * c.stance.width), smoothstep(WALKING[0], WALKING[1], c.speed));
-  aside(to, other.position, across, sign, 0.05 * H, widest);
+  const narrowest = 0.05 * H;
+  const widest = lerp(SLOW_WIDTH * 2 * c.stance.width, Math.max(narrowest + 0.3 * H, 2.3 * c.stance.width), smoothstep(WALKING[0], WALKING[1], c.speed));
+  aside(to, other.position, across, sign, narrowest, widest);
   // (on a bend the body will be further round: its side of where it will be, as it will face)
   const arc = travel(c, ahead, _then2);
   aside(to, _then2.add(c.root), c.yaw + 2 * arc, sign, OWN_SIDE * c.p.scale, Infinity);
   // A turning step must stay narrow across the body too, not only across the feet's mean heading.
-  if (c.speed < WALKING[0]) aside(to, other.position, c.yaw, sign, 0.05 * H, 1.4 * 2 * c.stance.width);
+  if (c.speed < WALKING[0]) aside(to, other.position, c.yaw, sign, narrowest, TURN_WIDTH * 2 * c.stance.width);
   // step length grows with speed; the first steps from standing are short
   const span = Math.hypot(2 * c.stance.width, c.stance.stagger);
   const pace = Math.max(c.speed, c.goalSpeed * 0.5);

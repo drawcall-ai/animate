@@ -254,6 +254,7 @@ export function vr(v: Variation = {}): Scenario {
  * arm's length), the body walks to stand with the shoulder that far from it (× the arm's length), at
  * a walk (m/s, m/s², at the recording's pace).
  */
+// Follow before full extension so offset reach targets stay within wrist range while the trunk turns.
 const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 0.95, stand: 0.55, speed: 1.3, accel: 1.2 };
 
 /** what a hand's target `target` asks of the body for hand `side` (see LEADS), every sub-step */

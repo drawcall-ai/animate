@@ -7,7 +7,7 @@ import type { Behaviour } from '../../core/goal';
 import { clampRotation } from '../../core/limits';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks } from '../asks';
-import { INDEX, SIDES } from '../bones';
+import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { forwardOf, smoothstep, yawOf } from '../../core/math';
 import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
@@ -72,7 +72,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
     const posture = new Posture();
     const life = options.life === false ? undefined : new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
-    const quiet: Pick<Life, 'drift' | 'breath' | 'onto'> = { drift: new Vector3(), breath: 0, onto: null };
+    const quiet: { drift: Vector3; breath: number; onto: Side | null } = { drift: new Vector3(), breath: 0, onto: null };
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
     const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)

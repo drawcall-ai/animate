@@ -7,7 +7,6 @@ import type { Side } from '../bones';
 export class Life {
   readonly drift = new Vector3();
   breath = 0;
-  onto: Side | null = null;
   private time = 0;
   private amount = 0;
   private next: number;
@@ -22,6 +21,10 @@ export class Life {
     this.next = lerp(10, 20, this.rand());
   }
 
+  get onto(): Side | null {
+    return this.time < this.until ? this.side : null;
+  }
+
   update(dt: number, quiet: boolean, speed: number) {
     this.time += dt;
     const amount = 1 / (1 + speed / 0.1);
@@ -31,14 +34,11 @@ export class Life {
       this.until = 0;
     }
     if (quiet && this.time >= this.next) {
-      const side = this.rand() < 0.5 ? 'left' : 'right';
-      this.onto = side === this.side ? (side === 'left' ? 'right' : 'left') : side;
-      this.side = this.onto;
+      this.side = this.side === null ? (this.rand() < 0.5 ? 'left' : 'right') : (this.side === 'left' ? 'right' : 'left');
       this.until = this.time + lerp(20, 40, this.rand());
       // Recalled in the research brief: spontaneous shifts roughly every 10–30 s.
       this.next = this.until + lerp(10, 30, this.rand());
     }
-    if (this.time >= this.until) this.onto = null;
     const t = this.time;
     // Seeded smooth drift: incommensurate components, 5–10 mm of quiet CoM travel.
     const noise = (a: number, b: number, c: number) => (Math.sin(a * t + this.phase) + 0.5 * Math.sin(b * t + 2 * this.phase) + 0.25 * Math.sin(c * t + 3 * this.phase)) / 1.75;
