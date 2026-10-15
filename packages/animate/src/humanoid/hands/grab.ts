@@ -61,7 +61,13 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
         },
         function* () {
           yield* when(arriving(h, LOWERING));
-          yield* action<Frame<W>>({ update: (f) => held(holds).forEach(({ side, item, grip }) => bringShoulder(h, f, side, item.toWorld(gripOf(item, grip), _world).position)) });
+          // Prepare at the grip's height, within the hands' current approach reach.
+          // Lowering for the full distance of an unfinished step/turn causes a squat.
+          yield* action<Frame<W>>({ update: (f) => held(holds).forEach(({ side, item, grip }) => {
+            const at = shortOf(f, side, item, grip).position;
+            at.y = item.toWorld(gripOf(item, grip), _world).position.y;
+            bringShoulder(h, f, side, at);
+          }) });
         },
       );
       yield* reachFor(h, holds)();

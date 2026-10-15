@@ -1,10 +1,11 @@
-import { Quaternion, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { carry, gazeOff, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
+import { standing } from './fixtures';
 
 const box = (at: Vector3) => new Item(at, new Quaternion(), { left: { position: new Vector3(0.15, 0, 0) }, right: { position: new Vector3(-0.15, 0, 0) } });
 
@@ -51,6 +52,31 @@ const gone = (v: number[], m: number) => {
 const peak = (v: number[]) => v.indexOf(Math.max(...v)) / 60;
 
 describe('grab', () => {
+  it('bows to hip-high grips without a transient squat', () => {
+    // Recalled rack geometry and stand (1.05 arm lengths): hip-high grips,
+    // just beyond a standing arm's reach.
+    const load = box(new Vector3(0, 0.88, 0.61));
+    let finished = false;
+    const h = standing((h) => [function* () {
+      yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { face: 0, stand: { ahead: 1.05 * h.proportions.armLength } })();
+      finished = true;
+    }]);
+    let knee = 0, bow = 0;
+    for (let tick = 0; tick < 300 && !finished; tick++) {
+      h.update(1 / 60);
+      bow = Math.max(bow, new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
+      for (const side of ['left', 'right'] as const) {
+        const at = (joint: string) => h.pose.position(h.pose.skeleton.index(`${side}${joint}`)).clone();
+        const joint = at('LowerLeg');
+        knee = Math.max(knee, Math.PI - at('UpperLeg').sub(joint).angleTo(at('Foot').sub(joint)));
+      }
+    }
+    expect(finished).toBe(true);
+    // Tuned regression bounds: relaxed knees below 35°, with at least 30° of bow.
+    expect(knee * 180 / Math.PI).toBeLessThan(35);
+    expect(bow * 180 / Math.PI).toBeGreaterThan(30);
+  });
+
   it('anticipates: the eyes and then the hands go to what it takes before the body has come up to it', () => {
     const load = box(new Vector3(0.1, 0.9, 2.2));
     const at = { eyes: NaN, hands: NaN, stood: NaN };

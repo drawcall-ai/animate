@@ -35,7 +35,8 @@ export function stableMorning(): Scenario {
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
     duration: 50, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
     cameraDistance: 4.8,
-    cameraAngles: { front: -Math.PI / 12, side: -11 * Math.PI / 18 },
+    // Tuned fixed three-quarter bearing: separates handler and horse along the lead lane.
+    cameraAngles: { front: -Math.PI / 3, side: -11 * Math.PI / 18 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(-Math.PI / 2), {
@@ -111,11 +112,14 @@ export function stableMorning(): Scenario {
         yield* named('untie the rail knot', reporting(report, ['rightHand'], function* () {
           yield* grab(h, { right: [rope, 'knot'] }, { face: 0, stand: { ahead: 0.4, aside: -0.4 }, look: reported(report, 'gaze', KNOT) })();
           yield* withGaze(h, reported(report, 'gaze', KNOT), function* () {
+            // Tuned 28 cm draw toward the body, rising only 8 cm: a tug, not a lateral flourish.
+            const pull = h.pose.position(0).clone().sub(KNOT).setY(0).normalize().multiplyScalar(0.28).setY(0.08);
             const pulls: [number, Vector3][] = [
-              [0.55, new Vector3(-0.12, 0.25, -0.25)],
-              [0.5, new Vector3(-0.02, 0, -0.02)],
-              [0.55, new Vector3(-0.15, 0.25, -0.25)],
-              [0.5, new Vector3(-0.18, -0.06, -0.3)],
+              [0.55, pull],
+              [0.5, new Vector3()],
+              [0.55, pull],
+              // Recalled 6 cm release below the knot, keeping the draw toward the body.
+              [0.5, pull.clone().setY(-0.06)],
             ];
             // Settle each reversal so both pulls reach their up-and-back endpoint.
             for (const [seconds, offset] of pulls) {

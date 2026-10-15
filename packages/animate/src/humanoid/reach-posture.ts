@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { ReadonlyPose } from '../core/pose';
-import { forwardOf, smoothstep, wrapAngle } from '../core/math';
+import { clamp, forwardOf, smoothstep, wrapAngle } from '../core/math';
 import { bowLever, lowering } from './balance/posture';
 import { INDEX, type Side } from './bones';
 import type { Humanoid } from './humanoid';
@@ -33,11 +33,24 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   const from = _v.copy(hand).sub(f.current.position(0));
   const ahead = from.dot(forwardOf(h.gait.facing, _forward));
   const lateral = from.dot(_left.set(Math.cos(h.gait.facing), 0, -Math.sin(h.gait.facing))) - (side === 'left' ? 1 : -1) * p.shoulderHalfWidth;
-  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), Math.max(0.5 * p.armLength, p.shoulderHeight - hand.y));
-  const below = Math.sqrt(Math.max(0, (ARM_REACH * p.armLength) ** 2 - across ** 2));
-  const drop = p.shoulderHeight - hand.y - below;
-  const forwardReach = Math.sqrt(Math.max(0, (ARM_REACH * p.armLength) ** 2 - lateral ** 2 - (p.shoulderHeight - hand.y) ** 2));
-  const { lower, bow } = lowering(p, { height: p.shoulderHeight, drop: drop > 0 ? drop : Math.min(0, p.shoulderHeight + below - hand.y), ahead: hand.y < p.shoulderHeight ? Math.max(0, ahead - forwardReach) : 0 });
+  // Tuned 2% reserve for the articulated shoulder arc: its single lever slightly
+  // overestimates the reach available when the pelvis tucks in a deep squat.
+  const reach = 0.98 * ARM_REACH * p.armLength;
+  const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));
+  const lever = bowLever(p, p.shoulderHeight);
+  const up = hand.y - p.shoulderHeight + lever;
+  const distance = Math.hypot(ahead, up);
+  // Intersect the shoulder's bow arc with the arm's reach circle. Measuring the
+  // drop at the upright shoulder asks the knees to do work the forward sweep supplies.
+  const angle = distance > 0 ? Math.acos(clamp((distance ** 2 + lever ** 2 - plane ** 2) / (2 * distance * lever), -1, 1)) : Math.PI;
+  const bend = hand.y < p.shoulderHeight ? clamp(Math.atan2(ahead, up) - angle, 0, NECK_PITCH * Math.PI / 180) : 0;
+  const sweep = lever * Math.sin(bend);
+  // Retain the recalled half-arm horizontal cap for vertical recruitment:
+  // steps and trunk turns, rather than a squat, close a sideways approach.
+  const across = Math.min(Math.hypot(ahead - sweep, lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - hand.y));
+  const below = Math.sqrt(Math.max(0, reach ** 2 - across ** 2));
+  const drop = Math.max(lever * (1 - Math.cos(bend)), p.shoulderHeight - hand.y - below);
+  const { lower, bow } = lowering(p, { height: p.shoulderHeight, drop: hand.y > p.shoulderHeight ? Math.min(0, p.shoulderHeight + below - hand.y) : drop, ahead: sweep });
   if (lower > 0) h.asks.lower = Math.max(h.asks.lower, lower * share);
   else if (lower < 0 && share > 0 && h.asks.lower <= 0) h.asks.lower = Math.min(h.asks.lower, lower * share);
   h.asks.bow = Math.max(h.asks.bow, bow * share);

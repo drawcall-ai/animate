@@ -165,7 +165,9 @@ export function lowering(p: Proportions, { drop, ahead = 0, height }: { drop: nu
   const deepBow = Math.acos(1 - clamp((drop - SQUAT * p.height) / lever, 0, 1));
   const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * smoothstep(0, SQUAT * p.height, drop)));
   const lower = clamp(drop - lever * (1 - Math.cos(bow)), 0, SQUAT * p.height);
-  return { lower: drop < 0 ? Math.max(drop, -TIPTOE * p.scale) : lower, bow };
+  // Inverse trig and its forward projection can leave a sub-ulp residual even
+  // when bow supplies the whole drop. Below one body-height ulp, request zero.
+  return { lower: drop < 0 ? Math.max(drop, -TIPTOE * p.scale) : lower <= Number.EPSILON * p.height ? 0 : lower, bow };
 }
 
 export const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
