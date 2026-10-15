@@ -197,6 +197,12 @@ export function swingPose(f: Frame<unknown>, c: Carriage, s: number, out: FootPo
   solveChain(f, legOf(st.side), { ...goal, tip: { position: goal.tip.position } });
   const local = _q.copy(f.prev.local(INDEX[`${st.side}Foot`])).slerp(_spin.setFromAxisAngle(_v.set(1, 0, 0), -SWING_ANKLE), smoothstep(0, SWING_RETURN[1], k));
   out.foot.slerp(_spin.copy(f.current.rotation(INDEX[`${st.side}LowerLeg`])).multiply(local), 1 - smoothstep(STRIKE_TURN, 1, k));
+  // A heel strike blended onto a deeply bent leg must still fit its ankle.
+  const shank = f.current.rotation(INDEX[`${st.side}LowerLeg`]);
+  const ankleRange = f.current.skeleton.limits[INDEX[`${st.side}Foot`]];
+  const ankleTurn = _q.copy(shank).invert().multiply(out.foot);
+  if (ankleRange) clampRotation(ankleTurn, ankleRange);
+  out.foot.copy(shank).multiply(ankleTurn);
   const toes = _q.copy(f.prev.local(INDEX[`${st.side}Toes`])).slerp(_spin.identity(), smoothstep(0, TOES_RELAX, k));
   const toeRange = f.current.skeleton.limits[INDEX[`${st.side}Toes`]];
   if (toeRange) clampRotation(toes, toeRange);

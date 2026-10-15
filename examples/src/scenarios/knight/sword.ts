@@ -48,7 +48,7 @@ export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {
   // (straight up first: its chape on the floor by the feet; out to the side upright, turned to hang there, then in to the hip: round the outside of the thigh)
   const up = (s: Required<Placement>) => at(s.position.x, s.position.y + 0.3, s.position.z);
   return function* () {
-    yield* take(k, { left: [scabbard, 'throat'] }, { face: yawOf(scabbard.current.quaternion) })();
+    yield* take(k, { left: [scabbard, 'throat'] }, { face: yawOf(scabbard.current.quaternion), stand: { aside: k.h.proportions.shoulderHalfWidth } })();
     yield* along(k, facingAt(k, 'hips'), [[scabbard, { left: 'throat' }, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]]]])();
     yield* wear(k.h, scabbard, INDEX.hips)();
   };

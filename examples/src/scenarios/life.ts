@@ -29,7 +29,12 @@ export const reachAround: Scenario = {
       done: () => done,
       script: (h) => function* () {
         yield* parallel<Frame<World>>('all', idle(h), function* () {
-          for (const position of points) yield* reporting(report, ['rightHand'], withGaze(h, position, handTo(h, 'right', reported(report, 'rightWrist', { position }), { seconds: 1, until: 'reached' }), { first: false }))();
+          for (const position of points) {
+            yield* reporting(report, ['rightHand'], withGaze(h, position, () => parallel<Frame<World>>('all',
+              walkTo(h, { to: position, within: 0.4 }),
+              handTo(h, 'right', reported(report, 'rightWrist', { position }), { seconds: 1, until: 'reached' }),
+            ), { first: false }))();
+          }
           done = true;
         });
       },

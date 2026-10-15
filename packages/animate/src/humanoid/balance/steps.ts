@@ -457,6 +457,8 @@ function limit(c: Carriage, s: number, to: Vector3, yaw: number, ahead: number) 
   // (on a bend the body will be further round: its side of where it will be, as it will face)
   const arc = travel(c, ahead, _then2);
   aside(to, _then2.add(c.root), c.yaw + 2 * arc, sign, OWN_SIDE * c.p.scale, Infinity);
+  // A turning step must stay narrow across the body too, not only across the feet's mean heading.
+  if (c.speed < WALKING[0]) aside(to, other.position, c.yaw, sign, 0.05 * H, 1.4 * 2 * c.stance.width);
   // step length grows with speed; the first steps from standing are short
   const span = Math.hypot(2 * c.stance.width, c.stance.stagger);
   const pace = Math.max(c.speed, c.goalSpeed * 0.5);

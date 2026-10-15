@@ -29,6 +29,8 @@ export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satis
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 export const ARM_REACH = 0.95;
+/** horizontal reach used to decide whether a target needs lowering (× arm length) */
+const OUT = 0.5;
 
 /**
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
@@ -78,8 +80,6 @@ function set<W>(f: Frame<W>, joints: Map<number, TrackedRotation>, bone: number,
   let joint = joints.get(bone);
   if (!joint) joints.set(bone, (joint = new TrackedRotation()));
   const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
-  const limit = f.current.skeleton.limits[bone];
-  if (limit) clampRotation(q, limit);
   f.current.setLocal(bone, q);
 }
 
@@ -170,7 +170,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
     const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
     const hips = f.current.position(0);
     const bearing = wrapAngle(Math.atan2(goal.x - hips.x, goal.z - hips.z) - h.gait.facing);
-    // Recalled design share from the brief: trunk joins a reach; 20% of bearing, at most 20°.
+    // The trunk joins the reach while the feet keep their facing.
     h.asks.twist = clamp(0.2 * bearing, -Math.PI / 9, Math.PI / 9) * (toward?.share ?? 1);
   }
 }
@@ -236,7 +236,7 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   // (the shoulder joint's height standing, and how far below and above it the arm reaches, held out as far as standing takes it)
   const high = p.hipHeight + p.offsets.spine.y + p.offsets.chest.y + p.offsets.leftShoulder.y + p.offsets.leftUpperArm.y;
   const shoulder = _s.copy(f.current.position(INDEX[`${side}UpperArm`]));
-  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), ARM_REACH * p.armLength);
+  const across = Math.min(Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z), OUT * p.armLength);
   const below = Math.sqrt((ARM_REACH * p.armLength) ** 2 - across * across);
   const drop = high - hand.y - below;
   if (drop > 0) {

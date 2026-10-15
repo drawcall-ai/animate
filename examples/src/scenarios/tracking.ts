@@ -254,7 +254,7 @@ export function vr(v: Variation = {}): Scenario {
  * arm's length), the body walks to stand with the shoulder that far from it (× the arm's length), at
  * a walk (m/s, m/s², at the recording's pace).
  */
-const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 1.05, stand: 0.55, speed: 1.3, accel: 1.2 };
+const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 0.95, stand: 0.55, speed: 1.3, accel: 1.2 };
 
 /** what a hand's target `target` asks of the body for hand `side` (see LEADS), every sub-step */
 function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame<World>) => Vector3, pace: number): (f: Frame<World>) => Partial<Asks> {

@@ -12,6 +12,7 @@ export class Life {
   private amount = 0;
   private next: number;
   private until = 0;
+  private side: Side | null = null;
   private readonly phase: number;
   private readonly rand: () => number;
 
@@ -30,7 +31,9 @@ export class Life {
       this.until = 0;
     }
     if (quiet && this.time >= this.next) {
-      this.onto = this.rand() < 0.5 ? 'left' : 'right';
+      const side = this.rand() < 0.5 ? 'left' : 'right';
+      this.onto = side === this.side ? (side === 'left' ? 'right' : 'left') : side;
+      this.side = this.onto;
       this.until = this.time + lerp(20, 40, this.rand());
       // Recalled in the research brief: spontaneous shifts roughly every 10–30 s.
       this.next = this.until + lerp(10, 30, this.rand());
