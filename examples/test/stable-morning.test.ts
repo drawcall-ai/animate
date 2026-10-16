@@ -1,6 +1,8 @@
 import { Euler, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Simulation } from '../src/simulation';
+import { vary } from '../scripts/run';
+import { segmentDistance } from './clearance';
 import { stableMorning } from '../src/scenarios/stable-morning';
 
 it('leads upright with a free swinging arm and an articulated pelvis', () => {
@@ -49,4 +51,45 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
   expect(sim.actors[0].log).toEqual([]);
   expect(sim.stage.bodies?.[0].log).toEqual([]);
   expect(sim.stage.done()).toBe(true);
+});
+
+it.each([0, 1, 2])('carries below the face until arrival and places clear of both bodies #%i', (seed) => {
+  const scene = stableMorning();
+  const sim = new Simulation(seed ? vary(scene, seed) : scene);
+  let headGap = Infinity, legGap = Infinity, barrelGap = Infinity, walking = 0;
+  while (sim.t < 25) {
+    sim.step();
+    const h = sim.actors[0];
+    const item = h.holding.left?.item;
+    const horse = sim.stage.bodies?.[0];
+    if (!item || item.name !== 'saddle' || !horse || item.supported || item.wornBy) continue;
+    const head = h.pose.point(h.pose.skeleton.index('head'), h.proportions.headCenter, new Vector3());
+    for (const box of sim.props()) {
+      if (box.kind !== 'box' || !box.quaternion || ![0.16, 0.29].includes(box.size.y)) continue;
+      const local = head.clone().sub(box.position).applyQuaternion(box.quaternion.clone().invert());
+      const off = local.clone().set(Math.max(0, Math.abs(local.x) - box.size.x / 2), Math.max(0, Math.abs(local.y) - box.size.y / 2), Math.max(0, Math.abs(local.z) - box.size.z / 2));
+      headGap = Math.min(headGap, off.length() - 0.06 * h.proportions.height);
+    }
+    if (sim.t > 14 && h.gait.eta > 0.7 && h.gait.velocity.length() > 0.15) {
+      walking++;
+      expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
+    }
+    if (item.current.position.x < 0.7) continue;
+    const root = horse.pose.position(0);
+    barrelGap = Math.min(barrelGap, root.x - h.pose.position(0).x - 0.24 - 0.06 * h.proportions.height);
+    for (const side of ['left', 'right']) for (const [a, b] of [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']]) {
+      const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
+      const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));
+      for (const s of ['left', 'right']) for (const [c, d] of [['Femur', 'Gaskin'], ['Gaskin', 'HindCannon'], ['Scapula', 'Humerus'], ['Humerus', 'Forearm']]) {
+        const other = horse.pose.position(horse.pose.skeleton.index(`${s}${c}`));
+        const tip = horse.pose.position(horse.pose.skeleton.index(`${s}${d}`));
+        legGap = Math.min(legGap, segmentDistance(from, end, other, tip) - 0.038 * h.proportions.height - 0.06);
+      }
+    }
+  }
+  console.log({ headGap, legGap, barrelGap, walking });
+  expect(walking).toBeGreaterThan(0);
+  expect(headGap).toBeGreaterThan(0);
+  expect(legGap).toBeGreaterThan(0);
+  expect(barrelGap).toBeGreaterThan(0);
 });

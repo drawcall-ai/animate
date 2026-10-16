@@ -3,7 +3,7 @@ import { Pose, type ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
-import { checkSnaps } from './rotation';
+import { SnapChecks } from './rotation';
 import { moveWorn, type Wearing } from './worn';
 import type { Item } from './carrier';
 
@@ -65,6 +65,7 @@ export class Body<W = unknown> {
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
+  private readonly snaps = new SnapChecks();
   protected afterWorn(_f: Frame<W>): void {}
 
   constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame<W>>, options: BodyOptions<W> = {}) {
@@ -122,7 +123,7 @@ export class Body<W = unknown> {
     frame.dt = dt;
     if (frame.dev && frame.time > 0) {
       checkLimits(frame.prev, frame.dev, frame.time);
-      checkSnaps(frame, frame.dev);
+      this.snaps.check(frame, frame.dev);
     }
     frame.beats.clear();
     frame.time += dt;

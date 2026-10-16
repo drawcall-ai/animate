@@ -20,6 +20,7 @@ export { balance, type Gait } from './humanoid/balance/balance';
 export type { Foot, FootPhase } from './humanoid/balance/foot';
 export { CALM, handTo, type HandOptions } from './humanoid/arms';
 export { approach, grab, type Stand } from './humanoid/hands/grab';
+export { place } from './humanoid/hands/place';
 export { carry, carryTogether, hold } from './humanoid/hands/carry';
 export { closeHand, type Grips, type Holds } from './humanoid/hands/grips';
 export { reachFor } from './humanoid/hands/reach';

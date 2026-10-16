@@ -29,16 +29,7 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
     // walks up; eyes, hands and bow set off before it stands there
     yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
     yield* named('saddle the horse', function* () {
-      const back = onBone(horse, 0, onBack)(horse.frame);
-      const carryPose = carried(h);
-      const lift = (f: Frame) => {
-        const goal = carryPose(f);
-        goal.position.y = back.position.y;
-        return goal;
-      };
-      yield* carry(h, saddle, [[0.75, lift]])(); // clear the rail before walking
-      yield* parallel<Frame>('race', approach(h, back), withGaze(h, () => saddle.current.position, hold(h, saddle, { to: lift })));
-      yield* carry(h, saddle, [[1.1, { position: new Vector3(-0.24, 0.33, 0), quaternion: across }], [0.75, onBack]], { on: onBone(horse, 0) })();
+      yield* place(h, saddle, onBone(horse, 0, onBack)(horse.frame))();
       yield* wear(horse, saddle, 0)(); // the horse moves it from now on
     })();
     yield* named('check the fit', withGaze(h, () => horse.pose.position(HEAD), release(h, ['left', 'right'])))();

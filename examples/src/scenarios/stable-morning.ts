@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import {
   Body, HORSE_SKELETON, Item, Pose,
-  approach, carried, carry, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, idle,
+  place, carried, carry, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, idle,
   named, onBone, release, wear, when, walkTo, withGaze,
   type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
@@ -73,23 +73,8 @@ export function stableMorning(): Scenario {
             look: reported(report, 'gaze', () => saddle.current.position),
           })))();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
-          withGaze(h, reported(report, 'gaze', () => saddle.current.position), function* () {
-            const beside = carried(h);
-            const lifted = (f: Frame<World>) => {
-              const goal = beside(f);
-              goal.position.y = saddlePlace(horse.frame).position.y;
-              return goal;
-            };
-            yield* carry(h, saddle, [[0.75, lifted]])();
-            yield* parallel<Frame<World>>('race',
-              approach(h, saddlePlace(horse.frame)),
-              hold(h, saddle, { to: lifted }),
-            );
-            yield* carry(h, saddle, [
-              [1.1, { position: SADDLED.clone().add(new Vector3(-0.24, 0.1, 0)), quaternion: yaw(Math.PI / 2) }],
-              [0.75, { position: SADDLED, quaternion: yaw(Math.PI / 2) }],
-            ], { on: onBone(horse, 0) })();
-          })))();
+          withGaze(h, reported(report, 'gaze', () => saddlePlace(horse.frame).position),
+            place(h, saddle, saddlePlace(horse.frame)))))();
         yield* named('hands off, check the fit', function* () {
           yield* wear(horse, saddle, 0, { to: { position: SADDLED, quaternion: yaw(Math.PI / 2) } })();
           yield* release(h, ['left', 'right'])();

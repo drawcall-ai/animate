@@ -29,22 +29,23 @@ export function spinOf(from: Quaternion, to: Quaternion, dt: number, out: Vector
 const _d = new Quaternion();
 
 /** Joint speed and the difference of successive angular velocities, from final poses. */
-export function checkSnaps(f: Frame, dev: Dev): void {
-  let history = velocities.get(dev);
-  if (!history) velocities.set(dev, history = []);
-  f.prev.skeleton.bones.forEach((bone, i) => {
-    if (!bone.snap) return;
-    const omega = spinOf(f.prev2.local(i), f.prev.local(i), f.dt, new Vector3());
-    const speed = omega.length() * 180 / Math.PI;
-    if (speed > bone.snap.speed) dev.append(f.time, { check: 'joint speed (°/s)', value: speed, limit: bone.snap.speed, where: bone.name });
-    const before = history[i];
-    if (before) {
-      const value = omega.distanceTo(before) / f.dt * 180 / Math.PI;
-      const limit = bone.snap.accel;
-      if (value > limit) dev.append(f.time, { check: 'joint acceleration (°/s²)', value, limit, where: bone.name });
-    }
-    history[i] = omega;
-  });
-}
+export class SnapChecks {
+  private readonly velocities: Vector3[] = [];
 
-const velocities = new WeakMap<Dev, Vector3[]>();
+  check(f: Frame, dev: Dev): void {
+    const history = this.velocities;
+    f.prev.skeleton.bones.forEach((bone, i) => {
+      if (!bone.snap) return;
+      const omega = spinOf(f.prev2.local(i), f.prev.local(i), f.dt, new Vector3());
+      const speed = omega.length() * 180 / Math.PI;
+      if (speed > bone.snap.speed) dev.append(f.time, { check: 'joint speed (°/s)', value: speed, limit: bone.snap.speed, where: bone.name });
+      const before = history[i];
+      if (before) {
+        const value = omega.distanceTo(before) / f.dt * 180 / Math.PI;
+        const limit = bone.snap.accel;
+        if (value > limit) dev.append(f.time, { check: 'joint acceleration (°/s²)', value, limit, where: bone.name });
+      }
+      history[i] = omega;
+    });
+  }
+}
