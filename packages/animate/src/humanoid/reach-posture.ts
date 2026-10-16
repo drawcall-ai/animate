@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { ReadonlyPose } from '../core/pose';
 import { forwardOf, smoothstep, wrapAngle } from '../core/math';
-import { lowering } from './balance/posture';
+import { handLowering, MOST_BOW } from './balance/posture';
 import { INDEX, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { NECK_PITCH } from './profile/limits';
@@ -36,7 +36,7 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   // Tuned 2% reserve for the articulated shoulder arc: its single lever slightly
   // overestimates the reach available when the pelvis tucks in a deep squat.
   const reach = 0.98 * ARM_REACH * p.armLength;
-  const { lower, bow } = lowering(p, { hand: { ahead, lateral, height: hand.y, reach } });
+  const { lower, bow } = handLowering(p, { ahead, lateral, height: hand.y, reach });
   if (lower > 0) h.asks.lower = Math.max(h.asks.lower, lower * share);
   else if (lower < 0 && share > 0 && h.asks.lower <= 0) h.asks.lower = Math.min(h.asks.lower, lower * share);
   h.asks.bow = Math.max(h.asks.bow, bow * share);
@@ -55,7 +55,7 @@ export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<
   const eyeUp = trunk + p.offsets.head.y * Math.cos(neck / 2) + p.eyes.y * Math.cos(neck) - p.eyes.z * Math.sin(neck);
   const eyeAhead = p.offsets.head.y * Math.sin(neck / 2) + p.eyes.y * Math.sin(neck) + p.eyes.z * Math.cos(neck);
   const needed = Math.max(0, Math.atan2(eyeUp - (point.y - hips.y), distance - eyeAhead) - neck - h.gazer.range.down);
-  const { bow } = lowering(p, { bow: needed });
+  const bow = Math.max(0, Math.min(needed, MOST_BOW));
   h.asks.bow = Math.max(h.asks.bow, bow);
 }
 const _v = new Vector3();

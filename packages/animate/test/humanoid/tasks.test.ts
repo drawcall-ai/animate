@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { ask, beyond, headTo, idle, pelvisTo, trunkTo, type Asks, type Behaviour, type Frame } from '../../src';
+import { ask, beyond, headTo, idle, type Asks, type Behaviour, type Frame } from '../../src';
+
 import { INDEX } from '../../src/humanoid/bones';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
@@ -63,46 +64,20 @@ describe('headTo', () => {
   });
 });
 
-describe('pelvisTo and trunkTo', () => {
-  it('take the root, both feet with it, and turn the chest as asked', () => {
-    const to = { position: new Vector3(0.1, 0.8, 0.05), quaternion: turned(0.3) };
-    const chest = turned(0.6, 0.4);
-    const taken: boolean[][] = [];
-    const h = run(
-      (h) =>
-        function* () {
-          yield* parallel<Frame>(
-            'all',
-            pelvisTo(h, to, { accel: 4, speed: 1, turnAccel: 20 }),
-            trunkTo(h, chest),
-            action<Frame>({ update: () => void taken.push([...h.asks.taken]) }),
-          );
-        },
-      3,
-    );
-    expect(h.pose.position(0).distanceTo(to.position)).toBeLessThan(1e-3);
-    expect(h.pose.rotation(0).angleTo(to.quaternion)).toBeLessThan(1e-3);
-    expect(h.pose.rotation(INDEX.chest).angleTo(chest)).toBeLessThan(1e-3);
-    expect(taken.every(([l, r]) => l && r)).toBe(true);
-  });
-});
-
 describe('ask', () => {
-  it('asks only what it is given, the feet taken copied in', () => {
-    const taken: [boolean, boolean] = [true, false];
+  it('asks only what it is given', () => {
     let seen: Asks | null = null;
     run(
       (h) =>
         function* () {
           yield* parallel<Frame>(
             'all',
-            ask(h, { lower: 0.1, taken }),
-            action<Frame>({ update: () => void (seen = { ...h.asks, taken: [...h.asks.taken] }) }),
+            ask(h, { lower: 0.1 }),
+            action<Frame>({ update: () => void (seen = { ...h.asks }) }),
           );
         },
       0.1,
     );
-    expect(seen).toMatchObject({ lower: 0.1, bow: 0, go: null, taken: [true, false] });
-    expect(taken).toEqual([true, false]);
+    expect(seen).toMatchObject({ lower: 0.1, bow: 0, go: null });
   });
 });

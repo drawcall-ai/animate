@@ -18,7 +18,7 @@ export const HELMED = at(0, 0.15, 0.02, new Quaternion());
  */
 export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
   // (before the face and over the head in a level frame at the head: the eyes on the helmet turn the head, which must not turn where it goes)
-  const level = INDEX.head;
+  const level = facingAt(k.h, INDEX.head, { position: new Vector3() });
   const head = onBone(k.h, INDEX.head, { position: new Vector3(), quaternion: new Quaternion() });
   const down = facingAt(k.h, INDEX.hips, at(0, 0.15, 1.6));
   return function* () {

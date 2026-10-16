@@ -1,8 +1,8 @@
 import { NECK_PITCH } from './profile/limits';
 import { Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Body } from '../core/body';
-import type { Carrier, Item } from '../core/carrier';
+import { Body, type Frame } from '../core/body';
+import type { Item } from '../core/carrier';
 import { solveChain } from '../core/chain';
 import type { Gazer } from '../core/gaze';
 import type { Behaviour } from '../core/goal';
@@ -49,7 +49,7 @@ export class Humanoid<W = unknown> {
   readonly asks: Asks = createAsks();
   /** where the feet stand or, stepping, land [left, right]: `balance`'s output */
   readonly feet: [Foot, Foot];
-  /** the walk `balance` carries the body on: its output */
+  /** Shared walk state: balance reports motion, walkTo owns the arrival estimate. */
   readonly gait: Gait;
   /** the neck and the eyes, for `lookAt` */
   readonly gazer: Gazer;
@@ -59,8 +59,6 @@ export class Humanoid<W = unknown> {
   readonly borne = new Map<Item, Bearing>();
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
   readonly holding: Record<Side, { item: Item; grip: string } | null> = { left: null, right: null };
-  /** Carry aims for this sub-step, consumed by the held-hand after-hook. */
-  readonly carrying = new Map<Item, Carrier>();
   private readonly body: Body<W>;
   private readonly ground = new Vector3();
 
@@ -81,10 +79,13 @@ export class Humanoid<W = unknown> {
     };
     const worn = dress(this, start.pose, options.wearing?.(p) ?? []);
     const moveHeld = followHeld(this);
-    this.body = new Body(
+    const humanoid = this;
+    this.body = new class extends Body<W> {
+      protected afterWorn(f: Frame<W>) { moveHeld(f); load(humanoid, f); }
+    }(
       rig.skeleton,
       behaviour(this),
-      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn, afterWorn: (f) => { moveHeld(f); load(this, f); } },
+      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn },
     );
     rig.write(this.body.pose, 0);
   }

@@ -22,7 +22,7 @@ export function don(k: Knight, gauntlet: Item, side: Side, stand: Stand): Behavi
   const fingers = new Vector3(side === 'left' ? 1 : -1, 0, 0).applyQuaternion(gauntlet.current.quaternion);
   return function* () {
     yield* take(k, { [other]: [gauntlet, 'cuff'] }, { face: headingOf(fingers.x, fingers.z), stand: { ...stand, aside: side === 'left' ? -0.1 : 0.1 } })();
-    yield* along(k, gauntlet, [[1.0, heldOpen(side)]], { on: INDEX.chest })();
+    yield* along(k, gauntlet, [[1.0, heldOpen(side)]], { on: facingAt(k.h, INDEX.chest, { position: new Vector3() }) })();
     const open = facingAt(k.h, INDEX.chest, heldOpen(side));
     yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, { to: open })))();
     yield* wear(k.h, gauntlet, INDEX[`${side}Hand`], { to: { position: new Vector3(), quaternion: new Quaternion() } })();

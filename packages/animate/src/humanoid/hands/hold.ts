@@ -7,6 +7,14 @@ import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { grip, gripOf, gripsOf, heldItems, type Grips } from './grips';
 
+const aims = new WeakMap<object, Map<Item, Carrier>>();
+
+export function carryAims(h: object): Map<Item, Carrier> {
+  let items = aims.get(h);
+  if (!items) aims.set(h, items = new Map());
+  return items;
+}
+
 const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
 /** One owner of held hands and carried-item fitting, after all body and item movers. */
@@ -14,7 +22,7 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
   const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
   return (f) => {
     for (const item of heldItems(h)) {
-      const aim = h.carrying.get(item);
+      const aim = carryAims(h).get(item);
       if (!aim && !item.supported && !item.wornBy && !item.moved(f.time)) {
         const turn = new Quaternion().copy(f.current.rotation(0)).multiply(new Quaternion().copy(f.prev.rotation(0)).invert());
         const at = item.current.position.clone().sub(f.prev.position(0)).applyQuaternion(turn).add(f.current.position(0));
@@ -29,7 +37,7 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
       }
       if (aim) fit(f, item, aim, grips, sides);
     }
-    h.carrying.clear();
+    carryAims(h).clear();
   };
 }
 

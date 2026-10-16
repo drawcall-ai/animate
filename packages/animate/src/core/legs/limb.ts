@@ -8,7 +8,7 @@ import { angleAt, cycleAt, DEG, type JointCycle } from './cycle';
 import type { LegChain, LegState } from './legs';
 import { boundSwing, quintic, type Swing } from './swing';
 import type { Stride } from './gait';
-import { Solver, type Target } from './solve';
+import { Solver, type LegTarget } from './solve';
 
 type Timing = LegState & { footfall: number; lift: number };
 
@@ -272,7 +272,7 @@ export class Limb {
   }
 
   /** Roll about the heel or toe while keeping that contact fixed in world space. */
-  private planted(contact: { position: Vector3; yaw: number }, pitch: number, out: Target): Target {
+  private planted(contact: { position: Vector3; yaw: number }, pitch: number, out: LegTarget): LegTarget {
     const pivot = pitch >= 0 ? this.leg.heel : this.leg.toe;
     yawPitch(contact.yaw, pitch, out.rotation);
     out.position.copy(pivot).applyQuaternion(yawPitch(contact.yaw, 0, _a)).add(contact.position)
@@ -304,8 +304,8 @@ const _w = new Vector3();
 const _q = new Quaternion();
 const _a = new Quaternion();
 const _b = new Quaternion();
-const _target: Target = { held: true, position: new Vector3(), rotation: new Quaternion(), above: [] };
-const _swingTarget: Target = { held: false, position: new Vector3(), rotation: new Quaternion(), above: [] };
+const _target: LegTarget = { held: true, position: new Vector3(), rotation: new Quaternion(), above: [] };
+const _swingTarget: LegTarget = { held: false, position: new Vector3(), rotation: new Quaternion(), above: [] };
 const _turn = new Quaternion();
 const _top = new Vector3();
 const _root = new Vector3();

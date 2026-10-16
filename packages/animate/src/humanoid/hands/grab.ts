@@ -3,10 +3,10 @@ import { Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
-import type { Behaviour, Live, Target } from '../../core/goal';
+import type { Behaviour, Live, Placement, Target } from '../../core/goal';
 import { when } from '../../core/when';
 import { ARM_REACH, handTo } from '../arms';
-import { INDEX, type Side } from '../bones';
+import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { withGaze } from '../look';
 import { forwardOf, headingOf, leftOf, wrapAngle } from '../../core/math';
@@ -23,7 +23,7 @@ export interface Stand {
   aside?: number;
 }
 
-/** Tuned stand distance (arm-length share): 0.8 leaves clearance for bulky loads and a downward gaze; 0.6 crowds them. */
+/** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
@@ -124,20 +124,32 @@ function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
  * of `grab`. A placing point is measured from the middle of the shoulders, rather than either
  * hand. A point must be within ARM_REACH of that middle at the requested stand (at the
  * shoulders' standing height); an impossible stand throws before walking. Grips may recruit
- * bowing and lowering during the reach.
+ * bowing and lowering during the reach. A destination placement uses the held grips at its
+ * orientation to choose the facing, so both hands can reach it.
  */
-export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
+export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Placement, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
   const { aside = 0 } = options.stand ?? {};
   return function* () {
-    const point = holds instanceof Vector3;
-    const grips: { side?: Side; at: Vector3 }[] = point ? [{ at: holds.clone() }] : held(holds).map(({ side, item, grip }) => ({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() }));
+    const grips: { side?: Side; at: Vector3 }[] = [];
+    const point = holds instanceof Vector3 || 'position' in holds;
+    if (holds instanceof Vector3) grips.push({ at: holds.clone() });
+    else if ('position' in holds) {
+      const { position, quaternion } = holds;
+      if (quaternion) for (const side of SIDES) {
+        const held = h.holding[side];
+        if (held) grips.push({ side, at: gripOf(held.item, held.grip).position.clone().applyQuaternion(quaternion).add(position) });
+      }
+      if (!grips.length) grips.push({ at: position.clone() });
+    } else for (const { side, item, grip } of held(holds)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
     const shoulders = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
     const reach = ARM_REACH * p.armLength;
     const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
-    const ahead = options.stand?.ahead ?? Math.min(WITHIN * p.armLength, p.toeFront + Math.max(0, height - p.ankleHeight), WITHIN * available);
+    // Low two-hand loads need room for the bow without crowding the knees against their support.
+    const distance = !point && grips.length === 2 && height < p.hipHeight ? 1.05 : WITHIN;
+    const ahead = options.stand?.ahead ?? Math.min(distance * p.armLength, p.toeFront + Math.max(0, height - p.ankleHeight), WITHIN * available);
     const shoulder = (side?: Side) => side
       ? h.pose.position(INDEX[`${side}UpperArm`])
       : h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
@@ -145,7 +157,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3, options: { f
     if (point) {
       const from = middle.clone().addScaledVector(leftOf(face), -aside).addScaledVector(forwardOf(face), -ahead);
       from.y = shoulders;
-      const distance = from.distanceTo(holds);
+      const distance = from.distanceTo(middle);
       if (distance > ARM_REACH * p.armLength) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
     }
     const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;

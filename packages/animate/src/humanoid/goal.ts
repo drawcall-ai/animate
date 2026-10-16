@@ -5,12 +5,12 @@ import type { Humanoid } from './humanoid';
 import type { ReadonlyPose } from '../core/pose';
 
 /** A placement on a bone, scaled with its body and followed from final poses. */
-export function onBone<W>(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement) {
+export function onBone<W>(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement = { position: new Vector3() }) {
   return movingPoint<W>(h, bone, local, () => h.pose.rotation(bone).clone());
 }
 
 /** A placement at a joint, aligned with body facing instead of the joint's rotation. */
-export function facingAt<W>(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly gait: { facing: number } }, bone: number, local: Placement) {
+export function facingAt<W>(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly gait: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
   return movingPoint<W>(h, bone, local, () => new Quaternion().setFromAxisAngle(UP, h.gait.facing));
 }
 

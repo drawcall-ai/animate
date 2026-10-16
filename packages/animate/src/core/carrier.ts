@@ -96,7 +96,7 @@ export class Item extends Carrier {
 }
 
 /** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
-export function onItem<W>(item: Carrier, local: Placement): (f: Frame<W>) => Target {
+export function onItem<W>(item: Carrier, local: Placement = { position: new Vector3(), quaternion: new Quaternion() }): (f: Frame<W>) => Target {
   return () => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() });
 }
 

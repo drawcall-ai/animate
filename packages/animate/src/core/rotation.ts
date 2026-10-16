@@ -30,7 +30,8 @@ const _d = new Quaternion();
 
 /** Joint speed and the difference of successive angular velocities, from final poses. */
 export function checkSnaps(f: Frame, dev: Dev): void {
-  const history = dev.velocities;
+  let history = velocities.get(dev);
+  if (!history) velocities.set(dev, history = []);
   f.prev.skeleton.bones.forEach((bone, i) => {
     if (!bone.snap) return;
     const omega = spinOf(f.prev2.local(i), f.prev.local(i), f.dt, new Vector3());
@@ -45,3 +46,5 @@ export function checkSnaps(f: Frame, dev: Dev): void {
     history[i] = omega;
   });
 }
+
+const velocities = new WeakMap<Dev, Vector3[]>();

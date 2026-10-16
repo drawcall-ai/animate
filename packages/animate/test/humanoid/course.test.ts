@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action } from '@pmndrs/timeline';
-import { Body, course, Item, STEP, still, type Frame, type Leg } from '../../src';
+import { Body, course, Item, still, type Frame, type Leg } from '../../src';
+import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
 const WORLD = { position: new Vector3(), quaternion: new Quaternion() };

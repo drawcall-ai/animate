@@ -1,7 +1,10 @@
+import { action } from '@pmndrs/timeline';
+import { live, type Behaviour, type Live, type Motion, type Target } from '../core/goal';
+import type { ReadonlyPose } from '../core/pose';
 // Recalled: Back et al. (1995), Hodson (2000/2001), Clayton (2004) curves as retained by the spike.
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
-import type { Legs } from '../core/legs/legs';
+import { Legs } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import type { LegChain } from '../core/legs/legs';
 import { LEGS, PELVIS, NECK, HEAD, MUZZLE } from './skeleton';
@@ -128,3 +131,15 @@ export function horseCarriage(f: Frame, legs: Legs, avoid?: Readonly<Vector3>): 
 }
 
 const walkBlend = (f: Frame) => Math.min(1, f.prev.position(0).distanceTo(f.prev2.position(0)) / (f.dt * HORSE_WALK.slowest));
+
+/** Follow a floor goal with the horse's pelvis, legs and head working together. */
+export function horseFollow<W>(start: ReadonlyPose, goal: Live<Pick<Target, 'position' | 'velocity'>, W>, options: { motion?: Motion; avoid?: Live<Readonly<Vector3> | undefined, W> } = {}): Behaviour<W> {
+  return function* () {
+    const legs = new Legs(start, horseLegs(), HORSE_WALK);
+    yield* action<Frame<W>>({ update: (f) => {
+      horsePelvis(f, legs);
+      legs.toward(f, live(goal, f), options.motion ?? { speed: 0.95, accel: 0.65 });
+      horseCarriage(f, legs, options.avoid && live(options.avoid, f));
+    } });
+  };
+}

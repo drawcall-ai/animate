@@ -27,14 +27,15 @@ export interface Course<W = unknown> {
  * stops to reverse), it comes to rest there and sets off again.
  * It sets off `delay` s after it is first read.
  */
-export function course<W>(item: Item, frame: Live<Required<Placement>, W>, legs: readonly Leg<W>[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
+export function course<W>(item: Item, frame: Live<Placement, W>, legs: readonly Leg<W>[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
   let start = NaN;
   let runs: Run[] = [];
   let from: Required<Placement> | undefined;
   const moving = legs.some(([, to]) => typeof to === 'function');
   const total = legs.reduce((sum, [seconds]) => sum + seconds / pace, 0);
   const to = (f: Frame<W>): Required<Placement> => {
-    const at = live(frame, f);
+    const place = live(frame, f);
+    const at = { position: place.position, quaternion: place.quaternion ?? IDENTITY };
     if (from === undefined) {
       start = f.time;
       const inverse = at.quaternion.clone().invert();
@@ -201,3 +202,5 @@ const _d = new Vector3();
 const _e = new Vector3();
 const _q = new Quaternion();
 const _at: Required<Placement> = { position: new Vector3(), quaternion: new Quaternion() };
+
+const IDENTITY = new Quaternion();

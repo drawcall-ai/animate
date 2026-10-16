@@ -1,7 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, gazeOff, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
+import { carry, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
+import { gazeOff } from '../../src/core/gaze';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';

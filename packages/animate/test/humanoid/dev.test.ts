@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
-import { Body, Humanoid, Item, eyesOnBefore, INDEX, STEP, Pose, createSkeletonModel, idle, named, watch, type Frame } from '../../src';
+import { Body, Humanoid, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, idle, named, watch, type Frame } from '../../src';
+import { STEP } from '../../src/core/body';
 import { checkFeet } from '../../src/humanoid/balance/checks';
 import { ballOf, footRotation, heelOf } from '../../src/humanoid/balance/foot';
 import { Dev } from '../../src/core/dev';

@@ -4,42 +4,39 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
 import { Life } from '../../src/humanoid/balance/life';
 
-function body(task: (h: Humanoid) => Behaviour, life = true) {
-  return new Humanoid(createSkeletonModel(), (h) => function* () { yield* parallel<Frame>('all', idle(h, { life }), task(h)); }, { dev: true });
+function body(task: (h: Humanoid) => Behaviour) {
+  return new Humanoid(createSkeletonModel(), (h) => function* () { yield* parallel<Frame>('all', idle(h), task(h)); }, { dev: true });
 }
 const step = (h: Humanoid, seconds: number) => { for (let i = 0; i < seconds * 60; i++) h.update(1 / 60); };
 
-it('stands alive, deterministically: breathing, millimetre sway and a weight shift within 25 s; can opt out', () => {
-  const sample = (life: boolean) => {
-    const h = body(() => function* () {}, life);
+it('stands alive, deterministically: breathing, millimetre sway and a weight shift within 25 s', () => {
+  const sample = () => {
+    const h = body(() => function* () {});
     const x: number[] = [], pitch: number[] = [];
     for (let i = 0; i < 1500; i++) {
       h.update(1 / 60);
       x.push(h.pose.com(new Vector3()).x);
       pitch.push(new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
     }
-    if (life) {
-      const sign = Math.sign(h.gait.quiet.x);
-      expect(Math.abs(h.gait.quiet.x)).toBeGreaterThan(0.04);
-      const loaded = sign > 0 ? 'left' : 'right';
-      const unloaded = sign > 0 ? 'right' : 'left';
-      const hip = (side: 'left' | 'right') => h.pose.position(INDEX[`${side}UpperLeg`]).y;
-      const knee = (side: 'left' | 'right') => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
-      expect(hip(unloaded)).toBeLessThan(hip(loaded) - 0.005);
-      expect(knee(unloaded)).toBeGreaterThan(0.2);
-      expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
-      step(h, 3);
-      expect(h.gait.quiet.x * sign).toBeGreaterThan(0.04);
-    }
+    const sign = Math.sign(h.gait.quiet.x);
+    expect(Math.abs(h.gait.quiet.x)).toBeGreaterThan(0.04);
+    const loaded = sign > 0 ? 'left' : 'right';
+    const unloaded = sign > 0 ? 'right' : 'left';
+    const hip = (side: 'left' | 'right') => h.pose.position(INDEX[`${side}UpperLeg`]).y;
+    const knee = (side: 'left' | 'right') => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
+    expect(hip(unloaded)).toBeLessThan(hip(loaded) - 0.005);
+    expect(knee(unloaded)).toBeGreaterThan(0.2);
+    expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
+    step(h, 3);
+    expect(h.gait.quiet.x * sign).toBeGreaterThan(0.04);
     expect(h.log).toEqual([]);
     return { x, pitch };
   };
-  const a = sample(true), b = sample(true), still = sample(false);
+  const a = sample(), b = sample();
   expect(a).toEqual(b);
   expect(Math.max(...a.x.slice(0, 600)) - Math.min(...a.x.slice(0, 600))).toBeGreaterThan(0.003);
   expect(Math.max(...a.x) - Math.min(...a.x)).toBeGreaterThan(0.04);
   expect(Math.max(...a.pitch.slice(120, 600)) - Math.min(...a.pitch.slice(120, 600))).toBeGreaterThan(0.02);
-  expect(Math.max(...still.x) - Math.min(...still.x)).toBeLessThan(0.001);
 });
 
 it('turns the trunk for an across-body reach and for an over-shoulder look within ROM', () => {

@@ -32,18 +32,14 @@ export interface Asks {
   bow: number;
   /** axial chest turn from the standing facing (rad) */
   twist: number;
-  /** hold the centre of mass off the feet's middle (m, on the floor): leaning into a force */
-  lean: Vector3 | null;
   /** the weight over one foot */
   onto: Side | null;
-  /** feet a task places itself [left, right] */
-  taken: [boolean, boolean];
   /** stand otherwise than the body's stance */
   stance: Partial<Stance> | null;
 }
 
 /** nothing asked */
-export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, twist: 0, lean: null, onto: null, taken: [false, false], stance: null });
+export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, twist: 0, onto: null, stance: null });
 
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {
@@ -54,17 +50,13 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
 
 /**
  * Asks `balance` for what `asks` gives (the fields it has; the rest as other tasks ask), every
- * sub-step, endless or until `until`: a task of its own for what no other task asks (stand on one
- * foot, lean into a push, turn to a facing while the hands work).
+ * sub-step, endless or until `until`: a task of its own for what no other task asks (shift weight, turn to a facing while the hands work).
  */
 export function ask<W>(h: Humanoid<W>, asks: Live<Partial<Asks>, W>, until?: UntilCondition<Frame<W>>): Behaviour<W> {
   return function* () {
     yield* action<Frame<W>>({
       update: (f) => {
-        // (the feet taken copied in: `balance` clears the body's own pair)
-        const { taken, ...rest } = live(asks, f);
-        Object.assign(h.asks, rest);
-        if (taken) [h.asks.taken[0], h.asks.taken[1]] = taken;
+        Object.assign(h.asks, live(asks, f));
       },
       until,
     });

@@ -17,7 +17,7 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, stand: S
     [1.0, at(0.3 * s, 0.14, 0.34)], // off the table, out in front
     [1.1, at(0.26 * s, 0.07, -0.05)], // out round the hips: the strap behind them
   ];
-  const hips = INDEX.hips;
+  const hips = facingAt(k.h, INDEX.hips, { position: new Vector3() });
   const front = facingAt(k.h, INDEX.hips, at(0, 0.07, 0.27));
   return function* () {
     yield* take(k, { left: [belt.buckle, 'end'], right: [belt.tongue, 'end'] }, { stand })();
@@ -42,7 +42,7 @@ export function hangSword(k: Knight, scabbard: Item): Behaviour<World> {
   const up = (_f: Frame, s: Required<Placement>) => at(s.position.x, s.position.y + 0.3, s.position.z);
   return function* () {
     yield* take(k, { left: [scabbard, 'throat'] }, { face: yawOf(scabbard.current.quaternion), stand: { aside: k.h.proportions.shoulderHalfWidth } })();
-    yield* along(k, scabbard, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]], { on: INDEX.hips })();
+    yield* along(k, scabbard, [[0.6, up], [0.6, at(0.3, 0.32, 0.3)], [0.7, at(0.34, 0.24, 0.22, HANGING.quaternion)], [0.8, HANGING]], { on: facingAt(k.h, INDEX.hips, { position: new Vector3() }) })();
     yield* wear(k.h, scabbard, INDEX.hips)();
   };
 }
@@ -63,7 +63,7 @@ const PRESENTED = at(0.15, 0.06, 0.22, turn(1.0, 0, 0.3));
  */
 export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<World> {
   const hilt = onItem(sword, sword.grips.hilt);
-  const hips = INDEX.hips;
+  const hips = facingAt(k.h, INDEX.hips, { position: new Vector3() });
   // (held where it is presented while the right hand draws: the scabbard moved before the sword it carries)
   const steady = hold(k.h, scabbard, { to: facingAt(k.h, INDEX.hips, PRESENTED) });
   return busy(
@@ -79,7 +79,7 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour<Wor
         yield* takeOff(k.h, sword)();
         // (out along the scabbard and home again: the sword's own length, not scaled with the body)
         const draw: Leg[] = [[0.7, at(0, 0.3, 0)], [0.5, still], [0.8, at(0, 0, 0)]];
-        yield* parallel<F>('race', steady, carry(k.h, sword, draw, { on: scabbard,  pace: k.pace }));
+        yield* parallel<F>('race', steady, carry(k.h, sword, draw, { on: onItem(scabbard), pace: k.pace }));
         yield* wear(k.h, sword, scabbard, { to: { position: new Vector3(), quaternion: new Quaternion() } })();
         yield* parallel<F>('race', release(k.h, ['right']), steady);
         yield* along(k, scabbard, [[0.6, HANGING]], { on: hips })();

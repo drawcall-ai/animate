@@ -2,10 +2,8 @@ import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import {
-  Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, STEP, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze,
-  type Frame,
-} from '../../src';
+import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
 it('keeps an unsupported grip through the next task’s gaze opening, then releases to rest', () => {
@@ -46,7 +44,7 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
       yield* reachFor(h, { right: [item, 'handle'] })();
       yield* carry(h, item, [[0.5, { position: goal }]])();
       world = item.current.position.clone();
-      yield* carry(h, item, [[0.5, { position: new Vector3(-0.15, 0.15, 0.3) }]], { on: frame })();
+      yield* carry(h, item, [[0.5, { position: new Vector3(-0.15, 0.15, 0.3) }]], { on: () => frame.current })();
       done = true;
     }], height);
   for (let i = 0; i < 360; i++) h.update(STEP);

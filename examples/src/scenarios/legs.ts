@@ -1,8 +1,9 @@
+import { humanGait, humanLegs } from '../human-legs';
 import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, HORSE_WALK, Legs, Pose, createWorld, horseLegs, humanGait, humanLegs, minimumJerk, yawOf, type Frame, type LegGait, type ReadonlyPose, type World } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, HORSE_WALK, Legs, Pose, createWorld, horseLegs, minimumJerk, yawOf, type Frame, type LegGait, type ReadonlyPose, type World } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
 

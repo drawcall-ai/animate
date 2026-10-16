@@ -1,3 +1,4 @@
+import { carryAims } from './hold';
 import { bringShoulder } from '../reach-posture';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
@@ -11,7 +12,6 @@ import { INDEX, SIDES, type Side } from '../bones';
 import { course, type Leg } from '../course';
 import type { Humanoid } from '../humanoid';
 import { grip, gripOf, gripsOf, offGrips, type Grips } from './grips';
-import { facingAt } from '../goal';
 import { following, LEADING } from './reach';
 
 // Holding and carrying: the hands on an item's grips, carrying it where it goes.
@@ -23,7 +23,7 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 const RESTING = 2;
 
 interface CarryOptions<W> {
-  on?: number | Carrier | Live<Required<Placement>, W>;
+  on?: Live<Placement, W>;
   pace?: number;
   motion?: Motion;
   limit?: number;
@@ -31,8 +31,7 @@ interface CarryOptions<W> {
 
 /**
  * Carry a held item along `legs`, in metres in the world by default. `on` selects an item frame
- * or a bone frame (only bone distances scale with that body). A bone number uses body facing at that joint.
- * A live placement supplies another body’s frame. Leg seconds describe an unloaded
+ * or a bone frame through `onItem` or `onBone`. Leg seconds describe an unloaded
  * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 1 cm and 5 cm/s of
  * the course end; throws after `limit` seconds of settling outside reach.
  */
@@ -43,13 +42,7 @@ export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], op
 function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], options: CarryOptions<W>, together?: (ready: boolean) => boolean): Behaviour<W> {
   return function* () {
     const { on, pace = 1, limit = RESTING } = options;
-    let frame: Live<Required<Placement>, W> = WORLD;
-    let scale = 1;
-    if (typeof on === 'number') {
-      frame = facingAt<W>(h, on, WORLD);
-      scale = h.scale;
-    } else if (on instanceof Carrier) frame = () => on.current;
-    else if (on) frame = on;
+    const frame = on ?? WORLD;
     const grips = gripsOf(h, item);
     const lag = grips[LEADING] === undefined && h.holding[LEADING] ? following(item, grips) : { delay: 0, slower: 0 };
     const factor = loadFactor(item.mass);
@@ -58,7 +51,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
     // Take-up and compliance belong to lifting off a support, not every carried waypoint.
     const load = item.supported ? factor - 1 : 0;
     // Tuned load take-up: 0.15 s at 8 kg; the same law slows the path and initial acceleration.
-    const path = course(item, frame, legs, { scale, pace: pace * (1 - lag.slower) / factor, delay: lag.delay + 0.45 * load });
+    const path = course(item, frame, legs, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay + 0.45 * load });
     const end = new TrackedEnd();
     let since = NaN;
     let dip = 0;
@@ -151,14 +144,14 @@ export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placeme
     item.supported = false;
     yield* action<Frame<W>>({
       update: (f) => {
-        if (h.carrying.has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
+        if (carryAims(h).has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
         const goal = live(to, f);
         // (on from where the item is, fitted to the wrists: arms lagging the aim do not pull it apart from them)
         const turned = rotation.follow(item.prev.quaternion, item.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
         if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side, _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(goal.position));
         const within = inReach(h, f, item, grips, sides, _at.copy(goal.position), turned);
         aim.move(f.time, position.follow(item.prev.position, item.current.position, within, motion, f.dt, _p), turned);
-        h.carrying.set(item, aim);
+        carryAims(h).set(item, aim);
       },
       until: options.until,
     });

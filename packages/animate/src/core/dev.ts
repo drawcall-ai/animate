@@ -1,4 +1,3 @@
-import type { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from './body';
 import type { Behaviour } from './goal';
@@ -26,7 +25,6 @@ export type WatchFrame<W = unknown> = Readonly<Omit<Frame<W>, 'current' | 'dev' 
 export class Dev {
   readonly log: LogEntry[] = [];
   beat?: string;
-  readonly velocities: Vector3[] = [];
 
   append(time: number, problem: Problem): void {
     this.log.push({ ...problem, time, ...(this.beat === undefined ? {} : { beat: this.beat }) });

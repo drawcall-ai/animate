@@ -19,7 +19,7 @@ import { stepFeet } from './steps';
 import { checkFeet, checkSupport } from './checks';
 
 
-/** What `balance` reports of the walk it carries the body on (its output: read it, never write it). */
+/** Walk state: balance owns the motion; walkTo publishes and clears its arrival estimate. */
 export interface Gait {
   /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
   phase: number;
@@ -29,7 +29,7 @@ export interface Gait {
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
   velocity: Vector3;
-  /** seconds until the walk now running arrives; Infinity when no walk is running; published by walkTo */
+  /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
   eta: number;
   /** a walk is under way */
   moving: boolean;
@@ -62,13 +62,13 @@ const SETTLED = 0.4;
  * roll and push off; arriving it squares the feet into the stance. It reads and clears `h.asks` at
  * the start of every sub-step, and writes `h.feet` and `h.gait`. Put it first: it writes the root.
  */
-export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number; life?: boolean } = {}): Behaviour<W> {
+export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour<W> {
   return function* () {
     const p = h.proportions;
     const base: Stance = { ...defaultStance(p), ...options.stance };
     const c = new Carriage(p, base, h.feet);
     const posture = new Posture();
-    const life = options.life === false ? undefined : new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
+    const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
     const quiet: { drift: Vector3; breath: number; onto: Side | null } = { drift: new Vector3(), breath: 0, onto: null };
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
@@ -85,7 +85,6 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         }
         const dt = f.dt;
         takeAsks(h.asks, asks);
-        if (asks.lean || asks.taken[0] || asks.taken[1]) throw new Error('balance takes no lean or taken feet yet');
         c.stance = asks.stance ? { ...base, ...asks.stance } : base;
         if (!started) {
           started = true;
@@ -115,11 +114,11 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
           const hand = INDEX[`${side}Hand`];
           return f.prev.position(hand).distanceTo(f.prev2.position(hand)) / dt;
         }));
-        life?.update(dt, life.quiet(asks, h), speed);
+        life.update(dt, life.quiet(asks, h), speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
-        quiet.drift.copy(life?.drift ?? ZERO);
-        quiet.breath = life?.breath ?? 0;
-        quiet.onto = asks.onto ?? life?.onto ?? null;
+        quiet.drift.copy(life.drift);
+        quiet.breath = life.breath;
+        quiet.onto = asks.onto ?? life.onto;
         posture.carry(f, c, { lower, bow, twist }, trunk, quiet);
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = pelvis.up.follow(_a.set(0, f.prev2.position(0).y, 0), _b.set(0, f.prev.position(0).y, 0), _g.set(0, c.pelvis.y, 0), PELVIS, dt, _up);
@@ -184,5 +183,3 @@ const _up = new Vector3();
 const _half = new Quaternion();
 const _q = new Quaternion();
 const _local = new Quaternion();
-
-const ZERO = new Vector3();

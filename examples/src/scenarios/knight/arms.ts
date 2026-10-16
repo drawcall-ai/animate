@@ -53,7 +53,7 @@ export function takeLance(k: Knight, lance: Item): Behaviour<World> {
   const lift = (_f: Frame, s: Required<Placement>) => at(s.position.x, s.position.y + 0.1, s.position.z);
   return function* () {
     yield* take(k, { right: [lance, 'grip'] }, { stand: { aside: -0.22 } })();
-    yield* along(k, lance, [[0.6, lift], [1.2, UPRIGHT]], { on: INDEX.hips })();
+    yield* along(k, lance, [[0.6, lift], [1.2, UPRIGHT]], { on: facingAt(k.h, INDEX.hips, { position: new Vector3() }) })();
   };
 }
 

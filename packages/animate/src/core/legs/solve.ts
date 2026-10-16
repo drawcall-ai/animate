@@ -25,7 +25,7 @@ const STIFF = 1e9;
 const STEPS = 24;
 const CONVERGED = 1e-7;
 /** Full terminal contact (world), or a swing with its reference orientation and one-sided ground constraints. */
-export interface Target {
+export interface LegTarget {
   /** false: the terminal is free; references shape the swing and ground constrains its sole. */
   held: boolean;
   position: Vector3;
@@ -135,7 +135,7 @@ export class Solver {
    * The joints posed for `target` this tick, off `pose`'s posed parents, written into it (the
    * previous coordinates kept). Start from bent references to avoid the straight-hinge saddle. Returns the terminal's miss (m).
    */
-  solve(pose: Pose, target: Target): number {
+  solve(pose: Pose, target: LegTarget): number {
     this.q1.set(this.q);
     this.q.set(this.ref);
     this.base(pose.rotation(pose.skeleton.bones[this.bones[0]].parent), pose.position(this.bones[0]));
@@ -149,7 +149,7 @@ export class Solver {
   }
 
   /** the joints `q` (rad, from them: written back) that reach `target` off a base turned `turn` at `top` (the top joint's world position), the pose untouched. Returns the miss (m). */
-  reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: Target, q: Float64Array): number {
+  reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array): number {
     const was = _was.subarray(0, this.n);
     was.set(this.q);
     this.q.set(this.ref);
@@ -169,7 +169,7 @@ export class Solver {
    * Levenberg's damped Gauss-Newton from the coordinates as they are, within their ranges (a straight knee is singular:
    * plain Gauss-Newton would leap): the terminal's miss (m)
    */
-  private iterate(target: Target): number {
+  private iterate(target: LegTarget): number {
     const { n, q, H, g, d, J, lo: lb, hi: ub, fixed, weight, ref, trial } = this;
     this.bound(q);
     const r = _r;
@@ -277,7 +277,7 @@ export class Solver {
   }
 
   /** the cost at the coordinates now (the residual into `r`) */
-  private cost(target: Target, r: Float64Array): number {
+  private cost(target: LegTarget, r: Float64Array): number {
     this.residual(target, r);
     let c = 0;
     for (let m = target.held ? 0 : 3; m < 6; m++) c += (target.held ? STIFF : this.turnWeight) * r[m] * r[m];
@@ -291,7 +291,7 @@ export class Solver {
   }
 
   /** the terminal's residual (position m, turn rad: world) into `r` */
-  private residual(target: Target, r: Float64Array) {
+  private residual(target: LegTarget, r: Float64Array) {
     this.forward();
     const last = this.bones.length - 1;
     const p = this.positions[last];
@@ -309,7 +309,7 @@ export class Solver {
   }
 
   /** the residual into `r` and the Jacobian into `J` at the coordinates now */
-  private linearise(target: Target, r: Float64Array) {
+  private linearise(target: LegTarget, r: Float64Array) {
     const { n, J } = this;
     this.residual(target, r);
     const p = this.positions[this.bones.length - 1];

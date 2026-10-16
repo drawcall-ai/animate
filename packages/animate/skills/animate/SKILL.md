@@ -9,7 +9,7 @@ description: Animate three.js characters with @drawcall/animate — a humanoid (
 
 A body runs one behaviour, a [@pmndrs/timeline](https://github.com/pmndrs/timeline) generator that `body.update(delta)` steps in fixed 1/60 s sub-steps. Behaviours don't keyframe: every sub-step each one writes absolute goals for the bones it owns and moves on toward them from the pose history, at its own pace. So any task can end at any moment, and whoever writes those bones next takes them over from where and how fast they were going. Wait with conditions (`when`, `until`, `timePassed`), never with Promises or wall time.
 
-A humanoid's behaviour is `parallel('all', idle(h), story)`. `idle` already balances, walks, breathes, sways, shifts weight, swings the free arms and looks about: don't author any of that, and to have the body stand a while, just wait (`when(timePassed(2, 'seconds'))`). A task wins on the bones it writes; when it ends, `idle` takes them back. Tasks never write the root or the legs: they ask `balance` inside `idle` (`ask(h, …)` for what no task asks). A hand holding an item keeps it until `release`.
+A humanoid's behaviour is `parallel('all', idle(h), story)`. `idle` already balances, walks, breathes, sways, shifts weight, swings the free arms and looks about: don't author any of that, and to have the body stand a while, just wait (`when(timePassed(2, 'seconds'))`). A task wins on the bones it writes; when it ends, `idle` takes them back. Tasks never write the root or the legs: they ask `balance` inside `idle`. A hand holding an item keeps it until `release`.
 
 ## A story, end to end
 
@@ -29,11 +29,16 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
     // walks up; eyes, hands and bow set off before it stands there
     yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
     yield* named('saddle the horse', function* () {
-      const back = horse.pose.point(0, onBack.position, new Vector3());
-      yield* parallel<Frame>('all', approach(h, back, { face: Math.PI / 2 }), withGaze(h, back, function* () {
-        yield* hold(h, saddle, { to: carried(h), until: arriving(h, 0.3) })(); // lifted, carried along
-        yield* carry(h, saddle, [[1.1, { position: new Vector3(-0.25, 0.45, 0), quaternion: across }], [0.75, onBack]], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }) })();
-      }));
+      const back = onBone(horse, 0, onBack)(horse.frame);
+      const carryPose = carried(h);
+      const lift = (f: Frame) => {
+        const goal = carryPose(f);
+        goal.position.y = back.position.y;
+        return goal;
+      };
+      yield* carry(h, saddle, [[0.75, lift]])(); // clear the rail before walking
+      yield* parallel<Frame>('race', approach(h, back), withGaze(h, () => saddle.current.position, hold(h, saddle, { to: lift })));
+      yield* carry(h, saddle, [[1.1, { position: new Vector3(-0.24, 0.33, 0), quaternion: across }], [0.75, onBack]], { on: onBone(horse, 0) })();
       yield* wear(horse, saddle, 0)(); // the horse moves it from now on
     })();
     yield* named('check the fit', withGaze(h, () => horse.pose.position(HEAD), release(h, ['left', 'right'])))();
@@ -61,15 +66,15 @@ yield* parallel<Frame>('all', release(h, ['left', 'right']), grab(h, { right: [r
 yield* grab(h, { right: [rope, 'knot'] })();
 
 // within a motion: one course through several places passes them without stopping
-yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }) })();
+yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: onBone(horse, 0) })();
 // not carry(…[[1.1, over]]) then carry(…[[0.75, onBack]]): the saddle stops dead above the back
 ```
 
-`[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, after one idle sub-step, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands. Between movers, an unsupported held item keeps its last hold pose relative to the body; supported or worn items stay with their support or wearer.
+`[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands.
 
 ## Units, frames and goals
 
-Metres, seconds, radians; +Y up, the floor at y = 0; yaw 0 faces +Z and +X is then the body's left. Goals live in one of three frames: the world (the default), a bone (`onBone(body, bone, local)` or `facingAt(h, bone, local)`; for a carry on another body, pass `onBone(body, bone, { position: new Vector3(), quaternion: new Quaternion() })` as `on`; bone goals scale with the body, live carry frames use metres), or an item (`onItem(item, local)`, `carry(…, { on: item })`). Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
+Metres, seconds, radians; +Y up, the floor at y = 0; yaw 0 faces +Z and +X is then the body's left. Goals live in one of three frames: the world (the default), a bone (`onBone(body, bone, local)` or `facingAt(h, bone, local)`), or an item (`onItem(item, local)`). For a carry on another body, use `{ on: onBone(body, bone) }`; for an item, `{ on: onItem(item) }`. Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
 
 Place what belongs to a body in its frame: `carried(h)` rather than a carry height like `y: 1.08` (right for one stature only), `onBone(horse, …)` rather than the horse's position plus an offset (right only while it stands still). Time beats by task conditions or distances to props, not raw coordinates such as `root.z > 8.2`.
 
@@ -81,28 +86,20 @@ What you author: the scene, the order of beats, the places on props a course pas
 
 ## Other bodies
 
-A `Body` is any skeleton with a behaviour. A horse ships with the package; `Legs` steps legs under a root the behaviour moves, and `legs.toward` moves and faces that root toward a goal on the floor. Any body can `wear` items, and `onBone` and `carry`'s `on` place things on it as it moves. Update every body each frame.
+A `Body` is any skeleton with a behaviour. A horse ships with the package: `horseFollow` moves it toward a floor goal with its pelvis, legs and head working together. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `on` place things on it as it moves. Update every body each frame.
 
 ```ts
 const HEAD = HORSE_SKELETON.index('head');
 const start = new Pose(HORSE_SKELETON);
 start.setRoot(new Vector3(1.2, start.position(0).y, 3));
-const legs = new Legs(start, horseLegs(), HORSE_WALK);
-const walk = { speed: 0.95, accel: 0.65 };
-// on a lead: after the groom once they are a rope's length off, else standing
-const led = (f: Frame) => {
+// Tied up until the rope is taken; then follow a rope's length behind the groom.
+const horse = new Body(HORSE_SKELETON, horseFollow(start, (f) => {
+  if (rope.supported) return { position: start.position(0) };
   const at = groom.pose.position(0);
   const back = f.prev.position(0).clone().sub(at).setY(0);
   return { position: back.length() < 2.4 ? f.prev.position(0) : back.setLength(2.4).add(at) };
-};
-const horse = new Body(HORSE_SKELETON, function* () {
-  // tied up till the rope is taken up, then led
-  yield* action<Frame>({ update: (f) => legs.toward(f, { position: start.position(0) }, walk), until: () => !rope.supported });
-  yield* action<Frame>({ update: (f) => { legs.toward(f, led(f), walk); horseCarriage(f, legs, groom.pose.position(0)); } });
-}, { pose: start });
+}), { pose: start });
 ```
-
-`toward` brakes and waits for side or rear goals until they move into its forward cone; unsupported requests still throw.
 
 ## Checking
 
@@ -112,7 +109,7 @@ Develop with `{ dev: true }` on every body: each sub-step checks the final pose 
 13.350 s, "saddle the horse": "saddle" left grip "left": 0.035 m off; right grip "right": 0.035 m off; 0.035 m off course end after 2 s
 ```
 
-A throw like this means the goal is out of reach from where the body stands: change where it stands (approach the place, facing it) or the course; a longer `limit` only throws later. Name every `Item` so errors say which.
+A throw like this means the goal is out of reach from where the body stands: change where it stands (approach its destination placement) or the course; a longer `limit` only throws later. Name every `Item` so errors say which.
 
 Expectations of the scene are watchers, composed before the story; they read final poses and cost nothing with dev off:
 

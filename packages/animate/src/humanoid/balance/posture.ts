@@ -5,7 +5,6 @@ import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
-import { NECK_PITCH } from '../profile/limits';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
@@ -151,27 +150,24 @@ export class Posture {
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
 const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, SQUAT * p.height, lower));
 
-/** Reach, gaze and tracked eyes request posture in the geometry they already have. */
-export function lowering(p: Proportions, request:
-  | { hand: { ahead: number; lateral: number; height: number; reach: number } }
-  | { bow: number }
-  | { drop: number; ahead: number; height: number },
-): { lower: number; bow: number } {
-  if ('bow' in request) return { lower: 0, bow: clamp(request.bow, 0, MOST_BOW) };
-  if ('hand' in request) {
-    const { ahead, lateral, height, reach } = request.hand;
-    const lever = bowLever(p, p.shoulderHeight);
-    const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));
-    const up = height - p.shoulderHeight + lever;
-    const distance = Math.hypot(ahead, up);
-    const angle = distance > 0 ? Math.acos(clamp((distance ** 2 + lever ** 2 - plane ** 2) / (2 * distance * lever), -1, 1)) : Math.PI;
-    const bow = height < p.shoulderHeight ? clamp(Math.atan2(ahead, up) - angle, 0, MOST_BOW) : 0;
-    // A sideways approach is closed by steps and trunk turns, rather than a squat.
-    const across = Math.min(Math.hypot(ahead - lever * Math.sin(bow), lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - height));
-    const below = Math.sqrt(Math.max(0, reach ** 2 - across ** 2));
-    const drop = height > p.shoulderHeight ? Math.min(0, p.shoulderHeight + below - height) : Math.max(lever * (1 - Math.cos(bow)), p.shoulderHeight - height - below);
-    return lowered(p, lever, drop, bow);
-  }
+/** Posture needed to bring a shoulder within hand reach. */
+export function handLowering(p: Proportions, request: { ahead: number; lateral: number; height: number; reach: number }): { lower: number; bow: number } {
+  const { ahead, lateral, height, reach } = request;
+  const lever = bowLever(p, p.shoulderHeight);
+  const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));
+  const up = height - p.shoulderHeight + lever;
+  const distance = Math.hypot(ahead, up);
+  const angle = distance > 0 ? Math.acos(clamp((distance ** 2 + lever ** 2 - plane ** 2) / (2 * distance * lever), -1, 1)) : Math.PI;
+  const bow = height < p.shoulderHeight ? clamp(Math.atan2(ahead, up) - angle, 0, MOST_BOW) : 0;
+  // A sideways approach is closed by steps and trunk turns, rather than a squat.
+  const across = Math.min(Math.hypot(ahead - lever * Math.sin(bow), lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - height));
+  const below = Math.sqrt(Math.max(0, reach ** 2 - across ** 2));
+  const drop = height > p.shoulderHeight ? Math.min(0, p.shoulderHeight + below - height) : Math.max(lever * (1 - Math.cos(bow)), p.shoulderHeight - height - below);
+  return lowered(p, lever, drop, bow);
+}
+
+/** Posture needed to lower the eyes toward a target. */
+export function lowering(p: Proportions, request: { drop: number; ahead: number; height: number }): { lower: number; bow: number } {
   const { drop, ahead, height } = request;
   const lever = bowLever(p, height);
   const bow = Math.min(Math.asin(clamp(ahead / lever, 0, 1)), Math.acos(1 - clamp(drop / lever, 0, 1)));
@@ -188,7 +184,8 @@ function lowered(p: Proportions, lever: number, drop: number, aheadBow: number) 
 }
 
 const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
-const MOST_BOW = NECK_PITCH * Math.PI / 180;
+// Tuned comfortable bow ceiling, independent of the neck joint range.
+export const MOST_BOW = 60 * Math.PI / 180;
 
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
 function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>): number {

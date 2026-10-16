@@ -2,7 +2,8 @@ import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { approach, arriving, carried, hold, handTo, Humanoid, createSkeletonModel, STEP, INDEX, grab, Item, walkTo, when, type Frame } from '../../src';
+import { approach, arriving, carried, hold, handTo, Humanoid, createSkeletonModel, INDEX, grab, Item, walkTo, when, type Frame } from '../../src';
+import { STEP } from '../../src/core/body';
 
 it('publishes arrival and starts a waiting grab before the walk ends without replacing its goal', () => {
   const to = new Vector3(0, 0, 2);

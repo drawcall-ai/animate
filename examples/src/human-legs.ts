@@ -1,10 +1,10 @@
 // Recalled: Perry (1992) / Winter (2009) normal walking curves, ported from the legged spike.
-import type { Proportions } from './proportions';
-import { INDEX, SIDES } from './bones';
-import type { JointCycle } from '../core/legs/cycle';
-import type { LegChain } from '../core/legs/legs';
-import type { LegGait } from '../core/legs/gait';
-import { powerGait } from '../core/legs/schedule';
+import type { Proportions } from '@drawcall/animate';
+import { INDEX, SIDES } from '@drawcall/animate';
+import type { JointCycle } from '../../packages/animate/src/core/legs/cycle';
+import type { LegChain } from '../../packages/animate/src/core/legs/legs';
+import type { LegGait } from '../../packages/animate/src/core/legs/gait';
+import { powerGait } from '../../packages/animate/src/core/legs/schedule';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992). */
 // Tuned in the spike: below 0.5 m/s shorten the stride instead of slowing its cadence.
