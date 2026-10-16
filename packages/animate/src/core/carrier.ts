@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Box3, Quaternion, Vector3 } from 'three';
 import { STEP } from './body';
 import type { Frame } from './body';
 import type { Placement, Target } from './goal';
@@ -64,6 +64,8 @@ export interface ItemOptions {
   name?: string;
   mass?: number;
   centre?: Vector3;
+  /** Solid envelope in item-local metres, for carrying clear of the body; grip positions alone do not bound its volume. */
+  bounds?: Box3;
   supported?: boolean;
 }
 
@@ -77,6 +79,7 @@ export class Item extends Carrier {
   wornBy: Wearer | null = null;
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
+  readonly bounds: Box3 | undefined;
   /** it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`, `carry`) or wearing it clears this, letting go of it where nothing else holds or wears it (`release`: put down) sets it */
   supported: boolean;
 
@@ -84,13 +87,17 @@ export class Item extends Carrier {
     position: Vector3,
     quaternion: Quaternion,
     readonly grips: Readonly<Record<string, Target>>,
-    { name = "item", mass = 0, centre = new Vector3(), supported = true }: ItemOptions = {},
+    { name = "item", mass = 0, centre = new Vector3(), supported = true, bounds }: ItemOptions = {},
   ) {
     super(position, quaternion);
     if (!(mass >= 0 && Number.isFinite(mass))) throw new Error(`an item of mass ${mass}`);
+    if (bounds && (bounds.isEmpty() || ![...bounds.min.toArray(), ...bounds.max.toArray()].every(Number.isFinite))) {
+      throw new Error(`"${name}" has empty or non-finite bounds`);
+    }
     this.name = name;
     this.mass = mass;
     this.centre = centre.clone();
+    this.bounds = bounds?.clone();
     this.supported = supported;
   }
 }

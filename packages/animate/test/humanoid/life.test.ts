@@ -40,6 +40,16 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
   expect(Math.max(...a.pitch.slice(120, 600)) - Math.min(...a.pitch.slice(120, 600))).toBeGreaterThan(0.02);
 });
 
+it('keeps the same life sequence when initial geometry differs only by trig roundoff', () => {
+  const make = (yaw: number) => new Humanoid<World>(createSkeletonModel(), idle, { world: createWorld(), yaw });
+  const a = make(0.1), b = make(0.1 + 1e-14);
+  for (let i = 0; i < 1500; i++) {
+    a.update(1 / 60);
+    b.update(1 / 60);
+    expect(a.gait.quiet.distanceTo(b.gait.quiet)).toBeLessThan(1e-10);
+  }
+});
+
 it('turns the trunk for an across-body reach and for an over-shoulder look within ROM', () => {
   for (const look of [false, true]) {
     const h = body((h) => function* () {

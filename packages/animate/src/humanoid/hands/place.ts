@@ -17,25 +17,32 @@ const LIFT = 0.5;
 const RAISE = 1.3;
 // Inherited unchanged from iteration 11 (3cad1b6); never re-tuned (anticipation s).
 export const RAISE_LEAD = 0.9;
+// Introduced in cae3f19: start the approach at two thirds of positive lift rise.
+const APPROACH_RISE = 2 / 3;
 /** Lift close to the body, approach, then transfer onto the destination during the last step.
  * A live destination follows translation and rotation throughout the approach and transfer. */
 export function place<W extends World>(h: Humanoid<W>, item: Item, to: Live<Placement, W>): Behaviour<W> {
-  return withGaze(h, (f) => live(to, f).position, function* () {
-    const atBody = carried(h);
-    const from = item.current.position.y;
-    const rise = atBody(h.frame).position.y - from;
-    const near = arriving(h, RAISE_LEAD);
-    let approached = false;
-    yield* parallel<Frame<W>>('all', function* () {
-      // Turn and set off in the last third of the lift, while the legs are extending.
-      yield* when<W>(() => item.current.position.y >= from + rise * 2 / 3);
-      yield* approach(h, to)();
-      approached = true;
-    }, function* () {
-      yield* carry(h, item, [[LIFT, atBody]])();
-      yield* hold(h, item, { to: atBody, until: near })();
-      yield* carry(h, item, [[RAISE, to]])();
-      yield* hold(h, item, { to, until: () => approached })();
-    });
-  });
+  return function* () {
+    let lifting = true;
+    const watched = item.current.position.clone();
+    yield* withGaze(h, (f) => lifting ? watched : live(to, f).position, function* () {
+      const atBody = carried(h);
+      const from = item.current.position.y;
+      const rise = atBody(h.frame).position.y - from;
+      const near = arriving(h, RAISE_LEAD);
+      let approached = false;
+      yield* parallel<Frame<W>>('all', function* () {
+        // Extension and turning overlap; a level or downward carry has no rise to wait for.
+        yield* when<W>(() => rise <= 0 || item.current.position.y >= from + rise * APPROACH_RISE);
+        yield* approach(h, to)();
+        approached = true;
+      }, function* () {
+        yield* carry(h, item, [[LIFT, atBody]])();
+        lifting = false;
+        yield* hold(h, item, { to: atBody, until: near })();
+        yield* carry(h, item, [[RAISE, to]])();
+        yield* hold(h, item, { to, until: () => approached })();
+      });
+    })();
+  };
 }

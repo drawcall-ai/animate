@@ -1,3 +1,4 @@
+import { SEGMENT_RADIUS } from '../../src/humanoid/hands/grab';
 import { leg } from '../core/rigs';
 import { Pose } from '../../src/core/pose';
 import { createWorld, type World } from '../../src/humanoid/world';
@@ -188,7 +189,7 @@ it('returns to its starting point after an internal route without a final target
   expect(Math.abs(h.pose.position(0).z)).toBeLessThan(0.15);
 });
 
-it.each(['one grip', 'two grips', 'placement'])('chooses a clear actual stand, including aside and explicit facing: %s', (kind) => {
+it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including aside and rejects a blocked explicit face: %s', (kind) => {
   const other = new Pose(leg());
   other.setRoot(new Vector3(-0.35, 1, 1.6));
   const world = createWorld({ bodies: [other] });
@@ -203,12 +204,13 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear actual stand, i
       const grips = kind === 'placement' ? item.current.position : kind === 'one grip'
         ? { right: [item, 'middle'] as const }
         : { left: [item, 'left'] as const, right: [item, 'right'] as const };
-      yield* approach(h, grips, { face: 0, stand: { ahead: 0.4, aside: 0.25 } })();
+      expect(() => approach(h, grips, { face: 0, stand: { ahead: 0.4, aside: 0.25 } })().next()).toThrow('explicit face has a blocked stand');
+      yield* approach(h, grips, { stand: { ahead: 0.4, aside: 0.25 } })();
       done = true;
     });
   }, { world });
   for (let t = 0; t < 8; t += STEP) h.update(STEP);
   expect(done).toBe(true);
   expect(Math.abs(h.gait.facing)).toBeGreaterThan(0.3);
-  for (const foot of h.feet) expect(Math.hypot(foot.position.x + 0.25, foot.position.z - 1.6)).toBeGreaterThan(h.proportions.toeFront + 0.06);
+  for (const foot of h.feet) expect(Math.hypot(foot.position.x + 0.25, foot.position.z - 1.6)).toBeGreaterThan(h.proportions.toeFront + SEGMENT_RADIUS);
 });

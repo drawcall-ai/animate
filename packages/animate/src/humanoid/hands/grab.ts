@@ -6,11 +6,10 @@ import type { Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Placement, type Target } from '../../core/goal';
 import type { World } from '../world';
 import { when } from '../../core/when';
-import { lookAt } from '../../core/gaze';
 import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { withGaze } from '../look';
+import { gazeLead, pathAhead, withGaze } from '../look';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../core/math';
 import { arriving, route } from '../walk';
 import { gripOf, held, type Holds } from './grips';
@@ -27,8 +26,8 @@ export interface Stand {
 
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
-// One arm length leaves room to bend toward low two-hand grips.
-const LOW_STAND = 1;
+// Inherited low two-hand stand distance: 1.05 arm lengths, leaving room to bend.
+const LOW_STAND = 1.05;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
 const SQUARE = 0.3;
@@ -41,16 +40,16 @@ const ON = 0.5;
 // Tuned frontal approach cone: lateral offset at most half the forward distance to the target.
 const ROUND_ASIDE = 0.5;
 // Proxy radius for other bodies’ low segments, not measured (m).
-const SEGMENT_RADIUS = 0.06;
+export const SEGMENT_RADIUS = 0.06;
 const STILL = 0.5;
 
 /**
  * Taking hold of things, each step under way before the last is over: the body walks up to take
- * them (`approach`); once they are in view (IN_VIEW), the eyes go to
+ * them (`approach`); once they are in view (IN_VIEW), one gaze notices them, follows the path during a long approach, and returns LOOKING s before arrival to
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); REACHING_OUT s before, the hands set off toward them (to a point
  * halfway from its shoulder to its grip); LOWERING s before, as it plants its last step, the body
  * starts to bow and bend for them; once it stands they take hold (`reachFor`). It ends with the hands on the grips: hold on with
- * `hold` or `carry`. Gaze and reach prepare together once the grips enter view; `first: true` lets the eyes lead.
+ * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead.
  */
 export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number; first?: boolean } = {}): Behaviour<W> {
   const { look = true, bow } = options;
@@ -84,19 +83,29 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
       stood = true;
     };
     const near = arriving(h, LOOKING);
+    const body = new Vector3();
+    let noticed = NaN;
     const seen = (f: Frame<W>) => {
-      const at = middleOf(holds), body = f.prev.com(_com);
+      const at = middleOf(holds);
+      f.prev.com(body);
       return Math.abs(wrapAngle(headingOf(at.x - body.x, at.z - body.z) - h.gait.facing)) < IN_VIEW;
     };
     const target = look === true ? () => middleOf(holds) : look;
-    yield* parallel<Frame<W>>('all', walk, function* () {
-      if (target === false) return;
-      // Notice as soon as the grips enter view; hand preparation keeps its approach timing.
-      yield* when((f: Frame<W>) => stood || seen(f));
-      yield* parallel<Frame<W>>('race', lookAt(h.gazer, target), when(near));
-    }, function* () {
+    const waitingHands = function* () {
       yield* when((f: Frame<W>) => stood || (near(f) && seen(f)));
-      yield* (look === false ? hands : withGaze(h, look === true ? middleOf(holds) : look, hands, { bow, first: options.first }))();
+      if (options.first && target !== false) yield* gazeLead(h, target)();
+      yield* hands();
+    };
+    yield* parallel<Frame<W>>('all', walk, function* () {
+      if (target === false) { yield* waitingHands(); return; }
+      yield* when((f: Frame<W>) => stood || seen(f));
+      yield* withGaze(h, (f) => {
+        if (Number.isNaN(noticed)) noticed = f.time;
+        return stood || near(f) || f.time - noticed < LOOKING
+          ? live(target, f)
+          : pathAhead(h, f.prev, body);
+      },
+      waitingHands, { bow })();
     });
   };
 }
@@ -105,7 +114,7 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
  * Further aside, wait for the approach to turn the body before looking. */
 const IN_VIEW = 1.4;
 
-/** how long before the body arrives to take something the eyes go to it, and the hands set off toward it (s): the eyes ~0.5–1 s ahead of the hands (Land & Hayhoe 2001) */
+/** Final-approach gaze lead (s); until then the eyes follow the walking path. */
 const LOOKING = 0.6;
 const REACHING_OUT = 0.5;
 /** how long before the body arrives it starts to come down for what it takes (s): as it plants its last step, not once it has stood still */
@@ -131,7 +140,7 @@ function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
  * hand. A point must be within ARM_REACH of that middle at the requested stand (at the
  * shoulders' standing height); an impossible stand throws before walking. Grips may recruit
  * bowing and lowering during the reach. A destination placement uses the held grips at its
- * orientation to choose the facing, so both hands can reach it; translation and rotation are followed live.
+ * orientation to choose the facing, so both hands can reach it; a blocked explicit `face` throws; translation and rotation are followed live.
  */
 export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placement, W>, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
   const { aside = 0 } = options.stand ?? {};
@@ -182,16 +191,18 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
       });
     });
     // Check the actual stand, including aside, before searching the nearest other facing (π/16).
-    let found = false;
-    for (let i = 0; i <= 32; i++) {
-      const yaw = face + Math.ceil(i / 2) * (i % 2 ? 1 : -1) * Math.PI / 16;
-      standAt(yaw);
-      if (!clear()) continue;
-      face = yaw;
-      found = true;
-      break;
-    }
-    if (!found) throw new Error('approach: no stand clear of nearby low segments');
+    const clearFacing = () => {
+      for (let i = 0; i <= (options.face === undefined ? 32 : 0); i++) {
+        const yaw = face + Math.ceil(i / 2) * (i % 2 ? 1 : -1) * Math.PI / 16;
+        standAt(yaw);
+        if (clear()) return yaw;
+      }
+      return undefined;
+    };
+    const yaw = clearFacing();
+    if (yaw === undefined) throw new Error(options.face === undefined
+      ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand');
+    face = yaw;
     const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.gait.facing)) < SQUARE;
     if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) return;
     const rotation = (f: Frame<W>) => {

@@ -1,3 +1,4 @@
+import { clearBody } from './clearance';
 import { carryAims } from './hold';
 import { bringShoulder } from '../reach-posture';
 import { Quaternion, Vector3 } from 'three';
@@ -132,6 +133,8 @@ export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placeme
     }
     // (where the hands carry the item: followed toward `to`)
     const aim = new Carrier(item.current.position, item.current.quaternion);
+    aim.prev.position.copy(item.prev.position);
+    aim.prev.quaternion.copy(item.prev.quaternion);
     const position = new TrackedPoint();
     const rotation = new TrackedRotation();
     if (item.supported && item.mass > PREP.mass) {
@@ -146,11 +149,13 @@ export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placeme
       update: (f) => {
         if (carryAims(h).has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
         const goal = live(to, f);
-        // (on from where the item is, fitted to the wrists: arms lagging the aim do not pull it apart from them)
-        const turned = rotation.follow(item.prev.quaternion, item.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
-        if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side, _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(goal.position));
-        const within = inReach(h, f, item, grips, sides, _at.copy(goal.position), turned);
-        aim.move(f.time, position.follow(item.prev.position, item.current.position, within, motion, f.dt, _p), turned);
+        // Advance the intended carry from its own history. Feeding the wrists' fitted
+        // item back into this aim makes their lag steer the next target and can amplify a swivel.
+        const turned = rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
+        const at = clearBody(h, f.current, item, _at.copy(goal.position), turned);
+        if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side, _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(at));
+        const within = clearBody(h, f.current, item, inReach(h, f, item, grips, sides, at, turned), turned);
+        aim.move(f.time, position.follow(aim.prev.position, aim.current.position, within, motion, f.dt, _p), turned);
         carryAims(h).set(item, aim);
       },
       until: options.until,

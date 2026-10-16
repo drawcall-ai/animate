@@ -136,8 +136,7 @@ export function horseCarriage(f: Frame, legs: Legs, avoid?: Readonly<Vector3>): 
   f.current.setLocal(HEAD, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -nod / 2));
 }
 
-// Retuned here: avoidance begins at 0.6 m instead of 0.8 m so a clear handler can keep the short lead.
-// Turn, range and rate are inherited unchanged from iteration 2 (8b2ac67); never re-tuned.
+// Inherited unchanged from iteration 2 (8b2ac67): tuned avoidance distance, turn, range and rate.
 const AVERT = { distance: 0.8, turn: 0.5, range: 0.3, rate: 4 };
 
 const walkBlend = (f: Frame) => Math.min(1, f.prev.position(0).distanceTo(f.prev2.position(0)) / (f.dt * HORSE_WALK.slowest));

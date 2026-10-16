@@ -1,4 +1,4 @@
-import { Euler, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Simulation } from '../src/simulation';
 import { vary } from '../scripts/run';
@@ -166,7 +166,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
   }
   expect(settingOff).toBeLessThan(0.3);
   expect(gazeAt).toBeLessThan(settingOff);
-  expect(liftAt - gripAt).toBeLessThan(0.7);
+  expect(liftAt - gripAt).toBeLessThan(0.5);
   expect(nearMin).toBeGreaterThan(0.15);
   expect(nearMax).toBeLessThan(0.3);
   expect(Number.isFinite(postGap)).toBe(true);
@@ -204,6 +204,12 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
   let walking = 0;
   let railGap = Infinity;
   let footAcross = Infinity;
+  let lifting = true;
+  let torsoGap = Infinity;
+  let headSpeed = 0;
+  let headTurn = 0;
+  let firstHead: Quaternion | null = null;
+  let lastHead: Quaternion | null = null;
   while (sim.t < 25) {
     sim.step();
     const h = sim.actors[0];
@@ -217,16 +223,42 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
       const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));
       for (const [c, d] of RAIL) railGap = Math.min(railGap, segmentDistance(from, end, c, d) - LEG_RADIUS * h.proportions.height - RAIL_RADIUS);
     }
+    if (h.gait.moving) lifting = false;
+    if (lifting) {
+      const rotation = h.pose.rotation(h.pose.skeleton.index('head')).clone();
+      firstHead ??= rotation.clone();
+      headTurn = Math.max(headTurn, firstHead.angleTo(rotation));
+      if (lastHead) headSpeed = Math.max(headSpeed, lastHead.angleTo(rotation) * 60);
+      lastHead = rotation;
+    }
     const head = h.pose.point(h.pose.skeleton.index('head'), h.proportions.headCenter, new Vector3());
     for (const box of sim.props()) {
       if (box.kind !== 'box' || !box.quaternion || ![SEAT_HEIGHT, SKIRT_HEIGHT].includes(box.size.y)) continue;
-      const local = head.clone().sub(box.position).applyQuaternion(box.quaternion.clone().invert());
+      const inverse = box.quaternion.clone().invert();
+      const local = head.clone().sub(box.position).applyQuaternion(inverse);
       const off = new Vector3(
         Math.max(0, Math.abs(local.x) - box.size.x / 2),
         Math.max(0, Math.abs(local.y) - box.size.y / 2),
         Math.max(0, Math.abs(local.z) - box.size.z / 2),
       );
       headGap = Math.min(headGap, off.length() - HEAD_RADIUS * h.proportions.height);
+      for (const [a, b, radius] of [['hips', 'chest', BODY_RADIUS], ['chest', 'neck', 0.045]] as const) {
+        const from = h.pose.position(h.pose.skeleton.index(a));
+        const to = h.pose.position(h.pose.skeleton.index(b));
+        // Minimise the convex point-to-box distance along the torso segment.
+        const gap = (u: number) => {
+          const p = from.clone().lerp(to, u).sub(box.position).applyQuaternion(inverse);
+          return Math.hypot(Math.max(0, Math.abs(p.x) - box.size.x / 2),
+            Math.max(0, Math.abs(p.y) - box.size.y / 2), Math.max(0, Math.abs(p.z) - box.size.z / 2));
+        };
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 32; i++) {
+          const a = (2 * lo + hi) / 3, b = (lo + 2 * hi) / 3;
+          if (gap(a) < gap(b)) hi = b;
+          else lo = a;
+        }
+        torsoGap = Math.min(torsoGap, gap((lo + hi) / 2) - radius * h.proportions.height);
+      }
     }
     if (h.gait.eta > RAISE_LEAD && h.gait.velocity.length() > MOVING) {
       walking++;
@@ -246,6 +278,9 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
     }
   }
   expect(walking).toBeGreaterThan(0);
+  expect(torsoGap).toBeGreaterThan(0.02);
+  expect(headTurn * 180 / Math.PI).toBeLessThan(20);
+  expect(headSpeed * 180 / Math.PI).toBeLessThan(180);
   expect(railGap).toBeGreaterThan(0);
   expect(footAcross).toBeGreaterThan(0);
   // Keep 2 cm of reserve, rather than a pass/fail boundary at contact.

@@ -5,6 +5,7 @@ import { gazeOff, lookAt, SHIFT } from '../core/gaze';
 import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
+import type { ReadonlyPose } from '../core/pose';
 import type { Humanoid } from './humanoid';
 import { forwardOf, lerp, smoothstep } from '../core/math';
 
@@ -52,6 +53,12 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
   };
 }
 
+/** The walking gaze's path point, shared by a long approach and the idle gaze. */
+export function pathAhead<W>(h: Humanoid<W>, pose: ReadonlyPose, out: Vector3): Vector3 {
+  return out.copy(pose.com(_com)).setY(AHEAD.walk.height * h.proportions.height)
+    .addScaledVector(forwardOf(h.gait.facing, _v), AHEAD.walk.distance);
+}
+
 const _com = new Vector3();
 const _v = new Vector3();
 
@@ -67,23 +74,28 @@ const _v = new Vector3();
 export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour<W> {
   const { bow = 0, first = false } = options;
   return function* () {
-    let lead = options.lead ?? NaN;
     yield* parallel<Frame<W>>(
       'race',
       function* () {
-        if (first) {
-          yield* when<W>((f, _, time) => {
-            const point = live(at, f);
-            if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
-            return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
-          });
-          yield* when(timePassed(lead, 'seconds'));
-        }
+        if (first) yield* gazeLead(h, at, options.lead)();
         yield* task();
       },
       lookAt(h.gazer, at, SHIFT),
       action<Frame<W>>({ update: () => { h.asks.bow = Math.max(h.asks.bow, bow); } }),
     );
+  };
+}
+
+/** Wait for the current gaze before starting a task; does not own or move the eyes. */
+export function gazeLead<W>(h: Humanoid<W>, at: Live<Vector3, W>, seconds = NaN): Behaviour<W> {
+  return function* () {
+    let lead = seconds;
+    yield* when<W>((f, _, time) => {
+      const point = live(at, f);
+      if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
+      return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
+    });
+    yield* when(timePassed(lead, 'seconds'));
   };
 }
 

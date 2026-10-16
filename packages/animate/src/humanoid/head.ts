@@ -1,3 +1,4 @@
+import { LOAD_RESERVE } from './hands/clearance';
 import { Quaternion, Vector3 } from 'three';
 import { action, type UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
@@ -189,10 +190,10 @@ const _swing = new Quaternion();
 const _local = new Quaternion();
 const _parent = new Quaternion();
 
+// Library handling policy: at most 20° of head motion to accommodate a load.
+const CLEARANCE_TURN = 20 * Math.PI / 180;
 // Recalled conservative radius (6% stature).
 const HEAD_RADIUS = 0.06;
-// Inherited unchanged from iteration 11 (3cad1b6); not re-tuned here (m).
-const HEAD_RESERVE = 0.04;
 // Inherited unchanged from iteration 12 (818a966); not re-tuned here (s).
 const HEAD_LEAD = 0.1;
 const X = new Vector3(1, 0, 0);
@@ -223,27 +224,30 @@ export function clearHead<W>(h: Humanoid<W>, pose: ReadonlyPose, goal: Quaternio
     for (let i = 0; i < grips; i++) load.radius = Math.max(load.radius, _grips[i].distanceTo(load.at));
     load.at.addScaledVector(item.velocity(_v), HEAD_LEAD);
   }
-  const loads = _loads.slice(0, count);
-  if (!count || clearance(h, pose, goal, loads) >= 0) return;
+  if (!count || clearance(h, pose, goal, count) >= 0) return;
   const back = _back.copy(pose.rotation(INDEX.chest)).multiply(_q.setFromAxisAngle(X, -NECK_EXTENSION * Math.PI / 180));
   let lo = 0, hi = 1;
-  if (clearance(h, pose, back, loads) >= 0) for (let pass = 0; pass < 10; pass++) {
+  if (clearance(h, pose, back, count) >= 0) for (let pass = 0; pass < 10; pass++) {
     const middle = (lo + hi) / 2;
-    if (clearance(h, pose, _clear.copy(goal).slerp(back, middle), loads) >= 0) hi = middle;
+    if (clearance(h, pose, _clear.copy(goal).slerp(back, middle), count) >= 0) hi = middle;
     else lo = middle;
   }
-  goal.slerp(back, hi);
+  // Load clearance can borrow a small cervical adjustment; it cannot solve an
+  // obstructed carry by folding the head into the chest. The load path owns the rest.
+  const angle = goal.angleTo(back);
+  goal.slerp(back, Math.min(hi, angle > 0 ? CLEARANCE_TURN / angle : 0));
 }
 
-function clearance<W>(h: Humanoid<W>, pose: ReadonlyPose, rotation: Quaternion, loads: readonly { at: Vector3; radius: number }[]): number {
+function clearance<W>(h: Humanoid<W>, pose: ReadonlyPose, rotation: Quaternion, count: number): number {
   const bones = pose.skeleton.chain(h.gazer.neck);
   const neck = pose.position(bones[0]);
   const headRadius = HEAD_RADIUS * h.proportions.height;
   const turn = within(pose, bones, pose.rotation(INDEX.chest), rotation, _local, _head.copy(neck));
   _head.add(_center.copy(h.proportions.headCenter).applyQuaternion(turn));
   let gap = Infinity;
-  for (const { at, radius } of loads) {
-    gap = Math.min(gap, _head.distanceTo(at) - (radius + headRadius + HEAD_RESERVE * h.proportions.scale) *
+  for (let i = 0; i < count; i++) {
+    const { at, radius } = _loads[i];
+    gap = Math.min(gap, _head.distanceTo(at) - (radius + headRadius + LOAD_RESERVE * h.proportions.scale) *
       (1 - smoothstep(neck.y, neck.y + headRadius, at.y)));
   }
   return gap;

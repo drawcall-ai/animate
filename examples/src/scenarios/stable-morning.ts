@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import {
   Body, HORSE_SKELETON, Item, Pose,
@@ -20,12 +20,12 @@ const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
 // Tuned against the yard sequence: leave time to halt beyond the gate and settle before the cut.
-const DURATION = 27.35;
+const DURATION = 28.35;
 const INSPECT = 0.85;
 // Tuned matched walk through braking, checked against solved hip excursion (m/s).
 const LEADING = { speed: 0.9 };
-// Handler station: shoulder-to-throatlatch advance plus the former shoulder offset (m).
-const LEAD_OFFSET = 1.22;
+// Tuned pelvis station ahead of the horse pelvis (m), placing the handler beside the throatlatch.
+const HANDLER_AHEAD = 1.22;
 // Tuned lane beside the head, outside the foreleg swing (m).
 const LEAD_ASIDE = 0.55;
 // Minimum station-transition distance; a larger station change gets enough travel to stay monotonic (m).
@@ -40,6 +40,13 @@ const SLACK_SAG = 0.25;
 const BARREL_LENGTH = 1.45;
 const GATE_POST = 0.15;
 const GATE_CLEAR = (BARREL_LENGTH + GATE_POST) / 2;
+// Original saddle proxy mesh dimensions (m); the carry envelope and drawing share them.
+const SEAT = new Vector3(0.48, 0.16, 0.44);
+const SKIRT = new Vector3(0.42, 0.29, 0.05);
+const SKIRT_DROP = 0.13;
+const SKIRT_ASIDE = 0.27;
+const SADDLE_BOUNDS = new Box3().setFromCenterAndSize(new Vector3(), SEAT);
+for (const side of [-1, 1]) SADDLE_BOUNDS.union(new Box3().setFromCenterAndSize(new Vector3(0, -SKIRT_DROP, side * SKIRT_ASIDE), SKIRT));
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -50,14 +57,14 @@ export function stableMorning(): Scenario {
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
     duration: DURATION, actors: [{ position: { x: 1.5, z: 0 }, yaw: -0.1 }],
     cameraDistance: 4.8,
-    // Tuned bearings: three-quarter front and a side profile opening the handler’s leading lane.
+    // Front moved from π/3 to 5π/6 to open the handler’s leading lane beside the near foreleg; side retains the profile.
     cameraAngles: { front: 5 * Math.PI / 6, side: 2 * Math.PI / 3 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(Math.PI / 2), {
         left: { position: new Vector3(0.22, 0, 0) },
         right: { position: new Vector3(-0.22, 0, 0) },
-      }, { name: 'saddle', mass: 8 });
+      }, { name: 'saddle', mass: 8, bounds: SADDLE_BOUNDS });
       const rope = new Item(KNOT.clone(), new Quaternion(), {
         knot: { position: new Vector3() },
       }, { name: 'rope' });
@@ -68,7 +75,7 @@ export function stableMorning(): Scenario {
       pose.setRoot(HORSE);
       const horse = new Body(HORSE_SKELETON, horseFollow(pose, () => {
         const travel = leadStart !== null && handler ? Math.max(0, handler.pose.position(0).z - leadStart) : 0;
-        const reserve = leadStart === null ? 0 : LEAD_OFFSET - (leadStart - HORSE.z);
+        const reserve = leadStart === null ? 0 : HANDLER_AHEAD - (leadStart - HORSE.z);
         // Keep the target moving forward: the station change consumes at most half of the handler's travel.
         const length = Math.max(LEAD_EASE, 2 * Math.abs(reserve));
         const ease = Math.exp(-travel / length);
@@ -125,7 +132,7 @@ export function stableMorning(): Scenario {
             },
             handTo(h, 'left', slack, { lead: false, until: () => false }),
             function* () {
-              yield* walkTo(h, { to: new Vector3(HORSE.x + LEAD_ASIDE, 0, gate.z + LEAD_OFFSET + GATE_CLEAR), face: 0, ...LEADING })();
+              yield* walkTo(h, { to: new Vector3(HORSE.x + LEAD_ASIDE, 0, gate.z + HANDLER_AHEAD + GATE_CLEAR), face: 0, ...LEADING })();
               yield* named('halt beyond the gate', () => when(timePassed(1, 'seconds')))();
             },
             function* () {
@@ -157,10 +164,10 @@ export function stableMorning(): Scenario {
             line(horse.pose.position(NECK), poll, 0.1, 0x9b744c),
             line(poll, muzzle, 0.1, 0x9b744c),
             box(root.clone().add(new Vector3(0, -0.13, -0.04)), 0.48, 0.48, BARREL_LENGTH, horse.pose.rotation(0).clone()),
-            box(saddle.current.position.clone(), 0.48, 0.16, 0.44, saddle.current.quaternion.clone()),
+            box(saddle.current.position.clone(), SEAT.x, SEAT.y, SEAT.z, saddle.current.quaternion.clone()),
           ];
           // Two skirts make the simple saddle read above the horse's barrel.
-          for (const side of [-1, 1]) props.push(box(new Vector3(0, -0.13, side * 0.27).applyQuaternion(saddle.current.quaternion).add(saddle.current.position), 0.42, 0.29, 0.05, saddle.current.quaternion.clone()));
+          for (const side of [-1, 1]) props.push(box(new Vector3(0, -SKIRT_DROP, side * SKIRT_ASIDE).applyQuaternion(saddle.current.quaternion).add(saddle.current.position), SKIRT.x, SKIRT.y, SKIRT.z, saddle.current.quaternion.clone()));
           const end = rope.current.position;
           const halter = horse.pose.point(HEAD, HALTER, new Vector3());
           const at = (u: number) => halter.clone().lerp(end, u).add(new Vector3(0, -0.32 * 4 * u * (1 - u), 0));

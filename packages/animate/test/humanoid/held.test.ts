@@ -1,3 +1,4 @@
+import { clearHead } from '../../src/humanoid/head';
 import { createWorld, type World } from '../../src/humanoid/world';
 import { RAISE_LEAD } from '../../src/humanoid/hands/place';
 import { standing } from './fixtures';
@@ -280,6 +281,10 @@ it('keeps the head clear while a wide held load rises through a downward gaze', 
     h.update(STEP);
     if (item.supported) continue;
     samples++;
+    const goal = h.pose.rotation(INDEX.head).clone();
+    const before = goal.clone();
+    clearHead(h, h.pose, goal);
+    expect(before.angleTo(goal)).toBeLessThanOrEqual(20 * Math.PI / 180 + 1e-12);
     const head = h.pose.point(INDEX.head, h.proportions.headCenter, new Vector3());
     expect(head.distanceTo(item.current.position)).toBeGreaterThan(0.22 + 0.06 * h.proportions.height);
   }
