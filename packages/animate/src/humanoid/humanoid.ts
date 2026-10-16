@@ -19,7 +19,7 @@ import { gazeAsks } from './reach-posture';
 import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { load, dress, type Bearing } from './worn';
-import { clearHead } from './hands/head';
+import { clearHead } from './head';
 import { followHeld } from './hands/hold';
 import type { Dressed } from './worn';
 

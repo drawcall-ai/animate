@@ -3,7 +3,11 @@ import { action, type UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { live, type Behaviour, type Live, type Motion, type Placement } from '../core/goal';
 import { clampRotation } from '../core/limits';
-import type { Pose } from '../core/pose';
+import type { Pose, ReadonlyPose } from '../core/pose';
+import { within } from '../core/gaze';
+import { smoothstep } from '../core/math';
+import { NECK_EXTENSION } from './profile/limits';
+import { gripOf, heldItems } from './hands/grips';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import { lowering, LOWER } from './balance/posture';
 import { INDEX } from './bones';
@@ -184,3 +188,41 @@ const _turn = new Quaternion();
 const _swing = new Quaternion();
 const _local = new Quaternion();
 const _parent = new Quaternion();
+
+// Recalled conservative radius (6% stature); tuned 4 cm reserve and 0.1 s anticipation against saddle clearance and pickup gaze gates.
+const HEAD_RADIUS = 0.06;
+const HEAD_RESERVE = 0.04;
+const HEAD_LEAD = 0.1;
+
+/** Let the cervical chain clear a held load before it passes the chin; fade continuously above the neck for headwear. */
+export function clearHead<W>(h: Humanoid<W>, pose: ReadonlyPose, goal: Quaternion): void {
+  const bones = pose.skeleton.chain(h.gazer.neck);
+  const parent = pose.rotation(INDEX.chest);
+  const neck = pose.position(bones[0]);
+  const headRadius = HEAD_RADIUS * h.proportions.height;
+  const back = parent.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -NECK_EXTENSION * Math.PI / 180));
+  const loads = heldItems(h).filter((item) => !item.wornBy).map((item) => {
+    const grips = Object.values(h.holding).flatMap((held) => held?.item === item ? [item.toWorld(gripOf(item, held.grip), { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position] : []);
+    const at = grips.reduce((sum, grip) => sum.add(grip), new Vector3()).divideScalar(grips.length);
+    const radius = Math.max(...grips.map((grip) => grip.distanceTo(at)));
+    at.addScaledVector(item.velocity(new Vector3()), HEAD_LEAD);
+    return { at, radius };
+  });
+  const clearance = (rotation: Quaternion) => {
+    const head = neck.clone();
+    const turn = within(pose, bones, parent, rotation, new Quaternion(), head);
+    head.add(h.proportions.headCenter.clone().applyQuaternion(turn));
+    return Math.min(...loads.map(({ at, radius }) => head.distanceTo(at) -
+      (radius + headRadius + HEAD_RESERVE * h.proportions.scale) *
+      (1 - smoothstep(neck.y, neck.y + headRadius, at.y))));
+  };
+  if (!loads.length) return;
+  if (clearance(goal) >= 0) return;
+  let lo = 0, hi = 1;
+  if (clearance(back) >= 0) for (let pass = 0; pass < 10; pass++) {
+    const middle = (lo + hi) / 2;
+    if (clearance(goal.clone().slerp(back, middle)) >= 0) hi = middle;
+    else lo = middle;
+  }
+  goal.slerp(back, hi);
+}

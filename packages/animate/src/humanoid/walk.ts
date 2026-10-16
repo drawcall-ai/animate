@@ -45,8 +45,6 @@ const SETTING_OFF = 0.5;
 export interface WalkOptions<W> {
   /** where to go, on the floor (default: where it stands: a turn in place) */
   to?: Live<Vector3, W>;
-  /** Intermediate floor points, traversed before `to`; ETA includes the remaining route. */
-  via?: readonly Live<Vector3, W>[];
   /** the facing to arrive with (rad; default the way it arrives, or toward `to` with `within`) */
   face?: Live<number, W>;
   /** stop with `to` this far ahead (m): in reach of it */
@@ -70,6 +68,11 @@ export interface WalkOptions<W> {
  * still goal and back steps toward a goal behind retain the requested facing.
  */
 export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W> {
+  return route(h, options);
+}
+
+/** Internal approach route: ETA includes every intermediate point. */
+export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly Live<Vector3, W>[] = []): Behaviour<W> {
   const { within = 0, speed = STROLL.speed, accel = STROLL.accel, plant } = options;
   return function* () {
     // A sibling walk owns the feet until its cleanup publishes an infinite ETA.
@@ -77,7 +80,7 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
     const go: Go = { to: new Vector3(), speed, accel, plant };
     const face = { yaw: 0 };
     let at: Vector3 | null = null;
-    const via = options.via ?? [];
+    const end = new Vector3();
     let leg = 0;
     // (within reach, the way to the point is fixed once close: from where the body then stands it
     // would drift as the body settles off the line to it)
@@ -89,21 +92,18 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
       go.accel = options.accel ?? accel / effort;
       const body = f.prev.com(_com).setY(0);
       at ??= body.clone();
-      if (leg < via.length && body.distanceTo(live(via[leg], f).clone().setY(0)) < ARRIVED.distance * h.scale) {
+      if (leg < via.length && body.distanceTo(_v.copy(live(via[leg], f)).setY(0)) < ARRIVED.distance * h.proportions.scale) {
         leg++;
         fixed = null;
       }
-      const final = leg === via.length;
-      const to = final ? (options.to === undefined ? at : live(options.to, f)) : live(via[leg], f);
-      const stopShort = final ? within : 0;
-      const close = Math.hypot(to.x - body.x, to.z - body.z) < stopShort + CLOSE * h.proportions.scale;
+      const to = options.to === undefined ? at : live(options.to, f);
+      const close = Math.hypot(to.x - body.x, to.z - body.z) < within + CLOSE * h.proportions.scale;
       const toward = close && fixed !== null ? fixed : headingOf(to.x - body.x, to.z - body.z);
       fixed = close ? toward : null;
-      const yaw = !final ? null : options.face === undefined ? (within > 0 ? toward : null) : live(options.face, f);
-      // (within: the point that far ahead, as the body will face it)
-      go.to.copy(to).setY(0);
-      if (stopShort > 0) go.to.addScaledVector(forwardOf(yaw ?? toward, _v), -stopShort);
-      return yaw;
+      const yaw = options.face === undefined ? (within > 0 ? toward : null) : live(options.face, f);
+      end.copy(to).setY(0).addScaledVector(forwardOf(yaw ?? toward, _v), -within);
+      go.to.copy(leg < via.length ? live(via[leg], f) : end).setY(0);
+      return leg < via.length ? null : yaw;
     };
     yield* action<Frame<W>>({
       init: () => () => { h.gait.eta = Infinity; },
@@ -113,11 +113,9 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
         if (options.stance) h.asks.stance = options.stance;
         h.gait.eta = etaOf(h, f.prev.com(_com), go, yaw);
         if (leg < via.length) {
-          const end = options.to === undefined ? go.to.clone() : live(options.to, f).clone().setY(0);
-          const face = options.face === undefined ? headingOf(end.x - go.to.x, end.z - go.to.z) : live(options.face, f);
-          end.addScaledVector(forwardOf(face), -within);
           let previous = go.to;
-          for (const next of [...via.slice(leg + 1).map((point) => live(point, f)), end]) {
+          for (let i = leg + 1; i <= via.length; i++) {
+            const next = i < via.length ? live(via[i], f) : end;
             h.gait.eta += Math.hypot(next.x - previous.x, next.z - previous.z) / go.speed;
             previous = next;
           }

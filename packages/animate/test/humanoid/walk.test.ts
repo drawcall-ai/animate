@@ -1,3 +1,4 @@
+import { route } from '../../src/humanoid/walk';
 import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
@@ -162,7 +163,7 @@ it('includes intermediate legs in arrival anticipation', () => {
   let near = NaN;
   let done = false;
   const h = standing((h) => [function* () {
-    yield* parallel<Frame>('all', walkTo(h, { to: new Vector3(0, 0, 3), via: [new Vector3(0, 0, 1)] }), function* () {
+    yield* parallel<Frame>('all', route(h, { to: new Vector3(0, 0, 3) }, [new Vector3(0, 0, 1)]), function* () {
       yield* when(arriving(h, 0.6));
       near = h.pose.position(0).z;
     });
@@ -171,4 +172,15 @@ it('includes intermediate legs in arrival anticipation', () => {
   for (let i = 0; i < 600; i++) h.update(STEP);
   expect(done).toBe(true);
   expect(near).toBeGreaterThan(2.5);
+});
+
+it('returns to its starting point after an internal route without a final target', () => {
+  let done = false;
+  const h = standing((h) => [function* () {
+    yield* route(h, {}, [new Vector3(0, 0, 1)])();
+    done = true;
+  }]);
+  for (let i = 0; i < 900 && !done; i++) h.update(STEP);
+  expect(done).toBe(true);
+  expect(Math.abs(h.pose.position(0).z)).toBeLessThan(0.15);
 });

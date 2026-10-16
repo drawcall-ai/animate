@@ -17,7 +17,6 @@ const LEG_RADIUS = 0.038;
 // Read from the horse leg proxy meshes, metres.
 const HORSE_LEG_RADIUS = 0.06;
 // Tuned catch-up window (s) and shoulder station bounds (m).
-const CATCH_UP_TIME = 45;
 const SHOULDER_MIN = 0.45;
 const SHOULDER_MAX = 0.75;
 const HUMAN_LEGS = [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']];
@@ -30,17 +29,20 @@ const HORSE_LEGS = [
 const HORSE_HEAD_RADIUS = 0.1;
 const RAIL_RADIUS = Math.SQRT2 * 0.04;
 const RAIL = [
-  [new Vector3(0.35, 0, 2.8), new Vector3(0.35, 1.2, 2.8)],
-  [new Vector3(0.35, 0, 4.5), new Vector3(0.35, 1.2, 4.5)],
-  [new Vector3(0.35, 1.12, 2.8), new Vector3(0.35, 1.12, 4.5)],
+  [new Vector3(-0.35, 0, 2.8), new Vector3(-0.35, 1.2, 2.8)],
+  [new Vector3(-0.35, 0, 4.5), new Vector3(-0.35, 1.2, 4.5)],
+  [new Vector3(-0.35, 1.12, 2.8), new Vector3(-0.35, 1.12, 4.5)],
 ];
 const MOVING = 0.15;
 const AT_HORSE = 0.7;
 
-it('leads upright with a free swinging arm and an articulated pelvis', () => {
+it('leads upright with the near hand forward, slack outside, and halts beyond the gate', () => {
   const sim = new Simulation(stableMorning(), undefined, true);
   const chest: number[] = [];
-  const arm: number[] = [];
+  const phases = ['', ''];
+  let ropeGap = Infinity;
+  let leading = 0;
+  let settled = 0;
   const roll: number[] = [];
   const hip: number[][] = [[], []];
   let airborneTilt = 0;
@@ -49,26 +51,34 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
   let horseStep = NaN;
   let leadGap = Infinity;
   let horseRoot = HORSE.clone();
-  while (sim.t < 50) {
+  while (sim.t < sim.scenario.duration) {
     sim.step();
     const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
     if (!saddle || saddle.kind !== 'box' || !saddle.quaternion) throw new Error('missing saddle');
     if (!sim.stage.bodies?.[0].worn.size && saddle.position.y > 1.25) {
       airborneTilt = Math.max(airborneTilt, new Vector3(0, 1, 0).applyQuaternion(saddle.quaternion).angleTo(new Vector3(0, 1, 0)));
       // Conservative bounds include both skirts: any crossing of the tie rail must pass above it.
-      if (Math.abs(saddle.position.x - 0.35) < 0.33 && saddle.position.z > 2.5 && saddle.position.z < 4.8) {
+      if (Math.abs(saddle.position.x + 0.35) < 0.33 && saddle.position.z > 2.5 && saddle.position.z < 4.8) {
         expect(saddle.position.y - 0.3).toBeGreaterThan(1.16);
       }
     }
     const h = sim.actors[0];
     const horse = sim.stage.bodies?.[0];
     if (!horse) throw new Error('missing horse');
+    for (const [s, side] of ['left', 'right'].entries()) {
+      const landed = h.feet[s].phase === 'planted' && phases[s] !== 'planted';
+      phases[s] = h.feet[s].phase;
+      if (!landed || Number.isNaN(knot) || sim.t < knot + 3 || h.gait.velocity.length() < 0.8) continue;
+      const foot = h.pose.position(h.pose.skeleton.index(`${side}Foot`)).clone().sub(h.pose.position(0));
+      expect((foot.x * Math.cos(h.gait.facing) - foot.z * Math.sin(h.gait.facing)) * (s === 0 ? 1 : -1)).toBeGreaterThan(0);
+    }
     const rope = h.holding.right?.item;
     if (rope?.name === 'rope' && !rope.supported) {
       if (Number.isNaN(knot)) knot = sim.t;
       if (Number.isNaN(firstStep) && h.feet.some((foot) => foot.phase === 'swing')) firstStep = sim.t;
       if (Number.isNaN(horseStep) && horse.pose.position(0).distanceTo(horseRoot) > 0.0001) horseStep = sim.t;
-      if (sim.t > knot + 3) expect(h.gait.velocity.length()).toBeGreaterThan(0.8);
+      if (h.gait.settled && sim.t > knot + 3) settled++;
+      if (sim.t > knot + 3 && h.gait.eta > 1 && h.gait.eta !== Infinity) expect(h.gait.velocity.length()).toBeGreaterThan(0.8);
       for (const [a, b] of [['hips', 'chest'], ['chest', 'neck'], ['neck', 'head']]) {
         const from = h.pose.position(h.pose.skeleton.index(a));
         const end = h.pose.position(h.pose.skeleton.index(b));
@@ -81,17 +91,27 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
       }
     }
     horseRoot = horse.pose.position(0).clone();
-    if (sim.t < 35) continue;
+    if (Number.isNaN(knot) || sim.t < knot + 3 || h.gait.velocity.length() < 0.8) continue;
+    leading++;
     const p = h.pose;
     const at = (name: string) => p.position(p.skeleton.index(name));
     expect(h.holding.left).toBeNull();
     expect(h.asks.bow).toBe(0);
     chest.push(new Euler().setFromQuaternion(p.rotation(p.skeleton.index('chest')), 'YXZ').x);
-    const upper = at('leftLowerArm').clone().sub(at('leftUpperArm'));
-    const forward = new Vector3(Math.sin(h.gait.facing), 0, Math.cos(h.gait.facing));
-    arm.push(Math.atan2(upper.dot(forward), -upper.y));
+    const right = at('rightHand').clone().sub(at('chest'));
+    expect(right.z).toBeGreaterThan(0.25);
+    expect(right.x).toBeLessThan(-0.1);
+    const left = at('leftHand').clone().sub(at('hips'));
+    expect(left.x).toBeGreaterThan(0.15);
+    expect(left.z).toBeGreaterThan(0.1);
+    for (const prop of sim.props()) {
+      if (prop.kind !== 'cylinder' || prop.color !== 0xc4a273 || !prop.quaternion) continue;
+      const turn = prop.quaternion;
+      const end = (sign: number) => new Vector3(0, sign * prop.length / 2, 0).applyQuaternion(turn).add(prop.position);
+      ropeGap = Math.min(ropeGap, segmentDistance(end(-1), end(1), at('hips'), at('chest')) - BODY_RADIUS * h.proportions.height - prop.radius);
+    }
     // The handler stays beside the shoulder once the horse has caught up.
-    if (sim.t > CATCH_UP_TIME) {
+    if (sim.t > knot + 5) {
       const ahead = p.position(0).z - horse.pose.position(0).z;
       expect(ahead).toBeGreaterThan(SHOULDER_MIN);
       expect(ahead).toBeLessThan(SHOULDER_MAX);
@@ -109,7 +129,9 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
   expect(airborneTilt * 180 / Math.PI).toBeLessThan(5);
   const degrees = 180 / Math.PI;
   expect(Math.max(...chest.map(Math.abs)) * degrees).toBeLessThan(5);
-  expect((Math.max(...arm) - Math.min(...arm)) * degrees).toBeGreaterThan(30);
+  expect(ropeGap).toBeGreaterThan(0.02);
+  expect(leading).toBeGreaterThan(60);
+  expect(settled).toBeGreaterThan(30);
   expect((Math.max(...roll) - Math.min(...roll)) * degrees).toBeGreaterThan(5.5);
   for (const angles of hip) {
     const excursion = (Math.max(...angles) - Math.min(...angles)) * degrees;
@@ -158,9 +180,9 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }
-    if (item.current.position.x < AT_HORSE) continue;
+    if (item.current.position.x > -AT_HORSE) continue;
     const root = horse.pose.position(0);
-    barrelGap = Math.min(barrelGap, root.x - h.pose.position(0).x - HORSE_HALF_WIDTH - BODY_RADIUS * h.proportions.height);
+    barrelGap = Math.min(barrelGap, h.pose.position(0).x - root.x - HORSE_HALF_WIDTH - BODY_RADIUS * h.proportions.height);
     for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
       const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
       const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));

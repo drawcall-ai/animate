@@ -49,7 +49,7 @@ const LATERAL = 0.8;
 /** a goal this far off the facing (rad) is walked to more and more slowly, then turned to first; still, the body edges toward it this fast (m/s) */
 const TURN_FIRST = [0.6, 1.3] as const;
 const TURNING_SPEED = 0.15;
-/** Short side or back repositions keep the requested facing (m, m/s, rad; read from the former backing rule). */
+/** Tuned against saddle-placement turns and the backing/side-step scenarios (m, m/s, rad). */
 const REPOSITION = { distance: 0.6, speed: 0.6, backAngle: 2.2 };
 
 /** A foot as the steps take it: how long it has stood, the pitch it landed with, its swing while it swings. */
@@ -290,9 +290,20 @@ export class Carriage {
     this.bent = Math.max(this.walk, this.bent + ((this.moving ? 1 : 0) - this.bent) * Math.min(1, dt * (this.moving ? BEND_RATE.give : BEND_RATE.straighten)));
   }
 
-  /** A short reposition may keep its facing while stepping sideways or back. */
-  get shuffling(): boolean {
-    return Math.hypot(this.goal.x - this.root.x, this.goal.z - this.root.z) < REPOSITION.distance && this.goalSpeed < STOP.goalSpeed;
+  /** A nearby stationary goal permits a correcting step; slow side/back steps also retain the requested facing. */
+  get reposition() {
+    const dx = this.goal.x - this.root.x;
+    const dz = this.goal.z - this.root.z;
+    const near = Math.hypot(dx, dz) < REPOSITION.distance * this.p.scale;
+    const still = near && this.goalSpeed < STOP.goalSpeed;
+    const toward = headingOf(dx, dz);
+    const travel = toward + wrapAngle(headingOf(this.velocity.x, this.velocity.z) - toward) * smoothstep(0.35, 0.8, this.speed);
+    const facing = this.goalFacing ?? this.yaw;
+    const off = Math.abs(wrapAngle(travel - facing));
+    const along = dx * Math.sin(facing) + dz * Math.cos(facing);
+    const across = dx * Math.cos(facing) - dz * Math.sin(facing);
+    return { still, keepFacing: near && this.speed < REPOSITION.speed * this.p.scale &&
+      (off > REPOSITION.backAngle || (this.goalFacing !== null && along < Math.abs(across) && still)) };
   }
 
   /** the ground velocity that closes (dx, dz) — `dist` away — and arrives at rest, within the speed limit */
@@ -315,7 +326,7 @@ export class Carriage {
     const bend = Math.min(this.maxSpeed, LATERAL / Math.max(1e-6, Math.abs(this.turnRate), Math.abs(this.goalTurn)));
     const off = Math.abs(wrapAngle(headingOf(dx, dz) - this.yaw));
     // (but a short shuffle back to a goal that stays put)
-    const turned = this.shuffling ? 1 : 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], off);
+    const turned = this.reposition.still ? 1 : 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], off);
     // (a body standing turns first; one walking edges on round)
     const cap = Math.max(this.speed > TURNING_SPEED ? TURNING_SPEED : 0, Math.min(this.starting ? START_GLIDE : bend, this.maxSpeed * turned));
     this.turningFirst = cap <= 0;
@@ -355,12 +366,7 @@ export class Carriage {
     const toGoal = headingOf(dx, dz);
     const travel = toGoal + wrapAngle(headingOf(this.velocity.x, this.velocity.z) - toGoal) * smoothstep(0.35, 0.8, this.speed);
     const facing = this.goalFacing ?? this.yaw;
-    const along = dx * Math.sin(facing) + dz * Math.cos(facing);
-    const across = dx * Math.cos(facing) - dz * Math.sin(facing);
-    const sideways = this.goalFacing !== null && along < Math.abs(across);
-    const backwards = Math.abs(wrapAngle(travel - facing)) > REPOSITION.backAngle;
-    const shuffle = dist < REPOSITION.distance && this.speed < REPOSITION.speed && (backwards || (sideways && this.goalSpeed < STOP.goalSpeed));
-    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (shuffle ? 0 : 1);
+    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (this.reposition.keepFacing ? 0 : 1);
     this.goalYaw = facing + wrapAngle(travel - facing) * far;
     const e = wrapAngle(this.goalYaw - this.yaw);
     const most = (this.turnSpeed ?? TURN_RATE) * dt;

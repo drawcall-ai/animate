@@ -46,6 +46,7 @@ interface Sample {
   gazed: boolean;
   /** sagittal angles (+ = forward): left upper arm, right thigh — contralateral pair */
   arm: number;
+  armFree: boolean;
   thigh: number;
   /** trunk (hips → neck) and pelvis (hips → spine) pitch, forward of vertical (rad) */
   trunk: number;
@@ -140,6 +141,9 @@ export class GaitKinematics {
     const pelvis = angles(j('leftUpperLeg'), j('rightUpperLeg'));
     const thorax = angles(j('leftUpperArm'), j('rightUpperArm'));
     const head = angles(j('leftEye'), j('rightEye'));
+    const eyes = j('leftEye').sub(j('rightEye'));
+    // Eye-line inclination is independent of yaw, including a look behind the body.
+    head.roll = Math.atan2(eyes.y, Math.hypot(eyes.x, eyes.z));
     const up = j('neck').sub(j('hips'));
     const tilt = j('spine').sub(j('hips'));
     const knee = j('leftLowerLeg');
@@ -164,6 +168,7 @@ export class GaitKinematics {
       feet: [h.feet[0].position.clone(), h.feet[1].position.clone()],
       gazed: asked.has('gaze'),
       arm: sagittal(j('leftLowerArm').sub(j('leftUpperArm')), fwd),
+      armFree: !asked.has('leftHand') && h.holding.left === null,
       thigh: sagittal(j('rightLowerLeg').sub(j('rightUpperLeg')), fwd),
       trunk: Math.atan2(up.dot(fwd), up.y),
       pelvis: Math.atan2(tilt.dot(fwd), tilt.y),
@@ -296,7 +301,7 @@ export class GaitKinematics {
       armCorrelation: correlation(arm, thigh),
       armLag: lag,
       armCycles: crossings(arm) / 2,
-      armRange: range(arm) * DEG,
+      armRange: S.slice(a, b).every((s) => s.armFree) ? range(arm) * DEG : NaN,
       curve,
       speed,
       stepAsymmetry: asymmetry(S, a, b),

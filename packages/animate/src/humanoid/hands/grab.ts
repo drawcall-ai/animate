@@ -10,7 +10,7 @@ import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { withGaze } from '../look';
 import { forwardOf, headingOf, leftOf, wrapAngle } from '../../core/math';
-import { arriving, walkTo } from '../walk';
+import { arriving, route } from '../walk';
 import { gripOf, held, type Holds } from './grips';
 import { reachFor } from './reach';
 
@@ -58,7 +58,7 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
       item.toWorld(gripOf(item, grip), _world).position.distanceTo(f.prev.position(INDEX[`${side}UpperArm`])) <= ARM_REACH * h.proportions.armLength);
     const reach = function* () {
       yield* parallel<Frame<W>>('race',
-        when((f: Frame<W>) => stood || (!h.gait.moving && arrivingForReach(f) && uprightReach(f))),
+        when((f: Frame<W>) => stood || (arrivingForReach(f) && uprightReach(f))),
         function* () {
           // Low grips need the bow and hands to set off together.
           yield* when<W>((f) => reachingOut(f) && (uprightReach(f) || arrivingForReach(f)));
@@ -164,7 +164,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
     const middle = grips.reduce((sum, g) => sum.add(g.at), new Vector3()).divideScalar(grips.length);
     if (point) {
       const distance = Math.hypot(ahead, aside, height - shoulders);
-      if (options.stand ? distance > reach : available === 0 && Math.hypot(aside, height - shoulders) > reach) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
+      if (options.stand ? distance > reach : Math.hypot(aside, height - shoulders) > reach) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
     }
     const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.gait.facing)) < SQUARE;
     if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) {
@@ -206,10 +206,10 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
       const beside = anchor.clone().addScaledVector(leftOf(yaw), side * ROUND * p.scale);
       via.push((f) => moved(beside, f));
     }
-    yield* walkTo(h, { to: destination, via, face: facing, within: ahead, until: (f) => {
+    yield* route(h, { to: destination, face: facing, within: ahead, until: (f) => {
       const there = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
       return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || h.gait.planted > STILL);
-    } })();
+    } }, via)();
   };
 }
 

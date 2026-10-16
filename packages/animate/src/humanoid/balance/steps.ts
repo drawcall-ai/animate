@@ -130,7 +130,7 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   const turning = margin[0] < margin[1] ? 0 : 1;
   const way = _v.subVectors(c.goal, c.root);
   // A short side-step opens with the foot on that side before pivoting; twistLimit still bounds the pelvis.
-  const opening = c.starting && c.shuffling && Math.abs(way.dot(leftOf(c.yaw, _to))) > Math.abs(way.dot(forwardOf(c.yaw, _to)));
+  const opening = c.starting && c.reposition.still && Math.abs(way.dot(leftOf(c.yaw, _to))) > Math.abs(way.dot(forwardOf(c.yaw, _to)));
   if (margin[turning] < TWIST_MARGIN && !opening && (!c.starting || c.bent >= READY)) return lift(c, turning, t, xcom, true);
   // (walking: standing, a body raised onto its toes is not leaving its feet behind)
   if (c.moving) for (let s = 0; s < 2; s++) if (steps[s].plantedTime > t.doubleSupport && overstretched(c, s, dt)) return lift(c, s, t, xcom, true);
@@ -250,7 +250,7 @@ function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Ve
     const turn = wrapAngle(c.goalYaw - c.yaw);
     // A short turning reposition opens with the outside foot: step around the planted
     // inside foot rather than drawing that foot across the knees (a spin turn).
-    if (c.shuffling && Math.abs(turn) > SQUARE.standing) last = turn > 0 ? 0 : 1;
+    if (c.reposition.still && Math.abs(turn) > SQUARE.standing) last = turn > 0 ? 0 : 1;
     else if (gl > 0.02 && Math.abs(across) > 0.3 * gl) last = across > 0 ? 1 : 0;
   }
   const next = 1 - last;

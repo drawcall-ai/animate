@@ -192,10 +192,11 @@ function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], pare
 }
 
 /** the head's turn (world, into `out`) toward `goal` from `parent`'s, the turn shared evenly over the neck's `bones`, each within its limit */
-function within(pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, out: Quaternion): Quaternion {
+export function within(pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, out: Quaternion, at?: Vector3): Quaternion {
   const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
   out.copy(parent);
   for (const b of bones) {
+    if (at && b !== bones[0]) at.add(_offset.copy(pose.skeleton.bones[b].offset).applyQuaternion(out));
     const limit = pose.skeleton.limits[b];
     const local = _goal.copy(share);
     if (limit) clampRotation(local, limit);
@@ -238,3 +239,5 @@ const _whole = new Quaternion();
 
 const _o = new Quaternion();
 const HYSTERESIS = 0.3;
+
+const _offset = new Vector3();
