@@ -87,7 +87,7 @@ export function stableMorning(): Scenario {
                 yield* carry(h, saddle, [
                   [1.1, { position: SADDLED.clone().add(new Vector3(-0.24, 0.21, 0)), quaternion: yaw(Math.PI / 2) }],
                   [0.75, { position: SADDLED, quaternion: yaw(Math.PI / 2) }],
-                ], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }), support: true })();
+                ], { on: onBone(horse, 0, { position: new Vector3(), quaternion: new Quaternion() }) })();
               },
             );
           })))();

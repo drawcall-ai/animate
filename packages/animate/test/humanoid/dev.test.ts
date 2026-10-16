@@ -123,3 +123,13 @@ it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as co
   checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, beats: new Set(), world: undefined }, dev);
   expect(dev.log).toContainEqual(expect.objectContaining({ check: 'planted foot slide (m)', where: 'leftFoot', limit: 0.01 }));
 });
+
+it('clears the development beat when nothing is running', () => {
+  const body = new Body(leg(), named('one step', function* () {
+    yield () => 'finished';
+  }), { dev: true });
+  body.update(STEP);
+  expect(body.frame.dev?.beat).toBe('one step');
+  body.update(STEP);
+  expect(body.frame.dev?.beat).toBeUndefined();
+});

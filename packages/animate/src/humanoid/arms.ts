@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
-import type { Carrier } from '../core/carrier';
+import { Item, type Carrier } from '../core/carrier';
 import { followRotation } from '../core/follow';
 import { Glide } from '../core/glide';
 import { live, type Behaviour, type Live, type Motion, type Target, type Until } from '../core/goal';
@@ -161,14 +161,15 @@ export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, o
 
 /** one sub-step of `handTo`, its arm's tip `arm` */
 export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Target, options: HandOptions<W>, arm: ChainTip, toward?: { at: Readonly<Vector3>; center?: Readonly<Vector3>; clavicle: Readonly<Quaternion>; share: number }) {
-  const held = h.holding[side];
-  if (held) held.time = f.time;
+  const wearing = options.on instanceof Item ? h.worn.get(options.on) : undefined;
+  // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
+  if (wearing && typeof wearing.on === 'number' && f.current.skeleton.chain(`${side}Arm`).includes(wearing.on)) return;
   const p = h.proportions;
   const at = options.on ? options.on.toWorld(target, _world).position : target.position;
   shrug(f, p, side, toward?.at ?? at, toward);
   const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
   // (gliding from where the hand is: an arm hanging all but straight is not drawn in at once)
-  arm.to(f, target, { ...CALM, ...options, pole, letOut: toward !== undefined });
+  arm.to(f, target, { ...CALM, ...options, pole, contact: options.on instanceof Item && options.on === h.holding[side]?.item, letOut: toward !== undefined });
   // The body joins a glide with the hand, rather than moving for its starting hang.
   if (options.lead ?? true) {
     bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1);
@@ -185,8 +186,8 @@ function shrug<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Vector
   const pose = f.current;
   const bone = INDEX[`${side}Shoulder`];
   const clavicle = pose.position(bone);
-  const shoulder = _s.copy(pose.position(INDEX[`${side}UpperArm`]));
   const chest = pose.rotation(INDEX.chest);
+  const shoulder = _s.copy(pose.position(INDEX[`${side}UpperArm`]));
   const up = _up.set(0, 1, 0).applyQuaternion(chest);
   const L = p.armLength;
   const v = _d.subVectors(hand, shoulder);

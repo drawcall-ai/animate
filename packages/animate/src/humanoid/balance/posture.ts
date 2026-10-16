@@ -151,28 +151,43 @@ export class Posture {
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
 const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, SQUAT * p.height, lower));
 
-/**
- * Bring the shoulders down by `drop` (m): mostly through the knees, with bow growing smoothly
- * into a deep squat. `height` is the target joint’s standing height, so the same
- * solve applies to shoulders and eyes. Both stay within their comfortable stops.
- */
-export function lowering(p: Proportions, { drop, ahead = 0, height }: { drop: number; ahead?: number; height: number }): { lower: number; bow: number } {
-  // Tuned articulated lever: 80% of the hip-to-target height; joints share the bow.
+/** Reach, gaze and tracked eyes request posture in the geometry they already have. */
+export function lowering(p: Proportions, request:
+  | { hand: { ahead: number; lateral: number; height: number; reach: number } }
+  | { bow: number }
+  | { drop: number; ahead: number; height: number },
+): { lower: number; bow: number } {
+  if ('bow' in request) return { lower: 0, bow: clamp(request.bow, 0, MOST_BOW) };
+  if ('hand' in request) {
+    const { ahead, lateral, height, reach } = request.hand;
+    const lever = bowLever(p, p.shoulderHeight);
+    const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));
+    const up = height - p.shoulderHeight + lever;
+    const distance = Math.hypot(ahead, up);
+    const angle = distance > 0 ? Math.acos(clamp((distance ** 2 + lever ** 2 - plane ** 2) / (2 * distance * lever), -1, 1)) : Math.PI;
+    const bow = height < p.shoulderHeight ? clamp(Math.atan2(ahead, up) - angle, 0, MOST_BOW) : 0;
+    // A sideways approach is closed by steps and trunk turns, rather than a squat.
+    const across = Math.min(Math.hypot(ahead - lever * Math.sin(bow), lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - height));
+    const below = Math.sqrt(Math.max(0, reach ** 2 - across ** 2));
+    const drop = height > p.shoulderHeight ? Math.min(0, p.shoulderHeight + below - height) : Math.max(lever * (1 - Math.cos(bow)), p.shoulderHeight - height - below);
+    return lowered(p, lever, drop, bow);
+  }
+  const { drop, ahead, height } = request;
   const lever = bowLever(p, height);
-  const aheadBow = Math.min(Math.asin(clamp(ahead / lever, 0, 1)), Math.acos(1 - clamp(drop / lever, 0, 1)));
-  // Prefer the knees for a vertical drop; recruit further bow once their reserve ends.
-  // A tuned 3° entry blend avoids a hard onset when the forward request is zero.
+  const bow = Math.min(Math.asin(clamp(ahead / lever, 0, 1)), Math.acos(1 - clamp(drop / lever, 0, 1)));
+  return lowered(p, lever, drop, bow);
+}
+
+function lowered(p: Proportions, lever: number, drop: number, aheadBow: number) {
   const deepBow = Math.acos(1 - clamp((drop - SQUAT * p.height) / lever, 0, 1));
+  // A small vertical reach recruits bow before the knees reach their deep-squat reserve.
   const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * smoothstep(0, SQUAT * p.height, drop)));
   const lower = clamp(drop - lever * (1 - Math.cos(bow)), 0, SQUAT * p.height);
-  // Inverse trig and its forward projection can leave a sub-ulp residual even
-  // when bow supplies the whole drop. Below one body-height ulp, request zero.
+  // Discard the sub-ulp residual from inverse trig followed by its forward projection.
   return { lower: drop < 0 ? Math.max(drop, -TIPTOE * p.scale) : lower <= Number.EPSILON * p.height ? 0 : lower, bow };
 }
 
-export const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
-
-/** Retain posture's tuned 60° stop for reach, gaze and tracked heads. */
+const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
 const MOST_BOW = NECK_PITCH * Math.PI / 180;
 
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */

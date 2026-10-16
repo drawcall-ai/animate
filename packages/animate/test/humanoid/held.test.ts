@@ -1,9 +1,9 @@
 import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
-import { action, timePassed } from '@pmndrs/timeline';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import {
-  Body, Carrier, INDEX, Item, STEP, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze,
+  Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, STEP, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze,
   type Frame,
 } from '../../src';
 import { leg } from '../core/rigs';
@@ -67,6 +67,11 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
   for (let i = 0; i < 180; i++) body.update(STEP);
   expect(item.current.position.distanceTo(body.pose.position(0).clone().add(new Vector3(0.2, 0.4, 0)))).toBeLessThan(0.001);
   expect(goal(other.frame).position.distanceTo(item.current.position)).toBeLessThan(0.001);
+  body.frame.current.setRoot(new Vector3(10, 1, 0));
+  expect(goal(other.frame).position.distanceTo(item.current.position)).toBeLessThan(0.001);
+  other.update(STEP);
+  body.update(STEP);
+  expect(goal(other.frame).velocity.x).toBeCloseTo(1);
   const off = new Body(leg(), takeOff(body, item));
   off.update(STEP);
   const at = item.current.position.clone();
@@ -117,4 +122,49 @@ it('an unsupported hold travels with the body between carries, and an explicit m
   expect(end.z - start.z).toBeGreaterThan(1.5);
   expect(off).toBeLessThan(0.03);
   expect(item.current.position.distanceTo(goal)).toBeLessThan(0.03);
+});
+
+it('follows a grip worn by another body without asking the humanoid to lower for it', () => {
+  const item = new Item(new Vector3(0.15, 0.9, 0.3), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 8 });
+  const wearer: Body = new Body(leg(), wearFromStart);
+  function* wearFromStart() { yield* wear(wearer, item, 0)(); }
+  wearer.update(STEP);
+  let done = false;
+  let lower = 0;
+  const h = standing((h) => [function* () {
+      yield* reachFor(h, { left: [item, 'grip'] })();
+      done = true;
+    }, action<Frame>({ update: () => { lower = Math.max(lower, h.asks.lower); } })]);
+  for (let i = 0; i < 180; i++) h.update(STEP);
+  expect(done).toBe(true);
+  expect(lower).toBe(0);
+  expect(item.wornBy).toBe(wearer);
+  expect(h.borne.has(item)).toBe(false);
+});
+
+it('keeps both carry grips until the slower course ends', () => {
+  const a = new Item(new Vector3(0.2, 1.1, 0.3), new Quaternion(), { grip: { position: new Vector3() } });
+  const b = new Item(new Vector3(-0.2, 1.1, 0.3), new Quaternion(), { grip: { position: new Vector3() } });
+  let done = false;
+  let samples = 0;
+  let off = 0;
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', action<Frame>({ update: (f) => {
+      const at = f.current.position(INDEX.hips).clone();
+      at.x = 0.04 * Math.sin(3 * f.time);
+      f.current.setRoot(at);
+    } }), function* () {
+      yield* reachFor(h, { left: [a, 'grip'], right: [b, 'grip'] })();
+      yield* carryTogether(h, [[a, [[0.3, { position: new Vector3(0.2, 1.15, 0.3) }]]], [b, [[1.5, { position: new Vector3(-0.2, 1.15, 0.3) }]]]])();
+      done = true;
+    }, action<Frame>({ update: (f) => {
+      if (done || f.time < 1.5) return;
+      samples++;
+      off = Math.max(off, f.current.position(INDEX.leftHand).distanceTo(a.current.position));
+    } }));
+  });
+  for (let i = 0; i < 300; i++) h.update(STEP);
+  expect(done).toBe(true);
+  expect(samples).toBeGreaterThan(10);
+  expect(off).toBeLessThan(0.03);
 });

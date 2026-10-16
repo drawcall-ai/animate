@@ -7,7 +7,7 @@ import { ARM_REACH, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { facingAt } from '../goal';
-import { heldItems, openHand } from './grips';
+import { heldItems } from './grips';
 
 // Letting go.
 
@@ -24,13 +24,19 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
   const { limit = LETTING_GO } = options;
   return function* () {
     const p = h.proportions;
-    const held = sides.map((side) => h.holding[side]);
     let targets: ((f: Frame<W>) => Target)[] | null = null;
     let time = NaN;
     let goals: Target[] = [];
+    const open = () => {
+      const loose = sides.flatMap((side) => h.holding[side]?.item ?? []);
+      for (const side of sides) h.holding[side] = null;
+      for (const item of loose) if (!item.wornBy && !heldItems(h).includes(item)) item.supported = true;
+    };
+    // Keep held contact until the release's hand mover actually starts.
     // (where each hand goes, from how it moved as it let go)
     const off = (f: Frame<W>): Target[] => {
       if (time === f.time) return goals;
+      if (!targets) open();
       targets ??= sides.map((side) => {
         const hand = f.prev.position(INDEX[`${side}Hand`]);
         const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
@@ -56,10 +62,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
       return goals;
     };
     const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], off(f)[k]));
-    const loose = held.flatMap((grip) => grip?.item ?? []);
-    for (const side of sides) yield* openHand(h, side)();
-    for (const item of loose) if (!item.wornBy && !heldItems(h).includes(item)) item.supported = true;
-    if (options.away === null) return;
+    if (options.away === null) { open(); return; }
     yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
   };
 }

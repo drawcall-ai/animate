@@ -1,4 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
+import { wrapAngle } from './math';
 import type { Placement } from './goal';
 import { clampRotation, coordinates, coordinatesOf } from './limits';
 import type { Pose } from './pose';
@@ -97,7 +98,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const toTarget = _t.subVectors(target, start);
   const d = toTarget.length();
   const turn = across > 1e-12 ? Math.acos(clampUnit((d * d - along - vp.lengthSq()) / across)) : 0;
-  const candidates = [wrap(turn - phi0), wrap(-turn - phi0)];
+  const candidates = [wrapAngle(turn - phi0), wrapAngle(-turn - phi0)];
   let bend = nearest(candidates[0], candidates[1], hinge);
   const now = _r.copy(c.base).multiply(local[0]);
   if (d < 1e-12) toTarget.copy(o1).add(v).applyQuaternion(now);
@@ -301,13 +302,12 @@ function excess(q: Quaternion, limit: Limit | undefined): number {
 
 /** the angle of `q`'s twist about the unit `axis` */
 function twistAbout(q: Quaternion, axis: Vector3): number {
-  return wrap(2 * Math.atan2(q.x * axis.x + q.y * axis.y + q.z * axis.z, q.w));
+  return wrapAngle(2 * Math.atan2(q.x * axis.x + q.y * axis.y + q.z * axis.z, q.w));
 }
 
 /** the angle about the unit `axis` from `a` to `b` (both across it) */
 const signedAngle = (a: Vector3, b: Vector3, axis: Vector3) => Math.atan2(_s.crossVectors(a, b).dot(axis), a.dot(b));
 const clampUnit = (x: number) => Math.min(1, Math.max(-1, x));
-const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 
 /** some direction across `v` */
 function perpendicular(v: Vector3, out: Vector3): Vector3 {

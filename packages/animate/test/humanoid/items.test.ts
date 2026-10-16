@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, closeHand, hold, idle, INDEX, Item, reachFor, release, takeOff, wear, when, type Behaviour, type Frame } from '../../src';
+import { carry, closeHand, hold, idle, INDEX, Item, STEP, reachFor, release, takeOff, wear, when, type Behaviour, type Frame } from '../../src';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
@@ -100,6 +100,11 @@ describe('items on the body', () => {
       ),
     ).toThrow(/twice/);
     a = box(new Vector3(0, 1, 0.3));
+    expect(() => run((h) => function* () {
+      yield* closeHand(h, 'left', a, 'left')();
+      yield* parallel<Frame>('all', hold(h, a, { to: a.current }), hold(h, a, { to: a.current }));
+    }, 0.1)).toThrow(/two carry aims/);
+    a = box(new Vector3(0, 1, 0.3));
     expect(() =>
       run(
         (h) =>
@@ -144,4 +149,17 @@ describe('hands that cannot get there', () => {
     );
     expect(done).toBe(true);
   });
+});
+
+it('moves initial worn items once and loads their moved centres on the same step', () => {
+  const item = new Item(new Vector3(), new Quaternion(), {}, { mass: 8 });
+  const h = new Humanoid(createSkeletonModel(), () => function* () { yield* when(() => false); }, {
+    wearing: () => [{ item, on: INDEX.chest, at: { position: new Vector3(0.2, 0, 0) } }],
+  });
+  const initial = h.pose.com(new Vector3());
+  h.update(STEP);
+  expect(h.worn.size).toBe(1);
+  expect(h.borne.get(item)?.kg).toBe(8);
+  expect(item.current.position.distanceTo(h.pose.position(INDEX.chest).clone().add(new Vector3(0.2, 0, 0)))).toBeLessThan(1e-9);
+  expect(h.pose.com(new Vector3()).distanceTo(initial)).toBeLessThan(1e-9);
 });

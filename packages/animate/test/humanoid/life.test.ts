@@ -18,6 +18,19 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
       x.push(h.pose.com(new Vector3()).x);
       pitch.push(new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
     }
+    if (life) {
+      const sign = Math.sign(h.gait.quiet.x);
+      expect(Math.abs(h.gait.quiet.x)).toBeGreaterThan(0.04);
+      const loaded = sign > 0 ? 'left' : 'right';
+      const unloaded = sign > 0 ? 'right' : 'left';
+      const hip = (side: 'left' | 'right') => h.pose.position(INDEX[`${side}UpperLeg`]).y;
+      const knee = (side: 'left' | 'right') => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
+      expect(hip(unloaded)).toBeLessThan(hip(loaded) - 0.005);
+      expect(knee(unloaded)).toBeGreaterThan(0.2);
+      expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
+      step(h, 3);
+      expect(h.gait.quiet.x * sign).toBeGreaterThan(0.04);
+    }
     expect(h.log).toEqual([]);
     return { x, pitch };
   };
@@ -116,23 +129,6 @@ it('slows the default walk under load, counting a bimanual item once', () => {
   expect(heavy).toBeGreaterThan(0);
   expect(heavy).toBeLessThan(light);
   expect(pace(5, true)).toBeCloseTo(heavy, 8);
-});
-
-it('holds a quiet weight shift with the unloaded knee soft and that side of the pelvis lower', () => {
-  const h = body(() => function* () {});
-  step(h, 25);
-  const sign = Math.sign(h.gait.quiet.x);
-  expect(Math.abs(h.gait.quiet.x)).toBeGreaterThan(0.04);
-  const loaded = sign > 0 ? 'left' : 'right';
-  const unloaded = sign > 0 ? 'right' : 'left';
-  const hip = (side: 'left' | 'right') => h.pose.position(INDEX[`${side}UpperLeg`]).y;
-  const knee = (side: 'left' | 'right') => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
-  expect(hip(unloaded)).toBeLessThan(hip(loaded) - 0.005);
-  expect(knee(unloaded)).toBeGreaterThan(0.2);
-  expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
-  step(h, 3);
-  expect(h.gait.quiet.x * sign).toBeGreaterThan(0.04);
-  expect(h.log).toEqual([]);
 });
 
 it('keeps sway and breathing after a loaded walk, without spontaneous weight shifts', () => {

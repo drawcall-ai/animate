@@ -5,7 +5,6 @@ import type { Frame } from '../../core/body';
 import { Carrier, type Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Until } from '../../core/goal';
 import { loadFactor } from '../../core/load';
-import { holdHand } from './hold';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { ARM_REACH } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
@@ -26,7 +25,6 @@ const RESTING = 2;
 interface CarryOptions<W> {
   on?: number | Carrier | Live<Required<Placement>, W>;
   pace?: number;
-  support?: boolean;
   motion?: Motion;
   limit?: number;
 }
@@ -36,8 +34,7 @@ interface CarryOptions<W> {
  * or a bone frame (only bone distances scale with that body). A bone number uses body facing at that joint.
  * A live placement supplies another body’s frame. Leg seconds describe an unloaded
  * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 1 cm and 5 cm/s of
- * the course end; throws after `limit` seconds of settling outside reach. With `support`, contact
- * within 1 cm of the endpoint arrests the item and ends the carry without waiting for free settling.
+ * the course end; throws after `limit` seconds of settling outside reach.
  */
 export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], options: CarryOptions<W> = {}): Behaviour<W> {
   return carrying(h, item, legs, options);
@@ -63,11 +60,6 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
       if (Number.isNaN(since)) since = f.time;
       const placement = path.to(f);
       const goal = placement.position;
-      // Support arrests the item on contact; an unsupported carry must settle under its own motion.
-      if (options.support && item.current.position.distanceTo(goal) < 0.01) {
-        item.supported = true;
-        return true;
-      }
       if (end.holds(f, item, goal)) return true;
       if (f.time - since > limit) {
         const off = offGrips(f, SIDES.flatMap((side) => {
@@ -115,8 +107,7 @@ class TrackedEnd {
  * where the item goes (another moves it, or an unsupported hold inherits body travel). With `to`,
  * the hands carry it there: they go for its grips
  * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward) and kept
- * within the arms' reach, and the item is put where the hands are (fitted to the wrists: its one
- * mover), so it never leaves them.
+ * within the arms' reach. The after-hook follows the grips and fits the item to the wrists.
  */
 export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
   const { to } = options;
@@ -128,32 +119,32 @@ export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placeme
     const grips = gripsOf(h, item);
     const sides = SIDES.filter((s) => grips[s] !== undefined);
     if (!sides.length) throw new Error(`"${item.name}" is not held by either hand`);
+    if (!to) {
+      yield* action<Frame<W>>({ until: options.until });
+      return;
+    }
     // (where the hands carry the item: followed toward `to`)
     const aim = new Carrier(item.current.position, item.current.quaternion);
     const position = new TrackedPoint();
     const rotation = new TrackedRotation();
-    if (to && item.supported && item.mass > PREP.mass) {
+    if (item.supported && item.mass > PREP.mass) {
       // Anticipatory preparation: 100 ms, with a small (5 mm) knee release.
-      yield* action<Frame<W>>({ update: (f) => {
-        for (const side of sides) holdHand(h, f, side);
+      yield* action<Frame<W>>({ update: () => {
         h.asks.lower = Math.max(h.asks.lower, PREP.lower * h.proportions.scale);
       }, until: timePassed(PREP.seconds, 'seconds') });
     }
     // (carried off whatever it rested on)
-    if (to) item.supported = false;
+    item.supported = false;
     yield* action<Frame<W>>({
       update: (f) => {
-        const on = to ? aim : item;
-        if (to) {
-          const goal = live(to, f);
-          // (on from where the item is, fitted to the wrists: arms lagging the aim do not pull it apart from them)
-          const turned = rotation.follow(item.prev.quaternion, item.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
-          if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side, _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(goal.position));
-          const within = inReach(h, f, item, grips, sides, _at.copy(goal.position), turned);
-          aim.move(f.time, position.follow(item.prev.position, item.current.position, within, motion, f.dt, _p), turned);
-        }
-        for (const side of sides) holdHand(h, f, side, on);
-        if (to) fit(f, item, aim, grips, sides);
+        if (h.carrying.has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
+        const goal = live(to, f);
+        // (on from where the item is, fitted to the wrists: arms lagging the aim do not pull it apart from them)
+        const turned = rotation.follow(item.prev.quaternion, item.current.quaternion, goal.quaternion ?? item.current.quaternion, { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, _q);
+        if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side, _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(turned).add(goal.position));
+        const within = inReach(h, f, item, grips, sides, _at.copy(goal.position), turned);
+        aim.move(f.time, position.follow(item.prev.position, item.current.position, within, motion, f.dt, _p), turned);
+        h.carrying.set(item, aim);
       },
       until: options.until,
     });
@@ -175,45 +166,11 @@ function inReach<W>(h: Humanoid<W>, f: Frame<W>, item: Item, grips: Grips, sides
   return at;
 }
 
-/**
- * `item` moved (at `f`'s time) where the wrists hold it: as `aim` has it, carried along with the
- * wrists — turned so the line between two grips lies along the line between the wrists, moved so
- * their middle is the wrists' middle
- */
-function fit<W>(f: Frame<W>, item: Item, aim: Carrier, grips: Grips, sides: readonly Side[]) {
-  const at = (side: Side, out: Vector3) => out.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
-  const wrist = (side: Side, out: Vector3) => out.copy(f.current.position(INDEX[`${side}Hand`]));
-  const turn = _turn.identity();
-  if (sides.length === 2) {
-    const held = _a.subVectors(at('right', _g1), at('left', _g2)).normalize();
-    const hands = _b.subVectors(wrist('right', _w1), wrist('left', _w2)).normalize();
-    turn.setFromUnitVectors(held, hands);
-  }
-  const middle = _m.set(0, 0, 0);
-  const hands = _h.set(0, 0, 0);
-  for (const side of sides) {
-    middle.add(at(side, _g1));
-    hands.add(wrist(side, _w1));
-  }
-  middle.divideScalar(sides.length);
-  hands.divideScalar(sides.length);
-  const position = _p.subVectors(aim.current.position, middle).applyQuaternion(turn).add(hands);
-  item.move(f.time, position, _q.copy(turn).multiply(aim.current.quaternion));
-}
-
 const _v = new Vector3();
 const _p = new Vector3();
 const _at = new Vector3();
-const _a = new Vector3();
-const _b = new Vector3();
-const _m = new Vector3();
-const _h = new Vector3();
 const _g1 = new Vector3();
-const _g2 = new Vector3();
-const _w1 = new Vector3();
-const _w2 = new Vector3();
 const _q = new Quaternion();
-const _turn = new Quaternion();
 
 const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 

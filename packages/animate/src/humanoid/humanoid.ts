@@ -2,7 +2,7 @@ import { NECK_PITCH } from './profile/limits';
 import { Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { Body } from '../core/body';
-import type { Item } from '../core/carrier';
+import type { Carrier, Item } from '../core/carrier';
 import { solveChain } from '../core/chain';
 import type { Gazer } from '../core/gaze';
 import type { Behaviour } from '../core/goal';
@@ -19,7 +19,7 @@ import { gazeAsks } from './reach-posture';
 import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { load, dress, type Bearing } from './worn';
-import { followHeld } from './hands/passive';
+import { followHeld } from './hands/hold';
 import type { Dressed } from './worn';
 
 export interface HumanoidOptions<W> {
@@ -58,7 +58,9 @@ export class Humanoid<W = unknown> {
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it (kept by the body) */
   readonly borne = new Map<Item, Bearing>();
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
-  readonly holding: Record<Side, { item: Item; grip: string; time?: number } | null> = { left: null, right: null };
+  readonly holding: Record<Side, { item: Item; grip: string } | null> = { left: null, right: null };
+  /** Carry aims for this sub-step, consumed by the held-hand after-hook. */
+  readonly carrying = new Map<Item, Carrier>();
   private readonly body: Body<W>;
   private readonly ground = new Vector3();
 

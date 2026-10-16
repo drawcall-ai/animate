@@ -20,6 +20,8 @@ export interface TipOptions<W> extends Motion {
    * straight) is not drawn in at once: it is let out as far as it was, never further, until it comes in
    */
   letOut?: boolean;
+  /** Follow a contact from the actual pose, without extrapolating the IK goals back into its carrier. */
+  contact?: boolean;
 }
 
 /**
@@ -50,8 +52,9 @@ export class ChainTip {
     const { on, accel, speed, turnAccel, turnSpeed } = options;
     // Resume the intended path unless another layer changed the last applied pose.
     const { moved } = this;
-    const own = this.on === on && Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
+    const own = !options.contact && this.on === on && Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
     this.on = on;
+    if (!own) this.joints.clear();
     const prev2 = own ? moved.before : f.prev2.position(tip);
     const prev = own ? moved.last : f.prev.position(tip);
     const position = follow(prev2, prev, target.position, { accel, speed, velocity: target.velocity, on }, f.dt, _position);
@@ -75,9 +78,10 @@ export class ChainTip {
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : live(options.pole, f) });
     if (turnAccel !== undefined) {
       for (const b of bones) {
-        let joint = this.joints.get(b);
-        if (!joint) this.joints.set(b, (joint = new TrackedRotation()));
-        const q = joint.follow(f.prev2.local(b), f.prev.local(b), f.current.local(b), { accel: turnAccel, speed: turnSpeed }, f.dt, _joint);
+        const pace = { accel: turnAccel, speed: turnSpeed };
+        const q = options.contact
+          ? followRotation(f.prev2.local(b), f.prev.local(b), f.current.local(b), pace, f.dt, _joint)
+          : this.joint(b).follow(f.prev2.local(b), f.prev.local(b), f.current.local(b), pace, f.dt, _joint);
         // (carried on by its motion, a joint stops at the end of its range)
         const limit = skeleton.limits[b];
         if (limit) clampRotation(q, limit);
@@ -85,6 +89,12 @@ export class ChainTip {
       }
     }
     moved.placed.copy(f.current.position(tip));
+  }
+
+  private joint(bone: number): TrackedRotation {
+    let joint = this.joints.get(bone);
+    if (!joint) this.joints.set(bone, (joint = new TrackedRotation()));
+    return joint;
   }
 }
 
