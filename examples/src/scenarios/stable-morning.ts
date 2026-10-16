@@ -20,23 +20,24 @@ const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
 // Tuned against the yard sequence: leave time to halt beyond the gate and settle before the cut.
-const DURATION = 30;
+const DURATION = 27.3;
 const INSPECT = 0.85;
-const LEADING = { speed: 0.95 };
-// Tuned beside the shoulder region: 0.6 m ahead of the trunk (the rig's scapular top is at 0.657 m).
-const LEAD_OFFSET = 0.6;
-// Tuned handler lane: 55 cm beside the horse centre line at its shoulder.
-const LEAD_ASIDE = 0.55;
-// Tuned distance (m): ease into the shoulder station over the first metre of travel.
-const LEAD_EASE = 1;
-// Tuned against the front/side leading poses: near hand below the chin, slack forward of the outside hip (m).
-const NEAR_HAND = new Vector3(-0.3, -0.05, 0.45);
+// Retuned here from 0.95 to match the short lead through braking without exceeding the solved hip-excursion gate (m/s).
+const LEADING = { speed: 0.9 };
+// Tuned here to keep the near hand 15–30 cm from the halter while beside the shoulder (m).
+const LEAD_OFFSET = 0.72;
+// Tuned here with the halter-distance and body-clearance story gates (m).
+const LEAD_ASIDE = 0.4;
+// Tuned here against the initial near-hand/halter gap: settle into the shoulder station over half a metre (m).
+const LEAD_EASE = 0.5;
+// Tuned here against the visible halter distance: near hand below the jaw; slack remains iteration 12’s outside-hip pose (m).
+const HALTER = new Vector3(0, -0.3, 0.05);
+const NEAR_HAND = new Vector3(-0.28, 0.04, 0.55);
 const SLACK_HAND = new Vector3(0.3, 0.1, 0.25);
-// Tuned against foreleg/chest clearance and varied-body support: diagonal stance outside the horse's lane.
-const KNOT_STAND = { ahead: 0.4, aside: 0.2 };
-const KNOT_FACE = -Math.PI / 4;
 // Tuned against the two-hand slack span: enough sag to show a loop without reaching the pelvis.
 const SLACK_SAG = 0.25;
+// Read from half the 1.45 m barrel and half the 0.15 m gate post: halt with the trunk beyond the opening.
+const GATE_CLEAR = (1.45 + 0.15) / 2;
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -78,8 +79,6 @@ export function stableMorning(): Scenario {
       const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(-Math.PI / 2) });
       const gate = new Vector3(-0.2, 0, 8.2);
       const tasks = (h: Humanoid<World>): Behaviour<World> => function* () {
-        // Let the gaze find the rack just before the feet set off.
-        yield* named('notice the saddle', withGaze(h, reported(report, 'gaze', RACK), () => when(timePassed(0.1, 'seconds'))))();
         yield* named('fetch the saddle', reporting(report, HANDS,
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
             look: reported(report, 'gaze', () => saddle.current.position),
@@ -105,7 +104,7 @@ export function stableMorning(): Scenario {
           );
         })();
         yield* named('untie the rail knot', reporting(report, ['rightHand'], function* () {
-          yield* grab(h, { right: [rope, 'knot'] }, { look: reported(report, 'gaze', KNOT), first: true, face: KNOT_FACE, stand: KNOT_STAND })();
+          yield* grab(h, { right: [rope, 'knot'] }, { look: reported(report, 'gaze', KNOT) })();
         }))();
         yield* named('lead out through the gate', reporting(report, HANDS, function* () {
           const near = facingAt(h, h.pose.skeleton.index('chest'), { position: NEAR_HAND });
@@ -121,7 +120,10 @@ export function stableMorning(): Scenario {
               yield* hold(h, rope, { to: near })();
             },
             handTo(h, 'left', slack, { lead: false, until: () => false }),
-            walkTo(h, { to: new Vector3(HORSE.x + LEAD_ASIDE, 0, gate.z + LEAD_OFFSET), face: 0, speed: LEADING.speed }),
+            function* () {
+              yield* walkTo(h, { to: new Vector3(HORSE.x + LEAD_ASIDE, 0, gate.z + LEAD_OFFSET + GATE_CLEAR), face: 0, ...LEADING })();
+              yield* named('halt beyond the gate', () => when(timePassed(1.5, 'seconds')))();
+            },
             function* () {
               // Look back as they set off, then attend to the short walk through the gate.
               yield* when(() => h.feet.some((foot) => foot.phase === 'swing'));
@@ -133,7 +135,6 @@ export function stableMorning(): Scenario {
             },
           );
         }))();
-        yield* named('halt beyond the gate', () => when(timePassed(1, 'seconds')))();
       };
       return {
         world: createWorld(), report, bodies: [horse],
@@ -157,7 +158,8 @@ export function stableMorning(): Scenario {
           // Two skirts make the simple saddle read above the horse's barrel.
           for (const side of [-1, 1]) props.push(box(new Vector3(0, -0.13, side * 0.27).applyQuaternion(saddle.current.quaternion).add(saddle.current.position), 0.42, 0.29, 0.05, saddle.current.quaternion.clone()));
           const end = rope.current.position;
-          const at = (u: number) => muzzle.clone().lerp(end, u).add(new Vector3(0, -0.32 * 4 * u * (1 - u), 0));
+          const halter = horse.pose.point(HEAD, HALTER, new Vector3());
+          const at = (u: number) => halter.clone().lerp(end, u).add(new Vector3(0, -0.32 * 4 * u * (1 - u), 0));
           for (let i = 0; i < 12; i++) {
             props.push(line(at(i / 12), at((i + 1) / 12), 0.012, 0xc4a273));
           }

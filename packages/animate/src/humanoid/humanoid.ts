@@ -60,6 +60,7 @@ export class Humanoid<W = unknown> {
   readonly borne = new Map<Item, Bearing>();
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
   readonly holding: Record<Side, { item: Item; grip: string } | null> = { left: null, right: null };
+  readonly world?: W;
   private readonly body: Body<W>;
   private readonly ground = new Vector3();
 
@@ -68,6 +69,7 @@ export class Humanoid<W = unknown> {
     behaviour: (h: Humanoid<W>) => Behaviour<W>,
     options: HumanoidOptions<W> = {},
   ) {
+    this.world = options.world;
     const rig = (this.rig = new Rig(model));
     const p = (this.proportions = rig.proportions);
     const yaw = options.yaw ?? 0;

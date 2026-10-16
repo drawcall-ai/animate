@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { eyesOf, jointOf } from '../src/joints';
 import { forwardOf, leftOf } from '../src/math';
-import type { Frame } from './frame';
+import { tasked, type Frame } from './frame';
 
 /** a stride is steady when its speed varies across it, and the stride before, by less than this share of its mean (and its turn rate by less than CURVE) */
 const STEADY = 0.1;
@@ -128,7 +128,8 @@ export class GaitKinematics {
   private readonly samples: Sample[] = [];
   private cached: Stride[] | null = null;
 
-  see({ t, h, asked }: Frame) {
+  see(frame: Frame) {
+    const { t, h, asked } = frame;
     const j = (n: string) => jointOf(h, n);
     const yaw = h.gait.facing;
     const fwd = forwardOf(yaw);
@@ -168,7 +169,7 @@ export class GaitKinematics {
       feet: [h.feet[0].position.clone(), h.feet[1].position.clone()],
       gazed: asked.has('gaze'),
       arm: sagittal(j('leftLowerArm').sub(j('leftUpperArm')), fwd),
-      armFree: !asked.has('leftHand') && h.holding.left === null,
+      armFree: !tasked(frame, 'left'),
       thigh: sagittal(j('rightLowerLeg').sub(j('rightUpperLeg')), fwd),
       trunk: Math.atan2(up.dot(fwd), up.y),
       pelvis: Math.atan2(tilt.dot(fwd), tilt.y),
@@ -288,7 +289,7 @@ export class GaitKinematics {
       from: S[a].t,
       to: S[b].t,
       armFit: fit.r2,
-      armTurns: turns(S.slice(a - half, b + half).map((s) => s.arm * DEG), half, half + n),
+      armTurns: turns(S, a, b),
       armAcceleration: acc / (fit.amplitude * ((2 * Math.PI) / (S[b].t - S[a].t)) ** 2),
       rollWithYaw: correlation(
         S.slice(a, b).map((s) => s.thoraxRoll),
@@ -433,20 +434,21 @@ function sineFit(xs: number[]): { amplitude: number; r2: number } {
   return { amplitude: Math.hypot(s, c), r2: 1 - rest / (total || 1) };
 }
 
-/** how many times `xs` turns back (by more than 0.3: noise at a flat extreme isn't a turn) at an index in [from, to) */
-function turns(xs: number[], from: number, to: number): number {
+/** Arm reversals above 0.3° whose extrema fall in [from, to); neighbouring strides establish the trend and confirm each extremum. */
+function turns(samples: Sample[], from: number, to: number): number {
   let n = 0;
-  let at = 0;
+  let at = Math.max(0, from - (to - from));
   let rising: boolean | null = null;
-  for (let k = 1; k < xs.length; k++) {
-    const x = xs[k];
+  for (let k = at + 1; k < Math.min(samples.length, to + (to - from)); k++) {
+    const x = samples[k].arm * DEG;
+    const peak = samples[at].arm * DEG;
     if (rising === null) {
-      if (Math.abs(x - xs[at]) > 0.3) {
-        rising = x > xs[at];
+      if (Math.abs(x - peak) > 0.3) {
+        rising = x > peak;
         at = k;
       }
-    } else if (rising ? x > xs[at] : x < xs[at]) at = k;
-    else if (Math.abs(x - xs[at]) > 0.3) {
+    } else if (rising ? x > peak : x < peak) at = k;
+    else if (Math.abs(x - peak) > 0.3) {
       if (at >= from && at < to) n++;
       rising = !rising;
       at = k;

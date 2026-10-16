@@ -9,12 +9,13 @@ import { arriving, waitForWalk } from '../walk';
 import { carry, hold } from './carry';
 import { approach } from './grab';
 
-// Tuned against stable-yard wrist tracking: lift into carry, then transfer while the feet finish turning.
+// Inherited unchanged from iteration 10 (c3f8368); never re-tuned (unloaded s).
 const LIFT = 0.5;
-// Tuned lift split: draw in at the support height over half the course, then rise.
+// Inherited unchanged from iteration 11 (3cad1b6); never re-tuned (share of LIFT).
 const DRAW_SHARE = 0.5;
+// Inherited unchanged from iteration 12 (818a966), which combined raise and transfer into one course.
 const RAISE = 1.3;
-// Tuned anticipation (s): one last step plus the loaded course’s ease-in before visible rise.
+// Inherited unchanged from iteration 11 (3cad1b6); never re-tuned (anticipation s).
 export const RAISE_LEAD = 0.9;
 /** Lift close to the body, approach, then transfer onto the destination during the last step.
  * A live destination follows translation and rotation throughout the approach and transfer. */
@@ -27,13 +28,18 @@ export function place<W>(h: Humanoid<W>, item: Item, to: Live<Placement, W>): Be
       const goal = atBody(f);
       goal.position.y = drawHeight;
       return goal;
-    }], [LIFT * (1 - DRAW_SHARE), atBody]])();
+    }]])();
     yield* waitForWalk(h);
     const near = arriving(h, RAISE_LEAD);
-    yield* parallel<Frame<W>>('all', approach(h, to), function* () {
+    let approached = false;
+    yield* parallel<Frame<W>>('all', function* () {
+      yield* approach(h, to)();
+      approached = true;
+    }, function* () {
+      yield* carry(h, item, [[LIFT * (1 - DRAW_SHARE), atBody]])();
       yield* hold(h, item, { to: atBody, until: near })();
       yield* carry(h, item, [[RAISE, to]])();
-      yield* hold(h, item, { to, until: () => h.gait.eta === Infinity })();
+      yield* hold(h, item, { to, until: () => approached })();
     });
   });
 }

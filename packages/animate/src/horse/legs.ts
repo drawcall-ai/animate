@@ -129,17 +129,22 @@ export function horseCarriage(f: Frame, legs: Legs, avoid?: Readonly<Vector3>): 
   const muzzle = f.prev.point(HEAD, MUZZLE, new Vector3());
   const distance = avoid ? muzzle.distanceTo(avoid) : Infinity;
   const local = avoid ? new Vector3().copy(avoid).sub(f.prev.position(0)).applyQuaternion(f.prev.rotation(0).clone().invert()) : new Vector3();
-  const away = -Math.sign(local.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3));
+  const away = -Math.sign(local.x) * AVERT.turn * Math.max(0, Math.min(1, (AVERT.distance - distance) / AVERT.range));
   const previous = new Vector3(0, 0, 1).applyQuaternion(f.prev.local(NECK));
-  const turn = Math.atan2(previous.x, previous.z) + (away - Math.atan2(previous.x, previous.z)) * (1 - Math.exp(-4 * f.dt));
+  const turn = Math.atan2(previous.x, previous.z) + (away - Math.atan2(previous.x, previous.z)) * (1 - Math.exp(-AVERT.rate * f.dt));
   f.current.setLocal(NECK, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), nod)));
   f.current.setLocal(HEAD, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -nod / 2));
 }
 
+// Retuned here: avoidance begins at 0.6 m instead of 0.8 m so a clear handler can keep the short lead.
+// Turn, range and rate are inherited unchanged from iteration 2 (8b2ac67); never re-tuned.
+const AVERT = { distance: 0.6, turn: 0.5, range: 0.3, rate: 4 };
+
 const walkBlend = (f: Frame) => Math.min(1, f.prev.position(0).distanceTo(f.prev2.position(0)) / (f.dt * HORSE_WALK.slowest));
 
-// Tuned walking acceleration (m/s²); catch-up speed follows v² = u² + 2ad, capped at the gait’s reference walk.
-const FOLLOW_ACCEL = 0.65;
+// Retuned here from 0.65 against the short lead and solved hip excursion through the stable-yard halt (m/s²).
+// Every forecast still passes the leg-support gates; catch-up speed remains capped at the reference walk.
+const FOLLOW_ACCEL = 0.8;
 
 /** Follow a floor goal with the horse's pelvis, legs and head working together. */
 export function horseFollow<W>(start: ReadonlyPose, goal: Live<Pick<Target, 'position' | 'velocity'>, W>, options: { avoid?: Live<Readonly<Vector3> | undefined, W> } = {}): Behaviour<W> {

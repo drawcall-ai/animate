@@ -4,6 +4,7 @@ import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Placement, type Target } from '../../core/goal';
+import { Pose } from '../../core/pose';
 import { when } from '../../core/when';
 import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
@@ -25,8 +26,8 @@ export interface Stand {
 
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
-// Tuned clearance for the knees and free hands beside low two-hand supports (× arm length).
-const LOW_STAND = 1.05;
+// Retuned here from 1.05 to one arm length for rack grip settling; 0.95 overlapped a rack leg in the story gate.
+const LOW_STAND = 1;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
 const SQUARE = 0.3;
@@ -38,6 +39,8 @@ const ROUND = 0.5;
 const ON = 0.5;
 // Tuned frontal approach cone: lateral offset at most half the forward distance to the target.
 const ROUND_ASIDE = 0.5;
+// Conservative estimate of another body’s lower-limb radius, not measured (m).
+const LIMB_RADIUS = 0.06;
 const STILL = 0.5;
 
 /**
@@ -69,12 +72,11 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
     };
     const prepare = function* () {
       yield* when((f: Frame<W>) => stood || arrivingForReach(f));
-      // Keep preparing the low grip through foot settling even after the full reach starts.
       yield* action<Frame<W>>({ until: () => stood, update: (f) => held(holds).forEach(({ side, item, grip }) => {
         bringShoulder(h, f, side, item.toWorld(gripOf(item, grip), _world).position);
       }) });
     };
-    const hands = () => parallel<Frame<W>>('all', reach, prepare);
+    const hands = () => parallel<Frame<W>>('all', prepare, reach);
     const walk = function* () {
       yield* approach(h, holds, options)();
       stood = true;
@@ -149,7 +151,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
       }
       if (!grips.length) grips.push({ at: position.clone() });
     } else for (const { side, item, grip } of held(source)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
-    const face = options.face ?? facingFor(h, grips);
+    let face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
     const shoulders = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
@@ -165,6 +167,32 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
     if (point) {
       const distance = Math.hypot(ahead, aside, height - shoulders);
       if (options.stand ? distance > reach : Math.hypot(aside, height - shoulders) > reach) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
+    }
+    // Choose a stand around a single grip that leaves the feet outside other bodies' lower limbs.
+    const world = h.world;
+    if (!options.stand && options.face === undefined && grips.length === 1 && world && typeof world === 'object' && 'bodies' in world && Array.isArray(world.bodies)) {
+      const bodies: unknown[] = world.bodies;
+      const clear = (yaw: number) => {
+        const at = _com.copy(middle).addScaledVector(forwardOf(yaw), -ahead).setY(0);
+        for (const body of bodies) {
+          if (!(body instanceof Pose) || body.skeleton === h.pose.skeleton) continue;
+          for (let b = 1; b < body.skeleton.bones.length; b++) {
+            const a = body.position(body.skeleton.bones[b].parent), end = body.position(b);
+            if (Math.min(a.y, end.y) > p.hipHeight) continue;
+            const dx = end.x - a.x, dz = end.z - a.z;
+            const t = Math.max(0, Math.min(1, ((at.x - a.x) * dx + (at.z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+            // Conservative lower-limb radius (6 cm), plus this body's hip span and toe reach.
+            if (Math.hypot(at.x - a.x - t * dx, at.z - a.z - t * dz) < p.hipHalfWidth + p.toeFront + LIMB_RADIUS) return false;
+          }
+        }
+        return true;
+      };
+      // Search the nearest facing first, at a geometric angular resolution of π/16.
+      for (let i = 0; i <= 32; i++) {
+        const yaw = face + Math.ceil(i / 2) * (i % 2 ? 1 : -1) * Math.PI / 16;
+        if (clear(yaw)) { face = yaw; break; }
+        if (i === 32) throw new Error('approach: no stand clear of nearby lower limbs');
+      }
     }
     const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.gait.facing)) < SQUARE;
     if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) {

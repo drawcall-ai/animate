@@ -191,7 +191,8 @@ function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], pare
   return Math.hypot(side / range.side, down / (down > 0 ? range.down : range.up));
 }
 
-/** the head's turn (world, into `out`) toward `goal` from `parent`'s, the turn shared evenly over the neck's `bones`, each within its limit */
+/** The head's turn (world, into `out`) toward `goal` from `parent`'s, shared evenly over the neck's `bones`, each within its limit.
+ * Given `at` starting at the first bone's world position, advance it to the head's origin under that turn. */
 export function within(pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, out: Quaternion, at?: Vector3): Quaternion {
   const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
   out.copy(parent);

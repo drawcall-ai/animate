@@ -1,5 +1,5 @@
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Humanoid, type Pose, type World } from '@drawcall/animate';
+import { Humanoid, Pose, type World } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
 import { FIXED_DT, type Prop, type Role, type Scenario, type Stage } from './scenario';
 
@@ -27,7 +27,7 @@ export class Simulation {
         return this.stage.script(h, i, cast);
       }, { dev, world: this.world, position: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [] }));
     });
-    this.bodies = cast.map((h) => h.snapshot());
+    this.bodies = [...cast.map((h) => h.snapshot()), ...(this.stage.bodies ?? []).map((b) => new Pose(b.pose.skeleton).copy(b.pose))];
     this.world.bodies = this.bodies;
   }
 
@@ -35,6 +35,7 @@ export class Simulation {
   step() {
     this.stage.move?.(this.t + FIXED_DT);
     this.actors.forEach((h, i) => this.bodies[i].copy(h.pose));
+    this.stage.bodies?.forEach((b, i) => this.bodies[this.actors.length + i].copy(b.pose));
     for (const h of this.actors) h.update(FIXED_DT);
     this.stage.bodies?.forEach((b) => b.update(FIXED_DT));
     this.t += FIXED_DT;

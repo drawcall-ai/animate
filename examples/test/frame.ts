@@ -1,4 +1,4 @@
-import type { Humanoid } from '@drawcall/animate';
+import type { Humanoid, Side } from '@drawcall/animate';
 import type { Solid } from '../src/scenario';
 
 /** a body as the metrics read it: its posed model, and what `balance` (its heading and ground velocity: `gait.facing`, `gait.velocity`), the hands (what they hold) and the weight of what it holds and wears report of it */
@@ -28,4 +28,9 @@ export class Peak {
 }
 
 /** a hand is on something: it holds an item, or the script asked it somewhere (or tracks it) */
-export const tasked = ({ h, asked }: Frame) => !!h.holding.left || !!h.holding.right || ['leftHand', 'rightHand', 'leftWrist', 'rightWrist'].some((name) => asked.has(name));
+export const tasked = (frame: Frame, side?: Side): boolean => {
+  const { h, asked } = frame;
+  return side
+    ? !!h.holding[side] || asked.has(`${side}Hand`) || asked.has(`${side}Wrist`)
+    : tasked(frame, 'left') || tasked(frame, 'right');
+};

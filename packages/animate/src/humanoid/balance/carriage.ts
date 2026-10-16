@@ -49,7 +49,7 @@ const LATERAL = 0.8;
 /** a goal this far off the facing (rad) is walked to more and more slowly, then turned to first; still, the body edges toward it this fast (m/s) */
 const TURN_FIRST = [0.6, 1.3] as const;
 const TURNING_SPEED = 0.15;
-/** Tuned against saddle-placement turns and the backing/side-step scenarios (m, m/s, rad). */
+/** Inherited unchanged from the prototype BACKUP (66cd4e0, core/src/gait/turn.ts); never re-tuned (m, m/s, rad). */
 const REPOSITION = { distance: 0.6, speed: 0.6, backAngle: 2.2 };
 
 /** A foot as the steps take it: how long it has stood, the pitch it landed with, its swing while it swings. */
@@ -290,10 +290,14 @@ export class Carriage {
     this.bent = Math.max(this.walk, this.bent + ((this.moving ? 1 : 0) - this.bent) * Math.min(1, dt * (this.moving ? BEND_RATE.give : BEND_RATE.straighten)));
   }
 
+  private readonly correction = { still: false, keepFacing: false, travel: 0, facing: 0 };
+
   /** A nearby stationary goal permits a correcting step; slow side/back steps also retain the requested facing. */
   get reposition() {
-    const dx = this.goal.x - this.root.x;
-    const dz = this.goal.z - this.root.z;
+    return this.correct(this.goal.x - this.root.x, this.goal.z - this.root.z);
+  }
+
+  private correct(dx: number, dz: number) {
     const near = Math.hypot(dx, dz) < REPOSITION.distance * this.p.scale;
     const still = near && this.goalSpeed < STOP.goalSpeed;
     const toward = headingOf(dx, dz);
@@ -302,8 +306,13 @@ export class Carriage {
     const off = Math.abs(wrapAngle(travel - facing));
     const along = dx * Math.sin(facing) + dz * Math.cos(facing);
     const across = dx * Math.cos(facing) - dz * Math.sin(facing);
-    return { still, keepFacing: near && this.speed < REPOSITION.speed * this.p.scale &&
-      (off > REPOSITION.backAngle || (this.goalFacing !== null && along < Math.abs(across) && still)) };
+    const out = this.correction;
+    out.still = still;
+    out.travel = travel;
+    out.facing = facing;
+    out.keepFacing = near && this.speed < REPOSITION.speed * this.p.scale &&
+      (off > REPOSITION.backAngle || (this.goalFacing !== null && along < Math.abs(across) && still));
+    return out;
   }
 
   /** the ground velocity that closes (dx, dz) — `dist` away — and arrives at rest, within the speed limit */
@@ -363,10 +372,8 @@ export class Carriage {
 
   /** turns the facing toward the travel (or the goal's facing, arriving), as fast as a body turns and its feet allow */
   private turn(dt: number, dx: number, dz: number, dist: number) {
-    const toGoal = headingOf(dx, dz);
-    const travel = toGoal + wrapAngle(headingOf(this.velocity.x, this.velocity.z) - toGoal) * smoothstep(0.35, 0.8, this.speed);
-    const facing = this.goalFacing ?? this.yaw;
-    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (this.reposition.keepFacing ? 0 : 1);
+    const { travel, facing, keepFacing } = this.correct(dx, dz);
+    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (keepFacing ? 0 : 1);
     this.goalYaw = facing + wrapAngle(travel - facing) * far;
     const e = wrapAngle(this.goalYaw - this.yaw);
     const most = (this.turnSpeed ?? TURN_RATE) * dt;

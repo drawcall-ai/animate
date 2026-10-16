@@ -35,7 +35,12 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
     yield* named('check the fit', withGaze(h, () => horse.pose.position(HEAD), release(h, ['left', 'right'])))();
     yield* named('lead out', function* () {
       yield* grab(h, { right: [rope, 'knot'] })();
-      yield* parallel<Frame>('race', hold(h, rope, { to: carried(h, 'right') }), walkTo(h, { to: gate }));
+      const near = facingAt(h, h.pose.skeleton.index('chest'), { position: new Vector3(-0.28, 0.04, 0.55) });
+      const slack = facingAt(h, 0, { position: new Vector3(0.3, 0.1, 0.25) });
+      yield* parallel<Frame>('race', hold(h, rope, { to: near }), handTo(h, 'left', slack, { lead: false }), function* () {
+        yield* walkTo(h, { to: gate })();
+        yield* when(timePassed(1.5, 'seconds')); // keep both hands in the lead pose through the halt
+      });
     })();
   });
 }, { position: { x: -1.5, z: 0 } });
