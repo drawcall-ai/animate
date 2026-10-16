@@ -19,8 +19,8 @@ const KNOT = new Vector3(-0.25, 1.12, 3.6);
 const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
-// Tuned against the yard sequence: leave time to halt beyond the gate and settle before the cut.
-const DURATION = 28.35;
+// Four Life seeds settle at 22.95–23.13 s; retain 1.27–1.45 s of idle.
+const DURATION = 24.4;
 const INSPECT = 0.85;
 // Tuned matched walk through braking, checked against solved hip excursion (m/s).
 const LEADING = { speed: 0.9 };

@@ -1,5 +1,5 @@
-import { wrapAngle, smoothstep } from './math';
 import { Quaternion, Vector3 } from 'three';
+import { clamp, wrapAngle, smoothstep } from './math';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from './body';
 import { followRotation } from './follow';
@@ -18,8 +18,6 @@ export interface Gazer {
   range: { down: number; up: number; side: number };
   /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
   pitch?: number;
-  /** Constrain the world head goal before following it, for clearance from nearby loads. */
-  avoid?(pose: ReadonlyPose, goal: Quaternion): void;
   /** Ask the body to help before aiming the head. */
   lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
@@ -52,6 +50,7 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
     const pursued = new Vector3();
     /** where the target was the sub-step before (null: not yet seen) */
     let aimed: Vector3 | null = null;
+    let eyePitch = 0, declination = 0;
     yield* action<Frame<W>>({
       update: (f) => {
         const pose = f.current;
@@ -61,7 +60,6 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
         const distance = aimed?.distanceTo(point) ?? Infinity;
         const jumped = distance > JUMP * f.dt;
-        (aimed ??= new Vector3()).copy(point);
         if (jumped) {
           // A new sight starts a gaze shift; pursuit and branch history belong to the old one.
           over = null;
@@ -85,10 +83,20 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         const facing = Math.atan2(-right.z, right.x);
         const turned = pose.rotation(parent);
         const local = _line.copy(d).applyQuaternion(_rel.copy(turned).invert());
-        // Preferred eye declination saves neck flexion; upward shifts retain the eyes' pursuit range.
         const down = Math.max(0, Math.atan2(-local.y, Math.hypot(local.x, local.z)));
         const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
-        const eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
+        const worldDown = Math.atan2(-d.y, d.x * Math.sin(facing) + d.z * Math.cos(facing));
+        if (jumped || !seen) eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
+        else if (gazer.pitch !== undefined && aimed) {
+          const before = _line.subVectors(aimed, origin);
+          const targetTurn = wrapAngle(worldDown - Math.atan2(-before.y, before.x * Math.sin(facing) + before.z * Math.cos(facing)));
+          const change = wrapAngle(worldDown - declination);
+          // Moving eyes absorb body travel; target pursuit keeps the usual eye/head share.
+          const share = clamp(change - (1 - EYES) * targetTurn, Math.min(EYES * change, change), Math.max(EYES * change, change));
+          eyePitch = clamp(eyePitch + share, 0, gazer.range.down);
+        }
+        declination = worldDown;
+        (aimed ??= new Vector3()).copy(point);
         const ways = (line: Vector3) => {
           const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
           const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
@@ -103,8 +111,8 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         // Acquire from the final head history once; earlier gaze layers cannot choose the branch.
         over ??= _o.angleTo(was) < _q.angleTo(was);
         const [kept, other] = over ? [_o, _q] : [_q, _o];
-        const strained = strain(gazer, pose, bones, turned, kept, d);
-        if (strain(gazer, pose, bones, turned, other, d) < strained - HYSTERESIS) over = !over;
+        const strained = strain(gazer, pose, bones, turned, kept, point);
+        if (strain(gazer, pose, bones, turned, other, point) < strained - HYSTERESIS) over = !over;
         // (the head's line, the way taken: the eyes take the rest of a turn aside, EYES of it from
         // where the neck's parent faces and no more than EYES_MOST of what is left of their range
         // where the neck stops short — a large shift ends with the eyes a little off the head's
@@ -115,6 +123,24 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
         // Follow in world space so the trunk can move beneath a steady gaze.
         const whole = _whole.copy(over ? _o : _q);
+        const used = strain(gazer, pose, bones, turned, whole, point);
+        if (used > 1 && eyePitch > 0) {
+          // A close target can consume lateral and downward eye range together.
+          // Give the head the missing declination before asking the eyes beyond their ellipse.
+          const full = _full.copy(whole).multiply(_p.setFromAxisAngle(X, eyePitch));
+          const best = strain(gazer, pose, bones, turned, full, point);
+          if (best < used) {
+            let lo = 0, hi = eyePitch;
+            while (hi - lo > SETTLED) {
+              const middle = (lo + hi) / 2;
+              const candidate = _candidate.copy(whole).multiply(_p.setFromAxisAngle(X, middle));
+              if (strain(gazer, pose, bones, turned, candidate, point) > Math.max(EYES_MOST, best)) lo = middle;
+              else hi = middle;
+            }
+            whole.multiply(_p.setFromAxisAngle(X, hi));
+            eyePitch -= hi;
+          }
+        }
         // (the whole turn followed once from the neck's history, then shared evenly down it, each
         // joint stopped at its range's end: the head turns at the gaze shift's pace, however many
         // joints share it — as fast as the shift is large (`headPace`), at most `motion`'s)
@@ -125,11 +151,6 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         (seen ??= new Quaternion()).copy(whole);
         const speeding = pursuit.distanceTo(pursued) / f.dt;
         pursued.copy(pursuit);
-        // Correct the preferred eye/head split against the actual limited chain and
-        // eye origin. Near targets can otherwise consume lateral and downward eye range together.
-        comfortable(gazer, pose, bones, turned, whole, point);
-        // Clearance is a constraint, not target motion to pursue at feed-forward speed.
-        gazer.avoid?.(pose, whole);
         const gap = was.angleTo(whole);
         shift = gap > shift || gap < SETTLED ? gap : shift;
         const pace = headPace(shift, motion);
@@ -147,29 +168,6 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
       },
     });
   };
-}
-
-function comfortable(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, point: Vector3) {
-  const last = bones[bones.length - 1];
-  const offset = gazer.eyes(pose, _eyeOffset).sub(pose.position(last)).applyQuaternion(_eyeTurn.copy(pose.rotation(last)).invert());
-  const usedAt = () => {
-    const turn = within(pose, bones, parent, goal, _eyeTurn, _eyeOrigin.copy(pose.position(bones[0])));
-    _eyeOrigin.add(_eyePoint.copy(offset).applyQuaternion(turn));
-    const direction = _eyeDirection.subVectors(point, _eyeOrigin).normalize();
-    const local = _eyeLocal.copy(direction).applyQuaternion(_eyeInverse.copy(turn).invert());
-    const pitch = Math.atan2(-local.y, Math.hypot(local.x, local.z));
-    return Math.hypot(Math.atan2(local.x, local.z) / gazer.range.side, pitch / (pitch > 0 ? gazer.range.down : gazer.range.up));
-  };
-  for (let pass = 0; pass < 2; pass++) {
-    const used = usedAt();
-    if (used <= 1) return;
-    _eyeBefore.copy(goal);
-    const correction = _eyeCorrection.setFromUnitVectors(_eyeForward.set(0, 0, 1).applyQuaternion(_eyeTurn), _eyeDirection);
-    goal.premultiply(_eyeShare.identity().slerp(correction, 1 - 1 / used));
-    // A saturated neck cannot fix every gaze. Keep a correction only if the
-    // attainable chain actually gives the eyes more room, rather than winding up its goal.
-    if (usedAt() >= used) { goal.copy(_eyeBefore); return; }
-  }
 }
 
 /** how far (rad) a gazer's eyes are off `point` (world): the head's line off it, less what the eyes take of a gaze shift at most (`lookAt`) */
@@ -216,18 +214,21 @@ const BELL = 1.5;
 
 /**
  * how much of the eyes' range (1: all of it) the head, turned toward `goal` (world) from `parent`'s
- * turn shared over the neck's `bones` each within its limit, leaves them to look along `d` (unit)
+ * turn shared over the neck's `bones` each within its limit, leaves them to look at `point` (world)
  */
-function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, d: Vector3): number {
-  const l = _l.copy(d).applyQuaternion(within(pose, bones, parent, goal, _within).invert());
-  const side = Math.atan2(l.x, l.z);
-  const down = Math.atan2(-l.y, Math.hypot(l.x, l.z));
-  const { range } = gazer;
-  return Math.hypot(side / range.side, down / (down > 0 ? range.down : range.up));
+function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, point: Readonly<Vector3>): number {
+  const last = bones[bones.length - 1];
+  const offset = gazer.eyes(pose, _eyeOffset).sub(pose.position(last)).applyQuaternion(_rel.copy(pose.rotation(last)).invert());
+  const turn = within(pose, bones, parent, goal, _within, _eyeOrigin.copy(pose.position(bones[0])));
+  _eyeOrigin.add(offset.applyQuaternion(turn));
+  const local = _l.copy(point).sub(_eyeOrigin).applyQuaternion(_rel.copy(turn).invert());
+  const side = Math.atan2(local.x, local.z);
+  const down = Math.atan2(-local.y, Math.hypot(local.x, local.z));
+  return Math.hypot(side / gazer.range.side, down / (down > 0 ? gazer.range.down : gazer.range.up));
 }
 
 /** The head's turn (world, into `out`) toward `goal` from `parent`'s, shared evenly over the neck's `bones`, each within its limit.
- * Given `at` starting at the first bone's world position, advance it to the head's origin under that turn. */
+ * Given `at`, advance it from the chain's base to the head's origin under that turn. */
 export function within(pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, out: Quaternion, at?: Vector3): Quaternion {
   const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
   out.copy(parent);
@@ -280,12 +281,6 @@ const _offset = new Vector3();
 
 const _eyeOffset = new Vector3();
 const _eyeOrigin = new Vector3();
-const _eyePoint = new Vector3();
-const _eyeDirection = new Vector3();
-const _eyeLocal = new Vector3();
-const _eyeForward = new Vector3();
-const _eyeTurn = new Quaternion();
-const _eyeInverse = new Quaternion();
-const _eyeCorrection = new Quaternion();
-const _eyeShare = new Quaternion();
-const _eyeBefore = new Quaternion();
+
+const _full = new Quaternion();
+const _candidate = new Quaternion();

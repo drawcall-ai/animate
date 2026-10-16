@@ -1,12 +1,9 @@
-import { clearBody } from './hands/clearance';
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { Placement } from '../core/goal';
 import { loadFactor } from '../core/load';
-import { heldMass, gripOf } from './hands/grips';
+import { heldMass } from './hands/grips';
 import type { Humanoid } from './humanoid';
-import { INDEX, SIDES } from './bones';
-import { forwardOf } from '../core/math';
 import type { ReadonlyPose } from '../core/pose';
 
 /** A placement on a bone, scaled with its body and followed from final poses. */
@@ -50,25 +47,6 @@ export function carried<W>(h: Humanoid<W>, side?: 'left' | 'right') {
     const goal = at(f);
     // A lift rises out of its squat: its resting height follows the feet, not the lowered pelvis.
     goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 + h.proportions.hipHeight + CARRY_HEIGHT * h.scale;
-    if (!side) {
-      // The pelvis moves behind a hinged trunk. Keep the grip envelope beyond the
-      // trunk at the load's height, rather than pulling a rising load through it.
-      let extent = 0;
-      for (const hand of SIDES) {
-        const held = h.holding[hand];
-        if (held) extent = Math.max(extent, gripOf(held.item, held.grip).position.length());
-      }
-      const hips = h.pose.position(0), neck = h.pose.position(INDEX.neck);
-      const u = Math.max(0, Math.min(1, (goal.position.y - hips.y) / Math.max(Number.EPSILON, neck.y - hips.y)));
-      const trunk = hips.clone().lerp(neck, u);
-      const forward = forwardOf(h.gait.facing);
-      const distance = goal.position.clone().sub(trunk).dot(forward);
-      goal.position.addScaledVector(forward, Math.max(0, extent + h.proportions.shoulderHalfWidth - distance));
-    }
-    for (const hand of SIDES) {
-      const item = h.holding[hand]?.item;
-      if (item && (hand === 'left' || item !== h.holding.left?.item)) clearBody(h, h.pose, item, goal.position, goal.quaternion);
-    }
     goal.velocity.y = 0;
     return goal;
   };

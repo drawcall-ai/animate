@@ -13,6 +13,8 @@ const HORSE_HALF_WIDTH = 0.24;
 // Recalled conservative human radii, as shares of stature.
 const HEAD_RADIUS = 0.06;
 const BODY_RADIUS = 0.06;
+// Inherited thorax capsule proxy from test/clearance.ts; no verified anatomical source.
+const UPPER_TORSO_RADIUS = 0.045;
 const LEG_RADIUS = 0.038;
 // Read from the horse leg proxy meshes, metres.
 const HORSE_LEG_RADIUS = 0.06;
@@ -38,6 +40,8 @@ const MOVING = 0.15;
 const AT_HORSE = 0.7;
 // One centimetre of item translation marks lift onset, above contact jitter.
 const LIFT_RISE = 0.01;
+// Read from OpenPoseSkeleton's default jointRadius: the rendered wrist sphere (m).
+const HAND_MARKER_RADIUS = 0.024;
 
 it('leads upright with the near hand forward, slack outside, and halts beyond the gate', () => {
   const sim = new Simulation(stableMorning(), undefined, true);
@@ -60,6 +64,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
   let leadingLegGap = Infinity;
   let gazeAt = Infinity, gripAt = Infinity, liftAt = Infinity;
   let gripHeight = NaN;
+  let contactKnee = NaN, contactPitch = NaN, contactDrop = NaN;
   while (sim.t < sim.scenario.duration) {
     sim.step();
     const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
@@ -72,11 +77,21 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
       }
     }
     const h = sim.actors[0];
+    if (Number.isNaN(gripHeight)) gripHeight = saddle.position.y;
     if (sim.stage.report.at(sim.t).has('gaze')) gazeAt = Math.min(gazeAt, sim.t);
+    if (saddle.position.y <= gripHeight + LIFT_RISE) for (const side of ['left', 'right']) for (const box of sim.props()) {
+      if (box.kind !== 'box' || !box.quaternion || ![SEAT_HEIGHT, SKIRT_HEIGHT].includes(box.size.y)) continue;
+      const local = h.pose.position(h.pose.skeleton.index(`${side}Hand`)).clone().sub(box.position).applyQuaternion(box.quaternion.clone().invert());
+      const gap = Math.hypot(Math.max(0, Math.abs(local.x) - box.size.x / 2), Math.max(0, Math.abs(local.y) - box.size.y / 2), Math.max(0, Math.abs(local.z) - box.size.z / 2));
+      if (gap <= HAND_MARKER_RADIUS && !Number.isFinite(gripAt)) {
+        gripAt = sim.t;
+        contactKnee = ['left', 'right'].reduce((sum, side) => sum + h.pose.local(h.pose.skeleton.index(`${side}LowerLeg`)).angleTo(new Quaternion()), 0) * 90 / Math.PI;
+        contactPitch = new Euler().setFromQuaternion(h.pose.rotation(h.pose.skeleton.index('chest')), 'YXZ').x * 180 / Math.PI;
+        contactDrop = h.proportions.hipHeight - h.pose.position(0).y;
+      }
+    }
     const load = h.holding.left?.item;
     if (load?.name === 'saddle') {
-      if (Number.isNaN(gripHeight)) gripHeight = load.current.position.y;
-      gripAt = Math.min(gripAt, sim.t);
       if (load.current.position.y > gripHeight + LIFT_RISE) liftAt = Math.min(liftAt, sim.t);
     }
     if (h.gait.velocity.length() > 0.01) settingOff = Math.min(settingOff, sim.t);
@@ -166,7 +181,11 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
   }
   expect(settingOff).toBeLessThan(0.3);
   expect(gazeAt).toBeLessThan(settingOff);
-  expect(liftAt - gripAt).toBeLessThan(0.5);
+  expect(liftAt - gripAt).toBeLessThanOrEqual(0.3);
+  expect(contactKnee).toBeGreaterThanOrEqual(20);
+  expect(contactKnee).toBeLessThanOrEqual(30);
+  expect(contactPitch).toBeLessThanOrEqual(35);
+  expect(contactDrop).toBeGreaterThan(0.015 * sim.actors[0].proportions.scale);
   expect(nearMin).toBeGreaterThan(0.15);
   expect(nearMax).toBeLessThan(0.3);
   expect(Number.isFinite(postGap)).toBe(true);
@@ -242,7 +261,7 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
         Math.max(0, Math.abs(local.z) - box.size.z / 2),
       );
       headGap = Math.min(headGap, off.length() - HEAD_RADIUS * h.proportions.height);
-      for (const [a, b, radius] of [['hips', 'chest', BODY_RADIUS], ['chest', 'neck', 0.045]] as const) {
+      for (const [a, b, radius] of [['hips', 'chest', BODY_RADIUS], ['chest', 'neck', UPPER_TORSO_RADIUS]] as const) {
         const from = h.pose.position(h.pose.skeleton.index(a));
         const to = h.pose.position(h.pose.skeleton.index(b));
         // Minimise the convex point-to-box distance along the torso segment.

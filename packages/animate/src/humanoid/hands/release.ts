@@ -3,7 +3,7 @@ import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Behaviour, Target } from '../../core/goal';
 import { reached } from '../../core/tip';
-import { ARM_REACH, handTo } from '../arms';
+import { ARM_REACH, clearArm, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { facingAt } from '../goal';
@@ -46,7 +46,9 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         else {
           const sign = side === 'left' ? 1 : -1;
           at.copy(shoulder).add(new Vector3(sign * REST_ASIDE * p.scale, -REST_DOWN * p.armLength, REST_AHEAD * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
-          at.addScaledVector(_v.subVectors(hand, f.prev2.position(INDEX[`${side}Hand`])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH), FOLLOW_THROUGH);
+          _v.subVectors(hand, f.prev2.position(INDEX[`${side}Hand`])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
+          at.addScaledVector(_v, FOLLOW_THROUGH);
+          clearArm(h, f, side, at);
         }
         // (within what the arm reaches from its shoulder)
         const reach = at.sub(shoulder);

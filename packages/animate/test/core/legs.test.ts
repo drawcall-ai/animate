@@ -5,6 +5,7 @@ import { Body, type Frame } from '../../src/core/body';
 import { strideAt } from '../../src/core/legs/gait';
 import { Limb, type Walker } from '../../src/core/legs/limb';
 import { Solver } from '../../src/core/legs/solve';
+import * as pursuit from '../../src/core/legs/root';
 import { Legs } from '../../src/core/legs/legs';
 import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
 import { HORSE_WALK, horseLegs, horseCarriage, horsePelvis } from '../../src/horse/legs';
@@ -193,4 +194,22 @@ it('rejects invalid follower goals and motion instead of waiting', () => {
     const body = new Body(SKELETON, () => action<Frame>({ update: (f) => engine.toward(f, { position }, motion) }), { pose });
     expect(() => body.update(1 / 60)).toThrow(/root (goal|motion|turn motion)/);
   }
+});
+
+it('reuses each travel forecast across root-height candidates', () => {
+  const pose = new Pose(SKELETON);
+  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  const goal = new Vector3(1, pose.position(0).y, 2);
+  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
+  } }), { pose, dev: true });
+  const forecast = vi.spyOn(pursuit, 'rootPlan');
+  try {
+    for (let tick = 0; tick < 120; tick++) {
+      forecast.mockClear();
+      body.update(1 / 60);
+      const shares = forecast.mock.calls.map((args) => args[6]);
+      expect(shares.length).toBe(new Set(shares).size);
+    }
+  } finally { forecast.mockRestore(); }
 });

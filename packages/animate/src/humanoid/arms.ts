@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { Item, type Carrier } from '../core/carrier';
@@ -64,7 +64,9 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
           set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
           const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
           const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
-          const clear = (thigh + CLEAR * p.height - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / p.armLength;
+          const rest = _w.copy(hips).addScaledVector(left, sign * (thigh + CLEAR * p.height)).setY(f.current.position(INDEX[`${side}UpperArm`]).y - p.armLength);
+          clearArm(h, f, side, rest);
+          const clear = (outward(rest) - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / p.armLength;
           const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1)));
           const hang = _q.setFromAxisAngle(Y, yaw).multiply(_h.setFromAxisAngle(X, -a)).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out)));
           set(f, goals, INDEX[`${side}UpperArm`], hang.premultiply(_h.copy(f.current.rotation(INDEX[`${side}Shoulder`])).invert()));
@@ -74,6 +76,25 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
       },
     });
   };
+}
+
+/** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh. */
+export function clearArm<W>(h: Humanoid<W>, f: Frame<W>, side: Side, at: Vector3): Vector3 {
+  const sign = side === 'left' ? 1 : -1, hips = f.current.position(0);
+  const yaw = yawOf(f.current.local(0));
+  const inverse = _r.setFromAxisAngle(Y, -yaw);
+  const local = _rest.subVectors(at, hips).applyQuaternion(inverse);
+  const pad = CLEAR * h.proportions.height;
+  let out = sign * local.x;
+  for (const [item, { on }] of h.worn) {
+    if (typeof on === 'number' && f.current.skeleton.chain(`${side}Arm`).includes(on)) continue;
+    const position = _d.subVectors(item.current.position, hips).applyQuaternion(inverse);
+    const rotation = _q.copy(inverse).multiply(item.current.quaternion);
+    const box = _box.copy(item.bounds).applyMatrix4(_matrix.compose(position, rotation, ONE));
+    if (local.y < box.min.y - pad || local.y > box.max.y + pad || local.z < box.min.z - pad || local.z > box.max.z + pad) continue;
+    out = Math.max(out, (sign > 0 ? box.max.x : -box.min.x) + pad);
+  }
+  return at.addScaledVector(leftOf(yaw, _left), sign * (out - sign * local.x));
 }
 
 /** joint `bone` turned on from its history toward `goal` (its own motion followed) */
@@ -172,7 +193,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
   arm.to(f, target, { ...CALM, ...options, pole, contact: options.on instanceof Item && options.on === h.holding[side]?.item, letOut: toward !== undefined });
   // The body joins a glide with the hand, rather than moving for its starting hang.
   if (options.lead ?? true) {
-    bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1);
+    bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1, options.on instanceof Item ? options.on.mass : 0);
     const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
     twistToward(h, f.current, goal, toward?.share ?? 1);
   }
@@ -253,3 +274,7 @@ const _m = new Vector3();
 const _axis = new Vector3();
 const _glided = { position: new Vector3(), velocity: new Vector3() };
 const ZERO = new Vector3();
+
+const _box = new Box3();
+const _matrix = new Matrix4();
+const ONE = new Vector3(1, 1, 1);

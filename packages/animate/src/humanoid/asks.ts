@@ -30,6 +30,8 @@ export interface Asks {
   lower: number;
   /** bend the trunk forward at the hips and lower back (rad) */
   bow: number;
+  /** maximum bow while preparing or carrying a load (rad); constraints combine by minimum */
+  bowLimit: number;
   /** axial chest turn from the standing facing (rad) */
   twist: number;
   /** the weight over one foot */
@@ -39,7 +41,7 @@ export interface Asks {
 }
 
 /** nothing asked */
-export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, twist: 0, onto: null, stance: null });
+export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, onto: null, stance: null });
 
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {

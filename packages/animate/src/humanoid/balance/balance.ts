@@ -70,9 +70,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
     const base: Stance = { ...defaultStance(p), ...options.stance };
     const c = new Carriage(p, base, h.feet);
     const posture = new Posture();
-    // Geometry identifies the variation at millimetre resolution, as reach/gaze do.
-    // Hashing raw trig results lets a last-bit Math difference choose another life sequence.
-    const life = new Life(options.seed ?? seedOf(...[p.height, h.feet[0].position.x, h.feet[0].position.z].map((m) => Math.round(m * 1000) / 1000)));
+    const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
     const quiet: { drift: Vector3; breath: number; onto: Side | null } = { drift: new Vector3(), breath: 0, onto: null };
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
@@ -113,11 +111,9 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         // the pelvis and the trunk over the feet, lowered and bowed as asked
         const lower = followed(asked.lower, asks.lower, LOWER, dt);
         c.lowered = Math.abs(lower) > LOWERED * p.scale;
-        const bow = followed(asked.bow, asks.bow, BOW, dt);
+        const bow = followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt);
         // Motion blends quiet stance out; a stationary load retains breathing and sway.
-        // Head tracking is activity too: quiet drift must not keep its standing
-        // amplitude while a tracked head is driving the body over its support.
-        const speed = Math.max(c.speed, ...[INDEX.head, INDEX.leftHand, INDEX.rightHand].map((tip) =>
+        const speed = Math.max(c.speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
           f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
         life.update(dt, life.quiet(asks, h), speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);

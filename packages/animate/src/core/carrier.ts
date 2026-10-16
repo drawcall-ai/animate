@@ -64,7 +64,7 @@ export interface ItemOptions {
   name?: string;
   mass?: number;
   centre?: Vector3;
-  /** Solid envelope in item-local metres, for carrying clear of the body; grip positions alone do not bound its volume. */
+  /** Optional solid envelope in item-local metres; otherwise bounds the centre and grips. */
   bounds?: Box3;
   supported?: boolean;
 }
@@ -79,7 +79,7 @@ export class Item extends Carrier {
   wornBy: Wearer | null = null;
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
-  readonly bounds: Box3 | undefined;
+  readonly bounds: Box3;
   /** it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`, `carry`) or wearing it clears this, letting go of it where nothing else holds or wears it (`release`: put down) sets it */
   supported: boolean;
 
@@ -97,7 +97,7 @@ export class Item extends Carrier {
     this.name = name;
     this.mass = mass;
     this.centre = centre.clone();
-    this.bounds = bounds?.clone();
+    this.bounds = bounds?.clone() ?? new Box3().setFromPoints([centre, ...Object.values(grips).map((g) => g.position)]);
     this.supported = supported;
   }
 }

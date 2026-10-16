@@ -151,8 +151,8 @@ export class Posture {
 const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, SQUAT * p.height, lower));
 
 /** Posture needed to bring a shoulder within hand reach. */
-export function handLowering(p: Proportions, request: { ahead: number; lateral: number; height: number; reach: number }): { lower: number; bow: number } {
-  const { ahead, lateral, height, reach } = request;
+export function handLowering(p: Proportions, request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number }): { lower: number; bow: number } {
+  const { ahead, lateral, height, reach, bowLimit } = request;
   const lever = bowLever(p, p.shoulderHeight);
   const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));
   const up = height - p.shoulderHeight + lever;
@@ -161,7 +161,7 @@ export function handLowering(p: Proportions, request: { ahead: number; lateral: 
   // A reachable high forward target also recruits the shoulder. Beyond that arc, rise first;
   // bowing toward an unreachable overhead target lowers the shoulder and chases the deficit.
   const bow = height < p.shoulderHeight || distance < lever + plane
-    ? clamp(Math.atan2(ahead, up) - angle, 0, MOST_BOW) : 0;
+    ? clamp(Math.atan2(ahead, up) - angle, 0, bowLimit) : 0;
   // A sideways approach is closed by steps and trunk turns, rather than a squat.
   const across = Math.min(Math.hypot(ahead - lever * Math.sin(bow), lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - height));
   const below = Math.sqrt(Math.max(0, reach ** 2 - across ** 2));

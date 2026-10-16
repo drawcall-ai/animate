@@ -11,6 +11,7 @@
     "build": "pnpm -F @drawcall/animate build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:seeds": "for offset in 0 1 2 3; do LIFE_SEED_OFFSET=$offset pnpm -r test || exit $?; done",
     "metrics": "pnpm -F examples metrics",
     "bench": "pnpm -F examples bench",
     "bench:browser": "node examples/scripts/bench.mjs",

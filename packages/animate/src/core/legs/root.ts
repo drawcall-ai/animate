@@ -14,7 +14,12 @@ interface State {
 }
 
 /** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, geometry: { height: number; radius: number }, share: number, offset: number): LegStep {
+export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number): LegStep {
+  if (share === 0) {
+    const position = f.prev.position(0).clone();
+    const quaternion = f.prev.rotation(0).clone();
+    return { root: () => ({ position, quaternion }), speed: 0 };
+  }
   const accel = motion.accel * share;
   const speed = motion.speed ?? Infinity;
   const previous: State = {
@@ -41,16 +46,13 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const angle = wrapAngle(bearing - yaw);
     const turn = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, v));
     const desired = Math.sign(angle) * Math.min(turn, Math.abs(angle) / STEP);
-    const turnAccel = (motion.turnAccel ?? motion.accel / geometry.radius) * share;
+    const turnAccel = (motion.turnAccel ?? motion.accel / radius) * share;
     let angular = Math.max(from.angular - turnAccel * STEP, Math.min(from.angular + turnAccel * STEP, desired));
     angular = Math.sign(angle) * Math.min(Math.abs(angular), Math.abs(angle) / STEP);
-    // Restore standing height by 2 mm per tick; support preflight supplies only the reserve needed.
-    // Keep the accepted height in the forecast rather than assume a planted leg can rise later.
-    const height = from.position.y + (ahead === 0 ? Math.max(-0.002, Math.min(0.002, geometry.height - from.position.y)) + offset : 0);
     return {
-      position: from.position.clone().addScaledVector(next, STEP).setY(height),
+      position: from.position.clone().addScaledVector(next, STEP).setY(from.position.y),
       quaternion: new Quaternion().setFromAxisAngle(UP, yaw + angular * STEP),
-      velocity: next, angular, speed: Math.max(v, geometry.radius * Math.abs(angular)),
+      velocity: next, angular, speed: Math.max(v, radius * Math.abs(angular)),
     };
   };
   const at = (time: number): State => {

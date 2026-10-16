@@ -1,4 +1,4 @@
-import { MathUtils, Quaternion, Vector3 } from 'three';
+import { Box3, MathUtils, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { approach, arriving, carried, eyesOnBefore, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, type Behaviour, type Frame, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
@@ -45,7 +45,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
     actors: [{}],
     stage: () => {
       const report = new Report();
-      const box = new Item(new Vector3(0.35, size.y / 2, 2.6 - nearer).applyAxisAngle(UP, around), new Quaternion().setFromAxisAngle(UP, 0.35 + around), { left: grip(size, 1), right: grip(size, -1) });
+      const box = new Item(new Vector3(0.35, size.y / 2, 2.6 - nearer).applyAxisAngle(UP, around), new Quaternion().setFromAxisAngle(UP, 0.35 + around), { left: grip(size, 1), right: grip(size, -1) }, { bounds: new Box3().setFromCenterAndSize(new Vector3(), size) });
       const shelved = new Vector3(SHELF.x, top + size.y / 2 + 0.005, SHELF.z - SHELF.depth / 2 + size.z / 2 + 0.01);
       return {
         world: createWorld(),

@@ -1,17 +1,12 @@
-import { LOAD_RESERVE } from './hands/clearance';
 import { Quaternion, Vector3 } from 'three';
 import { action, type UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { live, type Behaviour, type Live, type Motion, type Placement } from '../core/goal';
 import { clampRotation } from '../core/limits';
-import type { Pose, ReadonlyPose } from '../core/pose';
-import { within } from '../core/gaze';
-import { smoothstep } from '../core/math';
-import { NECK_EXTENSION } from './profile/limits';
-import { gripOf } from './hands/grips';
+import type { Pose } from '../core/pose';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import { lowering, LOWER } from './balance/posture';
-import { INDEX, SIDES } from './bones';
+import { INDEX } from './bones';
 import type { Humanoid } from './humanoid';
 import { forwardOf, wrapAngle, yawOf } from '../core/math';
 
@@ -189,66 +184,3 @@ const _turn = new Quaternion();
 const _swing = new Quaternion();
 const _local = new Quaternion();
 const _parent = new Quaternion();
-
-// Library handling policy: at most 20° of head motion to accommodate a load.
-const CLEARANCE_TURN = 20 * Math.PI / 180;
-// Recalled conservative radius (6% stature).
-const HEAD_RADIUS = 0.06;
-// Inherited unchanged from iteration 12 (818a966); not re-tuned here (s).
-const HEAD_LEAD = 0.1;
-const X = new Vector3(1, 0, 0);
-const _back = new Quaternion();
-const _clear = new Quaternion();
-const _head = new Vector3();
-const _center = new Vector3();
-const _grips = [new Vector3(), new Vector3()];
-const _loads = [{ at: new Vector3(), radius: 0 }, { at: new Vector3(), radius: 0 }];
-
-/** Let the cervical chain clear a held load before it passes the chin; fade continuously above the neck for headwear. */
-export function clearHead<W>(h: Humanoid<W>, pose: ReadonlyPose, goal: Quaternion): void {
-  let count = 0;
-  for (const side of SIDES) {
-    const item = h.holding[side]?.item;
-    if (!item || item.wornBy || (side === 'right' && item === h.holding.left?.item)) continue;
-    const load = _loads[count++];
-    load.at.set(0, 0, 0);
-    let grips = 0;
-    for (const hand of SIDES) {
-      const held = h.holding[hand];
-      if (held?.item !== item) continue;
-      // Only position is needed: no velocity/spin target to build.
-      load.at.add(_grips[grips++].copy(gripOf(item, held.grip).position).applyQuaternion(item.current.quaternion).add(item.current.position));
-    }
-    load.at.divideScalar(grips);
-    load.radius = 0;
-    for (let i = 0; i < grips; i++) load.radius = Math.max(load.radius, _grips[i].distanceTo(load.at));
-    load.at.addScaledVector(item.velocity(_v), HEAD_LEAD);
-  }
-  if (!count || clearance(h, pose, goal, count) >= 0) return;
-  const back = _back.copy(pose.rotation(INDEX.chest)).multiply(_q.setFromAxisAngle(X, -NECK_EXTENSION * Math.PI / 180));
-  let lo = 0, hi = 1;
-  if (clearance(h, pose, back, count) >= 0) for (let pass = 0; pass < 10; pass++) {
-    const middle = (lo + hi) / 2;
-    if (clearance(h, pose, _clear.copy(goal).slerp(back, middle), count) >= 0) hi = middle;
-    else lo = middle;
-  }
-  // Load clearance can borrow a small cervical adjustment; it cannot solve an
-  // obstructed carry by folding the head into the chest. The load path owns the rest.
-  const angle = goal.angleTo(back);
-  goal.slerp(back, Math.min(hi, angle > 0 ? CLEARANCE_TURN / angle : 0));
-}
-
-function clearance<W>(h: Humanoid<W>, pose: ReadonlyPose, rotation: Quaternion, count: number): number {
-  const bones = pose.skeleton.chain(h.gazer.neck);
-  const neck = pose.position(bones[0]);
-  const headRadius = HEAD_RADIUS * h.proportions.height;
-  const turn = within(pose, bones, pose.rotation(INDEX.chest), rotation, _local, _head.copy(neck));
-  _head.add(_center.copy(h.proportions.headCenter).applyQuaternion(turn));
-  let gap = Infinity;
-  for (let i = 0; i < count; i++) {
-    const { at, radius } = _loads[i];
-    gap = Math.min(gap, _head.distanceTo(at) - (radius + headRadius + LOAD_RESERVE * h.proportions.scale) *
-      (1 - smoothstep(neck.y, neck.y + headRadius, at.y)));
-  }
-  return gap;
-}

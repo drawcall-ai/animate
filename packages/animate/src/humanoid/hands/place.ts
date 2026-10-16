@@ -17,7 +17,8 @@ const LIFT = 0.5;
 const RAISE = 1.3;
 // Inherited unchanged from iteration 11 (3cad1b6); never re-tuned (anticipation s).
 export const RAISE_LEAD = 0.9;
-// Introduced in cae3f19: start the approach at two thirds of positive lift rise.
+// Original tuning provenance is unrecorded. Retained against pickup-shelf and stable-morning
+// placement/clearance regressions: travel starts after two thirds of positive rise.
 const APPROACH_RISE = 2 / 3;
 /** Lift close to the body, approach, then transfer onto the destination during the last step.
  * A live destination follows translation and rotation throughout the approach and transfer. */

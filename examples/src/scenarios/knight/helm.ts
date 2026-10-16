@@ -1,7 +1,7 @@
 import { ARM_REACH } from '../../../../packages/animate/src/humanoid/arms';
 import { Quaternion, Vector3 } from 'three';
-import { parallel } from '@pmndrs/timeline';
-import { approach, closeHand, handTo, hold, INDEX, lookAt, onBone, facingAt, reached, reachFor, still, wear, type Behaviour, type Frame, type Holds, type Item, type World } from '@drawcall/animate';
+import { parallel, timePassed } from '@pmndrs/timeline';
+import { approach, closeHand, handTo, hold, INDEX, lookAt, facingAt, reached, reachFor, still, wear, when, type Behaviour, type Frame, type Holds, type Item, type World } from '@drawcall/animate';
 import { reported } from '../../report';
 import { along, at, busy, eyesOn, pause, type Knight } from './knight';
 
@@ -17,9 +17,8 @@ export const HELMED = at(0, 0.15, 0.02, new Quaternion());
  * strap's ends and buckle it under the chin; they let go as the next thing sets off (`flow`).
  */
 export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
-  // (before the face and over the head in a level frame at the head: the eyes on the helmet turn the head, which must not turn where it goes)
+  // A level frame at the head keeps its turn independent of the gaze.
   const level = facingAt(k.h, INDEX.head, { position: new Vector3() });
-  const head = onBone(k.h, INDEX.head, { position: new Vector3(), quaternion: new Quaternion() });
   const down = facingAt(k.h, INDEX.hips, at(0, 0.15, 1.6));
   return function* () {
     // (its grips are toward its front, away from him: he stands back from them)
@@ -35,8 +34,8 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
     for (const side of ['left', 'right'] as const) yield* closeHand(k.h, side, helmet, side)();
     yield* eyesOn(k, () => helmet.current.position, along(k, helmet, [[1.0, at(0, 0.14, 0.3, new Quaternion())], [0.4, still]], { on: level }))();
     yield* along(k, helmet, [[0.7, at(0, 0.42, 0.26)], [0.6, at(0, 0.4, 0.02)]], { on: level })();
-    yield* parallel<F>('race', along(k, helmet, [[1.2, HELMED]], { on: head }), lookAt(k.h.gazer, reported(k.report, 'gaze', (f) => down(f).position)));
     yield* wear(k.h, helmet, INDEX.head, { to: HELMED })();
+    yield* parallel<F>('race', () => when(timePassed(1.2 / k.pace, 'seconds')), lookAt(k.h.gazer, reported(k.report, 'gaze', (f) => down(f).position)));
     // (the chin strap: its ends from by the jaw, buckled under the chin, a tug)
     yield* busy(k, function* () {
       yield* reachFor(k.h, { left: [helmet, 'strapLeft'], right: [helmet, 'strapRight'] })();

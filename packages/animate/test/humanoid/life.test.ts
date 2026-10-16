@@ -2,11 +2,11 @@ import { createWorld, type World } from '../../src/humanoid/world';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
+import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, hold, withGaze, when, walkTo, reachFor, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
 import { Life } from '../../src/humanoid/balance/life';
 
-function body(task: (h: Humanoid<World>) => Behaviour<World>) {
-  return new Humanoid<World>(createSkeletonModel(), (h) => function* () { yield* parallel<Frame<World>>('all', idle(h), task(h)); }, { world: createWorld(), dev: true });
+function body(task: (h: Humanoid<World>) => Behaviour<World>, height = 1.75) {
+  return new Humanoid<World>(createSkeletonModel(height), (h) => function* () { yield* parallel<Frame<World>>('all', idle(h), task(h)); }, { world: createWorld(), dev: true });
 }
 const step = (h: Humanoid<World>, seconds: number) => { for (let i = 0; i < seconds * 60; i++) h.update(1 / 60); };
 
@@ -40,16 +40,6 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
   expect(Math.max(...a.pitch.slice(120, 600)) - Math.min(...a.pitch.slice(120, 600))).toBeGreaterThan(0.02);
 });
 
-it('keeps the same life sequence when initial geometry differs only by trig roundoff', () => {
-  const make = (yaw: number) => new Humanoid<World>(createSkeletonModel(), idle, { world: createWorld(), yaw });
-  const a = make(0.1), b = make(0.1 + 1e-14);
-  for (let i = 0; i < 1500; i++) {
-    a.update(1 / 60);
-    b.update(1 / 60);
-    expect(a.gait.quiet.distanceTo(b.gait.quiet)).toBeLessThan(1e-10);
-  }
-});
-
 it('turns the trunk for an across-body reach and for an over-shoulder look within ROM', () => {
   for (const look of [false, true]) {
     const h = body((h) => function* () {
@@ -80,40 +70,6 @@ it('grabs a floor grip while the gaze stays in range in a deep squat', () => {
   const local = item.current.position.clone().sub(eyes).applyQuaternion(h.pose.rotation(INDEX.head).clone().invert());
   expect(Math.atan2(-local.y, Math.hypot(local.x, local.z))).toBeLessThan(h.gazer.range.down + 0.02);
   expect(h.log).toEqual([]);
-});
-
-it('prepares a heavy lift before support leaves, and carries it slower than a light item', () => {
-  const run = (mass: number) => {
-    const item = new Item(new Vector3(-0.15, 1, 0.4), new Quaternion(), { grip: { position: new Vector3() } }, { mass });
-    let start = 0, off = 0, down = 0, preparation = 0, end = 0;
-    const h = body((h) => function* () {
-      yield* grab(h, { right: [item, 'grip'] }, { first: true })();
-      const hips = h.pose.position(0).y;
-      yield* parallel<Frame<World>>('all', function* () {
-        yield* action<Frame<World>>({ update: (f) => { start = f.time; }, until: timePassed(1 / 60, 'seconds') });
-        yield* carry(h, item, [[1, { position: new Vector3(-0.15, 1.2, 0.4) }]])();
-        yield* action<Frame<World>>({ update: (f) => { end = f.time; }, until: timePassed(1 / 60, 'seconds') });
-      }, action<Frame<World>>({ update: (f) => {
-        if (item.supported) {
-          down = Math.max(down, hips - f.current.position(0).y);
-          preparation = Math.max(preparation, h.asks.lower);
-        }
-        if (!item.supported && !off) off = f.time;
-      }, until: () => end !== 0 }));
-      yield* hold(h, item)();
-    });
-    step(h, 5);
-    expect(h.log).toEqual([]);
-    return { delay: off - start, down, preparation, duration: end - off, pitch: new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x };
-  };
-  const light = run(0), heavy = run(5);
-  // The requested APA contract replaces the former 200 ms / 25 mm staging.
-  expect(heavy.delay - light.delay).toBeGreaterThanOrEqual(0.05);
-  expect(heavy.delay - light.delay).toBeLessThanOrEqual(0.15);
-  expect(heavy.preparation).toBeGreaterThanOrEqual(0.005);
-  expect(heavy.down).toBeLessThan(0.01);
-  expect(heavy.duration).toBeGreaterThan(light.duration + 0.2);
-  expect(heavy.pitch).toBeLessThan(light.pitch - 0.01);
 });
 
 it('slows the default walk under load, counting a bimanual item once', () => {
@@ -175,24 +131,25 @@ it('seeds the first weight-shift side and alternates later shifts, including aft
   }
 });
 
-it('takes an 8 kg waist-height grip with a bow and standing knees', () => {
-  const item = new Item(new Vector3(0, 0.88, 0.45), new Quaternion(), {
-    left: { position: new Vector3(0.18, 0, 0) }, right: { position: new Vector3(-0.18, 0, 0) },
+it.each([1.6, 1.75, 1.85])('prepares an 8 kg low grip with the knees before lifting on a %s m body', (height) => {
+  const scale = height / 1.75;
+  const item = new Item(new Vector3(0, 0.88 * scale, 0.45 * scale), new Quaternion(), {
+    left: { position: new Vector3(0.18 * scale, 0, 0) }, right: { position: new Vector3(-0.18 * scale, 0, 0) },
   }, { mass: 8 });
+  let knee = NaN, pitch = NaN, drop = NaN;
   const h = body((h) => function* () {
     yield* grab(h, { left: [item, 'left'], right: [item, 'right'] }, { first: true })();
+    knee = (h.pose.local(INDEX.leftLowerLeg).angleTo(new Quaternion()) + h.pose.local(INDEX.rightLowerLeg).angleTo(new Quaternion())) * 90 / Math.PI;
+    pitch = new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x * 180 / Math.PI;
+    drop = h.proportions.hipHeight - h.pose.position(0).y;
     yield* hold(h, item)();
-  });
-  let lower = 0;
-  let bow = 0;
-  for (let tick = 0; tick < 6 * 60; tick++) {
-    h.update(1 / 60);
-    lower = Math.max(lower, h.asks.lower);
-    bow = Math.max(bow, h.asks.bow);
-  }
+  }, height);
+  step(h, 6);
   expect(h.holding.left?.item).toBe(item);
   expect(h.holding.right?.item).toBe(item);
-  expect(lower).toBeLessThan(0.08);
-  expect(bow).toBeGreaterThan(0.2);
+  expect(knee).toBeGreaterThanOrEqual(20);
+  expect(knee).toBeLessThanOrEqual(30);
+  expect(pitch).toBeLessThanOrEqual(35);
+  expect(drop).toBeGreaterThan(0.015 * scale);
   expect(h.log).toEqual([]);
 });

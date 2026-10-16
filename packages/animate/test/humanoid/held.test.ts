@@ -1,11 +1,10 @@
-import { clearHead } from '../../src/humanoid/head';
 import { createWorld, type World } from '../../src/humanoid/world';
 import { RAISE_LEAD } from '../../src/humanoid/hands/place';
 import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, grab, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
@@ -263,30 +262,4 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   expect(raisingOnStep).toBeGreaterThan(0);
   expect(done).toBe(true);
   expect(item.current.position.distanceTo(destination.position)).toBeLessThan(0.01);
-});
-
-it('keeps the head clear while a wide held load rises through a downward gaze', () => {
-  const item = new Item(new Vector3(0, 0.88, 0.55), new Quaternion(), {
-    left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
-  }, { mass: 8 });
-  let samples = 0;
-  const h = standing((h) => [function* () {
-    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] })();
-    yield* withGaze(h, () => item.current.position, function* () {
-      yield* carry(h, item, [[0.8, carried(h)], [1.1, { position: new Vector3(0, 1.3, 0.35) }]])();
-      yield* hold(h, item)();
-    })();
-  }]);
-  for (let i = 0; i < 600; i++) {
-    h.update(STEP);
-    if (item.supported) continue;
-    samples++;
-    const goal = h.pose.rotation(INDEX.head).clone();
-    const before = goal.clone();
-    clearHead(h, h.pose, goal);
-    expect(before.angleTo(goal)).toBeLessThanOrEqual(20 * Math.PI / 180 + 1e-12);
-    const head = h.pose.point(INDEX.head, h.proportions.headCenter, new Vector3());
-    expect(head.distanceTo(item.current.position)).toBeGreaterThan(0.22 + 0.06 * h.proportions.height);
-  }
-  expect(samples).toBeGreaterThan(60);
 });

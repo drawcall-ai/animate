@@ -286,7 +286,8 @@ export class Carriage {
     const v2 = v.x * v.x + v.z * v.z;
     const rate = dt > 0 && v2 > TURN_SPEED * TURN_SPEED ? (v.z * (v.x - vx) - v.x * (v.z - vz)) / (v2 * dt) : 0;
     this.turnRate += (rate - this.turnRate) * Math.min(1, TURN_TRACK_RATE * dt);
-    this.walk += (smoothstep(0.08, 0.6, this.speed) - this.walk) * Math.min(1, dt * 6);
+    // Exact decay preserves the 6/s time constant; Euler blending sped up stops at finite dt.
+    this.walk += (smoothstep(0.08, 0.6, this.speed) - this.walk) * (1 - Math.exp(-dt * 6));
     this.bent = Math.max(this.walk, this.bent + ((this.moving ? 1 : 0) - this.bent) * Math.min(1, dt * (this.moving ? BEND_RATE.give : BEND_RATE.straighten)));
   }
 

@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Box3, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
@@ -9,6 +9,7 @@ import { handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { lerp } from '../../core/math';
+import { LOAD_RESERVE } from './clearance';
 import { closeHand, offGrips, gripOf, held, openHand, type Grips, type Holds } from './grips';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
@@ -23,32 +24,73 @@ const REACHING = 4;
  * seeded by what it goes for), its arm kept as it is till then. A hand not there within `limit` s throws.
  */
 export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } = {}): Behaviour<W> {
-  const hands = held(holds);
-  const there = (f: Frame<W>) => hands.every(({ side, item, grip }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], gripOf(item, grip), item));
-  const until = (f: Frame<W>, _: unknown, time: number) => {
-    if (there(f)) return true;
-    if (time > limit) {
-      const off = offGrips(f, hands.map((hand) => ({ ...hand, at: hand.item.toWorld(gripOf(hand.item, hand.grip), _world).position.clone() })));
-      throw new Error(`${off.join('; ')} after ${limit} s`);
-    }
-    return false;
-  };
-  // (each hand gliding to its grip in the time a reach that far takes; both going, the other a
-  // moment after the leading one, a little slower)
-  const lagging = hands.length > 1;
-  const reach = (side: Side, item: Item, grip: string): Behaviour<W> =>
-    function* () {
-      const { delay, slower } = lagging && side !== LEADING ? following(item, { [side]: grip }) : { delay: 0, slower: 0 };
-      const at = item.toWorld(gripOf(item, grip), _world).position;
-      const seconds = reachTime(h.pose.position(INDEX[`${side}Hand`]).distanceTo(at) / h.proportions.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
-      // A target worn on this body must not be chased with that same body's posture.
-      yield* handTo(h, side, gripOf(item, grip), { on: item, until, seconds, after: delay, lead: !item.wornBy })();
-    };
   return function* () {
+    const hands = held(holds), began = h.frame.time;
+    const there = (f: Frame<W>) => hands.every(({ side, item, grip }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], gripOf(item, grip), item));
+    const until = (ready: (f: Frame<W>) => boolean) => (f: Frame<W>) => {
+      if (ready(f)) return true;
+      if (f.time - began > limit) {
+        const off = offGrips(f, hands.map((hand) => ({ ...hand, at: hand.item.toWorld(gripOf(hand.item, hand.grip), _world).position.clone() })));
+        throw new Error(`${off.join('; ')} after ${limit} s`);
+      }
+      return false;
+    };
+    const plan = hands.map(({ side, item, grip }) => {
+      const goal = gripOf(item, grip);
+      const from = h.pose.position(INDEX[`${side}Hand`]).clone().sub(item.current.position).applyQuaternion(item.current.quaternion.clone().invert());
+      const route = outside(item, goal.position, from, LOAD_RESERVE * h.proportions.scale);
+      const points = route.length ? route : [goal.position];
+      let was = from;
+      const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
+      const distance = lengths.reduce((sum, length) => sum + length, 0);
+      const at = item.toWorld(goal, _world).position;
+      const { delay, slower } = hands.length > 1 && side !== LEADING ? following(item, { [side]: grip }) : { delay: 0, slower: 0 };
+      const seconds = reachTime(distance / h.proportions.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
+      return { side, item, goal, points, lengths, distance, route, delay, seconds };
+    });
+    const arrived = until((f) => plan.every(({ side, item, points }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], { position: points[points.length - 1] }, item)));
+    const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
     for (const { side } of hands) yield* openHand(h, side)();
-    yield* parallel<Frame<W>>('all', ...hands.map(({ side, item, grip }) => reach(side, item, grip)));
+    yield* parallel<Frame<W>>('all', ...plan.map((p) => function* () {
+      for (const [i, position] of p.points.entries()) {
+        const began = h.frame.time;
+        const seconds = p.distance > 0 ? p.seconds * p.lengths[i] / p.distance : p.seconds;
+        const after = i === 0 ? Math.max(p.delay, finish - p.seconds) : 0;
+        const goal = p.route.length ? { position } : p.goal;
+        const ready = p.route.length
+          ? i === p.points.length - 1 ? arrived : until((f) => f.time >= began + seconds + after)
+          : until(there);
+        yield* handTo(h, p.side, goal, { on: p.item, lead: !p.item.wornBy, seconds, after, until: ready })();
+      }
+    }));
+    // Both hands reach the outside staging points before closing on the actual grips.
+    if (plan.some(({ route }) => route.length)) yield* parallel<Frame<W>>('all', ...plan.map(({ side, item, goal }) => handTo(h, side, goal, { on: item, lead: !item.wornBy, until: until(there) })));
     for (const { side, item, grip } of hands) yield* closeHand(h, side, item, grip)();
   };
+}
+
+/** Route around the envelope to its nearest grip face; the final closure is separate. */
+function outside(item: Item, grip: Vector3, from: Vector3, reserve: number): Vector3[] {
+  const bounds = item.bounds, size = bounds.getSize(new Vector3());
+  if (item.wornBy || size.x * size.y * size.z === 0) return [];
+  const box = bounds.clone().expandByScalar(reserve);
+  const { axis, end } = face(bounds, grip), sign = end ? 1 : -1;
+  const edge = (end ? box.max : box.min).getComponent(axis);
+  const outer = grip.clone().setComponent(axis, sign > 0 ? Math.max(grip.getComponent(axis), edge) : Math.min(grip.getComponent(axis), edge));
+  // Keep the same reserve toward the starting height, rather than lowering to grip
+  // height before closure; the outside wrist still has to settle within REACHED.
+  if (axis !== 1) outer.y = grip.y + Math.max(-reserve, Math.min(reserve, from.y - grip.y));
+  const corner = from.clone().setComponent(axis, outer.getComponent(axis));
+  return [corner, outer];
+}
+
+function face(bounds: Box3, point: Vector3) {
+  let axis = 0, end = 0, gap = Infinity;
+  for (let i = 0; i < 3; i++) for (const side of [0, 1]) {
+    const distance = Math.abs(point.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
+    if (distance < gap) { gap = distance; axis = i; end = side; }
+  }
+  return { axis, end };
 }
 
 /**

@@ -49,6 +49,12 @@ export interface LegStep {
   gait?: LegGait;
 }
 
+interface LegMotion {
+  speed: number;
+  walkers: Walker[];
+  gait: LegGait;
+}
+
 /** Stateful leg solver: write a root then `update`, or let `toward` preflight and move it. Ground is y=0. */
 export class Legs {
   private readonly standingHeight: number;
@@ -81,46 +87,50 @@ export class Legs {
     if (!(motion.accel > 0 && Number.isFinite(motion.accel)) || (motion.speed !== undefined && !(motion.speed >= 0 && Number.isFinite(motion.speed)))) throw new Error('root motion needs finite positive acceleration and nonnegative speed');
     if (![goal.position.x, goal.position.y, goal.position.z, ...(goal.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error('root goal must be finite');
     if ([motion.turnAccel, motion.turnSpeed].some((value) => value !== undefined && !(value >= 0 && Number.isFinite(value)))) throw new Error('root turn motion must be finite and nonnegative');
-    const geometry = {
-      height: this.standingHeight,
-      radius: Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z))),
-    };
+    const radius = Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z)));
+    const height = f.prev.position(0).y;
+    // Restore standing height by at most 2 mm per tick; preflight supplies the reserve.
+    const rise = Math.max(-0.002, Math.min(0.002, this.standingHeight - height));
     let offset = 0;
     let share = 1;
-    const forecast = () => rootPlan(f, goal.position, goal.velocity ?? new Vector3(), motion, this.gait, geometry, share, offset);
-    let step: LegStep;
+    let step: LegStep | undefined;
+    let first = 0;
     const supported = (plan: LegStep) => {
-      if (!this.supports(f, plan)) return false;
-      const { walkers } = this.motion(f, plan);
-      return this.states.every((state, i) => {
-        const walker = walkers[i];
+      const predicted = this.motion(f, plan);
+      for (let k = 0; k < this.states.length; k++) {
+        const i = (first + k) % this.states.length, state = this.states[i];
+        const walker = predicted.walkers[i];
         const left = (state.footfall - walker.phase) / walker.stride.frequency;
-        return state.planted || left > HORIZON || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold);
-      });
+        if (this.supportsLeg(f, predicted, i) && (state.planted || left > HORIZON || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold))) continue;
+        // The failed constraint is most likely to reject the next nearby height too.
+        first = i;
+        return false;
+      }
+      return true;
     };
-    // Tuned bounded search: ±12 cm in 2 mm increments; 24 geometric travel
-    // reductions cover shares down to ~0.0013. Every candidate meets the same support checks.
+    // Inherited search: ±12 cm in 2 mm increments; 24 travel shares reach
+    // ~0.0013, then try waiting with the same height reserve.
+    // Every candidate meets the same support checks.
     let found = false;
-    for (let retry = 0; retry < 24 && !found; retry++) {
+    for (let retry = 0; retry <= 24 && !found; retry++) {
+      // Height does not change pursuit or speed: integrate once for this travel share.
+      const plan = rootPlan(f, goal.position, goal.velocity ?? new Vector3(), motion, this.gait, radius, share);
+      const position = new Vector3(), adjustment = share === 0 ? 0 : rise;
+      step = { speed: plan.speed, root: (time) => {
+        const at = plan.root(time);
+        return { position: position.copy(at.position).setY(height + (adjustment + offset)), quaternion: at.quaternion };
+      } };
       for (let k = 0; k <= 60 && !found; k++) {
         for (const direction of [1, -1]) {
           offset = direction * k * 0.002;
-          step = forecast();
           if (!supported(step)) continue;
           found = true;
           break;
         }
       }
-      if (!found) share *= 0.75;
+      if (!found) share = retry === 23 ? 0 : share * 0.75;
     }
-    step = forecast();
-    if (!found) {
-      // A pursuit may be unsupported while standing remains possible. Wait on the same checks.
-      const position = f.prev.position(0).clone();
-      const quaternion = f.prev.rotation(0).clone();
-      step = { root: () => ({ position, quaternion }), speed: 0 };
-      if (!supported(step)) throw new Error('legs cannot support root follower');
-    }
+    if (!found || !step) throw new Error('legs cannot support root follower');
     const at = step.root(f.time);
     f.current.setRoot(at.position);
     f.current.setLocal(0, at.quaternion);
@@ -174,20 +184,23 @@ export class Legs {
    * it does not certify existing contacts, swing clearance or balance.
    */
   supports(f: Frame, step: LegStep): boolean {
-    const { speed, walkers, gait } = this.motion(f, step);
-    return this.states.every((state, i) => {
-      if (!state.planted) return true;
-      const walker = walkers[i];
-      if (walker.phase - state.footfall < walker.stride.duty && this.limbs[i].supports(f.current, state, walker)) return true;
-      const next = before(offsetAt(gait, speed, i), walker.phase) + 1;
-      const { landing, contact } = this.landing(walker, state, next, i);
-      if (this.limbs[i].landingSupported(f.current, walker, landing, contact)) return true;
-      contact.position.copy(this.limbs[i].standingAt(walker, landing, contact.position.y));
-      return this.limbs[i].landingSupported(f.current, walker, landing, contact);
-    });
+    const predicted = this.motion(f, step);
+    return this.states.every((_, i) => this.supportsLeg(f, predicted, i));
   }
 
-  private motion(f: Frame, step: LegStep) {
+  private supportsLeg(f: Frame, { speed, walkers, gait }: LegMotion, i: number): boolean {
+    const state = this.states[i];
+    if (!state.planted) return true;
+    const walker = walkers[i], limb = this.limbs[i];
+    if (walker.phase - state.footfall < walker.stride.duty && limb.supports(f.current, state, walker)) return true;
+    const next = before(offsetAt(gait, speed, i), walker.phase) + 1;
+    const { landing, contact } = this.landing(walker, state, next, i);
+    if (limb.landingSupported(f.current, walker, landing, contact)) return true;
+    contact.position.copy(limb.standingAt(walker, landing, contact.position.y));
+    return limb.landingSupported(f.current, walker, landing, contact);
+  }
+
+  private motion(f: Frame, step: LegStep): LegMotion {
     const gait = step.gait ?? this.gait;
     if (gait !== this.gait) checkGait(gait, this.chains.length);
     const input = step.speed;
