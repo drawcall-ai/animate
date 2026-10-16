@@ -93,7 +93,7 @@ const HEAD = HORSE_SKELETON.index('head');
 const start = new Pose(HORSE_SKELETON);
 start.setRoot(new Vector3(1.2, start.position(0).y, 3));
 // Tied up until the rope is taken; then follow a rope's length behind the groom.
-const horse = new Body(HORSE_SKELETON, horseFollow(start, (f) => {
+const horse: Body = new Body(HORSE_SKELETON, horseFollow(start, (f) => {
   if (rope.supported) return { position: start.position(0) };
   const at = groom.pose.position(0);
   const back = f.prev.position(0).clone().sub(at).setY(0);
