@@ -223,26 +223,26 @@ export function clearHead<W>(h: Humanoid<W>, pose: ReadonlyPose, goal: Quaternio
     for (let i = 0; i < grips; i++) load.radius = Math.max(load.radius, _grips[i].distanceTo(load.at));
     load.at.addScaledVector(item.velocity(_v), HEAD_LEAD);
   }
-  if (!count || clearance(h, pose, goal, count) >= 0) return;
+  const loads = _loads.slice(0, count);
+  if (!count || clearance(h, pose, goal, loads) >= 0) return;
   const back = _back.copy(pose.rotation(INDEX.chest)).multiply(_q.setFromAxisAngle(X, -NECK_EXTENSION * Math.PI / 180));
   let lo = 0, hi = 1;
-  if (clearance(h, pose, back, count) >= 0) for (let pass = 0; pass < 10; pass++) {
+  if (clearance(h, pose, back, loads) >= 0) for (let pass = 0; pass < 10; pass++) {
     const middle = (lo + hi) / 2;
-    if (clearance(h, pose, _clear.copy(goal).slerp(back, middle), count) >= 0) hi = middle;
+    if (clearance(h, pose, _clear.copy(goal).slerp(back, middle), loads) >= 0) hi = middle;
     else lo = middle;
   }
   goal.slerp(back, hi);
 }
 
-function clearance<W>(h: Humanoid<W>, pose: ReadonlyPose, rotation: Quaternion, count: number): number {
+function clearance<W>(h: Humanoid<W>, pose: ReadonlyPose, rotation: Quaternion, loads: readonly { at: Vector3; radius: number }[]): number {
   const bones = pose.skeleton.chain(h.gazer.neck);
   const neck = pose.position(bones[0]);
   const headRadius = HEAD_RADIUS * h.proportions.height;
   const turn = within(pose, bones, pose.rotation(INDEX.chest), rotation, _local, _head.copy(neck));
   _head.add(_center.copy(h.proportions.headCenter).applyQuaternion(turn));
   let gap = Infinity;
-  for (let i = 0; i < count; i++) {
-    const { at, radius } = _loads[i];
+  for (const { at, radius } of loads) {
     gap = Math.min(gap, _head.distanceTo(at) - (radius + headRadius + HEAD_RESERVE * h.proportions.scale) *
       (1 - smoothstep(neck.y, neck.y + headRadius, at.y)));
   }

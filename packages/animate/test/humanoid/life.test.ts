@@ -1,13 +1,14 @@
+import { createWorld, type World } from '../../src/humanoid/world';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
 import { Life } from '../../src/humanoid/balance/life';
 
-function body(task: (h: Humanoid) => Behaviour) {
-  return new Humanoid(createSkeletonModel(), (h) => function* () { yield* parallel<Frame>('all', idle(h), task(h)); }, { dev: true });
+function body(task: (h: Humanoid<World>) => Behaviour<World>) {
+  return new Humanoid<World>(createSkeletonModel(), (h) => function* () { yield* parallel<Frame<World>>('all', idle(h), task(h)); }, { world: createWorld(), dev: true });
 }
-const step = (h: Humanoid, seconds: number) => { for (let i = 0; i < seconds * 60; i++) h.update(1 / 60); };
+const step = (h: Humanoid<World>, seconds: number) => { for (let i = 0; i < seconds * 60; i++) h.update(1 / 60); };
 
 it('stands alive, deterministically: breathing, millimetre sway and a weight shift within 25 s', () => {
   const sample = () => {
@@ -42,7 +43,7 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
 it('turns the trunk for an across-body reach and for an over-shoulder look within ROM', () => {
   for (const look of [false, true]) {
     const h = body((h) => function* () {
-      yield* parallel<Frame>('race', look ? lookAt(h.gazer, new Vector3(-2, 1.4, -1)) : handTo(h, 'right', { position: new Vector3(0.45, 1.2, 0.25) }), when(timePassed(3, 'seconds')));
+      yield* parallel<Frame<World>>('race', look ? lookAt(h.gazer, new Vector3(-2, 1.4, -1)) : handTo(h, 'right', { position: new Vector3(0.45, 1.2, 0.25) }), when(timePassed(3, 'seconds')));
     });
     step(h, 3);
     const turn = new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').y;
@@ -78,11 +79,11 @@ it('prepares a heavy lift before support leaves, and carries it slower than a li
     const h = body((h) => function* () {
       yield* grab(h, { right: [item, 'grip'] }, { first: true })();
       const hips = h.pose.position(0).y;
-      yield* parallel<Frame>('all', function* () {
-        yield* action<Frame>({ update: (f) => { start = f.time; }, until: timePassed(1 / 60, 'seconds') });
+      yield* parallel<Frame<World>>('all', function* () {
+        yield* action<Frame<World>>({ update: (f) => { start = f.time; }, until: timePassed(1 / 60, 'seconds') });
         yield* carry(h, item, [[1, { position: new Vector3(-0.15, 1.2, 0.4) }]])();
-        yield* action<Frame>({ update: (f) => { end = f.time; }, until: timePassed(1 / 60, 'seconds') });
-      }, action<Frame>({ update: (f) => {
+        yield* action<Frame<World>>({ update: (f) => { end = f.time; }, until: timePassed(1 / 60, 'seconds') });
+      }, action<Frame<World>>({ update: (f) => {
         if (item.supported) {
           down = Math.max(down, hips - f.current.position(0).y);
           preparation = Math.max(preparation, h.asks.lower);
@@ -113,7 +114,7 @@ it('slows the default walk under load, counting a bimanual item once', () => {
     let speed = 0;
     const h = body((h) => function* () {
       yield* reachFor(h, both ? { left: [item, 'left'], right: [item, 'right'] } : { right: [item, 'right'] })();
-      yield* parallel<Frame>('race', hold(h, item), walkTo(h, { to: new Vector3(0, 0, 3) }), action<Frame>({
+      yield* parallel<Frame<World>>('race', hold(h, item), walkTo(h, { to: new Vector3(0, 0, 3) }), action<Frame<World>>({
         update: () => { if (h.asks.go) speed = h.asks.go.speed; }, until: timePassed(0.2, 'seconds'),
       }));
       yield* hold(h, item)();
@@ -133,7 +134,7 @@ it('keeps sway and breathing after a loaded walk, without spontaneous weight shi
   const h = body((h) => function* () {
     yield* reachFor(h, { right: [item, 'grip'] })();
     const carrying = hold(h, item, { to: facingAt(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }) });
-    yield* parallel<Frame>('race', carrying, walkTo(h, { to: new Vector3(0, 0, 2) }));
+    yield* parallel<Frame<World>>('race', carrying, walkTo(h, { to: new Vector3(0, 0, 2) }));
     yield* carrying();
   });
   step(h, 8);

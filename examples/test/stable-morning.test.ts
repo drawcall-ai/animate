@@ -16,13 +16,14 @@ const BODY_RADIUS = 0.06;
 const LEG_RADIUS = 0.038;
 // Read from the horse leg proxy meshes, metres.
 const HORSE_LEG_RADIUS = 0.06;
-// Tuned catch-up window (s) and shoulder station bounds (m).
-const SHOULDER_MIN = 0.45;
-const SHOULDER_MAX = 0.75;
+// Handler pelvis 0.5 m ahead of the moving shoulder girdle, ±15 cm.
+const SHOULDER_MIN = 0.35;
+const SHOULDER_MAX = 0.65;
 const HUMAN_LEGS = [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']];
 const HORSE_LEGS = [
   ['Femur', 'Gaskin'], ['Gaskin', 'HindCannon'],
-  ['Scapula', 'Humerus'], ['Humerus', 'Forearm'],
+  ['Scapula', 'Humerus'], ['Humerus', 'Forearm'], ['Forearm', 'ForeCannon'],
+  ['ForeCannon', 'ForePastern'], ['ForePastern', 'ForeHoof'],
 ];
 // Read from the carry/raise split: observe all walking before the final approach.
 // Read from the horse neck/head proxy cylinders and square tie-rail sections, metres.
@@ -35,6 +36,8 @@ const RAIL = [
 ];
 const MOVING = 0.15;
 const AT_HORSE = 0.7;
+// One centimetre of item translation marks lift onset, above contact jitter.
+const LIFT_RISE = 0.01;
 
 it('leads upright with the near hand forward, slack outside, and halts beyond the gate', () => {
   const sim = new Simulation(stableMorning(), undefined, true);
@@ -54,6 +57,9 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
   let nearMin = Infinity, nearMax = 0, postGap = Infinity;
   let settingOff = Infinity;
   let untieLegGap = Infinity;
+  let leadingLegGap = Infinity;
+  let gazeAt = Infinity, gripAt = Infinity, liftAt = Infinity;
+  let gripHeight = NaN;
   while (sim.t < sim.scenario.duration) {
     sim.step();
     const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
@@ -66,6 +72,13 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
       }
     }
     const h = sim.actors[0];
+    if (sim.stage.report.at(sim.t).has('gaze')) gazeAt = Math.min(gazeAt, sim.t);
+    const load = h.holding.left?.item;
+    if (load?.name === 'saddle') {
+      if (Number.isNaN(gripHeight)) gripHeight = load.current.position.y;
+      gripAt = Math.min(gripAt, sim.t);
+      if (load.current.position.y > gripHeight + LIFT_RISE) liftAt = Math.min(liftAt, sim.t);
+    }
     if (h.gait.velocity.length() > 0.01) settingOff = Math.min(settingOff, sim.t);
     const horse = sim.stage.bodies?.[0];
     if (!horse) throw new Error('missing horse');
@@ -76,13 +89,15 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
       const foot = h.pose.position(h.pose.skeleton.index(`${side}Foot`)).clone().sub(h.pose.position(0));
       expect((foot.x * Math.cos(h.gait.facing) - foot.z * Math.sin(h.gait.facing)) * (s === 0 ? 1 : -1)).toBeGreaterThan(0);
     }
-    if (h.frame.beats.has('untie the rail knot')) {
+    if (h.frame.beats.has('untie the rail knot') || h.frame.beats.has('lead out through the gate')) {
       for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
         const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
         const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));
         for (const s of ['left', 'right']) for (const [c, d] of HORSE_LEGS) {
-          untieLegGap = Math.min(untieLegGap, segmentDistance(from, end,
-            horse.pose.position(horse.pose.skeleton.index(`${s}${c}`)), horse.pose.position(horse.pose.skeleton.index(`${s}${d}`))) - LEG_RADIUS * h.proportions.height - HORSE_LEG_RADIUS);
+          const gap = segmentDistance(from, end,
+            horse.pose.position(horse.pose.skeleton.index(`${s}${c}`)), horse.pose.position(horse.pose.skeleton.index(`${s}${d}`))) - LEG_RADIUS * h.proportions.height - HORSE_LEG_RADIUS;
+          if (h.frame.beats.has('untie the rail knot')) untieLegGap = Math.min(untieLegGap, gap);
+          else leadingLegGap = Math.min(leadingLegGap, gap);
         }
       }
     }
@@ -137,9 +152,10 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
       const end = (sign: number) => new Vector3(0, sign * prop.length / 2, 0).applyQuaternion(turn).add(prop.position);
       ropeGap = Math.min(ropeGap, segmentDistance(end(-1), end(1), at('hips'), at('chest')) - BODY_RADIUS * h.proportions.height - prop.radius);
     }
-    // The handler stays beside the shoulder once the horse has caught up.
+    // Beside the throatlatch, ahead of the moving shoulder and its foreleg swing.
     if (sim.t > knot + 5) {
-      const ahead = p.position(0).z - horse.pose.position(0).z;
+      const shoulder = ['left', 'right'].reduce((sum, side) => sum + horse.pose.position(horse.pose.skeleton.index(`${side}Scapula`)).z, 0) / 2;
+      const ahead = p.position(0).z - shoulder;
       expect(ahead).toBeGreaterThan(SHOULDER_MIN);
       expect(ahead).toBeLessThan(SHOULDER_MAX);
     }
@@ -149,11 +165,14 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
     roll.push(new Euler().setFromQuaternion(horse.pose.local(horse.pose.skeleton.index('pelvis')), 'YXZ').z);
   }
   expect(settingOff).toBeLessThan(0.3);
+  expect(gazeAt).toBeLessThan(settingOff);
+  expect(liftAt - gripAt).toBeLessThan(0.7);
   expect(nearMin).toBeGreaterThan(0.15);
   expect(nearMax).toBeLessThan(0.3);
   expect(Number.isFinite(postGap)).toBe(true);
   expect(postGap).toBeGreaterThan(0.02);
   expect(untieLegGap).toBeGreaterThan(0);
+  expect(leadingLegGap).toBeGreaterThan(0.02);
   expect(firstStep - knot).toBeGreaterThanOrEqual(0);
   expect(firstStep - knot).toBeLessThan(0.5);
   expect(horseStep).toBeGreaterThanOrEqual(firstStep);

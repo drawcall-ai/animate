@@ -1,3 +1,4 @@
+import { createWorld, type World } from '../../src/humanoid/world';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
@@ -11,24 +12,24 @@ import { standing } from './fixtures';
 const box = (at: Vector3) => new Item(at, new Quaternion(), { left: { position: new Vector3(0.15, 0, 0) }, right: { position: new Vector3(-0.15, 0, 0) } });
 
 /** hand `side` in the hips' frame: where it is moved to, not carried along by the body */
-const onHips = (h: Humanoid, side: Side) => h.pose.position(INDEX[`${side}Hand`]).clone().sub(h.pose.position(INDEX.hips)).applyQuaternion(h.pose.rotation(INDEX.hips).clone().invert());
+const onHips = (h: Humanoid<World>, side: Side) => h.pose.position(INDEX[`${side}Hand`]).clone().sub(h.pose.position(INDEX.hips)).applyQuaternion(h.pose.rotation(INDEX.hips).clone().invert());
 
 /** each hand's speed (m/s) at each sub-step of `behaviour` (over the base, the body standing), from when `mark` is called in it */
-function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds: number): Record<Side, number[]> {
+function speeds(behaviour: (h: Humanoid<World>, mark: () => void) => Behaviour<World>, seconds: number): Record<Side, number[]> {
   const v: Record<Side, number[]> = { left: [], right: [] };
   let marked = false;
-  const h = new Humanoid(createSkeletonModel(), (h) =>
+  const h = new Humanoid<World>(createSkeletonModel(), (h) =>
     function* () {
       yield* when(() => true);
       const was = { left: new Vector3(), right: new Vector3() };
-      yield* parallel<Frame>(
+      yield* parallel<Frame<World>>(
         'all',
         idle(h),
         behaviour(h, () => {
           marked = true;
           for (const side of ['left', 'right'] as const) was[side].copy(h.pose.position(INDEX[`${side}Hand`]));
         }),
-        action<Frame>({
+        action<Frame<World>>({
           update: () => {
             if (!marked) return;
             for (const side of ['left', 'right'] as const) {
@@ -39,7 +40,7 @@ function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds
           },
         }),
       );
-    },
+    }, { world: createWorld() },
   );
   for (let t = 0; t < seconds; t += 1 / 60) h.update(1 / 60);
   return v;
@@ -81,17 +82,17 @@ describe('grab', () => {
   it('anticipates: the eyes and then the hands go to what it takes before the body has come up to it', () => {
     const load = box(new Vector3(0.1, 0.9, 2.2));
     const at = { eyes: NaN, hands: NaN, stood: NaN };
-    const h = new Humanoid(createSkeletonModel(), (h) =>
+    const h = new Humanoid<World>(createSkeletonModel(), (h) =>
       function* () {
         yield* when(() => true);
         const was = new Vector3();
-        yield* parallel<Frame>(
+        yield* parallel<Frame<World>>(
           'race',
           idle(h),
           function* () {
             yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { first: true })();
           },
-          action<Frame>({
+          action<Frame<World>>({
             update: (f) => {
               const middle = load.current.position;
               if (Number.isNaN(at.eyes) && gazeOff(h.gazer, f.prev, middle) < 0.2) at.eyes = f.time;
@@ -102,7 +103,7 @@ describe('grab', () => {
             },
           }),
         );
-      },
+      }, { world: createWorld() },
     );
     for (let t = 0; t < 8; t += 1 / 60) h.update(1 / 60);
     expect(h.holding.right?.item).toBe(load);
@@ -119,9 +120,9 @@ describe('grab low', () => {
     const at = { arrived: NaN, down: NaN };
     let walked = false;
     let standing = NaN;
-    const h = new Humanoid(createSkeletonModel(), (h) =>
+    const h = new Humanoid<World>(createSkeletonModel(), (h) =>
       function* () {
-        yield* parallel<Frame>('race', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }, { first: true }), action<Frame>({
+        yield* parallel<Frame<World>>('race', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }, { first: true }), action<Frame<World>>({
           update: (f) => {
             const hips = f.prev.position(INDEX.hips).y;
             standing = Number.isNaN(standing) ? hips : standing;
@@ -131,7 +132,7 @@ describe('grab low', () => {
             if (Number.isNaN(at.down) && hips < standing - 0.1) at.down = f.time;
           },
         }));
-      },
+      }, { world: createWorld() },
     );
     for (let t = 0; t < 8; t += 1 / 60) h.update(1 / 60);
     expect(h.holding.right?.item).toBe(load);
@@ -144,18 +145,18 @@ describe('release', () => {
   it('follows through: a hand let go of something moving carries on its way, then off the item', () => {
     const load = box(new Vector3(0, 1.0, 0.4));
     const at = { let: new Vector3(), after: new Vector3() };
-    const h = new Humanoid(createSkeletonModel(), (h) =>
+    const h = new Humanoid<World>(createSkeletonModel(), (h) =>
       function* () {
         yield* when(() => true);
-        yield* parallel<Frame>('race', idle(h), function* () {
+        yield* parallel<Frame<World>>('race', idle(h), function* () {
           yield* reachFor(h, { right: [load, 'right'] })();
           // (swept to the right, let go of halfway)
-          yield* parallel<Frame>('race', carry(h, load, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]), when(timePassed(0.4, 'seconds')));
+          yield* parallel<Frame<World>>('race', carry(h, load, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]), when(timePassed(0.4, 'seconds')));
           at.let.copy(h.pose.position(INDEX.rightHand));
-          yield* parallel<Frame>('race', release(h, ['right']), when(timePassed(0.4, 'seconds')));
+          yield* parallel<Frame<World>>('race', release(h, ['right']), when(timePassed(0.4, 'seconds')));
           at.after.copy(h.pose.position(INDEX.rightHand));
         });
-      },
+      }, { world: createWorld() },
     );
     for (let t = 0; t < 4; t += 1 / 60) h.update(1 / 60);
     // (0.4 s after letting go, well on to the right, where it was carrying the box: not just coasting to a stop)
@@ -197,7 +198,7 @@ describe('reach onset', () => {
           function* () {
             yield* when(timePassed(1, 'seconds'));
             mark();
-            yield* parallel<Frame>('race', reachFor(h, { right: [load, 'right'] }), action<Frame>({ update: () => void off.push(h.pose.position(INDEX.rightHand).distanceTo(load.toWorld(load.grips.right, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)) }));
+            yield* parallel<Frame<World>>('race', reachFor(h, { right: [load, 'right'] }), action<Frame<World>>({ update: () => void off.push(h.pose.position(INDEX.rightHand).distanceTo(load.toWorld(load.grips.right, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)) }));
           },
         2.5,
       );
@@ -233,7 +234,7 @@ describe('two hands', () => {
       (h, mark) =>
         function* () {
           // (both hands held out before them, then gone for the box from there)
-          yield* parallel<Frame>('race', handTo(h, 'left', out('left'), { lead: false }), handTo(h, 'right', out('right'), { lead: false }), when(timePassed(1.5, 'seconds')));
+          yield* parallel<Frame<World>>('race', handTo(h, 'left', out('left'), { lead: false }), handTo(h, 'right', out('right'), { lead: false }), when(timePassed(1.5, 'seconds')));
           mark();
           yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
         },
@@ -254,7 +255,7 @@ describe('two hands', () => {
       (h) =>
         function* () {
           yield* reachFor(h, { left: [a, 'right'], right: [b, 'left'] })();
-          yield* parallel<Frame>('race', parallel('all', carry(h, a, legs(0.35)), carry(h, b, legs(-0.35))), action<Frame>({
+          yield* parallel<Frame<World>>('race', parallel('all', carry(h, a, legs(0.35)), carry(h, b, legs(-0.35))), action<Frame<World>>({
             update: () => {
               v.left.push(a.current.position.distanceTo(a.prev.position) * 60);
               v.right.push(b.current.position.distanceTo(b.prev.position) * 60);

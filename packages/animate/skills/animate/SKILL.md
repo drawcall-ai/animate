@@ -24,8 +24,9 @@ const rope = new Item(new Vector3(0.25, 1.12, 3.6), new Quaternion(), { knot: { 
 const onBack = { position: new Vector3(0, 0.23, 0), quaternion: across }; // in the horse's trunk frame
 const gate = new Vector3(0.6, 0, 12);
 
+const world = createWorld();
 const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
-  yield* parallel<Frame>('all', idle(h), function* () {
+  yield* parallel<Frame<World>>('all', idle(h), function* () {
     // walks up; eyes, hands and bow set off before it stands there
     yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
     yield* named('saddle the horse', function* () {
@@ -37,13 +38,21 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
       yield* grab(h, { right: [rope, 'knot'] })();
       const near = facingAt(h, h.pose.skeleton.index('chest'), { position: new Vector3(-0.28, 0.04, 0.55) });
       const slack = facingAt(h, 0, { position: new Vector3(0.3, 0.1, 0.25) });
-      yield* parallel<Frame>('race', hold(h, rope, { to: near }), handTo(h, 'left', slack, { lead: false }), function* () {
+      yield* parallel<Frame<World>>('race', hold(h, rope, { to: near }), handTo(h, 'left', slack, { lead: false }), function* () {
         yield* walkTo(h, { to: gate })();
         yield* when(timePassed(1.5, 'seconds')); // keep both hands in the lead pose through the halt
       });
     })();
   });
-}, { position: { x: -1.5, z: 0 } });
+}, { world, position: { x: -1.5, z: 0 } });
+const bodies = [groom.snapshot(), new Pose(horse.pose.skeleton).copy(horse.pose)];
+world.bodies = bodies;
+function update(dt: number) {
+  bodies[0].copy(groom.pose);
+  bodies[1].copy(horse.pose);
+  groom.update(dt);
+  horse.update(dt);
+}
 ```
 
 ## Anticipation: start the next thing before this one ends
@@ -84,7 +93,7 @@ What you author: the scene, the order of beats, the places on props a course pas
 
 ## Other bodies
 
-A `Body` is any skeleton with a behaviour. A horse ships with the package: `horseFollow` moves it toward a floor goal with its pelvis, legs and head working together. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `on` place things on it as it moves. Update every body each frame.
+A `Body` is any skeleton with a behaviour. A horse ships with the package: `horseFollow` moves it toward a floor goal with its pelvis, legs and head working together. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `on` place things on it as it moves. Include other bodies, such as the horse, in `world.bodies` so approaches can choose stands clear of their low segments. Before updating any body, copy every body's last final pose into its entry; then update every body each frame.
 
 ```ts
 const HEAD = HORSE_SKELETON.index('head');

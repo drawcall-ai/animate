@@ -52,3 +52,10 @@ export function yawOf(q: Readonly<Quaternion>): number {
   const left = _left.set(1, 0, 0).applyQuaternion(q);
   return Math.atan2(-left.z, left.x);
 }
+
+/** Distance on the floor plane from `point` to segment `a`–`b`. */
+export function pointSegmentDistance(point: Readonly<Vector3>, a: Readonly<Vector3>, b: Readonly<Vector3>): number {
+  const x = b.x - a.x, z = b.z - a.z;
+  const t = clamp(((point.x - a.x) * x + (point.z - a.z) * z) / (x * x + z * z || 1), 0, 1);
+  return Math.hypot(point.x - a.x - t * x, point.z - a.z - t * z);
+}

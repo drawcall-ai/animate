@@ -138,13 +138,12 @@ export function horseCarriage(f: Frame, legs: Legs, avoid?: Readonly<Vector3>): 
 
 // Retuned here: avoidance begins at 0.6 m instead of 0.8 m so a clear handler can keep the short lead.
 // Turn, range and rate are inherited unchanged from iteration 2 (8b2ac67); never re-tuned.
-const AVERT = { distance: 0.6, turn: 0.5, range: 0.3, rate: 4 };
+const AVERT = { distance: 0.8, turn: 0.5, range: 0.3, rate: 4 };
 
 const walkBlend = (f: Frame) => Math.min(1, f.prev.position(0).distanceTo(f.prev2.position(0)) / (f.dt * HORSE_WALK.slowest));
 
-// Retuned here from 0.65 against the short lead and solved hip excursion through the stable-yard halt (m/s²).
-// Every forecast still passes the leg-support gates; catch-up speed remains capped at the reference walk.
-const FOLLOW_ACCEL = 0.8;
+// Tuned follower acceleration (m/s²); catch-up speed is capped at the reference walk.
+const FOLLOW_ACCEL = 0.65;
 
 /** Follow a floor goal with the horse's pelvis, legs and head working together. */
 export function horseFollow<W>(start: ReadonlyPose, goal: Live<Pick<Target, 'position' | 'velocity'>, W>, options: { avoid?: Live<Readonly<Vector3> | undefined, W> } = {}): Behaviour<W> {

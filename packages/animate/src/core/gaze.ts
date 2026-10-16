@@ -91,7 +91,7 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
           _o.multiply(_p);
         };
         ways(d);
-        over ??= _o.angleTo(turned) < _q.angleTo(turned);
+        over ??= _o.angleTo(f.prev.rotation(bones[bones.length - 1])) < _q.angleTo(f.prev.rotation(bones[bones.length - 1]));
         const [kept, other] = over ? [_o, _q] : [_q, _o];
         const strained = strain(gazer, pose, bones, turned, kept, d);
         if (strain(gazer, pose, bones, turned, other, d) < strained - HYSTERESIS) over = !over;
@@ -105,14 +105,11 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
         // Follow in world space so the trunk can move beneath a steady gaze.
         const whole = _whole.copy(over ? _o : _q);
-        gazer.avoid?.(pose, whole);
         // (the whole turn followed once from the neck's history, then shared evenly down it, each
         // joint stopped at its range's end: the head turns at the gaze shift's pace, however many
         // joints share it — as fast as the shift is large (`headPace`), at most `motion`'s)
         const last = bones[bones.length - 1];
         const was = _was.copy(f.prev.rotation(last));
-        const gap = was.angleTo(whole);
-        shift = gap > shift || gap < SETTLED ? gap : shift;
         // (a target moving smoothly is pursued: its own turn followed without lag, at most at
         // `motion`'s speed; and as it speeds up or slows, the head with it: its own acceleration on
         // top of the shift's)
@@ -120,6 +117,10 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         (seen ??= new Quaternion()).copy(whole);
         const speeding = pursuit.distanceTo(pursued) / f.dt;
         pursued.copy(pursuit);
+        // Clearance is a constraint, not target motion to pursue at feed-forward speed.
+        gazer.avoid?.(pose, whole);
+        const gap = was.angleTo(whole);
+        shift = gap > shift || gap < SETTLED ? gap : shift;
         const pace = headPace(shift, motion);
         pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
         const before = _was2.copy(f.prev2.rotation(last));

@@ -1,3 +1,4 @@
+import { createWorld, type World } from '../../src/humanoid/world';
 import { parallel, type Timeline } from '@pmndrs/timeline';
 import { Humanoid, createSkeletonModel, idle, type Frame } from '../../src';
 // Test fixtures: character models as viverse loads them, and random rotations.
@@ -63,8 +64,8 @@ export function turnUpTo(rand: () => number, angle: number): Quaternion {
 }
 
 /** The same idle/task ordering in every interaction test. */
-export function standing(tasks: (h: Humanoid) => Timeline<Frame>[], height = 1.75): Humanoid {
-  return new Humanoid(createSkeletonModel(height), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h), ...tasks(h));
-  });
+export function standing(tasks: (h: Humanoid<World>) => Timeline<Frame<World>>[], height = 1.75): Humanoid<World> {
+  return new Humanoid<World>(createSkeletonModel(height), (h) => function* () {
+    yield* parallel<Frame<World>>('all', idle(h), ...tasks(h));
+  }, { world: createWorld() });
 }

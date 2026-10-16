@@ -20,24 +20,26 @@ const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
 // Tuned against the yard sequence: leave time to halt beyond the gate and settle before the cut.
-const DURATION = 27.3;
+const DURATION = 27.35;
 const INSPECT = 0.85;
-// Retuned here from 0.95 to match the short lead through braking without exceeding the solved hip-excursion gate (m/s).
+// Tuned matched walk through braking, checked against solved hip excursion (m/s).
 const LEADING = { speed: 0.9 };
-// Tuned here to keep the near hand 15–30 cm from the halter while beside the shoulder (m).
-const LEAD_OFFSET = 0.72;
-// Tuned here with the halter-distance and body-clearance story gates (m).
-const LEAD_ASIDE = 0.4;
-// Tuned here against the initial near-hand/halter gap: settle into the shoulder station over half a metre (m).
+// Handler station: shoulder-to-throatlatch advance plus the former shoulder offset (m).
+const LEAD_OFFSET = 1.22;
+// Tuned lane beside the head, outside the foreleg swing (m).
+const LEAD_ASIDE = 0.55;
+// Minimum station-transition distance; a larger station change gets enough travel to stay monotonic (m).
 const LEAD_EASE = 0.5;
 // Tuned here against the visible halter distance: near hand below the jaw; slack remains iteration 12’s outside-hip pose (m).
 const HALTER = new Vector3(0, -0.3, 0.05);
-const NEAR_HAND = new Vector3(-0.28, 0.04, 0.55);
+const NEAR_HAND = new Vector3(-0.4, 0.04, 0.3);
 const SLACK_HAND = new Vector3(0.3, 0.1, 0.25);
 // Tuned against the two-hand slack span: enough sag to show a loop without reaching the pelvis.
 const SLACK_SAG = 0.25;
 // Read from half the 1.45 m barrel and half the 0.15 m gate post: halt with the trunk beyond the opening.
-const GATE_CLEAR = (1.45 + 0.15) / 2;
+const BARREL_LENGTH = 1.45;
+const GATE_POST = 0.15;
+const GATE_CLEAR = (BARREL_LENGTH + GATE_POST) / 2;
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -49,7 +51,7 @@ export function stableMorning(): Scenario {
     duration: DURATION, actors: [{ position: { x: 1.5, z: 0 }, yaw: -0.1 }],
     cameraDistance: 4.8,
     // Tuned bearings: three-quarter front and a side profile opening the handler’s leading lane.
-    cameraAngles: { front: Math.PI / 3, side: 2 * Math.PI / 3 },
+    cameraAngles: { front: 5 * Math.PI / 6, side: 2 * Math.PI / 3 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(Math.PI / 2), {
@@ -67,12 +69,14 @@ export function stableMorning(): Scenario {
       const horse = new Body(HORSE_SKELETON, horseFollow(pose, () => {
         const travel = leadStart !== null && handler ? Math.max(0, handler.pose.position(0).z - leadStart) : 0;
         const reserve = leadStart === null ? 0 : LEAD_OFFSET - (leadStart - HORSE.z);
-        const ease = Math.exp(-travel / LEAD_EASE);
+        // Keep the target moving forward: the station change consumes at most half of the handler's travel.
+        const length = Math.max(LEAD_EASE, 2 * Math.abs(reserve));
+        const ease = Math.exp(-travel / length);
         const ahead = travel - reserve * (1 - ease);
         // The gate and horse share this straight lane; do not chase the handler's pelvic sway.
         const target = new Vector3(HORSE.x, HORSE.y, HORSE.z + ahead);
         const velocity = leadStart !== null && handler
-          ? new Vector3(0, 0, handler.gait.velocity.z * (1 - reserve * ease / LEAD_EASE)) : new Vector3();
+          ? new Vector3(0, 0, handler.gait.velocity.z * (1 - reserve * ease / length)) : new Vector3();
         return { position: target, velocity };
       }, { avoid: () => handler?.pose.position(handler.pose.skeleton.index('head')) }), { pose, dev });
 
@@ -122,7 +126,7 @@ export function stableMorning(): Scenario {
             handTo(h, 'left', slack, { lead: false, until: () => false }),
             function* () {
               yield* walkTo(h, { to: new Vector3(HORSE.x + LEAD_ASIDE, 0, gate.z + LEAD_OFFSET + GATE_CLEAR), face: 0, ...LEADING })();
-              yield* named('halt beyond the gate', () => when(timePassed(1.5, 'seconds')))();
+              yield* named('halt beyond the gate', () => when(timePassed(1, 'seconds')))();
             },
             function* () {
               // Look back as they set off, then attend to the short walk through the gate.
@@ -152,7 +156,7 @@ export function stableMorning(): Scenario {
           const props: Prop[] = [...yard(), ...skeletonProps(horse.pose),
             line(horse.pose.position(NECK), poll, 0.1, 0x9b744c),
             line(poll, muzzle, 0.1, 0x9b744c),
-            box(root.clone().add(new Vector3(0, -0.13, -0.04)), 0.48, 0.48, 1.45, horse.pose.rotation(0).clone()),
+            box(root.clone().add(new Vector3(0, -0.13, -0.04)), 0.48, 0.48, BARREL_LENGTH, horse.pose.rotation(0).clone()),
             box(saddle.current.position.clone(), 0.48, 0.16, 0.44, saddle.current.quaternion.clone()),
           ];
           // Two skirts make the simple saddle read above the horse's barrel.
@@ -199,7 +203,7 @@ function yard(): Prop[] {
     box(new Vector3(-0.35, 0.6, 4.5), 0.08, 1.2, 0.08),
     box(new Vector3(-0.35, 1.12, 3.65), 0.08, 0.08, 1.7),
     box(new Vector3(-0.35, 0.6, 2.8), 0.08, 1.2, 0.08),
-    ...[0.9, -2.65].map((x) => box(new Vector3(x, 0.8, 8.2), 0.15, 1.6, 0.15)),
+    ...[0.9, -2.65].map((x) => box(new Vector3(x, 0.8, 8.2), GATE_POST, 1.6, GATE_POST)),
     ...[0.55, 1.15].map((y) => box(new Vector3(0.9, y, 9.2), 0.06, 0.07, 2)),
     ...[0.55, 1.15].map((y) => box(new Vector3(-3.65, y, 8.2), 2, 0.07, 0.06)),
   ];
