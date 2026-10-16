@@ -23,6 +23,14 @@ const INSPECT = 0.85;
 const LEADING = { speed: 0.95 };
 // Tuned beside the shoulder region: 0.6 m ahead of the trunk (the rig's scapular top is at 0.657 m).
 const LEAD_OFFSET = 0.6;
+// Tuned handler lane: 55 cm beside the horse centre line at its shoulder.
+const LEAD_ASIDE = 0.55;
+// Tuned distance (m): ease into the shoulder station over the first metre of travel.
+const LEAD_EASE = 1;
+// Tuned unloaded seconds to take the saddle into its walking carry.
+const CARRY_LIFT = 0.75;
+// Read: the near rail post is at z=2.8 m. Tuned: pass 0.6 m before it.
+const RAIL_ENTRY = 2.8 - 0.6;
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -46,15 +54,18 @@ export function stableMorning(): Scenario {
       }, { name: 'rope' });
       let handler: Humanoid<World> | null = null;
       let lookedBack = false;
-      let leading = false;
+      let leadStart: number | null = null;
       const pose = new Pose(HORSE_SKELETON);
       pose.setRoot(HORSE);
       const horse = new Body(HORSE_SKELETON, horseFollow(pose, () => {
-        const ahead = leading && handler ? Math.max(0, handler.pose.position(0).z - HORSE.z - LEAD_OFFSET) : 0;
+        const travel = leadStart !== null && handler ? Math.max(0, handler.pose.position(0).z - leadStart) : 0;
+        const reserve = leadStart === null ? 0 : LEAD_OFFSET - (leadStart - HORSE.z);
+        const ease = Math.exp(-travel / LEAD_EASE);
+        const ahead = travel - reserve * (1 - ease);
         // The gate and horse share this straight lane; do not chase the handler's pelvic sway.
         const target = new Vector3(HORSE.x, HORSE.y, HORSE.z + ahead);
-        const velocity = leading && handler ? new Vector3(0, 0, handler.gait.velocity.z) : new Vector3();
-        if (ahead === 0) velocity.set(0, 0, 0);
+        const velocity = leadStart !== null && handler
+          ? new Vector3(0, 0, handler.gait.velocity.z * (1 - reserve * ease / LEAD_EASE)) : new Vector3();
         return { position: target, velocity };
       }, { avoid: () => handler?.pose.position(handler.pose.skeleton.index('head')) }), { pose, dev });
 
@@ -70,6 +81,13 @@ export function stableMorning(): Scenario {
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
             look: reported(report, 'gaze', () => saddle.current.position),
           })))();
+        yield* named('carry round the rail', function* () {
+          const atBody = carried(h);
+          yield* parallel<Frame<World>>('all', function* () {
+            yield* carry(h, saddle, [[CARRY_LIFT, atBody]])();
+            yield* hold(h, saddle, { to: atBody, until: () => !h.asks.go && h.gait.settled })();
+          }, walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, RAIL_ENTRY) }));
+        })();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
           place(h, saddle, saddlePlace)))();
         yield* named('hands off, check the fit', function* () {
@@ -95,22 +113,24 @@ export function stableMorning(): Scenario {
         }))();
         yield* named('lead out through the gate', reporting(report, ['rightHand'], function* () {
           const beside = carried(h, 'right');
-          leading = true;
-          let stopped: Vector3 | null = null;
           yield* parallel<Frame<World>>('all',
             function* () {
-              yield* carry(h, rope, [[0.6, beside]])();
-              yield* hold(h, rope, { to: (f) => stopped ? { position: stopped } : beside(f) })();
+              yield* when(() => h.feet.some((foot) => foot.phase === 'swing'));
+              leadStart = h.pose.position(0).z;
             },
             function* () {
-              yield* walkTo(h, { to: new Vector3(0.2, 0, gate.z - 2.5), speed: LEADING.speed })();
-              stopped = rope.current.position.clone();
+              yield* carry(h, rope, [[0.6, beside]])();
+              yield* hold(h, rope, { to: beside })();
+            },
+            walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, 30), speed: LEADING.speed }),
+            function* () {
+              // Look back on the way to the gate; the glance does not stop the feet.
+              yield* when(() => h.pose.position(0).z >= gate.z - 2.5);
               yield* withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.75, -0.65)),
-                () => when(timePassed(1.5, 'seconds')), { lead: 0, first: true })();
-              stopped = null;
+                () => when(timePassed(1.5, 'seconds')), { first: true })();
               lookedBack = true;
               yield* withGaze(h, reported(report, 'gaze', (f) => f.prev.position(0).clone().add(new Vector3(0, 0.5, 4))),
-                walkTo(h, { to: new Vector3(0.2, 0, 30), speed: LEADING.speed }))();
+                () => when(() => false))();
             },
           );
         }))();

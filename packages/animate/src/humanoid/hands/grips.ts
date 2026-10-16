@@ -65,3 +65,8 @@ export function offGrips<W>(f: Frame<W>, hands: readonly { side: Side; item: Ite
     return `"${item.name}" ${side} grip "${grip}": ${f.prev.position(INDEX[`${side}Hand`]).distanceTo(at).toFixed(3)} m off`;
   });
 }
+
+/** Unsupported weight borne through the hands, counting each item once. */
+export function heldMass<W>(h: Humanoid<W>): number {
+  return heldItems(h).reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
+}

@@ -95,6 +95,9 @@ export class Humanoid<W = unknown> {
   /** Development problems from checks and watchers. */
   get log() { return this.body.log; }
 
+  /** Current sub-step, for reading live goals when a behaviour starts. */
+  get frame(): Frame<W> { return this.body.frame; }
+
   /** the last final pose */
   get pose(): ReadonlyPose {
     return this.body.pose;

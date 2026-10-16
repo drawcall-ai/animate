@@ -9,11 +9,16 @@ import { stableMorning } from '../src/scenarios/stable-morning';
 const SEAT_HEIGHT = 0.16;
 const SKIRT_HEIGHT = 0.29;
 const HORSE_HALF_WIDTH = 0.24;
-// Recalled conservative body radii, as shares of stature.
+// Recalled conservative human radii, as shares of stature.
 const HEAD_RADIUS = 0.06;
 const BODY_RADIUS = 0.06;
 const LEG_RADIUS = 0.038;
+// Read from the horse leg proxy meshes, metres.
 const HORSE_LEG_RADIUS = 0.06;
+// Tuned catch-up window (s) and shoulder station bounds (m).
+const CAUGHT_UP = 45;
+const SHOULDER_MIN = 0.45;
+const SHOULDER_MAX = 0.75;
 const HUMAN_LEGS = [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']];
 const HORSE_LEGS = [
   ['Femur', 'Gaskin'], ['Gaskin', 'HindCannon'],
@@ -21,7 +26,15 @@ const HORSE_LEGS = [
 ];
 // Read from the carry/raise split: observe walking after leaving the rack and before the final approach.
 const LEAVING_RACK = 14;
-const RAISE_LEAD = 0.7;
+const RAISE_LEAD = 0.3;
+// Read from the horse neck/head proxy cylinders and square tie-rail sections, metres.
+const HORSE_HEAD_RADIUS = 0.1;
+const RAIL_RADIUS = Math.SQRT2 * 0.04;
+const RAIL = [
+  [new Vector3(0.35, 0, 2.8), new Vector3(0.35, 1.2, 2.8)],
+  [new Vector3(0.35, 0, 4.5), new Vector3(0.35, 1.2, 4.5)],
+  [new Vector3(0.35, 1.12, 2.8), new Vector3(0.35, 1.12, 4.5)],
+];
 const MOVING = 0.15;
 const AT_HORSE = 0.7;
 
@@ -32,6 +45,11 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
   const roll: number[] = [];
   const hip: number[][] = [[], []];
   let airborneTilt = 0;
+  let knot = NaN;
+  let firstStep = NaN;
+  let horseStep = NaN;
+  let leadGap = Infinity;
+  let horseRoot = new Vector3(1.2, 1.37, 3);
   while (sim.t < 50) {
     sim.step();
     const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
@@ -43,8 +61,28 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
         expect(saddle.position.y - 0.3).toBeGreaterThan(1.16);
       }
     }
-    if (sim.t < 35) continue;
     const h = sim.actors[0];
+    const horse = sim.stage.bodies?.[0];
+    if (!horse) throw new Error('missing horse');
+    const rope = h.holding.right?.item;
+    if (rope?.name === 'rope' && !rope.supported) {
+      if (Number.isNaN(knot)) knot = sim.t;
+      if (Number.isNaN(firstStep) && h.feet.some((foot) => foot.phase === 'swing')) firstStep = sim.t;
+      if (Number.isNaN(horseStep) && horse.pose.position(0).distanceTo(horseRoot) > 0.0001) horseStep = sim.t;
+      if (sim.t > knot + 3) expect(h.gait.velocity.length()).toBeGreaterThan(0.8);
+      for (const [a, b] of [['hips', 'chest'], ['chest', 'neck'], ['neck', 'head']]) {
+        const from = h.pose.position(h.pose.skeleton.index(a));
+        const end = h.pose.position(h.pose.skeleton.index(b));
+        const neck = horse.pose.position(horse.pose.skeleton.index('neck'));
+        const poll = horse.pose.position(horse.pose.skeleton.index('head'));
+        const muzzle = horse.pose.point(horse.pose.skeleton.index('head'), new Vector3(0, -0.42, 0.33), new Vector3());
+        for (const [c, d] of [[neck, poll], [poll, muzzle]]) {
+          leadGap = Math.min(leadGap, segmentDistance(from, end, c, d) - BODY_RADIUS * h.proportions.height - HORSE_HEAD_RADIUS);
+        }
+      }
+    }
+    horseRoot = horse.pose.position(0).clone();
+    if (sim.t < 35) continue;
     const p = h.pose;
     const at = (name: string) => p.position(p.skeleton.index(name));
     expect(h.holding.left).toBeNull();
@@ -53,19 +91,22 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
     const upper = at('leftLowerArm').clone().sub(at('leftUpperArm'));
     const forward = new Vector3(Math.sin(h.gait.facing), 0, Math.cos(h.gait.facing));
     arm.push(Math.atan2(upper.dot(forward), -upper.y));
-    const horse = sim.stage.bodies?.[0];
-    if (!horse) throw new Error('missing horse');
     // The handler stays beside the shoulder once the horse has caught up.
-    if (sim.t > 45) {
+    if (sim.t > CAUGHT_UP) {
       const ahead = p.position(0).z - horse.pose.position(0).z;
-      expect(ahead).toBeGreaterThan(0.45);
-      expect(ahead).toBeLessThan(0.75);
+      expect(ahead).toBeGreaterThan(SHOULDER_MIN);
+      expect(ahead).toBeLessThan(SHOULDER_MAX);
     }
     for (const [i, side] of ['left', 'right'].entries()) {
       hip[i].push(new Euler().setFromQuaternion(horse.pose.local(horse.pose.skeleton.index(`${side}Femur`)), 'YZX').x);
     }
     roll.push(new Euler().setFromQuaternion(horse.pose.local(horse.pose.skeleton.index('pelvis')), 'YXZ').z);
   }
+  expect(firstStep - knot).toBeGreaterThanOrEqual(0);
+  expect(firstStep - knot).toBeLessThan(0.5);
+  expect(horseStep).toBeGreaterThanOrEqual(firstStep);
+  expect(horseStep - firstStep).toBeLessThan(0.1);
+  expect(leadGap).toBeGreaterThan(0.02);
   expect(airborneTilt * 180 / Math.PI).toBeLessThan(5);
   const degrees = 180 / Math.PI;
   expect(Math.max(...chest.map(Math.abs)) * degrees).toBeLessThan(5);
@@ -88,12 +129,21 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
   let legGap = Infinity;
   let barrelGap = Infinity;
   let walking = 0;
+  let railGap = Infinity;
+  let footAcross = Infinity;
   while (sim.t < 25) {
     sim.step();
     const h = sim.actors[0];
     const item = h.holding.left?.item;
     const horse = sim.stage.bodies?.[0];
     if (!item || item.name !== 'saddle' || !horse || item.supported || item.wornBy) continue;
+    const feet = h.pose.position(h.pose.skeleton.index('leftFoot')).clone().sub(h.pose.position(h.pose.skeleton.index('rightFoot')));
+    footAcross = Math.min(footAcross, feet.x * Math.cos(h.gait.facing) - feet.z * Math.sin(h.gait.facing));
+    for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
+      const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
+      const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));
+      for (const [c, d] of RAIL) railGap = Math.min(railGap, segmentDistance(from, end, c, d) - LEG_RADIUS * h.proportions.height - RAIL_RADIUS);
+    }
     const head = h.pose.point(h.pose.skeleton.index('head'), h.proportions.headCenter, new Vector3());
     for (const box of sim.props()) {
       if (box.kind !== 'box' || !box.quaternion || ![SEAT_HEIGHT, SKIRT_HEIGHT].includes(box.size.y)) continue;
@@ -123,6 +173,8 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
     }
   }
   expect(walking).toBeGreaterThan(0);
+  expect(railGap).toBeGreaterThan(0);
+  expect(footAcross).toBeGreaterThan(0);
   // Keep 2 cm of reserve, rather than a pass/fail boundary at contact.
   expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);

@@ -197,22 +197,64 @@ it('takes up a heavy lift slowly, dips at arrival and recovers before finishing'
   expect(heavy.heights.at(-1)).toBeCloseTo(1.25, 2);
 });
 
-it('places on a destination that keeps moving during the lift and approach', () => {
+it('follows destination translation and rotation during the lift and approach', () => {
   const item = new Item(new Vector3(0, 1.1, 0.3), new Quaternion(), {
     left: { position: new Vector3(0.18, 0, 0) },
     right: { position: new Vector3(-0.18, 0, 0) },
   });
   let done = false;
   let error = Infinity;
-  const destination = (f: Frame) => ({ position: new Vector3(0.08 * Math.sin(f.time), 1.2, 1.2) });
+  let walking = 0;
+  let advanced = 0;
+  let stand: number | null = null;
+  const turn = (f: Frame) => 0.2 * Math.min(f.time, 4);
+  const destination = (f: Frame) => ({ position: new Vector3(0, 1.2, 2 + 0.35 * Math.min(f.time, 4)),
+    quaternion: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn(f)) });
   const h = standing((h) => [function* () {
     yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
     yield* place(h, item, destination)();
     done = true;
   }, action<Frame>({ update: (f) => {
+    if (h.gait.moving) {
+      walking++;
+      advanced = Math.max(advanced, destination(f).position.z - 2);
+      const go = h.asks.go;
+      if (!go) throw new Error('moving without a walk goal');
+      const distance = destination(f).position.clone().sub(go.to).setY(0).length();
+      stand ??= distance;
+      expect(distance).toBeCloseTo(stand, 5);
+      expect(h.asks.face?.yaw).toBeCloseTo(turn(f), 5);
+      expect(go.to.z).toBeCloseTo(destination(f).position.z - stand * Math.cos(turn(f)), 5);
+    }
     if (done) error = item.current.position.distanceTo(destination(f).position);
   } })]);
   for (let i = 0; i < 900 && !done; i++) h.update(STEP);
   expect(done).toBe(true);
+  expect(walking).toBeGreaterThan(0);
+  expect(advanced).toBeGreaterThan(0.12);
   expect(error).toBeLessThan(0.01);
+});
+
+it('lifts a heavy item before raising toward an out-of-reach placement', () => {
+  const item = new Item(new Vector3(0, 0.8, 0.35), new Quaternion(), {
+    left: { position: new Vector3(0.18, 0, 0) }, right: { position: new Vector3(-0.18, 0, 0) },
+  }, { mass: 8 });
+  const destination = { position: new Vector3(0, 1.5, 3) };
+  let done = false;
+  let walking = 0;
+  const h = standing((h) => [function* () {
+    yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* place(h, item, destination)();
+    done = true;
+  }]);
+  for (let i = 0; i < 1200 && !done; i++) {
+    h.update(STEP);
+    if (h.gait.moving && h.gait.eta > 0.7) {
+      walking++;
+      expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
+    }
+  }
+  expect(walking).toBeGreaterThan(0);
+  expect(done).toBe(true);
+  expect(item.current.position.distanceTo(destination.position)).toBeLessThan(0.01);
 });

@@ -56,8 +56,8 @@ yield* parallel<Frame>('all', release(h, ['left', 'right']), grab(h, { right: [r
 // within a task: grab and withGaze overlap their own parts; don't walk up and look first yourself
 yield* grab(h, { right: [rope, 'knot'] })();
 
-// placement overlaps the lift and approach, then raises and lowers onto a live destination
-yield* place(h, saddle, onBone(horse, 0, onBack))();
+// one course through several places passes them without stopping
+yield* carry(h, item, [[0.5, clear], [0.8, across], [0.5, down]])();
 ```
 
 `[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands.

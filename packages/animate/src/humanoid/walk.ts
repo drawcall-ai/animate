@@ -4,7 +4,7 @@ import type { Frame } from '../core/body';
 import { live, type Behaviour, type Live } from '../core/goal';
 import type { UntilCondition } from '@pmndrs/timeline';
 import type { Go } from './asks';
-import { heldItems } from './hands/grips';
+import { heldMass } from './hands/grips';
 import { loadFactor } from '../core/load';
 import { when } from '../core/when';
 import type { Humanoid } from './humanoid';
@@ -74,7 +74,7 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
     // would drift as the body settles off the line to it)
     let fixed: number | null = null;
     const where = (f: Frame<W>) => {
-      const mass = heldItems(h).reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
+      const mass = heldMass(h);
       const effort = loadFactor(mass);
       go.speed = options.speed ?? speed / effort;
       go.accel = options.accel ?? accel / effort;

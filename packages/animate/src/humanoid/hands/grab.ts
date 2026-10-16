@@ -1,5 +1,5 @@
 import { bringShoulder } from '../reach-posture';
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
@@ -25,8 +25,6 @@ export interface Stand {
 
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
-// Tuned placement reserve: use the available reach, retaining 1% for shoulder motion.
-const PLACING = 0.99;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
 const SQUARE = 0.3;
@@ -127,16 +125,14 @@ function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
  * hand. A point must be within ARM_REACH of that middle at the requested stand (at the
  * shoulders' standing height); an impossible stand throws before walking. Grips may recruit
  * bowing and lowering during the reach. A destination placement uses the held grips at its
- * orientation to choose the facing, so both hands can reach it.
+ * orientation to choose the facing, so both hands can reach it; translation and rotation are followed live.
  */
 export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placement, W>, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
   const { aside = 0 } = options.stand ?? {};
   return function* () {
     const moving = typeof holds === 'function' ? holds : null;
-    let start: Placement | null = null;
-    if (moving) yield* when<W>((f) => { start = live(moving, f); return true; });
-    const source = start ?? holds;
-    if (typeof source === 'function') throw new Error('approach: missing live placement');
+    const source = live(holds, h.frame);
+    const start = moving && 'position' in source ? source : null;
     const grips: { side?: Side; at: Vector3 }[] = [];
     const point = source instanceof Vector3 || 'position' in source;
     if (source instanceof Vector3) grips.push({ at: source.clone() });
@@ -153,21 +149,19 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
     const shoulders = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
     const reach = ARM_REACH * p.armLength;
-    const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
+    const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) * (1 - Number.EPSILON) : Infinity;
     // Low two-hand loads need room for the bow without crowding the knees against their support.
     const distance = !point && grips.length === 2 && height < p.hipHeight ? 1.05 : WITHIN;
-    const ahead = options.stand?.ahead ?? Math.min(point ? PLACING * available : distance * p.armLength, p.toeFront + Math.max(0, height - p.ankleHeight));
+    const ahead = options.stand?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + Math.max(0, height - p.ankleHeight));
     const shoulder = (side?: Side) => side
       ? h.pose.position(INDEX[`${side}UpperArm`])
       : h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
     const middle = grips.reduce((sum, g) => sum.add(g.at), new Vector3()).divideScalar(grips.length);
     if (point) {
-      const from = middle.clone().addScaledVector(leftOf(face), -aside).addScaledVector(forwardOf(face), -ahead);
-      from.y = shoulders;
-      const distance = from.distanceTo(middle);
+      const distance = Math.hypot(ahead, aside, height - shoulders);
       if (distance > ARM_REACH * p.armLength) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
     }
-    const turned = () => Math.abs(wrapAngle(face - h.gait.facing)) < SQUARE;
+    const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.gait.facing)) < SQUARE;
     if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) {
       return;
     }
@@ -189,19 +183,29 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
       const beside = middle.clone().addScaledVector(across, side * ROUND * p.scale).addScaledVector(way, (ON * ROUND * p.scale) / length);
       yield* walkTo(h, { to: beside, until: (f) => flat(f.prev.com(_com), beside) < NEAR * ROUND * p.scale })();
     }
-    let still = 0;
-    const arrived = (f: Frame<W>) => {
-      const planted = !h.gait.moving && h.feet.every((foot) => foot.phase === 'planted');
-      still = planted ? still + f.dt : 0;
-      return turned() && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || still > STILL);
+    const rotation = (f: Frame<W>) => {
+      const current = moving ? live(moving, f) : null;
+      return start?.quaternion && current?.quaternion
+        ? current.quaternion.clone().multiply(start.quaternion.clone().invert())
+        : new Quaternion();
+    };
+    const facing = (f: Frame<W>) => {
+      const forward = forwardOf(face).applyQuaternion(rotation(f));
+      return headingOf(forward.x, forward.z);
     };
     const destination = (f: Frame<W>) => moving && start
-      ? live(moving, f).position.clone().sub(start.position).add(to)
+      ? to.clone().sub(start.position).applyQuaternion(rotation(f)).add(live(moving, f).position)
       : to;
-    yield* walkTo(h, { to: destination, face, within: ahead, until: (f) => {
-      if (moving) there.copy(destination(f)).addScaledVector(forwardOf(face), -ahead);
-      return arrived(f);
-    } })();
+    let plantedAt = Infinity;
+    yield* parallel<Frame<W>>('race', function* () {
+      yield* action<Frame<W>>({ update: (f) => {
+        const planted = !h.gait.moving && h.feet.every((foot) => foot.phase === 'planted');
+        plantedAt = planted ? Math.min(plantedAt, f.time) : Infinity;
+      } });
+    }, walkTo(h, { to: destination, face: facing, within: ahead, until: (f) => {
+      const there = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
+      return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || f.time - plantedAt > STILL);
+    } }));
   };
 }
 
