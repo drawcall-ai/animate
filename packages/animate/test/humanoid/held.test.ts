@@ -168,3 +168,33 @@ it('keeps both carry grips until the slower course ends', () => {
   expect(samples).toBeGreaterThan(10);
   expect(off).toBeLessThan(0.03);
 });
+
+
+it('takes up a heavy lift slowly, dips at arrival and recovers before finishing', () => {
+  const lift = (mass: number) => {
+    const item = new Item(new Vector3(-0.15, 1, 0.3), new Quaternion(), { handle: { position: new Vector3() } }, { mass });
+    let start = NaN, end = NaN, time = 0;
+    const heights: number[] = [];
+    const h = standing((h) => [function* () {
+      yield* reachFor(h, { right: [item, 'handle'] })();
+      start = time;
+      yield* carry(h, item, [[0.8, { position: new Vector3(-0.15, 1.25, 0.3) }]])();
+      end = time - start;
+    }]);
+    for (let i = 0; i < 360; i++) {
+      time = i * STEP;
+      h.update(STEP);
+      if (!Number.isNaN(start)) heights.push(item.current.position.y);
+    }
+    return { heights, end };
+  };
+  const light = lift(0), heavy = lift(8);
+  expect(heavy.heights[24]).toBeLessThan(light.heights[24] - 0.02);
+  // The nominal 8 kg path ends near 1.23 s; its arrival dip must be visible afterwards.
+  const arrival = heavy.heights.slice(70, 90);
+  const settle = heavy.heights.slice(90, 115);
+  expect(Math.max(...arrival) - Math.min(...settle)).toBeGreaterThan(0.015);
+  expect(heavy.end).toBeGreaterThan(light.end + 0.5);
+  expect(Number.isFinite(heavy.end)).toBe(true);
+  expect(heavy.heights.at(-1)).toBeCloseTo(1.25, 2);
+});

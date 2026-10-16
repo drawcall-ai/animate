@@ -1,5 +1,5 @@
 import { Humanoid, yawOf, type Body, type World } from '@drawcall/animate';
-import { Bone, Quaternion, Vector3, type Object3D } from 'three';
+import { Bone, Box3, Quaternion, Vector3, type Object3D } from 'three';
 import type { Prop } from './scenario';
 import type { Simulation } from './simulation';
 
@@ -117,9 +117,17 @@ export class Playback {
     return yawOf(this.subject().pose.rotation(0));
   }
 
+  get bounds(): Box3 {
+    const bounds = new Box3();
+    for (const body of [...this.sim.actors, ...this.sim.stage.bodies ?? []]) {
+      for (let i = 0; i < body.pose.skeleton.bones.length; i++) bounds.expandByPoint(body.pose.position(i));
+    }
+    // Tuned 20 cm silhouette allowance beyond joints (head, barrel, hands and feet).
+    return bounds.expandByScalar(0.2);
+  }
+
   private root() {
-    const focus = this.sim.stage.focus?.();
-    if (focus) return focus;
+    if (this.sim.stage.bodies?.length && this.sim.actors.length) return this.bounds.getCenter(new Vector3());
     const body = this.subject();
     return body instanceof Humanoid ? body.model.scene.position.clone().setY(FOCUS_HEIGHT * body.proportions.height) : body.pose.position(0).clone();
   }

@@ -23,8 +23,6 @@ export interface Stage {
   report: Report;
   /** the scenery drawn at time `t` (s) */
   props(t: number): Prop[];
-  /** Optional scene focus, for framing an interaction across several bodies. */
-  focus?(): Vector3;
   /** whether the run did what the scenario is for (asked at its end) */
   done(): boolean;
   /** what actor `index` wears from the start, for its proportions (made with it: worn and borne from its first sub-step) */

@@ -103,7 +103,7 @@ function seek(t: number) {
 
 /** the free camera starts from the three-quarter shot, orbiting the focus */
 function startOrbit() {
-  placeCamera(stage.camera, 'three', framing, distance());
+  placeCamera(stage.camera, 'three', framing, distance(), playback.bounds);
   stage.controls.target.copy(framing.focus);
 }
 
@@ -138,7 +138,7 @@ function aim() {
   } else {
     const angles = playback.sim.scenario.cameraAngles;
     const bearing = settings.view === 'front' || settings.view === 'side' ? angles?.[settings.view] : undefined;
-    placeCamera(stage.camera, settings.view, framing, distance(), bearing);
+    placeCamera(stage.camera, settings.view, framing, distance(), playback.bounds, bearing);
   }
 }
 

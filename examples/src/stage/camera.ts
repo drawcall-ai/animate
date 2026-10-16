@@ -1,4 +1,4 @@
-import { Vector3, type PerspectiveCamera } from 'three';
+import { Vector3, type Box3, type PerspectiveCamera } from 'three';
 import { forwardOf, leftOf, Spring } from '../math';
 
 /** `orbit` = free (OrbitControls); the others are fixed shots relative to the body's facing */
@@ -43,7 +43,7 @@ export class Framing {
 const _f = new Vector3();
 
 /** Puts `camera` `distance` from the framing's focus, on `shot`'s side of the body, looking at it. */
-export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw }: Framing, distance: number, bearing?: number) {
+export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw }: Framing, distance: number, bounds: Box3, bearing?: number) {
   const f = forwardOf(yaw);
   const l = leftOf(yaw);
   const dir = new Vector3();
@@ -57,6 +57,14 @@ export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw 
   dir.normalize();
   const target = focus.clone();
   if (shot === 'top') target.y = 0.5;
-  camera.position.copy(target).addScaledVector(dir, shot === 'top' ? distance * 1.1 : distance);
+  const right = new Vector3().crossVectors(camera.up, dir).normalize();
+  const up = new Vector3().crossVectors(dir, right);
+  const tan = Math.tan(camera.fov * Math.PI / 360) / camera.zoom;
+  const corner = new Vector3();
+  for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
+    corner.set(x, y, z).sub(target);
+    distance = Math.max(distance, corner.dot(dir) + Math.max(Math.abs(corner.dot(up)) / tan, Math.abs(corner.dot(right)) / (tan * camera.aspect)));
+  }
+  camera.position.copy(target).addScaledVector(dir, distance);
   camera.lookAt(target);
 }

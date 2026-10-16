@@ -52,15 +52,26 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
     else if (on) frame = on;
     const grips = gripsOf(h, item);
     const lag = grips[LEADING] === undefined && h.holding[LEADING] ? following(item, grips) : { delay: 0, slower: 0 };
-    const path = course(item, frame, legs, { scale, pace: pace * (1 - lag.slower) / loadFactor(item.mass), delay: lag.delay });
+    const factor = loadFactor(item.mass);
+    const motion = options.motion ?? CARRYING;
+    const from = item.current.position.y;
+    // Take-up and compliance belong to lifting off a support, not every carried waypoint.
+    const load = item.supported ? factor - 1 : 0;
+    // Tuned load take-up: 0.15 s at 8 kg; the same law slows the path and initial acceleration.
+    const path = course(item, frame, legs, { scale, pace: pace * (1 - lag.slower) / factor, delay: lag.delay + 0.45 * load });
     const end = new TrackedEnd();
     let since = NaN;
+    let dip = 0;
+    const seconds = 2.4 * load;
     const there = (f: Frame<W>) => {
       if (!path.over(f)) return false;
       if (Number.isNaN(since)) since = f.time;
       const placement = path.to(f);
       const goal = placement.position;
-      if (end.holds(f, item, goal)) return true;
+      // Load compliance: https://pmc.ncbi.nlm.nih.gov/articles/PMC4443842/ (F = k × displacement).
+      // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
+      dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
+      if (end.holds(f, item, goal) && (dip === 0 || f.time - since >= seconds)) return true;
       if (f.time - since > limit) {
         const off = offGrips(f, SIDES.flatMap((side) => {
           const name = grips[side];
@@ -70,7 +81,13 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
       }
       return false;
     };
-    yield* hold(h, item, { to: path.to, motion: options.motion, until: (f) => { const ready = there(f); return together ? together(ready) : ready; } })();
+    const to = (f: Frame<W>) => {
+      const goal = path.to(f);
+      const u = Number.isNaN(since) || seconds === 0 ? 0 : Math.min(1, (f.time - since) / seconds);
+      if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
+      return goal;
+    };
+    yield* hold(h, item, { to, motion: { ...motion, accel: motion.accel / factor }, until: (f) => { const ready = there(f); return together ? together(ready) : ready; } })();
   };
 }
 
@@ -111,10 +128,7 @@ class TrackedEnd {
  */
 export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
   const { to } = options;
-  // Recalled design tuning, not a measured law: load slows carrying with the same factor as its course and walking.
-  const factor = loadFactor(item.mass);
-  const pace = options.motion ?? CARRYING;
-  const motion = { ...pace, accel: pace.accel / factor };
+  const motion = options.motion ?? CARRYING;
   return function* () {
     const grips = gripsOf(h, item);
     const sides = SIDES.filter((s) => grips[s] !== undefined);

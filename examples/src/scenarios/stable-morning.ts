@@ -35,8 +35,8 @@ export function stableMorning(): Scenario {
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
     duration: 50, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
     cameraDistance: 4.8,
-    // Tuned fixed three-quarter bearing: separates handler and horse along the lead lane.
-    cameraAngles: { front: -Math.PI / 3, side: -11 * Math.PI / 18 },
+    // Tuned north/profile bearing: shows the rack bow; the west side shot separates the lead lane.
+    cameraAngles: { front: 0, side: -11 * Math.PI / 18 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(-Math.PI / 2), {
@@ -110,7 +110,8 @@ export function stableMorning(): Scenario {
           );
         })();
         yield* named('untie the rail knot', reporting(report, ['rightHand'], function* () {
-          yield* grab(h, { right: [rope, 'knot'] }, { face: 0, stand: { ahead: 0.4, aside: -0.4 }, look: reported(report, 'gaze', KNOT) })();
+          // Tuned north/camera-side stance: 50 cm back keeps the knot in view and within right-hand reach.
+          yield* grab(h, { right: [rope, 'knot'] }, { face: -Math.PI / 2, stand: { ahead: 0.5, aside: -0.3 }, look: reported(report, 'gaze', KNOT) })();
           yield* withGaze(h, reported(report, 'gaze', KNOT), function* () {
             // Tuned 28 cm draw toward the body, rising only 8 cm: a tug, not a lateral flourish.
             const pull = h.pose.position(0).clone().sub(KNOT).setY(0).normalize().multiplyScalar(0.28).setY(0.08);
@@ -160,11 +161,6 @@ export function stableMorning(): Scenario {
           b: RACK.clone().add(new Vector3(x, 0, 0)).setY(0.71),
           radius: Math.SQRT2 * 0.03, touches: [],
         })),
-        focus: () => {
-          if (!handler) throw new Error('stable framing needs its handler');
-          const at = handler.pose.position(0).clone().setY(0.54 * handler.proportions.height);
-          return saddle.wornBy === horse ? at.lerp(horse.pose.position(0).clone().setY(1), 0.5) : at;
-        },
         done: () => saddle.wornBy === horse && lookedBack && horse.pose.position(0).clone().sub(gate).dot(forwardOf(0)) > 0,
         props: () => {
           const root = horse.pose.position(0);
