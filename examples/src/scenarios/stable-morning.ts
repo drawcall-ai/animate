@@ -19,7 +19,10 @@ const KNOT = new Vector3(0.25, 1.12, 3.6);
 const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
-const DURATION = 50;
+// Tuned story length: about nine seconds leading after the yard tasks.
+const DURATION = 26;
+// Read from the original story horizon (s): the distant lead target stays beyond an extended run too.
+const LEAD_HORIZON = 50;
 const INSPECT = 0.85;
 const LEADING = { speed: 0.95 };
 // Tuned beside the shoulder region: 0.6 m ahead of the trunk (the rig's scapular top is at 0.657 m).
@@ -39,7 +42,7 @@ export function stableMorning(): Scenario {
     duration: DURATION, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
     cameraDistance: 4.8,
     // Tuned bearings: three-quarter front and a side profile opening the handler’s leading lane.
-    cameraAngles: { front: -Math.PI / 3, side: -Math.PI / 2 },
+    cameraAngles: { front: Math.PI / 12, side: -2 * Math.PI / 3 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(-Math.PI / 2), {
@@ -69,8 +72,8 @@ export function stableMorning(): Scenario {
       const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(Math.PI / 2) });
       const gate = new Vector3(0.2, 0, 8.2);
       const tasks = (h: Humanoid<World>): Behaviour<World> => function* () {
-        // A breath and a look across the yard; idle supplies the movement underneath.
-        yield* named('cold air at the door', withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.9, 5)), () => when(timePassed(1.3, 'seconds')), { first: true }))();
+        // Let the gaze find the rack just before the feet set off.
+        yield* named('notice the saddle', withGaze(h, reported(report, 'gaze', RACK), () => when(timePassed(0.1, 'seconds')), { first: true }))();
         yield* named('fetch the saddle', reporting(report, HANDS,
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
             look: reported(report, 'gaze', () => saddle.current.position),
@@ -109,10 +112,11 @@ export function stableMorning(): Scenario {
               yield* carry(h, rope, [[0.6, beside]])();
               yield* hold(h, rope, { to: beside })();
             },
-            walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, gate.z + LEADING.speed * DURATION), speed: LEADING.speed }),
+            // Far enough beyond the gate never to arrive during this story.
+            walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, gate.z + LEADING.speed * LEAD_HORIZON), speed: LEADING.speed }),
             function* () {
-              // Look back on the way to the gate; the glance does not stop the feet.
-              yield* when(() => h.pose.position(0).z >= gate.z - 2.5);
+              // Look back as they set off, then attend to the short walk through the gate.
+              yield* when(() => h.feet.some((foot) => foot.phase === 'swing'));
               yield* withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.75, -0.65)),
                 () => when(timePassed(1.5, 'seconds')), { first: true })();
               lookedBack = true;

@@ -35,14 +35,16 @@ const range = (axis: 0 | 1 | 2, a: [number, number], b: [number, number], twist:
  */
 /** Comfortable total cervical flexion, shared by neck and head (degrees). */
 export const NECK_PITCH = 60;
+/** Total cervical extension from the clinical range above (degrees). */
+export const NECK_EXTENSION = 80;
 /** Total thoracolumbar flexion, shared by spine and chest (degrees). */
 export const TRUNK_PITCH = 80;
 
 const RANGES = {
   spine: range(1, [-20, 20], [-15, TRUNK_PITCH / 2], [-25, 25]),
   chest: range(1, [-20, 20], [-15, TRUNK_PITCH / 2], [-25, 25]),
-  neck: range(1, [-25, 25], [-40, NECK_PITCH / 2], [-37, 37]),
-  head: range(1, [-25, 25], [-40, NECK_PITCH / 2], [-37, 37]),
+  neck: range(1, [-25, 25], [-NECK_EXTENSION / 2, NECK_PITCH / 2], [-37, 37]),
+  head: range(1, [-25, 25], [-NECK_EXTENSION / 2, NECK_PITCH / 2], [-37, 37]),
   shoulder: range(0, [-30, 30], [-15, 45], [-50, 10]),
   upperArm: range(1, [-40, 180], [-180, 60], [-70, 90], new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -Math.PI / 2)),
   lowerArm: range(0, [-150, 5], [-5, 5], [-45, 45]),

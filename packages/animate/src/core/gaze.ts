@@ -18,6 +18,8 @@ export interface Gazer {
   range: { down: number; up: number; side: number };
   /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
   pitch?: number;
+  /** Constrain the world head goal before following it, for clearance from nearby loads. */
+  avoid?(pose: ReadonlyPose, goal: Quaternion): void;
   /** Ask the body to help before aiming the head. */
   lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
@@ -103,6 +105,7 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
         if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
         // Follow in world space so the trunk can move beneath a steady gaze.
         const whole = _whole.copy(over ? _o : _q);
+        gazer.avoid?.(pose, whole);
         // (the whole turn followed once from the neck's history, then shared evenly down it, each
         // joint stopped at its range's end: the head turns at the gaze shift's pace, however many
         // joints share it — as fast as the shift is large (`headPace`), at most `motion`'s)

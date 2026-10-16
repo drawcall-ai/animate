@@ -3,7 +3,7 @@ import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, grab, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
@@ -243,6 +243,7 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   const destination = { position: new Vector3(0, 1.5, 3) };
   let done = false;
   let walking = 0;
+  let raisingOnStep = 0;
   const h = standing((h) => [function* () {
     yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
     yield* place(h, item, destination)();
@@ -250,12 +251,36 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   }]);
   for (let i = 0; i < 1200 && !done; i++) {
     h.update(STEP);
+    if (h.gait.velocity.length() > 0.15 && h.gait.eta <= RAISE_LEAD && item.current.position.y > carried(h)(h.frame).position.y + 0.01) raisingOnStep++;
     if (h.gait.moving && h.gait.eta > RAISE_LEAD) {
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }
   }
   expect(walking).toBeGreaterThan(0);
+  expect(raisingOnStep).toBeGreaterThan(0);
   expect(done).toBe(true);
   expect(item.current.position.distanceTo(destination.position)).toBeLessThan(0.01);
+});
+
+it('keeps the head clear while a wide held load rises through a downward gaze', () => {
+  const item = new Item(new Vector3(0, 0.88, 0.55), new Quaternion(), {
+    left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
+  }, { mass: 8 });
+  let samples = 0;
+  const h = standing((h) => [function* () {
+    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* withGaze(h, () => item.current.position, function* () {
+      yield* carry(h, item, [[0.8, carried(h)], [1.1, { position: new Vector3(0, 1.3, 0.35) }]])();
+      yield* hold(h, item)();
+    })();
+  }]);
+  for (let i = 0; i < 600; i++) {
+    h.update(STEP);
+    if (item.supported) continue;
+    samples++;
+    const head = h.pose.point(INDEX.head, h.proportions.headCenter, new Vector3());
+    expect(head.distanceTo(item.current.position)).toBeGreaterThan(0.22 + 0.06 * h.proportions.height);
+  }
+  expect(samples).toBeGreaterThan(60);
 });

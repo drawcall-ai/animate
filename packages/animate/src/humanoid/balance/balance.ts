@@ -5,7 +5,7 @@ import { follow } from '../../core/follow';
 import type { Behaviour } from '../../core/goal';
 import { clampRotation } from '../../core/limits';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
-import { createAsks, takeAsks } from '../asks';
+import { createAsks, takeAsks, type Asks } from '../asks';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { forwardOf, smoothstep, yawOf } from '../../core/math';
@@ -35,7 +35,7 @@ export interface Gait {
   moving: boolean;
   /** come to rest: no walk under way, both feet planted a while and none wanting to step */
   settled: boolean;
-  /** seconds standing on planted feet since the current walk started; walkTo resets it */
+  /** seconds standing on planted feet since the current walk started; balance resets it on a new go request */
   planted: number;
   /** the thorax's rotation with the stride (rad, + to the left) */
   thoraxYaw: number;
@@ -79,6 +79,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
     const pelvis = { along: new TrackedPoint(), up: new TrackedPoint(), rotation: new TrackedRotation(), trunk: [new TrackedRotation(), new TrackedRotation()] };
     const feet: [FootPose, FootPose] = [footPose(), footPose()];
     let started = false;
+    let lastGo: Asks['go'] = null;
     yield* action<Frame<W>>({
       update: (f) => {
         if (f.dev) {
@@ -155,7 +156,8 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
 
         const g = h.gait;
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
-        g.planted = !c.moving && c.steps.every((st) => !st.swing) ? g.planted + f.dt : 0;
+        g.planted = go === lastGo && !c.moving && c.steps.every((st) => !st.swing) ? g.planted + f.dt : 0;
+        lastGo = go;
         g.settled = !c.moving && !stepped && c.steps.every((st) => !st.swing && st.plantedTime > SETTLED);
         g.velocity.copy(c.velocity);
         g.quiet.copy(posture.quiet);

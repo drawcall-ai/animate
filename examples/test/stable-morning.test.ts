@@ -135,9 +135,9 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
     const h = sim.actors[0];
     const item = h.holding.left?.item;
     const horse = sim.stage.bodies?.[0];
-    if (!item || item.name !== 'saddle' || !horse || item.supported || item.wornBy) continue;
     const feet = h.pose.position(h.pose.skeleton.index('leftFoot')).clone().sub(h.pose.position(h.pose.skeleton.index('rightFoot')));
     footAcross = Math.min(footAcross, feet.x * Math.cos(h.gait.facing) - feet.z * Math.sin(h.gait.facing));
+    if (!item || item.name !== 'saddle' || !horse || item.supported || item.wornBy) continue;
     for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
       const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
       const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));

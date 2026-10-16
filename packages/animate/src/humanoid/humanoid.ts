@@ -19,6 +19,7 @@ import { gazeAsks } from './reach-posture';
 import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { load, dress, type Bearing } from './worn';
+import { clearHead } from './hands/head';
 import { followHeld } from './hands/hold';
 import type { Dressed } from './worn';
 
@@ -75,6 +76,7 @@ export class Humanoid<W = unknown> {
     this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
     this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180,
+      avoid: (pose, goal) => clearHead(this, pose, goal),
       lead: (pose, point) => gazeAsks(this, pose, point),
     };
     const worn = dress(this, start.pose, options.wearing?.(p) ?? []);

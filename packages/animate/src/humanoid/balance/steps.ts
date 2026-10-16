@@ -247,7 +247,11 @@ function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Ve
     const gz = c.goal.z - c.root.z;
     const gl = Math.hypot(gx, gz);
     const across = gx * Math.cos(c.yaw) - gz * Math.sin(c.yaw);
-    if (gl > 0.02 && Math.abs(across) > 0.3 * gl) last = across > 0 ? 1 : 0;
+    const turn = wrapAngle(c.goalYaw - c.yaw);
+    // A short turning reposition opens with the outside foot: step around the planted
+    // inside foot rather than drawing that foot across the knees (a spin turn).
+    if (c.shuffling && Math.abs(turn) > SQUARE.standing) last = turn > 0 ? 0 : 1;
+    else if (gl > 0.02 && Math.abs(across) > 0.3 * gl) last = across > 0 ? 1 : 0;
   }
   const next = 1 - last;
   const lastLoaded = steps[last].plantedTime >= t.doubleSupport;

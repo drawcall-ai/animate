@@ -49,8 +49,8 @@ const LATERAL = 0.8;
 /** a goal this far off the facing (rad) is walked to more and more slowly, then turned to first; still, the body edges toward it this fast (m/s) */
 const TURN_FIRST = [0.6, 1.3] as const;
 const TURNING_SPEED = 0.15;
-/** people only back up for a short (m), slow (m/s) shuffle to a goal facing away (rad) */
-const BACKUP = { distance: 0.6, speed: 0.6, angle: 2.2 };
+/** Short side or back repositions keep the requested facing (m, m/s, rad; read from the former backing rule). */
+const REPOSITION = { distance: 0.6, speed: 0.6, backAngle: 2.2 };
 
 /** A foot as the steps take it: how long it has stood, the pitch it landed with, its swing while it swings. */
 export interface Stepping {
@@ -292,7 +292,7 @@ export class Carriage {
 
   /** A short reposition may keep its facing while stepping sideways or back. */
   get shuffling(): boolean {
-    return Math.hypot(this.goal.x - this.root.x, this.goal.z - this.root.z) < BACKUP.distance && this.goalSpeed < STOP.goalSpeed;
+    return Math.hypot(this.goal.x - this.root.x, this.goal.z - this.root.z) < REPOSITION.distance && this.goalSpeed < STOP.goalSpeed;
   }
 
   /** the ground velocity that closes (dx, dz) — `dist` away — and arrives at rest, within the speed limit */
@@ -355,8 +355,12 @@ export class Carriage {
     const toGoal = headingOf(dx, dz);
     const travel = toGoal + wrapAngle(headingOf(this.velocity.x, this.velocity.z) - toGoal) * smoothstep(0.35, 0.8, this.speed);
     const facing = this.goalFacing ?? this.yaw;
-    const backwards = Math.abs(wrapAngle(travel - facing)) > BACKUP.angle && dist < BACKUP.distance && this.speed < BACKUP.speed;
-    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (backwards ? 0 : 1);
+    const along = dx * Math.sin(facing) + dz * Math.cos(facing);
+    const across = dx * Math.cos(facing) - dz * Math.sin(facing);
+    const sideways = this.goalFacing !== null && along < Math.abs(across);
+    const backwards = Math.abs(wrapAngle(travel - facing)) > REPOSITION.backAngle;
+    const shuffle = dist < REPOSITION.distance && this.speed < REPOSITION.speed && (backwards || (sideways && this.goalSpeed < STOP.goalSpeed));
+    const far = Math.max(smoothstep(0.25, 0.6, dist), smoothstep(0.5, 0.9, this.goalSpeed), smoothstep(ARRIVAL_TURN[0], ARRIVAL_TURN[1], this.speed)) * (shuffle ? 0 : 1);
     this.goalYaw = facing + wrapAngle(travel - facing) * far;
     const e = wrapAngle(this.goalYaw - this.yaw);
     const most = (this.turnSpeed ?? TURN_RATE) * dt;

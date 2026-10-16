@@ -138,6 +138,12 @@ it('rejects unreachable stands before asking for a walk', () => {
   }
 });
 
+it('rejects a vertically unreachable placing point with the default stand before walking', () => {
+  const h = new Humanoid(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)));
+  expect(() => h.update(STEP)).toThrow(/point .* from shoulder middle .* exceeds arm reach/);
+  expect(h.asks.go).toBeNull();
+});
+
 it.each([new Vector3(1, 1.25, 2), new Vector3(-1, 1.4, 2)])('approaches a placing point squarely by default: %s', (point) => {
   let done = false;
   const h = standing((h) => [function* () {
@@ -150,4 +156,19 @@ it.each([new Vector3(1, 1.25, 2), new Vector3(-1, 1.4, 2)])('approaches a placin
   expect(done).toBe(true);
   expect(delta.length()).toBeLessThan(0.95 * h.proportions.armLength);
   expect(Math.abs(Math.atan2(delta.x, delta.z) - h.gait.facing)).toBeLessThan(0.3);
+});
+
+it('includes intermediate legs in arrival anticipation', () => {
+  let near = NaN;
+  let done = false;
+  const h = standing((h) => [function* () {
+    yield* parallel<Frame>('all', walkTo(h, { to: new Vector3(0, 0, 3), via: [new Vector3(0, 0, 1)] }), function* () {
+      yield* when(arriving(h, 0.6));
+      near = h.pose.position(0).z;
+    });
+    done = true;
+  }]);
+  for (let i = 0; i < 600; i++) h.update(STEP);
+  expect(done).toBe(true);
+  expect(near).toBeGreaterThan(2.5);
 });
