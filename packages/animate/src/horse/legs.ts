@@ -132,13 +132,16 @@ export function horseCarriage(f: Frame, legs: Legs, avoid?: Readonly<Vector3>): 
 
 const walkBlend = (f: Frame) => Math.min(1, f.prev.position(0).distanceTo(f.prev2.position(0)) / (f.dt * HORSE_WALK.slowest));
 
+// Tuned follow ceiling: leave catch-up room above a 0.95 m/s handler without lengthening the walking stride excessively.
+const FOLLOWING = { speed: 1.05, accel: 0.65 };
+
 /** Follow a floor goal with the horse's pelvis, legs and head working together. */
 export function horseFollow<W>(start: ReadonlyPose, goal: Live<Pick<Target, 'position' | 'velocity'>, W>, options: { motion?: Motion; avoid?: Live<Readonly<Vector3> | undefined, W> } = {}): Behaviour<W> {
   return function* () {
     const legs = new Legs(start, horseLegs(), HORSE_WALK);
     yield* action<Frame<W>>({ update: (f) => {
       horsePelvis(f, legs);
-      legs.toward(f, live(goal, f), options.motion ?? { speed: 0.95, accel: 0.65 });
+      legs.toward(f, live(goal, f), options.motion ?? FOLLOWING);
       horseCarriage(f, legs, options.avoid && live(options.avoid, f));
     } });
   };

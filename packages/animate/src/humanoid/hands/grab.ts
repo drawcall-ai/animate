@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
-import type { Behaviour, Live, Placement, Target } from '../../core/goal';
+import { live, type Behaviour, type Live, type Placement, type Target } from '../../core/goal';
 import { when } from '../../core/when';
 import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
@@ -25,6 +25,8 @@ export interface Stand {
 
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
+// Tuned placement reserve: use the available reach, retaining 1% for shoulder motion.
+const PLACING = 0.99;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
 const SQUARE = 0.3;
@@ -127,20 +129,25 @@ function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
  * bowing and lowering during the reach. A destination placement uses the held grips at its
  * orientation to choose the facing, so both hands can reach it.
  */
-export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Placement, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
+export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placement, W>, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
   const { aside = 0 } = options.stand ?? {};
   return function* () {
+    const moving = typeof holds === 'function' ? holds : null;
+    let start: Placement | null = null;
+    if (moving) yield* when<W>((f) => { start = live(moving, f); return true; });
+    const source = start ?? holds;
+    if (typeof source === 'function') throw new Error('approach: missing live placement');
     const grips: { side?: Side; at: Vector3 }[] = [];
-    const point = holds instanceof Vector3 || 'position' in holds;
-    if (holds instanceof Vector3) grips.push({ at: holds.clone() });
-    else if ('position' in holds) {
-      const { position, quaternion } = holds;
+    const point = source instanceof Vector3 || 'position' in source;
+    if (source instanceof Vector3) grips.push({ at: source.clone() });
+    else if ('position' in source) {
+      const { position, quaternion } = source;
       if (quaternion) for (const side of SIDES) {
         const held = h.holding[side];
         if (held) grips.push({ side, at: gripOf(held.item, held.grip).position.clone().applyQuaternion(quaternion).add(position) });
       }
       if (!grips.length) grips.push({ at: position.clone() });
-    } else for (const { side, item, grip } of held(holds)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
+    } else for (const { side, item, grip } of held(source)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
     const face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
@@ -149,7 +156,7 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Placement, 
     const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
     // Low two-hand loads need room for the bow without crowding the knees against their support.
     const distance = !point && grips.length === 2 && height < p.hipHeight ? 1.05 : WITHIN;
-    const ahead = options.stand?.ahead ?? Math.min(distance * p.armLength, p.toeFront + Math.max(0, height - p.ankleHeight), WITHIN * available);
+    const ahead = options.stand?.ahead ?? Math.min(point ? PLACING * available : distance * p.armLength, p.toeFront + Math.max(0, height - p.ankleHeight));
     const shoulder = (side?: Side) => side
       ? h.pose.position(INDEX[`${side}UpperArm`])
       : h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
@@ -188,7 +195,13 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Placement, 
       still = planted ? still + f.dt : 0;
       return turned() && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || still > STILL);
     };
-    yield* walkTo(h, { to, face, within: ahead, until: arrived })();
+    const destination = (f: Frame<W>) => moving && start
+      ? live(moving, f).position.clone().sub(start.position).add(to)
+      : to;
+    yield* walkTo(h, { to: destination, face, within: ahead, until: (f) => {
+      if (moving) there.copy(destination(f)).addScaledVector(forwardOf(face), -ahead);
+      return arrived(f);
+    } })();
   };
 }
 

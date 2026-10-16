@@ -5,14 +5,36 @@ import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
 import { stableMorning } from '../src/scenarios/stable-morning';
 
+// Read from the scene's saddle meshes and horse barrel, in metres.
+const SEAT_HEIGHT = 0.16;
+const SKIRT_HEIGHT = 0.29;
+const HORSE_HALF_WIDTH = 0.24;
+// Recalled conservative body radii, as shares of stature.
+const HEAD_RADIUS = 0.06;
+const BODY_RADIUS = 0.06;
+const LEG_RADIUS = 0.038;
+const HORSE_LEG_RADIUS = 0.06;
+const HUMAN_LEGS = [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']];
+const HORSE_LEGS = [
+  ['Femur', 'Gaskin'], ['Gaskin', 'HindCannon'],
+  ['Scapula', 'Humerus'], ['Humerus', 'Forearm'],
+];
+// Read from the carry/raise split: observe walking after leaving the rack and before the final approach.
+const LEAVING_RACK = 14;
+const RAISE_LEAD = 0.7;
+const MOVING = 0.15;
+const AT_HORSE = 0.7;
+
 it('leads upright with a free swinging arm and an articulated pelvis', () => {
   const sim = new Simulation(stableMorning(), undefined, true);
-  const chest: number[] = [], arm: number[] = [], roll: number[] = [];
+  const chest: number[] = [];
+  const arm: number[] = [];
+  const roll: number[] = [];
   const hip: number[][] = [[], []];
   let airborneTilt = 0;
   while (sim.t < 50) {
     sim.step();
-    const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === 0.16);
+    const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
     if (!saddle || saddle.kind !== 'box' || !saddle.quaternion) throw new Error('missing saddle');
     if (!sim.stage.bodies?.[0].worn.size && saddle.position.y > 1.25) {
       airborneTilt = Math.max(airborneTilt, new Vector3(0, 1, 0).applyQuaternion(saddle.quaternion).angleTo(new Vector3(0, 1, 0)));
@@ -33,6 +55,12 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
     arm.push(Math.atan2(upper.dot(forward), -upper.y));
     const horse = sim.stage.bodies?.[0];
     if (!horse) throw new Error('missing horse');
+    // The handler stays beside the shoulder once the horse has caught up.
+    if (sim.t > 45) {
+      const ahead = p.position(0).z - horse.pose.position(0).z;
+      expect(ahead).toBeGreaterThan(0.45);
+      expect(ahead).toBeLessThan(0.75);
+    }
     for (const [i, side] of ['left', 'right'].entries()) {
       hip[i].push(new Euler().setFromQuaternion(horse.pose.local(horse.pose.skeleton.index(`${side}Femur`)), 'YZX').x);
     }
@@ -56,7 +84,10 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
 it.each([0, 1, 2])('carries below the face until arrival and places clear of both bodies #%i', (seed) => {
   const scene = stableMorning();
   const sim = new Simulation(seed ? vary(scene, seed) : scene);
-  let headGap = Infinity, legGap = Infinity, barrelGap = Infinity, walking = 0;
+  let headGap = Infinity;
+  let legGap = Infinity;
+  let barrelGap = Infinity;
+  let walking = 0;
   while (sim.t < 25) {
     sim.step();
     const h = sim.actors[0];
@@ -65,31 +96,35 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
     if (!item || item.name !== 'saddle' || !horse || item.supported || item.wornBy) continue;
     const head = h.pose.point(h.pose.skeleton.index('head'), h.proportions.headCenter, new Vector3());
     for (const box of sim.props()) {
-      if (box.kind !== 'box' || !box.quaternion || ![0.16, 0.29].includes(box.size.y)) continue;
+      if (box.kind !== 'box' || !box.quaternion || ![SEAT_HEIGHT, SKIRT_HEIGHT].includes(box.size.y)) continue;
       const local = head.clone().sub(box.position).applyQuaternion(box.quaternion.clone().invert());
-      const off = local.clone().set(Math.max(0, Math.abs(local.x) - box.size.x / 2), Math.max(0, Math.abs(local.y) - box.size.y / 2), Math.max(0, Math.abs(local.z) - box.size.z / 2));
-      headGap = Math.min(headGap, off.length() - 0.06 * h.proportions.height);
+      const off = new Vector3(
+        Math.max(0, Math.abs(local.x) - box.size.x / 2),
+        Math.max(0, Math.abs(local.y) - box.size.y / 2),
+        Math.max(0, Math.abs(local.z) - box.size.z / 2),
+      );
+      headGap = Math.min(headGap, off.length() - HEAD_RADIUS * h.proportions.height);
     }
-    if (sim.t > 14 && h.gait.eta > 0.7 && h.gait.velocity.length() > 0.15) {
+    if (sim.t > LEAVING_RACK && h.gait.eta > RAISE_LEAD && h.gait.velocity.length() > MOVING) {
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }
-    if (item.current.position.x < 0.7) continue;
+    if (item.current.position.x < AT_HORSE) continue;
     const root = horse.pose.position(0);
-    barrelGap = Math.min(barrelGap, root.x - h.pose.position(0).x - 0.24 - 0.06 * h.proportions.height);
-    for (const side of ['left', 'right']) for (const [a, b] of [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']]) {
+    barrelGap = Math.min(barrelGap, root.x - h.pose.position(0).x - HORSE_HALF_WIDTH - BODY_RADIUS * h.proportions.height);
+    for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
       const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
       const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));
-      for (const s of ['left', 'right']) for (const [c, d] of [['Femur', 'Gaskin'], ['Gaskin', 'HindCannon'], ['Scapula', 'Humerus'], ['Humerus', 'Forearm']]) {
+      for (const s of ['left', 'right']) for (const [c, d] of HORSE_LEGS) {
         const other = horse.pose.position(horse.pose.skeleton.index(`${s}${c}`));
         const tip = horse.pose.position(horse.pose.skeleton.index(`${s}${d}`));
-        legGap = Math.min(legGap, segmentDistance(from, end, other, tip) - 0.038 * h.proportions.height - 0.06);
+        legGap = Math.min(legGap, segmentDistance(from, end, other, tip) - LEG_RADIUS * h.proportions.height - HORSE_LEG_RADIUS);
       }
     }
   }
-  console.log({ headGap, legGap, barrelGap, walking });
   expect(walking).toBeGreaterThan(0);
-  expect(headGap).toBeGreaterThan(0);
+  // Keep 2 cm of reserve, rather than a pass/fail boundary at contact.
+  expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);
   expect(barrelGap).toBeGreaterThan(0);
 });

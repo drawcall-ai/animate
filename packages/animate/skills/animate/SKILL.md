@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — a humanoid (`Humanoid`, `idle`, `walkTo`, `grab`, `hold`, `carry`, `release`, `wear`, `withGaze`) or any other body (`Body`, `Legs`, a shipped horse) moved by @pmndrs/timeline behaviours that flow into one another. Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a humanoid (`Humanoid`, `idle`, `walkTo`, `grab`, `hold`, `carry`, `place`, `release`, `wear`, `withGaze`) or any other body (`Body`, `Legs`, a shipped horse) moved by @pmndrs/timeline behaviours that flow into one another. Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -29,7 +29,7 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
     // walks up; eyes, hands and bow set off before it stands there
     yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
     yield* named('saddle the horse', function* () {
-      yield* place(h, saddle, onBone(horse, 0, onBack)(horse.frame))();
+      yield* place(h, saddle, onBone(horse, 0, onBack))();
       yield* wear(horse, saddle, 0)(); // the horse moves it from now on
     })();
     yield* named('check the fit', withGaze(h, () => horse.pose.position(HEAD), release(h, ['left', 'right'])))();
@@ -56,9 +56,8 @@ yield* parallel<Frame>('all', release(h, ['left', 'right']), grab(h, { right: [r
 // within a task: grab and withGaze overlap their own parts; don't walk up and look first yourself
 yield* grab(h, { right: [rope, 'knot'] })();
 
-// within a motion: one course through several places passes them without stopping
-yield* carry(h, saddle, [[1.1, over], [0.75, onBack]], { on: onBone(horse, 0) })();
-// not carry(…[[1.1, over]]) then carry(…[[0.75, onBack]]): the saddle stops dead above the back
+// placement overlaps the lift and approach, then raises and lowers onto a live destination
+yield* place(h, saddle, onBone(horse, 0, onBack))();
 ```
 
 `[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands.
@@ -71,7 +70,7 @@ Place what belongs to a body in its frame: `carried(h)` rather than a carry heig
 
 ## Leave placement to the library
 
-The defaults place and time things from the body, the load and the task; a hand-placed number usually reads worse and breaks for another body. Leave `stand` off `grab` and `approach` (they stand where the grips are in comfortable reach; placing points face squarely unless you give `face` for a particular orientation), options off `release` (it follows through and settles where the free arms take over), and `speed` off walks unless matching another body's pace. Give items their `mass` rather than slowing anything yourself: walks, holds and lifts slow and prepare for the load, and course seconds are written for an unloaded item. Carry poses come from `carried(h)` / `carried(h, 'right')`. To step back while keeping the facing, snapshot the target before walking: `const back = h.pose.position(0).clone().add(new Vector3(0, 0, -0.3).applyAxisAngle(new Vector3(0, 1, 0), h.gait.facing));` then `yield* walkTo(h, { to: back, face: h.gait.facing })();`.
+The defaults place and time things from the body, the load and the task; a hand-placed number usually reads worse and breaks for another body. Leave `stand` off `grab` and `approach` (they stand where the grips are in comfortable reach; placing points face squarely unless you give `face` for a particular orientation), options off `release` (it follows through and settles where the free arms take over), and `speed` off walks unless matching another body's pace. Give items their `mass` rather than slowing anything yourself: walks, holds and lifts slow and prepare for the load, and course seconds are written for an unloaded item. Use `place(h, item, destination)` for a lift, approach and placement; keep a moving destination live with `onBone`. Carry poses come from `carried(h)` / `carried(h, 'right')`. To step back while keeping the facing, snapshot the target before walking: `const back = h.pose.position(0).clone().add(new Vector3(0, 0, -0.3).applyAxisAngle(new Vector3(0, 1, 0), h.gait.facing));` then `yield* walkTo(h, { to: back, face: h.gait.facing })();`.
 
 What you author: the scene, the order of beats, the places on props a course passes, and how long a pause lasts.
 

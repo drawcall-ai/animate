@@ -1,6 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { Placement } from '../core/goal';
+import { loadFactor } from '../core/load';
+import { heldItems } from './hands/grips';
 import type { Humanoid } from './humanoid';
 import type { ReadonlyPose } from '../core/pose';
 
@@ -37,6 +39,14 @@ export function carried<W>(h: Humanoid<W>, side?: 'left' | 'right') {
   const at = facingAt<W>(h, 0, { position: new Vector3(side ? (side === 'left' ? CARRY_ASIDE : -CARRY_ASIDE) : 0, 0, side ? CARRY_BESIDE : CARRY_AHEAD) });
   return (f: Frame<W>) => {
     const goal = at(f);
+    // Recalled load law: heavy loads are held close to reduce their moment about the back.
+    // Tuned: the same effort law used for pace shortens the two-hand carry's lever arm (35 → 19 cm at 8 kg).
+    if (!side) {
+      const mass = heldItems(h).reduce((sum, item) => sum + item.mass, 0);
+      const effort = loadFactor(mass);
+      goal.position.add(new Vector3(0, 0, CARRY_AHEAD * (1 / (effort * effort) - 1) * h.scale)
+        .applyAxisAngle(UP, h.gait.facing));
+    }
     // A lift rises out of its squat: its resting height follows the feet, not the lowered pelvis.
     goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 + h.proportions.hipHeight + CARRY_HEIGHT * h.scale;
     goal.velocity.y = 0;

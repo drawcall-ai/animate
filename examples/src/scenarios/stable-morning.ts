@@ -20,9 +20,9 @@ const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
 const INSPECT = 0.85;
-// Tuned straight gate lane: pursuit lag v²/(2a) leaves slack beside the handler.
-const LEADING = { speed: 0.95, accel: 0.65 };
-const LEAD_OFFSET = 1.6;
+const LEADING = { speed: 0.95 };
+// Tuned beside the shoulder region: 0.6 m ahead of the trunk (the rig's scapular top is at 0.657 m).
+const LEAD_OFFSET = 0.6;
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -50,15 +50,13 @@ export function stableMorning(): Scenario {
       const pose = new Pose(HORSE_SKELETON);
       pose.setRoot(HORSE);
       const horse = new Body(HORSE_SKELETON, horseFollow(pose, () => {
-        // Muzzle is 1.63 m ahead of the root. At 0.95 m/s the pursuit lag is
-        // v²/(2a) = 0.69 m: a 1.6 m offset leaves about 0.66 m of lead, beside the handler.
         const ahead = leading && handler ? Math.max(0, handler.pose.position(0).z - HORSE.z - LEAD_OFFSET) : 0;
         // The gate and horse share this straight lane; do not chase the handler's pelvic sway.
         const target = new Vector3(HORSE.x, HORSE.y, HORSE.z + ahead);
         const velocity = leading && handler ? new Vector3(0, 0, handler.gait.velocity.z) : new Vector3();
         if (ahead === 0) velocity.set(0, 0, 0);
         return { position: target, velocity };
-      }, { motion: LEADING, avoid: () => handler?.pose.position(handler.pose.skeleton.index('head')) }), { pose, dev });
+      }, { avoid: () => handler?.pose.position(handler.pose.skeleton.index('head')) }), { pose, dev });
 
       const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(Math.PI / 2) });
       const gate = new Vector3(0.2, 0, 8.2);
@@ -73,8 +71,7 @@ export function stableMorning(): Scenario {
             look: reported(report, 'gaze', () => saddle.current.position),
           })))();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
-          withGaze(h, reported(report, 'gaze', () => saddlePlace(horse.frame).position),
-            place(h, saddle, saddlePlace(horse.frame)))))();
+          place(h, saddle, saddlePlace)))();
         yield* named('hands off, check the fit', function* () {
           yield* wear(horse, saddle, 0, { to: { position: SADDLED, quaternion: yaw(Math.PI / 2) } })();
           yield* release(h, ['left', 'right'])();
@@ -95,13 +92,16 @@ export function stableMorning(): Scenario {
         })();
         yield* named('untie the rail knot', reporting(report, ['rightHand'], function* () {
           yield* grab(h, { right: [rope, 'knot'] }, { look: reported(report, 'gaze', KNOT) })();
-          yield* carry(h, rope, [[0.6, carried(h, 'right')]])();
         }))();
         yield* named('lead out through the gate', reporting(report, ['rightHand'], function* () {
           const beside = carried(h, 'right');
+          leading = true;
           let stopped: Vector3 | null = null;
           yield* parallel<Frame<World>>('all',
-            hold(h, rope, { to: (f) => stopped ? { position: stopped } : beside(f) }),
+            function* () {
+              yield* carry(h, rope, [[0.6, beside]])();
+              yield* hold(h, rope, { to: (f) => stopped ? { position: stopped } : beside(f) })();
+            },
             function* () {
               yield* walkTo(h, { to: new Vector3(0.2, 0, gate.z - 2.5), speed: LEADING.speed })();
               stopped = rope.current.position.clone();
@@ -109,7 +109,6 @@ export function stableMorning(): Scenario {
                 () => when(timePassed(1.5, 'seconds')), { lead: 0, first: true })();
               stopped = null;
               lookedBack = true;
-              leading = true;
               yield* withGaze(h, reported(report, 'gaze', (f) => f.prev.position(0).clone().add(new Vector3(0, 0.5, 4))),
                 walkTo(h, { to: new Vector3(0.2, 0, 30), speed: LEADING.speed }))();
             },

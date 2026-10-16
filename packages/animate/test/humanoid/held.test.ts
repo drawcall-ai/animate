@@ -2,7 +2,7 @@ import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
@@ -195,4 +195,24 @@ it('takes up a heavy lift slowly, dips at arrival and recovers before finishing'
   expect(heavy.end).toBeGreaterThan(light.end + 0.5);
   expect(Number.isFinite(heavy.end)).toBe(true);
   expect(heavy.heights.at(-1)).toBeCloseTo(1.25, 2);
+});
+
+it('places on a destination that keeps moving during the lift and approach', () => {
+  const item = new Item(new Vector3(0, 1.1, 0.3), new Quaternion(), {
+    left: { position: new Vector3(0.18, 0, 0) },
+    right: { position: new Vector3(-0.18, 0, 0) },
+  });
+  let done = false;
+  let error = Infinity;
+  const destination = (f: Frame) => ({ position: new Vector3(0.08 * Math.sin(f.time), 1.2, 1.2) });
+  const h = standing((h) => [function* () {
+    yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* place(h, item, destination)();
+    done = true;
+  }, action<Frame>({ update: (f) => {
+    if (done) error = item.current.position.distanceTo(destination(f).position);
+  } })]);
+  for (let i = 0; i < 900 && !done; i++) h.update(STEP);
+  expect(done).toBe(true);
+  expect(error).toBeLessThan(0.01);
 });
