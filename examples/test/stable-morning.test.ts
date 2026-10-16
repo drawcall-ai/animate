@@ -3,7 +3,8 @@ import { expect, it } from 'vitest';
 import { Simulation } from '../src/simulation';
 import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
-import { stableMorning } from '../src/scenarios/stable-morning';
+import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
+import { HORSE, stableMorning } from '../src/scenarios/stable-morning';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
 const SEAT_HEIGHT = 0.16;
@@ -16,7 +17,7 @@ const LEG_RADIUS = 0.038;
 // Read from the horse leg proxy meshes, metres.
 const HORSE_LEG_RADIUS = 0.06;
 // Tuned catch-up window (s) and shoulder station bounds (m).
-const CAUGHT_UP = 45;
+const CATCH_UP_TIME = 45;
 const SHOULDER_MIN = 0.45;
 const SHOULDER_MAX = 0.75;
 const HUMAN_LEGS = [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']];
@@ -24,9 +25,7 @@ const HORSE_LEGS = [
   ['Femur', 'Gaskin'], ['Gaskin', 'HindCannon'],
   ['Scapula', 'Humerus'], ['Humerus', 'Forearm'],
 ];
-// Read from the carry/raise split: observe walking after leaving the rack and before the final approach.
-const LEAVING_RACK = 14;
-const RAISE_LEAD = 0.3;
+// Read from the carry/raise split: observe all walking before the final approach.
 // Read from the horse neck/head proxy cylinders and square tie-rail sections, metres.
 const HORSE_HEAD_RADIUS = 0.1;
 const RAIL_RADIUS = Math.SQRT2 * 0.04;
@@ -49,7 +48,7 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
   let firstStep = NaN;
   let horseStep = NaN;
   let leadGap = Infinity;
-  let horseRoot = new Vector3(1.2, 1.37, 3);
+  let horseRoot = HORSE.clone();
   while (sim.t < 50) {
     sim.step();
     const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
@@ -92,7 +91,7 @@ it('leads upright with a free swinging arm and an articulated pelvis', () => {
     const forward = new Vector3(Math.sin(h.gait.facing), 0, Math.cos(h.gait.facing));
     arm.push(Math.atan2(upper.dot(forward), -upper.y));
     // The handler stays beside the shoulder once the horse has caught up.
-    if (sim.t > CAUGHT_UP) {
+    if (sim.t > CATCH_UP_TIME) {
       const ahead = p.position(0).z - horse.pose.position(0).z;
       expect(ahead).toBeGreaterThan(SHOULDER_MIN);
       expect(ahead).toBeLessThan(SHOULDER_MAX);
@@ -155,7 +154,7 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
       );
       headGap = Math.min(headGap, off.length() - HEAD_RADIUS * h.proportions.height);
     }
-    if (sim.t > LEAVING_RACK && h.gait.eta > RAISE_LEAD && h.gait.velocity.length() > MOVING) {
+    if (h.gait.eta > RAISE_LEAD && h.gait.velocity.length() > MOVING) {
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }

@@ -13,12 +13,13 @@ import { skeletonProps, line } from '../stage/props';
 
 const UP = new Vector3(0, 1, 0);
 // Tuned: 3 cm below square standing, rather than an 8 cm crouch; contacts plan further reserve.
-const HORSE = new Vector3(1.2, 1.37, 3);
+export const HORSE = new Vector3(1.2, 1.37, 3);
 const RACK = new Vector3(-1.1, 0.88, 2);
 const KNOT = new Vector3(0.25, 1.12, 3.6);
 const HEAD = HORSE_SKELETON.index('head');
 const NECK = HORSE_SKELETON.index('neck');
 const HANDS = ['leftHand', 'rightHand'];
+const DURATION = 50;
 const INSPECT = 0.85;
 const LEADING = { speed: 0.95 };
 // Tuned beside the shoulder region: 0.6 m ahead of the trunk (the rig's scapular top is at 0.657 m).
@@ -27,10 +28,6 @@ const LEAD_OFFSET = 0.6;
 const LEAD_ASIDE = 0.55;
 // Tuned distance (m): ease into the shoulder station over the first metre of travel.
 const LEAD_EASE = 1;
-// Tuned unloaded seconds to take the saddle into its walking carry.
-const CARRY_LIFT = 0.75;
-// Read: the near rail post is at z=2.8 m. Tuned: pass 0.6 m before it.
-const RAIL_ENTRY = 2.8 - 0.6;
 const SADDLED = new Vector3(0, 0.23, 0);
 const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 
@@ -39,10 +36,10 @@ export function stableMorning(): Scenario {
   return {
     id: 'stable-morning', title: 'Cold morning in the stable yard',
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
-    duration: 50, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
+    duration: DURATION, actors: [{ position: { x: -1.5, z: 0 }, yaw: 0.1 }],
     cameraDistance: 4.8,
-    // One three-quarter bearing keeps the handler and horse separated along the lead.
-    cameraAngles: { front: -Math.PI / 3, side: -11 * Math.PI / 18 },
+    // Tuned bearings: three-quarter front and a side profile opening the handler’s leading lane.
+    cameraAngles: { front: -Math.PI / 3, side: -Math.PI / 2 },
     stage: (dev = false) => {
       const report = new Report();
       const saddle = new Item(RACK.clone(), yaw(-Math.PI / 2), {
@@ -74,20 +71,10 @@ export function stableMorning(): Scenario {
       const tasks = (h: Humanoid<World>): Behaviour<World> => function* () {
         // A breath and a look across the yard; idle supplies the movement underneath.
         yield* named('cold air at the door', withGaze(h, reported(report, 'gaze', new Vector3(-3, 1.9, 5)), () => when(timePassed(1.3, 'seconds')), { first: true }))();
-        yield* named('cross the yard', withGaze(h, reported(report, 'gaze', new Vector3(0.2, 1.4, 4)), walkTo(h, { to: new Vector3(0.2, 0, 2.5) })))();
-        yield* named('notice the horse', withGaze(h, reported(report, 'gaze', () => horse.pose.position(HEAD).clone()),
-          () => when(timePassed(0.65, 'seconds'))))();
         yield* named('fetch the saddle', reporting(report, HANDS,
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
             look: reported(report, 'gaze', () => saddle.current.position),
           })))();
-        yield* named('carry round the rail', function* () {
-          const atBody = carried(h);
-          yield* parallel<Frame<World>>('all', function* () {
-            yield* carry(h, saddle, [[CARRY_LIFT, atBody]])();
-            yield* hold(h, saddle, { to: atBody, until: () => !h.asks.go && h.gait.settled })();
-          }, walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, RAIL_ENTRY) }));
-        })();
         yield* named('carry and raise the saddle', reporting(report, HANDS,
           place(h, saddle, saddlePlace)))();
         yield* named('hands off, check the fit', function* () {
@@ -122,7 +109,7 @@ export function stableMorning(): Scenario {
               yield* carry(h, rope, [[0.6, beside]])();
               yield* hold(h, rope, { to: beside })();
             },
-            walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, 30), speed: LEADING.speed }),
+            walkTo(h, { to: new Vector3(HORSE.x - LEAD_ASIDE, 0, gate.z + LEADING.speed * DURATION), speed: LEADING.speed }),
             function* () {
               // Look back on the way to the gate; the glance does not stop the feet.
               yield* when(() => h.pose.position(0).z >= gate.z - 2.5);

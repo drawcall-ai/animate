@@ -91,8 +91,9 @@ export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W>
       return yaw;
     };
     yield* action<Frame<W>>({
-      init: () => () => {
-        h.gait.eta = Infinity;
+      init: () => {
+        h.gait.planted = 0;
+        return () => { h.gait.eta = Infinity; };
       },
       update: (f) => {
         const yaw = where(f);

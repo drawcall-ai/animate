@@ -290,6 +290,11 @@ export class Carriage {
     this.bent = Math.max(this.walk, this.bent + ((this.moving ? 1 : 0) - this.bent) * Math.min(1, dt * (this.moving ? BEND_RATE.give : BEND_RATE.straighten)));
   }
 
+  /** A short reposition may keep its facing while stepping sideways or back. */
+  get shuffling(): boolean {
+    return Math.hypot(this.goal.x - this.root.x, this.goal.z - this.root.z) < BACKUP.distance && this.goalSpeed < STOP.goalSpeed;
+  }
+
   /** the ground velocity that closes (dx, dz) — `dist` away — and arrives at rest, within the speed limit */
   private wantedVelocity(dx: number, dz: number, dist: number): Vector3 {
     const { goalVelocity: gv, accel } = this;
@@ -310,8 +315,7 @@ export class Carriage {
     const bend = Math.min(this.maxSpeed, LATERAL / Math.max(1e-6, Math.abs(this.turnRate), Math.abs(this.goalTurn)));
     const off = Math.abs(wrapAngle(headingOf(dx, dz) - this.yaw));
     // (but a short shuffle back to a goal that stays put)
-    const shuffle = dist < BACKUP.distance && this.goalSpeed < STOP.goalSpeed;
-    const turned = shuffle ? 1 : 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], off);
+    const turned = this.shuffling ? 1 : 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], off);
     // (a body standing turns first; one walking edges on round)
     const cap = Math.max(this.speed > TURNING_SPEED ? TURNING_SPEED : 0, Math.min(this.starting ? START_GLIDE : bend, this.maxSpeed * turned));
     this.turningFirst = cap <= 0;

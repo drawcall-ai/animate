@@ -12,12 +12,12 @@ import { carry, hold } from './carry';
 import { approach } from './grab';
 
 // Tuned unloaded course seconds: lift into a carry, raise on arrival, then lower onto the support.
-const LIFT = 0.75;
+const LIFT = 0.5;
 const RAISE = 1.1;
 const LOWER = 0.75;
-// Tuned anticipation: approach once the lift clears its support, raise 0.3 s before arrival, after the final turn.
+// Tuned anticipation: approach once the lift clears its support, raise on arrival before foot settling.
 const LIFT_CLEAR = 0.08;
-const ARRIVING = 0.3;
+export const RAISE_LEAD = 0.3;
 // Tuned default-stature metres: keep the rise ahead of the face and outside the destination until the final transfer.
 const OUTSIDE = 0.35;
 const BELOW = 0.1;
@@ -27,15 +27,23 @@ const BELOW = 0.1;
 export function place<W>(h: Humanoid<W>, item: Item, to: Live<Placement, W>): Behaviour<W> {
   return withGaze(h, (f) => live(to, f).position, function* () {
     const atBody = carried(h);
+    const height = Math.min(item.current.position.y, atBody(h.frame).position.y);
+    // The raise must read this approach’s ETA, after both lift clearance and any sibling walk.
     let approaching = false;
-    const near = arriving(h, ARRIVING);
+    const near = arriving(h, RAISE_LEAD);
     yield* parallel<Frame<W>>('all', function* () {
       yield* when<W>((f) => !item.supported && item.current.position.y >= atBody(f).position.y - LIFT_CLEAR * h.scale);
+      if (h.asks.go) yield* when(() => h.gait.eta === Infinity);
       approaching = true;
       yield* approach(h, to)();
     }, function* () {
-      yield* carry(h, item, [[LIFT, atBody]])();
-      yield* hold(h, item, { to: atBody, until: (f) => approaching && near(f) })();
+      // Draw the load below the bowed head before lifting it into the standing carry.
+      yield* carry(h, item, [[LIFT / 2, (f) => {
+        const goal = atBody(f);
+        goal.position.y = height;
+        return goal;
+      }], [LIFT / 2, atBody]])();
+      yield* hold(h, item, { to: atBody, until: (f) => approaching && near(f) && !h.gait.moving })();
       yield* carry(h, item, [[RAISE, (f) => {
         const goal = atBody(f);
         goal.quaternion = live(to, f).quaternion ?? goal.quaternion;

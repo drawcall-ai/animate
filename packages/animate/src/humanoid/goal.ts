@@ -8,19 +8,20 @@ import type { ReadonlyPose } from '../core/pose';
 
 /** A placement on a bone, scaled with its body and followed from final poses. */
 export function onBone<W>(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint<W>(h, bone, local, () => h.pose.rotation(bone).clone());
+  return movingPoint<W>(h, bone, () => local, () => h.pose.rotation(bone).clone());
 }
 
 /** A placement at a joint, aligned with body facing instead of the joint's rotation. */
 export function facingAt<W>(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly gait: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint<W>(h, bone, local, () => new Quaternion().setFromAxisAngle(UP, h.gait.facing));
+  return movingPoint<W>(h, bone, () => local, () => new Quaternion().setFromAxisAngle(UP, h.gait.facing));
 }
 
-function movingPoint<W>(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement, turn: () => Quaternion) {
+function movingPoint<W>(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Placement, turn: () => Quaternion) {
   let last: { time: number; position: Vector3 } | null = null;
   const velocity = new Vector3();
   return (f: Frame<W>) => {
     const pose = h.pose;
+    const local = offset();
     const quaternion = turn();
     const position = local.position.clone().multiplyScalar(h.scale).applyQuaternion(quaternion).add(pose.position(bone));
     if (local.quaternion) quaternion.multiply(local.quaternion);
@@ -36,13 +37,13 @@ const UP = new Vector3(0, 1, 0);
 
 /** A comfortable carry in front of the hips, or beside one hip for a single hand; follows the body. */
 export function carried<W>(h: Humanoid<W>, side?: 'left' | 'right') {
-  const position = new Vector3();
-  const at = facingAt<W>(h, 0, { position });
-  return (f: Frame<W>) => {
-    // Tuned: shorten the lever arm with the pace effort law (35 → 19 cm at 8 kg).
+  const at = movingPoint<W>(h, 0, () => {
+    // Recalled load law: shorten the lever arm with squared pace effort (35 → 19 cm at 8 kg).
     const effort = loadFactor(heldMass(h));
-    position.set(side ? (side === 'left' ? CARRY_ASIDE : -CARRY_ASIDE) : 0, 0,
-      side ? CARRY_BESIDE : CARRY_AHEAD / effort ** 2);
+    return { position: new Vector3(side ? (side === 'left' ? CARRY_ASIDE : -CARRY_ASIDE) : 0, 0,
+      side ? CARRY_BESIDE : CARRY_AHEAD / effort ** 2) };
+  }, () => new Quaternion().setFromAxisAngle(UP, h.gait.facing));
+  return (f: Frame<W>) => {
     const goal = at(f);
     // A lift rises out of its squat: its resting height follows the feet, not the lowered pelvis.
     goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 + h.proportions.hipHeight + CARRY_HEIGHT * h.scale;

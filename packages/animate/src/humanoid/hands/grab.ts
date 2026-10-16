@@ -25,6 +25,8 @@ export interface Stand {
 
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
+// Tuned clearance for the knees and free hands beside low two-hand supports (× arm length).
+const LOW_STAND = 1.05;
 /** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it), the body facing within SQUARE (rad) of the way asked */
 const IN_REACH = 0.65;
 const SQUARE = 0.3;
@@ -35,6 +37,8 @@ const ROUND = 0.5;
 /** the point beside what it walks round: how far on toward where it goes, and how near it the body comes before turning there (× ROUND) */
 const ON = 0.5;
 const NEAR = 0.3;
+// Tuned frontal approach cone: a wide load rounds the support when its lateral offset exceeds half its forward offset.
+const ROUND_ASIDE = 0.5;
 const STILL = 0.5;
 
 /**
@@ -49,28 +53,30 @@ export function grab<W>(h: Humanoid<W>, holds: Holds, options: { face?: number; 
   const { look = true, bow } = options;
   return function* () {
     let stood = false;
+    const arrivingForReach = arriving(h, LOWERING);
     const reach = function* () {
-      // (on their way out while the body still comes up, the body coming down for them as it plants
-      // its last step; it stands, they take hold)
-      yield* parallel<Frame<W>>(
-        'race',
-        when(() => stood),
-        function* () {
-          yield* when(arriving(h, REACHING_OUT));
-          yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
-        },
-        function* () {
-          yield* when(arriving(h, LOWERING));
-          // Prepare at the grip's height, within the hands' current approach reach.
-          // Lowering for the full distance of an unfinished step/turn causes a squat.
-          yield* action<Frame<W>>({ update: (f) => held(holds).forEach(({ side, item, grip }) => {
-            const at = shortOf(f, side, item, grip).position;
-            at.y = item.toWorld(gripOf(item, grip), _world).position.y;
-            bringShoulder(h, f, side, at);
-          }) });
-        },
-      );
-      yield* reachFor(h, holds)();
+      yield* parallel<Frame<W>>('all', function* () {
+        yield* parallel<Frame<W>>('race',
+          when((f: Frame<W>) => stood || (!h.gait.moving && arrivingForReach(f)
+            && held(holds).every(({ side, item, grip }) => {
+              const height = item.toWorld(gripOf(item, grip), _world).position.y;
+              return Math.abs(height - f.prev.position(INDEX[`${side}UpperArm`]).y) <= ARM_REACH * h.proportions.armLength;
+            }))),
+          function* () {
+            yield* when(arriving(h, REACHING_OUT));
+            yield* parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => shortOf(f, side, item, grip), { lead: false })));
+          },
+        );
+        yield* reachFor(h, holds)();
+      }, function* () {
+        yield* when((f: Frame<W>) => stood || arrivingForReach(f));
+        // Keep preparing the low grip through foot settling even after the full reach starts.
+        yield* action<Frame<W>>({ until: () => stood, update: (f) => held(holds).forEach(({ side, item, grip }) => {
+          const at = shortOf(f, side, item, grip).position;
+          at.y = item.toWorld(gripOf(item, grip), _world).position.y;
+          bringShoulder(h, f, side, at);
+        }) });
+      });
     };
     const walk = function* () {
       yield* approach(h, holds, options)();
@@ -109,7 +115,7 @@ const LOWERING = 0.3;
 /** how far toward its grip a hand reaches out while the body still comes up to it (share of the way from its shoulder) */
 const SHORT = 0.5;
 
-/** a point SHORT of the way from hand `side`'s shoulder to `item`'s grip `grip` (world) */
+/** A point SHORT of the way from shoulder to grip (world). */
 function shortOf<W>(f: Frame<W>, side: Side, item: Item, grip: string): Target {
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   return { position: item.toWorld(gripOf(item, grip), _world).position.sub(shoulder).multiplyScalar(SHORT).add(shoulder).clone() };
@@ -149,15 +155,15 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
     const shoulders = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
     const reach = ARM_REACH * p.armLength;
-    const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) * (1 - Number.EPSILON) : Infinity;
-    // Low two-hand loads need room for the bow without crowding the knees against their support.
-    const distance = !point && grips.length === 2 && height < p.hipHeight ? 1.05 : WITHIN;
+    const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
+    // Leave room beside a low support while the body bends to its grips.
+    const distance = !point && grips.length === 2 && height < p.hipHeight ? LOW_STAND : WITHIN;
     const ahead = options.stand?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + Math.max(0, height - p.ankleHeight));
     const shoulder = (side?: Side) => side
       ? h.pose.position(INDEX[`${side}UpperArm`])
       : h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
     const middle = grips.reduce((sum, g) => sum.add(g.at), new Vector3()).divideScalar(grips.length);
-    if (point) {
+    if (point && options.stand) {
       const distance = Math.hypot(ahead, aside, height - shoulders);
       if (distance > ARM_REACH * p.armLength) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
     }
@@ -167,9 +173,31 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
     }
     const to = middle.clone().addScaledVector(leftOf(face), -aside);
     const there = to.clone().addScaledVector(forwardOf(face), -ahead);
+    const rotation = (f: Frame<W>) => {
+      const current = moving ? live(moving, f) : null;
+      return start?.quaternion && current?.quaternion
+        ? current.quaternion.clone().multiply(start.quaternion.clone().invert())
+        : new Quaternion();
+    };
+    const facing = (f: Frame<W>) => {
+      const forward = forwardOf(face).applyQuaternion(rotation(f));
+      return headingOf(forward.x, forward.z);
+    };
+    const moved = (point: Vector3, f: Frame<W>) => moving && start
+      ? point.clone().sub(start.position).applyQuaternion(rotation(f)).add(live(moving, f).position)
+      : point;
+    const destination = (f: Frame<W>) => moved(to, f);
     // (round it: the way from where the body stands to there passing nearer its grips than ROUND)
     const body = h.pose.com(new Vector3()).setY(0);
     middle.setY(0);
+    const lateral = body.clone().sub(there).dot(leftOf(face));
+    const frontal = Math.abs(body.clone().sub(there).dot(forwardOf(face)));
+    if (point && grips.length > 1 && Math.abs(lateral) > Math.max(ROUND * p.scale, ROUND_ASIDE * frontal)) {
+      // A wide held load approaches beside its support before turning in, rather than cutting its corner.
+      const beside = there.clone().addScaledVector(leftOf(face), Math.sign(lateral) * ROUND * p.scale);
+      yield* walkTo(h, { to: (f) => moved(beside, f), until: (f) => flat(f.prev.com(_com), moved(beside, f)) < NEAR * ROUND * p.scale })();
+      body.copy(h.pose.com(new Vector3())).setY(0);
+    }
     const way = _d.subVectors(there, body).setY(0);
     const length = way.length();
     const along = length > 1e-6 ? _e.subVectors(middle, body).dot(way) / length : 0;
@@ -181,31 +209,12 @@ export function approach<W>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placem
       const across = new Vector3(-way.z, 0, way.x).normalize();
       const side = Math.sign(_e.subVectors(nearest, middle).dot(across)) || 1;
       const beside = middle.clone().addScaledVector(across, side * ROUND * p.scale).addScaledVector(way, (ON * ROUND * p.scale) / length);
-      yield* walkTo(h, { to: beside, until: (f) => flat(f.prev.com(_com), beside) < NEAR * ROUND * p.scale })();
+      yield* walkTo(h, { to: (f) => moved(beside, f), until: (f) => flat(f.prev.com(_com), moved(beside, f)) < NEAR * ROUND * p.scale })();
     }
-    const rotation = (f: Frame<W>) => {
-      const current = moving ? live(moving, f) : null;
-      return start?.quaternion && current?.quaternion
-        ? current.quaternion.clone().multiply(start.quaternion.clone().invert())
-        : new Quaternion();
-    };
-    const facing = (f: Frame<W>) => {
-      const forward = forwardOf(face).applyQuaternion(rotation(f));
-      return headingOf(forward.x, forward.z);
-    };
-    const destination = (f: Frame<W>) => moving && start
-      ? to.clone().sub(start.position).applyQuaternion(rotation(f)).add(live(moving, f).position)
-      : to;
-    let plantedAt = Infinity;
-    yield* parallel<Frame<W>>('race', function* () {
-      yield* action<Frame<W>>({ update: (f) => {
-        const planted = !h.gait.moving && h.feet.every((foot) => foot.phase === 'planted');
-        plantedAt = planted ? Math.min(plantedAt, f.time) : Infinity;
-      } });
-    }, walkTo(h, { to: destination, face: facing, within: ahead, until: (f) => {
+    yield* walkTo(h, { to: destination, face: facing, within: ahead, until: (f) => {
       const there = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
-      return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || f.time - plantedAt > STILL);
-    } }));
+      return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (h.gait.settled || h.gait.planted > STILL);
+    } })();
   };
 }
 

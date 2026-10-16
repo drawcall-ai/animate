@@ -1,3 +1,4 @@
+import { RAISE_LEAD } from '../../src/humanoid/hands/place';
 import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
@@ -249,7 +250,7 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   }]);
   for (let i = 0; i < 1200 && !done; i++) {
     h.update(STEP);
-    if (h.gait.moving && h.gait.eta > 0.7) {
+    if (h.gait.moving && h.gait.eta > RAISE_LEAD) {
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }

@@ -35,13 +35,15 @@ export interface Gait {
   moving: boolean;
   /** come to rest: no walk under way, both feet planted a while and none wanting to step */
   settled: boolean;
+  /** seconds standing on planted feet since the current walk started; walkTo resets it */
+  planted: number;
   /** the thorax's rotation with the stride (rad, + to the left) */
   thoraxYaw: number;
   /** the requested quiet stance displacement from the centred stance (m, world) */
   quiet: Vector3;
 }
 
-export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, thoraxYaw: 0, quiet: new Vector3() });
+export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, planted: 0, thoraxYaw: 0, quiet: new Vector3() });
 
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
 const BOW = { accel: 6, speed: 1.2 };
@@ -153,6 +155,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
 
         const g = h.gait;
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
+        g.planted = !c.moving && c.steps.every((st) => !st.swing) ? g.planted + f.dt : 0;
         g.settled = !c.moving && !stepped && c.steps.every((st) => !st.swing && st.plantedTime > SETTLED);
         g.velocity.copy(c.velocity);
         g.quiet.copy(posture.quiet);

@@ -128,7 +128,10 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   const turn = wrapAngle(c.yaw + c.stance.blade - yawOf(f.prev.local(0)));
   const margin = steps.map((st) => st.plantedTime >= t.doubleSupport && Math.abs(turn) > 1e-4 ? twistMargin(f, st.side, turn) : Infinity);
   const turning = margin[0] < margin[1] ? 0 : 1;
-  if (margin[turning] < TWIST_MARGIN && (!c.starting || c.bent >= READY)) return lift(c, turning, t, xcom, true);
+  const way = _v.subVectors(c.goal, c.root);
+  // A short side-step opens with the foot on that side before pivoting; twistLimit still bounds the pelvis.
+  const opening = c.starting && c.shuffling && Math.abs(way.dot(leftOf(c.yaw, _to))) > Math.abs(way.dot(forwardOf(c.yaw, _to)));
+  if (margin[turning] < TWIST_MARGIN && !opening && (!c.starting || c.bent >= READY)) return lift(c, turning, t, xcom, true);
   // (walking: standing, a body raised onto its toes is not leaving its feet behind)
   if (c.moving) for (let s = 0; s < 2; s++) if (steps[s].plantedTime > t.doubleSupport && overstretched(c, s, dt)) return lift(c, s, t, xcom, true);
   // (setting off, the knees give before a foot leaves: off a straight leg there is no stepping)
