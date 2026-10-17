@@ -1,4 +1,4 @@
-import { Euler, Quaternion, Vector3 } from 'three';
+import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { Item, type BoneName, type Placement, type Proportions, type Side, type Target } from '@drawcall/animate';
 import type { Prop, Solid } from '../../scenario';
 
@@ -17,8 +17,8 @@ export interface Gear {
 }
 
 /** a piece of gear at `at`: its grips, mass (kg) and centre of mass (in its frame, default its origin), drawing and solids */
-const piece = (at: Placement, grips: Record<string, Target>, mass: number, parts: Part[], solids: Solid[] = [], centre?: Vector3): Gear => ({
-  item: new Item(at.position.clone(), at.quaternion?.clone() ?? new Quaternion(), grips, { mass, centre }),
+const piece = (at: Placement, grips: Record<string, Target>, mass: number, parts: Part[], solids: Solid[] = [], centre?: Vector3, bounds?: Box3): Gear => ({
+  item: new Item(at.position.clone(), at.quaternion?.clone() ?? new Quaternion(), grips, { mass, centre, bounds }),
   parts,
   solids,
 });
@@ -43,7 +43,7 @@ export function helmet(at: Placement): Gear {
     chinLeft: { position: new Vector3(0.03, rim - 0.22, 0.22) },
     chinRight: { position: new Vector3(-0.03, rim - 0.22, 0.22) },
   };
-  const gear = piece(at, grips, 2.5, [
+  return piece(at, grips, 2.5, [
     { kind: 'cylinder', at: new Vector3(0, 0, 0), radius: HELM.radius, length: HELM.height },
     { kind: 'cylinder', at: new Vector3(0, HELM.height / 2 + 0.02, -0.01), radius: 0.08, length: 0.04 },
     { kind: 'box', at: new Vector3(0, rim - 0.03, HELM.radius + 0.005), size: new Vector3(0.02, 0.08, 0.01) }, // the nasal
@@ -51,12 +51,10 @@ export function helmet(at: Placement): Gear {
     { a: new Vector3(-0.08, HELM.height / 2, 0), b: new Vector3(0.08, HELM.height / 2, 0), radius: 0.01, touches: [], name: 'helm crown' },
     // (its rim at the brow and behind the head: over the shoulders, where it and its mail rest on them, it may touch the upper arms)
     ...[1, -1].map((z) => ({ a: new Vector3(-0.08, rim, z * HELM.radius), b: new Vector3(0.08, rim, z * HELM.radius), radius: 0.01, touches: ['shoulders', 'leftUpperArm', 'rightUpperArm'], name: 'helm rim' })),
-  ]);
-  // Bound the rigid shell, not the dangling strap grips below it; read directly
-  // from the rim, crown and nasal meshes above. Wear lowers this hollow shell onto the skull.
-  gear.item.bounds.set(new Vector3(-HELM.radius, rim - 0.03 - 0.08 / 2, -HELM.radius),
-    new Vector3(HELM.radius, HELM.height / 2 + 0.02 + 0.04 / 2, HELM.radius + 0.005 + 0.01 / 2));
-  return gear;
+  ], undefined, new Box3(
+    new Vector3(-HELM.radius, rim - 0.03 - 0.08 / 2, -HELM.radius),
+    new Vector3(HELM.radius, HELM.height / 2 + 0.02 + 0.04 / 2, HELM.radius + 0.005 + 0.01 / 2),
+  ));
 }
 
 /** the bascinet's radius and height (m) */

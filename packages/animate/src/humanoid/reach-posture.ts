@@ -24,17 +24,18 @@ export function twistToward<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readon
   if (Math.abs(twist) > Math.abs(h.asks.twist)) h.asks.twist = twist;
 }
 
-/** Reach requests use standing geometry, so a solved bow never chases itself. */
+/** Standing reach requests, closed against the solved shoulder and chest. */
 export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0) {
   const p = h.proportions;
   const factor = loadFactor(Math.max(mass, heldMass(h)));
   const low = hand.y < p.hipHeight;
+  // Tuned load strategy, not an empirical dose-response: heavier low reaches trade bow for knees.
   const bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
   if (low) h.asks.bowLimit = Math.min(h.asks.bowLimit, bowLimit);
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
   if (low && factor > 1 && h.gait.moving) return;
-  // Tuned heavy-load strategy: flex up to 60° as mass grows, sharing the descent
-  // with the knees before contact; 8 kg recruits about 27°, not a straight-leg stoop.
+  // research-contact §4 rule 3 [C]: ≥10–15° knees under load. Tuned 30° ceiling
+  // on each leg segment (knee flexion is their sum), scaled by the same load law.
   if (low) h.asks.lower = Math.max(h.asks.lower, p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share);
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.

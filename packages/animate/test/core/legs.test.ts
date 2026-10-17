@@ -209,6 +209,7 @@ it('reuses each travel forecast across root-height candidates', () => {
       forecast.mockClear();
       body.update(1 / 60);
       const shares = forecast.mock.calls.map((args) => args[6]);
+      expect(shares.length).toBeGreaterThan(0);
       expect(shares.length).toBe(new Set(shares).size);
     }
   } finally { forecast.mockRestore(); }

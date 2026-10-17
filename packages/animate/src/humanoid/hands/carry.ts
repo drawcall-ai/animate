@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { action, parallel } from '@pmndrs/timeline';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import { Carrier, type Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Until } from '../../core/goal';
@@ -51,7 +51,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
     const from = item.current.position.y;
     // Take-up and compliance belong to lifting off a support, not every carried waypoint.
     const load = item.supported ? factor - 1 : 0;
-    // The reach prepares the knees; lift starts on contact, with mass slowing its acceleration and path.
+    // Mass slows the lift’s acceleration and path.
     const path = course(item, frame, legs, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay });
     const end = new TrackedEnd();
     let since = NaN;
@@ -118,13 +118,12 @@ class TrackedEnd {
  * The hands on `item`'s grips, every sub-step: endless, or until `until`. Without `to`, the hands go
  * where the item goes (another moves it, or an unsupported hold inherits body travel). With `to`,
  * the hands carry it there: they go for its grips
- * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward) and kept
- * within the arms' reach. The after-hook follows the grips and fits the item to the wrists.
+ * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward).
+ * The arm solver bounds the wrists; carry rejects an unreachable endpoint rather than moving it
+ * silently within reach. The after-hook follows the grips and fits the item to the wrists.
  */
 export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
-  return function* () {
-    yield* holding(h, item, new CarryAim(h, item, options.motion ?? CARRYING), options)();
-  };
+  return () => holding(h, item, new CarryAim(h, item, options.motion ?? CARRYING), options)();
 }
 
 /** One load path: clear its course before following it, and judge the same endpoint. */
@@ -136,13 +135,6 @@ class CarryAim<W> {
   private readonly rotation = new TrackedRotation();
   private readonly at = new Vector3();
   private readonly turned = new Quaternion();
-  private dt = 0;
-  private readonly advance = (goal: Vector3) => {
-    this.position.follow(this.nominal.prev.position, this.nominal.current.position, goal, this.motion, this.dt, this.at);
-    // Constraint correction is not velocity to feed back into the intended path.
-    this.nominal.move(this.time, this.at, this.turned);
-    return this.at;
-  };
   private time = NaN;
 
   constructor(private readonly h: Humanoid<W>, private readonly item: Item, private readonly motion: Motion) {
@@ -155,7 +147,6 @@ class CarryAim<W> {
   read(f: Frame<W>, to: Live<Placement, W>): Carrier {
     if (this.time === f.time) return this.carrier;
     this.time = f.time;
-    this.dt = f.dt;
     const { nominal: aim, goal, h, item, motion } = this;
     const target = live(to, f);
     goal.position.copy(target.position);
@@ -163,7 +154,11 @@ class CarryAim<W> {
     // Continue the intended motion, rather than feeding wrist-fitting lag back into it.
     const turned = this.rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion,
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned);
-    clearBody(h, f, item, goal.position, turned, this.advance);
+    clearBody(h, f, item, goal.position, turned);
+    this.position.follow(aim.prev.position, aim.current.position, goal.position, motion, f.dt, this.at);
+    // Constraint correction is not velocity to feed back into the intended path.
+    aim.move(f.time, this.at, turned);
+    clearBody(h, f, item, this.at, turned);
     this.carrier.move(f.time, this.at, turned);
     return this.carrier;
   }
@@ -178,6 +173,12 @@ function holding<W>(h: Humanoid<W>, item: Item, path: CarryAim<W>, options: { to
     if (!to) {
       yield* action<Frame<W>>({ until: options.until });
       return;
+    }
+    if (item.supported && item.mass > 2 && (item.current.position.y >= h.proportions.hipHeight || h.proportions.hipHeight - h.pose.position(0).y < 0.005 * h.scale)) {
+      // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
+      yield* action<Frame<W>>({ update: () => {
+        h.asks.lower = Math.max(h.asks.lower, 0.005 * h.scale);
+      }, until: timePassed(0.1, 'seconds') });
     }
     // (carried off whatever it rested on)
     item.supported = false;

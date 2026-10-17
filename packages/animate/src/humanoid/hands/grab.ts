@@ -147,7 +147,7 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
     const shoulders = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
     const reach = ARM_REACH * p.armLength;
     const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
-    // Leave room beside a low support while the body bends to its grips.
+    // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
     const distance = !point && grips.length === 2 && height < p.hipHeight ? LOW_STAND / Math.sqrt(loadFactor(mass)) : WITHIN;
     const ahead = options.stand?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + Math.max(0, height - p.ankleHeight));
     const shoulder = (side?: Side) => side

@@ -92,12 +92,12 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
       go.accel = options.accel ?? accel / effort;
       const body = f.prev.com(_com).setY(0);
       at ??= body.clone();
-      if (leg < via.length && body.distanceTo(_v.copy(live(via[leg], f)).setY(0)) < ARRIVED.distance * h.proportions.scale) {
+      if (leg < via.length && body.distanceTo(_v.copy(live(via[leg], f)).setY(0)) < ARRIVED.distance * h.scale) {
         leg++;
         fixed = null;
       }
       const to = options.to === undefined ? at : live(options.to, f);
-      const close = Math.hypot(to.x - body.x, to.z - body.z) < within + CLOSE * h.proportions.scale;
+      const close = Math.hypot(to.x - body.x, to.z - body.z) < within + CLOSE * h.scale;
       const toward = close && fixed !== null ? fixed : headingOf(to.x - body.x, to.z - body.z);
       fixed = close ? toward : null;
       const yaw = options.face === undefined ? (within > 0 ? toward : null) : live(options.face, f);
@@ -130,7 +130,7 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
         if (leg < via.length) return false;
         if (options.until) return options.until(f, clock, time);
         const body = f.prev.com(_com);
-        const there = Math.hypot(body.x - go.to.x, body.z - go.to.z) < ARRIVED.distance * h.proportions.scale;
+        const there = Math.hypot(body.x - go.to.x, body.z - go.to.z) < ARRIVED.distance * h.scale;
         const turned = yaw === null || Math.abs(wrapAngle(yaw - h.gait.facing)) < ARRIVED.yaw;
         return there && turned && h.gait.settled;
       },
@@ -144,7 +144,7 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
  * is longer (the trajectory a motion-matching query predicts, here from the walk's own goal)
  */
 function etaOf<W>(h: Humanoid<W>, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
-  const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * h.proportions.scale;
+  const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * h.scale;
   const v = Math.min(go.speed, Math.max(h.gait.velocity.length(), SETTING_OFF));
   const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;
   const turn = yaw === null ? 0 : Math.max(0, Math.abs(wrapAngle(yaw - h.gait.facing)) - ARRIVED.yaw) / TURNING;

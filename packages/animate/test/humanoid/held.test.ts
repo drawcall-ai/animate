@@ -1,7 +1,9 @@
+import { clearBody } from '../../src/humanoid/hands/clearance';
+import { pointSegmentDistance } from '../../src/core/math';
 import { createWorld, type World } from '../../src/humanoid/world';
 import { RAISE_LEAD } from '../../src/humanoid/hands/place';
 import { standing } from './fixtures';
-import { Quaternion, Vector3 } from 'three';
+import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
@@ -262,4 +264,21 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   expect(raisingOnStep).toBeGreaterThan(0);
   expect(done).toBe(true);
   expect(item.current.position.distanceTo(destination.position)).toBeLessThan(0.01);
+});
+
+it.each([0.02, 0.22])('clears a %s m load from the final neck→head segment, including above the trunk', (radius) => {
+  const h = standing(() => []);
+  for (let i = 0; i < 60; i++) h.update(STEP);
+  const item = new Item(new Vector3(), new Quaternion(), {}, {
+    bounds: new Box3(new Vector3(-radius, -radius, -radius), new Vector3(radius, radius, radius)),
+  });
+  const neck = h.pose.position(INDEX.neck);
+  const head = h.pose.point(INDEX.head, h.proportions.headCenter, new Vector3());
+  const reserve = radius + 0.06 * h.proportions.height;
+  for (const part of [0, 0.5, 1]) {
+    const at = neck.clone().lerp(head, part);
+    clearBody(h, h.frame, item, at, item.current.quaternion);
+    expect(head.distanceTo(at)).toBeGreaterThan(reserve);
+    expect(pointSegmentDistance(at, neck, head)).toBeGreaterThan(reserve);
+  }
 });

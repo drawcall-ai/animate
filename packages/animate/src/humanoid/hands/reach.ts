@@ -38,14 +38,14 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
     const plan = hands.map(({ side, item, grip }) => {
       const goal = gripOf(item, grip);
       const from = h.pose.position(INDEX[`${side}Hand`]).clone().sub(item.current.position).applyQuaternion(item.current.quaternion.clone().invert());
-      const route = outside(item, goal.position, from, LOAD_RESERVE * h.proportions.scale);
+      const route = outside(item, goal.position, from, LOAD_RESERVE * h.scale);
       const points = route.length ? route : [goal.position];
       let was = from;
       const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
       const distance = lengths.reduce((sum, length) => sum + length, 0);
       const at = item.toWorld(goal, _world).position;
       const { delay, slower } = hands.length > 1 && side !== LEADING ? following(item, { [side]: grip }) : { delay: 0, slower: 0 };
-      const seconds = reachTime(distance / h.proportions.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
+      const seconds = reachTime(distance / h.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
       return { side, item, goal, points, lengths, distance, route, delay, seconds };
     });
     const arrived = until((f) => plan.every(({ side, item, points }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], { position: points[points.length - 1] }, item)));
