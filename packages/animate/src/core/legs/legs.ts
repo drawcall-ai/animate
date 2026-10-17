@@ -156,19 +156,23 @@ export class Legs {
         this.event(i, 'land');
       } else if (state.planted && (this.phase - state.footfall >= duty || !this.limbs[i].supports(f.current, state, walker))) {
         const next = before(offset, this.phase) + 1;
-        const { landing, contact } = this.landing(walker, state, next, i);
-        const limb = this.limbs[i];
-        const { position: to, yaw } = contact;
-        limb.foothold(f.current, walker, landing, { position: to, yaw });
-        // Numerical identity only: a stopped root takes no new steps.
-        if (to.distanceTo(state.foothold.position) > 1e-6 || Math.abs(yaw - state.foothold.yaw) > 1e-6) {
-          state.planted = false;
-          state.lift = this.phase;
-          state.footfall = next;
-          state.foothold.position.copy(to);
-          state.foothold.yaw = yaw;
-          this.event(i, 'lift');
-        } else state.footfall = before(offset, this.phase);
+        // A truncated startup swing cannot arrive at stance speed.
+        if (next - this.phase < (1 - duty) / 2) state.footfall = next;
+        else {
+          const { landing, contact } = this.landing(walker, state, next, i);
+          const limb = this.limbs[i];
+          limb.foothold(f.current, walker, landing, contact);
+          const { position: to, yaw } = contact;
+          // Numerical identity only: a stopped root takes no new steps.
+          if (to.distanceTo(state.foothold.position) > 1e-6 || Math.abs(yaw - state.foothold.yaw) > 1e-6) {
+            state.planted = false;
+            state.lift = this.phase;
+            state.footfall = next;
+            state.foothold.position.copy(to);
+            state.foothold.yaw = yaw;
+            this.event(i, 'lift');
+          } else state.footfall = before(offset, this.phase);
+        }
       }
       state.phase = this.phase - state.footfall + (state.planted ? 0 : 1);
       this.limbs[i].pose(f, walker, state, this.gait.clearance[i]);
@@ -178,7 +182,7 @@ export class Legs {
   /**
    * Preflight the next update's landing reserve without posing or advancing the engine.
    * Call after earlier body writers, before update, with the same frame and root/speed forecast.
-   * False: revise the forecast (e.g. adjust the root's height or slow down) and retry. At most ten reach
+   * False: revise the forecast (e.g. adjust the root's height or slow down) and retry. At most fourteen reach
    * solves per leg, with no foothold search. True guarantees the proposed-stance check;
    * it does not certify existing contacts, swing clearance or balance.
    */

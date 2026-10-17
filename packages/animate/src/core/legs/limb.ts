@@ -35,7 +35,7 @@ export class Limb {
   private swing: Swing | null = null;
   private ready = false;
   private landed = false;
-  private held: { position: Vector3; rotation: Quaternion } | null = null;
+  private held: { position: Vector3; rotation: Quaternion; pivot: Vector3 } | null = null;
 
   /** Read the previous completed pose, including later writers. */
   check(f: Frame): void {
@@ -46,7 +46,7 @@ export class Limb {
     const p = f.prev;
     const where = p.skeleton.bones[this.terminal].name;
     if (this.landed) {
-      const speed = p.position(this.terminal).distanceTo(f.prev2.position(this.terminal)) / f.dt;
+      const speed = p.point(this.terminal, this.held.pivot, _w).distanceTo(f.prev2.point(this.terminal, this.held.pivot, _end)) / f.dt;
       if (speed > 0.1) f.dev.append(f.time - f.dt, { check: 'leg touchdown speed (m/s)', value: speed, limit: 0.1, where });
     }
     const miss = p.position(this.terminal).distanceTo(this.held.position);
@@ -93,7 +93,7 @@ export class Limb {
     return this.reserve(p, walker, state.foothold, targets, 1e-5);
   }
 
-  /** Shorten a proposed step until its landing is reachable, before committing the foothold. */
+  /** Shorten a proposed step; if straight shortening cannot support it, try nearby lateral anchors. */
   foothold(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): void {
     const standing = this.standingAt(walker, ahead, contact.position.y);
     const desired = contact.position.clone();
@@ -102,7 +102,14 @@ export class Limb {
       return this.landingSupported(p, walker, ahead, contact);
     };
     if (reaches(1)) return;
-    if (!reaches(0)) throw new Error('root does not support the proposed stance');
+    if (!reaches(0)) {
+      const center = standing.clone();
+      for (const offset of [0.01, -0.01, 0.02, -0.02, 0.04, -0.04, 0.08, -0.08]) {
+        standing.copy(center).addScaledVector(_w.set(1, 0, 0).applyQuaternion(yawPitch(contact.yaw, 0, _a)), offset);
+        if (reaches(0)) break;
+      }
+      if (!reaches(0)) throw new Error('root does not support the proposed stance');
+    }
     let lo = 0;
     let hi = 1;
     // Eight bisections retain a verified reachable endpoint, within 1/256 of the step.
@@ -122,7 +129,7 @@ export class Limb {
   /** The same reserve used by preflight and the foothold search. */
   landingSupported(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): boolean {
     this.refs(0, walker.stride);
-    const targets = [ahead, ahead + HORIZON].flatMap((time): [number, number][] => [
+    const targets = [ahead - 2 * STEP, ahead, ahead + HORIZON].flatMap((time): [number, number][] => [
       [time, 0], [time, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)],
     ]);
     return this.reserve(p, walker, contact, targets, 1e-6);
@@ -159,7 +166,7 @@ export class Limb {
     this.refs(u, walker.stride);
     const pitch = this.pitch(Math.min(1, u / duty), stepping);
     const target = this.planted(state.foothold, pitch, _target);
-    this.held = { position: target.position.clone(), rotation: target.rotation.clone() };
+    this.held = { position: target.position.clone(), rotation: target.rotation.clone(), pivot: pitch >= 0 ? leg.heel : leg.toe };
     solver.solve(p, target);
     if (leg.toes) p.setLocal(leg.toes.bone, sagittal(-Math.min(0, pitch), _q));
   }
@@ -194,7 +201,7 @@ export class Limb {
     }
     const swing = this.swing;
     const reach = _top.distanceTo(landing.position);
-    const target = this.planted(state.foothold, this.pitch(0, walker.stride.stepping), _swingTarget);
+    const target = this.planted(state.foothold, this.pitch(0, stride.stepping), _swingTarget);
     const local = (time: number, at: Vector3) => {
       walker.rootAt(time, _root, _rootTurn);
       return at.sub(_root).applyQuaternion(yawPitch(yawOf(_rootTurn), 0, _rootTurn).invert());
