@@ -114,7 +114,6 @@ describe('balance', () => {
     // HEAD 4411c97: first accelerating stride 7.281 cm, next 5.203 cm.
     expect(excursions[0]).toBeLessThanOrEqual(0.07281);
     expect(excursions[1]).toBeLessThanOrEqual(0.05203);
-    console.log('human contact', JSON.stringify({ vertical: Math.max(...touch), pitchStep: Math.max(...pitchSteps), heelLift: Math.max(...heels), excursions }));
     let strides = 0;
     for (let k = 1; k < contacts.length; k++) {
       const from = contacts[k - 1], to = contacts[k];

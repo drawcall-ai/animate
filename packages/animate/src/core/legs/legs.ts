@@ -101,7 +101,7 @@ export class Legs {
         const i = (first + k) % this.states.length, state = this.states[i];
         const walker = predicted.walkers[i];
         const left = walker.timeTo(state.footfall);
-        if (this.supportsLeg(f, predicted, i) && (state.planted || left > HORIZON || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold))) continue;
+        if (this.supportsLeg(f, predicted, i) && (state.planted || left > HORIZON || this.limbs[i].landingSupported(f.current, walker, left, state.foothold))) continue;
         // The failed constraint is most likely to reject the next nearby height too.
         first = i;
         return false;
@@ -167,7 +167,6 @@ export class Legs {
           state.footfall = next;
           state.foothold.position.copy(to);
           state.foothold.yaw = yaw;
-          limb.lift();
           this.event(i, 'lift');
         } else state.footfall = before(offset, this.phase);
       }
@@ -215,11 +214,10 @@ export class Legs {
       return Math.max(0, phases.findIndex((value) => value >= landing - 1e-9)) * STEP;
     };
     const walkers: Walker[] = strides.map((stride, i) => ({
-      phase, stride, timeTo, previous: f.prev,
+      phase, stride, timeTo,
       at: (ahead) => {
         const ticks = Math.max(0, Math.ceil(ahead / STEP - 1e-9));
-        while (phases.length <= ticks) advance();
-        return { phase: phases[ticks], stride: strideAt(gait, speedAt(f.time + ticks * STEP), i) };
+        return strideAt(gait, speedAt(f.time + ticks * STEP), i);
       },
       rootAt: (ahead, position, turn) => {
         const root = step.root(f.time + Math.max(0, Math.ceil(ahead / STEP - 1e-9)) * STEP);

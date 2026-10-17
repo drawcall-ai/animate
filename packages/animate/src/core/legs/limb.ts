@@ -17,9 +17,8 @@ export const HORIZON = 0.1;
 export interface Walker {
   phase: number;
   stride: Stride;
-  previous: ReadonlyPose;
   timeTo(phase: number): number;
-  at(ahead: number): Pick<Walker, 'phase' | 'stride'>;
+  at(ahead: number): Stride;
   rootAt(ahead: number, position: Vector3, turn: Quaternion): void;
 }
 
@@ -34,8 +33,8 @@ export class Limb {
   private readonly rest: Float64Array;
   private readonly trial: Float64Array;
   private swing: Swing | null = null;
-  private lifting = false;
   private ready = false;
+  private landed = false;
   private held: { position: Vector3; rotation: Quaternion } | null = null;
 
   /** Read the previous completed pose, including later writers. */
@@ -46,10 +45,14 @@ export class Limb {
     if (!this.held) return;
     const p = f.prev;
     const where = p.skeleton.bones[this.terminal].name;
+    if (this.landed) {
+      const speed = p.position(this.terminal).distanceTo(f.prev2.position(this.terminal)) / f.dt;
+      if (speed > 0.1) f.dev.append(f.time - f.dt, { check: 'leg touchdown speed (m/s)', value: speed, limit: 0.1, where });
+    }
     const miss = p.position(this.terminal).distanceTo(this.held.position);
     // 0.1 mm distinguishes numerical settling from visible contact movement.
     if (miss > 1e-4) f.dev.append(f.time - f.dt, { check: 'leg contact (m)', value: miss, limit: 1e-4, where });
-    const turn = new Quaternion().copy(p.rotation(this.terminal)).angleTo(this.held.rotation);
+    const turn = p.rotation(this.terminal).angleTo(this.held.rotation);
     // A tenth of a milliradian detects a later writer rotating a foot about its fixed origin.
     if (turn > 1e-4) f.dev.append(f.time - f.dt, { check: 'leg contact turn (rad)', value: turn, limit: 1e-4, where });
   }
@@ -142,11 +145,6 @@ export class Limb {
     return true;
   }
 
-  /** the swing starts: it is taken from where the terminal is as it poses next */
-  lift() {
-    this.lifting = true;
-  }
-
   /** the leg posed for `state` at the walker's phase, its swing clearing the ground by `clearance` (m) */
   pose(f: Frame<unknown>, walker: Walker, state: Timing, clearance: number) {
     const { leg, solver } = this;
@@ -154,6 +152,7 @@ export class Limb {
     const p = f.current;
     this.ready = true;
     this.held = null;
+    this.landed = state.planted && this.swing !== null;
     if (!state.planted) return this.swung(f, walker, state, clearance);
     this.swing = null;
     const u = walker.phase - state.footfall;
@@ -184,17 +183,24 @@ export class Limb {
     const p = f.current;
     const left = walker.timeTo(state.footfall);
     const s = (walker.phase - state.lift) / (state.footfall - state.lift);
-    if (this.lifting || !this.swing) this.swing = this.lifted(f, walker);
+    const stride = walker.at(left);
+    this.baseAt(p, walker, left, _turn, _top);
+    const landing = this.planted(state.foothold, this.pitch(0, stride.stepping), _target);
+    // Commit the joint branch at lift-off; changing it mid-swing produces snaps.
+    if (!this.swing) {
+      this.swing = this.lifted(f, walker);
+      this.refs(0, stride);
+      solver.reach(_turn, _top, landing, this.swing.land);
+    }
     const swing = this.swing;
-    this.landing(p, walker, state, left);
-    const reach = _top.distanceTo(_target.position);
+    const reach = _top.distanceTo(landing.position);
     const target = this.planted(state.foothold, this.pitch(0, walker.stride.stepping), _swingTarget);
     const local = (time: number, at: Vector3) => {
       walker.rootAt(time, _root, _rootTurn);
       return at.sub(_root).applyQuaternion(yawPitch(yawOf(_rootTurn), 0, _rootTurn).invert());
     };
-    const end = local(left, target.position.clone());
-    const rate = local(left + STEP, target.position.clone()).sub(end).divideScalar(STEP);
+    const end = local(left, _end.copy(target.position));
+    const rate = local(left + STEP, _rate.copy(target.position)).sub(end).divideScalar(STEP);
     end.y = state.foothold.position.y + Math.min(this.leg.heel.y, this.leg.toe.y);
     rate.y = 0;
     for (let j = 0; j < 3; j++) {
@@ -204,12 +210,13 @@ export class Limb {
     target.position.y += clearance * loft(s);
     target.rotation.slerp(swing.turn, 1 - minimumJerk(s));
     const free = minimumJerk(4 * s) * (1 - minimumJerk(4 * s - 3));
-    this.lifting = false;
     for (let j = 0; j < solver.n; j++) this.setRef(j, swing.from[j] + (swing.land[j] - swing.from[j]) * minimumJerk(s) + swing.fold[j] * loft(s), walker.stride);
     _swingTarget.swing = s;
     _swingTarget.above = this.aboveAt(s);
     _swingTarget.floor = clearance * loft(s);
-    target.position.y -= Math.min(..._swingTarget.above.map((point) => _w.copy(point).applyQuaternion(target.rotation).y));
+    let low = Infinity;
+    for (const point of _swingTarget.above) low = Math.min(low, _w.copy(point).applyQuaternion(target.rotation).y);
+    target.position.y -= low;
     // Keep the landing's reach through mid-swing; return it with zero end acceleration.
     const hip = p.position(this.top), span = _w.subVectors(target.position, hip);
     if (span.length() > reach) target.position.lerp(span.setLength(reach).add(hip), free);
@@ -249,25 +256,14 @@ export class Limb {
     };
   }
 
-  private landing(p: Pose, walker: Walker, state: Timing, left: number) {
-    if (!this.swing) throw new Error('a landing without a swing');
-    const { stride } = walker.at(left);
-    this.refs(0, stride);
-    this.baseAt(p, walker, left, _turn, _top);
-    const target = this.planted(state.foothold, this.pitch(0, stride.stepping), _target);
-    // Commit the joint branch at lift-off; changing forecast branches mid-swing produces snaps.
-    if (this.lifting) this.solver.reach(_turn, _top, target, this.swing.land);
-  }
-
   /** the top joint's parent's turn and the top joint's position `ahead` s from now: off the root as now, the root where it is planned then */
   private baseAt(p: Pose, walker: Walker, ahead: number, turn: Quaternion, top: Vector3) {
     const parent = p.skeleton.bones[this.top].parent;
     walker.rootAt(ahead, _root, _rootTurn);
     const inverse = _a.copy(p.rotation(0)).invert();
     const relative = _b.copy(inverse).multiply(p.rotation(parent));
-    const previous = new Quaternion().copy(walker.previous.rotation(0)).invert().multiply(walker.previous.rotation(parent));
-    // Continue the parent body's rotation as well as the planned root (e.g. a walking pelvis).
-    turn.copy(_rootTurn).multiply(previous.slerp(relative, 1 + ahead / STEP));
+    // Only the root is planned: hold the current parent offset instead of extrapolating an oscillation.
+    turn.copy(_rootTurn).multiply(relative);
     top.copy(p.position(parent)).sub(p.position(0)).applyQuaternion(inverse).applyQuaternion(_rootTurn).add(_root)
       .add(_w.copy(p.skeleton.bones[this.top].offset).applyQuaternion(turn));
   }
@@ -315,5 +311,7 @@ const _target: LegTarget = { swing: null, position: new Vector3(), rotation: new
 const _swingTarget: LegTarget = { swing: 0, position: new Vector3(), rotation: new Quaternion(), above: [] };
 const _turn = new Quaternion();
 const _top = new Vector3();
+const _end = new Vector3();
+const _rate = new Vector3();
 const _root = new Vector3();
 const _rootTurn = new Quaternion();

@@ -51,7 +51,8 @@ export function footprint(p: Proportions, ankle: Readonly<Vector3>, yaw: number)
   ];
 }
 
-/** Keep the lift-off/mid-swing path; a derived C² quintic brakes through the last quarter. */
+/** Recalled CMU mocap anchors: 0.18 at s=0.3, 0.39 at 0.5, 0.8 at 0.8 (inherited).
+ * Derived tail: C² join at s=0.75 to the original fit, ending at 1 with v=a=0; supersedes the 0.8 anchor. */
 export function swingProgress(s: number): number {
   if (s <= 0.75) return s + s * (1 - s) * (-0.66 - 0.78 * s + 2.44 * s * s);
   const t = (s - 0.75) / 0.25;

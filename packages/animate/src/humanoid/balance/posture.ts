@@ -44,8 +44,13 @@ export const LOWER = { accel: 3, speed: 0.6 };
  */
 const LANDING = { from: 0.1, to: 0.75, relax: 0.025 };
 const LIFTED = 0.25;
+/** Tuned heel-rise forecast onset (rad); follows the actual roll softly beyond it. */
+const HEEL_SOFT = 0.75;
+/** Walking planted reach (× leg length): a soft knee under load. */
 export const REACH = 0.975;
+/** Standing planted reach (× leg length): nearly extended, without a singular knee. */
 export const STANDING_REACH = 0.995;
+/** Landing reach (× leg length): near extension before heel loading takes in the knee. */
 export const LANDING_REACH = 0.998;
 /** Shared reach through heel loading (× leg length), from near extension to standing/walking. */
 export const plantedReach = (bent: number, landed: number) => lerp(LANDING_REACH, lerp(STANDING_REACH, REACH, bent), smoothstep(0, 0.2, landed));
@@ -211,7 +216,8 @@ function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>
 }
 
 /**
- * The highest the pelvis may be (as planned, over its ground point) with every foot still in its
+ * Planning bound before pelvis following/rotation; legs.pelvisHeight enforces the final geometry.
+ * The highest the pelvis may be (over its ground point) with every foot still in its
  * leg's reach: a planted foot (a trailing one up on its ball, and every one as far as `tiptoe` asks
  * it up, 0 … 1; and not below `floor`), a landing one
  * in the late swing (fading in, against the hip as it will be on landing).
@@ -227,8 +233,8 @@ function reachLimit(c: Carriage, floor: number, tiptoe: number): number {
     const planted = (at: Vector3, yaw: number, landed: number, strike: number) => {
       // (fading from the landing's: a trailing foot's heel rises, a landed one rolls flat)
       const behind = -((at.x - hip.x) * fwd.x + (at.z - hip.z) * fwd.z);
-      const extra = Math.max(0, -0.75 - st.roll[1]);
-      const raised = -0.75 - extra * minimumJerk(extra / (MAX_HEEL - 0.75));
+      const extra = Math.max(0, -HEEL_SOFT - st.roll[1]);
+      const raised = -HEEL_SOFT - extra * minimumJerk(extra / (MAX_HEEL - HEEL_SOFT));
       const heel = lerp(strike * (1 - smoothstep(0, 0.15, landed)), raised, Math.max(tiptoe, smoothstep(0, 0.1, behind)));
       const reach = plantedReach(c.bent, landed) * p.legLength;
       const top = highest(hip, ankleFor(p, st.side, at, yaw, heel, _ankle), reach) + below;

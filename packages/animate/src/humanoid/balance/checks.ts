@@ -49,11 +49,13 @@ export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev, steps: reado
       return Math.hypot(actual.x - anchor.x, actual.z - anchor.z);
     };
     const heel = heelOf(h.proportions);
+    // Walking heel strike only: running lands through a different, forefoot loading pattern.
     if (steps[s].plantedTime === 0 && h.gait.run === 0) {
       const vertical = Math.abs(f.prev.point(bone, heel, new Vector3()).y - f.prev2.point(bone, heel, new Vector3()).y) / f.dt;
       if (vertical > 0.1) dev.append(f.time - f.dt, { check: 'touchdown vertical speed (m/s)', value: vertical, limit: 0.1, where: `${side}Foot` });
       const was = new Vector3(0, 0, 1).applyQuaternion(f.prev2.rotation(bone));
       const turn = Math.abs(pitch - Math.atan2(was.y, Math.hypot(was.x, was.z))) * 180 / Math.PI;
+      // Tuned 1.5°/tick ceiling for a visible slap; research-contact §1 gives no per-tick pitch limit.
       if (turn > 1.5) dev.append(f.time - f.dt, { check: 'touchdown pitch step (°)', value: turn, limit: 1.5, where: `${side}Foot` });
     }
     const ball = ballOf(h.proportions, side);

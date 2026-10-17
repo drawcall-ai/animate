@@ -33,6 +33,7 @@ function valueAt(keys: JointCycle['keys'], u: number): number {
   const [p0, p1, p2, p3] = [at(i - 1)[1], at(i)[1], at(i + 1)[1], at(i + 2)[1]];
   const width = u1 - u0;
   const before = (u0 - at(i - 1)[0] + 1) % 1, after = (at(i + 2)[0] - u1 + 2) % 1;
+  // Non-uniform key spacing: scale the neighboring secants by this interval, preserving phase rates.
   const m0 = (p2 - p0) * width / (width + before), m1 = (p3 - p1) * width / (width + after);
   return p1 + t * (m0 + t * (3 * (p2 - p1) - 2 * m0 - m1 + t * (2 * (p1 - p2) + m0 + m1)));
 }

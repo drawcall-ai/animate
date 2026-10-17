@@ -54,6 +54,27 @@ it('leg contact checks read the final pose after a later writer, and disappear w
   expect(run(false)).toEqual([]);
 });
 
+it('checks touchdown on direct Legs users after later pose writers, only with dev enabled', () => {
+  const run = (dev: boolean) => {
+    const pose = new Pose(SKELETON);
+    const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+    let landed = -1;
+    const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+      engine.toward(f, { position: new Vector3(0, pose.position(0).y, 20) }, { speed: 0.95, accel: 0.65 });
+      if (landed < 0 && engine.events.some((event) => event.type === 'land')) {
+        landed = f.time;
+        f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.01, 0, 0)));
+      }
+    } }), { pose, dev });
+    for (let tick = 0; tick < 120 && (landed < 0 || body.frame.time <= landed); tick++) body.update(1 / 60);
+    expect(landed).toBeGreaterThan(0);
+    return { log: body.log.filter((entry) => entry.check === 'leg touchdown speed (m/s)'), landed };
+  };
+  const { log, landed } = run(true);
+  expect(log).toContainEqual(expect.objectContaining({ limit: 0.1, time: landed }));
+  expect(run(false).log).toEqual([]);
+});
+
 it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', () => {
   expect(strideAt(HORSE_WALK, -8.9e-16, 0)).toEqual(strideAt(HORSE_WALK, 0, 0));
   for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(HORSE_WALK, speed, 0)).toThrow('leg speed');
@@ -71,7 +92,7 @@ it('shortens a long foothold with at most 40 reach solves and keeps its verified
   pose.setRoot(new Vector3(0, 1.32, 0));
   const limb = new Limb(horseLegs()[0], pose);
   const root = pose.position(0).clone();
-  const walker: Walker = { phase: 0, previous: pose, timeTo: () => 0, at: () => ({ phase: 0, stride: strideAt(HORSE_WALK, 1.6, 0) }), stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
+  const walker: Walker = { phase: 0, timeTo: () => 0, at: () => strideAt(HORSE_WALK, 1.6, 0), stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
     position.copy(root);
     turn.identity();
   } };
@@ -151,7 +172,6 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
     });
   }
   expect(Math.max(...contact)).toBeLessThanOrEqual(0.1);
-  console.log('horse contact', JSON.stringify({ fore: contact[0], hind: contact[1] }));
   expect(support.length).toBeGreaterThan(30);
   expect(Math.max(...support)).toBeLessThan(3);
   expect(Math.max(...swing)).toBeGreaterThan(25);

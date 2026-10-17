@@ -27,5 +27,5 @@ export function quintic(x: number, v: number, a: number, x1: number, v1: number,
   ];
 }
 
-/** C² lift, peaking at 30% of swing with a longer terminal descent. */
+/** Derived C² lift; peak 0.3 from research-contact §2 rule 3 (25–35%, recalled), longer terminal descent. */
 export const loft = (s: number) => s < 0.3 ? minimumJerk(s / 0.3) : 1 - minimumJerk((s - 0.3) / 0.7);

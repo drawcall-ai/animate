@@ -47,6 +47,7 @@ export class Solver {
   readonly lo: Float64Array;
   readonly hi: Float64Array;
   private readonly weight: Float64Array;
+  private weightSum: number;
   private readonly prior: Float64Array;
   /** the coordinates as last posed */
   readonly q: Float64Array;
@@ -100,6 +101,7 @@ export class Solver {
       this.hi[j] = hi;
       if (hi <= lo) throw new Error('a leg coordinate needs a nonzero range');
     }
+    this.weightSum = this.weight.reduce((sum, w) => sum + w, 0);
     this.q = new Float64Array(n);
     this.ref = new Float64Array(n);
     this.offsets = bones.map((b) => skeleton.bones[b].offset.clone());
@@ -121,7 +123,9 @@ export class Solver {
   /** the coordinates' reference (rad) for coordinate `j`, held within its range */
   setRef(j: number, value: number, weight = 1) {
     if (!(weight > 0 && Number.isFinite(weight))) throw new Error('a joint reference needs finite positive weight');
-    this.weight[j] = weight / (this.hi[j] - this.lo[j]) ** 2;
+    const next = weight / (this.hi[j] - this.lo[j]) ** 2;
+    this.weightSum += next - this.weight[j];
+    this.weight[j] = next;
     this.ref[j] = Math.min(this.hi[j], Math.max(this.lo[j], value));
   }
 
@@ -132,10 +136,11 @@ export class Solver {
   solve(pose: Pose, target: LegTarget, seed = this.ref): number {
     this.prior.set(seed);
     this.q.set(seed);
-    this.base(pose.rotation(pose.skeleton.bones[this.bones[0]].parent), pose.position(this.bones[0]));
+    this.baseTurn.copy(pose.rotation(pose.skeleton.bones[this.bones[0]].parent));
+    this.basePosition.copy(pose.position(this.bones[0]));
     let miss = this.iterate(target);
     const last = this.bones.length - 1;
-    if (miss > 1e-5 || target.above.some((point) => _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y < (target.floor ?? 0) - 1e-5)) {
+    if (seed !== this.ref && (miss > 1e-5 || target.above.some((point) => _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y < (target.floor ?? 0) - 1e-5))) {
       const kept = this.q.slice(), cost = this.cost(target, _r), previous = miss;
       this.q.set(this.ref);
       miss = this.iterate(target);
@@ -151,27 +156,20 @@ export class Solver {
     was.set(this.q);
     this.prior.set(this.ref);
     this.q.set(this.ref);
-    this.base(turn, top);
+    this.baseTurn.copy(turn);
+    this.basePosition.copy(top);
     const miss = this.iterate(target);
     q.set(this.q);
     this.q.set(was);
     return miss;
   }
 
-  private base(turn: Readonly<Quaternion>, top: Readonly<Vector3>) {
-    this.baseTurn.copy(turn);
-    this.basePosition.copy(top);
-  }
-
-  /**
-   * Levenberg's damped Gauss-Newton from the coordinates as they are, within their ranges (a straight knee is singular:
-   * plain Gauss-Newton would leap): the terminal's miss (m)
-   */
+  /** Bounded damped Gauss-Newton (straight knees are singular): terminal miss in m. */
   private iterate(target: LegTarget): number {
     const { n, q, H, g, d, J, lo: lb, hi: ub, fixed, weight, ref, trial } = this;
     this.bound(q);
     const r = _r;
-    const [wp, wr] = this.stiffness(target);
+    const wp = this.stiffness(target, Math.sqrt(STIFF)), wr = this.stiffness(target, this.weightSum);
     let cost = this.cost(target, r);
     let damping = 1e-3;
     for (let step = 0; step < STEPS; step++) {
@@ -245,10 +243,7 @@ export class Solver {
     return Math.hypot(r[0], r[1], r[2]);
   }
 
-  /** Euler coordinate boxes alone do not enforce the rig's combined swing/twist limit.
-   * Project each candidate toward its valid neutral before accepting it. Bounds are constraints,
-   * never a clamp applied after the contact solve (which would move a planted foot).
-   */
+  /** Enforce combined swing/twist ROM before accepting a candidate; a post-solve clamp would move the contact. */
   private bound(q: Float64Array): void {
     for (let j = 0; j < this.n; j++) q[j] = Math.min(this.hi[j], Math.max(this.lo[j], q[j]));
     for (let k = 0; k < this.bones.length; k++) {
@@ -272,18 +267,17 @@ export class Solver {
     }
   }
 
-  /** A free path yields to the floor; its tracking error and first two derivatives vanish at plant. */
-  private stiffness(target: LegTarget): [number, number] {
-    if (target.swing === null) return [STIFF, STIFF];
-    const tail = (1 - target.swing) ** 6;
-    return [Math.min(STIFF, Math.sqrt(STIFF) / tail), Math.min(STIFF, this.weight.reduce((sum, w) => sum + w, 0) / tail)];
+  /** Tuned sqrt(STIFF): geometric midpoint of unit reference and contact stiffness.
+   * Derived compliance (1-s)^6 has zero end value/rate/acceleration; STIFF caps conditioning. */
+  private stiffness(target: LegTarget, free: number): number {
+    return Math.min(STIFF, free / (target.swing === null ? 0 : (1 - target.swing) ** 6));
   }
 
   /** the cost at the coordinates now (the residual into `r`) */
   private cost(target: LegTarget, r: Float64Array): number {
     this.residual(target, r);
     let c = 0;
-    const [wp, wr] = this.stiffness(target);
+    const wp = this.stiffness(target, Math.sqrt(STIFF)), wr = this.stiffness(target, this.weightSum);
     for (let m = 0; m < 6; m++) c += (m < 3 ? wp : wr) * r[m] * r[m];
     for (let j = 0; j < this.n; j++) c += this.weight[j] * ((this.q[j] - this.ref[j]) ** 2 + (this.q[j] - this.prior[j]) ** 2) / 2;
     const last = this.bones.length - 1;

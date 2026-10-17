@@ -135,7 +135,6 @@ it('clears the development beat when nothing is running', () => {
   expect(body.frame.dev?.beat).toBeUndefined();
 });
 
-
 it('measures touchdown from the final poses, independently of the next pose', () => {
   const h = new Humanoid(createSkeletonModel(), () => function* () {});
   const pose = new Pose(h.rig.skeleton).copy(h.pose);

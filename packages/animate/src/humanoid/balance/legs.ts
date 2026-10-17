@@ -28,7 +28,7 @@ const HEEL_OFF = { stand: 0.62, walk: 0.19, run: 0.45 };
 /** push-off: how much further the ankle plantarflexes by toe-off (rad): to ~15° past neutral walking, ~25° running */
 const PUSH = { walk: 0.46, run: 0.88 };
 /** how far the ankle flexes up (rad) */
-export const DORSIFLEXION = (40 * Math.PI) / 180;
+const DORSIFLEXION = (40 * Math.PI) / 180;
 /** the swinging ankle holds its push-off through the start of the swing, then returns to just past neutral (rad), over this share of it */
 const SWING_ANKLE = 0.06;
 const SWING_RETURN = [0.1, 0.45] as const;
@@ -52,6 +52,9 @@ const FLAT_LIFT = 0.3;
 const TOES_RELAX = 0.3;
 /** how far a swinging leg reaches, at most (× its length): all but straight lifting and landing, a runner's less in between */
 const SWING_REACH = 0.93;
+/** Tuned soft reach onset, and straight-knee singularity reserve (fractions of reach). */
+const SWING_SOFT = 0.97;
+const STRAIGHT = 0.999;
 /** how far to its own side of the standing foot a swinging ankle passes, at least (m, default body) */
 const SWING_PAST = 0.06;
 
@@ -71,9 +74,8 @@ export const foldedReach = (p: Proportions, bend: number) => Math.sqrt(p.thigh *
 export function rollFoot(f: Frame<unknown>, c: Carriage, s: number): number {
   const st = c.steps[s];
   const goal = plantedPitch(f, c, s);
-  let pitch = follow(st.roll[0], st.roll[1], goal, ROLL, f.dt);
-  st.roll = [st.roll[1], pitch];
-  return pitch;
+  st.roll = [st.roll[1], follow(st.roll[0], st.roll[1], goal, ROLL, f.dt)];
+  return st.roll[1];
 }
 
 /**
@@ -84,7 +86,7 @@ export function rollFoot(f: Frame<unknown>, c: Carriage, s: number): number {
 function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number {
   const st = c.steps[s];
   const foot = c.feet[s];
-  const strike = st.landPitch * (1 - smoothstep(0, HEEL_ROCKER, st.plantedTime));
+  const strike = st.landPitch;
   const t = c.timing();
   const other = c.steps[1 - s];
   const trailing = !other.swing && other.plantedTime < st.plantedTime;
@@ -92,7 +94,7 @@ function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number {
   const runPush = smoothstep(0.45, 1, st.plantedTime / t.stance);
   const limit = lerp(lerp(HEEL_OFF.stand, HEEL_OFF.walk, c.walk), HEEL_OFF.run, t.run);
   const ankle = limit - lerp(PUSH.walk * walkPush, PUSH.run * runPush, t.run) * c.walk;
-  return Math.max(-MAX_HEEL, lerp(strike, Math.min(strike, ankle - shankTilt(f.prev, st.side, foot.yaw)), smoothstep(0, HEEL_ROCKER, st.plantedTime)));
+  return Math.max(-MAX_HEEL, lerp(strike, Math.min(0, ankle - shankTilt(f.prev, st.side, foot.yaw)), smoothstep(0, HEEL_ROCKER, st.plantedTime)));
 }
 
 /** a swing taking off now: from where the foot is (as the last pose has it, heading `fromYaw`), toward its landing `to`, the hip carried at `velocity` */
@@ -191,10 +193,11 @@ export function swingPose(f: Frame<unknown>, c: Carriage, s: number, out: FootPo
   const small = _b.copy(p.sole.smallToe).setX(p.sole.smallToe.x * st.sign).applyQuaternion(out.toes).y + ball;
   const soft = 0.004 * Math.sin(Math.PI * k) ** 2 + Number.EPSILON;
   const low = ankle.y + softMin(heel, softMin(big, small, soft), soft) - (foot.position.y - p.ankleHeight);
+  // sin³ has zero value, speed and acceleration at both contacts; the clearance cannot kick the sole.
   ankle.y += softplus(SOLE_CLEARANCE * Math.sin(Math.PI * k) ** 3 * smoothstep(0, CLEARING, k) - low, soft);
   // never out of the leg's reach: taken in from the floor and given back to it
   const reach = lerp(LANDING_REACH, SWING_REACH, run * smoothstep(0, 0.2, k) * (1 - smoothstep(0.6, 1, k))) * p.legLength;
-  ankle.lerp(withinReach(hip, _a.copy(ankle), reach, 0.97), minimumJerk(k / REACH_IN) * (1 - minimumJerk((k - 1 + REACH_IN) / REACH_IN)));
+  ankle.lerp(withinReach(hip, _a.copy(ankle), reach, SWING_SOFT), minimumJerk(k / REACH_IN) * (1 - minimumJerk((k - 1 + REACH_IN) / REACH_IN)));
   return out;
 }
 
@@ -211,7 +214,7 @@ function legGoal(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose): Ch
   const hip = c.hip(side, _hip);
   const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
   const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
-  const ankle = withinReach(hip, _a.copy(pose.ankle), 0.999 * c.p.legLength, 0.999);
+  const ankle = withinReach(hip, _a.copy(pose.ankle), STRAIGHT * c.p.legLength, STRAIGHT);
   const knee = INDEX[`${side}LowerLeg`];
   const limit = f.prev.skeleton.limits[knee];
   const swing = c.steps[side === 'left' ? 0 : 1].swing;
@@ -273,7 +276,7 @@ const _q = new Quaternion();
 const _spin = new Quaternion();
 const _arc = new Quaternion();
 
-/** Fit the applied pelvis to both ends of the leg reach, keeping the final foot goals. */
+/** Authoritative reach bound from applied hips and final foot goals; posture.reachLimit only plans the carriage. */
 export function pelvisHeight<W>(f: Frame<W>, c: Carriage, feet: readonly FootPose[]): number {
   let floor = -Infinity;
   let ceiling = Infinity;
