@@ -7,10 +7,11 @@ import { INDEX, type Side } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../core/math';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import type { Carriage } from './carriage';
-import { ankleFor, footprint } from './foot';
+import { ankleFor, footprint, MAX_HEEL } from './foot';
 import type { Frame } from '../../core/body';
-import { DORSIFLEXION, liftOff, MAX_HEEL, REACH, shankTilt } from './legs';
+import { liftOff } from './legs';
 import { hullOf, outside, past } from './support';
+import { REACH } from './posture';
 import { leadTime, type Timing } from './timing';
 
 /** the extrapolated centre of mass is caught by a step once it leaves the feet by this much (m, default body) */
@@ -80,8 +81,9 @@ export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>
       foot.phase = 'planted';
       st.swing = null;
       st.plantedTime = 0;
-      // (as the swing ended: no more toes-up than the ankle flexes under the shank)
-      st.landPitch = Math.min(w.strike, DORSIFLEXION - shankTilt(f.prev, st.side, foot.yaw));
+      // Continue the final constrained swing pitch, then roll about that heel.
+      const forward = _v.set(0, 0, 1).applyQuaternion(f.prev.rotation(INDEX[`${st.side}Foot`]));
+      st.landPitch = Math.atan2(forward.y, Math.hypot(forward.x, forward.z));
       st.roll = [st.landPitch, st.landPitch];
       c.lastLanded = s;
       return;

@@ -2,9 +2,18 @@ import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
 import { Humanoid, idle, walkTo, type Frame } from '../../src';
+import { INDEX } from '../../src/humanoid/bones';
+import { heelOf, swingProgress } from '../../src/humanoid/balance/foot';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
 const dt = 1 / 60;
+
+it('ends swing progression with zero speed and acceleration', () => {
+  const d = 1e-4;
+  expect(swingProgress(1)).toBeCloseTo(1, 12);
+  expect((swingProgress(1 + d) - swingProgress(1 - d)) / (2 * d)).toBeCloseTo(0, 5);
+  expect((swingProgress(1 + d) - 2 * swingProgress(1) + swingProgress(1 - d)) / d ** 2).toBeCloseTo(0, 4);
+});
 
 describe('balance', () => {
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
@@ -50,10 +59,31 @@ describe('balance', () => {
     });
     const samples: { y: number; speed: number }[] = [];
     const contacts: number[] = [];
+    const phases = ['planted', 'planted'];
+    const touch: number[] = [], pitchSteps: number[] = [], heels: number[] = [];
+    const rocker: number[][] = [[], []];
+    const pitch = (side: 'left' | 'right', previous = false) => {
+      const forward = new Vector3(0, 0, 1).applyQuaternion((previous ? h.frame.prev2 : h.pose).rotation(INDEX[`${side}Foot`]));
+      return Math.atan2(forward.y, Math.hypot(forward.x, forward.z)) * 180 / Math.PI;
+    };
     let planted = true;
     let settled = Infinity;
     for (let tick = 0; tick < 15 * 60; tick++) {
       h.update(dt);
+      for (const [s, side] of (['left', 'right'] as const).entries()) {
+        const bone = INDEX[`${side}Foot`];
+        const heel = h.pose.point(bone, heelOf(h.proportions), new Vector3());
+        if (h.feet[s].phase === 'planted' && phases[s] === 'swing') {
+          touch.push(Math.abs(heel.y - h.frame.prev2.point(bone, heelOf(h.proportions), new Vector3()).y) / dt);
+          pitchSteps.push(Math.abs(pitch(side) - pitch(side, true)));
+          rocker[s] = [];
+        }
+        if (h.feet[s].phase === 'planted' && rocker[s].length < 4) {
+          rocker[s].push(pitch(side));
+          heels.push(heel.y);
+        }
+        phases[s] = h.feet[s].phase;
+      }
       samples.push({ y: h.pose.position(0).y, speed: h.gait.velocity.length() });
       const on = h.feet[0].phase === 'planted';
       if (on && !planted) contacts.push(tick);
@@ -77,14 +107,22 @@ describe('balance', () => {
       }
       return count;
     };
+    const excursions = contacts.slice(1).map((to, k) => range(samples.slice(contacts[k], to + 1).map((sample) => sample.y)));
+    expect(Math.max(...touch)).toBeLessThanOrEqual(0.1);
+    expect(Math.max(...pitchSteps)).toBeLessThanOrEqual(1.5);
+    expect(Math.max(...heels)).toBeLessThanOrEqual(1e-6);
+    // HEAD 4411c97: first accelerating stride 7.281 cm, next 5.203 cm.
+    expect(excursions[0]).toBeLessThanOrEqual(0.07281);
+    expect(excursions[1]).toBeLessThanOrEqual(0.05203);
+    console.log('human contact', JSON.stringify({ vertical: Math.max(...touch), pitchStep: Math.max(...pitchSteps), heelLift: Math.max(...heels), excursions }));
     let strides = 0;
     for (let k = 1; k < contacts.length; k++) {
       const from = contacts[k - 1], to = contacts[k];
       const stride = samples.slice(from, to + 1);
       if (from < 3 * 60 || stride.some((sample) => sample.speed < 1.2)) continue;
       const ys = stride.map((sample) => sample.y);
-      // HEAD d318ba2: ~4.4 cm; eight reversals above 1 mm already exist.
-      expect(range(ys)).toBeLessThanOrEqual(0.045);
+      // HEAD 4411c97: 4.417 cm maximum; eight reversals above 1 mm already exist.
+      expect(range(ys)).toBeLessThanOrEqual(0.04418);
       expect(reversals(ys)).toBeLessThanOrEqual(8);
       strides++;
     }

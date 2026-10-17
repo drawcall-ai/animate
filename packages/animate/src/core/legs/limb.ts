@@ -1,12 +1,11 @@
 import { minimumJerk, yawOf } from '../math';
-// Stance pins the terminal; swing follows a quintic joint plan plus the reference cycle's shape.
-// The free terminal follows those references while its sole clears the ground.
+// Stance pins the terminal; swing follows a C² sole path ending on the stance rate.
 import { Euler, Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
 import type { Pose, ReadonlyPose } from '../pose';
 import { angleAt, cycleAt, DEG, type JointCycle } from './cycle';
 import type { LegChain, LegState } from './legs';
-import { boundSwing, quintic, type Swing } from './swing';
+import { loft, quintic, type Swing } from './swing';
 import type { Stride } from './gait';
 import { Solver, type LegTarget } from './solve';
 
@@ -18,6 +17,9 @@ export const HORIZON = 0.1;
 export interface Walker {
   phase: number;
   stride: Stride;
+  previous: ReadonlyPose;
+  timeTo(phase: number): number;
+  at(ahead: number): Pick<Walker, 'phase' | 'stride'>;
   rootAt(ahead: number, position: Vector3, turn: Quaternion): void;
 }
 
@@ -179,22 +181,39 @@ export class Limb {
   /** the swing this tick: its plan stepped toward the landing as now seen, its shape over it, the ground kept */
   private swung(f: Frame<unknown>, walker: Walker, state: Timing, clearance: number) {
     const { leg, solver } = this;
-    const { frequency } = walker.stride;
     const p = f.current;
-    const span = (state.footfall - state.lift) / frequency;
-    const left = Math.max(0, (state.footfall - walker.phase) / frequency);
-    const s = 1 - left / span;
-    if (this.lifting || !this.swing) this.swing = this.lifted(p, walker);
+    const left = walker.timeTo(state.footfall);
+    const s = (walker.phase - state.lift) / (state.footfall - state.lift);
+    if (this.lifting || !this.swing) this.swing = this.lifted(f, walker);
     const swing = this.swing;
     this.landing(p, walker, state, left);
-    for (let j = 0; j < solver.n; j++) boundSwing(swing, j, left + f.dt, solver.lo[j], solver.hi[j]);
-    for (let j = 0; j < solver.n; j++) [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], swing.land[j], left + f.dt, f.dt);
+    const reach = _top.distanceTo(_target.position);
+    const target = this.planted(state.foothold, this.pitch(0, walker.stride.stepping), _swingTarget);
+    const local = (time: number, at: Vector3) => {
+      walker.rootAt(time, _root, _rootTurn);
+      return at.sub(_root).applyQuaternion(yawPitch(yawOf(_rootTurn), 0, _rootTurn).invert());
+    };
+    const end = local(left, target.position.clone());
+    const rate = local(left + STEP, target.position.clone()).sub(end).divideScalar(STEP);
+    end.y = state.foothold.position.y + Math.min(this.leg.heel.y, this.leg.toe.y);
+    rate.y = 0;
+    for (let j = 0; j < 3; j++) {
+      [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], end.getComponent(j), rate.getComponent(j), left + f.dt, f.dt);
+    }
+    target.position.set(swing.x[0], 0, swing.x[2]).applyQuaternion(yawPitch(yawOf(p.rotation(0)), 0, _a)).add(p.position(0)).setY(swing.x[1]);
+    target.position.y += clearance * loft(s);
+    target.rotation.slerp(swing.turn, 1 - minimumJerk(s));
+    const free = minimumJerk(4 * s) * (1 - minimumJerk(4 * s - 3));
     this.lifting = false;
-    for (let j = 0; j < solver.n; j++) this.setRef(j, swing.x[j] + this.shape(j, s, walker.stride), walker.stride);
+    for (let j = 0; j < solver.n; j++) this.setRef(j, swing.from[j] + (swing.land[j] - swing.from[j]) * minimumJerk(s) + swing.fold[j] * loft(s), walker.stride);
+    _swingTarget.swing = s;
     _swingTarget.above = this.aboveAt(s);
-    // C² at both contacts, with the full sole clearance at mid-swing.
-    _swingTarget.floor = clearance * 64 * s ** 3 * (1 - s) ** 3;
-    solver.solve(p, _swingTarget);
+    _swingTarget.floor = clearance * loft(s);
+    target.position.y -= Math.min(..._swingTarget.above.map((point) => _w.copy(point).applyQuaternion(target.rotation).y));
+    // Keep the landing's reach through mid-swing; return it with zero end acceleration.
+    const hip = p.position(this.top), span = _w.subVectors(target.position, hip);
+    if (span.length() > reach) target.position.lerp(span.setLength(reach).add(hip), free);
+    solver.solve(p, _swingTarget, solver.q);
     if (leg.toes) p.setLocal(leg.toes.bone, this.toesAt(s, _a));
   }
 
@@ -212,45 +231,32 @@ export class Limb {
     return this.above;
   }
 
-  /** the swing setting off from how the joints have gone these three ticks */
-  private lifted(p: Pose, walker: Walker): Swing {
-    const { q, q1 } = this.solver;
-    const dt = STEP;
-    const stepping = walker.stride.stepping;
+  /** Start from the last two completed sole poses in the root's horizontal frame. */
+  private lifted(f: Frame<unknown>, walker: Walker): Swing {
+    const at = f.prev.position(this.terminal).clone().sub(f.prev.position(0)).applyQuaternion(yawPitch(yawOf(f.prev.rotation(0)), 0, _a).invert()).setY(Math.max(0, this.lowest(f.prev)));
+    const previous = f.prev2.position(this.terminal).clone().sub(f.prev2.position(0)).applyQuaternion(yawPitch(yawOf(f.prev2.rotation(0)), 0, _a).invert()).setY(Math.max(0, this.lowest(f.prev2)));
+    const blend = walker.stride.referenceBlend ?? 0;
+    const sample = (c: JointCycle, s: number) => cycleAt(c, c.duty + s * (1 - c.duty), blend);
     return {
-      x: Float64Array.from(q),
-      v: Float64Array.from(q, (x, j) => (x - q1[j]) / dt),
-      a: new Float64Array(q.length),
-      land: Float64Array.from(q),
-      stepping,
-      toes: this.leg.toes ? p.local(this.leg.toes.bone).clone() : new Quaternion(),
+      fold: Float64Array.from(this.cycles, (c) => c ? (sample(c, 0.5) - (sample(c, 0) + sample(c, 1)) / 2) * Math.sqrt(walker.stride.stepping) : 0),
+      x: Float64Array.from(at.toArray()),
+      v: Float64Array.from(at.clone().sub(previous).divideScalar(STEP).toArray()),
+      a: new Float64Array(3),
+      land: Float64Array.from(this.solver.q),
+      from: Float64Array.from(this.solver.q),
+      turn: f.prev.rotation(this.terminal).clone(),
+      toes: this.leg.toes ? f.prev.local(this.leg.toes.bone).clone() : new Quaternion(),
     };
   }
 
-  /**
-   * coordinate `j`'s swing shape `s` (0 … 1) through it: its reference cycle's swing over the
-   * chord between its ends (the knee's bump, the carpus's fold), eased in and out (16 s²(1 − s)²:
-   * none of it at either end, nor its rate or acceleration, the plan's own there)
-   */
-  private shape(j: number, s: number, { referenceBlend: blend = 0 }: Stride): number {
-    const c = this.cycles[j];
-    const swing = this.swing;
-    if (!c || !swing) return 0;
-    const [a, b] = [swingOf(c, 0, blend), swingOf(c, 1, blend)];
-    // For a folded limb, shortening is proportional to angle² near extension. Scale its
-    // flexion by sqrt(travel), preserving clearance as horizontal steps become shorter.
-    return (swingOf(c, s, blend) - a - (b - a) * s) * Math.sqrt(swing.stepping) * 16 * s * s * (1 - s) * (1 - s);
-  }
-
-  /** the landing solved ahead: the joints that stand on the contact `left` s from now, the root where it is planned then (from the last tick's) */
   private landing(p: Pose, walker: Walker, state: Timing, left: number) {
-    const swing = this.swing;
-    if (!swing) throw new Error('a landing without a swing');
-    const { stepping } = walker.stride;
-    this.refs(0, walker.stride);
+    if (!this.swing) throw new Error('a landing without a swing');
+    const { stride } = walker.at(left);
+    this.refs(0, stride);
     this.baseAt(p, walker, left, _turn, _top);
-    const target = this.planted(state.foothold, this.pitch(0, stepping), _target);
-    this.solver.reach(_turn, _top, target, swing.land);
+    const target = this.planted(state.foothold, this.pitch(0, stride.stepping), _target);
+    // Commit the joint branch at lift-off; changing forecast branches mid-swing produces snaps.
+    if (this.lifting) this.solver.reach(_turn, _top, target, this.swing.land);
   }
 
   /** the top joint's parent's turn and the top joint's position `ahead` s from now: off the root as now, the root where it is planned then */
@@ -258,8 +264,12 @@ export class Limb {
     const parent = p.skeleton.bones[this.top].parent;
     walker.rootAt(ahead, _root, _rootTurn);
     const inverse = _a.copy(p.rotation(0)).invert();
-    turn.copy(_rootTurn).multiply(_b.copy(inverse).multiply(p.rotation(parent)));
-    top.copy(p.position(this.top)).sub(p.position(0)).applyQuaternion(inverse).applyQuaternion(_rootTurn).add(_root);
+    const relative = _b.copy(inverse).multiply(p.rotation(parent));
+    const previous = new Quaternion().copy(walker.previous.rotation(0)).invert().multiply(walker.previous.rotation(parent));
+    // Continue the parent body's rotation as well as the planned root (e.g. a walking pelvis).
+    turn.copy(_rootTurn).multiply(previous.slerp(relative, 1 + ahead / STEP));
+    top.copy(p.position(parent)).sub(p.position(0)).applyQuaternion(inverse).applyQuaternion(_rootTurn).add(_root)
+      .add(_w.copy(p.skeleton.bones[this.top].offset).applyQuaternion(turn));
   }
 
   /** the rocker's pitch of the terminal `us` (0 … 1) through its stance (rad, + toes up), as far as it steps: minimum-jerk between its keys (a spline's overshoot would lift a flat hoof's toe) */
@@ -289,9 +299,6 @@ export class Limb {
 
 }
 
-/** a cycle's swing `s` (0 … 1) through it (rad): from its toe-off to its end */
-const swingOf = (c: JointCycle, s: number, blend: number) => cycleAt(c, c.duty + s * (1 - c.duty), blend);
-
 /** a rotation by `angle` (rad) in a bone's sagittal plane: its far end forward (about −X) */
 const sagittal = (angle: number, out: Quaternion) => out.setFromAxisAngle(X, -angle);
 
@@ -304,8 +311,8 @@ const _w = new Vector3();
 const _q = new Quaternion();
 const _a = new Quaternion();
 const _b = new Quaternion();
-const _target: LegTarget = { held: true, position: new Vector3(), rotation: new Quaternion(), above: [] };
-const _swingTarget: LegTarget = { held: false, position: new Vector3(), rotation: new Quaternion(), above: [] };
+const _target: LegTarget = { swing: null, position: new Vector3(), rotation: new Quaternion(), above: [] };
+const _swingTarget: LegTarget = { swing: 0, position: new Vector3(), rotation: new Quaternion(), above: [] };
 const _turn = new Quaternion();
 const _top = new Vector3();
 const _root = new Vector3();

@@ -13,7 +13,7 @@ import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
 import { seedOf } from '../../core/random';
 import { Life } from './life';
 import { Carriage } from './carriage';
-import { foldedFloor, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
+import { pelvisHeight, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
 import { LOWER, Posture, TIPTOE, type Trunk } from './posture';
 import { stepFeet } from './steps';
 import { checkFeet, checkSupport } from './checks';
@@ -76,14 +76,14 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
     const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)
-    const pelvis = { along: new TrackedPoint(), up: new TrackedPoint(), rotation: new TrackedRotation(), trunk: [new TrackedRotation(), new TrackedRotation()] };
+    const pelvis = { along: new TrackedPoint(), rotation: new TrackedRotation(), trunk: [new TrackedRotation(), new TrackedRotation()] };
     const feet: [FootPose, FootPose] = [footPose(), footPose()];
     let started = false;
     let lastGo: Asks['go'] = null;
     yield* action<Frame<W>>({
       update: (f) => {
         if (f.dev) {
-          checkFeet(h, f, f.dev);
+          checkFeet(h, f, f.dev, c.steps);
           checkSupport(h, f, f.dev);
         }
         const dt = f.dt;
@@ -122,8 +122,8 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         quiet.onto = asks.onto ?? life.onto;
         posture.carry(f, c, { lower, bow, twist }, trunk, quiet);
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
-        const up = pelvis.up.follow(_a.set(0, f.prev2.position(0).y, 0), _b.set(0, f.prev.position(0).y, 0), _g.set(0, c.pelvis.y, 0), PELVIS, dt, _up);
-        c.pelvis.copy(at).setY(up.y);
+        const up = follow(f.prev2.position(0).y, f.prev.position(0).y, c.pelvis.y, PELVIS, dt);
+        c.pelvis.copy(at).setY(up);
         pelvis.rotation.follow(f.prev2.local(0), f.prev.local(0), c.pelvisRotation, TURN, dt, c.pelvisRotation);
         f.current.setRoot(c.pelvis);
         f.current.setLocal(0, c.pelvisRotation);
@@ -143,13 +143,13 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
           if (st.swing) swingPose(f, c, s, pose);
           else plantedPose(p, side, h.feet[s], rollFoot(f, c, s), pose);
         });
-        const floor = foldedFloor(f, c, feet);
-        const raised = floor > c.pelvis.y;
-        c.pelvis.y = Math.max(c.pelvis.y, floor);
+        const height = pelvisHeight(f, c, feet);
+        const adjusted = height !== c.pelvis.y;
+        c.pelvis.y = height;
         f.current.setRoot(c.pelvis);
-        // The free ankle was relaxed against the shank before the folded-reach correction.
+        // The free ankle was relaxed against the shank before the pelvis reach correction.
         // Recompute it on the corrected hip, rather than carrying a sideways foot into the final solve.
-        if (raised) SIDES.forEach((_, s) => { if (c.steps[s].swing) swingPose(f, c, s, feet[s]); });
+        if (adjusted) SIDES.forEach((_, s) => { if (c.steps[s].swing) swingPose(f, c, s, feet[s]); });
         SIDES.forEach((side, s) => solveLeg(f, c, side, feet[s]));
 
         const g = h.gait;
@@ -182,7 +182,6 @@ const _a = new Vector3();
 const _b = new Vector3();
 const _g = new Vector3();
 const _at = new Vector3();
-const _up = new Vector3();
 const _half = new Quaternion();
 const _q = new Quaternion();
 const _local = new Quaternion();

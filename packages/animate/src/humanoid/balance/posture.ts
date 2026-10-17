@@ -5,12 +5,10 @@ import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, softMin, wrapAngle } from '../../core/math';
+import { clamp, forwardOf, leftOf, lerp, minimumJerk, quatYXZ, smoothstep, softMin, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage } from './carriage';
-import { ankleFor } from './foot';
-import { REACH, STANDING_REACH } from './legs';
-
+import { ankleFor, MAX_HEEL } from './foot';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
 const LIST = 0.05;
 const SWAY = 0.0085;
@@ -46,8 +44,11 @@ export const LOWER = { accel: 3, speed: 0.6 };
  */
 const LANDING = { from: 0.1, to: 0.75, relax: 0.025 };
 const LIFTED = 0.25;
-/** how far the pelvis is carried within its legs' reach (× their length): a planted one's walking, and one landing (all but straight: the old core's) */
-const PELVIS_REACH = { planted: REACH, landing: 0.998 };
+export const REACH = 0.975;
+export const STANDING_REACH = 0.995;
+export const LANDING_REACH = 0.998;
+/** Shared reach through heel loading (× leg length), from near extension to standing/walking. */
+export const plantedReach = (bent: number, landed: number) => lerp(LANDING_REACH, lerp(STANDING_REACH, REACH, bent), smoothstep(0, 0.2, landed));
 
 /** a light, brisk walk carries the trunk slightly forward (~3°), a run more (rad) */
 const gaitLean = (walk: number, run: number) => 0.05 * walk + 0.1 * run;
@@ -223,26 +224,27 @@ function reachLimit(c: Carriage, floor: number, tiptoe: number): number {
     const foot = c.feet[s];
     const hip = c.hip(st.side, _hip);
     const below = c.pelvis.y - hip.y;
-    const planted = (at: Vector3, yaw: number, landed: number) => {
+    const planted = (at: Vector3, yaw: number, landed: number, strike: number) => {
       // (fading from the landing's: a trailing foot's heel rises, a landed one rolls flat)
       const behind = -((at.x - hip.x) * fwd.x + (at.z - hip.z) * fwd.z);
-      const heel = lerp(st.landPitch * (1 - smoothstep(0, 0.15, landed)), -0.75, Math.max(tiptoe, smoothstep(0, 0.1, behind)));
-      const stands = lerp(STANDING_REACH, PELVIS_REACH.planted, c.bent);
-      const reach = lerp(PELVIS_REACH.landing, stands, smoothstep(0, 0.2, landed)) * p.legLength;
+      const extra = Math.max(0, -0.75 - st.roll[1]);
+      const raised = -0.75 - extra * minimumJerk(extra / (MAX_HEEL - 0.75));
+      const heel = lerp(strike * (1 - smoothstep(0, 0.15, landed)), raised, Math.max(tiptoe, smoothstep(0, 0.1, behind)));
+      const reach = plantedReach(c.bent, landed) * p.legLength;
       const top = highest(hip, ankleFor(p, st.side, at, yaw, heel, _ankle), reach) + below;
       return lerp(top, Math.max(top, floor), smoothstep(0.05, 0.15, behind));
     };
     const w = st.swing;
     if (!w) {
-      limit = Math.min(limit, planted(foot.position, foot.yaw, st.plantedTime));
+      limit = Math.min(limit, planted(foot.position, foot.yaw, st.plantedTime, st.landPitch));
       return;
     }
     // (a foot just lifted lets the pelvis go gradually; a runner's at once)
-    if (w.progress < LIFTED * (1 - c.run)) limit = Math.min(limit, planted(w.from, w.fromYaw, Infinity) + LANDING.relax * p.height * smoothstep(0, LIFTED, w.progress));
+    if (w.progress < LIFTED * (1 - c.run)) limit = Math.min(limit, planted(w.from, w.fromYaw, Infinity, st.landPitch) + LANDING.relax * p.height * smoothstep(0, LIFTED, w.progress));
     if (w.progress < LANDING.from) return;
     // (as it will hold the pelvis once landed: against the hip as it will be then)
     hip.addScaledVector(c.velocity, (1 - w.progress) * w.duration);
-    limit = Math.min(limit, planted(foot.position, foot.yaw, 0) + LANDING.relax * p.height * (1 - smoothstep(LANDING.from, LANDING.to, w.progress)));
+    limit = Math.min(limit, planted(foot.position, foot.yaw, 0, w.strike) + LANDING.relax * p.height * (1 - smoothstep(LANDING.from, LANDING.to, w.progress)));
   });
   return limit;
 }

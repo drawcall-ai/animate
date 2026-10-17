@@ -3,6 +3,7 @@ import type { Frame } from '../../core/body';
 import type { Dev } from '../../core/dev';
 import { GRAVITY } from '../../core/math';
 import { INDEX, SIDES } from '../bones';
+import type { Stepping } from './carriage';
 import type { Humanoid } from '../humanoid';
 import { solePoints } from '../landmarks';
 import { ballOf, footRotation, heelOf, footprint } from './foot';
@@ -29,7 +30,7 @@ export function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
 }
 
 /** Read the final planted foot, allowing its roll about the heel or ball, never the solve's goal. */
-export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
+export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev, steps: readonly Pick<Stepping, 'plantedTime'>[]): void {
   if (f.time <= f.dt) return;
   SIDES.forEach((side, s) => {
     const foot = h.feet[s];
@@ -48,6 +49,13 @@ export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
       return Math.hypot(actual.x - anchor.x, actual.z - anchor.z);
     };
     const heel = heelOf(h.proportions);
+    if (steps[s].plantedTime === 0 && h.gait.run === 0) {
+      const vertical = Math.abs(f.prev.point(bone, heel, new Vector3()).y - f.prev2.point(bone, heel, new Vector3()).y) / f.dt;
+      if (vertical > 0.1) dev.append(f.time - f.dt, { check: 'touchdown vertical speed (m/s)', value: vertical, limit: 0.1, where: `${side}Foot` });
+      const was = new Vector3(0, 0, 1).applyQuaternion(f.prev2.rotation(bone));
+      const turn = Math.abs(pitch - Math.atan2(was.y, Math.hypot(was.x, was.z))) * 180 / Math.PI;
+      if (turn > 1.5) dev.append(f.time - f.dt, { check: 'touchdown pitch step (°)', value: turn, limit: 1.5, where: `${side}Foot` });
+    }
     const ball = ballOf(h.proportions, side);
     const value = Math.abs(pitch) < 0.05 ? Math.max(slide(heel), slide(ball)) : slide(pitch > 0 ? heel : ball);
     if (value > 0.01) dev.append(f.time - f.dt, { check: 'planted foot slide (m)', value, limit: 0.01, where: `${side}Foot` });

@@ -31,7 +31,10 @@ function valueAt(keys: JointCycle['keys'], u: number): number {
   while (u1 <= u0) u1 += 1;
   const t = (x - u0) / (u1 - u0);
   const [p0, p1, p2, p3] = [at(i - 1)[1], at(i)[1], at(i + 1)[1], at(i + 2)[1]];
-  return 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+  const width = u1 - u0;
+  const before = (u0 - at(i - 1)[0] + 1) % 1, after = (at(i + 2)[0] - u1 + 2) % 1;
+  const m0 = (p2 - p0) * width / (width + before), m1 = (p3 - p1) * width / (width + after);
+  return p1 + t * (m0 + t * (3 * (p2 - p1) - 2 * m0 - m1 + t * (2 * (p1 - p2) + m0 + m1)));
 }
 
 /**

@@ -13,6 +13,9 @@ export interface Foot {
   phase: FootPhase;
 }
 
+/** the most a planted heel rises (rad) */
+export const MAX_HEEL = 1.05;
+
 /** half a foot's width at the toes (m, default body): how far past the ankle's line a foot holds the body sideways */
 export const FOOT_HALF_WIDTH = 0.04;
 
@@ -48,11 +51,12 @@ export function footprint(p: Proportions, ankle: Readonly<Vector3>, yaw: number)
   ];
 }
 
-/**
- * How far along its path (0 → 1) a swinging foot is at swing progress `s`: slow off the floor,
- * fastest late, slowing into the heel strike (CMU mocap: 0.18 at s = 0.3, 0.39 at 0.5, 0.8 at 0.8).
- */
-export const swingProgress = (s: number) => s + s * (1 - s) * (-0.66 - 0.78 * s + 2.44 * s * s);
+/** Keep the lift-off/mid-swing path; a derived C² quintic brakes through the last quarter. */
+export function swingProgress(s: number): number {
+  if (s <= 0.75) return s + s * (1 - s) * (-0.66 - 0.78 * s + 2.44 * s * s);
+  const t = (s - 0.75) / 0.25;
+  return 0.77390625 + t * (0.3690625 + t * (-0.069375 + t * (0.2546875 + t * (-0.64703125 + t * 0.31875))));
+}
 
 /** the ankle's rise above its straight path at swing progress `s`, peak 1, as the knee flexes (CMU mocap: walking peaks at s ≈ 0.38, running at 0.47) */
 export function swingHump(s: number, run: number): number {

@@ -100,7 +100,7 @@ export class Legs {
       for (let k = 0; k < this.states.length; k++) {
         const i = (first + k) % this.states.length, state = this.states[i];
         const walker = predicted.walkers[i];
-        const left = (state.footfall - walker.phase) / walker.stride.frequency;
+        const left = walker.timeTo(state.footfall);
         if (this.supportsLeg(f, predicted, i) && (state.planted || left > HORIZON || this.limbs[i].landingSupported(f.current, walker, Math.max(0, left), state.foothold))) continue;
         // The failed constraint is most likely to reject the next nearby height too.
         first = i;
@@ -207,20 +207,22 @@ export class Legs {
     const speedAt = (t: number) => speedOf(typeof input === 'number' ? input : input(t));
     const speed = speedAt(f.time);
     const strides = this.chains.map((_, i) => strideAt(gait, speed, i));
-    const phase = this.phase + strides[0].frequency * f.dt;
-    // Include the landing tick's phase overshoot, exactly as update does.
-    const phases = [0];
-    const seconds = (cycles: number) => {
-      while (phases[phases.length - 1] < cycles - 1e-9) {
-        const t = f.time + phases.length * STEP;
-        phases.push(phases[phases.length - 1] + strideAt(gait, speedAt(t), 0).frequency * STEP);
-      }
-      return phases.findIndex((value) => value >= cycles - 1e-9) * STEP;
+    const phase = this.phase + (speed > 0 || this.states.some((state) => !state.planted) ? strides[0].frequency * f.dt : 0);
+    const phases = [phase];
+    const advance = () => phases.push(phases[phases.length - 1] + strideAt(gait, speedAt(f.time + phases.length * STEP), 0).frequency * STEP);
+    const timeTo = (landing: number) => {
+      while (phases[phases.length - 1] < landing - 1e-9) advance();
+      return Math.max(0, phases.findIndex((value) => value >= landing - 1e-9)) * STEP;
     };
-    const walkers: Walker[] = strides.map((stride) => ({
-      phase, stride,
+    const walkers: Walker[] = strides.map((stride, i) => ({
+      phase, stride, timeTo, previous: f.prev,
+      at: (ahead) => {
+        const ticks = Math.max(0, Math.ceil(ahead / STEP - 1e-9));
+        while (phases.length <= ticks) advance();
+        return { phase: phases[ticks], stride: strideAt(gait, speedAt(f.time + ticks * STEP), i) };
+      },
       rootAt: (ahead, position, turn) => {
-        const root = step.root(f.time + seconds(ahead * stride.frequency));
+        const root = step.root(f.time + Math.max(0, Math.ceil(ahead / STEP - 1e-9)) * STEP);
         position.copy(root.position);
         turn.copy(root.quaternion);
       },
@@ -229,15 +231,15 @@ export class Legs {
   }
 
   private landing(walker: Walker, state: LegTiming, next: number, i: number) {
-    const { frequency, duty, stepping } = walker.stride;
+    const { duty, stepping } = walker.stride;
     const limb = this.limbs[i];
     const position = new Vector3();
     const turn = new Quaternion();
-    walker.rootAt((next + (walker.stride.stanceCenter ?? duty / 2) - walker.phase) / frequency, position, turn);
+    walker.rootAt(walker.timeTo(next + (walker.stride.stanceCenter ?? duty / 2)), position, turn);
     const anchor = limb.anchor.clone();
     if (limb.leg.width !== undefined) anchor.x += (limb.leg.width - anchor.x) * stepping;
     const to = anchor.applyQuaternion(turn).add(position).setY(state.foothold.position.y);
-    return { landing: (next - walker.phase) / frequency, contact: { position: to, yaw: yawOf(turn) + limb.leg.toeOut } };
+    return { landing: walker.timeTo(next), contact: { position: to, yaw: yawOf(turn) + limb.leg.toeOut } };
   }
 
   private event(leg: number, type: ContactEvent['type']): void {

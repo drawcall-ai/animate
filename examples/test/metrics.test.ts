@@ -144,7 +144,7 @@ const KNOWN: [string, Scenario][] = [
 ];
 for (const [name, sc] of KNOWN) it.fails(`${name} (known)`, () => judged(sc));
 // (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)
-it.fails('stroll: the pelvis bobs on a bend within 1 cm of walking straight (known)', () => {
+it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
   const m = measure('stroll', steps(new Simulation(stroll())));
   const straight = m.gait.summary(false, false);
   const curve = m.gait.summary(true, false);

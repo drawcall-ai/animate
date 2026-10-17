@@ -149,6 +149,11 @@ export function horseFollow<W>(start: ReadonlyPose, goal: Live<Pick<Target, 'pos
   return function* () {
     const legs = new Legs(start, horseLegs(), HORSE_WALK);
     yield* action<Frame<W>>({ update: (f) => {
+      if (f.dev) for (const event of legs.events) if (event.type === 'land') {
+        const bone = LEGS[event.leg].hoof;
+        const speed = f.prev.position(bone).distanceTo(f.prev2.position(bone)) / f.dt;
+        if (speed > 0.1) f.dev.append(f.time - f.dt, { check: 'horse touchdown speed (m/s)', value: speed, limit: 0.1, where: f.prev.skeleton.bones[bone].name });
+      }
       horsePelvis(f, legs);
       const target = live(goal, f);
       const pace = Math.max(HORSE_WALK.slowest, target.velocity?.length() ?? 0);

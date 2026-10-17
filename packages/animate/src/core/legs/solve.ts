@@ -1,5 +1,5 @@
 // A leg's joints posed as one bounded least-squares problem (Levenberg-Marquardt, an active set
-// for the bounds): the terminal's position and turn stiff targets (a contact, a landing), or free in swing
+// for the bounds): the terminal's position and turn stiff at contact, compliant through swing
 // (joint references shape it while the sole clears the ground); each joint's reference a soft target weighted by
 // the rig's own range for it; the ground a stiff one-sided target; every joint within its range.
 import { solveFree } from './cholesky';
@@ -24,15 +24,14 @@ const STIFF = 1e9;
 // Tuned: 24 iterations settle the trot's most folded contact below 0.01 mm.
 const STEPS = 24;
 const CONVERGED = 1e-7;
-/** Full terminal contact (world), or a swing with its reference orientation and one-sided ground constraints. */
+/** A terminal pose (world), with one-sided ground constraints. */
 export interface LegTarget {
-  /** false: the terminal is free; references shape the swing and ground constrains its sole. */
-  held: boolean;
+  /** null: rigid contact; otherwise swing progress, with compliance vanishing before plant. */
+  swing: number | null;
   position: Vector3;
   rotation: Quaternion;
   /** points of the terminal (its frame) kept above the ground (y = 0), hard */
   above: readonly Vector3[];
-  /** Sole clearance during swing (m). */
   floor?: number;
 }
 
@@ -48,10 +47,9 @@ export class Solver {
   readonly lo: Float64Array;
   readonly hi: Float64Array;
   private readonly weight: Float64Array;
-  private readonly turnWeight: number;
-  /** the coordinates as last posed and a tick before */
+  private readonly prior: Float64Array;
+  /** the coordinates as last posed */
   readonly q: Float64Array;
-  readonly q1: Float64Array;
   /** the soft targets (set before `solve`) */
   readonly ref: Float64Array;
   private readonly offsets: Vector3[];
@@ -94,6 +92,7 @@ export class Solver {
     this.lo = new Float64Array(n);
     this.hi = new Float64Array(n);
     this.weight = new Float64Array(n);
+    this.prior = new Float64Array(n);
     for (let j = 0; j < n; j++) {
       const [lo, hi] = rangeOf(skeleton, bones[of[j]], list[j]);
       this.weight[j] = 1 / ((hi - lo) * (hi - lo));
@@ -102,16 +101,11 @@ export class Solver {
       if (hi <= lo) throw new Error('a leg coordinate needs a nonzero range');
     }
     this.q = new Float64Array(n);
-    this.q1 = new Float64Array(n);
     this.ref = new Float64Array(n);
     this.offsets = bones.map((b) => skeleton.bones[b].offset.clone());
     this.H = new Float64Array(n * n);
     this.g = new Float64Array(n);
     this.d = new Float64Array(n);
-    // Serial joint angle variances add: the free terminal's turn is a soft preference,
-    // rather than a second rigid copy of the joint references.
-    const variance = this.hi.reduce((sum, hi, j) => sum + (hi - this.lo[j]) ** 2, 0);
-    this.turnWeight = variance > 0 ? 1 / variance : 0;
     this.fixed = new Uint8Array(n);
     this.trial = new Float64Array(n);
     this.was = new Float64Array(n);
@@ -133,25 +127,29 @@ export class Solver {
 
   /**
    * The joints posed for `target` this tick, off `pose`'s posed parents, written into it (the
-   * previous coordinates kept). Start from bent references to avoid the straight-hinge saddle. Returns the terminal's miss (m).
+   * previous coordinates kept). Stance starts from bent references; swing continues its last pose. Returns the terminal's miss (m).
    */
-  solve(pose: Pose, target: LegTarget): number {
-    this.q1.set(this.q);
-    this.q.set(this.ref);
+  solve(pose: Pose, target: LegTarget, seed = this.ref): number {
+    this.prior.set(seed);
+    this.q.set(seed);
     this.base(pose.rotation(pose.skeleton.bones[this.bones[0]].parent), pose.position(this.bones[0]));
-    if (!target.held) {
-      this.forward();
-      target.rotation.copy(this.rotations[this.bones.length - 1]);
+    let miss = this.iterate(target);
+    const last = this.bones.length - 1;
+    if (miss > 1e-5 || target.above.some((point) => _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y < (target.floor ?? 0) - 1e-5)) {
+      const kept = this.q.slice(), cost = this.cost(target, _r), previous = miss;
+      this.q.set(this.ref);
+      miss = this.iterate(target);
+      if (this.cost(target, _r) >= cost) { this.q.set(kept); miss = previous; }
     }
-    const miss = this.iterate(target);
     this.write(pose);
     return miss;
   }
 
-  /** the joints `q` (rad, from them: written back) that reach `target` off a base turned `turn` at `top` (the top joint's world position), the pose untouched. Returns the miss (m). */
+  /** the joints `q` (rad, written back; starting from the references) that reach `target` off a base turned `turn` at `top` (the top joint's world position), the pose untouched. Returns the miss (m). */
   reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array): number {
     const was = _was.subarray(0, this.n);
     was.set(this.q);
+    this.prior.set(this.ref);
     this.q.set(this.ref);
     this.base(turn, top);
     const miss = this.iterate(target);
@@ -173,9 +171,7 @@ export class Solver {
     const { n, q, H, g, d, J, lo: lb, hi: ub, fixed, weight, ref, trial } = this;
     this.bound(q);
     const r = _r;
-    const hold = target.held ? 1 : 0;
-    const wp = STIFF * hold;
-    const wr = target.held ? STIFF : this.turnWeight;
+    const [wp, wr] = this.stiffness(target);
     let cost = this.cost(target, r);
     let damping = 1e-3;
     for (let step = 0; step < STEPS; step++) {
@@ -188,7 +184,7 @@ export class Solver {
           H[i * n + k] = H[k * n + i] = s;
         }
         H[i * n + i] += weight[i];
-        let s = weight[i] * (q[i] - ref[i]);
+        let s = weight[i] * (q[i] - (ref[i] + this.prior[i]) / 2);
         for (let m = 0; m < 6; m++) s += (m < 3 ? wp : wr) * J[m * n + i] * r[m];
         g[i] = s;
       }
@@ -276,12 +272,20 @@ export class Solver {
     }
   }
 
+  /** A free path yields to the floor; its tracking error and first two derivatives vanish at plant. */
+  private stiffness(target: LegTarget): [number, number] {
+    if (target.swing === null) return [STIFF, STIFF];
+    const tail = (1 - target.swing) ** 6;
+    return [Math.min(STIFF, Math.sqrt(STIFF) / tail), Math.min(STIFF, this.weight.reduce((sum, w) => sum + w, 0) / tail)];
+  }
+
   /** the cost at the coordinates now (the residual into `r`) */
   private cost(target: LegTarget, r: Float64Array): number {
     this.residual(target, r);
     let c = 0;
-    for (let m = target.held ? 0 : 3; m < 6; m++) c += (target.held ? STIFF : this.turnWeight) * r[m] * r[m];
-    for (let j = 0; j < this.n; j++) c += this.weight[j] * (this.q[j] - this.ref[j]) ** 2;
+    const [wp, wr] = this.stiffness(target);
+    for (let m = 0; m < 6; m++) c += (m < 3 ? wp : wr) * r[m] * r[m];
+    for (let j = 0; j < this.n; j++) c += this.weight[j] * ((this.q[j] - this.ref[j]) ** 2 + (this.q[j] - this.prior[j]) ** 2) / 2;
     const last = this.bones.length - 1;
     for (const point of target.above) {
       const y = _v.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y - (target.floor ?? 0);

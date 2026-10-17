@@ -7,27 +7,27 @@ import { Limb, type Walker } from '../../src/core/legs/limb';
 import { Solver } from '../../src/core/legs/solve';
 import * as pursuit from '../../src/core/legs/root';
 import { Legs } from '../../src/core/legs/legs';
-import { boundSwing, quintic, type Swing } from '../../src/core/legs/swing';
+import { quintic } from '../../src/core/legs/swing';
 import { HORSE_WALK, horseLegs, horseCarriage, horsePelvis } from '../../src/horse/legs';
 import { SKELETON, LEGS, HEAD } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
 
-it('a short swing with an outward lift-off derivative stays inside ROM and lands at rest', () => {
+it('a Cartesian swing has a bell-shaped speed peaking halfway and zero contact acceleration', () => {
   for (const T of [0.08, 0.2, 0.6]) {
-    for (const velocity of [-40, 40]) {
-      const s: Swing = {
-        x: new Float64Array([0.99]), v: new Float64Array([velocity]), a: new Float64Array([velocity * 100]),
-        land: new Float64Array([-0.9]), stepping: 1, toes: new Quaternion(),
-      };
-      boundSwing(s, 0, T, -1, 1);
-      for (let k = 0; k <= 200; k++) {
-        const [q] = quintic(s.x[0], s.v[0], s.a[0], s.land[0], T, T * k / 200);
-        expect(q).toBeGreaterThanOrEqual(-1 - 1e-12);
-        expect(q).toBeLessThanOrEqual(1 + 1e-12);
-      }
-      expect(quintic(s.x[0], s.v[0], s.a[0], s.land[0], T, T)).toEqual([-0.9, 0, 0]);
-    }
+    const values = Array.from({ length: 201 }, (_, k) => quintic(0, 0, 0, 1, 0, T, T * k / 200));
+    expect(values[0]).toEqual([0, 0, 0]);
+    expect(values[200]).toEqual([1, 0, 0]);
+    for (const [x] of values) { expect(x).toBeGreaterThanOrEqual(0); expect(x).toBeLessThanOrEqual(1); }
+    expect(values.findIndex((v) => v[1] === Math.max(...values.map((x) => x[1])))).toBe(100);
+    expect(values[100][1]).toBeCloseTo(1.875 / T, 8);
   }
+});
+
+it('a swing ends on the stance rate rather than at rest', () => {
+  const end = quintic(0, 0.2, 0, 1, -0.7, 0.5, 0.5 - 1e-6);
+  expect(end[0]).toBeCloseTo(1, 5);
+  expect(end[1]).toBeCloseTo(-0.7, 5);
+  expect(end[2]).toBeCloseTo(0, 2);
 });
 
 it('leg contact checks read the final pose after a later writer, and disappear with dev off', () => {
@@ -71,7 +71,7 @@ it('shortens a long foothold with at most 40 reach solves and keeps its verified
   pose.setRoot(new Vector3(0, 1.32, 0));
   const limb = new Limb(horseLegs()[0], pose);
   const root = pose.position(0).clone();
-  const walker: Walker = { phase: 0, stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
+  const walker: Walker = { phase: 0, previous: pose, timeTo: () => 0, at: () => ({ phase: 0, stride: strideAt(HORSE_WALK, 1.6, 0) }), stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
     position.copy(root);
     turn.identity();
   } };
@@ -117,8 +117,17 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
   } }), { pose, dev: true });
   const support: number[] = [], swing: number[] = [], poll: number[] = [];
   const hoofPitch: number[] = [], hindHock: number[] = [], column: number[] = [];
+  const planted = [true, true, true, true];
+  const contact = [0, 0];
   for (let tick = 0; tick < 480; tick++) {
     body.update(1 / 60);
+    engine.legs.forEach((state, i) => {
+      if (state.planted && !planted[i]) {
+        const speed = body.pose.position(LEGS[i].hoof).distanceTo(body.frame.prev2.position(LEGS[i].hoof)) * 60;
+        contact[i < 2 ? 0 : 1] = Math.max(contact[i < 2 ? 0 : 1], speed);
+      }
+      planted[i] = state.planted;
+    });
     if (tick < 180) continue;
     const state = engine.legs[0];
     const q = body.pose.local(LEGS[0].cannon);
@@ -141,6 +150,8 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
       }
     });
   }
+  expect(Math.max(...contact)).toBeLessThanOrEqual(0.1);
+  console.log('horse contact', JSON.stringify({ fore: contact[0], hind: contact[1] }));
   expect(support.length).toBeGreaterThan(30);
   expect(Math.max(...support)).toBeLessThan(3);
   expect(Math.max(...swing)).toBeGreaterThan(25);
