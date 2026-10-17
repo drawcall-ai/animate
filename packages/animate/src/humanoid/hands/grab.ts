@@ -44,8 +44,8 @@ export const SEGMENT_RADIUS = 0.06;
 
 /**
  * Taking hold of things, each step under way before the last is over: the body walks up to take
- * them (`approach`); once they are in view (IN_VIEW), one gaze notices them, follows the path during a long approach, and returns LOOKING s before arrival to
- * them (`withGaze`: on the grips' middle, or `look`; `false`: not); at that final approach, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
+ * them (`approach`); once they are in view (IN_VIEW), one gaze notices them, follows the path during a long approach, and returns within two steps or LOOKING s before arrival to
+ * them (`withGaze`: on the grips' middle, or `look`; `false`: not); within the last estimated second, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead.
  */
 export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number; first?: boolean } = {}): Behaviour<W> {
@@ -67,10 +67,13 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
       stood = true;
     };
     const near = arriving(h, LOOKING);
+    const raising = arriving(h, 1);
     const com = new Vector3();
     const ahead = new Vector3();
     let noticed = NaN;
     let returning = false;
+    // Two-step gaze horizon (research-contact §3 [R-s]); default-body distance proxy: 1.6 m [D].
+    const close = (f: Frame<W>) => flat(f.prev.com(com), middleOf(holds)) < 1.6 * h.scale;
     const seen = (f: Frame<W>) => {
       const at = middleOf(holds);
       f.prev.com(com);
@@ -78,8 +81,7 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
     };
     const target = look === true ? () => middleOf(holds) : look;
     const waitingHands = function* () {
-      yield* when((f: Frame<W>) => stood || (seen(f) && (near(f) || held(holds).some(({ side, item, grip }) =>
-        flat(f.prev.position(INDEX[`${side}UpperArm`]), item.toWorld(gripOf(item, grip), _world).position) < ARM_REACH * h.proportions.armLength))));
+      yield* when((f: Frame<W>) => stood || (seen(f) && raising(f)));
       yield* parallel<Frame<W>>('race', when((f: Frame<W>) => stood || near(f)),
         () => parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => ({
           position: f.prev.position(INDEX[`${side}UpperArm`]).clone().lerp(item.toWorld(gripOf(item, grip), _world).position, 0.5),
@@ -91,7 +93,7 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
       yield* when((f: Frame<W>) => stood || seen(f));
       yield* withGaze(h, (f) => {
         if (Number.isNaN(noticed)) noticed = f.time;
-        returning ||= near(f);
+        returning ||= close(f) || near(f);
         return stood || returning || f.time - noticed < LOOKING
           ? live(target, f)
           : pathAhead(h, f.prev, ahead);
@@ -105,7 +107,7 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
  * Further aside, wait for the approach to turn the body before looking. */
 const IN_VIEW = 1.4;
 
-/** Final-approach gaze lead (s); until then the eyes follow the walking path. */
+/** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
 const LOOKING = 0.6;
 /** Prepare the knees during the last landing (s before arrival). */
 const LOWERING = 0.3;

@@ -2,7 +2,7 @@ import { createWorld, type World } from '../../src/humanoid/world';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
+import { approach, carry, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
 import { gazeOff } from '../../src/core/gaze';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
@@ -54,6 +54,62 @@ const gone = (v: number[], m: number) => {
 const peak = (v: number[]) => v.indexOf(Math.max(...v)) / 60;
 
 describe('grab', () => {
+  it.each([0, 1, 2])('looks at a two-hand pickup at least a second before its last travelling touchdown (variation %i)', (seed) => {
+    const load = new Item(new Vector3(1.1, 0.88, 2), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2), {
+      left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
+    }, { mass: 8 });
+    const h = new Humanoid<World>(createSkeletonModel(1.75 + seed * 0.02), (h) => function* () {
+      yield* parallel<Frame<World>>('all', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }, { face: Math.PI / 2 }));
+    }, { world: createWorld(), dev: true, position: { x: 1.5 + seed * 0.02, z: 0 }, yaw: -0.1 });
+    const feet = h.feet.map((foot) => ({ phase: foot.phase, from: foot.position.clone() }));
+    let walking = false, stood = NaN, looking = NaN, touchdown = NaN;
+    for (let tick = 0; tick < 600 && Number.isNaN(stood); tick++) {
+      h.update(1 / 60);
+      const time = (tick + 1) / 60;
+      walking ||= h.gait.velocity.length() > 0.5;
+      if (gazeOff(h.gazer, h.pose, load.current.position) >= 0.2) looking = NaN;
+      else if (Number.isNaN(looking)) looking = time;
+      h.feet.forEach((foot, s) => {
+        const was = feet[s];
+        const com = h.pose.com(new Vector3());
+        if (foot.phase === 'swing' && was.phase !== 'swing') was.from.copy(com);
+        if (foot.phase === 'planted' && was.phase === 'swing' && Math.hypot(com.x - was.from.x, com.z - was.from.z) > 0.1) {
+          touchdown = time;
+        }
+        was.phase = foot.phase;
+      });
+      if (walking && !h.gait.moving) stood = time;
+    }
+    expect(stood).toBeGreaterThan(touchdown);
+    // research-contact §3: derived acceptance bounds, not measured human thresholds.
+    expect(touchdown - looking).toBeGreaterThanOrEqual(1);
+    expect(h.log).toEqual([]);
+  });
+
+  it('keeps the free arm swing until the walk ETA reaches one second, even passing reachable grips', () => {
+    const make = (take: boolean) => new Humanoid<World>(createSkeletonModel(), (h) => function* () {
+      const load = new Item(new Vector3(1.1, 0.88, 2), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2), {
+        left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
+      }, { mass: 8 });
+      const holds = { left: [load, 'left'], right: [load, 'right'] } satisfies Parameters<typeof grab>[1];
+      yield* parallel<Frame<World>>('all', idle(h), take ? grab(h, holds, { face: Math.PI / 2, look: false }) : approach(h, holds, { face: Math.PI / 2 }));
+    }, { world: createWorld(), position: { x: 1.5, z: 0 }, yaw: -0.1 });
+    const taking = make(true), walking = make(false);
+    let samples = 0;
+    for (let tick = 0; tick < 240; tick++) {
+      taking.update(1 / 60);
+      walking.update(1 / 60);
+      if (taking.gait.eta <= 1) break;
+      if (!Number.isFinite(taking.gait.eta)) continue;
+      samples++;
+      for (const side of ['left', 'right'] as const) for (const joint of ['UpperArm', 'LowerArm', 'Hand'] as const) {
+        const bone = INDEX[`${side}${joint}`];
+        expect(taking.pose.local(bone).angleTo(walking.pose.local(bone))).toBeLessThan(1e-6);
+      }
+    }
+    expect(samples).toBeGreaterThan(60);
+  });
+
   it('bows to hip-high grips without a transient squat', () => {
     // Recalled rack geometry and stand (1.05 arm lengths): hip-high grips,
     // just beyond a standing arm's reach.
