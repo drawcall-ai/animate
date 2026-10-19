@@ -23,6 +23,7 @@ export interface Walker {
 }
 
 export class Limb {
+  restPitch = 0;
   readonly solver: Solver;
   readonly top: number;
   readonly terminal: number;
@@ -210,8 +211,9 @@ export class Limb {
     const swing = this.swing;
     this.progress = s;
     const target = this.planted(state.foothold, this.pitch(0, stride.stepping), _swingTarget);
-    // World-space planting excludes root acceleration; [D] heading curvature follows the
-    // arc's sagitta with the same minimum-jerk progress, rather than cutting its chord.
+    // [D] World-space swing excludes root acceleration from touchdown speed. Curved travel
+    // follows the arc's sagitta instead of cutting its chord; one lift-to-land reference blend
+    // keeps the chosen joint branch, where a second mid-swing reach blend caused snaps.
     const end = _end.copy(target.position);
     end.y = state.foothold.position.y + Math.min(this.leg.heel.y, this.leg.toe.y);
     for (let j = 0; j < 3; j++) {
@@ -283,7 +285,7 @@ export class Limb {
     let k = 0;
     while (k < keys.length - 2 && us >= keys[k + 1][0]) k++;
     const [[u0, a], [u1, b]] = [keys[k], keys[k + 1]];
-    return (a + (b - a) * minimumJerk((us - u0) / (u1 - u0))) * DEG * stepping + (this.leg.rest ?? 0) * DEG * (1 - stepping);
+    return (a + (b - a) * minimumJerk((us - u0) / (u1 - u0))) * DEG * stepping + this.restPitch * DEG * (1 - stepping);
   }
 
   /** Roll about the heel or toe while keeping that contact fixed in world space. */

@@ -46,5 +46,5 @@ export { eyesOnBefore } from './humanoid/watch';
 
 export { Legs, type LegChain, type LegStep } from './core/legs/legs';
 export type { LegGait } from './core/legs/gait';
-export { horseLegs, horseFollow, HorseMotion, type HorseAttention, type HorseGait, HORSE_WALK, HORSE_TROT } from './horse/legs';
+export { horseLegs, horseFollow, horseLeadPoint, HORSE_WALK } from './horse/legs';
 export { SKELETON as HORSE_SKELETON } from './horse/skeleton';

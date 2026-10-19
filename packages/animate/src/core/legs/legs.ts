@@ -17,8 +17,6 @@ export interface LegChain {
   toeOut: number;
   /** Lateral foothold offset in the root frame (m). Omitted: rest offset. */
   width?: number;
-  /** Standing terminal pitch (degrees); a resting hoof can keep its toe planted. */
-  rest?: number;
   /** Terminal pitch through stance, degrees, positive toes up. */
   rocker: readonly (readonly [number, number])[];
 }
@@ -67,6 +65,13 @@ export class Legs {
   /** Events from the last update only. No ETA or event history. */
   readonly events: ContactEvent[] = [];
   private readonly limbs: Limb[];
+  private readonly posture = new Quaternion();
+
+  /** Standing terminal pitch (degrees), separate from the chain geometry; a hoof rests on its toe. */
+  rest(pitches: readonly number[]): void {
+    if (pitches.length !== this.limbs.length || !pitches.every(Number.isFinite)) throw new Error('rest needs one finite pitch per leg');
+    this.limbs.forEach((limb, i) => { limb.restPitch = pitches[i]; });
+  }
 
   constructor(pose: ReadonlyPose, private readonly chains: readonly LegChain[], private gait: LegGait) {
     if (!chains.length) throw new Error('legs needs at least one chain');
@@ -91,7 +96,7 @@ export class Legs {
     if ([motion.turnAccel, motion.turnSpeed].some((value) => value !== undefined && !(value >= 0 && Number.isFinite(value)))) throw new Error('root turn motion must be finite and nonnegative');
     const radius = Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z)));
     const height = f.current.position(0).y;
-    const posture = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -yawOf(f.current.rotation(0))).multiply(f.current.rotation(0));
+    const posture = this.posture.setFromAxisAngle(UP, -yawOf(f.current.rotation(0))).multiply(f.current.rotation(0));
     // Restore standing height by at most 2 mm per tick; preflight supplies the reserve.
     const rise = Math.max(-0.002, Math.min(0.002, this.standingHeight - height));
     let offset = 0;
@@ -254,3 +259,4 @@ export class Legs {
 }
 
 const before = (offset: number, phase: number) => offset + Math.floor(phase - offset + 1e-9);
+const UP = new Vector3(0, 1, 0);

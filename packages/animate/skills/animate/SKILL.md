@@ -95,6 +95,8 @@ What you author: the scene, the order of beats, the places on props a course pas
 
 A `Body` is any skeleton with a behaviour. A horse ships with the package: `horseFollow` moves it toward a floor goal with its pelvis, legs and head working together. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `on` place things on it as it moves. Include other bodies, such as the horse, in `world.bodies` so approaches can choose stands clear of their low segments. Before updating any body, copy every body's last final pose into its entry; then update every body each frame.
 
+`horseFollow` walks. Pass a live `person` point for attention and close head avoidance, and a live `tether` (`position`, `length`) while tied; return `undefined` when absent or untied. Keep the returned behaviour to call `follow.react(handler.pose.position(0))` once at saddle placement or girth tightening. Each explicit event copies the point and settles in about four seconds; live getters may return fresh vectors freely. Use `horseLeadPoint(horse.pose, out)` for an attention-following hand station that ignores gait pitch and nod; draw the rope from the actual halter. Standing ears, tail and head move within 25 seconds; hind-leg rest starts after at least 60 seconds of quiet.
+
 ```ts
 const HEAD = HORSE_SKELETON.index('head');
 const start = new Pose(HORSE_SKELETON);

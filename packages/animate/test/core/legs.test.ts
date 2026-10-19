@@ -8,8 +8,8 @@ import { Solver } from '../../src/core/legs/solve';
 import * as pursuit from '../../src/core/legs/root';
 import { Legs } from '../../src/core/legs/legs';
 import { quintic } from '../../src/core/legs/swing';
-import { HORSE_WALK, HORSE_TROT, horseLegs } from '../../src/horse/legs';
-import { HorseMotion } from '../../src/horse/legs';
+import { HORSE_WALK, HORSE_TROT, horseLegs, horseLeadPoint } from '../../src/horse/legs';
+import { horseMotion } from '../../src/horse/legs';
 import { type HorseAttention, type HorseGait } from '../../src/horse/legs';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
@@ -142,7 +142,7 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
   const pose = new Pose(SKELETON);
   pose.setRoot(new Vector3(0, 1.37, 0));
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const motion = new HorseMotion(pose, horseLegs(), HORSE_WALK);
+  const motion = horseMotion(pose, HORSE_WALK);
   const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
     motion.prepare(f, engine);
     engine.toward(f, { position: new Vector3(0, 1.37, 20) }, { speed: 0.95, accel: 0.65 });
@@ -261,14 +261,14 @@ it('reuses each travel forecast across root-height candidates', () => {
 function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention<unknown> = {}, seed = 42) {
   const pose = new Pose(SKELETON);
   pose.setRoot(new Vector3(0, 1.32, 0));
-  const chains = horseLegs();
+  const chains = horseLegs().map(chain => Object.freeze(chain));
   const legs = new Legs(pose, chains, gait);
-  const motion = new HorseMotion(pose, chains, gait, seed);
+  const motion = horseMotion(pose, gait, seed);
   const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
     motion.prepare(f, legs, attention);
     legs.toward(f, { position: new Vector3(0, 1.32, speed ? 100 : 0) }, { speed, accel: 1.85 });
   } }), { pose, dev: true });
-  return { body, legs };
+  return { body, legs, motion };
 }
 const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samples);
 const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'YXZ').x;
@@ -276,7 +276,7 @@ const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'Y
 it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
   const { body, legs } = movingHorse(gait, speed);
   const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [], back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];
-  const high: number[] = [], low: number[] = [], relative: number[] = [], relativeCroup: number[] = [];
+  const high: number[] = [], low: number[] = [], relative: number[] = [], relativeCroup: number[] = [], lead: number[] = [];
   for (let tick = 0; tick < 600; tick++) {
     body.update(1 / 60);
     if (tick < 240) continue;
@@ -287,6 +287,7 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
     pelvis.push(pitchOf(p.rotation(PELVIS))); tail.push(new Euler().setFromQuaternion(p.local(TAIL), 'YXZ').y);
     relative.push(p.position(HEAD).y - p.position(LEGS[0].scapula ?? 0).y);
     relativeCroup.push(p.position(HEAD).y - p.position(PELVIS).y);
+    lead.push(horseLeadPoint(p, new Vector3()).sub(p.position(0)).z);
     const phase = legs.legs[0].phase % 0.5;
     if (phase < 0.03 || phase > 0.47) high.push(p.position(HEAD).y);
     if (Math.abs(phase - 0.25) < 0.03) low.push(p.position(HEAD).y);
@@ -299,6 +300,7 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
   const passiveLag = lag.indexOf(Math.max(...lag)) / 60;
   expect(passiveLag).toBeGreaterThanOrEqual(0.1); expect(passiveLag).toBeLessThanOrEqual(0.2);
   expect(excursion(tail)).toBeGreaterThan(5 * Math.PI / 180);
+  expect(excursion(lead)).toBeLessThan(1e-12);
   expect(excursion(pelvis) / (Math.PI / 180)).toBeGreaterThan(6.5);
   expect(excursion(pelvis) / (Math.PI / 180)).toBeLessThan(7.5);
   const trot = gait === HORSE_TROT;
@@ -331,7 +333,7 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
   const sample = (seed: number) => {
     const knot = new Vector3(0.7, 1.12, 0.8);
     const { body } = movingHorse(HORSE_WALK, 0, { tether: { position: knot, length: 1.1 } }, seed);
-    const ears: number[][] = [[], []], tail: number[] = [], head: number[] = [], roll: number[] = [], yaw: number[] = [];
+    const ears: number[][] = [[], []], tail: number[] = [], head: number[] = [], roll: number[] = [], yaw: number[] = [], shift: number[] = [];
     let rested = 0, toe = 0, heel = 0;
     for (let tick = 0; tick < 220 * 60; tick++) {
       body.update(1 / 60);
@@ -339,7 +341,8 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
       EARS.forEach((ear, i) => ears[i].push(p.local(ear).angleTo(new Quaternion())));
       tail.push(p.local(TAIL).angleTo(new Quaternion())); head.push(p.rotation(HEAD).angleTo(new Quaternion()));
       yaw.push(new Euler().setFromQuaternion(p.local(NECK), 'YXZ').y);
-      roll.push(new Euler().setFromQuaternion(p.local(PELVIS), 'YXZ').z);
+      roll.push(new Euler().setFromQuaternion(p.rotation(PELVIS), 'YXZ').z);
+      shift.push(p.position(PELVIS).x);
       expect(p.point(HEAD, HALTER, new Vector3()).distanceTo(knot)).toBeLessThanOrEqual(1.1 + 1e-6);
       const com = p.com(new Vector3());
       expect(Math.abs(com.x)).toBeLessThan(0.08);
@@ -352,9 +355,10 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
     expect(excursion(ears[0].slice(0, 6 * 60))).toBeGreaterThan(0.1);
     expect(excursion(ears[1].slice(0, 6 * 60))).toBeGreaterThan(0.1);
     expect(excursion(tail.slice(0, 20 * 60))).toBeGreaterThan(0.1);
-    expect(excursion(head.slice(0, 30 * 60))).toBeGreaterThan(0.02);
-    expect(excursion(yaw.slice(0, 30 * 60))).toBeGreaterThan(0.03);
+    expect(excursion(head.slice(0, 25 * 60))).toBeGreaterThan(0.02);
+    expect(excursion(yaw.slice(0, 25 * 60))).toBeGreaterThan(0.03);
     expect(excursion(roll.slice(0, 60 * 60))).toBeGreaterThan(0.01);
+    expect(excursion(shift.slice(0, 6 * 60))).toBeGreaterThan(0.01);
     expect(heel).toBeGreaterThan(0.04); expect(Math.abs(toe)).toBeLessThan(1e-4);
     expect(rested).toBeLessThan(1.11);
     expect(body.log).toEqual([]);
@@ -368,7 +372,7 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
 it.each([false, true])('checks the final tied pose after later writers, dev=%s', (dev) => {
   const pose = new Pose(SKELETON); pose.setRoot(new Vector3(0, 1.32, 0));
   const chains = horseLegs(), legs = new Legs(pose, chains, HORSE_WALK);
-  const motion = new HorseMotion(pose, chains, HORSE_WALK);
+  const motion = horseMotion(pose, HORSE_WALK);
   const tether = { position: new Vector3(0.7, 1.12, 0.8), length: 0.9 };
   const body = new Body(SKELETON, () => action<Frame>({ update: f => {
     motion.prepare(f, legs, { tether: f.time < 0.02 ? tether : undefined });
@@ -381,8 +385,8 @@ it.each([false, true])('checks the final tied pose after later writers, dev=%s',
 });
 
 it('ears lead the head toward an approaching person; both saddling reactions begin within 1 s and settle by 5 s', () => {
-  let person: Vector3 | undefined, reaction: Vector3 | undefined;
-  const { body } = movingHorse(HORSE_WALK, 0, { person: () => person, reaction: () => reaction });
+  let person: Vector3 | undefined;
+  const { body, motion } = movingHorse(HORSE_WALK, 0, { person: () => person?.clone() });
   for (let i = 0; i < 60; i++) body.update(1 / 60);
   const ear = body.pose.local(EARS[0]).clone(), neck = body.pose.local(NECK).clone();
   person = new Vector3(2, 1.5, 3);
@@ -390,11 +394,14 @@ it('ears lead the head toward an approaching person; both saddling reactions beg
   expect(ear.angleTo(body.pose.local(EARS[0]))).toBeGreaterThan(neck.angleTo(body.pose.local(NECK)));
   for (let i = 0; i < 54; i++) body.update(1 / 60);
   expect(new Euler().setFromQuaternion(body.pose.local(NECK), 'YXZ').y).toBeGreaterThan(0.1);
+  const point = new Vector3(2, 1, -1);
   for (let event = 0; event < 2; event++) {
     const before = body.pose.local(HEAD).clone();
-    reaction = new Vector3(2, 1, -1);
+    motion.react(point.setX(2));
+    point.setX(-2);
     for (let i = 0; i < 60; i++) body.update(1 / 60);
     expect(before.angleTo(body.pose.local(HEAD))).toBeGreaterThan(0.15);
+    expect(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y).toBeGreaterThan(0.15);
     for (let i = 0; i < 240; i++) body.update(1 / 60);
     expect(Math.abs(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y)).toBeLessThan(0.01);
   }
