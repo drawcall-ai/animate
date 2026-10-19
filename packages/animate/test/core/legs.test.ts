@@ -56,7 +56,7 @@ it('leg contact checks read the final pose after a later writer, and disappear w
   expect(run(false)).toEqual([]);
 });
 
-it('checks touchdown on direct Legs users after later pose writers, only with dev enabled', () => {
+it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const)('checks %s touchdown on direct Legs users after later pose writers, only with dev enabled', (axis, offset, limit) => {
   const run = (dev: boolean) => {
     const pose = new Pose(SKELETON);
     const engine = new Legs(pose, horseLegs(), HORSE_WALK);
@@ -65,15 +65,15 @@ it('checks touchdown on direct Legs users after later pose writers, only with de
       engine.toward(f, { position: new Vector3(0, pose.position(0).y, 20) }, { speed: 0.95, accel: 0.65 });
       if (landed < 0 && engine.events.some((event) => event.type === 'land')) {
         landed = f.time;
-        f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.01, 0, 0)));
+        f.current.setRoot(f.current.position(0).clone().add(offset));
       }
     } }), { pose, dev });
     for (let tick = 0; tick < 120 && (landed < 0 || body.frame.time <= landed); tick++) body.update(1 / 60);
     expect(landed).toBeGreaterThan(0);
-    return { log: body.log.filter((entry) => entry.check === 'leg touchdown speed (m/s)'), landed };
+    return { log: body.log.filter((entry) => entry.check === `leg touchdown ${axis} speed (m/s)`), landed };
   };
   const { log, landed } = run(true);
-  expect(log).toContainEqual(expect.objectContaining({ limit: 0.1, time: landed }));
+  expect(log).toContainEqual(expect.objectContaining({ limit, time: landed }));
   expect(run(false).log).toEqual([]);
 });
 
@@ -150,13 +150,14 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
   const support: number[] = [], swing: number[] = [], poll: number[] = [];
   const hoofPitch: number[] = [], hindHock: number[] = [], column: number[] = [];
   const planted = [true, true, true, true];
-  const contact = [0, 0];
+  const contact = [0, 0], horizontal = [0, 0];
   for (let tick = 0; tick < 480; tick++) {
     body.update(1 / 60);
     engine.legs.forEach((state, i) => {
       if (state.planted && !planted[i]) {
-        const speed = body.pose.position(LEGS[i].hoof).distanceTo(body.frame.prev2.position(LEGS[i].hoof)) * 60;
-        contact[i < 2 ? 0 : 1] = Math.max(contact[i < 2 ? 0 : 1], speed);
+        const velocity = body.pose.position(LEGS[i].hoof).clone().sub(body.frame.prev2.position(LEGS[i].hoof)).multiplyScalar(60);
+        contact[i < 2 ? 0 : 1] = Math.max(contact[i < 2 ? 0 : 1], Math.abs(velocity.y));
+        horizontal[i < 2 ? 0 : 1] = Math.max(horizontal[i < 2 ? 0 : 1], velocity.setY(0).length());
       }
       planted[i] = state.planted;
     });
@@ -183,6 +184,7 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
     });
   }
   expect(Math.max(...contact)).toBeLessThanOrEqual(0.1);
+  expect(Math.max(...horizontal)).toBeLessThanOrEqual(1);
   expect(support.length).toBeGreaterThan(30);
   expect(Math.max(...support)).toBeLessThan(3);
   expect(Math.max(...swing)).toBeGreaterThan(25);
@@ -432,7 +434,8 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: solved hooves peak
       expect((high + 0.5) / flight.length).toBeLessThanOrEqual(0.35);
       const terminal = flight.slice(Math.floor(flight.length * (i < 2 ? 0.75 : 0.875)));
       expect(terminal[0].speed).toBeGreaterThan(terminal[terminal.length - 1].speed);
-      expect(velocity.length()).toBeLessThanOrEqual(0.1);
+      expect(Math.abs(velocity.y)).toBeLessThanOrEqual(0.1);
+      expect(velocity.setY(0).length()).toBeLessThanOrEqual(1);
       checked++;
     });
   }

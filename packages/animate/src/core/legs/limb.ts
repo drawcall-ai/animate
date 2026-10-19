@@ -65,10 +65,13 @@ export class Limb {
         return Math.atan2(forward.y, Math.hypot(forward.x, forward.z));
       };
       const turn = Math.abs(pitch(p) - pitch(f.prev2)) / DEG;
-      // Inherited visible-slap ceiling; research-contact §1 supplies no per-tick limit.
+      // [tuned, inherited] 1.5° per tick limits visible pitch snaps; unchanged.
       if (turn > 1.5) f.dev.append(f.time - f.dt, { check: 'touchdown pitch step (°)', value: turn, limit: 1.5, where });
-      const speed = p.point(this.terminal, this.held.pivot, _w).distanceTo(f.prev2.point(this.terminal, this.held.pivot, _end)) / f.dt;
-      if (speed > 0.1) f.dev.append(f.time - f.dt, { check: 'leg touchdown speed (m/s)', value: speed, limit: 0.1, where });
+      // [derived, user-approved] 1 m/s horizontal, 0.1 vertical; Winter 1992 doi:10.1093/ptj/72.1.45 [read: abstract]: 0.87 horizontal, negligible vertical.
+      const velocity = p.point(this.terminal, this.held.pivot, _w).sub(f.prev2.point(this.terminal, this.held.pivot, _end)).divideScalar(f.dt);
+      const vertical = Math.abs(velocity.y), horizontal = velocity.setY(0).length();
+      if (vertical > 0.1) f.dev.append(f.time - f.dt, { check: 'leg touchdown vertical speed (m/s)', value: vertical, limit: 0.1, where });
+      if (horizontal > 1) f.dev.append(f.time - f.dt, { check: 'leg touchdown horizontal speed (m/s)', value: horizontal, limit: 1, where });
     }
     const miss = p.position(this.terminal).distanceTo(this.held.position);
     // 0.1 mm distinguishes numerical settling from visible contact movement.
