@@ -112,7 +112,8 @@ export function chainTo<W>(chain: string, target: Live<Target, W>, options: TipO
 
 /**
  * Bone `tip` of a body (its last poses `prev2`, `prev`, `dt` apart) is on `target` (on a carrier, in
- * its frame): within REACHED's distance and angle, and moving with it to within its speed.
+ * its frame): within REACHED's distance and angle, and moving with it to within its speed. The last
+ * pose is a frame old, so it is judged against where the target was then (moved back by its velocity).
  */
 export function reached(prev2: ReadonlyPose, prev: ReadonlyPose, dt: number, tip: number, target: Target, on?: Carrier): boolean {
   let goal = target.position;
@@ -123,8 +124,9 @@ export function reached(prev2: ReadonlyPose, prev: ReadonlyPose, dt: number, tip
     velocity.applyQuaternion(on.current.quaternion).add(_goal.velocity);
   }
   const at = prev.position(tip);
+  const then = _then.copy(goal).addScaledVector(velocity, -dt);
   const moving = _v.subVectors(at, prev2.position(tip)).divideScalar(dt).sub(velocity);
-  if (at.distanceTo(goal) > REACHED.distance || moving.length() > REACHED.speed) return false;
+  if (at.distanceTo(then) > REACHED.distance || moving.length() > REACHED.speed) return false;
   if (!target.quaternion) return true;
   // (in the frame the target is given in, rolled about its axis as near the tip as it may be)
   const turned = near(prev.rotation(tip), on);
@@ -157,6 +159,7 @@ const _d = new Quaternion();
 const _roll = new Quaternion();
 const _near = new Quaternion();
 const _velocity = new Vector3();
+const _then = new Vector3();
 const _goal: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 
 /** the tip bone of chain `chain` */

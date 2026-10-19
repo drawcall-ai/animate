@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
 import { Body, chainTo, lookAt, SHIFT, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
 import { spinOf } from '../../src/core/rotation';
+import { reached } from '../../src/core/tip';
+import type { ReadonlyPose } from '../../src/core/pose';
 import { leg, turn } from './rigs';
 
 const dt = 1 / 60;
@@ -148,5 +150,16 @@ describe('lookAt', () => {
     const top = large.speeds.indexOf(peak(large.speeds));
     expect(large.speeds.filter((v) => v > 0.95 * peak(large.speeds)).length).toBeLessThan(0.25 * large.speeds.filter((v) => v > 0.05).length);
     expect(top).toBeGreaterThan(3);
+  });
+});
+
+describe('reached', () => {
+  it('counts a tip tracking a moving target exactly, judging the last pose against where the target was then', () => {
+    const speed = 0.9;
+    const pose = (x: number) => ({ position: () => new Vector3(x, 0, 0) }) as unknown as ReadonlyPose;
+    const target = { position: new Vector3(speed * 2 * dt, 0, 0), velocity: new Vector3(speed, 0, 0) };
+    // the tip was on the target both earlier frames; now the target is a frame (1.5 cm) further on
+    expect(reached(pose(0), pose(speed * dt), dt, 0, target)).toBe(true);
+    expect(reached(pose(0), pose(0), dt, 0, target)).toBe(false);
   });
 });
