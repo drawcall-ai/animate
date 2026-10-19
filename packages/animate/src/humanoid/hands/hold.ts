@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { Carrier, Item } from '../../core/carrier';
+import { REACHED, type Target } from '../../core/goal';
 import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
@@ -17,6 +18,15 @@ export function carryAims(h: object): Map<Item, Carrier> {
 
 const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
+/**
+ * How far a hand may be from a grip it starts holding (m): a reach ends once the wrist is within
+ * `REACHED.distance`, and the same frame's hold step and fit may pull it up to ~2 cm more (tuned
+ * against the scenes' grabs, none of which comes closer than 1 cm to this limit).
+ */
+export const GRIP_TAKEN = REACHED.distance + 0.02;
+
+const _taken: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+
 /** One owner of held hands and carried-item fitting, after all body and item movers. */
 export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
   const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
@@ -28,7 +38,7 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
       previous[side] = held ? [held.item, held.grip] : undefined;
       if (!held || (was?.[0] === held.item && was[1] === held.grip)) return [];
       const { item, grip: name } = held;
-      return [{ side, item, name, at: gripOf(item, name).position.clone().applyQuaternion(item.current.quaternion).add(item.current.position) }];
+      return [{ side, item, name, at: item.toWorld(gripOf(item, name), _taken).position.clone() }];
     }) : [];
     for (const item of heldItems(h)) {
       const aim = carryAims(h).get(item);
@@ -48,7 +58,7 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
     }
     for (const { side, item, name, at } of taking) {
       const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
-      if (value > 0.03) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: 0.03, where: `${item.name} ${side} ${name}` });
+      if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${item.name} ${side} ${name}` });
     }
     carryAims(h).clear();
   };

@@ -4,6 +4,7 @@ import { Simulation } from '../src/simulation';
 import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
 import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
+import { GRIP_TAKEN } from '../../packages/animate/src/humanoid/hands/hold';
 import { HORSE, stableMorning } from '../src/scenarios/stable-morning';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
@@ -331,7 +332,7 @@ it.each([0, 1, 2])('takes the loose end with its own reach after the right grip 
     if (Number.isNaN(leftAt)) {
       leftAt = sim.t;
       if (!previousEnd) throw new Error('missing pre-grip loose end');
-      expect(wrist.distanceTo(previousEnd)).toBeLessThanOrEqual(0.03);
+      expect(wrist.distanceTo(previousEnd)).toBeLessThanOrEqual(GRIP_TAKEN);
     }
     expect(end.distanceTo(h.holding.left.item.current.position)).toBeLessThan(1e-8);
   }
