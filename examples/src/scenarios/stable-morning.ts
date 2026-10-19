@@ -3,7 +3,7 @@ import { parallel, timePassed } from '@pmndrs/timeline';
 import {
   Body, HORSE_SKELETON, Item, Pose,
   place, facingAt, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle,
-  named, onBone, release, wear, when, walkTo, withGaze, yawOf,
+  named, onBone, reachFor, release, wear, when, walkTo, withGaze, yawOf,
   type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
 import { forwardOf } from '../math';
@@ -73,6 +73,10 @@ export function stableMorning(): Scenario {
       const rope = new Item(KNOT.clone(), new Quaternion(), {
         knot: { position: new Vector3() },
       }, { name: 'rope' });
+      // A flexible rope has independently carried ends, rather than two rigid-item grips.
+      const loose = new Item(KNOT.clone().add(new Vector3(0, -0.2, 0)), new Quaternion(), {
+        end: { position: new Vector3() },
+      }, { name: 'rope slack' });
       let handler: Humanoid<World> | null = null;
       let lookedBack = false;
       let leadStart: number | null = null;
@@ -147,7 +151,10 @@ export function stableMorning(): Scenario {
               yield* hold(h, rope, { to: near, until: timePassed(0.6, 'seconds') })();
               yield* hold(h, rope, { to: near })();
             },
-            handTo(h, 'left', slack, { lead: false, until: () => false }),
+            function* () {
+              yield* reachFor(h, { left: [loose, 'end'] })();
+              yield* hold(h, loose, { to: slack })();
+            },
             function* () {
               yield* walkTo(h, { to: new Vector3(HORSE.x + LEAD_ASIDE, 0, gate.z + HANDLER_AHEAD + GATE_CLEAR), face: 0, ...LEADING })();
               yield* named('halt beyond the gate', () => when(timePassed(1, 'seconds')))();
@@ -193,12 +200,8 @@ export function stableMorning(): Scenario {
           for (let i = 0; i < 12; i++) {
             props.push(line(at(i / 12), at((i + 1) / 12), 0.012, 0xc4a273));
           }
-          if (handler?.holding.right?.item === rope) {
-            const outside = handler.pose.position(handler.pose.skeleton.index('leftHand'));
-            const loose = (u: number) => end.clone().lerp(outside, u).add(new Vector3(0, -SLACK_SAG * 4 * u * (1 - u), 0));
-            for (let i = 0; i < 12; i++) props.push(line(loose(i / 12), loose((i + 1) / 12), 0.012, 0xc4a273));
-          }
-          if (rope.supported) props.push(line(end, KNOT, 0.012, 0xc4a273));
+          const slack = (u: number) => end.clone().lerp(loose.current.position, u).add(new Vector3(0, -SLACK_SAG * 4 * u * (1 - u), 0));
+          for (let i = 0; i < 12; i++) props.push(line(slack(i / 12), slack((i + 1) / 12), 0.012, 0xc4a273));
           return props;
         },
         script: (h) => {

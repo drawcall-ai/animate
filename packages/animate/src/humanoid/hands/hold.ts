@@ -5,7 +5,7 @@ import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { grip, gripOf, gripsOf, heldItems, type Grips } from './grips';
+import { grip, gripOf, gripsOf, heldItems, type Grips, type Holds } from './grips';
 
 const aims = new WeakMap<object, Map<Item, Carrier>>();
 
@@ -20,7 +20,16 @@ const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 /** One owner of held hands and carried-item fitting, after all body and item movers. */
 export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
   const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
+  const previous: Holds = {};
   return (f) => {
+    // Preserve acquisition points before wrist fitting can move an item onto a distant hand.
+    const taking = f.dev ? SIDES.flatMap((side) => {
+      const held = h.holding[side], was = previous[side];
+      previous[side] = held ? [held.item, held.grip] : undefined;
+      if (!held || (was?.[0] === held.item && was[1] === held.grip)) return [];
+      const { item, grip: name } = held;
+      return [{ side, item, name, at: gripOf(item, name).position.clone().applyQuaternion(item.current.quaternion).add(item.current.position) }];
+    }) : [];
     for (const item of heldItems(h)) {
       const aim = carryAims(h).get(item);
       if (!aim && !item.supported && !item.wornBy && !item.moved(f.time)) {
@@ -36,6 +45,10 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
         handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy }, arms[side]);
       }
       if (aim) fit(f, item, aim, grips, sides);
+    }
+    for (const { side, item, name, at } of taking) {
+      const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
+      if (value > 0.03) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: 0.03, where: `${item.name} ${side} ${name}` });
     }
     carryAims(h).clear();
   };

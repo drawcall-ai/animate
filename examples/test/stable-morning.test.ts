@@ -152,7 +152,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
     leading++;
     const p = h.pose;
     const at = (name: string) => p.position(p.skeleton.index(name));
-    expect(h.holding.left).toBeNull();
+    expect(h.holding.left?.item.name).toBe('rope slack');
     expect(h.asks.bow).toBe(0);
     chest.push(new Euler().setFromQuaternion(p.rotation(p.skeleton.index('chest')), 'YXZ').x);
     const right = at('rightHand').clone().sub(at('chest'));
@@ -306,4 +306,37 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
   expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);
   expect(barrelGap).toBeGreaterThan(0);
+});
+
+it.each([0, 1, 2])('takes the loose end with its own reach after the right grip #%i', (seed) => {
+  const scene = stableMorning();
+  const sim = new Simulation(seed ? vary(scene, seed) : scene, undefined, true);
+  let rightAt = NaN, leftAt = NaN, initialGap = NaN;
+  let previousEnd: Vector3 | null = null;
+  while (sim.t < scene.duration) {
+    sim.step();
+    const h = sim.actors[0];
+    if (h.holding.right?.item.name !== 'rope') continue;
+    const wrist = h.pose.position(h.pose.skeleton.index('leftHand'));
+    const lines = sim.props().filter((p) => p.kind === 'cylinder' && p.color === 0xc4a273);
+    const last = lines[lines.length - 1];
+    if (!last || last.kind !== 'cylinder' || !last.quaternion) throw new Error('missing loose end');
+    const end = new Vector3(0, last.length / 2, 0).applyQuaternion(last.quaternion).add(last.position);
+    if (Number.isNaN(rightAt)) {
+      rightAt = sim.t;
+      initialGap = wrist.distanceTo(end);
+      expect(h.holding.left).toBeNull();
+    }
+    if (h.holding.left?.item.name !== 'rope slack') { previousEnd = end; continue; }
+    if (Number.isNaN(leftAt)) {
+      leftAt = sim.t;
+      if (!previousEnd) throw new Error('missing pre-grip loose end');
+      expect(wrist.distanceTo(previousEnd)).toBeLessThanOrEqual(0.03);
+    }
+    expect(end.distanceTo(h.holding.left.item.current.position)).toBeLessThan(1e-8);
+  }
+  expect(initialGap).toBeGreaterThan(0.15);
+  expect(leftAt - rightAt).toBeGreaterThan(0.3);
+  expect(leftAt - rightAt).toBeLessThan(3);
+  expect(sim.actors[0].log).toEqual([]);
 });
