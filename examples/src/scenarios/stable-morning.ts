@@ -3,7 +3,7 @@ import { parallel, timePassed } from '@pmndrs/timeline';
 import {
   Body, HORSE_SKELETON, Item, Pose,
   place, facingAt, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle,
-  named, onBone, reachFor, release, wear, when, walkTo, withGaze, yawOf,
+  named, onBone, reachFor, release, takeOff, watch, wear, when, walkTo, withGaze, yawOf,
   type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
 import { forwardOf } from '../math';
@@ -41,6 +41,8 @@ const NEAR_HAND = new Vector3(-0.4, 0.04, 0.3);
 const SLACK_HAND = new Vector3(0.3, 0.1, 0.25);
 // Tuned against the two-hand slack span: enough sag to show a loop without reaching the pelvis.
 const SLACK_SAG = 0.25;
+// Requested scene acceptance bound for the gathering elbow behind its shoulder (m).
+const GATHER_BACK = 0.08;
 // Read from half the 1.45 m barrel and half the 0.15 m gate post: halt with the trunk beyond the opening.
 const BARREL_LENGTH = 1.45;
 const GATE_POST = 0.15;
@@ -74,7 +76,8 @@ export function stableMorning(): Scenario {
         knot: { position: new Vector3() },
       }, { name: 'rope' });
       // A flexible rope has independently carried ends, rather than two rigid-item grips.
-      const loose = new Item(KNOT.clone().add(new Vector3(0, -0.2, 0)), new Quaternion(), {
+      // Tuned rope drape (m): 20 cm toward the gathering hand, 15 cm down, 10 cm forward.
+      const loose = new Item(KNOT.clone().add(new Vector3(0.2, -0.15, 0.1)), new Quaternion(), {
         end: { position: new Vector3() },
       }, { name: 'rope slack' });
       let handler: Humanoid<World> | null = null;
@@ -153,6 +156,7 @@ export function stableMorning(): Scenario {
             },
             function* () {
               yield* reachFor(h, { left: [loose, 'end'] })();
+              yield* takeOff(h, loose)();
               yield* hold(h, loose, { to: slack })();
             },
             function* () {
@@ -207,8 +211,19 @@ export function stableMorning(): Scenario {
         script: (h) => {
           handler = h;
           return function* () {
+            // Until gathered, the loose end hangs from the knot end, including during walk-off.
+            yield* wear(h, loose, rope)();
             yield* parallel<Frame<World>>('all',
               eyesOnBefore(h, saddle, 0.4), eyesOnBefore(h, rope, 0.4),
+              watch('gather the loose end', (f) => {
+                if (h.holding.right?.item !== rope || h.holding.left?.item === loose) return null;
+                const p = f.prev, bone = (name: string) => p.skeleton.index(name);
+                const elbow = p.position(bone('leftLowerArm')).clone().sub(p.position(bone('leftUpperArm')))
+                  .applyQuaternion(p.rotation(bone('chest')).clone().invert());
+                const value = -elbow.z;
+                return value > GATHER_BACK
+                  ? { check: 'elbow behind shoulder (m)', value, limit: GATHER_BACK, where: 'left elbow' } : null;
+              }),
               idle(h), tasks(h),
             );
           };

@@ -309,15 +309,17 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
   expect(barrelGap).toBeGreaterThan(0);
 });
 
-it.each([0, 1, 2])('takes the loose end with its own reach after the right grip #%i', (seed) => {
+it.each([0, 1, 2])('gathers the hanging end from the held rope while walking #%i', (seed) => {
   const scene = stableMorning();
   const sim = new Simulation(seed ? vary(scene, seed) : scene, undefined, true);
   let rightAt = NaN, leftAt = NaN, initialGap = NaN;
   let previousEnd: Vector3 | null = null;
+  let gatheringSteps = 0;
   while (sim.t < scene.duration) {
     sim.step();
     const h = sim.actors[0];
-    if (h.holding.right?.item.name !== 'rope') continue;
+    const rope = h.holding.right?.item;
+    if (rope?.name !== 'rope') continue;
     const wrist = h.pose.position(h.pose.skeleton.index('leftHand'));
     const lines = sim.props().filter((p) => p.kind === 'cylinder' && p.color === 0xc4a273);
     const last = lines[lines.length - 1];
@@ -328,16 +330,27 @@ it.each([0, 1, 2])('takes the loose end with its own reach after the right grip 
       initialGap = wrist.distanceTo(end);
       expect(h.holding.left).toBeNull();
     }
-    if (h.holding.left?.item.name !== 'rope slack') { previousEnd = end; continue; }
+    if (h.holding.left?.item.name !== 'rope slack') {
+      const loose = [...h.worn.keys()].find((item) => item.name === 'rope slack');
+      if (!loose) throw new Error('loose end must hang from the held rope until gathered');
+      expect(h.worn.get(loose)?.on).toBe(rope);
+      expect(end.y).toBeLessThan(rope.current.position.y);
+      if (h.gait.velocity.length() > MOVING) gatheringSteps++;
+      previousEnd = end;
+      continue;
+    }
     if (Number.isNaN(leftAt)) {
       leftAt = sim.t;
       if (!previousEnd) throw new Error('missing pre-grip loose end');
       expect(wrist.distanceTo(previousEnd)).toBeLessThanOrEqual(GRIP_TAKEN);
     }
+    expect(h.holding.left.item.wornBy).toBeNull();
+    expect(h.worn.has(h.holding.left.item)).toBe(false);
     expect(end.distanceTo(h.holding.left.item.current.position)).toBeLessThan(1e-8);
   }
   expect(initialGap).toBeGreaterThan(0.15);
   expect(leftAt - rightAt).toBeGreaterThan(0.3);
   expect(leftAt - rightAt).toBeLessThan(3);
+  expect(gatheringSteps).toBeGreaterThan(30);
   expect(sim.actors[0].log).toEqual([]);
 });
