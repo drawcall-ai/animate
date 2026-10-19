@@ -1,7 +1,7 @@
 import type { Quaternion } from 'three';
 import { minimumJerk } from '../math';
 
-/** The horizontal root-frame path and world sole height (m, m/s, m/s²), plus its joint references. */
+/** The world horizontal path and sole height (m, m/s, m/s²), plus its joint references. */
 export interface Swing {
   /** the plan's state: lift-off to landing, minimum jerk, re-planned each tick toward the landing as it is seen then */
   x: Float64Array;
@@ -11,7 +11,7 @@ export interface Swing {
   land: Float64Array;
   from: Float64Array;
   fold: Float64Array;
-  turn: Quaternion;
+  turn: { foot: Quaternion; yaw: number };
   toes: Quaternion;
 }
 

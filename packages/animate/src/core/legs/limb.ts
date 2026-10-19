@@ -1,4 +1,4 @@
-import { minimumJerk, yawOf } from '../math';
+import { minimumJerk, wrapAngle, yawOf } from '../math';
 // Stance pins the terminal; swing follows a C² sole path ending on the stance rate.
 import { Euler, Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
@@ -34,12 +34,19 @@ export class Limb {
   private readonly trial: Float64Array;
   private swing: Swing | null = null;
   private ready = false;
+  private progress = 0;
+  private peak = { speed: 0, phase: 0 };
   private landed = false;
   private held: { position: Vector3; rotation: Quaternion; pivot: Vector3 } | null = null;
 
   /** Read the previous completed pose, including later writers. */
   check(f: Frame): void {
     if (!f.dev || !this.ready) return;
+    if (this.swing) {
+      const speed = _w.subVectors(f.prev.position(this.terminal), f.prev2.position(this.terminal)).setY(0).length() / f.dt;
+      if (speed > this.peak.speed) this.peak = { speed, phase: this.progress };
+    }
+    if (this.landed && this.peak.phase < 0.35) f.dev.append(f.time - f.dt, { check: 'leg swing peak earliness before 35% (fraction)', value: 0.35 - this.peak.phase, limit: 0, where: f.prev.skeleton.bones[this.terminal].name });
     const depth = -this.lowest(f.prev);
     if (depth > 1e-4) f.dev.append(f.time - f.dt, { check: 'leg ground (m)', value: depth, limit: 1e-4, where: f.prev.skeleton.bones[this.terminal].name });
     if (!this.held) return;
@@ -196,27 +203,25 @@ export class Limb {
     // Commit the joint branch at lift-off; changing it mid-swing produces snaps.
     if (!this.swing) {
       this.swing = this.lifted(f, walker);
+      this.peak = { speed: 0, phase: 0 };
       this.refs(0, stride);
       solver.reach(_turn, _top, landing, this.swing.land);
     }
     const swing = this.swing;
-    const reach = _top.distanceTo(landing.position);
+    this.progress = s;
     const target = this.planted(state.foothold, this.pitch(0, stride.stepping), _swingTarget);
-    const local = (time: number, at: Vector3) => {
-      walker.rootAt(time, _root, _rootTurn);
-      return at.sub(_root).applyQuaternion(yawPitch(yawOf(_rootTurn), 0, _rootTurn).invert());
-    };
-    const end = local(left, _end.copy(target.position));
-    const rate = local(left + STEP, _rate.copy(target.position)).sub(end).divideScalar(STEP);
+    // World-space planting excludes root acceleration; [D] heading curvature follows the
+    // arc's sagitta with the same minimum-jerk progress, rather than cutting its chord.
+    const end = _end.copy(target.position);
     end.y = state.foothold.position.y + Math.min(this.leg.heel.y, this.leg.toe.y);
-    rate.y = 0;
     for (let j = 0; j < 3; j++) {
-      [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], end.getComponent(j), rate.getComponent(j), left + f.dt, f.dt);
+      [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], end.getComponent(j), 0, left + f.dt, f.dt);
     }
-    target.position.set(swing.x[0], 0, swing.x[2]).applyQuaternion(yawPitch(yawOf(p.rotation(0)), 0, _a)).add(p.position(0)).setY(swing.x[1]);
+    target.position.fromArray(swing.x);
+    const bend = 2 * minimumJerk(s) * Math.tan(wrapAngle(yawOf(_rootTurn) - swing.turn.yaw) / 4);
+    _w.subVectors(end, target.position); target.position.addScaledVector(_w.set(-_w.z, 0, _w.x), bend);
     target.position.y += clearance * loft(s);
-    target.rotation.slerp(swing.turn, 1 - minimumJerk(s));
-    const free = minimumJerk(4 * s) * (1 - minimumJerk(4 * s - 3));
+    target.rotation.slerp(swing.turn.foot, 1 - minimumJerk(s));
     for (let j = 0; j < solver.n; j++) this.setRef(j, swing.from[j] + (swing.land[j] - swing.from[j]) * minimumJerk(s) + swing.fold[j] * loft(s), walker.stride);
     _swingTarget.swing = s;
     _swingTarget.above = this.aboveAt(s);
@@ -224,9 +229,6 @@ export class Limb {
     let low = Infinity;
     for (const point of _swingTarget.above) low = Math.min(low, _w.copy(point).applyQuaternion(target.rotation).y);
     target.position.y -= low;
-    // Keep the landing's reach through mid-swing; return it with zero end acceleration.
-    const hip = p.position(this.top), span = _w.subVectors(target.position, hip);
-    if (span.length() > reach) target.position.lerp(span.setLength(reach).add(hip), free);
     solver.solve(p, _swingTarget, solver.q);
     if (leg.toes) p.setLocal(leg.toes.bone, this.toesAt(s, _a));
   }
@@ -245,10 +247,10 @@ export class Limb {
     return this.above;
   }
 
-  /** Start from the last two completed sole poses in the root's horizontal frame. */
+  /** Start from the last two completed sole poses in world space. */
   private lifted(f: Frame<unknown>, walker: Walker): Swing {
-    const at = f.prev.position(this.terminal).clone().sub(f.prev.position(0)).applyQuaternion(yawPitch(yawOf(f.prev.rotation(0)), 0, _a).invert()).setY(Math.max(0, this.lowest(f.prev)));
-    const previous = f.prev2.position(this.terminal).clone().sub(f.prev2.position(0)).applyQuaternion(yawPitch(yawOf(f.prev2.rotation(0)), 0, _a).invert()).setY(Math.max(0, this.lowest(f.prev2)));
+    const at = f.prev.position(this.terminal).clone().setY(Math.max(0, this.lowest(f.prev)));
+    const previous = f.prev2.position(this.terminal).clone().setY(Math.max(0, this.lowest(f.prev2)));
     const blend = walker.stride.referenceBlend ?? 0;
     const sample = (c: JointCycle, s: number) => cycleAt(c, c.duty + s * (1 - c.duty), blend);
     return {
@@ -258,7 +260,7 @@ export class Limb {
       a: new Float64Array(3),
       land: Float64Array.from(this.solver.q),
       from: Float64Array.from(this.solver.q),
-      turn: f.prev.rotation(this.terminal).clone(),
+      turn: { foot: f.prev.rotation(this.terminal).clone(), yaw: yawOf(f.prev.rotation(0)) },
       toes: this.leg.toes ? f.prev.local(this.leg.toes.bone).clone() : new Quaternion(),
     };
   }
@@ -281,7 +283,7 @@ export class Limb {
     let k = 0;
     while (k < keys.length - 2 && us >= keys[k + 1][0]) k++;
     const [[u0, a], [u1, b]] = [keys[k], keys[k + 1]];
-    return (a + (b - a) * minimumJerk((us - u0) / (u1 - u0))) * DEG * stepping;
+    return (a + (b - a) * minimumJerk((us - u0) / (u1 - u0))) * DEG * stepping + (this.leg.rest ?? 0) * DEG * (1 - stepping);
   }
 
   /** Roll about the heel or toe while keeping that contact fixed in world space. */
@@ -319,6 +321,5 @@ const _swingTarget: LegTarget = { swing: 0, position: new Vector3(), rotation: n
 const _turn = new Quaternion();
 const _top = new Vector3();
 const _end = new Vector3();
-const _rate = new Vector3();
 const _root = new Vector3();
 const _rootTurn = new Quaternion();

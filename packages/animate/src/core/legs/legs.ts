@@ -17,6 +17,8 @@ export interface LegChain {
   toeOut: number;
   /** Lateral foothold offset in the root frame (m). Omitted: rest offset. */
   width?: number;
+  /** Standing terminal pitch (degrees); a resting hoof can keep its toe planted. */
+  rest?: number;
   /** Terminal pitch through stance, degrees, positive toes up. */
   rocker: readonly (readonly [number, number])[];
 }
@@ -88,7 +90,8 @@ export class Legs {
     if (![goal.position.x, goal.position.y, goal.position.z, ...(goal.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error('root goal must be finite');
     if ([motion.turnAccel, motion.turnSpeed].some((value) => value !== undefined && !(value >= 0 && Number.isFinite(value)))) throw new Error('root turn motion must be finite and nonnegative');
     const radius = Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z)));
-    const height = f.prev.position(0).y;
+    const height = f.current.position(0).y;
+    const posture = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -yawOf(f.current.rotation(0))).multiply(f.current.rotation(0));
     // Restore standing height by at most 2 mm per tick; preflight supplies the reserve.
     const rise = Math.max(-0.002, Math.min(0.002, this.standingHeight - height));
     let offset = 0;
@@ -118,7 +121,7 @@ export class Legs {
       const position = new Vector3(), adjustment = share === 0 ? 0 : rise;
       step = { speed: plan.speed, root: (time) => {
         const at = plan.root(time);
-        return { position: position.copy(at.position).setY(height + (adjustment + offset)), quaternion: at.quaternion };
+        return { position: position.copy(at.position).setY(height + adjustment + offset), quaternion: at.quaternion.clone().multiply(posture) };
       } };
       for (let k = 0; k <= 60 && !found; k++) {
         for (const direction of [1, -1]) {

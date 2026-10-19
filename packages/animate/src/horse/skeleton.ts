@@ -96,7 +96,7 @@ const AT = {
   hindSole: v(0.15, 0, -0.64),
 };
 
-/** the bones, parents first: the trunk (root), pelvis, neck, head, then each leg's */
+/** the bones, parents first: the trunk (root), spine, pelvis, neck, head, then each leg's */
 function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
   const bones: BoneDef[] = [];
   const at: Vector3[] = [];
@@ -107,9 +107,11 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
     return bones.length - 1;
   };
   const trunk = add('trunk', -1, AT.trunk, MASS.trunk, v(0, 1.12, 0.3), 1);
-  const pelvis = add('pelvis', trunk, AT.pelvis, MASS.pelvis, v(0, 1.27, -0.68), 1);
+  // [D] Pitch about the hip axis; a croup pivot was translating the leg attachments.
+  const spine = add('spine', trunk, AT.hip.clone().setX(0), 0, AT.pelvis, 0);
+  const pelvis = add('pelvis', spine, AT.pelvis, MASS.pelvis, v(0, 1.27, -0.68), 1);
   const neck = add('neck', trunk, AT.neck, MASS.neck, AT.poll, 0.45);
-  add('head', neck, AT.poll, MASS.head, AT.muzzle, 0.4);
+  const head = add('head', neck, AT.poll, MASS.head, AT.muzzle, 0.4);
   const legs: HorseLeg[] = [];
   for (const [fore, end] of [[true, 'Fore'], [false, 'Hind']] as const) {
     for (const side of [1, -1] as const) {
@@ -136,6 +138,9 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
       legs.push({ name: `${name}${end}`, fore, side, scapula, upper, middle, cannon, pastern, hoof, sole: m(sole).sub(m(coffin)), toe: m(sole).sub(m(coffin)).add(TOE), heel: m(sole).sub(m(coffin)).add(HEEL) });
     }
   }
+  // [C] Minimum attention/follower joints; mass remains included in head/pelvis.
+  for (const side of [1, -1]) add(`${side === 1 ? 'left' : 'right'}Ear`, head, AT.poll.clone().add(v(side * 0.1, 0.06, 0)), 0, AT.poll, 0);
+  add('tail', pelvis, v(0, 1.39, -0.9), 0, AT.pelvis, 0);
   return { bones, legs: ['leftFore', 'rightFore', 'leftHind', 'rightHind'].map((n) => legs.find((l) => l.name === n) ?? fail(n)) };
 }
 
@@ -170,6 +175,9 @@ const range = (z: [number, number], x: [number, number], twist: [number, number]
  * Denoix 2004, recalled).
  */
 const RANGES: Record<string, Range> = {
+  Ear: range([-45, 45], [-60, 60], [-120, 120]),
+  tail: range([-60, 60], [-60, 60], [-70, 70]),
+  spine: range([-8, 8], [-15, 15], [-10, 10]),
   pelvis: range([-8, 8], [-15, 15], [-10, 10]),
   neck: range([-20, 20], [-40, 60], [-35, 35]),
   head: range([-20, 20], [-40, 45], [-30, 30]),
@@ -217,8 +225,13 @@ export const SKELETON = new Skeleton(built.bones, {
 });
 /** the legs, in fore-left, fore-right, hind-left, hind-right order */
 export const LEGS: readonly HorseLeg[] = built.legs;
+export const SPINE = SKELETON.index('spine');
 export const PELVIS = SKELETON.index('pelvis');
 export const NECK = SKELETON.index('neck');
 export const HEAD = SKELETON.index('head');
 /** the muzzle (in the head's frame) */
 export const MUZZLE = AT.muzzle.clone().sub(AT.poll);
+
+export const EARS = [SKELETON.index('leftEar'), SKELETON.index('rightEar')];
+export const TAIL = SKELETON.index('tail');
+export const HALTER = v(0, -0.3, 0.05);
