@@ -6,6 +6,7 @@ export { solveChain, type ChainGoal } from './core/chain';
 export { follow, followRotation } from './core/follow';
 export { live, type Behaviour, type FollowOptions, type Live, type Motion, type Placement, type Target, type Until } from './core/goal';
 export { Carrier, Item, onItem, type ItemOptions } from './core/carrier';
+export { Rope } from './core/rope';
 export { ChainTip, chainTo, reached, type TipOptions } from './core/tip';
 export { TrackedPoint, TrackedRotation } from './core/track';
 export { GLANCE, lookAt, SHIFT, type Gazer } from './core/gaze';

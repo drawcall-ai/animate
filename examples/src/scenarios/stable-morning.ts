@@ -1,9 +1,9 @@
 import { Box3, Quaternion, Vector3 } from 'three';
-import { parallel, timePassed } from '@pmndrs/timeline';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
 import {
-  Body, HORSE_SKELETON, Item, Pose,
+  Body, HORSE_SKELETON, Item, Pose, Rope,
   place, facingAt, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle,
-  named, onBone, reachFor, release, takeOff, watch, wear, when, walkTo, withGaze, yawOf,
+  named, onBone, reachFor, release, watch, wear, when, walkTo, withGaze, yawOf,
   type Behaviour, type Frame, type Humanoid, type World,
 } from '@drawcall/animate';
 import { forwardOf } from '../math';
@@ -35,12 +35,20 @@ const HANDLER_AHEAD = 1.22;
 const LEAD_ASIDE = 0.55;
 // Minimum station-transition distance; a larger station change gets enough travel to stay monotonic (m).
 const LEAD_EASE = 0.5;
-// Tuned here against the visible halter distance: near hand below the jaw; slack remains iteration 12’s outside-hip pose (m).
+// Tuned here against the visible halter distance: near hand below the jaw; slack hand low beside the hip (m).
 const HALTER = new Vector3(0, -0.3, 0.05);
 const NEAR_HAND = new Vector3(-0.4, 0.04, 0.3);
-const SLACK_HAND = new Vector3(0.3, 0.1, 0.25);
-// Tuned against the two-hand slack span: enough sag to show a loop without reaching the pelvis.
-const SLACK_SAG = 0.25;
+const SLACK_HAND = new Vector3(0.22, -0.08, 0.16);
+// A 2.4 m lead rope: 1.2 m from the halter to the knot (the tie's reach), the slack beyond it; the
+// second hand takes the slack where it meets it, offered 60 cm past the knot hand (about the
+// hands' span, so it hangs between them) (m, and shares of its length).
+export const LEAD_ROPE = 2.4;
+const KNOT_AT = 1.2 / LEAD_ROPE;
+const GATHER_AT = 1.8 / LEAD_ROPE;
+// Tuned: a reaching hand closes on swinging rope within a palm's width of it (m).
+const CATCH = 0.05;
+// Tuned: the rope between the hands is a fifth longer than their span, so it hangs in a shallow loop.
+const SLIDE = 1.2;
 // Requested scene acceptance bound for the gathering elbow behind its shoulder (m).
 const GATHER_BACK = 0.08;
 // Read from half the 1.45 m barrel and half the 0.15 m gate post: halt with the trunk beyond the opening.
@@ -75,9 +83,8 @@ export function stableMorning(): Scenario {
       const rope = new Item(KNOT.clone(), new Quaternion(), {
         knot: { position: new Vector3() },
       }, { name: 'rope' });
-      // A flexible rope has independently carried ends, rather than two rigid-item grips.
-      // Tuned rope drape (m): 20 cm toward the gathering hand, 15 cm down, 10 cm forward.
-      const loose = new Item(KNOT.clone().add(new Vector3(0.2, -0.15, 0.1)), new Quaternion(), {
+      // Where the second hand gathers the slack: it lies on the rope until taken.
+      const loose = new Item(KNOT.clone(), new Quaternion(), {
         end: { position: new Vector3() },
       }, { name: 'rope slack' });
       let handler: Humanoid<World> | null = null;
@@ -100,6 +107,9 @@ export function stableMorning(): Scenario {
       }, { person: () => handler?.pose.position(handler.pose.skeleton.index('head')),
         tether: () => rope.supported ? { position: KNOT, length: 1.2 } : undefined });
       const horse = new Body(HORSE_SKELETON, follow, { pose, dev });
+      const halterAt = () => horse.pose.point(HEAD, HALTER, new Vector3());
+      const lead = new Rope(halterAt(), KNOT.clone().lerp(halterAt(), -1 / KNOT_AT + 1), LEAD_ROPE);
+      let gathering = false;
 
       const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(-Math.PI / 2) });
       const gate = new Vector3(-0.2, 0, 8.2);
@@ -155,8 +165,8 @@ export function stableMorning(): Scenario {
               yield* hold(h, rope, { to: near })();
             },
             function* () {
+              gathering = true;
               yield* reachFor(h, { left: [loose, 'end'] })();
-              yield* takeOff(h, loose)();
               yield* hold(h, loose, { to: slack })();
             },
             function* () {
@@ -198,21 +208,33 @@ export function stableMorning(): Scenario {
           }
           // Two skirts make the simple saddle read above the horse's barrel.
           for (const side of [-1, 1]) props.push(box(new Vector3(0, -SKIRT_DROP, side * SKIRT_ASIDE).applyQuaternion(saddle.current.quaternion).add(saddle.current.position), SKIRT.x, SKIRT.y, SKIRT.z, saddle.current.quaternion.clone()));
-          const end = rope.current.position;
-          const halter = horse.pose.point(HEAD, HALTER, new Vector3());
-          const at = (u: number) => halter.clone().lerp(end, u).add(new Vector3(0, -0.32 * 4 * u * (1 - u), 0));
-          for (let i = 0; i < 12; i++) {
-            props.push(line(at(i / 12), at((i + 1) / 12), 0.012, 0xc4a273));
-          }
-          const slack = (u: number) => end.clone().lerp(loose.current.position, u).add(new Vector3(0, -SLACK_SAG * 4 * u * (1 - u), 0));
-          for (let i = 0; i < 12; i++) props.push(line(slack(i / 12), slack((i + 1) / 12), 0.012, 0xc4a273));
+          const { points } = lead;
+          for (let k = 1; k < points.length; k++) props.push(line(points[k - 1].clone(), points[k].clone(), 0.012, 0xc4a273));
           return props;
         },
         script: (h) => {
           handler = h;
           return function* () {
-            // Until gathered, the loose end hangs from the knot end, including during walk-off.
-            yield* wear(h, loose, rope)();
+            // The lead rope hangs from the halter and whatever holds it; ungathered, the slack's
+            // gathering point moves with the rope.
+            const gathered = () => h.holding.left?.item === loose;
+            const leftHand = h.pose.skeleton.index('leftHand');
+            let caught = false;
+            let gatherAt = GATHER_AT;
+            const swing = action<Frame<World>>({
+              update: (f) => {
+                const hand = f.current.position(leftHand);
+                if (gathering && !caught) gatherAt = lead.nearest(hand, KNOT_AT + 0.1, 1);
+                caught ||= gathering && hand.distanceTo(lead.at(gatherAt)) < CATCH;
+                // The rope slides through the gathering hand as the hands part: it keeps more rope between them than their span.
+                if (caught) gatherAt = Math.min(1, Math.max(gatherAt, KNOT_AT + SLIDE * hand.distanceTo(rope.current.position) / LEAD_ROPE));
+                const pinned: [number, Vector3][] = [[0, halterAt()], [KNOT_AT, rope.current.position]];
+                if (caught) pinned.push([gatherAt, loose.current.position]);
+                lead.step(f.dt, pinned);
+                // Caught, the rope point goes with the closing hand until the hold carries it.
+                if (!gathered() && !loose.moved(f.time)) loose.move(f.time, caught ? hand : lead.at(gatherAt));
+              },
+            });
             yield* parallel<Frame<World>>('all',
               eyesOnBefore(h, saddle, 0.4), eyesOnBefore(h, rope, 0.4),
               watch('gather the loose end', (f) => {
@@ -224,7 +246,7 @@ export function stableMorning(): Scenario {
                 return value > GATHER_BACK
                   ? { check: 'elbow behind shoulder (m)', value, limit: GATHER_BACK, where: 'left elbow' } : null;
               }),
-              idle(h), tasks(h),
+              idle(h), tasks(h), () => swing,
             );
           };
         },
