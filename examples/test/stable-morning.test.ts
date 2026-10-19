@@ -4,7 +4,7 @@ import { Simulation } from '../src/simulation';
 import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
 import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
-import { HORSE, stableMorning } from '../src/scenarios/stable-morning';
+import { HORSE, LEAD_ROPE, stableMorning } from '../src/scenarios/stable-morning';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
 const SEAT_HEIGHT = 0.16;
@@ -152,7 +152,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
     leading++;
     const p = h.pose;
     const at = (name: string) => p.position(p.skeleton.index(name));
-    expect(h.holding.left).toBeNull();
+    expect(h.holding.left?.item.name).toBe('rope slack');
     expect(h.asks.bow).toBe(0);
     chest.push(new Euler().setFromQuaternion(p.rotation(p.skeleton.index('chest')), 'YXZ').x);
     const right = at('rightHand').clone().sub(at('chest'));
@@ -306,4 +306,39 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
   expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);
   expect(barrelGap).toBeGreaterThan(0);
+});
+
+it.each([0, 1, 2])('gathers the slack of a hanging rope of fixed length while walking #%i', (seed) => {
+  const scene = stableMorning();
+  const sim = new Simulation(seed ? vary(scene, seed) : scene, undefined, true);
+  let rightAt = NaN, leftAt = NaN;
+  let gatheringSteps = 0;
+  while (sim.t < scene.duration) {
+    sim.step();
+    const h = sim.actors[0];
+    // The lead rope keeps its length (2.4 m), whatever holds it: within 2%, the few centimetres it
+    // gives when drawn taut between the halter and the near hand (tuned bound).
+    const segments = sim.props().filter((p) => p.kind === 'cylinder' && p.color === 0xc4a273);
+    const length = segments.reduce((sum, p) => sum + (p.kind === 'cylinder' ? p.length : 0), 0);
+    if (sim.t > 1) expect(Math.abs(length - LEAD_ROPE) / LEAD_ROPE).toBeLessThan(0.02);
+    const rope = h.holding.right?.item;
+    if (rope?.name !== 'rope') continue;
+    if (Number.isNaN(rightAt)) {
+      rightAt = sim.t;
+      expect(h.holding.left).toBeNull();
+    }
+    if (h.holding.left?.item.name !== 'rope slack') {
+      // Ungathered, the slack hangs below the knot hand.
+      const tail = segments[segments.length - 1];
+      if (tail.kind === 'cylinder') expect(tail.position.y).toBeLessThan(rope.current.position.y);
+      if (h.gait.velocity.length() > MOVING) gatheringSteps++;
+      continue;
+    }
+    if (Number.isNaN(leftAt)) leftAt = sim.t;
+    expect(h.holding.left.item.wornBy).toBeNull();
+  }
+  expect(leftAt - rightAt).toBeGreaterThan(0.3);
+  expect(leftAt - rightAt).toBeLessThan(3);
+  expect(gatheringSteps).toBeGreaterThan(30);
+  expect(sim.actors[0].log).toEqual([]);
 });

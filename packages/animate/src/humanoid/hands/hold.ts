@@ -1,11 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { Carrier, Item } from '../../core/carrier';
+import { REACHED, type Target } from '../../core/goal';
 import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { grip, gripOf, gripsOf, heldItems, type Grips } from './grips';
+import { grip, gripOf, gripsOf, heldItems, type Grips, type Holds } from './grips';
 
 const aims = new WeakMap<object, Map<Item, Carrier>>();
 
@@ -17,10 +18,28 @@ export function carryAims(h: object): Map<Item, Carrier> {
 
 const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
+/**
+ * How far a hand may be from a grip it starts holding (m): a reach ends once the wrist is within
+ * `REACHED.distance`, and the same frame's hold step and fit may pull it up to ~2 cm more (tuned
+ * against the scenes' grabs, none of which comes closer than 1 cm to this limit).
+ */
+export const GRIP_TAKEN = REACHED.distance + 0.02;
+
+const _taken: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+
 /** One owner of held hands and carried-item fitting, after all body and item movers. */
 export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
   const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
+  const previous: Holds = {};
   return (f) => {
+    // Preserve acquisition points before wrist fitting can move an item onto a distant hand.
+    const taking = f.dev ? SIDES.flatMap((side) => {
+      const held = h.holding[side], was = previous[side];
+      previous[side] = held ? [held.item, held.grip] : undefined;
+      if (!held || (was?.[0] === held.item && was[1] === held.grip)) return [];
+      const { item, grip: name } = held;
+      return [{ side, item, name, at: item.toWorld(gripOf(item, name), _taken).position.clone() }];
+    }) : [];
     for (const item of heldItems(h)) {
       const aim = carryAims(h).get(item);
       if (!aim && !item.supported && !item.wornBy && !item.moved(f.time)) {
@@ -36,6 +55,17 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
         handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy }, arms[side]);
       }
       if (aim) fit(f, item, aim, grips, sides);
+      // Worn-item contact has one rigid owner; check after that owner and both arms moved.
+      // A carried item instead fits compliant wrists; its course owns endpoint accuracy.
+      if (f.dev && item.wornBy) for (const side of sides) {
+        const at = item.toWorld(gripOf(item, grip(grips, side)), _taken).position;
+        const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
+        if (value > REACHED.distance) f.dev.append(f.time, { check: 'held grip distance (m)', value, limit: REACHED.distance, where: `${item.name} ${side}` });
+      }
+    }
+    for (const { side, item, name, at } of taking) {
+      const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
+      if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${item.name} ${side} ${name}` });
     }
     carryAims(h).clear();
   };

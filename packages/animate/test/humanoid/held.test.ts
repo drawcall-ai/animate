@@ -6,7 +6,7 @@ import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, closeHand, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
@@ -281,4 +281,24 @@ it.each([0.02, 0.22])('clears a %s m load from the final neck→head segment, in
     expect(head.distanceTo(at)).toBeGreaterThan(reserve);
     expect(pointSegmentDistance(at, neck, head)).toBeGreaterThan(reserve);
   }
+});
+
+it.each([false, true])('checks grip activation against the final wrist before fitting (late contact %s)', (contact) => {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    const item = new Item(h.pose.position(INDEX.leftHand).clone().add(new Vector3(contact ? 0.1 : 0, 0, 0)), new Quaternion(), {
+      end: { position: new Vector3() },
+    }, { name: 'loose rope' });
+    yield* closeHand(h, 'left', item, 'end')();
+    yield* parallel<Frame>('all',
+      hold(h, item, { to: () => ({ position: h.pose.position(INDEX.leftHand).clone() }) }),
+      action<Frame>({ update: (f) => {
+        f.current.setRoot(f.prev.position(0).clone().add(new Vector3(0.1, 0, 0)));
+        f.current.setLocal(INDEX.leftHand, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.01));
+      } }),
+    );
+  }, { dev: true });
+  h.update(STEP);
+  const problems = h.log.filter((entry) => entry.check === 'grip activation distance (m)');
+  if (contact) expect(problems).toEqual([]);
+  else expect(problems).toEqual([expect.objectContaining({ value: expect.closeTo(0.1), limit: 0.03, where: 'loose rope left end' })]);
 });

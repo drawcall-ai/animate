@@ -1,7 +1,7 @@
 import { Group, Vector3 } from 'three';
 import { flattenCharacterModelOptions, loadCharacterModel, type CharacterModel } from '@pmndrs/viverse';
 import { Bodies, instance } from './stage/bodies';
-import { Framing, placeCamera, VIEWS } from './stage/camera';
+import { Framing, placeCamera, PlayerCamera, VIEWS } from './stage/camera';
 import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
@@ -45,6 +45,7 @@ const zoom = Number(params.get('zoom') ?? 1);
 /** the shots turned about the focus by this much (rad, + = toward the body's left): the far side of what it faces */
 const turn = Number(params.get('turn') ?? 0);
 const framing = new Framing();
+let playerCamera = new PlayerCamera();
 const settings: Settings = {
   view: VIEWS.find((v) => v === params.get('view')) ?? 'orbit',
   flat: params.get('mode') === '2d',
@@ -85,6 +86,8 @@ function start(s: Scenario) {
 
 /** sets the stage for the playback just started */
 function show() {
+  playerCamera = new PlayerCamera();
+  bodies.hideHead(false);
   const { scenario: s, actors } = playback.sim;
   bodies.cast(actors);
   stage.setEnvironment(s);
@@ -136,14 +139,26 @@ function facing() {
 }
 
 /** aims the camera at the framing (which is smoothed already) */
-function aim() {
+function aim(dt = FIXED_DT) {
+  const player = playback.sim.stage.player;
+  const playerView = settings.view === 'first' || settings.view === 'third' ? settings.view : player?.input.view;
+  const usePlayer = player && (player.live || settings.view === 'first' || settings.view === 'third' || !params.has('view') && settings.view === 'orbit');
+  stage.controls.enabled = !usePlayer;
+  bodies.hideHead(!!usePlayer && playerView === 'first');
+  if (usePlayer && playerView) {
+    playerCamera.apply(stage.camera, player, playerView, dt);
+    return;
+  }
+  stage.camera.fov = FOV;
+  stage.camera.near = 0.05;
+  stage.camera.updateProjectionMatrix();
   if (settings.view === 'orbit') {
     stage.controls.target.copy(framing.focus);
     stage.controls.update();
   } else {
     const angles = playback.sim.scenario.cameraAngles;
     const bearing = settings.view === 'front' || settings.view === 'side' ? angles?.[settings.view] : undefined;
-    placeCamera(stage.camera, settings.view, framing, distance(), playback.bounds, bearing);
+    placeCamera(stage.camera, settings.view === 'first' || settings.view === 'third' ? 'three' : settings.view, framing, distance(), playback.bounds, bearing);
   }
 }
 
@@ -170,7 +185,7 @@ function recordVideo() {
       camera.position.copy(orbit);
       camera.fov = FOV;
     }
-    aim();
+    aim(dt);
     if (cinematic) {
       orbit = camera.position.clone();
       const look = settings.view === 'orbit' ? stage.controls.target.clone() : framing.focus.clone();
@@ -206,7 +221,66 @@ function captureStill() {
   window.__ready = true;
 }
 
+function bindPlayerInput() {
+  const canvas = byId('c', HTMLCanvasElement);
+  const keys = new Set<string>();
+  const clearInput = () => {
+    keys.clear();
+    const player = playback.sim.stage.player;
+    if (player) { player.input.move.x = 0; player.input.move.z = 0; player.input.fire = false; player.input.ads = false; player.input.sprint = false; }
+  };
+  const moveInput = () => {
+    const player = playback.sim.stage.player;
+    if (!player?.live) return;
+    player.input.move.x = Number(keys.has('KeyA')) - Number(keys.has('KeyD'));
+    player.input.move.z = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
+    player.input.sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  };
+  canvas.addEventListener('click', () => {
+    const player = playback.sim.stage.player;
+    if (!player || document.pointerLockElement === canvas) return;
+    player.live = true;
+    clearInput();
+    settings.view = 'orbit';
+    settings.playing = true;
+    void canvas.requestPointerLock();
+  });
+  document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) clearInput(); });
+  window.addEventListener('blur', clearInput);
+  document.addEventListener('keydown', (event) => {
+    if (document.pointerLockElement !== canvas) return;
+    if (event.code === 'Escape') { document.exitPointerLock(); return; }
+    keys.add(event.code);
+    moveInput();
+    const player = playback.sim.stage.player;
+    if (event.code === 'KeyV' && !event.repeat && player) player.input.view = player.input.view === 'first' ? 'third' : 'first';
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyV'].includes(event.code)) event.preventDefault();
+  });
+  document.addEventListener('keyup', (event) => { keys.delete(event.code); moveInput(); });
+  document.addEventListener('mousemove', (event) => {
+    const player = playback.sim.stage.player;
+    if (document.pointerLockElement !== canvas || !player) return;
+    // Tuned mouse sensitivity, radians per pixel; positive world yaw turns toward screen left.
+    player.input.aimYaw -= event.movementX * 0.002;
+    player.input.aimPitch = Math.max(-1.3, Math.min(0.65, player.input.aimPitch - event.movementY * 0.002));
+  });
+  document.addEventListener('mousedown', (event) => {
+    const player = playback.sim.stage.player;
+    if (document.pointerLockElement !== canvas || !player) return;
+    if (event.button === 0) player.input.fire = true;
+    if (event.button === 2) player.input.ads = true;
+  });
+  document.addEventListener('mouseup', (event) => {
+    const player = playback.sim.stage.player;
+    if (!player) return;
+    if (event.button === 0) player.input.fire = false;
+    if (event.button === 2) player.input.ads = false;
+  });
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+}
+
 function playLive() {
+  bindPlayerInput();
   if (params.has('t')) seek(Number(params.get('t')));
   let last = performance.now();
   let acc = 0;
@@ -218,11 +292,11 @@ function playLive() {
       while (acc >= FIXED_DT) {
         acc -= FIXED_DT;
         playback.step();
-        if (playback.sim.t > playback.sim.scenario.duration) load(scenario);
+        if (playback.sim.t > playback.sim.scenario.duration && !playback.sim.stage.player?.live) load(scenario);
       }
       sync(acc / FIXED_DT, dt);
     }
-    aim();
+    aim(dt);
     draw();
     requestAnimationFrame(loop);
   };

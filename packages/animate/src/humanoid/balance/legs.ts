@@ -74,7 +74,10 @@ export const foldedReach = (p: Proportions, bend: number) => Math.sqrt(p.thigh *
 export function rollFoot(f: Frame<unknown>, c: Carriage, s: number): number {
   const st = c.steps[s];
   const goal = plantedPitch(f, c, s);
-  st.roll = [st.roll[1], follow(st.roll[0], st.roll[1], goal, ROLL, f.dt)];
+  // Derived finite difference: follow the moving roll goal without a cadence-dependent lag.
+  const velocity = st.rollGoal === null ? 0 : (goal - st.rollGoal) / f.dt;
+  st.rollGoal = goal;
+  st.roll = [st.roll[1], follow(st.roll[0], st.roll[1], goal, { ...ROLL, velocity }, f.dt)];
   return st.roll[1];
 }
 
