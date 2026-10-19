@@ -1,10 +1,11 @@
+import type { Player } from '../scenario';
 import { Vector3, type Box3, type PerspectiveCamera } from 'three';
 import { forwardOf, leftOf, Spring } from '../math';
 
 /** `orbit` = free (OrbitControls); the others are fixed shots relative to the body's facing */
-export type View = 'orbit' | 'front' | 'side' | 'back' | 'three' | 'top';
+export type View = 'orbit' | 'front' | 'side' | 'back' | 'three' | 'top' | 'first' | 'third';
 export type Shot = Exclude<View, 'orbit'>;
-export const VIEWS: View[] = ['orbit', 'front', 'side', 'three', 'back', 'top'];
+export const VIEWS: View[] = ['orbit', 'front', 'side', 'three', 'back', 'top', 'first', 'third'];
 
 /** how quickly the camera takes up the body's travel and its turns (1/s): far below a walk's footfalls (~12 rad/s), of whose surges the travel then passes on ~3% */
 const TRAVEL = 2;
@@ -67,4 +68,23 @@ export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw 
   }
   camera.position.copy(target).addScaledVector(dir, distance);
   camera.lookAt(target);
+}
+
+/** Recalled: full-body first person and an over-the-shoulder third-person camera (Unreal/Unity).
+ * Tuned camera response: soften step bob, retain movement; camera state never enters simulation.
+ */
+export class PlayerCamera {
+  private readonly eye = new Spring();
+
+  apply(camera: PerspectiveCamera, player: Player, view: 'first' | 'third', dt: number) {
+    const { aimYaw: yaw, aimPitch: pitch } = player.input;
+    const direction = new Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+    const eye = this.eye.step(player.eyes(), 24, dt);
+    camera.position.copy(eye);
+    if (view === 'third') camera.position.addScaledVector(direction, -2.4).addScaledVector(leftOf(yaw), -0.55).y += 0.15;
+    camera.lookAt(eye.clone().addScaledVector(direction, 20));
+    camera.fov = view === 'first' ? 90 : 65;
+    camera.near = 0.02;
+    camera.updateProjectionMatrix();
+  }
 }

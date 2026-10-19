@@ -142,6 +142,7 @@ export class GaitKinematics {
     const pelvis = angles(j('leftUpperLeg'), j('rightUpperLeg'));
     const thorax = angles(j('leftUpperArm'), j('rightUpperArm'));
     const head = angles(j('leftEye'), j('rightEye'));
+    const torsoYaw = asked.get('torsoYaw');
     const eyes = j('leftEye').sub(j('rightEye'));
     // Eye-line inclination is independent of yaw, including a look behind the body.
     head.roll = Math.atan2(eyes.y, Math.hypot(eyes.x, eyes.z));
@@ -161,7 +162,9 @@ export class GaitKinematics {
       pelvisRoll: pelvis.roll,
       pelvisYaw: pelvis.yaw,
       thoraxRoll: thorax.roll,
-      thoraxYaw: thorax.yaw,
+      // Remove the authored torso turn when judging the remaining gait counter-rotation.
+      // The final shoulder line is still measured; an aim request is not a relaxed stride.
+      thoraxYaw: thorax.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
       lean: Math.atan2(up.dot(left), up.y),
       headRoll: head.roll,
       headYaw: head.yaw,

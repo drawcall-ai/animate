@@ -55,6 +55,13 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
         handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy }, arms[side]);
       }
       if (aim) fit(f, item, aim, grips, sides);
+      // Worn-item contact has one rigid owner; check after that owner and both arms moved.
+      // A carried item instead fits compliant wrists; its course owns endpoint accuracy.
+      if (f.dev && item.wornBy) for (const side of sides) {
+        const at = item.toWorld(gripOf(item, grip(grips, side)), _taken).position;
+        const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
+        if (value > REACHED.distance) f.dev.append(f.time, { check: 'held grip distance (m)', value, limit: REACHED.distance, where: `${item.name} ${side}` });
+      }
     }
     for (const { side, item, name, at } of taking) {
       const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);

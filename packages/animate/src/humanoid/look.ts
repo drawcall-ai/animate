@@ -7,7 +7,7 @@ import { live, type Behaviour, type Live } from '../core/goal';
 import { seeded, seedOf } from '../core/random';
 import type { ReadonlyPose } from '../core/pose';
 import type { Humanoid } from './humanoid';
-import { forwardOf, lerp, smoothstep } from '../core/math';
+import { forwardOf, lerp, smoothstep, wrapAngle } from '../core/math';
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
 const HEAD_SHARE = 0.55;
@@ -103,3 +103,22 @@ export function gazeLead<W>(h: Humanoid<W>, at: Live<Vector3, W>, seconds = NaN)
 const ARRIVED = Math.PI / 180;
 const LONGEST = 1.2;
 const LEAD = [0.1, 0.3];
+
+/** Upper-body aim, with the gait's counter-rotation and balance preserved.
+ * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck.
+ * Tuned torso shares: 65% yaw, 25% pitch; balance shares them over spine/chest,
+ * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
+ * The existing posture and gaze owners retain their motion limits and final-pose checks.
+ */
+export function aimAt<W>(h: Humanoid<W>, at: Live<Vector3, W>): Behaviour<W> {
+  return function* () {
+    yield* parallel<Frame<W>>('all', lookAt(h.gazer, at, SHIFT), action<Frame<W>>({ update: (f) => {
+      const direction = live(at, f).clone().sub(h.gazer.eyes(f.prev, new Vector3()));
+      const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.gait.facing);
+      const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
+      // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation.
+      h.asks.twist = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw));
+      h.asks.bow = 0.25 * pitch;
+    } }));
+  };
+}

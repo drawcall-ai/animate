@@ -31,7 +31,7 @@ export { onBone, facingAt, carried } from './humanoid/goal';
 export { takeOff, wear, type Wearing } from './core/worn';
 export type { Bearing, Dressed } from './humanoid/worn';
 export { headTo, type HeadOptions } from './humanoid/head';
-export { lookAround, withGaze } from './humanoid/look';
+export { aimAt, lookAround, withGaze } from './humanoid/look';
 export { idle } from './humanoid/idle';
 export { arriving, walkTo, type WalkOptions } from './humanoid/walk';
 export type { Stance } from './humanoid/stance';
