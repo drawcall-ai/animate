@@ -1,4 +1,4 @@
-import { humanGait, humanLegs } from '../human-legs';
+import { humanGait, humanLegs } from '@drawcall/animate';
 import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';

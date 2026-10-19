@@ -32,6 +32,7 @@ export type { Bearing, Dressed } from './humanoid/worn';
 export { headTo, type HeadOptions } from './humanoid/head';
 export { lookAround, withGaze } from './humanoid/look';
 export { idle } from './humanoid/idle';
+export { humanGait, humanLegs } from './humanoid/legs';
 export { arriving, walkTo, type WalkOptions } from './humanoid/walk';
 export type { Stance } from './humanoid/stance';
 export { createSkeletonModel } from './humanoid/model';
