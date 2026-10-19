@@ -16,3 +16,6 @@ export function seedOf(...parts: readonly (string | number)[]): number {
   for (const c of parts.join('|')) hash = Math.imul(hash ^ c.charCodeAt(0), 0x01000193);
   return hash >>> 0;
 }
+
+/** Smooth seeded drift shared by standing bodies; incommensurate frequencies avoid a repeating loop. */
+export const irregular = (t: number, phase: number, a: number, b: number, c: number) => (Math.sin(a * t + phase) + 0.5 * Math.sin(b * t + 2 * phase) + 0.25 * Math.sin(c * t + 3 * phase)) / 1.75;

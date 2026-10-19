@@ -17,7 +17,7 @@ interface State {
 export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number): LegStep {
   if (share === 0) {
     const position = f.prev.position(0).clone();
-    const quaternion = f.prev.rotation(0).clone();
+    const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(f.prev.rotation(0)));
     return { root: () => ({ position, quaternion }), speed: 0 };
   }
   const accel = motion.accel * share;
