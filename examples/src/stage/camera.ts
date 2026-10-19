@@ -75,11 +75,16 @@ export function placeCamera(camera: PerspectiveCamera, shot: Shot, { focus, yaw 
  */
 export class PlayerCamera {
   private readonly eye = new Spring();
+  private ads = 0;
 
   apply(camera: PerspectiveCamera, player: Player, view: 'first' | 'third', dt: number) {
     const { aimYaw: yaw, aimPitch: pitch } = player.input;
     const direction = new Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
-    const eye = this.eye.step(player.eyes(), 24, dt);
+    const actual = player.eyes();
+    // Tuned 250 ms ADS blend: near sights need the body's eye, not a lagging camera origin.
+    this.ads += Math.max(-dt / 0.25, Math.min(dt / 0.25, Number(player.input.ads) - this.ads));
+    const eye = this.eye.step(actual, 24, dt).clone();
+    if (view === 'first') eye.lerp(actual, this.ads * this.ads * (3 - 2 * this.ads));
     camera.position.copy(eye);
     if (view === 'third') camera.position.addScaledVector(direction, -2.4).addScaledVector(leftOf(yaw), -0.55).y += 0.15;
     camera.lookAt(eye.clone().addScaledVector(direction, 20));

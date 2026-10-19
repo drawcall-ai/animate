@@ -61,6 +61,7 @@ export interface Stepping {
   landPitch: number;
   /** planted, how it is rolled (rad) the two last sub-steps */
   roll: [number, number];
+  rollGoal: number | null;
   swing: Swing | null;
 }
 
@@ -95,6 +96,8 @@ export class Carriage {
   readonly root = new Vector3();
   yaw = 0;
   readonly velocity = new Vector3();
+  /** Actual change in ground speed (m/s²), used to forecast accelerating steps. */
+  speedup = 0;
   /** the goal (on the floor) and how fast it moves, speeds up along its way (m/s²) */
   readonly goal = new Vector3();
   readonly goalVelocity = new Vector3();
@@ -149,7 +152,7 @@ export class Carriage {
     /** the feet [left, right]: where they stand or land */
     readonly feet: readonly [Foot, Foot],
   ) {
-    const stepping = (side: Side, sign: 1 | -1): Stepping => ({ side, sign, plantedTime: 10, landPitch: 0, roll: [0, 0], swing: null });
+    const stepping = (side: Side, sign: 1 | -1): Stepping => ({ side, sign, plantedTime: 10, landPitch: 0, roll: [0, 0], rollGoal: null, swing: null });
     this.steps = [stepping('left', 1), stepping('right', -1)];
     this.omega = Math.sqrt(GRAVITY / p.legLength);
   }
@@ -283,6 +286,7 @@ export class Carriage {
       this.yaw += wrapAngle(this.feetYaw() - this.yaw) * k;
       this.goalYaw = this.yaw;
     }
+    this.speedup = (this.speed - Math.hypot(vx, vz)) / dt;
     const v2 = v.x * v.x + v.z * v.z;
     const rate = dt > 0 && v2 > TURN_SPEED * TURN_SPEED ? (v.z * (v.x - vx) - v.x * (v.z - vz)) / (v2 * dt) : 0;
     this.turnRate += (rate - this.turnRate) * Math.min(1, TURN_TRACK_RATE * dt);

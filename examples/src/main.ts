@@ -222,13 +222,14 @@ function bindPlayerInput() {
   const clearInput = () => {
     keys.clear();
     const player = playback.sim.stage.player;
-    if (player) { player.input.move.x = 0; player.input.move.z = 0; player.input.fire = false; }
+    if (player) { player.input.move.x = 0; player.input.move.z = 0; player.input.fire = false; player.input.ads = false; player.input.sprint = false; }
   };
   const moveInput = () => {
     const player = playback.sim.stage.player;
     if (!player?.live) return;
     player.input.move.x = Number(keys.has('KeyA')) - Number(keys.has('KeyD'));
     player.input.move.z = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
+    player.input.sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
   };
   canvas.addEventListener('click', () => {
     const player = playback.sim.stage.player;
@@ -260,9 +261,17 @@ function bindPlayerInput() {
   });
   document.addEventListener('mousedown', (event) => {
     const player = playback.sim.stage.player;
-    if (document.pointerLockElement === canvas && player && event.button === 0) player.input.fire = true;
+    if (document.pointerLockElement !== canvas || !player) return;
+    if (event.button === 0) player.input.fire = true;
+    if (event.button === 2) player.input.ads = true;
   });
-  document.addEventListener('mouseup', () => { const player = playback.sim.stage.player; if (player) player.input.fire = false; });
+  document.addEventListener('mouseup', (event) => {
+    const player = playback.sim.stage.player;
+    if (!player) return;
+    if (event.button === 0) player.input.fire = false;
+    if (event.button === 2) player.input.ads = false;
+  });
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 }
 
 function playLive() {

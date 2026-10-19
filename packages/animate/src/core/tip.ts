@@ -88,6 +88,9 @@ export class ChainTip {
         f.current.setLocal(b, q);
       }
     }
+    // Joint damping must not separate an acquired contact; retain the damped bend and wrist
+    // while satisfying the positional constraint within the chain's existing joint limits.
+    if (options.contact) solveChain(f, chain, { tip: { position, quaternion: f.current.rotation(tip).clone() }, pole: f.current.position(bones[1]).clone() });
     moved.placed.copy(f.current.position(tip));
   }
 

@@ -85,6 +85,7 @@ export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>
       const forward = _v.set(0, 0, 1).applyQuaternion(f.prev.rotation(INDEX[`${st.side}Foot`]));
       st.landPitch = Math.atan2(forward.y, Math.hypot(forward.x, forward.z));
       st.roll = [st.landPitch, st.landPitch];
+      st.rollGoal = null;
       c.lastLanded = s;
       return;
     }
@@ -118,12 +119,23 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   const dt = f.dt;
   const t = c.timing();
   const { steps } = c;
+  const forecast = _forecast.copy(xcom).addScaledVector(c.velocity, dt);
+  // Derived: run compression changes CoM during landing; its backward difference can lag
+  // root travel. Keep the greater forward velocity when forecasting the running catch.
+  if (t.run > 0) {
+    const measured = f.prev.com(_v).sub(f.prev2.com(_to)).dot(c.velocity) / (dt * c.speed);
+    forecast.addScaledVector(c.velocity, Math.max(0, c.speed - measured) / (c.speed * c.omega));
+  }
   if (t.run > 0.5) {
     // running: a step clock, each foot pushing off half a stride after the other did, even while
     // the other is still in the air; a foot left behind out of the leg's reach goes at once
     const s = 1 - c.lastLift;
     const f = steps[s];
-    if (!f.swing && ((c.clock - c.lastLiftAt >= t.step && f.plantedTime >= 0.6 * t.stance) || overstretched(c, s, dt))) return lift(c, s, t, xcom, true);
+    // Derived: acceleration can outrun a committed landing before the nominal run clock.
+    // Forecast against fixed contacts/landings, not in the moving goal's frame.
+    const support = hullOf(c.feet.flatMap((foot) => footprint(c.p, foot.position, foot.yaw)));
+    const falling = outside(support, forecast) > FALL * c.p.scale;
+    if (!f.swing && (falling || (c.clock - c.lastLiftAt >= t.step && f.plantedTime >= 0.6 * t.stance) || overstretched(c, s, dt))) return lift(c, s, t, xcom, true);
     return null;
   }
   if (steps.some((f) => f.swing)) return null;
@@ -144,8 +156,9 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
   const still = 1 - smoothstep(SLOW[0], SLOW[1], c.speed / c.p.scale);
   // (walking, the foot that just landed takes the weight for a double support first, the other
   // pushing off, unless the body is falling well past it)
-  // Placement follows the goal; forecast one sub-step of XCoM motion relative to that goal.
-  const out = uncaught(c, _to.copy(xcom).addScaledVector(c.velocity, dt).addScaledVector(c.goalVelocity, -dt));
+  // Steady walking follows the goal's rhythm; accelerating, forecast against fixed contacts
+  // so the previous speed's step cannot delay the catch as the root speeds up.
+  const out = uncaught(c, _to.copy(forecast).addScaledVector(c.goalVelocity, -dt * (1 - clamp(c.speedup / c.accel, 0, 1))));
   c.falling = out > (1 - 2 * still) * CATCH * c.p.scale ? c.falling + dt : 0;
   // (round a bend the extrapolated centre of mass runs outside the path by (v/ω)²·κ/2 by design: that is no fall)
   const bend = (0.5 * (c.speed / c.omega) ** 2 * Math.abs(c.turnRate)) / Math.max(c.speed, 0.1);
@@ -497,6 +510,7 @@ function aside(to: Vector3, from: Readonly<Vector3>, yaw: number, sign: number, 
   to.z += lz * sign * (want - lateral);
 }
 
+const _forecast = new Vector3();
 const _v = new Vector3();
 const _to = new Vector3();
 const _hip = new Vector3();

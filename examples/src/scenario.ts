@@ -16,7 +16,7 @@ export interface Role {
 
 /** A run of a scenario: its world, its scenery and carriers, and its actors' behaviours (made fresh for every run). */
 export interface Player {
-  input: { move: { x: number; z: number }; aimYaw: number; aimPitch: number; fire: boolean; view: 'first' | 'third' };
+  input: { move: { x: number; z: number }; aimYaw: number; aimPitch: number; fire: boolean; ads: boolean; sprint: boolean; view: 'first' | 'third' };
   live: boolean;
   eyes(): Vector3;
 }
