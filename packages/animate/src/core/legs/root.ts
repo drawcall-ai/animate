@@ -1,8 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
+import { follow } from '../follow';
 import type { Motion } from '../goal';
-import { wrapAngle, yawOf } from '../math';
-import type { LegGait } from './gait';
+import { clamp, wrapAngle, yawOf } from '../math';
+import { strideAt, type LegGait } from './gait';
 import type { LegStep } from './legs';
 
 export interface RootState {
@@ -13,14 +14,19 @@ export interface RootState {
 }
 
 /** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number, previous: RootState, acceleration: number): Omit<LegStep, 'root'> & { root(time: number): RootState } {
-  if (share === 0) {
+export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion)): Omit<LegStep, 'root'> & { root(time: number): RootState } {
+  if (share === 0 && !facing) {
     const position = previous.position.clone();
     const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));
     return { root: () => ({ position, quaternion, velocity: new Vector3(), angular: 0 }), speed: 0 };
   }
-  const accel = motion.accel * share;
-  const speed = motion.speed ?? Infinity;
+  const accel = motion.accel * (facing ? 1 : share);
+  const speed = share === 0 ? 0 : (motion.speed ?? Infinity) * speedShare;
+  const cruise = Math.max(gait.slowest, Number.isFinite(motion.speed ?? Infinity) ? motion.speed ?? Infinity : previous.velocity.length());
+  const braking = cruise ** 2 / (2 * motion.accel);
+  const stride = strideAt(gait, cruise, 0);
+  const midstance = cruise * stride.duty / (2 * stride.frequency);
+  const targets = [goal.clone()];
   const states: (RootState & { speed: number })[] = [];
   const advance = (from: RootState, ahead: number): RootState & { speed: number } => {
     const goalSpeed = velocity.length();
@@ -29,25 +35,50 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const travel = goalSpeed * accelerating + 0.5 * acceleration * accelerating ** 2
       + Math.max(0, goalSpeed + acceleration * accelerating) * (ahead - accelerating);
     const target = new Vector3().copy(goal).addScaledVector(velocity, acceleration === 0 ? ahead : goalSpeed > 0 ? travel / goalSpeed : 0);
+    const futureVelocity = velocity.clone();
+    if (goalTurn !== 0 && goalSpeed > 0) {
+      const tick = Math.round(ahead / STEP);
+      while (targets.length <= tick) {
+        const t = (targets.length - 0.5) * STEP;
+        const v = Math.max(0, Math.min(motion.speed ?? Infinity, goalSpeed + acceleration * t));
+        targets.push(targets[targets.length - 1].clone().addScaledVector(velocity.clone().applyAxisAngle(UP, goalTurn * t), v / goalSpeed * STEP));
+      }
+      target.copy(targets[tick]);
+      futureVelocity.applyAxisAngle(UP, goalTurn * ahead).setLength(Math.max(0, goalSpeed + acceleration * accelerating));
+    }
     const delta = target.sub(from.position).setY(0);
     const distance = delta.length();
     const heading = distance > 1e-9 ? Math.atan2(delta.x, delta.z) : yawOf(from.quaternion);
-    const forward = Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
-    // These legs step fore/aft. Brake and wait for a goal outside the forward cone.
+    // [D] Start within the distance needed to brake translation and complete the goal turn.
+    const turnAngle = facing ? Math.abs(wrapAngle(yawOf(facing) - heading)) : 0;
+    const duration = turnAngle === 0 ? 0 : Math.max(2 * Math.sqrt(turnAngle / (motion.turnAccel ?? motion.accel / radius)), turnAngle / (motion.turnSpeed ?? Infinity), 1 / stride.frequency);
+    const arrival = facing ? clamp(1 - distance / (Math.max(braking, cruise * duration) + midstance), 0, 1) : 0;
+    const forward = (arrival > 0 && (turnAngle > 1e-9 || from.velocity.lengthSq() > 1e-8)) || Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
     // Follow in the goal's moving frame: braking closes the gap in addition to its velocity.
     // [D] Brake closing speed with root deceleration minus the target's deceleration.
+    const turnAccel = (motion.turnAccel ?? motion.accel / radius) * (facing ? 1 : share);
+    const remaining = facing ? Math.abs(wrapAngle(yawOf(facing) - yawOf(from.quaternion))) : 0;
+    const turning = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, from.velocity.length())) * turnShare;
+    const untilFacing = remaining === 0 ? 0 : Math.max(2 * Math.sqrt(remaining / turnAccel), remaining / turning);
+    // [D] Keep translating until the remaining turn can finish, rather than exhaust the approach first.
+    const closing = arrival > 0 && untilFacing > 0 ? Math.min(speed, distance / untilFacing) : speed;
     const wanted = forward ? delta.setLength(distance > 1e-9 ? Math.sqrt(2 * Math.max(0, accel + Math.min(0, acceleration)) * distance) : 0)
-      .add(velocity).clampLength(0, speed) : delta.set(0, 0, 0);
+      .add(futureVelocity).clampLength(0, closing) : delta.set(0, 0, 0);
     const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * STEP));
     const v = next.length();
     const yaw = yawOf(from.quaternion);
-    const bearing = v > 1e-4 ? Math.atan2(next.x, next.z) : yaw;
+    const travelYaw = v > 1e-4 ? Math.atan2(next.x, next.z) : facing ? heading : yaw;
+    const goalAngle = facing ? wrapAngle(yawOf(facing) - travelYaw) : 0, direction = Math.sign(goalAngle);
+    const progress = Math.max(Math.abs(goalAngle) * arrival, direction * wrapAngle(stanceYaw - travelYaw), direction * wrapAngle(yaw - travelYaw));
+    const bearing = facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress) : travelYaw;
     const angle = wrapAngle(bearing - yaw);
-    const turn = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, v));
+    const turn = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, v)) * turnShare;
     const desired = Math.sign(angle) * Math.min(turn, Math.abs(angle) / STEP);
-    const turnAccel = (motion.turnAccel ?? motion.accel / radius) * share;
     let angular = Math.max(from.angular - turnAccel * STEP, Math.min(from.angular + turnAccel * STEP, desired));
-    angular = Math.sign(angle) * Math.min(Math.abs(angular), Math.abs(angle) / STEP);
+    angular = facing && turnAccel > 0 && Number.isFinite(turnAccel)
+      ? (follow(yaw - from.angular * STEP, yaw, yaw + angle, { accel: turnAccel, speed: turn }, STEP) - yaw) / STEP
+      : Math.sign(angle) * Math.min(Math.abs(angular), Math.abs(angle) / STEP);
+    if (Math.abs(angular) < 1e-9) angular = 0;
     return {
       position: from.position.clone().addScaledVector(next, STEP).setY(from.position.y),
       quaternion: new Quaternion().setFromAxisAngle(UP, yaw + angular * STEP),
@@ -59,7 +90,10 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     while (states.length <= tick) states.push(advance(states[states.length - 1] ?? previous, states.length * STEP));
     return states[tick];
   };
-  return { speed: (time) => at(time).speed, root: (time) => at(time) };
+  return { speed: (time) => at(time).speed, root: (time) => at(time), heading: facing ? (time) => {
+    const velocity = at(time).velocity;
+    return velocity.lengthSq() > 1e-18 ? Math.atan2(velocity.x, velocity.z) : undefined;
+  } : undefined };
 }
 
 const UP = new Vector3(0, 1, 0);

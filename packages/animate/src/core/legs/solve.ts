@@ -4,6 +4,7 @@
 // the rig's own range for it; the ground a stiff one-sided target; every joint within its range.
 import { solveFree } from './cholesky';
 import { Quaternion, Vector3 } from 'three';
+import { wrapAngle, yawOf } from '../math';
 import { beyond, clampRotation } from '../limits';
 import type { Pose } from '../pose';
 import type { Skeleton } from '../skeleton';
@@ -53,6 +54,9 @@ export class Solver {
   readonly q: Float64Array;
   /** the soft targets (set before `solve`) */
   readonly ref: Float64Array;
+  /** Heading residual from the last reach forecast (rad). */
+  headingError = 0;
+  rotationError = 0;
   private readonly offsets: Vector3[];
   /** the chain's base: its top bone's parent's world turn and the top joint's position */
   private readonly baseTurn = new Quaternion();
@@ -151,28 +155,38 @@ export class Solver {
   }
 
   /** the joints `q` (rad, written back; starting from the references) that reach `target` off a base turned `turn` at `top` (the top joint's world position), the pose untouched. Returns the miss (m). */
-  reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array): number {
+  reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array, seed = this.ref): number {
     const was = _was.subarray(0, this.n);
     was.set(this.q);
-    this.prior.set(this.ref);
-    this.q.set(this.ref);
+    this.prior.set(seed);
+    this.q.set(seed);
     this.baseTurn.copy(turn);
     this.basePosition.copy(top);
-    const miss = this.iterate(target);
+    const heading = () => Math.abs(wrapAngle(yawOf(target.rotation) - yawOf(this.rotations[this.bones.length - 1])));
+    let miss = this.iterate(target), angle = heading(), rotation = target.rotation.angleTo(this.rotations[this.bones.length - 1]);
     q.set(this.q);
+    // An orientation-constrained reference can converge on the wrong branch; also try the completed pose.
+    if (angle > 1e-4 || (seed !== this.ref && (miss > 1e-6 || rotation > 1e-4))) {
+      this.q.set(seed === this.ref ? was : this.ref);
+      const next = this.iterate(target), turn = heading();
+      if (Math.max(next, turn) < Math.max(miss, angle)) { miss = next; angle = turn; rotation = target.rotation.angleTo(this.rotations[this.bones.length - 1]); q.set(this.q); }
+    }
     this.q.set(was);
+    this.headingError = angle;
+    this.rotationError = rotation;
     return miss;
   }
 
-  /** Forward height of the swing reference, without advancing the solved joints. */
-  referenceHeight(pose: Pose): number {
+  /** Ankle height at the target's horizontal position that retains the reference reach. */
+  referenceFloor(pose: Pose, at: Vector3): number {
     const kept = this.q.slice();
     this.q.set(this.ref);
     this.baseTurn.copy(pose.rotation(pose.skeleton.bones[this.bones[0]].parent));
     this.basePosition.copy(pose.position(this.bones[0]));
     this.forward();
+    const reach = this.positions[this.bones.length - 1].distanceToSquared(this.basePosition);
     this.q.set(kept);
-    return this.positions[this.bones.length - 1].y;
+    return this.basePosition.y - Math.sqrt(Math.max(0, reach - (at.x - this.basePosition.x) ** 2 - (at.z - this.basePosition.z) ** 2));
   }
 
   /** Bounded damped Gauss-Newton (straight knees are singular): terminal miss in m. */

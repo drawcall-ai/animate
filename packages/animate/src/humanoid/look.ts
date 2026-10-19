@@ -47,7 +47,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
         const w = smoothstep(0.1, 0.6, g.walk);
         const distance = lerp(AHEAD.stand.distance, AHEAD.walk.distance, w);
         const height = lerp(AHEAD.stand.height, AHEAD.walk.height, w) * p.height + glance * up * distance;
-        const yaw = g.facing + HEAD_SHARE * g.thoraxYaw + glance * aside;
+        const yaw = (g.facingAhead ?? g.facing) + HEAD_SHARE * g.thoraxYaw + glance * aside;
         return target.copy(f.prev.com(_com)).setY(height).addScaledVector(forwardOf(yaw, _v), distance);
     })();
   };
@@ -56,7 +56,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
 export function pathAhead<W>(h: Humanoid<W>, pose: ReadonlyPose, out: Vector3): Vector3 {
   return out.copy(pose.com(_com)).setY(AHEAD.walk.height * h.proportions.height)
-    .addScaledVector(forwardOf(h.gait.facing, _v), AHEAD.walk.distance);
+    .addScaledVector(forwardOf(h.gait.facingAhead ?? h.gait.facing, _v), AHEAD.walk.distance);
 }
 
 const _com = new Vector3();

@@ -76,7 +76,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false, legs }: V
  * A walk to a point on the floor (and a facing there), or `within` reach of it facing it, from
  * standing at the origin facing +Z: judged as a stroll, done once the walk has ended there.
  */
-export function walkThere(to: Vector3, face?: number, within = 0): Scenario {
+export function walkThere(to: Vector3, face?: number, within = 0, legs?: Variation['legs']): Scenario {
   return {
     id: 'stroll',
     title: 'Walk there',
@@ -102,7 +102,7 @@ export function walkThere(to: Vector3, face?: number, within = 0): Scenario {
             walker = h;
             yield* parallel<Frame<World>>(
               'all',
-              idle(h),
+              idle(h, { legs }),
               function* () {
                 yield* walkTo(h, { to, face, within })();
                 ended = true;

@@ -17,6 +17,7 @@ export const HORIZON = 0.1;
 export interface Walker {
   phase: number;
   phaseAt?(ahead: number): number;
+  heading?(ahead: number): number | undefined;
   stride: Stride;
   timeTo(phase: number): number;
   at(ahead: number): Stride;
@@ -26,6 +27,8 @@ export interface Walker {
 
 export class Limb {
   restPitch = 0;
+  /** The last reserve could not hold contact heading: reduce turn before changing height. */
+  turnLimited = false;
   readonly solver: Solver;
   readonly top: number;
   readonly terminal: number;
@@ -35,6 +38,7 @@ export class Limb {
   private readonly cycles: (JointCycle | null)[];
   private readonly rest: Float64Array;
   private readonly trial: Float64Array;
+  private readonly length: number;
   private swing: Swing | null = null;
   private ready = false;
   private progress = 0;
@@ -56,6 +60,13 @@ export class Limb {
     const p = f.prev;
     const where = p.skeleton.bones[this.terminal].name;
     if (this.landed) {
+      const pitch = (pose: ReadonlyPose) => {
+        const forward = _w.set(0, 0, 1).applyQuaternion(pose.rotation(this.terminal));
+        return Math.atan2(forward.y, Math.hypot(forward.x, forward.z));
+      };
+      const turn = Math.abs(pitch(p) - pitch(f.prev2)) / DEG;
+      // Inherited visible-slap ceiling; research-contact §1 supplies no per-tick limit.
+      if (turn > 1.5) f.dev.append(f.time - f.dt, { check: 'touchdown pitch step (°)', value: turn, limit: 1.5, where });
       const speed = p.point(this.terminal, this.held.pivot, _w).distanceTo(f.prev2.point(this.terminal, this.held.pivot, _end)) / f.dt;
       if (speed > 0.1) f.dev.append(f.time - f.dt, { check: 'leg touchdown speed (m/s)', value: speed, limit: 0.1, where });
     }
@@ -77,6 +88,7 @@ export class Limb {
     const s = rest.skeleton;
     this.solver = new Solver(s, leg.joints);
     this.trial = new Float64Array(this.solver.n);
+    this.length = leg.joints.slice(1).reduce((sum, joint) => sum + s.bones[joint.bone].offset.length(), 0);
     this.top = leg.joints[0].bone;
     this.terminal = leg.joints[leg.joints.length - 1].bone;
     this.anchor.copy(rest.position(this.terminal)).sub(rest.position(0)).applyQuaternion(_q.copy(rest.rotation(0)).invert());
@@ -111,19 +123,38 @@ export class Limb {
       return [ahead, this.pitch(Math.min(1, (phase - state.footfall) / at.duty), at.stepping)];
     });
     // Existing stance reserve: 10 µm; a new committed landing uses the tighter 1 µm stop.
-    return this.reserve(p, walker, state.foothold, targets, 1e-5);
+    return this.reserve(p, walker, state.foothold, targets, 1e-5, state.footfall) && (!walker.phaseAt || this.reserve(p, walker, state.foothold, [this.extension(p, walker, state.foothold, state.footfall, 0, Math.max(...times))], 1e-5, state.footfall));
   }
 
   /** Shorten a proposed step; if straight shortening cannot support it, try nearby lateral anchors. */
-  foothold(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): void {
+  foothold(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold'], phase?: number): boolean {
     const standing = this.standingAt(walker, ahead, contact.position.y);
     const desired = contact.position.clone();
     const reaches = (t: number) => {
       contact.position.lerpVectors(standing, desired, t);
-      return this.landingSupported(p, walker, ahead, contact);
+      return phase === undefined ? this.landingSupported(p, walker, ahead, contact) : this.stanceSupported(p, walker, ahead, contact, phase);
     };
-    if (reaches(1)) return;
-    if (!reaches(0)) {
+    if (reaches(1)) return true;
+    let lo = 0, hi = 1;
+    if (phase !== undefined) {
+      const direction = desired.clone().sub(standing), a = direction.lengthSq();
+      if (a === 0) return false;
+      let end = ahead;
+      const phaseAt = (time: number) => walker.phaseAt?.(time) ?? walker.phase + time * walker.stride.frequency;
+      while (phaseAt(end) - phase < walker.at(end).duty) end += STEP;
+      // Intersect each planned pose's reach sphere with the foothold segment.
+      for (let time = ahead - 2 * STEP; time <= end + 1e-9; time += STEP) {
+        const stride = walker.at(time), u = Math.min(1, Math.max(0, (phaseAt(time) - phase) / stride.duty));
+        this.baseAt(p, walker, time, _turn, _top);
+        contact.position.copy(standing);
+        const delta = this.planted(contact, this.pitch(u, stride.stepping), _target).position.sub(_top);
+        const b = delta.dot(direction), discriminant = b * b - a * (delta.lengthSq() - this.length ** 2);
+        if (discriminant < 0) return false;
+        lo = Math.max(lo, (-b - Math.sqrt(discriminant)) / a); hi = Math.min(hi, (-b + Math.sqrt(discriminant)) / a);
+        if (lo > hi) return false;
+      }
+      return reaches((lo + hi) / 2);
+    } else if (!reaches(0)) {
       const center = standing.clone();
       for (const offset of [0.01, -0.01, 0.02, -0.02, 0.04, -0.04, 0.08, -0.08]) {
         standing.copy(center).addScaledVector(_w.set(1, 0, 0).applyQuaternion(yawPitch(contact.yaw, 0, _a)), offset);
@@ -131,8 +162,6 @@ export class Limb {
       }
       if (!reaches(0)) throw new Error('root does not support the proposed stance');
     }
-    let lo = 0;
-    let hi = 1;
     // Eight bisections retain a verified reachable endpoint, within 1/256 of the step.
     for (let i = 0; i < 8; i++) {
       const mid = (lo + hi) / 2;
@@ -140,6 +169,7 @@ export class Limb {
       else hi = mid;
     }
     contact.position.lerpVectors(standing, desired, lo);
+    return true;
   }
 
   standingAt(walker: Walker, ahead: number, height: number): Vector3 {
@@ -166,7 +196,7 @@ export class Limb {
     if (flat) times.push(ahead + flat[0] * duration);
     const targets = times.map((time): [number, number] => [time, this.pitch((time - ahead) / duration, stride.stepping)]);
     targets.push([ahead, this.pitch(STEP / duration, stride.stepping)]);
-    return this.reserve(p, walker, contact, targets, 1e-6);
+    return this.reserve(p, walker, contact, targets, 1e-6, walker.phaseAt?.(ahead));
   }
 
   /** A committed step must also carry the body until its next scheduled lift. */
@@ -174,19 +204,40 @@ export class Limb {
     if (!this.landingSupported(p, walker, ahead, contact)) return false;
     let end = ahead;
     while ((walker.phaseAt?.(end) ?? phase + (end - ahead) * walker.stride.frequency) - phase < walker.at(end).duty) end += STEP;
-    return this.reserve(p, walker, contact, [[end, this.pitch(1, walker.at(end).stepping)]], 1e-6);
+    return this.reserve(p, walker, contact, [[end, this.pitch(1, walker.at(end).stepping)]], 1e-6, phase) && this.reserve(p, walker, contact, [this.extension(p, walker, contact, phase, ahead, end)], 1e-6, phase);
+  }
+
+  /** The bob can peak between endpoint checks: verify the most extended planned stance pose too. */
+  private extension(p: Pose, walker: Walker, contact: Timing['foothold'], footfall: number, from: number, to: number): [number, number] {
+    let longest = -Infinity, result: [number, number] = [from, 0];
+    for (let time = from; time <= to + 1e-9; time += STEP) {
+      const stride = walker.at(time), phase = (walker.phaseAt?.(time) ?? walker.phase + time * stride.frequency) - footfall;
+      const pitch = this.pitch(Math.min(1, Math.max(0, phase / stride.duty)), stride.stepping);
+      this.baseAt(p, walker, time, _turn, _top);
+      const distance = this.planted(contact, pitch, _target).position.distanceToSquared(_top);
+      if (distance > longest) { longest = distance; result = [time, pitch]; }
+    }
+    return result;
   }
 
   /** Identical bases and pitches have identical reserve solves; stationary forecasts repeat them. */
-  private reserve(p: Pose, walker: Walker, contact: Timing['foothold'], targets: readonly (readonly [number, number])[], limit: number): boolean {
+  private reserve(p: Pose, walker: Walker, contact: Timing['foothold'], targets: readonly (readonly [number, number])[], limit: number, footfall?: number): boolean {
+    this.turnLimited = false;
     const top = new Vector3();
     const turn = new Quaternion();
     let lastPitch = NaN;
     for (const [time, pitch] of targets) {
+      if (walker.phaseAt && footfall !== undefined) this.refs(walker.phaseAt(time) - footfall, walker.at(time));
       this.baseAt(p, walker, time, _turn, _top);
       if (pitch === lastPitch && top.equals(_top) && turn.equals(_turn)) continue;
       const target = this.planted(contact, pitch, _target);
-      if (this.solver.reach(_turn, _top, target, this.trial) >= limit) return false;
+      if (walker.phaseAt && _top.distanceTo(target.position) > this.length + limit) return false;
+      const miss = this.solver.reach(_turn, _top, target, this.trial, walker.phaseAt ? this.solver.q : this.solver.ref);
+      const rotationLimited = this.solver.headingError > 1e-4 || (!!walker.travelAt && Math.abs(time) <= HORIZON && this.solver.rotationError > 1e-4);
+      if (miss >= limit || rotationLimited) {
+        this.turnLimited = this.solver.headingError > 1e-4;
+        return false;
+      }
       top.copy(_top);
       turn.copy(_turn);
       lastPitch = pitch;
@@ -209,7 +260,7 @@ export class Limb {
     const pitch = this.pitch(Math.min(1, u / duty), stepping);
     const target = this.planted(state.foothold, pitch, _target);
     this.held = { position: target.position.clone(), rotation: target.rotation.clone(), pivot: pitch >= 0 ? leg.heel : leg.toe };
-    solver.solve(p, target);
+    solver.solve(p, target, walker.phaseAt ? solver.q : solver.ref);
     if (leg.toes) p.setLocal(leg.toes.bone, sagittal(-Math.min(0, pitch), _q));
   }
 
@@ -235,38 +286,40 @@ export class Limb {
     const stride = walker.at(left);
     this.baseAt(p, walker, left, _turn, _top);
     const landing = this.planted(state.foothold, this.pitch(0, stride.stepping), _target);
-    // Commit the joint branch at lift-off; changing it mid-swing produces snaps.
     if (!this.swing) {
       this.swing = this.lifted(f, walker);
       this.peak = { speed: 0, phase: 0 };
       this.refs(0, stride);
       solver.reach(_turn, _top, landing, this.swing.land);
+      // [D from C] Fold at loft's recalled 30% apex; endpoints already include their stance bend.
+      if (walker.phaseAt) for (const [j, c] of this.cycles.entries()) if (c) this.swing.fold[j] =
+        (cycleAt(c, c.duty + 0.3 * (1 - c.duty), stride.referenceBlend ?? 0) - (this.swing.from[j] + this.swing.land[j]) / 2) * Math.sqrt(stride.stepping);
     }
     const swing = this.swing;
     this.progress = s;
     const target = this.planted(state.foothold, this.pitch(0, stride.stepping), _swingTarget);
-    // [D] World-space swing excludes root acceleration from touchdown speed. Curved travel
-    // follows the arc's sagitta instead of cutting its chord; one lift-to-land reference blend
-    // keeps the chosen joint branch, where a second mid-swing reach blend caused snaps.
+    // [D] World-space swing keeps touchdown rates independent of root acceleration; the sagitta follows curved travel.
     const end = _end.copy(target.position);
     end.y = state.foothold.position.y + Math.min(this.leg.heel.y, this.leg.toe.y);
     for (let j = 0; j < 3; j++) {
-      [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], end.getComponent(j), 0, left + f.dt, f.dt);
+      [swing.x[j], swing.v[j], swing.a[j]] = quintic(swing.x[j], swing.v[j], swing.a[j], end.getComponent(j), 0, left + (walker.phaseAt ? 0 : f.dt), f.dt);
     }
     target.position.fromArray(swing.x);
-    const bend = 2 * minimumJerk(s) * Math.tan(wrapAngle(yawOf(_rootTurn) - swing.turn.yaw) / 4);
+    const bend = 2 * minimumJerk(s) * Math.tan(wrapAngle((walker.heading ? walker.heading(left) ?? swing.turn.yaw : yawOf(_rootTurn)) - swing.turn.yaw) / 4);
     _w.subVectors(end, target.position); target.position.addScaledVector(_w.set(-_w.z, 0, _w.x), bend);
     target.position.y += clearance * loft(s);
     target.rotation.slerp(swing.turn.foot, 1 - minimumJerk(s));
     for (let j = 0; j < solver.n; j++) this.setRef(j, swing.from[j] + (swing.land[j] - swing.from[j]) * minimumJerk(s) + swing.fold[j] * loft(s), walker.stride);
-    // [D] Lift from the joint reference; the existing loft gives this correction zero endpoint rates.
-    if (walker.phaseAt) target.position.y = Math.max(target.position.y, solver.referenceHeight(p) * loft(s) + target.position.y * (1 - loft(s)));
     _swingTarget.swing = s;
     _swingTarget.above = this.aboveAt(s);
     _swingTarget.floor = clearance * loft(s);
     let low = Infinity;
     for (const point of _swingTarget.above) low = Math.min(low, _w.copy(point).applyQuaternion(target.rotation).y);
     target.position.y -= low;
+    if (walker.phaseAt) {
+      // [D] Retain the reference bend at the actual fore/aft reach; C2 handovers preserve contact rates.
+      target.position.y += Math.max(0, solver.referenceFloor(p, target.position) - target.position.y) * minimumJerk(2 * Math.min(s, 1 - s));
+    }
     solver.solve(p, _swingTarget, solver.q);
     if (leg.toes) p.setLocal(leg.toes.bone, this.toesAt(s, _a));
   }
@@ -298,7 +351,7 @@ export class Limb {
       a: new Float64Array(3),
       land: Float64Array.from(this.solver.q),
       from: Float64Array.from(this.solver.q),
-      turn: { foot: f.prev.rotation(this.terminal).clone(), yaw: yawOf(f.prev.rotation(0)) },
+      turn: { foot: f.prev.rotation(this.terminal).clone(), yaw: walker.heading ? walker.heading(0) ?? 0 : yawOf(f.prev.rotation(0)) },
       toes: this.leg.toes ? f.prev.local(this.leg.toes.bone).clone() : new Quaternion(),
     };
   }

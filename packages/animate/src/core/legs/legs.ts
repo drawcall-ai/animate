@@ -49,11 +49,14 @@ export interface LegStep {
   speed: number | ((time: number) => number);
   /** Floor-plane travel frame for footholds when the body root carries independent posture. */
   travel?(time: number): Required<Placement>;
+  /** Path bearing (rad) when facing is independent; undefined while stationary. Otherwise root yaw supplies curvature. */
+  heading?(time: number): number | undefined;
   gait?: LegGait;
 }
 
 interface LegMotion {
   speed: number;
+  nextLift: number;
   walkers: Walker[];
   gait: LegGait;
 }
@@ -75,12 +78,16 @@ export class Legs {
   private goalVelocity: Vector3 | null = null;
   private reserve: [number, number, number] = [0, 0, 0];
   private reserveGoal = 0;
-  private traveled = false;
+  /** Heading predicted half a second ahead by the accepted root plan. */
+  readonly facingAhead = new Quaternion();
+  private readonly contacts = new Map<number, { phase: number; contact: ContactEvent['foothold'] }>();
   private stance: ContactEvent['foothold'][] | null = null;
 
-  private get settling(): boolean {
-    return this.stance?.some((goal, i) => goal.position.distanceTo(this.states[i].foothold.position) > 1e-6 || Math.abs(goal.yaw - this.states[i].foothold.yaw) > 1e-6) ?? false;
+  private offAnchor(i: number): boolean {
+    const goal = this.stance?.[i], foot = this.states[i].foothold;
+    return !!goal && (goal.position.distanceTo(foot.position) > SETTLE || Math.abs(wrapAngle(goal.yaw - foot.yaw)) > SQUARE);
   }
+  private get settling(): boolean { return this.states.some((_, i) => this.offAnchor(i)); }
 
   get settled(): boolean { return !this.settling && this.states.every((state) => state.planted); }
 
@@ -107,24 +114,26 @@ export class Legs {
    * Target velocity predicts continuing travel until touchdown.
    * Motion values belong to the caller; this controller has no species-specific gains.
    * `carry` forecasts the body pose over the locomotion root, for both preflight and posing.
-   * Goals outside the forward cone brake and wait until they move ahead. Throws only if no supported forecast exists.
+   * With a facing, turn toward goals outside the forward cone before travelling. Otherwise brake and wait. Throws only if no supported forecast exists.
    */
-  toward(f: Frame, goal: Pick<Target, 'position' | 'velocity'>, motion: Motion, carry?: (root: RootState, phase: number, time: number) => Required<Placement>): void {
+  toward(f: Frame, goal: Pick<Target, 'position' | 'velocity' | 'quaternion'>, motion: Motion, carry?: (root: RootState, phase: number, time: number) => Required<Placement>): void {
     if (!(motion.accel > 0 && Number.isFinite(motion.accel)) || (motion.speed !== undefined && !(motion.speed >= 0 && Number.isFinite(motion.speed)))) throw new Error('root motion needs finite positive acceleration and nonnegative speed');
-    if (![goal.position.x, goal.position.y, goal.position.z, ...(goal.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error('root goal must be finite');
+    if (![goal.position.x, goal.position.y, goal.position.z, ...(goal.velocity?.toArray() ?? []), ...(goal.quaternion?.toArray() ?? [])].every(Number.isFinite)) throw new Error('root goal must be finite');
     if ([motion.turnAccel, motion.turnSpeed].some((value) => value !== undefined && !(value >= 0 && Number.isFinite(value)))) throw new Error('root turn motion must be finite and nonnegative');
+    const fullStance = !!(carry || goal.quaternion);
     const from = carry ? this.root : { position: f.prev.position(0).clone(), quaternion: f.prev.rotation(0).clone(),
       velocity: f.prev.position(0).clone().sub(f.prev2.position(0)).setY(0).divideScalar(f.dt),
       angular: wrapAngle(yawOf(f.prev.rotation(0)) - yawOf(f.prev2.rotation(0))) / f.dt };
-    if (carry && (motion.speed ?? Infinity) > 0) this.stance = null;
-    if (carry && from.velocity.lengthSq() > 0) this.traveled = true;
-    if (carry && this.traveled && !this.stance && motion.speed === 0 && from.velocity.lengthSq() === 0) {
-      this.stance = this.limbs.map((limb, i) => ({ position: limb.anchor.clone().applyQuaternion(from.quaternion).add(from.position).setY(this.states[i].foothold.position.y), yaw: yawOf(from.quaternion) + this.chains[i].toeOut }));
-    }
+    this.stance = fullStance && from.velocity.lengthSq() === 0
+      ? this.limbs.map((limb, i) => ({ position: limb.anchor.clone().applyQuaternion(from.quaternion).add(from.position).setY(this.states[i].foothold.position.y), yaw: yawOf(from.quaternion) + this.chains[i].toeOut })) : null;
+    const yaw = yawOf(from.quaternion);
+    const stanceYaw = yaw + this.states.reduce((sum, state, i) => sum + wrapAngle(state.foothold.yaw - this.chains[i].toeOut - yaw), 0) / this.states.length;
     const velocity = goal.velocity ?? new Vector3();
     const goalSpeed = velocity.length();
     const acceleration = carry && this.goalVelocity && goalSpeed > 1e-6
       ? Math.max(-motion.accel, Math.min(motion.accel, velocity.clone().sub(this.goalVelocity).dot(velocity) / (goalSpeed * f.dt))) : 0;
+    const goalTurn = carry && this.goalVelocity && goalSpeed > 1e-6 && this.goalVelocity.lengthSq() > 1e-12
+      ? wrapAngle(Math.atan2(velocity.x, velocity.z) - Math.atan2(this.goalVelocity.x, this.goalVelocity.z)) / f.dt : 0;
     (this.goalVelocity ??= new Vector3()).copy(velocity);
     const radius = Math.max(...this.limbs.map((limb) => Math.hypot(limb.anchor.x, limb.anchor.z)));
     const height = f.current.position(0).y;
@@ -133,20 +142,23 @@ export class Legs {
     // Restore standing height by at most 2 mm per tick; preflight supplies the reserve.
     const rise = Math.max(-0.002, Math.min(0.002, this.standingHeight - height));
     let offset = 0;
-    let share = 1;
+    let share = 1, turnShare = 1, turning = false;
     let step: LegStep | undefined;
     let travel: LegStep | undefined;
-    let first = 0;
+    let first = 0, turnLimited = false;
     const supported = (plan: LegStep) => {
+      turnLimited = false;
+      this.contacts.clear();
       const predicted = this.motion(f, plan);
       for (let k = 0; k < this.states.length; k++) {
         const i = (first + k) % this.states.length, state = this.states[i];
         const walker = predicted.walkers[i];
         const left = walker.timeTo(state.footfall);
-        const supported = carry ? this.carriesLeg(f, predicted, i) : this.supportsLeg(f, predicted, i);
-        if (supported && (state.planted || (!carry && left > HORIZON) || (carry ? this.limbs[i].stanceSupported(f.current, walker, left, state.foothold, state.footfall) : this.limbs[i].landingSupported(f.current, walker, left, state.foothold)))) continue;
+        const supported = fullStance ? this.carriesLeg(f, predicted, i) : this.supportsLeg(f, predicted, i);
+        if (supported && (state.planted || (!fullStance && left > HORIZON) || (fullStance ? this.limbs[i].stanceSupported(f.current, walker, left, state.foothold, state.footfall) : this.limbs[i].landingSupported(f.current, walker, left, state.foothold)))) continue;
         // The failed constraint is most likely to reject the next nearby height too.
         first = i;
+        turnLimited = this.limbs[i].turnLimited;
         return false;
       }
       return true;
@@ -155,11 +167,12 @@ export class Legs {
     // ~0.0013, then try waiting with the same height reserve.
     // Every candidate meets the same support checks.
     let found = false;
-    for (let retry = 0; retry <= 24 && !found; retry++) {
+    for (let retry = 0; retry <= (turning ? 48 : 24) && !found; retry++) {
       // Height does not change pursuit or speed: integrate once for this travel share.
-      const plan = rootPlan(f, goal.position, velocity, carry && share > 0 ? { ...motion, speed: (motion.speed ?? Infinity) * share } : motion, this.gait, radius, carry && share > 0 ? 1 : share, from, acceleration);
+      const plan = rootPlan(f, goal.position, velocity, motion, this.gait, radius, fullStance && share > 0 ? 1 : share, from, acceleration, goal.quaternion, turnShare, goalTurn, fullStance ? share : 1, stanceYaw);
+      if (retry === 0) turning = fullStance && (Math.abs(plan.root(f.time).angular) > 1e-9 || Math.abs(plan.root(f.time + 0.5).angular) > 1e-9);
       travel = plan;
-      const position = new Vector3(), adjustment = share === 0 ? 0 : rise;
+      const position = new Vector3(), adjustment = share === 0 || fullStance ? 0 : rise;
       const swinging = this.states.some((state) => !state.planted) || this.settling;
       const advance = (time: number) => {
         const speed = typeof plan.speed === 'number' ? plan.speed : plan.speed(time);
@@ -167,33 +180,45 @@ export class Legs {
       };
       const nowSpeed = typeof plan.speed === 'number' ? plan.speed : plan.speed(f.time);
       const phases = [this.cycle + (nowSpeed > 0 || swinging ? advance(f.time) : 0)];
-      const poses = new Map<number, Required<Placement>>();
-      step = { speed: plan.speed, travel: carry ? plan.root : undefined, root: (time) => {
+      const poses: Required<Placement>[] = [];
+      step = { speed: plan.speed, heading: plan.heading, travel: fullStance ? plan.root : undefined, root: (time) => {
         const at = plan.root(time);
-        if (!carry) return { position: position.copy(at.position).setY(height + adjustment + offset), quaternion: at.quaternion.clone().multiply(posture) };
+        if (!carry) return { position: position.copy(at.position).setY(height + adjustment + (fullStance ? quintic(reserve[0], reserve[1], reserve[2], offset, 0, HORIZON, time - f.time + f.dt)[0] - reserve[0] : offset)), quaternion: at.quaternion.clone().multiply(posture) };
         const tick = Math.max(0, Math.round((time - f.time) / STEP));
         while (phases.length <= tick) phases.push(phases[phases.length - 1] + advance(f.time + phases.length * STEP));
-        let posed = poses.get(tick);
-        if (!posed) { posed = carry(at, phases[tick], time); poses.set(tick, posed); }
+        while (poses.length <= tick) {
+          const k = poses.length, time = f.time + k * STEP;
+          poses.push(carry(plan.root(time), phases[k], time));
+        }
+        const posed = poses[tick];
         return { position: position.copy(posed.position).addScaledVector(UP, adjustment + quintic(reserve[0], reserve[1], reserve[2], offset, 0, HORIZON, time - f.time + f.dt)[0]), quaternion: posed.quaternion };
       } };
-      // Preserve the walking reserve: unwinding it each steady tick adds a second vertical wave.
-      const changing = from.velocity.distanceTo(plan.root(f.time).velocity) > 1e-6;
-      const start = carry ? Math.round(this.reserveGoal / 0.002) - (from.velocity.lengthSq() === 0 || changing ? Math.sign(this.reserveGoal) : 0) : 0;
-      for (let k = 0; k <= (carry ? 120 : 60) && !found; k++) {
+      // Recover height when the contacts no longer need the lower reserve.
+      const transition = this.events.length > 0 || this.states.some((state, i) => phases[0] - state.footfall >= (state.planted ? strideAt(this.gait, nowSpeed, i).duty : 0));
+      const start = fullStance && !transition ? Math.round(this.reserveGoal / 0.002) : 0;
+      heights: for (let k = 0; k <= (fullStance ? 120 : 60) && !found; k++) {
         for (const direction of [1, -1]) {
           const index = start + direction * k;
           if (Math.abs(index) > 60) continue;
           offset = index * 0.002;
-          if (!supported(step)) continue;
+          if (!supported(step)) {
+            // Prefer less turn to changing pelvis height for a rejected contact rotation.
+            if (turning && turnShare > 0 && turnLimited) break heights;
+            continue;
+          }
           found = true;
           break;
         }
       }
-      if (!found) share = retry === 23 ? 0 : share * 0.75;
+      if (!found) {
+        // A committed travelling step may still fit with less turn, before shortening travel.
+        if (turning && retry < 24) turnShare = retry === 23 ? 0 : turnShare * 0.75;
+        else share = retry === (turning ? 47 : 23) ? 0 : share * 0.75;
+      }
     }
     if (!found || !step || !travel) throw new Error('legs cannot support root follower');
-    if (carry) { this.reserve = quintic(reserve[0], reserve[1], reserve[2], offset, 0, HORIZON, f.dt); this.reserveGoal = offset; }
+    if (fullStance) { this.reserve = quintic(reserve[0], reserve[1], reserve[2], offset, 0, HORIZON, f.dt); this.reserveGoal = offset; }
+    this.facingAhead.copy(travel.root(f.time + 0.5).quaternion);
     const motor = travel.root(f.time);
     this.root.velocity.subVectors(motor.position, from.position).setY(0).divideScalar(f.dt);
     this.root.angular = wrapAngle(yawOf(motor.quaternion) - yawOf(from.quaternion)) / f.dt;
@@ -213,7 +238,7 @@ export class Legs {
     this.limbs.forEach((limb) => limb.check(f));
     this.time = f.time;
     this.events.length = 0;
-    const { speed, walkers } = this.motion(f, step);
+    const { speed, walkers, nextLift } = this.motion(f, step);
     this.cycle = walkers[0].phase;
     this.states.forEach((state, i) => {
       const walker = walkers[i];
@@ -222,17 +247,17 @@ export class Legs {
       if (!state.planted && this.cycle >= state.footfall) {
         state.planted = true;
         this.event(i, 'land');
-      } else if (state.planted && (this.cycle - state.footfall >= duty || !this.limbs[i].supports(f.current, state, walker))) {
-        const next = before(offset, this.cycle) + 1;
+      } else if (state.planted && (this.cycle - state.footfall >= duty || (i === nextLift && this.offAnchor(i)) || ((!step.travel || i === nextLift) && !this.limbs[i].supports(f.current, state, walker)))) {
+        const next = this.next(walker, offset);
         // A truncated startup swing cannot arrive at stance speed.
         if (next - this.cycle < (1 - duty) / 2) state.footfall = next;
         else {
           const { landing, contact } = this.landing(walker, state, next, i);
-          const limb = this.limbs[i];
-          limb.foothold(f.current, walker, landing, contact);
+          const limb = this.limbs[i], planned = this.contacts.get(i);
+          if (planned?.phase === next) { contact.position.copy(planned.contact.position); contact.yaw = planned.contact.yaw; }
+          else if (!limb.foothold(f.current, walker, landing, contact, step.travel ? next : undefined)) throw new Error('root does not support the proposed stance');
           const { position: to, yaw } = contact;
-          // Numerical identity only: a stopped root takes no new steps.
-          if (to.distanceTo(state.foothold.position) > 1e-6 || Math.abs(yaw - state.foothold.yaw) > 1e-6) {
+          if (to.distanceTo(state.foothold.position) > (this.stance ? SETTLE : 1e-6) || Math.abs(wrapAngle(yaw - state.foothold.yaw)) > (this.stance ? SQUARE : 1e-6)) {
             state.planted = false;
             state.lift = this.cycle;
             state.footfall = next;
@@ -245,6 +270,7 @@ export class Legs {
       state.phase = this.cycle - state.footfall + (state.planted ? 0 : 1);
       this.limbs[i].pose(f, walker, state, this.gait.clearance[i]);
     });
+    this.contacts.clear();
   }
 
   /**
@@ -264,26 +290,25 @@ export class Legs {
     if (!state.planted) return true;
     const walker = walkers[i], limb = this.limbs[i];
     if (walker.phase - state.footfall < walker.stride.duty && limb.supports(f.current, state, walker)) return true;
-    const next = before(offsetAt(gait, speed, i), walker.phase) + 1;
+    const next = this.next(walker, offsetAt(gait, speed, i));
     const { landing, contact } = this.landing(walker, state, next, i);
     if (limb.landingSupported(f.current, walker, landing, contact)) return true;
     contact.position.copy(limb.standingAt(walker, landing, contact.position.y));
     return limb.landingSupported(f.current, walker, landing, contact);
   }
 
-  private carriesLeg(f: Frame, { speed, walkers, gait }: LegMotion, i: number): boolean {
+  private carriesLeg(f: Frame, { speed, walkers, gait, nextLift }: LegMotion, i: number): boolean {
     const state = this.states[i];
     if (!state.planted) return true;
     const walker = walkers[i], limb = this.limbs[i];
-    if (walker.phase - state.footfall < walker.stride.duty) return limb.supports(f.current, state, walker);
-    const next = before(offsetAt(gait, speed, i), walker.phase) + 1;
-    const { landing, contact } = this.landing(walker, state, next, i);
-    if (!limb.landingSupported(f.current, walker, landing, contact)) {
-      const standing = { position: limb.standingAt(walker, landing, contact.position.y), yaw: contact.yaw };
-      if (!limb.landingSupported(f.current, walker, landing, standing)) return false;
-      limb.foothold(f.current, walker, landing, contact);
+    if (walker.phase - state.footfall < walker.stride.duty && !(nextLift === i && this.offAnchor(i))) {
+      if (limb.supports(f.current, state, walker)) return true;
+      if (nextLift !== i) return false;
     }
-    return limb.stanceSupported(f.current, walker, landing, contact, next);
+    const next = this.next(walker, offsetAt(gait, speed, i));
+    const { landing, contact } = this.landing(walker, state, next, i);
+    this.contacts.set(i, { phase: next, contact });
+    return limb.foothold(f.current, walker, landing, contact, next);
   }
 
   private motion(f: Frame, step: LegStep): LegMotion {
@@ -292,7 +317,17 @@ export class Legs {
     const input = step.speed;
     const speedAt = (t: number) => speedOf(typeof input === 'number' ? input : input(t));
     const speed = speedAt(f.time);
-    const strides = this.chains.map((_, i) => strideAt(gait, speed, i));
+    const travel = step.travel;
+    const strideAtTime = (time: number, i: number) => {
+      const speed = speedAt(time), at = strideAt(gait, speed, i);
+      if (!travel) return at;
+      const from = travel(time).position.clone(), to = travel(time + STEP).position;
+      const linear = Math.hypot(to.x - from.x, to.z - from.z) / STEP;
+      // Turning advances the foot clock, but fore/aft rockers follow translation only.
+      if (linear + 1e-9 < speed) at.stepping = Math.min(1, linear / (gait.referenceSpeed ?? gait.slowest));
+      return at;
+    };
+    const strides = this.chains.map((_, i) => strideAtTime(f.time, i));
     const phase = this.cycle + (speed > 0 || this.settling || this.states.some((state) => !state.planted) ? strides[0].frequency * f.dt : 0);
     const phases = [phase];
     const advance = () => phases.push(phases[phases.length - 1] + strideAt(gait, speedAt(f.time + phases.length * STEP), 0).frequency * STEP);
@@ -300,12 +335,13 @@ export class Legs {
       while (phases[phases.length - 1] < landing - 1e-9) advance();
       return Math.max(0, phases.findIndex((value) => value >= landing - 1e-9)) * STEP;
     };
-    const travel = step.travel;
+    const heading = step.heading;
     const walkers: Walker[] = strides.map((stride, i) => ({
       phase, stride, timeTo,
+      heading: heading && ((ahead) => heading(f.time + ahead)),
       at: (ahead) => {
         const ticks = Math.max(0, Math.ceil(ahead / STEP - 1e-9));
-        return strideAt(gait, speedAt(f.time + ticks * STEP), i);
+        return strideAtTime(f.time + ticks * STEP, i);
       },
       phaseAt: travel && ((ahead) => {
         const tick = Math.max(0, Math.ceil(ahead / STEP - 1e-9));
@@ -322,12 +358,22 @@ export class Legs {
         turn.copy(root.quaternion);
       },
     }));
-    return { speed, walkers, gait };
+    // One early lift at a time; the other contacts must carry the forecast until the next landing.
+    const nextLift = this.states.every((state) => state.planted)
+      ? this.states.reduce((best, state, i) => {
+        if (this.offAnchor(i) !== this.offAnchor(best)) return this.offAnchor(i) ? i : best;
+        return state.footfall + strides[i].duty < this.states[best].footfall + strides[best].duty ? i : best;
+      }, 0) : -1;
+    return { speed, walkers, gait, nextLift };
+  }
+
+  private next(walker: Walker, offset: number): number {
+    const next = before(offset, walker.phase) + 1, swing = walker.phase + 1 - walker.stride.duty;
+    if (!walker.phaseAt) return next;
+    return this.stance || walker.at(walker.timeTo(swing)).stepping === 0 ? swing : Math.max(next, (walker.phase + swing) / 2 + STEP * walker.stride.frequency);
   }
 
   private landing(walker: Walker, state: LegTiming, next: number, i: number) {
-    const rest = this.stance?.[i];
-    if (rest) return { landing: walker.timeTo(next), contact: { position: rest.position.clone(), yaw: rest.yaw } };
     const { duty, stepping } = walker.stride;
     const limb = this.limbs[i];
     const position = new Vector3();
@@ -335,7 +381,7 @@ export class Legs {
     (walker.travelAt ?? walker.rootAt)(walker.timeTo(next + (walker.stride.stanceCenter ?? duty / 2)), position, turn);
     // [D] Footholds follow floor-plane travel; pelvis list must not turn leg height into step width.
     const anchor = limb.anchor.clone();
-    if (limb.leg.width !== undefined) anchor.x += (limb.leg.width - anchor.x) * stepping;
+    if (limb.leg.width !== undefined) anchor.x += (limb.leg.width - anchor.x) * (walker.phaseAt ? Math.min(stepping, walker.at(walker.timeTo(next)).stepping) : stepping);
     const to = anchor.applyQuaternion(turn).add(position).setY(state.foothold.position.y);
     return { landing: walker.timeTo(next), contact: { position: to, yaw: yawOf(turn) + limb.leg.toeOut } };
   }
@@ -348,3 +394,6 @@ export class Legs {
 
 const before = (offset: number, phase: number) => offset + Math.floor(phase - offset + 1e-9);
 const UP = new Vector3(0, 1, 0);
+
+/** Stopped feet need another step only outside these anchor tolerances (m, rad). */
+const SETTLE = 0.02, SQUARE = 0.05;

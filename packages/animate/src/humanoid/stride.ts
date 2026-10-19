@@ -7,7 +7,7 @@ import { strideAt } from '../core/legs/gait';
 import { cycleAt, DEG } from '../core/legs/cycle';
 import { follow } from '../core/follow';
 import { clampRotation } from '../core/limits';
-import { yawOf } from '../core/math';
+import { wrapAngle, yawOf } from '../core/math';
 import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from './asks';
@@ -26,10 +26,10 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
   return function* () {
     const p = h.proportions;
     const gait = humanGait(p);
-    // [D] 4.5 cm is the midpoint of the supplied 4–5 cm human target, scaled with body size.
+    // [D] The requested 4 cm walking bob, scaled with body size.
     // Convert displacement to Posture's existing BOB units; the inherited constant is unchanged.
     // [D] Two bobs per stride, with the trough halfway through double support after contact.
-    const bob = (phase: number, duty: number) => 0.045 * p.scale / (2 * BOB * p.height) * (1 - Math.cos(4 * Math.PI * (phase - (duty - 0.5) / 2)));
+    const bob = (phase: number, duty: number) => 0.04 * p.scale / (2 * BOB * p.height) * (1 - Math.cos(4 * Math.PI * (phase - (duty - 0.5) / 2)));
     const base = { ...defaultStance(p), ...options.stance };
     const chains = humanLegs(p).map((leg): LegChain => {
       // [D from C] A coordinated stride's toe-off pitch is the sum of the recalled joint angles (0 − 38 − 18 = −56°).
@@ -47,12 +47,13 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
     const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     const pelvis = new TrackedPoint(), rotation = new TrackedRotation();
     const back = [new TrackedRotation(), new TrackedRotation()];
+    const tilts = [new Quaternion(), new Quaternion()];
     const landed = [10, 10];
     const offsets = [new Vector3(), new Vector3()];
     const heights = [h.pose.position(0).y, h.pose.position(0).y];
     let lastGo: Asks['go'] = null;
     const center = c.root.clone().sub(legs.root.position).setY(0), neutral = center.clone().negate();
-    const stop = c.root.clone(), velocity = new Vector3();
+    const stop = c.root.clone(), velocity = new Vector3(), facing = new Quaternion();
     let seen = false, starting = false, lastClock = 0, phase = 0;
     yield* action<Frame<W>>({ update: (f) => {
       if (f.dev) checkSupport(h, f, f.dev);
@@ -62,7 +63,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       c.stance = asks.stance ? { ...base, ...asks.stance } : base;
       c.walk = walking(c.walk, speed, dt);
       const timing = strideAt(gait, speed, 0);
-      const clock = legs.phase;
+      const clock = legs.phase + timing.frequency * dt;
       phase = entrain(phase, 2 * Math.PI * (clock - timing.duty), 2 * Math.PI * (clock - lastClock) / dt, dt);
       lastClock = clock;
       const step = ((clock - timing.duty) % 0.5 + 0.5) % 0.5;
@@ -81,7 +82,10 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       at.y = follow(heights[0], heights[1], c.pelvis.y, PELVIS, dt);
       [heights[0], heights[1]] = [heights[1], at.y];
       f.current.setRoot(at);
-      f.current.setLocal(0, rotation.follow(f.prev2.local(0), f.prev.local(0), c.pelvisRotation, TURN, dt, new Quaternion()));
+      const tilt = rotation.follow(tilts[0], tilts[1], legs.root.quaternion.clone().invert().multiply(c.pelvisRotation), TURN, dt, new Quaternion());
+      tilts[0].copy(tilts[1]);
+      tilts[1].copy(tilt);
+      f.current.setLocal(0, tilt.premultiply(legs.root.quaternion));
       const half = f.current.local(0).clone().invert().multiply(trunk.chest);
       half.slerp(new Quaternion(), 0.5);
       [INDEX.spine, INDEX.chest].forEach((bone, k) => {
@@ -97,17 +101,23 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       } else velocity.set(0, 0, 0);
       seen = !!go;
       if (!c.moving && (c.root.distanceTo(stop) > START.distance * p.scale || velocity.length() > START.speed)) { c.moving = true; starting = true; }
+      const heading = Math.atan2(stop.x - c.root.x, stop.z - c.root.z);
+      const travelYaw = legs.root.velocity.lengthSq() > 1e-8 ? Math.atan2(legs.root.velocity.x, legs.root.velocity.z) : heading;
+      const yaw = asks.face?.yaw ?? (c.moving ? travelYaw : c.yaw);
+      facing.setFromAxisAngle(new Vector3(0, 1, 0), yaw);
       const motor = legs.root.position.clone(), inverse = legs.root.quaternion.clone().invert();
       const current = { position: f.current.position(0).clone(), quaternion: f.current.local(0).clone() };
-      legs.toward(f, { position: (c.moving ? stop : c.root).clone().sub(center), velocity: c.moving ? velocity : new Vector3() },
-        { accel: go?.accel ?? 1.2 * p.scale, speed: c.moving ? Math.min(go?.speed ?? 1.3 * p.scale, starting ? START_GLIDE * p.scale : Infinity) : 0 },
+      let forecastWalk = c.walk, forecastSpeed = 0;
+      legs.toward(f, { position: (c.moving ? stop : c.root).clone().sub(center), velocity: c.moving ? velocity : new Vector3(), quaternion: asks.face || !c.moving || Math.abs(wrapAngle(heading - c.yaw)) >= Math.PI / 4 ? facing : undefined },
+        { accel: go?.accel ?? 1.2 * p.scale, speed: c.moving ? Math.min(go?.speed ?? 1.3 * p.scale, starting ? START_GLIDE * p.scale : Infinity) : 0, turnSpeed: asks.face?.rate },
         (root, phase, time) => {
-          if (time <= f.time) return { position: root.position.clone().sub(motor).add(current.position), quaternion: root.quaternion.clone().multiply(inverse).multiply(current.quaternion) };
+          if (time <= f.time) { forecastWalk = c.walk; forecastSpeed = root.velocity.length(); return { position: root.position.clone().sub(motor).add(current.position), quaternion: root.quaternion.clone().multiply(inverse).multiply(current.quaternion) }; }
+          forecastWalk = walking(forecastWalk, forecastSpeed, dt); forecastSpeed = root.velocity.length();
           const t = strideAt(gait, root.velocity.length(), 0);
-          const future: Carried = { ...c, offset: neutral, walk: root.velocity.lengthSq() === 0 ? walking(c.walk, 0, time - f.time) : c.walk, root: root.position.clone().add(center).setY(0), yaw: yawOf(root.quaternion), pelvis: new Vector3(), pelvisRotation: new Quaternion() };
-          const step = ((phase - t.frequency * dt - t.duty) % 0.5 + 0.5) % 0.5, progress = Math.min(1, step / (1 - t.duty));
+          const future: Carried = { ...c, offset: neutral, walk: forecastWalk, root: root.position.clone().add(center).setY(0), yaw: yawOf(root.quaternion), pelvis: new Vector3(), pelvisRotation: new Quaternion() };
+          const step = ((phase - t.duty) % 0.5 + 0.5) % 0.5, progress = Math.min(1, step / (1 - t.duty));
           posture.forecast().carry({ prev: f.prev, dt: 0 }, future, requested, { chest: new Quaternion(), thoraxYaw: 0 }, life,
-            { phase: 2 * Math.PI * (phase - t.frequency * dt - t.duty), bob: bob(phase - t.frequency * dt, t.duty), nod: Math.cos(2 * Math.PI * progress), compression: 0 },
+            { phase: 2 * Math.PI * (phase - t.duty), bob: bob(phase, t.duty), nod: Math.cos(2 * Math.PI * progress), compression: 0 },
             (height) => height);
           return { position: future.pelvis, quaternion: future.pelvisRotation };
         });
@@ -127,9 +137,10 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       });
       const g = h.gait;
       [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [phase, c.walk, 0, c.yaw, c.moving, trunk.thoraxYaw];
+      g.facingAhead = yawOf(legs.facingAhead);
       g.planted = go === lastGo && !c.moving && legs.legs.every((leg) => leg.planted) ? g.planted + dt : 0;
       lastGo = go;
-      g.settled = !c.moving && legs.settled && landed.every((time) => time > SETTLED);
+      g.settled = !c.moving && Math.abs(wrapAngle(yaw - c.yaw)) < STOP.yaw && legs.settled && landed.every((time) => time > SETTLED);
       g.quiet.copy(posture.quiet);
     } });
   };

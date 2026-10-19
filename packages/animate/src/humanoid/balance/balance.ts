@@ -28,6 +28,8 @@ export interface Gait {
   run: number;
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
+  /** Core pursuit heading half a second ahead, for anticipatory gaze. */
+  facingAhead?: number;
   velocity: Vector3;
   /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
   eta: number;
