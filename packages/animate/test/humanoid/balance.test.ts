@@ -53,14 +53,34 @@ describe('balance', () => {
     for (const [s, f] of h.feet.entries()) expect(Math.abs(f.yaw - (0.5 + (s === 0 ? 0.12 : -0.12)))).toBeLessThan(0.1);
   });
 
-  it('bounds pelvis excursion and contact ringing in each steady stride and after stopping', () => {
+  it('core walks to a point without a facing and settles there', () => {
+    const to = new Vector3(0.6, 0, 2);
+    let arrived = false;
     const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-      yield* parallel<Frame>('all', idle(h), walkTo(h, { to: new Vector3(0, 0, 12) }));
+      yield* parallel<Frame>('all', idle(h, { legs: 'core' }), function* () {
+        yield* walkTo(h, { to })();
+        arrived = true;
+      });
+    }, { dev: true });
+    for (let k = 0; k < 8 * 60 && !arrived; k++) h.update(dt);
+    expect(arrived).toBe(true);
+    expect(h.gait.moving).toBe(false);
+    expect(h.gait.settled).toBe(true);
+    expect(h.pose.com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
+    h.update(dt);
+    expect(h.log).toEqual([]);
+  }, 20000);
+
+  it.each(['old', 'core'] as const)('%s bounds pelvis excursion and contact ringing in each steady stride and after stopping', (legs) => {
+    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+      yield* parallel<Frame>('all', idle(h, { legs }), walkTo(h, { to: new Vector3(0, 0, 12) }));
     });
     const samples: { y: number; speed: number }[] = [];
     const contacts: number[] = [];
     const phases = ['planted', 'planted'];
     const touch: number[] = [], pitchSteps: number[] = [], heels: number[] = [];
+    // Core starts the opposite leg late in stance; only an observed landing starts its heel window.
+    const landed = [legs === 'old', legs === 'old'];
     const rocker: number[][] = [[], []];
     const pitch = (side: 'left' | 'right', previous = false) => {
       const forward = new Vector3(0, 0, 1).applyQuaternion((previous ? h.frame.prev2 : h.pose).rotation(INDEX[`${side}Foot`]));
@@ -77,8 +97,9 @@ describe('balance', () => {
           touch.push(Math.abs(heel.y - h.frame.prev2.point(bone, heelOf(h.proportions), new Vector3()).y) / dt);
           pitchSteps.push(Math.abs(pitch(side) - pitch(side, true)));
           rocker[s] = [];
+          landed[s] = true;
         }
-        if (h.feet[s].phase === 'planted' && rocker[s].length < 4) {
+        if (landed[s] && h.feet[s].phase === 'planted' && rocker[s].length < 4) {
           rocker[s].push(pitch(side));
           heels.push(heel.y);
         }

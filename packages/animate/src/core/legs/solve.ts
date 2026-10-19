@@ -164,6 +164,17 @@ export class Solver {
     return miss;
   }
 
+  /** Forward height of the swing reference, without advancing the solved joints. */
+  referenceHeight(pose: Pose): number {
+    const kept = this.q.slice();
+    this.q.set(this.ref);
+    this.baseTurn.copy(pose.rotation(pose.skeleton.bones[this.bones[0]].parent));
+    this.basePosition.copy(pose.position(this.bones[0]));
+    this.forward();
+    this.q.set(kept);
+    return this.positions[this.bones.length - 1].y;
+  }
+
   /** Bounded damped Gauss-Newton (straight knees are singular): terminal miss in m. */
   private iterate(target: LegTarget): number {
     const { n, q, H, g, d, J, lo: lb, hi: ub, fixed, weight, ref, trial } = this;

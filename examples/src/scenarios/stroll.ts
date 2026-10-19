@@ -14,7 +14,7 @@ const ARC = 6.6;
 
 /** a point on the path `s` m along it: straight along +z for `straight` m, then a left-hand arc of `radius` */
 function path(s: number, straight: number, radius: number, out: Vector3): Vector3 {
-  if (s < straight) return out.set(0, 0, s);
+  if (s < straight || radius === Infinity) return out.set(0, 0, s);
   const a = (s - straight) / radius;
   return out.set(radius - radius * Math.cos(a), 0, straight + radius * Math.sin(a));
 }
@@ -25,10 +25,11 @@ export interface Variation {
   radius?: number;
   yaw?: number;
   halt?: boolean;
+  legs?: 'old' | 'core';
 }
 
 /** Only a go-there point moves, along a path at a stroll; nobody scripts a step. */
-export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variation = {}): Scenario {
+export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false, legs }: Variation = {}): Scenario {
   return {
     id: 'stroll',
     title: 'Stroll (a go-there point)',
@@ -64,7 +65,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variati
               // (after it, until it has long stopped)
               walkTo(h, { to: reported(report, 'go', point), speed: PACE * speed, until: timePassed(22, 'seconds') }),
             );
-            yield* parallel<Frame<World>>('all', idle(h), tasks);
+            yield* parallel<Frame<World>>('all', idle(h, { legs }), tasks);
           },
       };
     },

@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
+import { Vector3 } from 'three';
+import { INDEX } from '../../packages/animate/src/humanoid/bones';
+import { stroll } from '../src/scenarios/stroll';
+import { checks, failed, measure as metricsOf } from './metrics';
+import type { Frame } from './frame';
 import type { LogEntry } from '@drawcall/animate';
 import { SCENARIOS } from '../src/scenarios';
 import type { Scenario } from '../src/scenario';
@@ -12,28 +17,31 @@ vi.mock('../../packages/animate/src/humanoid/idle', async (original) => {
   return { ...actual, idle: ((h, options = {}) => actual.idle(h, { ...options, legs: path.legs })) satisfies typeof actual.idle };
 });
 
-// Stage 0: exact check names, per scene. A disappearing failure must be removed here.
-const coreFailures: Record<string, { checks: string[]; error?: string }> = {
+// Core-only migration scaffolding: exact remaining failures, tagged with their implementing stage.
+// The complete straight stroll below has no expected failures; old-path checks remain strict.
+type MigrationStage = 2 | 3 | 4;
+const coreFailures: Record<string, { checks: Record<string, MigrationStage>; error?: { stage: MigrationStage; message: string } }> = {
   'stroll': {
-    checks: ['XCoM outside support (m)', 'joint acceleration (°/s²)', 'leg ground (m)', 'standing CoM outside the feet (m)'],
-    error: '3.033 s, "": legs cannot support root follower',
+    checks: { 'XCoM outside support (m)': 4, 'leg contact turn (rad)': 2, 'leg ground (m)': 2 },
   },
   'pickup-shelf': {
-    checks: ['XCoM outside support (m)'],
-    error: '6.383 s, "": "item" left grip "left": 0.684 m off; "item" right grip "right": 0.692 m off after 4 s',
+    // Arrival succeeds. At the first check (3.30 s), lower=0.135 m and bow=0.270 rad: stage 4.
+    // Behind-box reposition comes in stage 3.
+    checks: { 'joint acceleration (°/s²)': 4, 'leg touchdown speed (m/s)': 4 },
+    error: { stage: 4, message: '3.467 s, "": legs cannot support root follower' },
   },
-  'hand-over': { checks: [] },
+  'hand-over': { checks: {} },
   'knight-arming': {
-    checks: ['XCoM outside support (m)', 'joint acceleration (°/s²)', 'leg contact (m)'],
-    error: '4.700 s, "": "item" left grip "end": 0.145 m off; "item" right grip "end": 0.069 m off after 4 s',
+    // Initial turn toward the table. The later helm half-turn needs stage 3, loaded balance stage 4.
+    checks: {},
+    error: { stage: 2, message: '0.300 s, "": legs cannot support root follower' },
   },
-  'idle-life': { checks: [] },
-  'reach-around': {
-    checks: ['reach-around: scenario unfinished'],
-  },
+  'idle-life': { checks: {} },
+  'reach-around': { checks: { 'reach-around: scenario unfinished': 4 } },
   'lift-heavy': {
-    checks: ['leg contact (m)', 'leg swing peak earliness before 35% (fraction)'],
-    error: '4.583 s, "": "box" left grip "left": 0.706 m off; "box" right grip "right": 0.706 m off after 4 s',
+    // Lower/bow toward the floor box, then loaded CoM and capture support.
+    checks: { 'XCoM outside support (m)': 4, 'leg contact turn (rad)': 4, 'leg ground (m)': 4 },
+    error: { stage: 4, message: '1.267 s, "": legs cannot support root follower' },
   },
 };
 
@@ -75,9 +83,78 @@ for (const sc of SCENARIOS) {
   }, 20000);
 
   if (!(sc.id in coreFailures)) continue;
-  it(`${sc.id}: core stage 0 parity failures`, () => {
+  it(`${sc.id}: core migration parity failures`, () => {
     const core = measure(sc, 'core');
     console.log(`${sc.id}: core failures ${JSON.stringify(core.failures)}`);
-    expect(core.failures).toEqual(coreFailures[sc.id]);
+    const expected = coreFailures[sc.id];
+    expect(core.failures).toEqual({ checks: Object.keys(expected.checks).sort(), ...(expected.error ? { error: expected.error.message } : {}) });
   }, 20000);
 }
+
+function straight(legs: 'old' | 'core') {
+  path.legs = legs;
+  const sim = new Simulation(stroll({ radius: Infinity }), undefined, true);
+  const previous = ['planted', 'planted'];
+  const contacts = new Map<number, Vector3>();
+  const heights: { t: number; y: number }[] = [], landings: number[] = [];
+  let touchdown = 0, vertical = 0;
+  function* frames(): Generator<Frame[]> {
+    while (sim.t < sim.scenario.duration) {
+      sim.step();
+      const h = sim.actors[0];
+      h.feet.forEach((foot, s) => {
+        if (foot.phase === 'planted' && previous[s] === 'swing') {
+          landings.push(sim.t);
+          const bone = s === 0 ? INDEX.leftFoot : INDEX.rightFoot;
+          const heel = h.pose.point(bone, h.proportions.sole.heel, new Vector3());
+          const was = h.frame.prev2.point(bone, h.proportions.sole.heel, new Vector3());
+          touchdown = Math.max(touchdown, heel.distanceTo(was) * 60);
+          vertical = Math.max(vertical, Math.abs(heel.y - was.y) * 60);
+          if (s === 0) contacts.set(sim.t, foot.position.clone());
+        }
+        previous[s] = foot.phase;
+      });
+      heights.push({ t: sim.t, y: h.pose.position(0).y });
+      yield sim.actors.map((h) => ({ t: sim.t, h, asked: sim.stage.report.at(sim.t), solids: [] }));
+    }
+  }
+  const metrics = metricsOf('stroll', frames());
+  sim.step(); // Check the last completed pose too.
+  const strides = metrics.gait.strides;
+  const median = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const length = median(strides.map((s) => {
+    const a = contacts.get(s.from), b = contacts.get(s.to);
+    if (!a || !b) throw new Error('stride without touchdown positions');
+    return a.distanceTo(b);
+  }));
+  const lows = landings.filter((t) => strides.some((s) => t >= s.from && t < s.to)).map((t) => {
+    const near = heights.filter((s) => Math.abs(s.t - t) < 0.15);
+    return near.reduce((low, s) => s.y < low.y ? s : low).t - t;
+  });
+  const rates = metrics.gait.rates();
+  if (!rates) throw new Error(`${legs}: no steady strides`);
+  return { sim, metrics, rates, lows, length, cadence: median(strides.map((s) => 120 / (s.to - s.from))), touchdown, vertical,
+    bob: metrics.gait.summary(false, false)?.pelvisUp };
+}
+
+it('core stage 1: straight strides, start/stop, rest stance and final-pose development checks', () => {
+  const old = straight('old'), core = straight('core');
+  for (const result of [old, core]) {
+    expect(result.sim.stage.done(), 'straight stroll finished').toBe(true);
+    expect(checks(result.metrics, { strides: { straight: 3, curve: 0 }, startStop: null }).filter(failed)).toEqual([]);
+    expect(result.sim.actors.flatMap((h) => [...h.log])).toEqual([]);
+  }
+  expect(core.touchdown).toBeLessThanOrEqual(0.1);
+  expect(core.bob).toBeGreaterThanOrEqual(0.035);
+  expect(core.bob).toBeLessThanOrEqual(0.05);
+  expect(core.lows.length).toBeGreaterThanOrEqual(6);
+  for (const lag of core.lows) {
+    expect(lag).toBeGreaterThanOrEqual(0);
+    expect(lag).toBeLessThanOrEqual(0.12);
+  }
+  for (const transition of ['start', 'stop'] as const) for (const part of ['trunk', 'pelvis'] as const) {
+    expect(core.rates[transition][part]).toBeLessThanOrEqual(1.25 * old.rates[transition][part]);
+    expect(core.rates[transition][part]).toBeGreaterThanOrEqual(old.rates[transition][part] / 1.25);
+  }
+  console.log('straight stroll comparison', JSON.stringify([old, core].map((result, i) => ({ path: i === 0 ? 'old' : 'core', stride: result.length, cadence: result.cadence, bob: result.bob, lowPointMs: [Math.min(...result.lows) * 1000, Math.max(...result.lows) * 1000], touchdown: result.touchdown, vertical: result.vertical, start: result.rates.start, stop: result.rates.stop }))));
+}, 20000);

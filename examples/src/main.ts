@@ -7,6 +7,7 @@ import { byId } from './dom';
 import { Playback } from './playback';
 import { FIXED_DT, type Scenario } from './scenario';
 import { SCENARIOS } from './scenarios';
+import { stroll } from './scenarios/stroll';
 import { Simulation } from './simulation';
 import { drawProps } from './stage/props';
 import { FOV, Stage } from './stage';
@@ -60,6 +61,8 @@ window.addEventListener('resize', () => stage.resize());
 stage.resize();
 
 let scenario = SCENARIOS.find((s) => s.id === params.get('example')) ?? SCENARIOS[0];
+const legs = params.get('legs');
+if (scenario.id === 'stroll' && (legs === 'old' || legs === 'core')) scenario = stroll({ legs, radius: Number(params.get('radius') ?? 3) });
 let playback = start(scenario);
 show();
 

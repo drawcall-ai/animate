@@ -5,16 +5,19 @@ import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, quatYXZ, smoothstep, softMin, wrapAngle } from '../../core/math';
+import { clamp, forwardOf, leftOf, lerp, minimumJerk, quatYXZ, smoothstep, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
-import type { Carriage } from './carriage';
+import type { Carriage, Stepping } from './carriage';
+import type { Side } from '../bones';
+import type { Stance } from '../stance';
+import type { Foot } from './foot';
 import { ankleFor, MAX_HEEL } from './foot';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
 const LIST = 0.05;
 const SWAY = 0.0085;
 const RUN_SWAY = 0.008;
 /** the walking pelvis's dip in double support below mid-stance (× height; Orendurff 2004) */
-const BOB = 0.016;
+export const BOB = 0.016;
 /** the thorax against the pelvis's rotation: walking it counter-rotates (2.1× the pelvis), running it turns further with it (CMU mocap) */
 const COUNTER = { walk: 2.1, run: -1.3 };
 /** the thorax rolls with its rotation, the forward shoulder up (rad per rad: CMU mocap) */
@@ -58,10 +61,48 @@ export const plantedReach = (bent: number, landed: number) => lerp(LANDING_REACH
 /** a light, brisk walk carries the trunk slightly forward (~3°), a run more (rad) */
 const gaitLean = (walk: number, run: number) => 0.05 * walk + 0.1 * run;
 
+/** The inherited 6/s blend into and out of walking, with exact decay at finite dt. */
+export const walking = (walk: number, speed: number, dt: number) => walk + (smoothstep(0.08, 0.6, speed) - walk) * (1 - Math.exp(-dt * 6));
+
+/** The inherited foot-clock entrainment, shared by both public phase conversions. */
+export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
+
 /** The trunk's posture for a sub-step: the chest's world rotation, the thorax's gait swing. */
 export interface Trunk {
   chest: Quaternion;
   thoraxYaw: number;
+}
+
+/** Root and posture state shared by both leg controllers. */
+export interface Carried {
+  p: Proportions;
+  root: Vector3;
+  offset: Vector3;
+  yaw: number;
+  walk: number;
+  run: number;
+  moving: boolean;
+  stance: Stance;
+  feet: readonly Foot[];
+  pelvis: Vector3;
+  pelvisRotation: Quaternion;
+}
+
+export interface Supported extends Carried {
+  bent: number;
+  velocity: Vector3;
+  steps: readonly { side: Side; plantedTime: number; landPitch: number; roll: readonly number[];
+    swing: Pick<NonNullable<Stepping['swing']>, 'from' | 'fromYaw' | 'duration' | 'progress' | 'strike'> | null }[];
+  hip(side: Side, out: Vector3): Vector3;
+}
+
+type CycleSource = Pick<Carriage, 'run' | 'clock' | 'lastLift' | 'lastLiftAt' | 'steps' | 'timing'>;
+
+export interface Cycle {
+  phase: number;
+  bob: number;
+  nod: number;
+  compression: number;
 }
 
 /**
@@ -79,7 +120,7 @@ export class Posture {
   readonly quiet = new Vector3();
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Frame<unknown>, c: Carriage, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>) {
+  carry(f: Pick<Frame<unknown>, 'prev' | 'dt'>, c: Carried, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
     const { lower, bow, twist } = asks;
     const { onto } = life;
     const { p } = c;
@@ -87,7 +128,6 @@ export class Posture {
     const dt = f.dt;
     const walk = c.walk;
     const run = c.run;
-    const t = c.timing();
     const fwd = forwardOf(c.yaw, _f);
     const left = leftOf(c.yaw, _l);
 
@@ -97,21 +137,12 @@ export class Posture {
     const chestYaw = lerp(COUNTER.walk, COUNTER.run, run) * pelvisYaw;
     const thoraxYaw = pelvisYaw - chestYaw;
     const thoraxRoll = -lerp(THORAX_ROLL.walk, THORAX_ROLL.run, run) * thoraxYaw;
-    let bob = 0;
-    let nodPhase = 1;
-    for (const s of c.steps) {
-      if (!s.swing) continue;
-      bob = Math.sin(Math.PI * s.swing.progress);
-      nodPhase = Math.cos(2 * Math.PI * s.swing.progress);
-    }
-    // pelvic list and sway: one sinusoid a stride, in step with the feet
-    const stride = this.stride(c, dt);
+    const { bob, nod: nodPhase, compression: comp } = cycle;
+    const stride = this.phase = cycle.phase;
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
     const side = -lerp(SWAY, RUN_SWAY, run) * H * Math.sin(stride) * walk;
     // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
     const walkLift = -(0.001 + BOB * (1 - bob)) * H * walk;
-    let comp = 0;
-    if (run > 0) for (const s of c.steps) if (!s.swing) comp = Math.max(comp, Math.sin(Math.PI * clamp(s.plantedTime / t.stance, 0, 1)));
     this.comp += (comp - this.comp) * Math.min(1, 40 * dt);
     const lift = lerp(walkLift, -(0.025 + 0.03 * this.comp) * H, run);
     const nod = lerp(NOD.walk * (nodPhase - 0.2), NOD.run * (this.comp * this.comp - 0.35), run) * walk;
@@ -119,10 +150,7 @@ export class Posture {
 
     // the pelvis where it puts the centre of mass over the root (its ground point, swayed, shifted
     // back under a nod), as high as the legs reach, and as low as asked
-    const offset = f.prev.com(_o).sub(f.prev.position(0)).negate().setY(0);
-    // Under-relax the pose-to-CoM feedback rather than apply the full knee response again.
-    (this.offset ??= offset.clone()).lerp(offset, 0.95);
-    const pelvis = c.pelvis.copy(c.root).add(this.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
+    const pelvis = c.pelvis.copy(c.root).add(c.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
     this.quiet.copy(left).multiplyScalar(life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
     const weight = _v.set(0, 0, 0);
     if (onto && !c.moving) {
@@ -136,7 +164,7 @@ export class Posture {
     roll += SHIFT.roll * shifted;
     quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
     const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
-    pelvis.y = softMin(standing, reachLimit(c, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower)), 0.015);
+    pelvis.y = height(standing, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower));
 
     // the trunk: the thorax counter-rotating and rolling, leaning, nodding and bowing
     quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + life.breath, thoraxRoll, out.chest);
@@ -144,12 +172,35 @@ export class Posture {
     out.thoraxYaw = thoraxYaw;
   }
 
-  /** the stride's phase, advanced by `dt`: it runs at the steps' pace, pulled toward each lift as it comes */
-  private stride(c: Carriage, dt: number): number {
+  /** The old controller follows the CoM; its pelvis offset is measured from the completed pose. */
+  center(f: Frame<unknown>): Vector3 {
+    const offset = f.prev.com(_o).sub(f.prev.position(0)).negate().setY(0);
+    // Under-relax the pose-to-CoM feedback rather than apply the full knee response again.
+    return (this.offset ??= offset.clone()).lerp(offset, 0.95);
+  }
+
+  /** A prediction owns its filter state; planning must not advance the live posture. */
+  forecast(): Posture {
+    const copy = new Posture();
+    copy.comp = this.comp;
+    copy.weight.copy(this.weight);
+    return copy;
+  }
+
+  /** Old controller's cycle, preserving its lift entrainment and swing-shaped bob. */
+  cycle(c: CycleSource, dt: number): Cycle {
+    let bob = 0, nod = 1, compression = 0;
+    for (const s of c.steps) {
+      if (!s.swing) continue;
+      bob = Math.sin(Math.PI * s.swing.progress);
+      nod = Math.cos(2 * Math.PI * s.swing.progress);
+    }
+    const t = c.timing();
+    if (c.run > 0) for (const s of c.steps) if (!s.swing) compression = Math.max(compression, Math.sin(Math.PI * clamp(s.plantedTime / t.stance, 0, 1)));
     const period = Math.max(c.timing().step, lerp(ARM_PERIOD.walk, ARM_PERIOD.run, c.run));
     const lifted = (c.lastLift === 0 ? 0 : Math.PI) + (Math.PI * (c.clock - c.lastLiftAt)) / period;
-    this.phase += dt * (Math.PI / period + ENTRAIN * wrapAngle(lifted - this.phase));
-    return this.phase;
+    this.phase = entrain(this.phase, lifted, Math.PI / period, dt);
+    return { phase: this.phase, bob, nod, compression };
   }
 }
 
@@ -222,7 +273,7 @@ function loadLean(pose: ReadonlyPose, p: Proportions, forward: Readonly<Vector3>
  * it up, 0 … 1; and not below `floor`), a landing one
  * in the late swing (fading in, against the hip as it will be on landing).
  */
-function reachLimit(c: Carriage, floor: number, tiptoe: number): number {
+export function reachLimit(c: Supported, floor: number, tiptoe: number): number {
   const p = c.p;
   const fwd = forwardOf(c.yaw, _f);
   let limit = Infinity;

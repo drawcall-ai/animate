@@ -8,13 +8,13 @@ import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks, type Asks } from '../asks';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { forwardOf, smoothstep, yawOf } from '../../core/math';
+import { forwardOf, smoothstep, softMin, yawOf } from '../../core/math';
 import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
 import { seedOf } from '../../core/random';
 import { Life } from './life';
 import { Carriage } from './carriage';
 import { pelvisHeight, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
-import { LOWER, Posture, TIPTOE, type Trunk } from './posture';
+import { LOWER, Posture, reachLimit, TIPTOE, type Trunk } from './posture';
 import { stepFeet } from './steps';
 import { checkFeet, checkSupport } from './checks';
 
@@ -46,14 +46,14 @@ export interface Gait {
 export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, planted: 0, thoraxYaw: 0, quiet: new Vector3() });
 
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
-const BOW = { accel: 6, speed: 1.2 };
+export const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
-const PELVIS = { accel: 30 };
-const TURN = { accel: 60 };
+export const PELVIS = { accel: 30 };
+export const TURN = { accel: 60 };
 /** let down or up this far (m, default body), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /** how long both feet stand before the body has settled (s): a squaring step comes before */
-const SETTLED = 0.4;
+export const SETTLED = 0.4;
 
 /**
  * Standing and walking: the body's root, legs and trunk posture, endless. It keeps the
@@ -120,7 +120,8 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         quiet.drift.copy(life.drift);
         quiet.breath = life.breath;
         quiet.onto = asks.onto ?? life.onto;
-        posture.carry(f, c, { lower, bow, twist }, trunk, quiet);
+        c.offset.copy(posture.center(f));
+        posture.carry(f, c, { lower, bow, twist }, trunk, quiet, posture.cycle(c, dt), (standing, floor, tiptoe) => softMin(standing, reachLimit(c, floor, tiptoe), 0.015));
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = follow(f.prev2.position(0).y, f.prev.position(0).y, c.pelvis.y, PELVIS, dt);
         c.pelvis.copy(at).setY(up);
@@ -165,7 +166,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
 }
 
 /** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
-function followed(history: number[], goal: number, motion: { accel: number; speed: number }, dt: number): number {
+export function followed(history: number[], goal: number, motion: { accel: number; speed: number }, dt: number): number {
   const next = follow(history[0], history[1], goal, motion, dt);
   [history[0], history[1]] = [history[1], next];
   return next;

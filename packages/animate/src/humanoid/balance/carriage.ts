@@ -7,6 +7,7 @@ import type { Proportions } from '../proportions';
 import { bodyYaw, feetFacing, OVER_ANKLES, type Stance } from '../stance';
 import { FOOT_HALF_WIDTH, type Foot } from './foot';
 import { runAmount, stepTiming, type Timing } from './timing';
+import { walking } from './posture';
 
 /** how fast a root that got off its feet is brought back over them (m/s) */
 const LEASH_SPEED = 0.6;
@@ -19,15 +20,15 @@ const ARRIVAL = 1.0;
 /** the facing asked on arrival is turned to once the body is this slow (m/s): first the stop, then the turn */
 const ARRIVAL_TURN = [0.3, 0.6] as const;
 /** how quickly the goal's own velocity is picked up (1/s) */
-const GOAL_VELOCITY_RATE = 9;
+export const GOAL_VELOCITY_RATE = 9;
 /** a goal moving faster than this (m/s) was re-planned, not carried: it jumped */
-const JUMP_SPEED = 4;
+export const JUMP_SPEED = 4;
 /** a walk starts when the goal is this far (m, default body), turned (rad; a facing asked: `faced`, just past where it stops) or moving (m/s) */
-const START = { distance: 0.14, yaw: 0.45, faced: 0.12, speed: 0.25 };
+export const START = { distance: 0.14, yaw: 0.45, faced: 0.12, speed: 0.25 };
 /** it stops once close, slow, the goal still and the facing reached */
-const STOP = { distance: 0.05, speed: 0.15, goalSpeed: 0.08, yaw: 0.1 };
+export const STOP = { distance: 0.05, speed: 0.15, goalSpeed: 0.08, yaw: 0.1 };
 /** until the first foot is off the ground the body barely glides (m/s) */
-const START_GLIDE = 0.15;
+export const START_GLIDE = 0.15;
 /** the sideways speed a shuffle of hip-wide steps carries (m/s) */
 const SHUFFLE = 0.4;
 /** how far the body may twist over its feet before turning waits for a step (rad, ~25°) */
@@ -93,6 +94,7 @@ export interface Swing {
  */
 export class Carriage {
   readonly root = new Vector3();
+  readonly offset = new Vector3();
   yaw = 0;
   readonly velocity = new Vector3();
   /** the goal (on the floor) and how fast it moves, speeds up along its way (m/s²) */
@@ -287,7 +289,7 @@ export class Carriage {
     const rate = dt > 0 && v2 > TURN_SPEED * TURN_SPEED ? (v.z * (v.x - vx) - v.x * (v.z - vz)) / (v2 * dt) : 0;
     this.turnRate += (rate - this.turnRate) * Math.min(1, TURN_TRACK_RATE * dt);
     // Exact decay preserves the 6/s time constant; Euler blending sped up stops at finite dt.
-    this.walk += (smoothstep(0.08, 0.6, this.speed) - this.walk) * (1 - Math.exp(-dt * 6));
+    this.walk = walking(this.walk, this.speed, dt);
     this.bent = Math.max(this.walk, this.bent + ((this.moving ? 1 : 0) - this.bent) * Math.min(1, dt * (this.moving ? BEND_RATE.give : BEND_RATE.straighten)));
   }
 

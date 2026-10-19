@@ -16,10 +16,12 @@ export const HORIZON = 0.1;
 
 export interface Walker {
   phase: number;
+  phaseAt?(ahead: number): number;
   stride: Stride;
   timeTo(phase: number): number;
   at(ahead: number): Stride;
   rootAt(ahead: number, position: Vector3, turn: Quaternion): void;
+  travelAt?(ahead: number, position: Vector3, turn: Quaternion): void;
 }
 
 export class Limb {
@@ -94,9 +96,20 @@ export class Limb {
 
   /** Reach must outlast the next few ticks, before extension makes the stance singular. */
   supports(p: Pose, state: Timing, walker: Walker): boolean {
-    const { duty, frequency, stepping } = walker.stride;
+    const { frequency } = walker.stride;
     this.refs(walker.phase - state.footfall, walker.stride);
-    const targets = [0, HORIZON].map((ahead): [number, number] => [ahead, this.pitch(Math.min(1, (walker.phase + ahead * frequency - state.footfall) / duty), stepping)]);
+    const times = [0, HORIZON];
+    if (walker.phaseAt) {
+      let until = 0;
+      while (walker.phaseAt(until) - state.footfall < walker.at(until).duty) until += STEP;
+      times[1] = Math.min(HORIZON, until);
+      if (until > times[1]) times.push(until);
+    }
+    const targets = times.map((ahead): [number, number] => {
+      const at = walker.phaseAt ? walker.at(ahead) : walker.stride;
+      const phase = walker.phaseAt?.(ahead) ?? walker.phase + ahead * frequency;
+      return [ahead, this.pitch(Math.min(1, (phase - state.footfall) / at.duty), at.stepping)];
+    });
     // Existing stance reserve: 10 µm; a new committed landing uses the tighter 1 µm stop.
     return this.reserve(p, walker, state.foothold, targets, 1e-5);
   }
@@ -130,17 +143,38 @@ export class Limb {
   }
 
   standingAt(walker: Walker, ahead: number, height: number): Vector3 {
-    walker.rootAt(ahead, _root, _rootTurn);
+    (walker.travelAt ?? walker.rootAt)(ahead, _root, _rootTurn);
     return this.anchor.clone().applyQuaternion(_rootTurn).add(_root).setY(height);
   }
 
   /** The same reserve used by preflight and the foothold search. */
   landingSupported(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): boolean {
+    if (walker.phaseAt) return this.contactSupported(p, walker, ahead, contact);
     this.refs(0, walker.stride);
     const targets = [ahead - 2 * STEP, ahead, ahead + HORIZON].flatMap((time): [number, number][] => [
       [time, 0], [time, this.pitch((time - ahead) * walker.stride.frequency / walker.stride.duty, walker.stride.stepping)],
     ]);
     return this.reserve(p, walker, contact, targets, 1e-6);
+  }
+
+  /** [D] Forecast the commanded rocker poses; foot-flat belongs at its key, not at heel strike. */
+  private contactSupported(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold']): boolean {
+    const stride = walker.at(ahead), duration = stride.duty / stride.frequency;
+    this.refs(0, stride);
+    const times = [ahead - 2 * STEP, ahead, ahead + HORIZON];
+    const flat = this.leg.rocker.find(([, pitch]) => pitch === 0);
+    if (flat) times.push(ahead + flat[0] * duration);
+    const targets = times.map((time): [number, number] => [time, this.pitch((time - ahead) / duration, stride.stepping)]);
+    targets.push([ahead, this.pitch(STEP / duration, stride.stepping)]);
+    return this.reserve(p, walker, contact, targets, 1e-6);
+  }
+
+  /** A committed step must also carry the body until its next scheduled lift. */
+  stanceSupported(p: Pose, walker: Walker, ahead: number, contact: Timing['foothold'], phase: number): boolean {
+    if (!this.landingSupported(p, walker, ahead, contact)) return false;
+    let end = ahead;
+    while ((walker.phaseAt?.(end) ?? phase + (end - ahead) * walker.stride.frequency) - phase < walker.at(end).duty) end += STEP;
+    return this.reserve(p, walker, contact, [[end, this.pitch(1, walker.at(end).stepping)]], 1e-6);
   }
 
   /** Identical bases and pitches have identical reserve solves; stationary forecasts repeat them. */
@@ -225,6 +259,8 @@ export class Limb {
     target.position.y += clearance * loft(s);
     target.rotation.slerp(swing.turn.foot, 1 - minimumJerk(s));
     for (let j = 0; j < solver.n; j++) this.setRef(j, swing.from[j] + (swing.land[j] - swing.from[j]) * minimumJerk(s) + swing.fold[j] * loft(s), walker.stride);
+    // [D] Lift from the joint reference; the existing loft gives this correction zero endpoint rates.
+    if (walker.phaseAt) target.position.y = Math.max(target.position.y, solver.referenceHeight(p) * loft(s) + target.position.y * (1 - loft(s)));
     _swingTarget.swing = s;
     _swingTarget.above = this.aboveAt(s);
     _swingTarget.floor = clearance * loft(s);

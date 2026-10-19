@@ -5,39 +5,38 @@ import { wrapAngle, yawOf } from '../math';
 import type { LegGait } from './gait';
 import type { LegStep } from './legs';
 
-interface State {
+export interface RootState {
   position: Vector3;
   quaternion: Quaternion;
   velocity: Vector3;
   angular: number;
-  speed: number;
 }
 
 /** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number): LegStep {
+export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number, previous: RootState, acceleration: number): Omit<LegStep, 'root'> & { root(time: number): RootState } {
   if (share === 0) {
-    const position = f.prev.position(0).clone();
-    const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(f.prev.rotation(0)));
-    return { root: () => ({ position, quaternion }), speed: 0 };
+    const position = previous.position.clone();
+    const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));
+    return { root: () => ({ position, quaternion, velocity: new Vector3(), angular: 0 }), speed: 0 };
   }
   const accel = motion.accel * share;
   const speed = motion.speed ?? Infinity;
-  const previous: State = {
-    position: f.prev.position(0).clone(), quaternion: f.prev.rotation(0).clone(),
-    velocity: f.prev.position(0).clone().sub(f.prev2.position(0)).setY(0).divideScalar(f.dt),
-    angular: wrapAngle(yawOf(f.prev.rotation(0)) - yawOf(f.prev2.rotation(0))) / f.dt,
-    speed: 0,
-  };
-  const states: State[] = [];
-  const advance = (from: State, ahead: number): State => {
-    const target = new Vector3().copy(goal).addScaledVector(velocity, ahead);
+  const states: (RootState & { speed: number })[] = [];
+  const advance = (from: RootState, ahead: number): RootState & { speed: number } => {
+    const goalSpeed = velocity.length();
+    const accelerating = acceleration === 0 ? ahead : Math.min(ahead, Math.max(0,
+      acceleration > 0 ? ((motion.speed ?? Infinity) - goalSpeed) / acceleration : -goalSpeed / acceleration));
+    const travel = goalSpeed * accelerating + 0.5 * acceleration * accelerating ** 2
+      + Math.max(0, goalSpeed + acceleration * accelerating) * (ahead - accelerating);
+    const target = new Vector3().copy(goal).addScaledVector(velocity, acceleration === 0 ? ahead : goalSpeed > 0 ? travel / goalSpeed : 0);
     const delta = target.sub(from.position).setY(0);
     const distance = delta.length();
     const heading = distance > 1e-9 ? Math.atan2(delta.x, delta.z) : yawOf(from.quaternion);
     const forward = Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
     // These legs step fore/aft. Brake and wait for a goal outside the forward cone.
     // Follow in the goal's moving frame: braking closes the gap in addition to its velocity.
-    const wanted = forward ? delta.setLength(distance > 1e-9 ? Math.sqrt(2 * accel * distance) : 0)
+    // [D] Brake closing speed with root deceleration minus the target's deceleration.
+    const wanted = forward ? delta.setLength(distance > 1e-9 ? Math.sqrt(2 * Math.max(0, accel + Math.min(0, acceleration)) * distance) : 0)
       .add(velocity).clampLength(0, speed) : delta.set(0, 0, 0);
     const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * STEP));
     const v = next.length();
@@ -55,7 +54,7 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
       velocity: next, angular, speed: Math.max(v, radius * Math.abs(angular)),
     };
   };
-  const at = (time: number): State => {
+  const at = (time: number): RootState & { speed: number } => {
     const tick = Math.max(0, Math.round((time - f.time) / STEP));
     while (states.length <= tick) states.push(advance(states[states.length - 1] ?? previous, states.length * STEP));
     return states[tick];
