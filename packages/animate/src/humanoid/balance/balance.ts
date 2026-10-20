@@ -6,7 +6,7 @@ import type { Behaviour } from '../../core/goal';
 import { clampRotation } from '../../core/limits';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks, type Asks, type Stance } from '../../core/asks';
-import { INDEX, SIDES, type Side } from '../bones';
+import { INDEX, SIDES } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { forwardOf, smoothstep, softMin, yawOf } from '../../core/math';
 import { defaultStance, OVER_ANKLES } from '../stance';
@@ -47,7 +47,6 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
     const posture = new Posture();
     const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
-    const quiet: { drift: Vector3; breath: number; onto: Side | null } = { drift: new Vector3(), breath: 0, onto: null };
     const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
     const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)
@@ -92,11 +91,8 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
           f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
         life.update(dt, life.quiet(asks, h), speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
-        quiet.drift.copy(life.drift);
-        quiet.breath = life.breath;
-        quiet.onto = asks.onto ?? life.onto;
         c.offset.copy(posture.center(f));
-        posture.carry(f, c, { lower, bow, twist }, trunk, quiet, posture.cycle(c, dt), (standing, floor, tiptoe) => softMin(standing, reachLimit(c, floor, tiptoe), 0.015));
+        posture.carry(f, c, { lower, bow, twist }, trunk, life, posture.cycle(c, dt), (standing, floor, tiptoe) => softMin(standing, reachLimit(c, floor, tiptoe), 0.015));
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = follow(f.prev2.position(0).y, f.prev.position(0).y, c.pelvis.y, PELVIS, dt);
         c.pelvis.copy(at).setY(up);

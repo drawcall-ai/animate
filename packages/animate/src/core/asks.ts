@@ -45,8 +45,8 @@ export interface Asks {
   bowLimit: number;
   /** axial chest turn from the standing facing (rad) */
   twist: number;
-  /** the weight over one foot (a biped's) */
-  onto: 'left' | 'right' | null;
+  /** where the eyes are (`lookAt`): a species without a neck chain turns its head there in its posture */
+  look: Readonly<Vector3> | null;
   /** stand otherwise than the body's stance */
   stance: Partial<Stance> | null;
   /** standing, shift the weight this far (m, on the floor) within the feet: toward what a hand falls short of */
@@ -54,7 +54,7 @@ export interface Asks {
 }
 
 /** nothing asked */
-export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, onto: null, stance: null, lean: null });
+export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, look: null, stance: null, lean: null });
 
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {

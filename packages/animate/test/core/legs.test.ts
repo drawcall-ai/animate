@@ -261,14 +261,14 @@ it('reuses each travel forecast across root-height candidates', () => {
 });
 
 
-function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention = {}, seed = 42) {
+function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null) {
   const pose = new Pose(SKELETON);
   pose.setRoot(new Vector3(0, 1.32, 0));
   const chains = horseLegs().map(chain => Object.freeze(chain));
   const legs = new Legs(pose, chains, gait);
   const motion = horseMotion(pose, gait, seed);
   const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    motion.prepare(f, legs, attention);
+    motion.prepare(f, legs, attention, look());
     legs.toward(f, { position: new Vector3(0, 1.32, speed ? 100 : 0) }, { speed, accel: 1.85 });
   } }), { pose, dev: true });
   return { body, legs, motion };
@@ -393,8 +393,8 @@ it.each([false, true])('checks the final tied pose after later writers, dev=%s',
 });
 
 it('ears lead the head toward an approaching person; both saddling reactions begin within 1 s and settle by 5 s', () => {
-  let person: Vector3 | undefined;
-  const { body, motion } = movingHorse(HORSE_WALK, 0, { person: () => person?.clone() });
+  let person: Vector3 | null = null;
+  const { body, motion } = movingHorse(HORSE_WALK, 0, {}, 42, () => person);
   for (let i = 0; i < 60; i++) body.update(1 / 60);
   const ear = body.pose.local(EARS[0]).clone(), neck = body.pose.local(NECK).clone();
   person = new Vector3(2, 1.5, 3);

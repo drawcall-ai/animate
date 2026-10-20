@@ -18,7 +18,7 @@ export function creature(body: Body, attention: Attention = {}): Behaviour {
     const legs = new Legs(body.pose, kind.chains, kind.gait), posture = kind.posture?.(body.pose), asks = createAsks();
     yield* action<Frame>({ update: (f) => {
       const { go } = takeAsks(body.asks, asks), still = _still.set(0, 0, 0), g = body.locomotion;
-      posture?.prepare(f, legs, attention);
+      posture?.prepare(f, legs, attention, asks.look);
       const goal = go?.to ?? f.prev.position(0), velocity = go?.velocity ?? still, accel = go?.accel ?? 1;
       const gap = _gap.copy(goal).sub(f.prev.position(0)).setY(0).length();
       const pace = Math.max(kind.gait.slowest, velocity.length());

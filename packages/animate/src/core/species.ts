@@ -18,8 +18,8 @@ export interface Species {
   legs?: { chains: readonly LegChain[]; gait: Gait; posture?: (start: ReadonlyPose) => Posture };
 }
 
-/** What a creature heeds as it stands and walks: a person to attend, a tether it is tied by, a startle (a new point each time). */
-export interface Attention { person?: Live<Readonly<Vector3> | undefined>; tether?: Live<{ position: Readonly<Vector3>; length: number } | undefined>; startle?: Live<Readonly<Vector3> | undefined> }
+/** What a creature heeds as it stands and walks besides what it looks at (`lookAt`): a tether it is tied by, a startle (a new point each time). */
+export interface Attention { tether?: Live<{ position: Readonly<Vector3>; length: number } | undefined>; startle?: Live<Readonly<Vector3> | undefined> }
 
-/** A species' posture over its legs, written each sub-step before the legs step. */
-export interface Posture { prepare(f: Frame, legs: Legs, attention: Attention): void }
+/** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */
+export interface Posture { prepare(f: Frame, legs: Legs, attention: Attention, look: Readonly<Vector3> | null): void }

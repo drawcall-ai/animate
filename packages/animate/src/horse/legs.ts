@@ -12,8 +12,13 @@ import { EARS, HALTER, HEAD, LEGS, NECK, PELVIS, SKELETON, SPINE, TAIL } from '.
 import { powerGait } from '../core/legs/schedule';
 import type { Attention, Species } from '../core/species';
 
-/** a horse: its walk, and its posture over its legs as it heeds a person, a tether and a startle */
-export const horse = (): Species => ({ skeleton: SKELETON, legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
+/** a horse: its walk, and its posture over its legs as it heeds what it looks at, a tether and a startle */
+export const horse = (): Species => ({ skeleton: SKELETON, gaze: { eyes: (pose, out) => pose.point(HEAD, EYES, out), range: EYE_RANGE },
+  legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
+/** [D] between the eyes, about a third of the way from the poll to the muzzle (m, head bone) */
+const EYES = new Vector3(0, -0.12, 0.1);
+/** Tuned (rad): the eyes add little to where the head turns (the posture turns it) */
+const EYE_RANGE = { down: 0.2, up: 0.2, side: 0.3 };
 
 const DEG = Math.PI / 180;
 const WITHERS = SKELETON.bones[LEGS[0].scapula ?? fail('a foreleg without a scapula')].offset.z;
@@ -136,7 +141,7 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
   const react = (point: Readonly<Vector3>): void => { reaction.copy(point); responseTime = 0; };
   return {
     react,
-    prepare(f: Frame, legs: Legs, attention: Attention = {}): void {
+    prepare(f: Frame, legs: Legs, attention: Attention = {}, look: Readonly<Vector3> | null = null): void {
       // (a new startle point is a new event)
       const startle = attention.startle && live(attention.startle, f);
       if (startle && startle !== startled) react(startled = startle);
@@ -158,18 +163,17 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
       rest.value += ((rest.quiet >= 60 ? rest.side : 0) * (1 - m) - rest.value) * (1 - Math.exp(-f.dt));
       rest.pitches[2] = -25 * Math.max(0, rest.value); rest.pitches[3] = 25 * Math.min(0, rest.value);
       legs.rest(rest.pitches);
-      const person = attention.person && live(attention.person, f);
       responseTime += f.dt;
       const response = minimumJerk(responseTime / 0.25) * (1 - minimumJerk((responseTime - 1) / 3));
       const inverse = turn(0, -yawOf(f.prev.rotation(0)), 0, _inverse);
-      if (person) _person.copy(person).sub(f.prev.position(0)).applyQuaternion(inverse);
+      if (look) _look.copy(look).sub(f.prev.position(0)).applyQuaternion(inverse);
       _reaction.copy(reaction).sub(f.prev.position(0)).applyQuaternion(inverse);
-      const attended = person && person.distanceTo(f.prev.position(HEAD)) < 5 ? clamp(Math.atan2(_person.x, _person.z), -0.55, 0.55) : 0;
+      const attended = look && look.distanceTo(f.prev.position(HEAD)) < 5 ? clamp(Math.atan2(_look.x, _look.z), -0.55, 0.55) : 0;
       const toward = Math.sign(_reaction.x);
       const previous = _e.setFromQuaternion(f.prev.local(NECK), 'YXZ').y;
-      const distance = person ? person.distanceTo(f.prev.position(HEAD)) : Infinity;
+      const distance = look ? look.distanceTo(f.prev.position(HEAD)) : Infinity;
       // Retained avoidance: 0.8 m / 0.3 m transition, 0.5 rad, 0.25 s response.
-      const away = person ? -Math.sign(_person.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3)) : 0;
+      const away = look ? -Math.sign(_look.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3)) : 0;
       // Tuned gains (rad): neck .35/head .2 sum to 31.5° look-back [D]; ears −.3, pelvis .025, tail .2.
       const wanted = away || (0.3 * attended * (1 - m) + 0.18 * idle.value('head') * (1 - m) + 0.35 * toward * response);
       const yaw = previous + (clamp(wanted, -0.55, 0.55) - previous) * (1 - Math.exp(-4 * f.dt));
@@ -218,4 +222,4 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
 }
 
 const _q = new Quaternion(), _inverse = new Quaternion(), _neck = new Quaternion(), _head = new Quaternion(), _base = new Quaternion();
-const _e = new Euler(), _point = new Vector3(), _person = new Vector3(), _reaction = new Vector3();
+const _e = new Euler(), _point = new Vector3(), _look = new Vector3(), _reaction = new Vector3();

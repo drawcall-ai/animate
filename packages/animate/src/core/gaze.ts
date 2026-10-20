@@ -10,8 +10,8 @@ import type { ReadonlyPose } from './pose';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {
-  /** the chain that turns the head */
-  neck: string;
+  /** the chain that turns the head; without one, the species' posture turns it toward where the eyes are asked (`asks.look`) */
+  neck?: string;
   /** the point the eyes look from (world), into `out` */
   eyes(pose: ReadonlyPose, out: Vector3): Vector3;
   /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
@@ -40,8 +40,11 @@ export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
  * over the neck chain's bones, each within its limit.
  */
 export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour {
-  const gazer = body.gazer;
+  const gazer = body.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
+  if (neck === undefined) return function* () {
+    yield* action<Frame>({ update: (f) => void (body.asks.look = live(target, f)) });
+  };
   return function* () {
     let over: boolean | null = null;
     /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
@@ -56,7 +59,7 @@ export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<
     yield* action<Frame>({
       update: (f) => {
         const pose = f.current;
-        const bones = pose.skeleton.chain(gazer.neck);
+        const bones = pose.skeleton.chain(neck);
         const point = live(target, f);
         gazer.lead?.(body, f.prev, point);
         // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
@@ -174,6 +177,7 @@ export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<
 
 /** how far (rad) a gazer's eyes are off `point` (world): the head's line off it, less what the eyes take of a gaze shift at most (`lookAt`) */
 export function gazeOff(gazer: Gazer, pose: ReadonlyPose, point: Readonly<Vector3>): number {
+  if (gazer.neck === undefined) throw new Error('gazeOff: the gaze has no neck');
   const bones = pose.skeleton.chain(gazer.neck);
   const head = pose.rotation(bones[bones.length - 1]);
   const d = _d.subVectors(point, gazer.eyes(pose, _eyes)).applyQuaternion(_rel.copy(head).invert());

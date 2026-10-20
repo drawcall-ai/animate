@@ -98,7 +98,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;
     // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts)
     phase = entrain(phase, stepper.phase, 2 * Math.PI / stepper.cycle, dt);
-    posture.carry(f, c, requested, trunk, { drift: life.drift, breath: life.breath, onto: asks.onto ?? life.onto },
+    posture.carry(f, c, requested, trunk, life,
       { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression: 0 }, (height) => height);
     const offset = hips.follow(offsets[0], offsets[1], c.pelvis.clone().sub(c.root).setY(0), PELVIS, dt, new Vector3());
     [offsets[0], offsets[1]] = [offsets[1], offset];
