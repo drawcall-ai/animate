@@ -7,7 +7,7 @@ import { driven } from './driven';
 import type { DrivenRoot } from '../core/legs/stepper';
 import { Humanoid } from './humanoid';
 import type { Body } from '../core/body';
-import { creature } from '../core/legs/walk';
+import { creature } from '../core/legs/creature';
 import type { Attention } from '../core/species';
 import { lookAround } from './look';
 import type { Stance } from '../core/asks';

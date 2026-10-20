@@ -1,12 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
-import type { Carrier, Item } from '../../core/carrier';
+import { gripOf, type Carrier, type Item } from '../../core/carrier';
 import { REACHED, type Target } from '../../core/goal';
 import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { grip, gripOf, gripsOf, type Grips } from './grips';
+import { grip, gripsOf, type Grips } from './grips';
 import { heldItems } from '../../core/worn';
 
 const aims = new WeakMap<object, Map<Item, Carrier>>();

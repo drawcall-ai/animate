@@ -1,16 +1,19 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import type { Body, Frame } from '../../core/body';
-import type { Item } from '../../core/carrier';
-import { lookAt } from '../../core/gaze';
-import { REACHED, type Behaviour, type Target, type Until } from '../../core/goal';
-import { followRotation } from '../../core/follow';
-import { forwardOf } from '../../core/math';
-import { ChainTip, reached } from '../../core/tip';
-import { walkTo } from '../walk';
-import { gripOf, type Holds } from './grips';
+import type { Body, Frame } from './body';
+import { gripOf, type Item } from './carrier';
+import { lookAt } from './gaze';
+import { REACHED, type Behaviour, type Target, type Until } from './goal';
+import { followRotation } from './follow';
+import { forwardOf } from './math';
+import { ChainTip, reached } from './tip';
+import { walkTo } from './walk';
 
-// A creature's hand (a jaw, a trunk): the skeleton's chain named for it reaches; what it takes stays where it was on it.
+// Hands of any body, by name (`Species.hands`): a person's arms reach as a person's do (`grab`); another body's hand (a jaw,
+// a trunk) is the tip of the skeleton's chain named for it, which reaches; what it takes stays where it was on it (`weld`).
+
+/** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. */
+export type Holds = Readonly<Record<string, readonly [Item, string]>>;
 
 /** Tuned: how a creature's hand goes to a grip (m/s², m/s) and back to rest (rad/s², rad/s): a calm dip of the head */
 const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };

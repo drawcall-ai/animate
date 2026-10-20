@@ -1,10 +1,10 @@
 import { Body } from '../../src/core/body';
 import { World } from '../../src/core/world';
 import { SEGMENT_RADIUS } from '../../src/humanoid/hands/grab';
-import type { Holds } from '../../src/humanoid/hands/grips';
+import type { Holds } from '../../src/core/hands';
 import { leg } from '../core/rigs';
 import { Pose } from '../../src/core/pose';
-import { route } from '../../src/humanoid/walk';
+import { route } from '../../src/core/walk';
 import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';

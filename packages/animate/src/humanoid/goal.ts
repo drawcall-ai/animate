@@ -1,39 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
-import type { Placement } from '../core/goal';
+import { movingPoint } from '../core/goal';
 import { loadFactor } from '../core/load';
-import { heldMass } from './hands/grips';
+import { heldMass } from '../core/worn';
 import type { Humanoid } from './humanoid';
-import type { ReadonlyPose } from '../core/pose';
 
-/** A placement on a bone, scaled with its body and followed from final poses. */
-export function onBone(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint(h, bone, () => local, () => h.pose.rotation(bone).clone());
-}
-
-/** A placement at a joint, aligned with body facing instead of the joint's rotation. */
-export function facingAt(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly locomotion: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint(h, bone, () => local, () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
-}
-
-function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Placement, turn: () => Quaternion) {
-  let last: { time: number; position: Vector3 } | null = null;
-  const velocity = new Vector3();
-  return (f: Frame) => {
-    const pose = h.pose;
-    const local = offset();
-    const quaternion = turn();
-    const position = local.position.clone().multiplyScalar(h.scale).applyQuaternion(quaternion).add(pose.position(bone));
-    if (local.quaternion) quaternion.multiply(local.quaternion);
-    // (read again in the same sub-step: as it was; in the next: from where it was)
-    if (last && Math.abs(f.time - f.dt - last.time) < 1e-9) velocity.subVectors(position, last.position).divideScalar(f.dt);
-    else if (!last || last.time !== f.time) velocity.set(0, 0, 0);
-    if (!last || last.time !== f.time) last = { time: f.time, position: position.clone() };
-    return { position, quaternion, velocity: velocity.clone() };
-  };
-}
-
-const UP = new Vector3(0, 1, 0);
 
 /** A comfortable carry in front of the hips, or beside one hip for a single hand; follows the body. */
 export function carried(h: Humanoid, side?: 'left' | 'right') {
@@ -53,6 +24,7 @@ export function carried(h: Humanoid, side?: 'left' | 'right') {
 }
 
 // Tuned carry staging (metres at default stature): clear the thighs, and leave room for a two-hand load.
+const UP = new Vector3(0, 1, 0);
 const CARRY_ASIDE = 0.24;
 const CARRY_BESIDE = 0.22;
 const CARRY_AHEAD = 0.35;

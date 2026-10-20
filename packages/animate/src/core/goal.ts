@@ -1,4 +1,5 @@
-import type { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
+import type { ReadonlyPose } from './pose';
 import type { ReusableTimeline, UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from './body';
 import type { Placed } from './carrier';
@@ -51,3 +52,33 @@ export type Until = UntilCondition<Frame> | 'reached';
 
 /** what `'reached'` allows: m, rad, m/s */
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };
+
+/** A placement on a bone, scaled with its body and followed from final poses. */
+export function onBone(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement = { position: new Vector3() }) {
+  return movingPoint(h, bone, () => local, () => h.pose.rotation(bone).clone());
+}
+
+/** A placement at a joint, aligned with body facing instead of the joint's rotation. */
+export function facingAt(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly locomotion: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
+  return movingPoint(h, bone, () => local, () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
+}
+
+/** a point moving with bone `bone` of a body (`offset` from it, turned by `turn`), its velocity read off where it was a sub-step before */
+export function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Placement, turn: () => Quaternion) {
+  let last: { time: number; position: Vector3 } | null = null;
+  const velocity = new Vector3();
+  return (f: Frame) => {
+    const pose = h.pose;
+    const local = offset();
+    const quaternion = turn();
+    const position = local.position.clone().multiplyScalar(h.scale).applyQuaternion(quaternion).add(pose.position(bone));
+    if (local.quaternion) quaternion.multiply(local.quaternion);
+    // (read again in the same sub-step: as it was; in the next: from where it was)
+    if (last && Math.abs(f.time - f.dt - last.time) < 1e-9) velocity.subVectors(position, last.position).divideScalar(f.dt);
+    else if (!last || last.time !== f.time) velocity.set(0, 0, 0);
+    if (!last || last.time !== f.time) last = { time: f.time, position: position.clone() };
+    return { position, quaternion, velocity: velocity.clone() };
+  };
+}
+
+const UP = new Vector3(0, 1, 0);

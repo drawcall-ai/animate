@@ -1,44 +1,29 @@
 # animate
 
-Procedural, humanlike motion for three.js characters. A body is moved by behaviours written as
-[@pmndrs/timeline](https://github.com/pmndrs/timeline) timelines, layered in order: each writes the
-bones it controls, steering them from the poses before — no animation clips, no runtime ML.
+Procedural, lifelike motion for three.js characters and creatures, with no animation clips and no runtime ML. A body is moved by behaviours written as [@pmndrs/timeline](https://github.com/pmndrs/timeline) timelines that flow into one another: it stands, walks, takes, carries and looks, scripted or driven by a player.
 
 ```sh
 npm install @drawcall/animate three @pmndrs/viverse
 ```
 
 ```ts
-import { Vector3 } from 'three';
-import { action } from '@pmndrs/timeline';
+import { Quaternion, Vector3 } from 'three';
+import { parallel } from '@pmndrs/timeline';
 import { loadCharacterModel } from '@pmndrs/viverse';
-import { follow, Humanoid, INDEX, solveChain, type Frame } from '@drawcall/animate';
+import { carried, grab, hold, Humanoid, idle, Item, walkTo, type Frame } from '@drawcall/animate';
 
+const cup = new Item(new Vector3(0.3, 0.9, 2), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'cup', mass: 0.3 });
 const model = await loadCharacterModel();
 scene.add(model.scene);
-const goal = new Vector3(-0.3, 1.2, 0.4);
-const body = new Humanoid(model, () =>
-  function* () {
-    // the right hand to a goal, as fast as a hand moves
-    yield* action<Frame>({
-      update: (f) => {
-        const hand = follow(f.prev2.position(INDEX.rightHand), f.prev.position(INDEX.rightHand), goal, { accel: 8, speed: 1.5 }, f.dt);
-        solveChain(f, 'rightArm', { tip: { position: hand } });
-      },
-    });
-  },
-);
+const person = new Humanoid(model, (h) => () => parallel<Frame>('all', idle(h), function* () {
+  yield* grab(h, { right: [cup, 'handle'] })(); // walks up, looks, reaches
+  yield* parallel<Frame>('race', hold(h, cup, { to: carried(h, 'right') }), walkTo(h, { to: new Vector3(0, 0, -2) }));
+}));
 
-// each frame
-body.update(delta);
+// every frame
+person.update(delta);
 ```
 
 The package ships its usage guide as a skill: `packages/animate/skills/animate/SKILL.md`.
 
-## Repository
-
-- `packages/animate` — the `@drawcall/animate` package
-- `examples` — the examples app (`pnpm dev`), its motion metrics (`pnpm metrics`) and capture tooling
-  (`pnpm capture`)
-
-Develop scenes with opt-in checks and read-only watchers; `pnpm run-scene <id>` prints their log headlessly.
+`packages/animate` is the package. `examples` is the examples app (`pnpm dev`), with its scenes' checks (`pnpm run-scene <id>`) and capture tooling.

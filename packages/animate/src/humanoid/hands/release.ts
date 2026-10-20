@@ -6,7 +6,7 @@ import { reached } from '../../core/tip';
 import { ARM_REACH, clearArm, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { facingAt } from '../goal';
+import { facingAt } from '../../core/goal';
 import { heldItems } from '../../core/worn';
 
 // Letting go.

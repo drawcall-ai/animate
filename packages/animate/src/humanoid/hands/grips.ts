@@ -1,7 +1,6 @@
-import type { Body } from '../../core/body';
 import type { Item } from '../../core/carrier';
-import { heldItems } from '../../core/worn';
-import type { Behaviour, Target } from '../../core/goal';
+import type { Behaviour } from '../../core/goal';
+import type { Holds } from '../../core/hands';
 import { SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 
@@ -10,8 +9,6 @@ import type { Humanoid } from '../humanoid';
 /** Which of an item's grips each hand takes (by name). */
 export type Grips = Partial<Record<Side, string>>;
 
-/** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. */
-export type Holds = Readonly<Record<string, readonly [Item, string]>>;
 
 /** Hand `side` open (a stub: the hand has no fingers yet): holding nothing, at once. */
 export function openHand(h: Humanoid, side: Side): Behaviour {
@@ -36,13 +33,6 @@ export function held(holds: Holds) {
   });
 }
 
-/** grip `name` of `item`: a target in its frame */
-export function gripOf(item: Item, name: string): Target {
-  const g = item.grips[name];
-  if (!g) throw new Error(`"${item.name}" has no grip "${name}"`);
-  return g;
-}
-
 /** the name of the grip hand `side` takes (it must take one) */
 export function grip(grips: Grips, side: Side): string {
   const name = grips[side];
@@ -55,8 +45,3 @@ export function gripsOf(h: Humanoid, item: Item): Grips {
   return Object.fromEntries(SIDES.flatMap((side) => h.holding[side]?.item === item ? [[side, h.holding[side]?.grip]] : []));
 }
 
-
-/** Unsupported weight borne through the hands, counting each item once. */
-export function heldMass(h: Body): number {
-  return heldItems(h).reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
-}

@@ -1,15 +1,15 @@
 import { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import type { Frame } from '../core/body';
-import { live, type Behaviour, type Live } from '../core/goal';
+import type { Frame } from './body';
+import { live, type Behaviour, type Live } from './goal';
 import type { UntilCondition } from '@pmndrs/timeline';
-import type { Go } from '../core/asks';
-import { heldMass } from './hands/grips';
-import { loadFactor } from '../core/load';
-import { when } from '../core/when';
-import type { Body } from '../core/body';
-import { forwardOf, headingOf, wrapAngle } from '../core/math';
-import type { Stance } from '../core/asks';
+import type { Go } from './asks';
+import { heldMass } from './worn';
+import { loadFactor } from './load';
+import { when } from './when';
+import type { Body } from './body';
+import { forwardOf, headingOf, wrapAngle } from './math';
+import type { Stance } from './asks';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
 const STROLL = { speed: 1.3, accel: 1.2 };

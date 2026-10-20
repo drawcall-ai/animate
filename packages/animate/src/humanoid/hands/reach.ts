@@ -1,7 +1,7 @@
 import { Box3, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
-import type { Item } from '../../core/carrier';
+import { gripOf, type Item } from '../../core/carrier';
 import { REACHED, type Behaviour, type Target } from '../../core/goal';
 import { seeded, seedOf } from '../../core/random';
 import { reached } from '../../core/tip';
@@ -10,7 +10,8 @@ import { SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { lerp } from '../../core/math';
 import { LOAD_RESERVE } from './clearance';
-import { closeHand, gripOf, held, openHand, type Grips, type Holds } from './grips';
+import { closeHand, held, openHand, type Grips } from './grips';
+import type { Holds } from '../../core/hands';
 import { heldItems } from '../../core/worn';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.

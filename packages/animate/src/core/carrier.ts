@@ -136,6 +136,13 @@ export class Item extends Carrier {
   }
 }
 
+/** grip `name` of `item`: a target in its frame */
+export function gripOf(item: Item, name: string): Target {
+  const g = item.grips[name];
+  if (!g) throw new Error(`"${item.name}" has no grip "${name}"`);
+  return g;
+}
+
 /** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
 export function onItem(item: Carrier, local: Placement = { position: new Vector3(), quaternion: new Quaternion() }): (f: Frame) => Target {
   return (f) => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }, f.time);

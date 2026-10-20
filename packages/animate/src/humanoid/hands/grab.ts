@@ -8,11 +8,14 @@ import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import { Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
-import { take } from './creature';
-import { gazeLead, pathAhead, withGaze } from '../look';
+import { take } from '../../core/hands';
+import { pathAhead } from '../look';
+import { gazeLead, withGaze } from '../../core/gaze';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../core/math';
-import { arriving, route } from '../walk';
-import { gripOf, held, type Holds } from './grips';
+import { arriving, route } from '../../core/walk';
+import { held } from './grips';
+import { gripOf } from '../../core/carrier';
+import type { Holds } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
 

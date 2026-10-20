@@ -7,7 +7,7 @@ import { INDEX, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { NECK_PITCH } from './profile/limits';
 import { ARM_REACH } from './arms';
-import { heldMass } from './hands/grips';
+import { heldMass } from '../core/worn';
 import { loadFactor } from '../core/load';
 
 /** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches

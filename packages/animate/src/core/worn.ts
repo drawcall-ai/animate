@@ -201,6 +201,11 @@ export interface Dressed {
   at: Placement;
 }
 
+/** Unsupported weight borne through the hands, counting each item once. */
+export function heldMass(h: Body): number {
+  return heldItems(h).reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
+}
+
 /** Held items, counting a two-handed load once. */
 export function heldItems(h: Body): Item[] {
   return [...new Set(Object.values(h.holding).flatMap((held) => held?.item ?? []))];
