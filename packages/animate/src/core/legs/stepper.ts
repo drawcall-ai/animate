@@ -78,9 +78,10 @@ type Leap = { phase: 'ground' | 'launch' | 'air' | 'landed' | 'down' | 'up'; sin
  * than `SIDE` of its speed sideways), lands flat but `BACKSTEP` (m) or more behind its hip, and, still, steps only to even out feet
  * `STAGGERED` (m) apart fore and aft). The pelvis turns at most `PELVIS_TURN` (rad) from a planted
  * foot's facing (the trunk and gaze take the rest), at `TURN` (rad/s², rad/s); a landing foresees at most `SPIN` (rad/s) of the root's turn;
- * turning steps as quick as walking `TURNING` m/s per rad/s turned or rad behind.
+ * turning steps as quick as walking `TURNING` m/s per rad/s turned or rad behind. A walker's pelvis never turns back past its root
+ * against the way the root turns `SENSING` s on, nor for `PAUSE` s after it stops turning; slower than `SHUFFLING` (m/s), its feet alternate.
  */
-const DUE = 1.5, BLOCKED = 0.05, SPAN = 0.25, SIDE = 0.5, BACKSTEP = 0.1, STAGGERED = 0.08, PELVIS_TURN = (50 * Math.PI) / 180, SPIN = 1.5, TURNING = 0.5, TURN = { accel: 80, speed: 8 };
+const DUE = 1.5, SENSING = 0.3, PAUSE = 0.5, SHUFFLING = 0.6, BLOCKED = 0.05, SPAN = 0.25, SIDE = 0.5, BACKSTEP = 0.1, STAGGERED = 0.08, PELVIS_TURN = (50 * Math.PI) / 180, SPIN = 1.5, TURNING = 0.5, TURN = { accel: 80, speed: 8 };
 const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
 /**
  * Tuned: a strike rolls flat in `ROLL` s; the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend; within `PIVOT` (m) of
@@ -114,7 +115,7 @@ export class Stepper {
   private readonly before: number[]; private readonly gap: number[]; private readonly yaws: number[];
   private asked: number | undefined; private stand = NaN; private last: number; private rootYaw: number;
   private readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
-  private low = NaN; private most = Infinity; private readonly hips = new Vector3();
+  private low = NaN; private most = Infinity; private sense = 0; private paused = 0; private readonly hips = new Vector3();
   private readonly heights = [0, 0]; private readonly velocity = new Vector3(); private poses: (FootPose | null)[] = [];
 
   constructor(private readonly st: Stepping, private readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number) {
@@ -172,11 +173,13 @@ export class Stepper {
     const rate = Math.abs(goal - this.last) / dt < 2 * TURN.speed ? (goal - this.last) / dt : 0;
     this.last = goal;
     let yaw = follow(yaws[0], yaws[1], goal, { ...TURN, velocity: rate }, dt);
-    // (with a foreseen root: never past the feet's reach of it, braking into the limit; caught up with a root still turning on, it waits
-    // for it rather than turn back)
+    // (with a foreseen root: never past the feet's reach of it, braking into the limit; past it in the way the root turns, or turned
+    // up to `PAUSE` s ago, never turning back: it waits for it)
     if (r.forecast) {
       if (low <= high) yaw = clamp(yaw, low, high);
-      if (spin !== 0 && (yaw - yaws[1]) * spin < 0 && (yaws[1] - goal) * spin > 0) yaw = yaws[1];
+      const turning = Math.sign(wrapAngle(r.forecast(SENSING).yaw - r.yaw));
+      [this.sense, this.paused] = turning !== 0 ? [turning, 0] : [this.sense, this.paused + dt];
+      if (this.paused < PAUSE && (yaw - yaws[1]) * this.sense < 0 && (yaws[1] - goal) * this.sense > 0) yaw = yaws[1];
     }
     [yaws[0], yaws[1]] = [yaws[1], yaw];
     // side-stepping, the feet open wider and close in to the narrowest: their travel never crosses
@@ -237,7 +240,8 @@ export class Stepper {
     const due = (leg: Leg) => moving > 0 ? legs[before[leg.i]].lifted >= C * this.gap[leg.i] || leg.planted >= Ts * DUE : leg.planted >= STEP.square;
     // (still, the feet stay but to even out a stance staggered fore and aft: a squat needs them side by side)
     const staggered = (leg: Leg) => Math.abs(_b.subVectors(legs[before[leg.i]].anchor, leg.anchor).dot(forwardOf(yaw, _f))) > STAGGERED * s;
-    const wants = (leg: Leg) => (!r.still || staggered(leg)) && ((off(leg, lead) > (v > 0 || spin !== 0 || k > 0 ? STEP.distance : STEP.still) * s && due(leg)) || off(leg, lead) > Math.max(STEP.distance * s, DUE * v * Ts) || Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn);
+    const turnedOff = (leg: Leg) => Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn;
+    const wants = (leg: Leg) => (!r.still || staggered(leg)) && ((off(leg, lead) > (v > 0 || spin !== 0 || k > 0 ? STEP.distance : STEP.still) * s && due(leg)) || off(leg, lead) > Math.max(STEP.distance * s, DUE * v * Ts) || turnedOff(leg));
     for (const leg of [...legs].sort((a, b) => off(b, lead) - off(a, lead))) {
       const other = legs[before[leg.i]];
       // alternate: lift once the other foot has stood (walking) or before it lands (running, a flight)
@@ -255,7 +259,9 @@ export class Stepper {
       // (a walker's — a foreseen root's — closes beside the other instead: left waiting, it would trail out of reach)
       // (a walker side-stepping opens with the foot on the side it goes, the other closing after it: first it does not step away from its way)
       if (!urgent && !other.swing && r.forecast && v > 0 && across * leg.sign < -SIDE && leg.lifted <= other.lifted) continue;
-      if (!urgent && !other.swing && !airborne && ((!r.forecast && landing(leg, Tsw - dt)[2] > BLOCKED * s) || off(other, lead + Tsw) > off(leg, lead + Tsw) + STEP.distance * s)) continue;
+      // (a walker's foot that stepped last, slow, lets the other turn first if it is turned off: the feet alternate, turning on the spot)
+      if (!urgent && !other.swing && r.forecast && v < SHUFFLING && leg.lifted < other.lifted && !other.landed && turnedOff(other)) continue;
+      if (!urgent && !other.swing && !airborne && ((!r.forecast && landing(leg, Tsw - dt)[2] > BLOCKED * s) || (off(other, lead + Tsw) > off(leg, lead + Tsw) + STEP.distance * s && !(r.forecast && turnedOff(leg))))) continue;
       const bone = feet.legs[leg.i].foot;
       const x = f.prev.position(bone).clone(), velocity = x.clone().sub(f.prev2.position(bone)).divideScalar(dt);
       const toes = f.prev.local(feet.legs[leg.i].toes).clone();

@@ -130,7 +130,7 @@ function crouchFor(share: number): number {
 /** Tuned: a walker catches its extrapolated centre of mass this far past its feet (m; the checks allow 0.1) */
 const CAPTURE = 0.07;
 /** Tuned: stopped close to a goal still asked (within `STOP`), the body edges onto it this fast (m/s) */
-const EDGE = 0.1;
+const EDGE = 0.03;
 /** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /** Tuned: the ankles' middle stands this far behind the centre of mass (m; the old balance stood it `OVER_ANKLES` ahead of them; walking, less leaves the extrapolated centre of mass past the toes as the trailing foot lifts, more lowers the pelvis before contact) */

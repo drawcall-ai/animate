@@ -53,7 +53,8 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const turnAngle = facing ? Math.abs(wrapAngle(yawOf(facing) - heading)) : 0;
     const duration = turnAngle === 0 ? 0 : Math.max(2 * Math.sqrt(turnAngle / (motion.turnAccel ?? motion.accel / radius)), turnAngle / (motion.turnSpeed ?? Infinity), 1 / stride.frequency);
     const arrival = facing ? clamp(1 - distance / (Math.max(braking, cruise * duration) + midstance), 0, 1) : 0;
-    const forward = (arrival > 0 && (turnAngle > 1e-9 || from.velocity.lengthSq() > 1e-8)) || Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
+    // (`travelFirst`: never held still to turn first, but slowed by `first` below)
+    const forward = travelFirst || (arrival > 0 && (turnAngle > 1e-9 || from.velocity.lengthSq() > 1e-8)) || Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
     // Follow in the goal's moving frame: braking closes the gap in addition to its velocity.
     // [D] Brake closing speed with root deceleration minus the target's deceleration.
     const turnAccel = (motion.turnAccel ?? motion.accel / radius) * (facing ? 1 : share);

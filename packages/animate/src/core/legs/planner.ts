@@ -13,7 +13,7 @@ export interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: numb
 /**
  * Pursues a goal under `Motion` limits (`rootPlan`: braking by v² = 2ad, turning no faster than a/v, the arrival turn begun
  * in time to finish it), writing `root` as a player's input would. Each sub-step it takes the fastest forecast `holds`
- * accepts — at full speed and turn, then both shorter in steps of `SHORTEN`, at last standing — so the legs can keep up (`Stepper.reachable`).
+ * accepts — at full speed and turn, else the largest share of both it accepts, at last standing — so the legs can keep up (`Stepper.reachable`).
  */
 export class Planner {
   readonly root: DrivenRoot;
@@ -34,11 +34,14 @@ export class Planner {
     const goalTurn = last && speed > 1e-6 && last.lengthSq() > 1e-12 ? wrapAngle(Math.atan2(velocity.x, velocity.z) - Math.atan2(last.x, last.z)) / f.dt : 0;
     (this.goalVelocity ??= new Vector3()).copy(velocity);
     const facing = goal.yaw === undefined ? undefined : new Quaternion().setFromAxisAngle(UP, goal.yaw);
-    let plan = rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, 1, goalTurn, 1, stance, true);
-    for (let share = SHORTEN, k = 0; k < TRIES; k++, share *= SHORTEN) {
-      const at = (ahead: number) => { const root = plan.root(f.time + ahead); return { position: root.position, yaw: yawOf(root.quaternion) }; };
-      if (holds(at)) break;
-      plan = rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, share, goalTurn, k === TRIES - 1 ? 0 : share, stance, true);
+    const planned = (share: number) => rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, share, goalTurn, share, stance, true);
+    const kept = (plan: ReturnType<typeof planned>) => holds((ahead) => { const root = plan.root(f.time + ahead); return { position: root.position, yaw: yawOf(root.quaternion) }; });
+    // (the largest share of its speed and turn the legs keep up with, found to within `PRECISION`: none, it stands)
+    let plan = planned(1);
+    if (!kept(plan)) {
+      let [lo, hi] = [0, 1];
+      while (hi - lo > PRECISION) { const mid = (lo + hi) / 2; if (kept(planned(mid))) lo = mid; else hi = mid; }
+      plan = planned(lo);
     }
     const chosen = plan, now = f.time;
     this.root.forecast = (ahead) => { const root = chosen.root(now + ahead); return { position: root.position.clone().setY(0), yaw: yawOf(root.quaternion) }; };
@@ -54,6 +57,6 @@ export class Planner {
   }
 }
 
-/** Tuned: a forecast the legs cannot keep up with is shortened by this share, at most `TRIES` times (the last: standing). */
-const SHORTEN = 0.75, TRIES = 12;
+/** Tuned: how finely the share of speed and turn the legs keep up with is found */
+const PRECISION = 1 / 64;
 const UP = new Vector3(0, 1, 0);
