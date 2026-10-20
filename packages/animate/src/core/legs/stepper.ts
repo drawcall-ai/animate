@@ -95,9 +95,10 @@ const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared:
  * reach with the pelvis let down `LANDING.drop` (m) more, never nearer than `least` (m). A swing's duration grows with the gait's at most
  * `PACE` (s/s); past `SETTLE` of it even a hard stop no longer moves its landing (a walker's: past `AIMED`). Landing a leap, the foot comes down at `TOUCH` of the body's fall.
  * Recalled (Perry 1992): the push-off peaks just after toe-off, gone by mid-swing; tuned: it eases in and out over the first `PUSHED` of a swing.
- * A bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing.
+ * A bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing. Tuned (the old balance shuffled hip-wide
+ * steps): a walker's slow step lands at most `WIDE.stances` standing stances aside of the other foot, as balance lets it.
  */
-const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85, PUSHED = 0.5, BEND_SPAN = 0.1;
+const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85, PUSHED = 0.5, BEND_SPAN = 0.1, WIDE = { stances: 1.4, within: 0.03 };
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
@@ -153,6 +154,8 @@ export class Stepper {
     const accel = _accel.subVectors(r.velocity, velocity).divideScalar(dt);
     velocity.copy(r.velocity);
     const travel = (ahead: number, out: Vector3) => r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead).addScaledVector(accel, ahead * ahead / 2);
+    // (and its velocity then: a walker's as foreseen, braking where it brakes; else run on at its acceleration)
+    const pace = (ahead: number, out: Vector3) => r.forecast ? out.subVectors(r.forecast(ahead + dt).position, r.forecast(ahead).position).divideScalar(dt).setY(0) : out.copy(r.velocity).addScaledVector(accel, ahead).setY(0);
     const forward = forwardOf(yaws[1]), left = leftOf(yaws[1]);
     const run = smoothstep(st.run[0], st.run[1], v);
     const wanted = yaws[1] + wrapAngle(r.yaw - yaws[1]);
@@ -208,7 +211,7 @@ export class Stepper {
     const landingReach = Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * feet.length) ** 2 - (Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s) - feet.ankleHeight) ** 2)));
     // (the extrapolated centre of mass `ahead` s on)
     const xcom = (ahead: number, out: Vector3) => travel(ahead, out).addScaledVector(forwardOf(yaw, _f), sitting)
-      .addScaledVector(_x.copy(r.velocity).addScaledVector(accel, ahead).setY(0), Math.sqrt(feet.length / GRAVITY)).setY(0);
+      .addScaledVector(pace(ahead, _x), Math.sqrt(feet.length / GRAVITY)).setY(0);
     // the feet: swings on, then those too far from home lift (the furthest first)
     for (const leg of legs) {
       leg.landed = false;
@@ -254,9 +257,10 @@ export class Stepper {
       const otherLands = other.swing ? (1 - other.swing.u) * other.swing.T : -other.planted;
       // (a foot about to be out of reach, or under the body, steps at once, the other in the air or not)
       // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
+      // (a walker's foot out of reach as it touches down stands first, the other closing in: the root it was aimed at is on its way)
       // (but for being out of reach, not in the sub-step it touches down: there it stands first; with a foreseen root, a walker's, nor
       // while the other is in the air: it walks, never leaving the floor)
-      const urgent = airborne ? !leg.swing && air > 0 : reach(leg) < nominal() + Math.max(0, vy) * RISING - STEP.short * s
+      const urgent = airborne ? !leg.swing && air > 0 : (reach(leg) < nominal() + Math.max(0, vy) * RISING - STEP.short * s && !(r.forecast && leg.landed && !other.swing))
         || (!leg.landed && (!other.swing || !r.forecast) && (leg === catcher || _v.subVectors(hip(leg), leg.anchor).dot(leftOf(yaw)) * leg.sign > STEP.medial * s || aheadOf(leg) > most));
       if (airborne && !urgent) continue;
       // (a foot lands before it lifts again, unless it would be out of reach: not in the sub-step it touches down)
@@ -297,10 +301,12 @@ export class Stepper {
       const turned = other.swing ? ahead : body + clamp(wrapAngle(ahead - body), -PELVIS_TURN, PELVIS_TURN);
       const side = leftOf(turned, new Vector3());
       // (as wide as the speed it will land at: a stopping step lands in the standing stance)
-      const landed = _w.copy(r.velocity).addScaledVector(accel, remaining), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
-      // (along the way it will go, round its curve, but as far as it goes now: a stop is caught by a foot further on)
+      const landed = pace(remaining, _w), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
+      // (along the way it will go, round its curve, but as far as it goes now: a stop is caught by a foot further on — ahead only: one
+      // stopping a step aside or back lands where the body stops, beside it)
       const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, far = Math.max(chord?.length() ?? 0, v * (remaining + lead));
-      const to = (chord && chord.lengthSq() > 1e-12 ? new Vector3().copy(r.position).addScaledVector(chord, far / chord.length()) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead))
+      const on = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
+      const to = (chord && on ? new Vector3().copy(r.position).add(chord).addScaledVector(forwardOf(turned, _f), Math.max(0, on.dot(forwardOf(turned, _f)))) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead))
         .addScaledVector(side, leg.sign * widthAt(speed)).addScaledVector(forwardOf(turned, _f), sitting).setY(feet.ankleHeight);
       // (rounding a bend the body leans in: the feet land out from its way as far as the extrapolated centre of mass runs out from it — its
       // speed × turn rate (the sideways acceleration) × l/g, halved: Hof's √(l/g) ahead along the tangent, off the arc by its square over twice the radius)
@@ -315,8 +321,16 @@ export class Stepper {
         const yawed = turned + leg.sign * toeOut, others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw);
         const past = (at: Vector3, centre: Vector3) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > st.capture! * s;
         const centre = xcom(remaining, new Vector3()), under = (c: Vector3) => c.clone().addScaledVector(side, leg.sign * st.width.narrowest * s / 2).setY(feet.ankleHeight);
-        if (past(to, centre)) to.copy(under(centre));
         const now = r.xcom;
+        // (a walker's slow step lands no further aside of the other foot than `WIDE.stances`, its extrapolated centre of mass, as it will be
+        // and is, kept within `WIDE.within` of the feet: it shuffles rather than straddles)
+        const gap = _v.subVectors(to, other.anchor).dot(side) * leg.sign, most = WIDE.stances * 2 * st.width.stand;
+        if (r.forecast && !other.swing && speed < SHUFFLING * s && gap > most) {
+          const narrower = to.clone().addScaledVector(side, -leg.sign * (gap - most));
+          const within = (c: Vector3) => outside(hullOf([...feet.print(leg.i, narrower, yawed), ...others]), c) <= WIDE.within * s;
+          if (within(centre) && (!now || within(now))) to.copy(narrower);
+        }
+        if (past(to, centre)) to.copy(under(centre));
         if (now && !other.swing && past(to, now)) {
           const from = to.clone(), toward = under(now);
           let [lo, hi] = [0, 1];

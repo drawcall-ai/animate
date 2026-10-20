@@ -34,6 +34,8 @@ const PELVIC_ROTATION = 0.035;
  * the lean atan(a / g) that would put it through the centre of mass, at most `ahead` (rad), and back slowing down at most `back`.
  */
 const SPEEDING = { share: 0.4, ahead: 0.35, back: 0.15 };
+/** Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing (with its toe-out); tuned: eased in over this share of the swing */
+const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1 };
 
@@ -100,7 +102,11 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
       legs.forEach((leg, i) => {
         const side = SIDES[i], thigh = f.current.position(INDEX[`${side}UpperLeg`]);
         const pose = stepper.pose(i, thigh);
-        const pole = _pole.copy(thigh).add(pose.ankle).multiplyScalar(0.5).addScaledVector(forwardOf(pose.yaw), 0.5);
+        // (swinging, the knee goes the way the foot points, but no further off the pelvis's way than `KNEE_OFF`: a foot still turned far
+        // out leaves no knee swung out with it — eased in over the swing's first `KNEE_EASE`, not snapped round as it lifts)
+        const along = stepper.yaw + leg.sign * record.toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
+        const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
+        const pole = _pole.copy(thigh).add(pose.ankle).multiplyScalar(0.5).addScaledVector(forwardOf(yawed), 0.5);
         // (planted, the leg turns as the foot needs; swinging, the knee bends toward the pole and the foot turns within the ankle's range, so the knee never swivels to suit it)
         solveChain(f, `${side}Leg`, { tip: { position: pose.ankle, quaternion: leg.swing ? undefined : pose.foot }, pole });
         const ankle = _local.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(pose.foot);
