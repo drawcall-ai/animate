@@ -27,7 +27,7 @@ export { createWorld, type World } from './humanoid/world';
 export { INDEX, SIDES, type BoneName, type Side } from './humanoid/bones';
 export type { Proportions } from './humanoid/proportions';
 export { idle } from './humanoid/idle';
-export type { DrivenRoot } from './humanoid/driven';
+export { Stepper, type DrivenRoot, type Stepping, type Feet } from './core/legs/stepper';
 export { ask, type Asks, type Go, type Stance } from './core/asks';
 export { arriving, walkTo, type WalkOptions } from './humanoid/walk';
 export { approach, grab, type Spot } from './humanoid/hands/grab';

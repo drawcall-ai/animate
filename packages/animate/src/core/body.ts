@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import type { Stepper } from './legs/stepper';
 import { TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
@@ -78,6 +79,8 @@ export class Body<W = unknown> {
   /** its walk, as the legs report it; walkTo publishes its arrival estimate there */
   readonly locomotion: Locomotion;
   readonly gazer?: Gazer;
+  /** the stepper keeping its legs under a root the scene drives, if any: ask it to `jump`, read whether it is `airborne` */
+  stepper: Stepper | null = null;
   readonly scale: number;
   /** the poses `frame` shows, as [prev2, prev, current] */
   private poses: [Pose, Pose, Pose];

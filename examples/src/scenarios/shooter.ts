@@ -1,6 +1,6 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, createWorld, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { INDEX, Item, aimAt, createWorld, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
 import { Carrier } from '../../../packages/animate/src/core/carrier';
 import { closeHand } from '../../../packages/animate/src/humanoid/hands/grips';
 import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
@@ -56,7 +56,7 @@ export function shooterTrack(t: number, input: Player['input']) {
  * The player's root: always facing the look yaw (≤ 50 ms smoothing), moving as the keys ask
  * relative to it at the speed the keys allow, accelerating and braking at `ACCEL` (in the air:
  * keeping its momentum, steered a little). Crouching eases in over `CROUCHING` s; a jump is the
- * legs' to make (`DrivenRoot.jump`).
+ * legs' to make (`Stepper.jump`).
  */
 // Recalled game-feel norms (e.g. Unreal's Character Movement defaults, CS/COD movement): ~1.4 m/s
 // walk, slower back and sideways, ~3.5 m/s sprint forward only, ADS slows, a crouch-walk ~0.8 m/s;
@@ -74,7 +74,7 @@ export class Controller {
   /** sprinting is held off (a reload under way) */
   hold = false;
 
-  step(input: Player['input'], dt: number) {
+  step(input: Player['input'], dt: number, legs: Stepper | null) {
     const r = this.root;
     r.yaw += wrapAngle(input.aimYaw - r.yaw) * (1 - Math.exp(-dt / FACING));
     const { x, z } = input.move, length = Math.hypot(x, z);
@@ -88,10 +88,10 @@ export class Controller {
         .setLength(speed * (input.ads ? SPEED.ads : 1) * (1 + (SPEED.crouch - 1) * r.crouch));
     }
     const change = wanted.sub(r.velocity);
-    r.velocity.add(change.clampLength(0, (r.airborne ? AIR : ACCEL) * dt));
+    r.velocity.add(change.clampLength(0, (legs?.airborne ? AIR : ACCEL) * dt));
     r.position.addScaledVector(r.velocity, dt);
     // (a press, not a held key, asks for a jump)
-    if (input.jump && !this.jumped && !r.airborne) r.jump = LEAP;
+    if (input.jump && !this.jumped && !legs?.airborne) legs?.jump(LEAP);
     this.jumped = input.jump;
   }
 
@@ -164,7 +164,7 @@ export function shooter(): Scenario {
           const input = { ...player.input, ads: player.input.ads && !reloading };
           controller.hold = reloading && pulled;
           if (player.input.reload && acquired && !reloading && !controller.sprinting(input)) wanted = true;
-          controller.step(input, dt);
+          controller.step(input, dt, actor.stepper);
           // Tuned 250 ms pose transitions, independent of camera/view.
           const approach = (value: number, target: number) => value + Math.max(-dt / 0.25, Math.min(dt / 0.25, target - value));
           ads = approach(ads, Number(input.ads));

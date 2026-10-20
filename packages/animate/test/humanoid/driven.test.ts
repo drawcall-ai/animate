@@ -83,11 +83,12 @@ it.each([
   ['from a sprint', 3.5],
 ])('jumps %s: dips, flies the ballistic arc, lands it with the knees, without a slide or a knee snap', (_, speed) => {
   let pressed = NaN, off = NaN, landed = NaN, top = 0, standing = 0;
-  const { h, lag } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, root, h) => {
-    if (Math.abs(t - 1.5) < dt / 2) [root.jump, pressed, standing] = [2.5, t, h.pose.position(0).y];
-    if (root.airborne && Number.isNaN(off)) off = t;
-    if (!root.airborne && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
-    if (root.airborne) top = Math.max(top, h.pose.position(0).y - standing);
+  const { h, lag } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h) => {
+    const legs = h.stepper!;
+    if (Math.abs(t - 1.5) < dt / 2) { legs.jump(2.5); [pressed, standing] = [t, h.pose.position(0).y]; }
+    if (legs.airborne && Number.isNaN(off)) off = t;
+    if (!legs.airborne && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
+    if (legs.airborne) top = Math.max(top, h.pose.position(0).y - standing);
   });
   expect(off - pressed).toBeLessThanOrEqual(0.12);
   expect(landed - off).toBeGreaterThan(0.45);

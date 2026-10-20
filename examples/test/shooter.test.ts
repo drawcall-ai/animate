@@ -198,7 +198,7 @@ function demo() {
       const grip = h.holding[side];
       if (grip) held = Math.max(held, h.pose.position(INDEX[`${side}Hand`]).distanceTo(grip.item.grips[grip.grip].position.clone().applyQuaternion(grip.item.current.quaternion).add(grip.item.current.position)));
     }
-    frames.push({ t: sim.t, jump: player.input.jump, reload: player.input.reload, crouch: root.crouch ?? 0, airborne: !!root.airborne, speed: Math.hypot(root.velocity.x, root.velocity.z),
+    frames.push({ t: sim.t, jump: player.input.jump, reload: player.input.reload, crouch: root.crouch ?? 0, airborne: !!h.stepper?.airborne, speed: Math.hypot(root.velocity.x, root.velocity.z),
       pelvis: h.pose.position(0).y, soles: (['left', 'right'] as const).map((side) => Math.min(...solePoints(h, h.pose, side).map((p) => p.y))),
       steps: status.steps.length, reloading: status.reloading, held });
   }
