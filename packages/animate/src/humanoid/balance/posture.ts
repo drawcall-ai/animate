@@ -17,7 +17,7 @@ const LIST = 0.05;
 const SWAY = 0.0085;
 const RUN_SWAY = 0.008;
 /** the walking pelvis's dip in double support below mid-stance (× height; Orendurff 2004) */
-export const BOB = 0.016;
+const BOB = 0.016;
 /** the thorax against the pelvis's rotation: walking it counter-rotates (2.1× the pelvis), running it turns further with it (CMU mocap) */
 const COUNTER = { walk: 2.1, run: -1.3 };
 /** the thorax rolls with its rotation, the forward shoulder up (rad per rad: CMU mocap) */

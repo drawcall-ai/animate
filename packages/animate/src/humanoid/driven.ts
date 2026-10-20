@@ -7,9 +7,9 @@ import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { clampRotation } from '../core/limits';
 import { clamp, forwardOf, GRAVITY, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle } from '../core/math';
-import { Stepper, type DrivenRoot, type Feet, type Leg } from '../core/legs/stepper';
+import { Stepper, type DrivenRoot, type Feet, type Leg, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
-import { createAsks, takeAsks } from '../core/asks';
+import { createAsks, takeAsks, type Asks } from '../core/asks';
 import { ankleFor, ballOf, footRotation, heelOf } from './balance/foot';
 import { shankTilt } from './balance/legs';
 import { hullOf, outside } from './balance/support';
@@ -32,6 +32,12 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
  * Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
 export function driven<W>(h: Humanoid<W>, root: Live<DrivenRoot, W>): Behaviour<W> {
+  return drivenBy(h, (f) => live(root, f));
+}
+
+/** `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`). */
+export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, stepper: Stepper) => DrivenRoot,
+  carry?: (f: Frame<W>, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour<W> {
   return function* () {
     const p = h.proportions;
     const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, ankleHeight: p.ankleHeight, rotation: footRotation,
@@ -42,30 +48,34 @@ export function driven<W>(h: Humanoid<W>, root: Live<DrivenRoot, W>): Behaviour<
         const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle), sign = i === 0 ? 1 : -1;
         return Math.min(heelOf(p, _a).applyQuaternion(foot).y + ankle.y, ...[p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y));
       } };
-    const stepper = (h.stepper = new Stepper(humanStepping(p), feet, h.feet, h.yaw));
+    const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0];
     yield* action<Frame<W>>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
-      const dt = f.dt, r = live(root, f), k = minimumJerk(clamp(r.crouch ?? 0, 0, 1));
       takeAsks(h.asks, asks);
+      const dt = f.dt, r = rootOf(f, asks, stepper), k = minimumJerk(clamp(r.crouch ?? 0, 0, 1));
       stepper.move(f, r);
       const { yaw, moving, run, Ts, legs } = stepper;
-      // the pelvis tipped forward with the stride (room for the hip to extend behind), the trunk leaning on it as asked
-      // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
-      const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
-      [tilts[0], tilts[1]] = [tilts[1], tilt];
-      f.current.setLocal(0, quatYXZ(yaw, tilt, 0, _q));
-      // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land)
-      const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
-      const bend = quatYXZ(Math.max(-0.8, Math.min(0.8, asks.twist)), asks.bow + RUN_LEAN * run + CROUCH_LEAN * k - tilt + nod, 0, _bend).slerp(IDENTITY, 0.5);
-      [INDEX.spine, INDEX.chest].forEach((bone, k) => {
-        const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
-        if (limit) clampRotation(local, limit);
-        const followed = trunk[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TRUNK, dt, _q);
-        if (limit) clampRotation(followed, limit);
-        f.current.setLocal(bone, followed);
-      });
+      // (a body carrying itself otherwise — a walker's posture — places the pelvis and trunk itself, its thorax turned so far)
+      const thoraxYaw = carry?.(f, asks, stepper) ?? 0;
+      if (!carry) {
+        // the pelvis tipped forward with the stride (room for the hip to extend behind), the trunk leaning on it as asked
+        // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
+        const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
+        [tilts[0], tilts[1]] = [tilts[1], tilt];
+        f.current.setLocal(0, quatYXZ(yaw, tilt, 0, _q));
+        // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land)
+        const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
+        const bend = quatYXZ(Math.max(-0.8, Math.min(0.8, asks.twist)), asks.bow + RUN_LEAN * run + CROUCH_LEAN * k - tilt + nod, 0, _bend).slerp(IDENTITY, 0.5);
+        [INDEX.spine, INDEX.chest].forEach((bone, k) => {
+          const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
+          if (limit) clampRotation(local, limit);
+          const followed = trunk[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TRUNK, dt, _q);
+          if (limit) clampRotation(followed, limit);
+          f.current.setLocal(bone, followed);
+        });
+      }
       // the legs down to the feet
       legs.forEach((leg, i) => {
         const side = SIDES[i], thigh = f.current.position(INDEX[`${side}UpperLeg`]);
@@ -87,11 +97,11 @@ export function driven<W>(h: Humanoid<W>, root: Live<DrivenRoot, W>): Behaviour<
         h.feet[i].phase = leg.swing ? 'swing' : 'planted';
       });
       const g = h.locomotion, stepping = legs.some((leg) => leg.swing);
-      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, 0];
+      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, thoraxYaw];
       g.velocity.copy(r.velocity).setY(0);
       g.planted = g.moving ? 0 : g.planted + dt;
       g.settled = stepper.settled;
-      g.quiet.set(0, 0, 0);
+      if (!carry) g.quiet.set(0, 0, 0);
     } });
   };
 }

@@ -18,21 +18,20 @@ type MigrationStage = 3 | 4;
 const coreFailures: Record<string, { checks: Record<string, MigrationStage | readonly MigrationStage[]>; error?: { stage: MigrationStage; message: string } }> = {
   'stroll': { checks: {} },
   'pickup-shelf': {
-    // Arrival succeeds; lowering/bowing toward the shelf needs stage 4. Behind-box reposition is stage 3.
-    checks: {},
-    error: { stage: 4, message: '3.267 s, "": legs cannot support root follower' },
+    // The stride's third step lands short of the XCoM (2.1 s, 0.115 m): capture stepping, stage 3. It squats but cannot reach the
+    // box (lowering/bowing toward it, the squat's landing): stage 4.
+    checks: { 'XCoM outside support (m)': 3, 'driven touchdown vertical speed (m/s)': 4, 'pickup-shelf: scenario unfinished': 4 },
   },
   'hand-over': { checks: {} },
   'knight-arming': {
-    // Initial table turn passes. The plan assigns the later helm half-turn to stage 3; the loaded lance is stage 4.
-    checks: { 'XCoM outside support (m)': 4, 'joint acceleration (°/s²)': [3, 4] },
+    // Initial table turn passes; the loaded lance is stage 4.
+    checks: { 'XCoM outside support (m)': 4 },
   },
   'idle-life': { checks: {} },
   'reach-around': { checks: {} },
   'lift-heavy': {
-    // Lower/bow toward the floor box, then loaded CoM and capture support.
-    checks: { 'XCoM outside support (m)': 4 },
-    error: { stage: 4, message: '1.133 s, "": legs cannot support root follower' },
+    // Lowered toward the floor box below the stepper's own crouch, a planted foot slides and a swinging sole sinks.
+    checks: { 'driven planted slide (m)': 4, 'driven swing sole sink (m)': 4 },
   },
 };
 
@@ -174,7 +173,7 @@ for (const [name, scene, stages] of [
   ['wider arc', stroll({ radius: 3.6 }), {}],
   ['left yaw', stroll({ yaw: 0.3 }), {}],
   ['right yaw', stroll({ yaw: -0.3 }), {}],
-  ['quarter turn', stroll({ yaw: Math.PI / 2 }), { 'XCoM outside support (m)': 4 }],
+  ['quarter turn', stroll({ yaw: Math.PI / 2 }), {}],
   ['half turn', stroll({ yaw: Math.PI }), { 'XCoM outside support (m)': 4 }],
   ['turn in place', walkThere(new Vector3(), Math.PI), {}],
   ['turning arrival', walkThere(new Vector3(0, 0, 4), Math.PI), { 'XCoM outside support (m)': 4 }],
