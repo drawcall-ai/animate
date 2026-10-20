@@ -40,6 +40,9 @@ export const NECK_EXTENSION = 80;
 /** Total thoracolumbar flexion, shared by spine and chest (degrees). */
 export const TRUNK_PITCH = 80;
 
+/** The knee's most flexion (degrees). */
+export const KNEE_FLEXION = 155;
+
 const RANGES = {
   spine: range(1, [-20, 20], [-15, TRUNK_PITCH / 2], [-25, 25]),
   chest: range(1, [-20, 20], [-15, TRUNK_PITCH / 2], [-25, 25]),
@@ -50,7 +53,7 @@ const RANGES = {
   lowerArm: range(0, [-150, 5], [-5, 5], [-45, 45]),
   hand: range(0, [-20, 30], [-80, 70], [-45, 45]),
   upperLeg: range(1, [-30, 45], [-120, 30], [-45, 45]),
-  lowerLeg: range(1, [-5, 5], [-5, 155], [-30, 30]),
+  lowerLeg: range(1, [-5, 5], [-5, KNEE_FLEXION], [-30, 30]),
   foot: range(1, [-35, 15], [-40, 50], [-20, 20]),
   toes: range(2, [-70, 45], [-10, 10], [-10, 10]),
 };

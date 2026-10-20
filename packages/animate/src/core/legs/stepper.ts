@@ -51,12 +51,14 @@ export interface Stepping {
 }
 
 /**
- * A species' feet: each leg's side (+1 left) and bones, its hip's half width and the leg's lengths (m); where the ankle is for a foot
+ * A species' feet: each leg's side (+1 left) and bones, its hip's half width and the leg's lengths (m), the knee's most bend; where the ankle is for a foot
  * planted at `anchor` turned `yaw` and rolled `pitch`, the foot's turn, its sole's lowest point posed so, the shank's lean over it in a pose.
  */
 export interface Feet {
   legs: readonly { sign: 1 | -1; foot: number; toes: number; top: number }[];
   hip: number; length: number; thigh: number; shin: number; ankleHeight: number;
+  /** the knee's most bend (rad) */
+  fold: number;
   ankle(i: number, anchor: Readonly<Vector3>, yaw: number, pitch: number, out: Vector3): Vector3;
   rotation(yaw: number, pitch: number, out: Quaternion): Quaternion;
   sole(i: number, ankle: Vector3, foot: Quaternion, toes: Quaternion): number;
@@ -349,7 +351,13 @@ export class Stepper {
     if (!airborne) legs.forEach((leg, i) => { y = softMin(y, reach(leg, this.poses[i]?.ankle) + (leg.swing ? LOWEST * s * (1 - minimumJerk((leg.swing.u - 0.5) / 0.3)) : 0), 0.004 * s); });
     // (let down at once as the feet need, up again no faster than `RISE`: a foot let go of does not pop the pelvis up)
     // (the root's own rise and fall are followed at once)
-    const base = airborne ? flying : Math.min(Math.max(y - rise, standing - LOWEST * s), lifted);
+    // (and, crouching too, no lower than a planted leg folds, as it stood last: its knee bent its most, the foot would slide)
+    const folded = Math.sqrt(feet.thigh ** 2 + feet.shin ** 2 + 2 * feet.thigh * feet.shin * Math.cos(feet.fold));
+    const fold = Math.max(-Infinity, ...legs.filter((leg) => !leg.swing).map((leg) => {
+      const ankle = feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), at = hip(leg);
+      return ankle.y + Math.sqrt(Math.max(0, folded ** 2 - (ankle.x - at.x) ** 2 - (ankle.z - at.z) ** 2));
+    }));
+    const base = airborne ? flying : Math.max(Math.min(Math.max(y - rise, standing - LOWEST * s), lifted), fold - rise);
     [heights[0], heights[1]] = [heights[1], base + crouched];
     y = base + rise;
     f.current.setRoot(_v.copy(pelvis).setY(y));
@@ -374,8 +382,8 @@ export class Stepper {
         w.toes.copy(f.prev.local(toesBone));
       }
       const u = w.u;
-      // (landing as it will stand: heel up already where the shank will lean past the ankle's bend)
-      const hipLands = _hipAt.copy(hip(leg)).addScaledVector(r.velocity, w.rest).setY(f.prev.position(top).y);
+      // (landing as it will stand: heel up already where the shank will lean past the ankle's bend, the hips as low as they are going)
+      const hipLands = _hipAt.copy(hip(leg)).addScaledVector(r.velocity, w.rest).setY(f.prev.position(top).y + Math.min(0, f.prev.position(top).y - f.prev2.position(top).y) / dt * w.rest);
       const strike = w.strike - beyond(shankLean(hipLands, feet.ankle(leg.i, leg.anchor, leg.yaw, w.strike, _a), leg.yaw) + w.strike - st.dorsiflexion) * minimumJerk((u - 0.5) / 0.5);
       const land = feet.ankle(leg.i, leg.anchor, leg.yaw, strike, new Vector3());
       if (airborne) for (const axis of ['x', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis] - pelvis[axis] - r.velocity[axis] * air, -r.velocity[axis], w.rest, dt);

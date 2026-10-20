@@ -202,8 +202,8 @@ export class Legs {
           if (Math.abs(index) > 60) continue;
           offset = index * 0.002;
           if (!supported(step)) {
-            // Prefer less turn to changing pelvis height for a rejected contact rotation.
-            if (turning && turnShare > 0 && turnLimited) break heights;
+            // A contact turned past its limit is no nearer at another pelvis height: less turn, or less travel, instead.
+            if (turnLimited) break heights;
             continue;
           }
           found = true;

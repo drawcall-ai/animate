@@ -17,6 +17,7 @@ import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { solePoints } from './landmarks';
 import { humanStepping } from './legs';
+import { KNEE_FLEXION } from './profile/limits';
 
 /** Tuned: the trunk leaning forward crouched and into a run (rad), following within `TRUNK` (rad/s²); recalled (CMU mocap, as the balance posture has it): it nods ~±1.2° walking, ~±3° running (rad, peak). */
 const CROUCH_LEAN = 0.3, RUN_LEAN = 0.12, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
@@ -51,7 +52,7 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
   carry?: (f: Frame<W>, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour<W> {
   return function* () {
     const p = h.proportions;
-    const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, ankleHeight: p.ankleHeight, rotation: footRotation,
+    const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: p.ankleHeight, rotation: footRotation,
       legs: SIDES.map((side, i) => ({ sign: i === 0 ? 1 : -1, foot: INDEX[`${side}Foot`], toes: INDEX[`${side}Toes`], top: INDEX[`${side}UpperLeg`] })),
       ankle: (i, anchor, yaw, pitch, out) => ankleFor(p, SIDES[i], anchor, yaw, pitch, out),
       lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
