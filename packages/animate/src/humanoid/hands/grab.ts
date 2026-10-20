@@ -45,10 +45,12 @@ export const SEGMENT_RADIUS = 0.06;
  * Taking hold of things, each step under way before the last is over: the body walks up to take
  * them (`approach`); once they are in view (IN_VIEW), one gaze notices them, follows the path during a long approach, and returns within two steps or LOOKING s before arrival to
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); within the last estimated second, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
- * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead.
+ * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead. `walk: false` takes them from where it
+ * stands: the hands go straight to them (on them already, they close at once).
  */
-export function grab(h: Humanoid, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean } = {}): Behaviour {
+export function grab(h: Humanoid, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean; walk?: boolean } = {}): Behaviour {
   const { look = true, bow } = options;
+  if (options.walk === false) return look === false ? reachFor(h, holds) : withGaze(h, look === true ? () => middleOf(holds) : look, reachFor(h, holds), { bow });
   return function* () {
     let stood = false;
     const reach = function* () {

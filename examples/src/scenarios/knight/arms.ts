@@ -1,7 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, hold, INDEX, facingAt, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement } from '@drawcall/animate';
-import { closeHand } from '../../../../packages/animate/src/humanoid/hands/grips';
+import { grab, handTo, hold, INDEX, facingAt, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement } from '@drawcall/animate';
 import { slideIn } from './gauntlets';
 import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
@@ -30,7 +29,7 @@ export function takeShield(k: Knight, shield: Item): Behaviour {
     yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI, spot: { aside } })();
     yield* eyesOn(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady))();
     yield* wear(k.h, shield, INDEX.leftLowerArm)();
-    yield* closeHand(k.h, 'left', shield, 'grip')();
+    yield* grab(k.h, { left: [shield, 'grip'] }, { walk: false, look: false })();
     // Clear the peg into the same body-relative pose used while walking.
     yield* parallel<F>('race', busy(k, release(k.h, ['right'], { away: { right: new Vector3(-0.3, -0.15, -0.15) } })), bearShield(k));
   };

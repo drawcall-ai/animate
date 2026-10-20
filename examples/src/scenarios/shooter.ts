@@ -1,8 +1,6 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, follow, followRotation, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid } from '@drawcall/animate';
-import { closeHand } from '../../../packages/animate/src/humanoid/hands/grips';
-import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
+import { INDEX, Item, aimAt, follow, followRotation, grab, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid } from '@drawcall/animate';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { spinOf } from '../../../packages/animate/src/core/rotation';
 import { scalar } from '../keys';
@@ -253,7 +251,7 @@ export function shooter(): Scenario {
             // only after — and held there the next, before it moves on with what it took)
             yield* parallel<Frame>('race', handTo(h, 'left', item.grips[grip], { on: item, lead: false, ...TAKE.motion }), function* () {
               yield* when((f) => now - began >= TAKE.seconds && reached(f, INDEX.leftHand, item.grips[grip], item));
-              yield* closeHand(h, 'left', item, grip)();
+              yield* grab(h, { left: [item, grip] }, { walk: false, look: false })();
             });
             const closed = now;
             yield* when(() => now > closed);
@@ -300,7 +298,7 @@ export function shooter(): Scenario {
             // (held from the first sub-step, off the hand it starts in: from the next the scene moves it into the aim)
             yield* wear(h, loaded, rifle)();
             yield* takeOff(h, rifle)();
-            yield* closeHand(h, 'right', rifle, 'pistol')();
+            yield* grab(h, { right: [rifle, 'pistol'] }, { walk: false, look: false })();
             yield* parallel<Frame>('all',
               watch('weapon pose', () => {
                 if (!acquired || now - steadySince < 0.5 || now - lastShot < 0.5) return null;
@@ -317,7 +315,7 @@ export function shooter(): Scenario {
                 yield* parallel<Frame>('all',
                   function* () {
                     yield* when((f) => f.time >= 0.9);
-                    yield* named('take foregrip', reachFor(h, { left: [rifle, 'foregrip'] }))();
+                    yield* named('take foregrip', grab(h, { left: [rifle, 'foregrip'] }, { walk: false, look: false }))();
                     acquired = true;
                     for (;;) {
                       yield* hold(h, rifle, { until: () => wanted })();

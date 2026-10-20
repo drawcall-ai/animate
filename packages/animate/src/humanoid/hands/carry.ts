@@ -1,12 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
-import { Carrier, type Item } from '../../core/carrier';
+import { Carrier, Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Motion, type Placement, type Until } from '../../core/goal';
 import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
-import { course, type Waypoint } from '../course';
+import { course, type Course, type Waypoint } from '../course';
 import type { Humanoid } from '../humanoid';
 import { grip, gripOf, gripsOf } from './grips';
 import { following, LEADING } from './reach';
@@ -29,18 +29,37 @@ interface CarryOptions {
   limit?: number;
 }
 
+/** where a carry takes an item: along timed waypoints (a course), or to a placement, live */
+export type Way = readonly Waypoint[] | Live<Placement>;
+
 /**
- * Carry a held item along `waypoints`, in metres in the world by default. `frame` selects an item frame
- * or a bone frame through `onItem` or `onBone`. Waypoint seconds describe an unloaded
- * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 5 mm and 5 cm/s of
- * the cleared course end; still settling `limit` s after the course is over, it is a problem in the dev log
- * (`Body.log`) and keeps going: lateness never throws.
+ * Carry a held item along `way` and end once it has come to rest there; or several held items at once,
+ * `[item, way]` each, every one kept at its end until all have come to rest. Waypoints are in metres in
+ * the world by default; `frame` selects an item frame or a bone frame through `onItem` or `onBone`.
+ * Waypoint seconds describe an unloaded item: its mass divides the course pace by `loadFactor(mass)`.
+ * A placement `way` is followed at `motion`'s pace. Ends within 5 mm and 5 cm/s of the cleared end;
+ * still settling `limit` s after the course is over, it is a problem in the dev log (`Body.log`) and
+ * keeps going: lateness never throws.
  */
-export function carry(h: Humanoid, item: Item, waypoints: readonly Waypoint[], options: CarryOptions = {}): Behaviour {
-  return carrying(h, item, waypoints, options);
+export function carry(h: Humanoid, item: Item, way: Way, options?: CarryOptions): Behaviour;
+export function carry(h: Humanoid, items: readonly (readonly [Item, Way])[], options?: CarryOptions): Behaviour;
+export function carry(h: Humanoid, what: Item | readonly (readonly [Item, Way])[], way?: Way | CarryOptions, options: CarryOptions = {}): Behaviour {
+  if (what instanceof Item) {
+    if (!isWay(way)) throw new Error(`carry: no way for "${what.name}"`);
+    return carrying(h, what, way, options);
+  }
+  if (isWay(way)) throw new Error('carry: several items take their ways with them');
+  const shared = way ?? {};
+  return function* () {
+    const ready = what.map(() => false);
+    yield* parallel<Frame>('all', ...what.map(([item, to], i) => carrying(h, item, to, shared, (there) => {
+      ready[i] = there;
+      return ready.every(Boolean);
+    })));
+  };
 }
 
-function carrying(h: Humanoid, item: Item, waypoints: readonly Waypoint[], options: CarryOptions, together?: (ready: boolean) => boolean): Behaviour {
+function carrying(h: Humanoid, item: Item, way: Way, options: CarryOptions, together?: (ready: boolean) => boolean): Behaviour {
   return function* () {
     const { pace = 1, limit = RESTING } = options;
     const frame = options.frame ?? WORLD;
@@ -53,7 +72,7 @@ function carrying(h: Humanoid, item: Item, waypoints: readonly Waypoint[], optio
     // Take-up and compliance belong to lifting off a support, not every carried waypoint.
     const load = item.supported ? factor - 1 : 0;
     // Mass slows the lift’s acceleration and path.
-    const path = course(item, frame, waypoints, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay });
+    const path = isCourse(way) ? course(item, frame, way, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay }) : toward(item, way);
     const end = new TrackedEnd();
     let since = NaN, late = false;
     let dip = 0;
@@ -84,14 +103,17 @@ function carrying(h: Humanoid, item: Item, waypoints: readonly Waypoint[], optio
   };
 }
 
-/** Carry several held items together: each keeps its grips at its endpoint until every carry settles. */
-export function carryTogether(h: Humanoid, carries: readonly (readonly [Item, readonly Waypoint[]])[], options: CarryOptions = {}): Behaviour {
-  return function* () {
-    const ready = carries.map(() => false);
-    yield* parallel<Frame>('all', ...carries.map(([item, waypoints], i) => carrying(h, item, waypoints, options, (there) => {
-      ready[i] = there;
-      return ready.every(Boolean);
-    })));
+const isCourse = (way: Way): way is readonly Waypoint[] => Array.isArray(way);
+const isWay = (x: Way | CarryOptions | undefined): x is Way => x !== undefined && (Array.isArray(x) || typeof x === 'function' || 'position' in x);
+
+/** a placement as a course already gone all its way: the item is carried there at the carry's pace */
+function toward(item: Item, to: Live<Placement>): Course {
+  return {
+    to: (f) => {
+      const at = live(to, f);
+      return { position: at.position.clone(), quaternion: (at.quaternion ?? item.current.quaternion).clone() };
+    },
+    over: () => true,
   };
 }
 

@@ -38,7 +38,7 @@ export function release(h: Humanoid, sides: readonly Side[], options: { away?: P
       if (time === f.time) return goals;
       if (!targets) open();
       targets ??= sides.map((side) => {
-        const hand = f.prev.position(INDEX[`${side}Hand`]);
+        const hand = f.prev.position(h.hands[side]);
         const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
         const at = hand.clone();
         const away = options.away?.[side];
@@ -46,7 +46,7 @@ export function release(h: Humanoid, sides: readonly Side[], options: { away?: P
         else {
           const sign = side === 'left' ? 1 : -1;
           at.copy(shoulder).add(new Vector3(sign * REST_ASIDE * p.scale, -REST_DOWN * p.armLength, REST_AHEAD * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.locomotion.facing)));
-          _v.subVectors(hand, f.prev2.position(INDEX[`${side}Hand`])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
+          _v.subVectors(hand, f.prev2.position(h.hands[side])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
           at.addScaledVector(_v, FOLLOW_THROUGH);
           clearArm(h, f, side, at);
         }
@@ -63,7 +63,7 @@ export function release(h: Humanoid, sides: readonly Side[], options: { away?: P
       });
       return goals;
     };
-    const until = (f: Frame, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f, INDEX[`${side}Hand`], off(f)[k]));
+    const until = (f: Frame, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f, h.hands[side], off(f)[k]));
     if (options.away === null) { open(); return; }
     yield* parallel<Frame>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
   };

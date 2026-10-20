@@ -57,17 +57,17 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
         if (bones.some((bone) => !f.current.local(bone).equals(f.prev.local(bone)))) continue;
         handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy && !moved }, arms[side]);
       }
-      if (aim) fit(f, item, aim, grips, sides);
+      if (aim) fit(h, f, item, aim, grips, sides);
       // Worn-item contact has one rigid owner; check after that owner and both arms moved.
       // A carried item instead fits compliant wrists; its course owns endpoint accuracy.
       if (f.dev && item.wornBy) for (const side of sides) {
         const at = item.toWorld(gripOf(item, grip(grips, side)), _taken).position;
-        const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
+        const value = f.current.position(h.hands[side]).distanceTo(at);
         if (value > REACHED.distance) f.dev.append(f.time, { check: 'held grip distance (m)', value, limit: REACHED.distance, where: `${item.name} ${side}` });
       }
     }
     for (const { side, item, name, at } of taking) {
-      const value = f.current.position(INDEX[`${side}Hand`]).distanceTo(at);
+      const value = f.current.position(h.hands[side]).distanceTo(at);
       if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${item.name} ${side} ${name}` });
     }
     carryAims(h).clear();
@@ -79,9 +79,9 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
  * wrists — turned so the line between two grips lies along the line between the wrists, moved so
  * their middle is the wrists' middle
  */
-function fit(f: Frame, item: Item, aim: Carrier, grips: Grips, sides: readonly Side[]) {
+function fit(h: Humanoid, f: Frame, item: Item, aim: Carrier, grips: Grips, sides: readonly Side[]) {
   const at = (side: Side, out: Vector3) => out.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
-  const wrist = (side: Side, out: Vector3) => out.copy(f.current.position(INDEX[`${side}Hand`]));
+  const wrist = (side: Side, out: Vector3) => out.copy(f.current.position(h.hands[side]));
   const turn = _turn.identity();
   if (sides.length === 2) {
     const held = _a.subVectors(at('right', _g1), at('left', _g2)).normalize();

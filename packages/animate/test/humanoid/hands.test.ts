@@ -2,7 +2,6 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { approach, carry, grab, handTo, hold, idle, INDEX, Item, release, when, type Behaviour, type Frame, type Waypoint } from '../../src';
-import { reachFor } from '../../src/humanoid/hands/reach';
 import { gazeOff } from '../../src/core/gaze';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
@@ -205,7 +204,7 @@ describe('release', () => {
       function* () {
         yield* when(() => true);
         yield* parallel<Frame>('race', idle(h), function* () {
-          yield* reachFor(h, { right: [load, 'right'] })();
+          yield* grab(h, { right: [load, 'right'] }, { walk: false, look: false })();
           // (swept to the right, let go of halfway)
           yield* parallel<Frame>('race', carry(h, load, [[0.8, { position: new Vector3(-0.3, 1.0, 0.4) }]]), when(timePassed(0.4, 'seconds')));
           at.let.copy(h.pose.position(INDEX.rightHand));
@@ -221,7 +220,7 @@ describe('release', () => {
   });
 });
 
-describe('reachFor', () => {
+describe('grab, from where it stands', () => {
   it('takes as long as a reach that far takes (Fitts): longer for a farther grip', () => {
     const reach = (at: Vector3) => {
       const load = box(at);
@@ -230,7 +229,7 @@ describe('reachFor', () => {
           function* () {
             yield* when(timePassed(1, 'seconds'));
             mark();
-            yield* reachFor(h, { right: [load, 'right'] })();
+            yield* grab(h, { right: [load, 'right'] }, { walk: false, look: false })();
             yield* hold(h, load)();
           },
         3.5,
@@ -254,7 +253,7 @@ describe('reach onset', () => {
           function* () {
             yield* when(timePassed(1, 'seconds'));
             mark();
-            yield* parallel<Frame>('race', reachFor(h, { right: [load, 'right'] }), action<Frame>({ update: () => void off.push(h.pose.position(INDEX.rightHand).distanceTo(load.toWorld(load.grips.right, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)) }));
+            yield* parallel<Frame>('race', grab(h, { right: [load, 'right'] }, { walk: false, look: false }), action<Frame>({ update: () => void off.push(h.pose.position(INDEX.rightHand).distanceTo(load.toWorld(load.grips.right, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)) }));
           },
         2.5,
       );
@@ -273,7 +272,7 @@ describe('two hands', () => {
         function* () {
           yield* when(timePassed(1, 'seconds'));
           mark();
-          yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
+          yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { walk: false, look: false })();
         },
       4,
     );
@@ -292,7 +291,7 @@ describe('two hands', () => {
           // (both hands held out before them, then gone for the box from there)
           yield* parallel<Frame>('race', handTo(h, 'left', out('left'), { lead: false }), handTo(h, 'right', out('right'), { lead: false }), when(timePassed(1.5, 'seconds')));
           mark();
-          yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
+          yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { walk: false, look: false })();
         },
       4,
     );
@@ -310,7 +309,7 @@ describe('two hands', () => {
     speeds(
       (h) =>
         function* () {
-          yield* reachFor(h, { left: [a, 'right'], right: [b, 'left'] })();
+          yield* grab(h, { left: [a, 'right'], right: [b, 'left'] }, { walk: false, look: false })();
           yield* parallel<Frame>('race', parallel('all', carry(h, a, legs(0.35)), carry(h, b, legs(-0.35))), action<Frame>({
             update: () => {
               v.left.push(a.current.position.distanceTo(a.prev.position) * 60);

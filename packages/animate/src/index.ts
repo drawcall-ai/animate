@@ -31,7 +31,7 @@ export { Stepper, type DrivenRoot, type Stepping, type Feet } from './core/legs/
 export { ask, type Asks, type Go, type Stance } from './core/asks';
 export { arriving, walkTo, type WalkOptions } from './humanoid/walk';
 export { approach, grab, type Spot } from './humanoid/hands/grab';
-export { carry, carryTogether, hold } from './humanoid/hands/carry';
+export { carry, hold, type Way } from './humanoid/hands/carry';
 export { place } from './humanoid/hands/place';
 export { release } from './humanoid/hands/release';
 export { handTo, type HandOptions } from './humanoid/arms';

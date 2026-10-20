@@ -1,9 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { carry, hold, idle, INDEX, Item, release, takeOff, wear, when, type Behaviour, type Frame } from '../../src';
+import { carry, grab, hold, idle, INDEX, Item, release, takeOff, wear, when, type Behaviour, type Frame } from '../../src';
 import { closeHand } from '../../src/humanoid/hands/grips';
-import { reachFor } from '../../src/humanoid/hands/reach';
 import { STEP } from '../../src/core/body';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
@@ -72,7 +71,7 @@ describe('items on the body', () => {
     const h = run(
       (h) =>
         function* () {
-          yield* reachFor(h, { left: [load, 'left'], right: [load, 'right'] })();
+          yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { walk: false, look: false })();
           yield* carry(h, load, [[1, { position: new Vector3(0, 1.05, 0.35) }]])();
           yield* parallel<Frame>('race', hold(h, load), function* () {
             yield* when(timePassed(1, 'seconds'));
@@ -126,7 +125,7 @@ describe('items on the body', () => {
 describe('hands that cannot get there', () => {
   it('fail visibly, never by throwing: a reach and a carry out of the arms are late in the dev log and keep going; a release off a folded arm does not hang', () => {
     const far = box(new Vector3(0, 1, 3));
-    const reaching = run((h) => reachFor(h, { left: [far, 'left'], right: [far, 'right'] }), 6, true);
+    const reaching = run((h) => grab(h, { left: [far, 'left'], right: [far, 'right'] }, { walk: false, look: false }), 6, true);
     expect(reaching.log.filter((entry) => entry.check.startsWith('late reach')).map((entry) => entry.where)).toEqual(['item left left', 'item right right']);
     expect(reaching.holding.left).toBe(null);
     const held = box(new Vector3(0, 1.1, 0.35));
@@ -134,7 +133,7 @@ describe('hands that cannot get there', () => {
     const carrying = run(
       (h) =>
         function* () {
-          yield* reachFor(h, { left: [held, 'left'], right: [held, 'right'] })();
+          yield* grab(h, { left: [held, 'left'], right: [held, 'right'] }, { walk: false, look: false })();
           yield* carry(h, held, [[1, goal]])();
         },
       12,

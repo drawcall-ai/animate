@@ -1,10 +1,8 @@
 import { ARM_REACH } from '../../../../packages/animate/src/humanoid/arms';
 import { Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
-import { approach, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item } from '@drawcall/animate';
-import { closeHand } from '../../../../packages/animate/src/humanoid/hands/grips';
+import { approach, grab, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item } from '@drawcall/animate';
 import { reached } from '../../../../packages/animate/src/core/tip';
-import { reachFor } from '../../../../packages/animate/src/humanoid/hands/reach';
 import { reported } from '../../report';
 import { along, at, busy, eyesOn, pause, type Knight } from './knight';
 
@@ -34,15 +32,15 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour {
       // 0.45 m out keeps the forearms clear of the helmet rim as the hands close on the grips.
       pole: () => new Vector3(side === 'left' ? 0.45 : -0.45, -0.3, -0.1).applyQuaternion(helmet.current.quaternion).add(helmet.current.position),
     }))), { first: true }))();
-    for (const side of ['left', 'right'] as const) yield* closeHand(k.h, side, helmet, side)();
+    yield* grab(k.h, { left: [helmet, 'left'], right: [helmet, 'right'] }, { walk: false, look: false })();
     yield* eyesOn(k, () => helmet.current.position, along(k, helmet, [[1.0, at(0, 0.14, 0.3, new Quaternion())], [0.4, still]], { frame: level }))();
     yield* along(k, helmet, [[0.7, at(0, 0.42, 0.26)], [0.6, at(0, 0.4, 0.02)]], { frame: level })();
     yield* wear(k.h, helmet, INDEX.head, { to: HELMED })();
     yield* parallel<F>('race', () => when(timePassed(1.2 / k.pace, 'seconds')), lookAt(k.h.gazer, reported(k.report, 'gaze', (f) => down(f).position)));
     // (the chin strap: its ends from by the jaw, buckled under the chin, a tug)
     yield* busy(k, function* () {
-      yield* reachFor(k.h, { left: [helmet, 'strapLeft'], right: [helmet, 'strapRight'] })();
-      yield* reachFor(k.h, { left: [helmet, 'chinLeft'], right: [helmet, 'chinRight'] })();
+      yield* grab(k.h, { left: [helmet, 'strapLeft'], right: [helmet, 'strapRight'] }, { walk: false, look: false })();
+      yield* grab(k.h, { left: [helmet, 'chinLeft'], right: [helmet, 'chinRight'] }, { walk: false, look: false })();
       yield* parallel<F>('race', pause(k, 0.6), hold(k.h, helmet));
     })();
   };

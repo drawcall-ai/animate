@@ -1,7 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { carry, carryTogether, hold, INDEX, facingAt, onItem, release, still, takeOff, wear, yawOf, type Behaviour, type Frame, type Item, type Waypoint, type Placement, type Spot } from '@drawcall/animate';
-import { reachFor } from '../../../../packages/animate/src/humanoid/hands/reach';
+import { carry, grab, hold, INDEX, facingAt, onItem, release, still, takeOff, wear, yawOf, type Behaviour, type Frame, type Item, type Waypoint, type Placement, type Spot } from '@drawcall/animate';
 import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
 // The sword belt and the sword: buckled on, hung at the left hip, its draw checked.
@@ -22,12 +21,12 @@ export function buckle(k: Knight, belt: { buckle: Item; tongue: Item }, spot: Sp
   const front = facingAt(k.h, INDEX.hips, at(0, 0.07, 0.27));
   return function* () {
     yield* take(k, { left: [belt.buckle, 'end'], right: [belt.tongue, 'end'] }, { spot })();
-    yield* carryTogether(k.h, [[belt.buckle, round(1)], [belt.tongue, round(-1)]], { frame: hips, pace: k.pace })();
+    yield* carry(k.h, [[belt.buckle, round(1)], [belt.tongue, round(-1)]], { frame: hips, pace: k.pace })();
     // (drawn round to before the belly, the ends together, the tongue through the buckle and pulled tight)
     yield* eyesOn(
       k,
       (f) => front(f).position,
-      carryTogether(k.h, [[belt.buckle, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]]], [belt.tongue, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]]]], { frame: hips, pace: k.pace }),
+      carry(k.h, [[belt.buckle, [[0.8, at(0.17, 0.06, 0.2)], [0.6, at(0.035, 0.07, 0.27)], [0.75, still]]], [belt.tongue, [[0.8, at(-0.17, 0.06, 0.2)], [0.6, at(-0.035, 0.07, 0.27)], [0.4, at(0.005, 0.07, 0.275)], [0.35, at(-0.05, 0.07, 0.27)]]]], { frame: hips, pace: k.pace }),
     )();
     yield* wear(k.h, belt.buckle, INDEX.hips)();
     yield* wear(k.h, belt.tongue, INDEX.hips)();
@@ -73,10 +72,10 @@ export function checkDraw(k: Knight, sword: Item, scabbard: Item): Behaviour {
       k,
       (f) => hilt(f).position,
       function* () {
-        yield* reachFor(k.h, { left: [scabbard, 'below'] })();
+        yield* grab(k.h, { left: [scabbard, 'below'] }, { walk: false, look: false })();
         yield* takeOff(k.h, scabbard)();
         yield* along(k, scabbard, [[0.6, PRESENTED]], { frame: hips })();
-        yield* parallel<F>('race', steady, reachFor(k.h, { right: [sword, 'hilt'] }));
+        yield* parallel<F>('race', steady, grab(k.h, { right: [sword, 'hilt'] }, { walk: false, look: false }));
         yield* takeOff(k.h, sword)();
         // (out along the scabbard and home again: the sword's own length, not scaled with the body)
         const draw: Waypoint[] = [[0.7, at(0, 0.3, 0)], [0.5, still], [0.8, at(0, 0, 0)]];

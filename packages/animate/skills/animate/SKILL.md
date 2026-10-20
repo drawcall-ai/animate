@@ -72,7 +72,7 @@ const down = { position: new Vector3(0, 1.6, 3) };
 yield* carry(h, saddle, [[0.5, clear], [0.8, over], [0.5, down]])();
 ```
 
-`[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands.
+One verb per intent: `grab` gets (it walks up and looks unless `walk: false`), `hold` keeps, `carry` moves along waypoints or to a placement and ends when it is there (several items at once: `carry(h, [[a, wayA], [b, wayB]])`), `place` puts down, `release` lets go, `wear`/`takeOff` attach. `[seconds, still]` holds a course still on purpose; `[seconds, carried(h)]` lifts into a carry pose that follows the body throughout the course. `arriving` also succeeds when no walk runs and the body is settled, so an approach already in reach can finish an `until: arriving(…)` hold. The next thing's opening must leave the current thing's bones alone (a later writer wins): eyes and feet while the hands finish, not the hands.
 
 ## Units, frames and goals
 

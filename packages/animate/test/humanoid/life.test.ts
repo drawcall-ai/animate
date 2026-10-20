@@ -2,7 +2,6 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
-import { reachFor } from '../../src/humanoid/hands/reach';
 import { Life } from '../../src/humanoid/balance/life';
 
 function body(task: (h: Humanoid) => Behaviour, height = 1.75) {
@@ -113,7 +112,7 @@ it('slows the default walk under load, counting a bimanual item once', () => {
     }, { mass, supported: false });
     let speed = 0;
     const h = body((h) => function* () {
-      yield* reachFor(h, both ? { left: [item, 'left'], right: [item, 'right'] } : { right: [item, 'right'] })();
+      yield* grab(h, both ? { left: [item, 'left'], right: [item, 'right'] } : { right: [item, 'right'] }, { walk: false, look: false })();
       yield* parallel<Frame>('race', hold(h, item), walkTo(h, { to: new Vector3(0, 0, 3) }), action<Frame>({
         update: () => { if (h.asks.go) speed = h.asks.go.speed; }, until: timePassed(0.2, 'seconds'),
       }));
@@ -132,7 +131,7 @@ it('slows the default walk under load, counting a bimanual item once', () => {
 it('keeps sway and breathing after a loaded walk, without spontaneous weight shifts', () => {
   const item = new Item(new Vector3(-0.15, 1.05, 0.35), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 5, supported: false });
   const h = body((h) => function* () {
-    yield* reachFor(h, { right: [item, 'grip'] })();
+    yield* grab(h, { right: [item, 'grip'] }, { walk: false, look: false })();
     const carrying = hold(h, item, { to: facingAt(h, INDEX.hips, { position: new Vector3(-0.15, 0.12, 0.35) }) });
     yield* parallel<Frame>('race', carrying, walkTo(h, { to: new Vector3(0, 0, 2) }));
     yield* carrying();

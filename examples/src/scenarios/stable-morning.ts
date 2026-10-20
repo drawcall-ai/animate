@@ -2,7 +2,6 @@ import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Body, HORSE_SKELETON, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
 import { Rope } from '../../../packages/animate/src/core/rope';
-import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
@@ -163,7 +162,7 @@ export function stableMorning(): Scenario {
             },
             function* () {
               gathering = true;
-              yield* reachFor(h, { left: [loose, 'end'] })();
+              yield* grab(h, { left: [loose, 'end'] }, { walk: false, look: false })();
               yield* hold(h, loose, { to: slack })();
             },
             function* () {

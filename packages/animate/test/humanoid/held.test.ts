@@ -5,7 +5,7 @@ import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Humanoid, createSkeletonModel, idle, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Humanoid, createSkeletonModel, grab, idle, INDEX, Item, place, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { Carrier } from '../../src/core/carrier';
 import { closeHand } from '../../src/humanoid/hands/grips';
 import { reachFor } from '../../src/humanoid/hands/reach';
@@ -19,7 +19,7 @@ it('keeps an unsupported grip through the next task’s gaze opening, then relea
   let off = 0;
   let released = false;
   const h = standing((h) => [function* () {
-      yield* reachFor(h, { right: [item, 'handle'] })();
+      yield* grab(h, { right: [item, 'handle'] }, { walk: false, look: false })();
       yield* hold(h, item, { to: carried(h, 'right'), until: timePassed(1, 'seconds') })();
       gap = true;
       yield* withGaze(h, new Vector3(2, 1.5, 0), function* () {
@@ -47,7 +47,7 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
   let world = new Vector3();
   let done = false;
   const h = standing((h) => [function* () {
-      yield* reachFor(h, { right: [item, 'handle'] })();
+      yield* grab(h, { right: [item, 'handle'] }, { walk: false, look: false })();
       yield* carry(h, item, [[0.5, { position: goal }]])();
       world = item.current.position.clone();
       yield* carry(h, item, [[0.5, { position: new Vector3(-0.15, 0.15, 0.3) }]], { frame: () => frame.current })();
@@ -106,7 +106,7 @@ it('an unsupported hold travels with the body between carries, and an explicit m
   let travelling = false;
   const goal = new Vector3(-0.2, 1.15, 2.3);
   const h = standing((h) => [function* () {
-      yield* reachFor(h, { right: [item, 'grip'] })();
+      yield* grab(h, { right: [item, 'grip'] }, { walk: false, look: false })();
       yield* carry(h, item, [[0.5, carried(h, 'right')]])();
       start = item.current.position.clone();
       travelling = true;
@@ -134,7 +134,7 @@ it('follows a grip worn by another body without asking the humanoid to lower for
   let done = false;
   let lower = 0;
   const h = standing((h) => [function* () {
-      yield* reachFor(h, { left: [item, 'grip'] })();
+      yield* grab(h, { left: [item, 'grip'] }, { walk: false, look: false })();
       done = true;
     }, action<Frame>({ update: () => { lower = Math.max(lower, h.asks.lower); } })]);
   for (let i = 0; i < 180; i++) h.update(STEP);
@@ -156,8 +156,8 @@ it('keeps both carry grips until the slower course ends', () => {
       at.x = 0.04 * Math.sin(3 * f.time);
       f.current.setRoot(at);
     } }), function* () {
-      yield* reachFor(h, { left: [a, 'grip'], right: [b, 'grip'] })();
-      yield* carryTogether(h, [[a, [[0.3, { position: new Vector3(0.2, 1.15, 0.3) }]]], [b, [[1.5, { position: new Vector3(-0.2, 1.15, 0.3) }]]]])();
+      yield* grab(h, { left: [a, 'grip'], right: [b, 'grip'] }, { walk: false, look: false })();
+      yield* carry(h, [[a, [[0.3, { position: new Vector3(0.2, 1.15, 0.3) }]]], [b, [[1.5, { position: new Vector3(-0.2, 1.15, 0.3) }]]]])();
       done = true;
     }, action<Frame>({ update: (f) => {
       if (done || f.time < 1.5) return;
@@ -178,7 +178,7 @@ it('takes up a heavy lift slowly, dips at arrival and recovers before finishing'
     let start = NaN, end = NaN, time = 0;
     const heights: number[] = [];
     const h = standing((h) => [function* () {
-      yield* reachFor(h, { right: [item, 'handle'] })();
+      yield* grab(h, { right: [item, 'handle'] }, { walk: false, look: false })();
       start = time;
       yield* carry(h, item, [[0.8, { position: new Vector3(-0.15, 1.25, 0.3) }]])();
       end = time - start;
@@ -215,7 +215,7 @@ it('follows destination translation and rotation during the lift and approach', 
   const destination = (f: Frame) => ({ position: new Vector3(0, 1.2, 2 + 0.35 * Math.min(f.time, 4)),
     quaternion: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn(f)) });
   const h = standing((h) => [function* () {
-    yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] }, { walk: false, look: false })();
     yield* place(h, item, destination)();
     done = true;
   }, action<Frame>({ update: (f) => {
@@ -248,7 +248,7 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   let walking = 0;
   let raisingOnStep = 0;
   const h = standing((h) => [function* () {
-    yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] }, { walk: false, look: false })();
     yield* place(h, item, destination)();
     done = true;
   }]);
