@@ -18,7 +18,7 @@ import { bringShoulder } from '../reach-posture';
 // Taking hold of things: walking up to them, the eyes and hands going ahead.
 
 /** Where the body stands to take something: its grips' middle `ahead` of it (m) and `aside` to its left (m; negative: its right). */
-export interface Stand {
+export interface Spot {
   /** Metres before the target, or the library's full arm reach for a deep object approached around its grips. */
   ahead?: number;
   aside?: number;
@@ -48,7 +48,7 @@ export const SEGMENT_RADIUS = 0.06;
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); within the last estimated second, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead.
  */
-export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { face?: number; stand?: Stand; look?: boolean | Live<Vector3, W>; bow?: number; first?: boolean } = {}): Behaviour<W> {
+export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3, W>; bow?: number; first?: boolean } = {}): Behaviour<W> {
   const { look = true, bow } = options;
   return function* () {
     let stood = false;
@@ -77,7 +77,7 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
     const seen = (f: Frame<W>) => {
       const at = middleOf(holds);
       f.prev.com(com);
-      return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - h.gait.facing)) < IN_VIEW;
+      return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - h.locomotion.facing)) < IN_VIEW;
     };
     const target = look === true ? () => middleOf(holds) : look;
     const waitingHands = function* () {
@@ -112,7 +112,7 @@ const LOOKING = 0.6;
 /** Prepare the knees during the last landing (s before arrival). */
 const LOWERING = 0.3;
 /**
- * Walking up to grips or a placing point: to stand facing `face` with the grips' middle `stand` before
+ * Walking up to grips or a placing point: to stand facing `face` with the grips' middle `spot` before
  * the body (default: in reach, squarely; facing so the left hand's grip is on the left, or toward a
  * single grip) — no step if every grip is in reach of its shoulder already. The last leg arrives
  * clear of the support and, for a rigid two-hand placement, within a cone of its facing
@@ -125,8 +125,8 @@ const LOWERING = 0.3;
  * bowing and lowering during the reach. A destination placement uses the held grips at its
  * orientation to choose the facing, so both hands can reach it; a blocked explicit `face` throws; translation and rotation are followed live.
  */
-export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placement, W>, options: { face?: number; stand?: Stand } = {}): Behaviour<W> {
-  const { aside = 0 } = options.stand ?? {};
+export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placement, W>, options: { face?: number; spot?: Spot } = {}): Behaviour<W> {
+  const { aside = 0 } = options.spot ?? {};
   return function* () {
     const moving = typeof holds === 'function' ? holds : null;
     const source = live(holds, h.frame);
@@ -151,14 +151,14 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
     const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
     // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
     const distance = !point && grips.length === 2 && height < p.hipHeight ? LOW_STAND / Math.sqrt(loadFactor(mass)) : WITHIN;
-    const ahead = options.stand?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + Math.max(0, height - p.ankleHeight));
+    const ahead = options.spot?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + Math.max(0, height - p.ankleHeight));
     const shoulder = (side?: Side) => side
       ? h.pose.position(INDEX[`${side}UpperArm`])
       : h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
     const middle = grips.reduce((sum, g) => sum.add(g.at), new Vector3()).divideScalar(grips.length);
     if (point) {
       const distance = Math.hypot(ahead, aside, height - shoulders);
-      if (options.stand ? distance > reach : Math.hypot(aside, height - shoulders) > reach) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
+      if (options.spot ? distance > reach : Math.hypot(aside, height - shoulders) > reach) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
     }
     const to = new Vector3(), there = new Vector3();
     const standAt = (yaw: number) => {
@@ -187,8 +187,8 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
     if (yaw === undefined) throw new Error(options.face === undefined
       ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand');
     face = yaw;
-    const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.gait.facing)) < SQUARE;
-    if (options.stand === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) return;
+    const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.locomotion.facing)) < SQUARE;
+    if (options.spot === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) return;
     const rotation = (f: Frame<W>) => {
       const current = moving ? live(moving, f) : null;
       return start?.quaternion && current?.quaternion
@@ -225,7 +225,7 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
     }
     yield* route(h, { to: destination, face: facing, within: ahead, until: (f) => {
       const there = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
-      return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (!h.gait.moving && h.feet.some((foot) => foot.phase === 'planted'));
+      return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (!h.locomotion.moving && h.feet.some((foot) => foot.phase === 'planted'));
     } }, via)();
   };
 }

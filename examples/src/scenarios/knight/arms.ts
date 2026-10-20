@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { closeHand, handTo, hold, INDEX, facingAt, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement, type World } from '@drawcall/animate';
+import { handTo, hold, INDEX, facingAt, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement, type World } from '@drawcall/animate';
+import { closeHand } from '../../../../packages/animate/src/humanoid/hands/grips';
 import { slideIn } from './gauntlets';
 import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
@@ -26,7 +27,7 @@ export function takeShield(k: Knight, shield: Item): Behaviour<World> {
   return function* () {
     // Both grips must be in reach, with room between the shield's face and the sword at the hip.
     const aside = (shield.grips.enter.position.x - shield.grips.edge.position.x) / 2;
-    yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI, stand: { aside } })();
+    yield* take(k, { right: [shield, 'edge'] }, { face: yawOf(shield.current.quaternion) + Math.PI, spot: { aside } })();
     yield* eyesOn(k, () => shield.current.position, () => parallel<F>('race', slideIn(k, 'left', shield, 'enter', 'grip'), steady))();
     yield* wear(k.h, shield, INDEX.leftLowerArm)();
     yield* closeHand(k.h, 'left', shield, 'grip')();
@@ -52,8 +53,8 @@ const UPRIGHT = at(-0.27, 0.3, 0.1, new Quaternion());
 export function takeLance(k: Knight, lance: Item): Behaviour<World> {
   const lift = (_f: Frame, s: Required<Placement>) => at(s.position.x, s.position.y + 0.1, s.position.z);
   return function* () {
-    yield* take(k, { right: [lance, 'grip'] }, { stand: { aside: -0.22 } })();
-    yield* along(k, lance, [[0.6, lift], [1.2, UPRIGHT]], { on: facingAt(k.h, INDEX.hips, { position: new Vector3() }) })();
+    yield* take(k, { right: [lance, 'grip'] }, { spot: { aside: -0.22 } })();
+    yield* along(k, lance, [[0.6, lift], [1.2, UPRIGHT]], { frame: facingAt(k.h, INDEX.hips, { position: new Vector3() }) })();
   };
 }
 

@@ -12,7 +12,7 @@ import { STEP } from '../../src/core/body';
 
 it('publishes arrival and starts a waiting grab before the walk ends without replacing its goal', () => {
   const to = new Vector3(0, 0, 2);
-  const face = 0.6, stand = { ahead: 0.6, aside: -0.2 };
+  const face = 0.6, spot = { ahead: 0.6, aside: -0.2 };
   const item = new Item(new Vector3(0, 0.9, 2.35), new Quaternion(), { grip: { position: new Vector3() } });
   const estimates: number[] = [];
   let ended = false;
@@ -25,27 +25,27 @@ it('publishes arrival and starts a waiting grab before the walk ends without rep
         ended = true;
       }, function* () {
         yield* when(arriving(h, 0.6));
-        started = !ended && h.gait.eta > 0;
-        yield* grab(h, { right: [item, 'grip'] }, { face, stand, look: false })();
+        started = !ended && h.locomotion.eta > 0;
+        yield* grab(h, { right: [item, 'grip'] }, { face, spot, look: false })();
         finished = true;
       }, action<Frame<World>>({ until: () => ended, update: () => {
-        estimates.push(h.gait.eta);
+        estimates.push(h.locomotion.eta);
         if (!started || ended) return;
         goals.push(h.asks.go?.to.distanceTo(to) ?? Infinity);
       } }));
     }]);
-  expect(h.gait.eta).toBe(Infinity);
+  expect(h.locomotion.eta).toBe(Infinity);
   for (let t = 0; t < 10; t += 1 / 60) h.update(1 / 60);
   expect(estimates[0]).toBeGreaterThan(1);
   expect(estimates.at(-1)).toBeLessThan(0.1);
   expect(started && ended && finished).toBe(true);
   expect(goals.length).toBeGreaterThan(0);
   expect(Math.max(...goals)).toBeLessThan(1e-6);
-  expect(h.gait.eta).toBe(Infinity);
+  expect(h.locomotion.eta).toBe(Infinity);
   expect(h.holding.right?.item).toBe(item);
-  expect(Math.abs(h.gait.facing - face)).toBeLessThan(0.3);
+  expect(Math.abs(h.locomotion.facing - face)).toBeLessThan(0.3);
   const body = h.pose.com(new Vector3());
-  const expected = new Vector3(-Math.cos(face) * stand.aside - Math.sin(face) * stand.ahead, 0, 2.35 + Math.sin(face) * stand.aside - Math.cos(face) * stand.ahead);
+  const expected = new Vector3(-Math.cos(face) * spot.aside - Math.sin(face) * spot.ahead, 0, 2.35 + Math.sin(face) * spot.aside - Math.cos(face) * spot.ahead);
   expect(Math.hypot(body.x - expected.x, body.z - expected.z)).toBeLessThan(0.12);
 });
 
@@ -59,10 +59,10 @@ it('clears the estimate when a walk is cancelled', () => {
       yield* action<Frame<World>>({ update: (f) => { near = arrival(f); } });
     }]);
   h.update(0.25);
-  expect(Number.isFinite(h.gait.eta)).toBe(true);
+  expect(Number.isFinite(h.locomotion.eta)).toBe(true);
   h.update(0.5);
   expect(cancelled).toBe(true);
-  expect(h.gait.eta).toBe(Infinity);
+  expect(h.locomotion.eta).toBe(Infinity);
   expect(near).toBe(false);
 });
 
@@ -74,7 +74,7 @@ it.each([false, true])('waits for the next walk to publish with the waiting bran
       const wait = function* () {
         yield* when(arriving(h, 1));
         started = true;
-        estimate = h.gait.eta;
+        estimate = h.locomotion.eta;
       };
       const walk = walkTo(h, { to: new Vector3(0, 0, 2) });
       yield* parallel<Frame<World>>('all', ...(waitingFirst ? [wait, walk] : [walk, wait]));
@@ -84,7 +84,7 @@ it.each([false, true])('waits for the next walk to publish with the waiting bran
   for (let t = 0; t < 5; t += 1 / 60) h.update(1 / 60);
   expect(started).toBe(true);
   expect(estimate).toBeLessThanOrEqual(1);
-  expect(h.gait.eta).toBe(Infinity);
+  expect(h.locomotion.eta).toBe(Infinity);
 });
 
 it('grabs without a walk, then ends an arrival hold when already in reach', () => {
@@ -96,14 +96,14 @@ it('grabs without a walk, then ends an arrival hold when already in reach', () =
       expect(h.asks.go).toBeNull();
       yield* grab(h, { right: [item, 'grip'] }, { face: 0, look: false })();
       expect(h.holding.right?.item).toBe(item);
-      expect(h.gait.eta).toBe(Infinity);
+      expect(h.locomotion.eta).toBe(Infinity);
       yield* parallel<Frame<World>>('all', approach(h, item.current.position, { face: 0 }),
         hold(h, item, { to: carried(h, 'right'), until: arriving(h, 0.3) }));
       finished = true;
     }]);
   for (let tick = 0; tick < 300; tick++) h.update(1 / 60);
   expect(finished).toBe(true);
-  expect(h.gait.eta).toBe(Infinity);
+  expect(h.locomotion.eta).toBe(Infinity);
 });
 
 it.each([
@@ -125,7 +125,7 @@ it.each([
     bow.push(h.asks.bow);
     lower.push(h.asks.lower);
   }
-  expect(h.gait.moving).toBe(walking);
+  expect(h.locomotion.moving).toBe(walking);
   if (walking && deficit < 0.06) {
     expect(Math.max(...bow)).toBe(0);
     expect(Math.max(...lower)).toBe(0);
@@ -137,7 +137,7 @@ it.each([
 
 it('rejects unreachable stands before asking for a walk', () => {
   for (const [point, ahead] of [[new Vector3(0, 1.4, 2), 2], [new Vector3(0, 10, 2), 0]] as const) {
-    const far = new Humanoid<World>(createSkeletonModel(), (h) => approach(h, point, { stand: { ahead } }), { world: createWorld() });
+    const far = new Humanoid<World>(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }), { world: createWorld() });
     expect(() => far.update(STEP)).toThrow(/point .* from shoulder middle .* exceeds arm reach/);
     expect(far.asks.go).toBeNull();
   }
@@ -160,7 +160,7 @@ it.each([new Vector3(1, 1.25, 2), new Vector3(-1, 1.4, 2)])('approaches a placin
   const delta = point.clone().sub(middle);
   expect(done).toBe(true);
   expect(delta.length()).toBeLessThan(0.95 * h.proportions.armLength);
-  expect(Math.abs(Math.atan2(delta.x, delta.z) - h.gait.facing)).toBeLessThan(0.3);
+  expect(Math.abs(Math.atan2(delta.x, delta.z) - h.locomotion.facing)).toBeLessThan(0.3);
 });
 
 it('includes intermediate legs in arrival anticipation', () => {
@@ -204,13 +204,13 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
       const grips = kind === 'placement' ? item.current.position : kind === 'one grip'
         ? { right: [item, 'middle'] as const }
         : { left: [item, 'left'] as const, right: [item, 'right'] as const };
-      expect(() => approach(h, grips, { face: 0, stand: { ahead: 0.4, aside: 0.25 } })().next()).toThrow('explicit face has a blocked stand');
-      yield* approach(h, grips, { stand: { ahead: 0.4, aside: 0.25 } })();
+      expect(() => approach(h, grips, { face: 0, spot: { ahead: 0.4, aside: 0.25 } })().next()).toThrow('explicit face has a blocked stand');
+      yield* approach(h, grips, { spot: { ahead: 0.4, aside: 0.25 } })();
       done = true;
     });
   }, { world });
   for (let t = 0; t < 8; t += STEP) h.update(STEP);
   expect(done).toBe(true);
-  expect(Math.abs(h.gait.facing)).toBeGreaterThan(0.3);
+  expect(Math.abs(h.locomotion.facing)).toBeGreaterThan(0.3);
   for (const foot of h.feet) expect(Math.hypot(foot.position.x + 0.25, foot.position.z - 1.6)).toBeGreaterThan(h.proportions.toeFront + SEGMENT_RADIUS);
 });

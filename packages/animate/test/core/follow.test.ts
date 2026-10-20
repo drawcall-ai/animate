@@ -1,6 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Carrier, follow, followRotation, type FollowOptions } from '../../src';
+import { follow, followRotation } from '../../src';
+import { Carrier } from '../../src/core/carrier';
+import type { FollowOptions } from '../../src/core/goal';
 import { turn } from './rigs';
 
 const dt = 1 / 60;

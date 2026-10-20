@@ -25,7 +25,7 @@ export class Feet {
       // foot) turns the leg — the toes' way for a standing leg, up for one raised forward, down
       // for one drawn back (whose pointed toes point back: the hinge is across the body's facing)
       const toes = jointOf(h, `${s}BigToe`).sub(jointOf(h, `${s}Heel`)).setY(0);
-      if (toes.dot(forwardOf(h.gait.facing)) < 0) toes.negate();
+      if (toes.dot(forwardOf(h.locomotion.facing)) < 0) toes.negate();
       const hinge = new Vector3(0, 1, 0).cross(toes).normalize();
       const front = ankle.clone().sub(hip).cross(hinge).normalize();
       if (knee.clone().sub(hip.clone().lerp(ankle, 0.5)).dot(front) < -0.02) this.hyper++;
@@ -36,7 +36,7 @@ export class Feet {
     h.feet.forEach((f, s) => {
       if (f.phase === 'planted') this.reach.see(jointOf(h, s === 0 ? 'leftUpperLeg' : 'rightUpperLeg').distanceTo(f.position) - h.proportions.legLength, t);
     });
-    if (jointOf(h, 'leftFoot').sub(jointOf(h, 'rightFoot')).dot(leftOf(h.gait.facing)) < 0.02) this.crossings++;
+    if (jointOf(h, 'leftFoot').sub(jointOf(h, 'rightFoot')).dot(leftOf(h.locomotion.facing)) < 0.02) this.crossings++;
   }
 
   toString() {
@@ -78,8 +78,8 @@ export class Landings {
       for (const q of track) if (q.t >= from) this.late.see(q.p.distanceTo(f.position), t);
       // (slow, stopping or standing, the feet land about a stance apart sideways)
       const other = h.feet[1 - s];
-      if (Math.hypot(h.gait.velocity.x, h.gait.velocity.z) >= SLOW || other.phase !== 'planted') return;
-      const across = Math.abs(f.position.clone().sub(other.position).dot(leftOf(h.gait.facing)));
+      if (Math.hypot(h.locomotion.velocity.x, h.locomotion.velocity.z) >= SLOW || other.phase !== 'planted') return;
+      const across = Math.abs(f.position.clone().sub(other.position).dot(leftOf(h.locomotion.facing)));
       this.wide.see(across / (STANCE * h.proportions.height), t);
     });
   }
@@ -114,12 +114,12 @@ export class FinalStance {
   endsStanding = false;
 
   see({ h }: Frame) {
-    const still = Math.hypot(h.gait.velocity.x, h.gait.velocity.z) < 0.05 && h.feet.every((f) => f.phase === 'planted');
+    const still = Math.hypot(h.locomotion.velocity.x, h.locomotion.velocity.z) < 0.05 && h.feet.every((f) => f.phase === 'planted');
     this.endsStanding = still;
     if (!still) return;
     const j = (n: string) => jointOf(h, n);
-    const fwd = forwardOf(h.gait.facing);
-    const left = leftOf(h.gait.facing);
+    const fwd = forwardOf(h.locomotion.facing);
+    const left = leftOf(h.locomotion.facing);
     const heels = [j('leftHeel'), j('rightHeel')];
     const mid = heels[0].clone().add(heels[1]).add(j('leftBigToe')).add(j('rightBigToe')).multiplyScalar(0.25);
     const com = comOf(h).sub(mid).setY(0);
@@ -130,9 +130,9 @@ export class FinalStance {
     this.rest = {
       heels: heels[0].distanceTo(heels[1]) / h.proportions.height,
       // A deliberate quiet displacement changes the stance's requested centre, not its tolerance.
-      aside: -com.clone().sub(h.gait.quiet).dot(left),
-      ahead: -com.clone().sub(h.gait.quiet).dot(fwd),
-      pelvis: j('hips').sub(mid).sub(h.gait.quiet).dot(left),
+      aside: -com.clone().sub(h.locomotion.quiet).dot(left),
+      ahead: -com.clone().sub(h.locomotion.quiet).dot(fwd),
+      pelvis: j('hips').sub(mid).sub(h.locomotion.quiet).dot(left),
       toeOut,
     };
   }

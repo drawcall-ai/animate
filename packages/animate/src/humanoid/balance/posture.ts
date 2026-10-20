@@ -9,7 +9,7 @@ import { clamp, forwardOf, leftOf, lerp, minimumJerk, quatYXZ, smoothstep, wrapA
 import type { Proportions } from '../proportions';
 import type { Carriage, Stepping } from './carriage';
 import type { Side } from '../bones';
-import type { Stance } from '../stance';
+import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
 import { ankleFor, MAX_HEEL } from './foot';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
@@ -73,8 +73,8 @@ export interface Trunk {
   thoraxYaw: number;
 }
 
-/** Root and posture state shared by both leg controllers. */
-export interface Carried {
+/** The body upright over its legs: root and posture state shared by both leg controllers. */
+export interface Upright {
   p: Proportions;
   root: Vector3;
   offset: Vector3;
@@ -88,7 +88,7 @@ export interface Carried {
   pelvisRotation: Quaternion;
 }
 
-export interface Supported extends Carried {
+export interface Supported extends Upright {
   bent: number;
   velocity: Vector3;
   steps: readonly { side: Side; plantedTime: number; landPitch: number; roll: readonly number[];
@@ -120,7 +120,7 @@ export class Posture {
   readonly quiet = new Vector3();
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Pick<Frame<unknown>, 'prev' | 'dt'>, c: Carried, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
+  carry(f: Pick<Frame<unknown>, 'prev' | 'dt'>, c: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
     const { lower, bow, twist } = asks;
     const { onto } = life;
     const { p } = c;

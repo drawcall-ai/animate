@@ -4,7 +4,7 @@ import type { ReadonlyPose } from '../core/pose';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { clamp, minimumJerk, yawOf } from '../core/math';
 import { irregular, seeded, seedOf } from '../core/random';
-import { strideAt, type LegGait } from '../core/legs/gait';
+import { strideAt, type Gait } from '../core/legs/gait';
 import type { Frame } from '../core/body';
 import { Legs, type LegChain } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
@@ -121,7 +121,7 @@ export function horseFollow<W>(start: ReadonlyPose, goal: Live<Pick<Target, 'pos
   }, { react: body.react });
 }
 
-export type HorseGait = LegGait & { body: typeof HORSE_WALK.body };
+export type HorseGait = Gait & { body: typeof HORSE_WALK.body };
 export interface HorseAttention<W> {
   person?: Live<Readonly<Vector3> | undefined, W>;
   /** Maximum halter-to-knot distance while tied. */

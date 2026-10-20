@@ -12,7 +12,7 @@ import { clampRotation } from '../core/limits';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, smoothstep, softMin, softplus, wrapAngle } from '../core/math';
 import { quintic } from '../core/legs/swing';
 import { TrackedRotation } from '../core/track';
-import { createAsks, takeAsks } from './asks';
+import { createAsks, takeAsks } from '../core/asks';
 import { ankleFor, ballOf, footRotation, heelOf } from './balance/foot';
 import { shankTilt } from './balance/legs';
 import { hullOf, outside } from './balance/support';
@@ -342,7 +342,7 @@ export function driven<W>(h: Humanoid<W>, root: Live<DrivenRoot, W>): Behaviour<
         h.feet[i].yaw = leg.yaw;
         h.feet[i].phase = leg.swing ? 'swing' : 'planted';
       });
-      const g = h.gait, stepping = legs.some((leg) => leg.swing);
+      const g = h.locomotion, stepping = legs.some((leg) => leg.swing);
       phase += Math.PI * dt / (C / 2) * Number(stepping);
       [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.thoraxYaw] = [phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), v > 0.05 || stepping, 0];
       g.velocity.copy(r.velocity).setY(0);

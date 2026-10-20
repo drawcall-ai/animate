@@ -1,6 +1,6 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { arriving, carry, grab, when, release, walkTo, withGaze, type Behaviour, type Holds, type Humanoid, type Item, type Leg, type Live, type Placement, type Side, type Stand, type World } from '@drawcall/animate';
+import { arriving, carry, grab, when, release, walkTo, withGaze, type Behaviour, type Holds, type Humanoid, type Item, type Waypoint, type Live, type Placement, type Side, type Spot, type World } from '@drawcall/animate';
 import { reported, reporting, type Report } from '../../report';
 
 // The knight and the small pieces his behaviours are made of over the package's tasks. Placements
@@ -29,7 +29,7 @@ export const busy = (k: Knight, task: Behaviour<World>): Behaviour<World> => rep
 export const eyesOn = (k: Knight, at: Live<Vector3, World>, task: Behaviour<World>, options: { first?: boolean; bow?: number } = {}): Behaviour<World> => withGaze(k.h, reported(k.report, 'gaze', at), task, options);
 
 /** taking hold of `holds` (`grab`), the eyes on them reported */
-export function take(k: Knight, holds: Holds, options: { face?: number; stand?: Stand } = {}): Behaviour<World> {
+export function take(k: Knight, holds: Holds, options: { face?: number; spot?: Spot } = {}): Behaviour<World> {
   return function* () {
     const grips = Object.values(holds).map(([item, grip]) => item.toWorld(item.grips[grip], { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position);
     const middle = grips.reduce((sum, g) => sum.add(g), new Vector3()).divideScalar(grips.length);
@@ -64,7 +64,7 @@ export function flow(k: Knight, beats: readonly Beat[], then: Behaviour<World>):
 }
 
 /** A held item carried along its course at the knight’s pace. */
-export const along = (k: Knight, item: Item, legs: readonly Leg[], options: { on: Live<Placement, World> }): Behaviour<World> => carry(k.h, item, legs, { ...options, pace: k.pace });
+export const along = (k: Knight, item: Item, waypoints: readonly Waypoint[], options: { frame: Live<Placement, World> }): Behaviour<World> => carry(k.h, item, waypoints, { ...options, pace: k.pace });
 
 export const at = (x: number, y: number, z: number, quaternion?: Quaternion): Placement => ({ position: new Vector3(x, y, z), quaternion });
 export const turn = (x: number, y: number, z: number) => new Quaternion().setFromEuler(new Euler(x, y, z, 'YXZ'));

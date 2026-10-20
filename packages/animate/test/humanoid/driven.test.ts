@@ -8,7 +8,7 @@ const dt = 1 / 60;
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
 function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid<unknown>) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { legs: { root } }), { dev: true });
+  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { dev: true });
   let lag = 0, steps = 0;
   const phases = h.feet.map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {
@@ -42,7 +42,7 @@ it.each([
   // (the balance bound is only noted for a driven body)
   expect(h.notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
   expect(h.feet.every((foot) => foot.phase === 'planted')).toBe(true);
-  expect(h.gait.settled).toBe(true);
+  expect(h.locomotion.settled).toBe(true);
 });
 
 it.each([
@@ -53,7 +53,7 @@ it.each([
   expect(lag).toBe(0);
   expect(steps).toBeGreaterThanOrEqual(2);
   expect(h.log).toEqual([]);
-  expect(Math.abs(h.gait.facing - turn)).toBeLessThan(0.01);
+  expect(Math.abs(h.locomotion.facing - turn)).toBeLessThan(0.01);
   for (const [s, foot] of h.feet.entries()) expect(Math.abs(foot.yaw - turn - (s === 0 ? 0.12 : -0.12))).toBeLessThan(25 * Math.PI / 180);
 });
 
@@ -62,7 +62,7 @@ it('walks a curve while turning, then stops and turns back in place', () => {
     (t) => t < 1 ? 0 : t < 4 ? (t - 1) * 0.4 : t < 4.8 ? 1.2 : -0.6);
   expect(lag).toBe(0);
   expect(h.log).toEqual([]);
-  expect(Math.abs(h.gait.facing + 0.6)).toBeLessThan(0.01);
+  expect(Math.abs(h.locomotion.facing + 0.6)).toBeLessThan(0.01);
 });
 
 it('crouches as asked: the pelvis let down smoothly, feet wider, steps still clean crouch-walking', () => {

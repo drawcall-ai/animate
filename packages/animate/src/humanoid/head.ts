@@ -104,10 +104,10 @@ class Under<W> {
   ask(f: Frame<W>, eyes: Vector3, yaw: number) {
     const { h, go, face } = this;
     const p = h.proportions;
-    const facing = h.gait.facing;
+    const facing = h.locomotion.facing;
     const off = Math.abs(wrapAngle(yaw - facing));
     if (Number.isNaN(face.yaw)) face.yaw = facing;
-    if (this.turning && off < SQUARED && h.gait.settled) [this.turning, face.yaw] = [false, facing];
+    if (this.turning && off < SQUARED && h.locomotion.settled) [this.turning, face.yaw] = [false, facing];
     this.off = off > TURN ? this.off + f.dt : 0;
     if (this.off >= WAIT) this.turning = true;
     if (this.turning) face.yaw = yaw;

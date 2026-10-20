@@ -21,7 +21,7 @@ export function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
     return solePoints(h, f.prev, side).map((at): [number, number] => [at.x, at.z]);
   });
   const hull = hullOf(support);
-  if (h.gait.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {
+  if (h.locomotion.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {
     const value = outside(hull, com);
     if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
   }
@@ -50,7 +50,7 @@ export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev, steps: reado
     };
     const heel = heelOf(h.proportions);
     // Walking heel strike only: running lands through a different, forefoot loading pattern.
-    if (steps[s].plantedTime === 0 && h.gait.run === 0) {
+    if (steps[s].plantedTime === 0 && h.locomotion.run === 0) {
       const vertical = Math.abs(f.prev.point(bone, heel, new Vector3()).y - f.prev2.point(bone, heel, new Vector3()).y) / f.dt;
       if (vertical > 0.1) dev.append(f.time - f.dt, { check: 'touchdown vertical speed (m/s)', value: vertical, limit: 0.1, where: `${side}Foot` });
       const was = new Vector3(0, 0, 1).applyQuaternion(f.prev2.rotation(bone));

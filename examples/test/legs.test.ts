@@ -1,9 +1,11 @@
-import { humanGait, humanLegs } from '@drawcall/animate';
+import { humanGait, humanLegs } from '../../packages/animate/src/humanoid/legs';
 import { HORSE_TROT } from '../../packages/animate/src/horse/legs';
 import { expect, it } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, HORSE_WALK, Humanoid, Legs, Pose, beyond, horseLegs, type Frame, type LegGait, type LegStep } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, Humanoid, Legs, Pose, type Frame, type Gait, type LegStep } from '@drawcall/animate';
+import { HORSE_WALK, horseLegs } from '../../packages/animate/src/horse/legs';
+import { beyond } from '../../packages/animate/src/core/limits';
 import { createOpenPoseModel } from '../src/openpose';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
@@ -27,7 +29,7 @@ function human(brake = 3, pace = 1.3, supported = false) {
   return { body, motion: () => move, engine: () => { if (!engine) throw new Error('human has not stepped'); return engine; } };
 }
 
-function horse(gait: LegGait, pace: number, brake = 2, radius = 15, supported = false) {
+function horse(gait: Gait, pace: number, brake = 2, radius = 15, supported = false) {
   const pose = new Pose(HORSE_SKELETON);
   const route = scriptedRoot(1.32, pace, new Vector3(), 0, 0, brake, radius);
   pose.setRoot(route.at(0).position);
@@ -194,8 +196,8 @@ it('legs-biped playback leads along the scripted travel and turn without writing
   expect(playback.velocity.length()).toBeGreaterThan(1);
   expect(playback.facing).toBeGreaterThan(0.1);
   expect(playback.facing).toBeCloseTo(playback.sim.actors[0].yaw, 10);
-  expect(playback.sim.actors[0].gait.velocity.length()).toBe(0);
-  expect(playback.sim.actors[0].gait.facing).toBe(0);
+  expect(playback.sim.actors[0].locomotion.velocity.length()).toBe(0);
+  expect(playback.sim.actors[0].locomotion.facing).toBe(0);
 });
 
 for (const [name, make] of [

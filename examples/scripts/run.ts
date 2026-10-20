@@ -1,4 +1,5 @@
-import { DEFAULT_HEIGHT, type LogEntry } from '@drawcall/animate';
+import { type LogEntry } from '@drawcall/animate';
+import { DEFAULT_HEIGHT } from '../../packages/animate/src/humanoid/proportions';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 

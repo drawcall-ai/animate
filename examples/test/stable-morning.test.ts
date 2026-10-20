@@ -94,15 +94,15 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
     if (load?.name === 'saddle') {
       if (load.current.position.y > gripHeight + LIFT_RISE) liftAt = Math.min(liftAt, sim.t);
     }
-    if (h.gait.velocity.length() > 0.01) settingOff = Math.min(settingOff, sim.t);
+    if (h.locomotion.velocity.length() > 0.01) settingOff = Math.min(settingOff, sim.t);
     const horse = sim.stage.bodies?.[0];
     if (!horse) throw new Error('missing horse');
     for (const [s, side] of ['left', 'right'].entries()) {
       const landed = h.feet[s].phase === 'planted' && phases[s] !== 'planted';
       phases[s] = h.feet[s].phase;
-      if (!landed || Number.isNaN(knot) || sim.t < knot + 3 || h.gait.velocity.length() < 0.8) continue;
+      if (!landed || Number.isNaN(knot) || sim.t < knot + 3 || h.locomotion.velocity.length() < 0.8) continue;
       const foot = h.pose.position(h.pose.skeleton.index(`${side}Foot`)).clone().sub(h.pose.position(0));
-      expect((foot.x * Math.cos(h.gait.facing) - foot.z * Math.sin(h.gait.facing)) * (s === 0 ? 1 : -1)).toBeGreaterThan(0);
+      expect((foot.x * Math.cos(h.locomotion.facing) - foot.z * Math.sin(h.locomotion.facing)) * (s === 0 ? 1 : -1)).toBeGreaterThan(0);
     }
     if (h.frame.beats.has('untie the rail knot') || h.frame.beats.has('lead out through the gate')) {
       for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
@@ -121,7 +121,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
       if (Number.isNaN(knot)) knot = sim.t;
       if (Number.isNaN(firstStep) && h.feet.some((foot) => foot.phase === 'swing')) firstStep = sim.t;
       if (Number.isNaN(horseStep) && horse.pose.position(0).distanceTo(horseRoot) > 0.0001) horseStep = sim.t;
-      if (h.gait.settled && sim.t > knot + 3) settled++;
+      if (h.locomotion.settled && sim.t > knot + 3) settled++;
       if (sim.t > knot + 3) {
         // The halter is below the jaw, where the visible lead attaches.
         const halter = horse.pose.point(horse.pose.skeleton.index('head'), new Vector3(0, -0.3, 0.05), new Vector3());
@@ -135,7 +135,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
         for (const x of [0.9, -2.65]) postGap = Math.min(postGap, segmentDistance(poll, muzzle,
           new Vector3(x, 0, 8.2), new Vector3(x, 1.6, 8.2)) - HORSE_HEAD_RADIUS - Math.SQRT2 * 0.075);
       }
-      if (sim.t > knot + 3 && h.gait.eta > 1 && h.gait.eta !== Infinity) expect(h.gait.velocity.length()).toBeGreaterThan(0.8);
+      if (sim.t > knot + 3 && h.locomotion.eta > 1 && h.locomotion.eta !== Infinity) expect(h.locomotion.velocity.length()).toBeGreaterThan(0.8);
       for (const [a, b] of [['hips', 'chest'], ['chest', 'neck'], ['neck', 'head']]) {
         const from = h.pose.position(h.pose.skeleton.index(a));
         const end = h.pose.position(h.pose.skeleton.index(b));
@@ -148,7 +148,7 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
       }
     }
     horseRoot = horse.pose.position(0).clone();
-    if (Number.isNaN(knot) || sim.t < knot + 3 || h.gait.velocity.length() < 0.8) continue;
+    if (Number.isNaN(knot) || sim.t < knot + 3 || h.locomotion.velocity.length() < 0.8) continue;
     leading++;
     const p = h.pose;
     const at = (name: string) => p.position(p.skeleton.index(name));
@@ -235,14 +235,14 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
     const item = h.holding.left?.item;
     const horse = sim.stage.bodies?.[0];
     const feet = h.pose.position(h.pose.skeleton.index('leftFoot')).clone().sub(h.pose.position(h.pose.skeleton.index('rightFoot')));
-    footAcross = Math.min(footAcross, feet.x * Math.cos(h.gait.facing) - feet.z * Math.sin(h.gait.facing));
+    footAcross = Math.min(footAcross, feet.x * Math.cos(h.locomotion.facing) - feet.z * Math.sin(h.locomotion.facing));
     if (!item || item.name !== 'saddle' || !horse || item.supported || item.wornBy) continue;
     for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) {
       const from = h.pose.position(h.pose.skeleton.index(`${side}${a}`));
       const end = h.pose.position(h.pose.skeleton.index(`${side}${b}`));
       for (const [c, d] of RAIL) railGap = Math.min(railGap, segmentDistance(from, end, c, d) - LEG_RADIUS * h.proportions.height - RAIL_RADIUS);
     }
-    if (h.gait.moving) lifting = false;
+    if (h.locomotion.moving) lifting = false;
     if (lifting) {
       const rotation = h.pose.rotation(h.pose.skeleton.index('head')).clone();
       firstHead ??= rotation.clone();
@@ -279,7 +279,7 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
         torsoGap = Math.min(torsoGap, gap((lo + hi) / 2) - radius * h.proportions.height);
       }
     }
-    if (h.gait.eta > RAISE_LEAD && h.gait.velocity.length() > MOVING) {
+    if (h.locomotion.eta > RAISE_LEAD && h.locomotion.velocity.length() > MOVING) {
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }
@@ -331,7 +331,7 @@ it.each([0, 1, 2])('gathers the slack of a hanging rope of fixed length while wa
       // Ungathered, the slack hangs below the knot hand.
       const tail = segments[segments.length - 1];
       if (tail.kind === 'cylinder') expect(tail.position.y).toBeLessThan(rope.current.position.y);
-      if (h.gait.velocity.length() > MOVING) gatheringSteps++;
+      if (h.locomotion.velocity.length() > MOVING) gatheringSteps++;
       continue;
     }
     if (Number.isNaN(leftAt)) leftAt = sim.t;

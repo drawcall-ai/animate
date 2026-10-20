@@ -1,6 +1,9 @@
 import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { ask, CALM, createWorld, handTo, headTo, idle, lookAt, reached, release, SHIFT, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
+import { ask, createWorld, handTo, headTo, idle, lookAt, release, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
+import { CALM } from '../../../packages/animate/src/humanoid/arms';
+import { reached } from '../../../packages/animate/src/core/tip';
+import { SHIFT } from '../../../packages/animate/src/core/gaze';
 import { destination, route, scalar, type Way } from '../keys';
 import { leftOf, wrapAngle } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -65,7 +68,7 @@ function headset(h: Humanoid<World>, v: Variation, center: (t: number, out: Vect
 /** the eyes on the head's tracked placement at the end (m), the body come to rest facing as it does (rad) */
 function underHead(h: Humanoid<World>, head: Required<Placement>): boolean {
   const eyes = h.pose.point(h.rig.skeleton.index('head'), h.proportions.eyes, new Vector3());
-  return eyes.distanceTo(head.position) < 0.03 && h.gait.settled && Math.abs(wrapAngle(yawOf(head.quaternion) - h.gait.facing)) < 0.3;
+  return eyes.distanceTo(head.position) < 0.03 && h.locomotion.settled && Math.abs(wrapAngle(yawOf(head.quaternion) - h.locomotion.facing)) < 0.3;
 }
 
 /** Only a head is tracked: looking round past the neck's range, down at something low behind, squatting to it. */
@@ -266,7 +269,7 @@ function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame
   let turning = false;
   return (f) => {
     const spot = go.to;
-    if (Number.isNaN(face.yaw)) [face.yaw, spot.x, spot.z] = [h.gait.facing, f.prev.com(_w).x, _w.z];
+    if (Number.isNaN(face.yaw)) [face.yaw, spot.x, spot.z] = [h.locomotion.facing, f.prev.com(_w).x, _w.z];
     const at = target(f);
     // (round as the shoulder sees it: across the body is round too)
     const toward = Math.atan2(at.x - spot.x - leftOf(face.yaw, _u).x * sign * p.shoulderHalfWidth, at.z - spot.z - _u.z * sign * p.shoulderHalfWidth);

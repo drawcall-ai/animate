@@ -1,11 +1,16 @@
+import { Vector3 } from 'three';
 import { TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
 import { SnapChecks } from './rotation';
-import { moveWorn, type Wearing } from './worn';
+import { dress, load, moveWorn, type Bearing, type Dressed, type Wearing } from './worn';
 import type { Item } from './carrier';
+import { createAsks, type Asks } from './asks';
+import { createLocomotion, type Locomotion } from './legs/gait';
+import type { Gazer } from './gaze';
+import { yawOf } from './math';
 
 /** the sub-step (s): fixed, so that what behaviours read off the history (velocities) does not depend on the frame rate */
 export const STEP = 1 / 60;
@@ -42,20 +47,37 @@ export interface BodyOptions<W> {
   dev?: boolean;
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;
-  /** Initial attachments; ownership of this map passes to the body. */
-  worn?: Map<Item, Wearing>;
+  /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone */
+  wearing?: readonly Dressed[];
+  /** its hands, by name, each the bone it holds with; and how they keep to what they hold, every sub-step after the worn items move */
+  hands?: { bones: Readonly<Record<string, number>>; hold: (body: Body<W>) => (f: Frame<W>) => void };
+  /** its neck and eyes, for `lookAt` */
+  gazer?: Gazer;
 }
 
 /**
  * An articulated body moved by one behaviour timeline. Each sub-step of `STEP` the timeline
- * writes `current`; then its world transforms are brought up to date and it becomes the
- * history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
+ * writes `current`; then the items it wears move with it, its hands keep to what they hold, the
+ * weight it bears loads its bones, and its world transforms are brought up to date and it becomes
+ * the history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
  * covers and carry the rest over; the body shows its last final pose.
  */
 export class Body<W = unknown> {
   /** after an update: `prev` is the final pose, `prev2` the one before, `dt` the last sub-step */
   readonly frame: Frame<W>;
-  readonly worn: Map<Item, Wearing>;
+  /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
+  readonly worn = new Map<Item, Wearing>();
+  /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it */
+  readonly borne = new Map<Item, Bearing>();
+  /** its hands' bones, by name (`BodyOptions.hands`) */
+  readonly hands: Readonly<Record<string, number>>;
+  /** what each hand holds, by which grip (`closeHand`, `openHand`) */
+  readonly holding: Record<string, { item: Item; grip: string } | null>;
+  /** what the tasks ask of its legs (see `Asks`) */
+  readonly asks: Asks = createAsks();
+  /** its walk, as the legs report it; walkTo publishes its arrival estimate there */
+  readonly locomotion: Locomotion;
+  readonly gazer?: Gazer;
   readonly scale: number;
   /** the poses `frame` shows, as [prev2, prev, current] */
   private poses: [Pose, Pose, Pose];
@@ -66,14 +88,19 @@ export class Body<W = unknown> {
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
   private readonly snaps = new SnapChecks();
-  protected afterWorn(_f: Frame<W>): void {}
+  private readonly hold: ((f: Frame<W>) => void) | null;
 
   constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame<W>>, options: BodyOptions<W> = {}) {
-    this.worn = options.worn ?? new Map();
     this.scale = options.scale ?? 1;
+    this.gazer = options.gazer;
     const start = new Pose(skeleton);
     if (options.pose) start.copy(options.pose);
     start.forward();
+    this.locomotion = createLocomotion(yawOf(start.local(0)));
+    this.hands = options.hands?.bones ?? {};
+    this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
+    dress(this, start, options.wearing ?? []);
+    this.hold = options.hands?.hold(this) ?? null;
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const { world } = options;
     this.frame = {
@@ -101,6 +128,22 @@ export class Body<W = unknown> {
   /** the last final pose */
   get pose(): ReadonlyPose {
     return this.frame.prev;
+  }
+
+  /** its ground velocity over the last sub-step: its centre of mass's, horizontal (m/s) */
+  get velocity(): Vector3 {
+    const { prev, prev2, dt } = this.frame;
+    return prev.com(new Vector3()).sub(prev2.com(new Vector3())).divideScalar(dt).setY(0);
+  }
+
+  /** its facing about +Y (0 faces +Z): the root's */
+  get yaw(): number {
+    return yawOf(this.pose.local(0));
+  }
+
+  /** a copy of the last final pose, as other bodies read it */
+  snapshot(): Pose {
+    return new Pose(this.pose.skeleton).copy(this.pose);
   }
 
   /** advances by `dt` (s): every whole `STEP` it covers, with what earlier updates left over */
@@ -134,7 +177,8 @@ export class Body<W = unknown> {
     (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
     if (frame.dev) frame.dev.beat = frame.beats.size ? [...frame.beats].join(' ∥ ') : undefined;
     moveWorn(this, frame);
-    this.afterWorn(frame);
+    this.hold?.(frame);
+    load(this, frame);
     clock.prevDelta = dt;
     clock.frame++;
     current.forward();

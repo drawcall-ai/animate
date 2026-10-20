@@ -6,7 +6,7 @@ import { live, type Behaviour, type Live, type Motion, type Placement, type Unti
 import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
-import { course, type Leg } from '../course';
+import { course, type Waypoint } from '../course';
 import type { Humanoid } from '../humanoid';
 import { grip, gripOf, gripsOf, offGrips } from './grips';
 import { following, LEADING } from './reach';
@@ -23,26 +23,26 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 const RESTING = 2;
 
 interface CarryOptions<W> {
-  on?: Live<Placement, W>;
+  frame?: Live<Placement, W>;
   pace?: number;
   motion?: Motion;
   limit?: number;
 }
 
 /**
- * Carry a held item along `legs`, in metres in the world by default. `on` selects an item frame
- * or a bone frame through `onItem` or `onBone`. Leg seconds describe an unloaded
+ * Carry a held item along `waypoints`, in metres in the world by default. `frame` selects an item frame
+ * or a bone frame through `onItem` or `onBone`. Waypoint seconds describe an unloaded
  * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 5 mm and 5 cm/s of
  * the cleared course end; throws after `limit` seconds of settling outside reach.
  */
-export function carry<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], options: CarryOptions<W> = {}): Behaviour<W> {
-  return carrying(h, item, legs, options);
+export function carry<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>[], options: CarryOptions<W> = {}): Behaviour<W> {
+  return carrying(h, item, waypoints, options);
 }
 
-function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], options: CarryOptions<W>, together?: (ready: boolean) => boolean): Behaviour<W> {
+function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>[], options: CarryOptions<W>, together?: (ready: boolean) => boolean): Behaviour<W> {
   return function* () {
-    const { on, pace = 1, limit = RESTING } = options;
-    const frame = on ?? WORLD;
+    const { pace = 1, limit = RESTING } = options;
+    const frame = options.frame ?? WORLD;
     const grips = gripsOf(h, item);
     const lag = grips[LEADING] === undefined && h.holding[LEADING] ? following(item, grips) : { delay: 0, slower: 0 };
     const factor = loadFactor(item.mass);
@@ -52,7 +52,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
     // Take-up and compliance belong to lifting off a support, not every carried waypoint.
     const load = item.supported ? factor - 1 : 0;
     // Mass slows the lift’s acceleration and path.
-    const path = course(item, frame, legs, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay });
+    const path = course(item, frame, waypoints, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay });
     const end = new TrackedEnd();
     let since = NaN;
     let dip = 0;
@@ -87,10 +87,10 @@ function carrying<W>(h: Humanoid<W>, item: Item, legs: readonly Leg<W>[], option
 }
 
 /** Carry several held items together: each keeps its grips at its endpoint until every carry settles. */
-export function carryTogether<W>(h: Humanoid<W>, carries: readonly (readonly [Item, readonly Leg<W>[]])[], options: CarryOptions<W> = {}): Behaviour<W> {
+export function carryTogether<W>(h: Humanoid<W>, carries: readonly (readonly [Item, readonly Waypoint<W>[]])[], options: CarryOptions<W> = {}): Behaviour<W> {
   return function* () {
     const ready = carries.map(() => false);
-    yield* parallel<Frame<W>>('all', ...carries.map(([item, legs], i) => carrying(h, item, legs, options, (there) => {
+    yield* parallel<Frame<W>>('all', ...carries.map(([item, waypoints], i) => carrying(h, item, waypoints, options, (there) => {
       ready[i] = there;
       return ready.every(Boolean);
     })));

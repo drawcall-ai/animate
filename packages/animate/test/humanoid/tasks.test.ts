@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { ask, beyond, headTo, idle, type Asks, type Behaviour, type Frame } from '../../src';
+import { ask, headTo, idle, type Asks, type Behaviour, type Frame } from '../../src';
+import { beyond } from '../../src/core/limits';
 
 import { INDEX } from '../../src/humanoid/bones';
 import { Humanoid } from '../../src/humanoid/humanoid';

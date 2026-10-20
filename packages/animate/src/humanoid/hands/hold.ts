@@ -6,7 +6,8 @@ import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { grip, gripOf, gripsOf, heldItems, type Grips, type Holds } from './grips';
+import { grip, gripOf, gripsOf, type Grips, type Holds } from './grips';
+import { heldItems } from '../../core/worn';
 
 const aims = new WeakMap<object, Map<Item, Carrier>>();
 

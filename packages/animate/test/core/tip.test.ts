@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { Body, chainTo, lookAt, SHIFT, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
+import { Body, chainTo, lookAt, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
+import { SHIFT } from '../../src/core/gaze';
 import { spinOf } from '../../src/core/rotation';
 import { reached } from '../../src/core/tip';
 import type { ReadonlyPose } from '../../src/core/pose';

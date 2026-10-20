@@ -7,7 +7,7 @@ import { ARM_REACH, clearArm, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { facingAt } from '../goal';
-import { heldItems } from './grips';
+import { heldItems } from '../../core/worn';
 
 // Letting go.
 
@@ -42,10 +42,10 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
         const at = hand.clone();
         const away = options.away?.[side];
-        if (away) at.add(away.clone().multiplyScalar(p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
+        if (away) at.add(away.clone().multiplyScalar(p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.locomotion.facing)));
         else {
           const sign = side === 'left' ? 1 : -1;
-          at.copy(shoulder).add(new Vector3(sign * REST_ASIDE * p.scale, -REST_DOWN * p.armLength, REST_AHEAD * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.gait.facing)));
+          at.copy(shoulder).add(new Vector3(sign * REST_ASIDE * p.scale, -REST_DOWN * p.armLength, REST_AHEAD * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.locomotion.facing)));
           _v.subVectors(hand, f.prev2.position(INDEX[`${side}Hand`])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
           at.addScaledVector(_v, FOLLOW_THROUGH);
           clearArm(h, f, side, at);
@@ -53,7 +53,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         // (within what the arm reaches from its shoulder)
         const reach = at.sub(shoulder);
         reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), ARM_REACH * p.armLength));
-        const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -h.gait.facing)).divideScalar(p.scale);
+        const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -h.locomotion.facing)).divideScalar(p.scale);
         return facingAt<W>(h, INDEX.hips, { position: local });
       });
       time = f.time;

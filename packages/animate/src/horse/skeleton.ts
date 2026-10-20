@@ -229,9 +229,6 @@ export const SPINE = SKELETON.index('spine');
 export const PELVIS = SKELETON.index('pelvis');
 export const NECK = SKELETON.index('neck');
 export const HEAD = SKELETON.index('head');
-/** the muzzle (in the head's frame) */
-export const MUZZLE = AT.muzzle.clone().sub(AT.poll);
-
 export const EARS = [SKELETON.index('leftEar'), SKELETON.index('rightEar')];
 export const TAIL = SKELETON.index('tail');
 export const HALTER = v(0, -0.3, 0.05);

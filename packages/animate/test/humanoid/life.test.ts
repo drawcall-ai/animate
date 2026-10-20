@@ -2,7 +2,8 @@ import { createWorld, type World } from '../../src/humanoid/world';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, reachFor, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
+import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
+import { reachFor } from '../../src/humanoid/hands/reach';
 import { Life } from '../../src/humanoid/balance/life';
 
 function body(task: (h: Humanoid<World>) => Behaviour<World>, height = 1.75) {
@@ -19,8 +20,8 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
       x.push(h.pose.com(new Vector3()).x);
       pitch.push(new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
     }
-    const sign = Math.sign(h.gait.quiet.x);
-    expect(Math.abs(h.gait.quiet.x)).toBeGreaterThan(0.04);
+    const sign = Math.sign(h.locomotion.quiet.x);
+    expect(Math.abs(h.locomotion.quiet.x)).toBeGreaterThan(0.04);
     const loaded = sign > 0 ? 'left' : 'right';
     const unloaded = sign > 0 ? 'right' : 'left';
     const hip = (side: 'left' | 'right') => h.pose.position(INDEX[`${side}UpperLeg`]).y;
@@ -29,7 +30,7 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
     expect(knee(unloaded)).toBeGreaterThan(0.2);
     expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
     step(h, 3);
-    expect(h.gait.quiet.x * sign).toBeGreaterThan(0.04);
+    expect(h.locomotion.quiet.x * sign).toBeGreaterThan(0.04);
     expect(h.log).toEqual([]);
     return { x, pitch };
   };
@@ -143,7 +144,7 @@ it('keeps sway and breathing after a loaded walk, without spontaneous weight shi
     h.update(1 / 60);
     sway.push(h.pose.com(new Vector3()).x);
     breath.push(new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
-    expect(h.gait.quiet.length()).toBeLessThan(0.02);
+    expect(h.locomotion.quiet.length()).toBeLessThan(0.02);
   }
   expect(Math.max(...sway) - Math.min(...sway)).toBeGreaterThan(0.004);
   expect(Math.max(...breath) - Math.min(...breath)).toBeGreaterThan(0.02);

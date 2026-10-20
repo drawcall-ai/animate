@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, headingOf, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Stand, type World } from '@drawcall/animate';
+import { handTo, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Spot, type World } from '@drawcall/animate';
+import { headingOf } from '../../../../packages/animate/src/core/math';
 import { along, at, eyesOn, take, turn, type Knight } from './knight';
 
 type F = Frame<World>;
@@ -17,12 +18,12 @@ const heldOpen = (side: Side) => {
  * hand goes to its mouth and slides in (slowly, in line); worn on that hand, home on it. The other
  * hand is left holding the cuff: it lets go as the next thing sets off (`flow`).
  */
-export function don(k: Knight, gauntlet: Item, side: Side, stand: Stand): Behaviour<World> {
+export function don(k: Knight, gauntlet: Item, side: Side, spot: Spot): Behaviour<World> {
   const other: Side = side === 'left' ? 'right' : 'left';
   const fingers = new Vector3(side === 'left' ? 1 : -1, 0, 0).applyQuaternion(gauntlet.current.quaternion);
   return function* () {
-    yield* take(k, { [other]: [gauntlet, 'cuff'] }, { face: headingOf(fingers.x, fingers.z), stand: { ...stand, aside: side === 'left' ? -0.1 : 0.1 } })();
-    yield* along(k, gauntlet, [[1.0, heldOpen(side)]], { on: facingAt(k.h, INDEX.chest, { position: new Vector3() }) })();
+    yield* take(k, { [other]: [gauntlet, 'cuff'] }, { face: headingOf(fingers.x, fingers.z), spot: { ...spot, aside: side === 'left' ? -0.1 : 0.1 } })();
+    yield* along(k, gauntlet, [[1.0, heldOpen(side)]], { frame: facingAt(k.h, INDEX.chest, { position: new Vector3() }) })();
     const open = facingAt(k.h, INDEX.chest, heldOpen(side));
     yield* eyesOn(k, () => gauntlet.current.position, () => parallel<F>('race', slideIn(k, side, gauntlet, 'mouth', 'inside'), hold(k.h, gauntlet, { to: open })))();
     yield* wear(k.h, gauntlet, INDEX[`${side}Hand`], { to: { position: new Vector3(), quaternion: new Quaternion() } })();

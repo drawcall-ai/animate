@@ -50,7 +50,7 @@ it('lists each scenario once', () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
-// These metrics assume humanoid balance owns h.feet/h.gait and centres the CoM.
+// These metrics assume humanoid balance owns h.feet/h.locomotion and centres the CoM.
 // The isolated leg scenes have final-pose contact/ROM/rate coverage in legs.test.ts and dev.test.ts.
 for (const sc of SCENARIOS.filter((s) => !s.id.startsWith('legs-'))) {
   if (sc.id === 'vr') it.fails(`${sc.id} target tracking (known)`, () => judged(sc));

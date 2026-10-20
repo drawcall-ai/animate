@@ -1,7 +1,9 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Carrier, Item, aimAt, closeHand, createWorld, handTo, hold, idle, named, onBone, onItem, reachFor, release, takeOff, watch, wear, when, withGaze,
-  type DrivenRoot, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { INDEX, Item, aimAt, createWorld, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { Carrier } from '../../../packages/animate/src/core/carrier';
+import { closeHand } from '../../../packages/animate/src/humanoid/hands/grips';
+import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
 import { scalar } from '../keys';
 import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
@@ -168,7 +170,7 @@ export function shooter(): Scenario {
           ads = approach(ads, Number(input.ads));
           reload = approach(reload, Number(canted));
           if (reload !== Number(canted)) turned = t;
-          sprint = approach(sprint, input.ads ? 0 : Math.max(actor?.gait.run ?? 0, Number(controller.sprinting(input))));
+          sprint = approach(sprint, input.ads ? 0 : Math.max(actor?.locomotion.run ?? 0, Number(controller.sprinting(input))));
           if (player.input.aimYaw !== previousYaw || player.input.aimPitch !== previousPitch || player.input.ads !== previousAds) steadySince = t;
           previousYaw = player.input.aimYaw;
           previousPitch = player.input.aimPitch;
@@ -295,7 +297,7 @@ export function shooter(): Scenario {
                 const value = sight.addScaledVector(direction(), -sight.dot(direction())).length();
                 return value > 0.01 ? { check: 'sight line offset (m)', value, limit: 0.01, where: 'rifle' } : null;
               }),
-              idle(h, { legs: { root: controller.root } }),
+              idle(h, { root: controller.root }),
               aimAt(h, aim),
               reporting(report, ['leftHand', 'rightHand', 'gaze'], function* () {
                 yield* parallel<Frame<World>>('all',

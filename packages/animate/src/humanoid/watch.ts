@@ -3,7 +3,7 @@ import type { Item } from '../core/carrier';
 import type { Behaviour } from '../core/goal';
 import type { Humanoid } from './humanoid';
 import { gazeOff } from '../core/gaze';
-import { heldItems } from './hands/grips';
+import { heldItems } from '../core/worn';
 
 /**
  * Eyes should lead a new grip by seconds (0.4–0.6 s in Land, Mennie & Rusted 1999).

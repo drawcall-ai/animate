@@ -1,10 +1,7 @@
 import type { Vector3 } from 'three';
 import { action, type UntilCondition } from '@pmndrs/timeline';
-import type { Frame } from '../core/body';
-import { live, type Behaviour, type Live } from '../core/goal';
-import type { Side } from './bones';
-import type { Humanoid } from './humanoid';
-import type { Stance } from './stance';
+import type { Body, Frame } from './body';
+import { live, type Behaviour, type Live } from './goal';
 
 /** Walking somewhere: the point on the floor the body goes to, its velocity, and how fast the body may go (m/s, m/s²). */
 export interface Go {
@@ -14,6 +11,20 @@ export interface Go {
   accel: number;
   /** arriving, the feet are squared into the stance (default true; false: they stay as they land) */
   plant?: boolean;
+}
+
+/** How the body stands when nothing asks for more. */
+export interface Stance {
+  /** half the distance between the ankles, sideways (m) */
+  width: number;
+  /** the left foot forward (+) or back (−) of the right (m) */
+  stagger: number;
+  /** how far the pelvis is let down, the knees bent (m): a ready stance */
+  crouch: number;
+  /** the pelvis and feet turned off the facing (rad): a bladed stance */
+  blade: number;
+  /** each foot turned out (rad) */
+  toeOut: number;
 }
 
 /**
@@ -34,8 +45,8 @@ export interface Asks {
   bowLimit: number;
   /** axial chest turn from the standing facing (rad) */
   twist: number;
-  /** the weight over one foot */
-  onto: Side | null;
+  /** the weight over one foot (a biped's) */
+  onto: 'left' | 'right' | null;
   /** stand otherwise than the body's stance */
   stance: Partial<Stance> | null;
 }
@@ -54,7 +65,7 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
  * Asks `balance` for what `asks` gives (the fields it has; the rest as other tasks ask), every
  * sub-step, endless or until `until`: a task of its own for what no other task asks (shift weight, turn to a facing while the hands work).
  */
-export function ask<W>(h: Humanoid<W>, asks: Live<Partial<Asks>, W>, until?: UntilCondition<Frame<W>>): Behaviour<W> {
+export function ask<W>(h: Body<W>, asks: Live<Partial<Asks>, W>, until?: UntilCondition<Frame<W>>): Behaviour<W> {
   return function* () {
     yield* action<Frame<W>>({
       update: (f) => {

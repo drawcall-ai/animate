@@ -15,7 +15,7 @@ export const LOAD_RESERVE = 0.04;
 export function clearBody<W>(h: Humanoid<W>, f: Frame<W>, item: Item, at: Vector3, rotation: Quaternion): Vector3 {
   if (item.wornBy) return at;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
-  const forward = forwardOf(h.gait.facing, _forward), left = leftOf(h.gait.facing, _left);
+  const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);
   let back = Infinity, bottom = Infinity, top = -Infinity, near = Infinity, far = -Infinity;
   for (let i = 0; i < 2; i++) {
     const turn = i === 0 ? rotation : item.current.quaternion;

@@ -2,20 +2,7 @@
 import type { Vector3 } from 'three';
 import { wrapAngle } from '../core/math';
 import type { Proportions } from './proportions';
-
-/** How the body stands when nothing asks for more. */
-export interface Stance {
-  /** half the distance between the ankles, sideways (m) */
-  width: number;
-  /** the left foot forward (+) or back (−) of the right (m) */
-  stagger: number;
-  /** how far the pelvis is let down, the knees bent (m): a ready stance */
-  crouch: number;
-  /** the pelvis and feet turned off the facing (rad): a bladed stance */
-  blade: number;
-  /** each foot turned out (rad) */
-  toeOut: number;
-}
+import type { Stance } from '../core/asks';
 
 /** feet about hip-width apart, turned out a little (heels 0.10–0.15 of the height apart, 0–12°) */
 export const defaultStance = (p: Proportions): Stance => ({ width: 0.065 * p.height, stagger: 0, crouch: 0, blade: 0, toeOut: 0.12 });

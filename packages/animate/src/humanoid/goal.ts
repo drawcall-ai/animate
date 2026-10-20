@@ -12,8 +12,8 @@ export function onBone<W>(h: { readonly pose: ReadonlyPose; readonly scale: numb
 }
 
 /** A placement at a joint, aligned with body facing instead of the joint's rotation. */
-export function facingAt<W>(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly gait: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint<W>(h, bone, () => local, () => new Quaternion().setFromAxisAngle(UP, h.gait.facing));
+export function facingAt<W>(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly locomotion: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
+  return movingPoint<W>(h, bone, () => local, () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
 }
 
 function movingPoint<W>(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Placement, turn: () => Quaternion) {
@@ -42,7 +42,7 @@ export function carried<W>(h: Humanoid<W>, side?: 'left' | 'right') {
     const effort = loadFactor(heldMass(h));
     return { position: new Vector3(side ? (side === 'left' ? CARRY_ASIDE : -CARRY_ASIDE) : 0, 0,
       side ? CARRY_BESIDE : CARRY_AHEAD / effort ** 2) };
-  }, () => new Quaternion().setFromAxisAngle(UP, h.gait.facing));
+  }, () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
   return (f: Frame<W>) => {
     const goal = at(f);
     // A lift rises out of its squat: its resting height follows the feet, not the lowered pelvis.

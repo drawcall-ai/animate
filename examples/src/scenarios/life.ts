@@ -62,7 +62,7 @@ export const liftHeavy: Scenario = {
         yield* parallel<Frame<World>>('all', idle(h), function* () {
           yield* reporting(report, ['leftHand', 'rightHand'], grab(h, { left: [box, 'left'], right: [box, 'right'] }, { first: true }))();
           yield* carry(h, box, [[1.5, carried(h)]])();
-          const there = h.pose.com(new Vector3()).setY(0).addScaledVector(forwardOf(h.gait.facing), 3);
+          const there = h.pose.com(new Vector3()).setY(0).addScaledVector(forwardOf(h.locomotion.facing), 3);
           yield* parallel<Frame<World>>('race', hold(h, box, { to: carried(h) }), walkTo(h, { to: there }));
           done = true;
           yield* hold(h, box, { to: carried(h) })();

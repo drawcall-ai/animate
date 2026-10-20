@@ -25,11 +25,10 @@ export interface Variation {
   radius?: number;
   yaw?: number;
   halt?: boolean;
-  legs?: 'old' | 'core';
 }
 
 /** Only a go-there point moves, along a path at a stroll; nobody scripts a step. */
-export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false, legs }: Variation = {}): Scenario {
+export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variation = {}): Scenario {
   return {
     id: 'stroll',
     title: 'Stroll (a go-there point)',
@@ -46,7 +45,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false, legs }: V
         report,
         props: () => [],
         // (come to rest at the point where it stopped)
-        done: () => !!walker && walker.gait.settled && walker.pose.com(new Vector3()).setY(0).distanceTo(point) < 0.15,
+        done: () => !!walker && walker.locomotion.settled && walker.pose.com(new Vector3()).setY(0).distanceTo(point) < 0.15,
         script: (h) =>
           function* () {
             walker = h;
@@ -65,7 +64,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false, legs }: V
               // (after it, until it has long stopped)
               walkTo(h, { to: reported(report, 'go', point), speed: PACE * speed, until: timePassed(22, 'seconds') }),
             );
-            yield* parallel<Frame<World>>('all', idle(h, { legs }), tasks);
+            yield* parallel<Frame<World>>('all', idle(h), tasks);
           },
       };
     },
@@ -76,7 +75,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false, legs }: V
  * A walk to a point on the floor (and a facing there), or `within` reach of it facing it, from
  * standing at the origin facing +Z: judged as a stroll, done once the walk has ended there.
  */
-export function walkThere(to: Vector3, face?: number, within = 0, legs?: Variation['legs']): Scenario {
+export function walkThere(to: Vector3, face?: number, within = 0): Scenario {
   return {
     id: 'stroll',
     title: 'Walk there',
@@ -91,10 +90,10 @@ export function walkThere(to: Vector3, face?: number, within = 0, legs?: Variati
         report: new Report(),
         props: () => [],
         done: () => {
-          if (!ended || !walker?.gait.settled) return false;
+          if (!ended || !walker?.locomotion.settled) return false;
           const com = walker.pose.com(new Vector3()).setY(0);
           const toward = within > 0 ? Math.atan2(to.x - com.x, to.z - com.z) : face;
-          const turned = toward === undefined || Math.abs(Math.atan2(Math.sin(walker.gait.facing - toward), Math.cos(walker.gait.facing - toward))) < 0.15;
+          const turned = toward === undefined || Math.abs(Math.atan2(Math.sin(walker.locomotion.facing - toward), Math.cos(walker.locomotion.facing - toward))) < 0.15;
           return turned && Math.abs(com.distanceTo(to) - within) < 0.15;
         },
         script: (h) =>
@@ -102,7 +101,7 @@ export function walkThere(to: Vector3, face?: number, within = 0, legs?: Variati
             walker = h;
             yield* parallel<Frame<World>>(
               'all',
-              idle(h, { legs }),
+              idle(h),
               function* () {
                 yield* walkTo(h, { to, face, within })();
                 ended = true;

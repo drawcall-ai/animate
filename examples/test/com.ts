@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { massFor } from '@drawcall/animate';
+import { massFor } from '../../packages/animate/src/humanoid/skeleton';
 import { jointOf } from '../src/joints';
 import type { Actor } from './frame';
 

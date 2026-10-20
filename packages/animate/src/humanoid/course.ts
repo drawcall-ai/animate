@@ -5,11 +5,11 @@ import { live, type Live, type Placement } from '../core/goal';
 import { exp, log } from '../core/rotation';
 import { minimumJerk } from '../core/math';
 
-/** A leg's duration (s) and place in the course's frame, read every sub-step.
+/** A waypoint's duration (s) and place in the course's frame, read every sub-step.
  * A goal may also read the fixed course start and the preceding place in that frame.
  * `still` pauses at the preceding place.
  */
-export type Leg<W = unknown> = [seconds: number, to: Placement | ((f: Frame<W>, start: Required<Placement>, last: Required<Placement>) => Placement)];
+export type Waypoint<W = unknown> = [seconds: number, to: Placement | ((f: Frame<W>, start: Required<Placement>, last: Required<Placement>) => Placement)];
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
 export interface Course<W = unknown> {
@@ -19,37 +19,37 @@ export interface Course<W = unknown> {
 
 /**
  * A course through `frame` (a moving frame: a placement with no scale of its own) from where `item`
- * is when it is first read, through its legs' placements (distances × `scale`) as one smooth curve
+ * is when it is first read, through its waypoints' placements (distances × `scale`) as one smooth curve
  * (centripetal Catmull–Rom, the rotation turned along it), timed by one minimum-jerk profile over
- * its whole length that takes as long as its legs together, `pace` times as fast as they say: it
+ * its whole length that takes as long as its waypoints together, `pace` times as fast as they say: it
  * passes its placements on the way without stopping and comes to rest only at the end — and where
- * a leg holds still (`still`) or the way turns back on itself (by more than 135°: the hand
+ * a waypoint holds still (`still`) or the way turns back on itself (by more than 135°: the hand
  * stops to reverse), it comes to rest there and sets off again.
  * It sets off `delay` s after it is first read.
  */
-export function course<W>(item: Item, frame: Live<Placement, W>, legs: readonly Leg<W>[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
+export function course<W>(item: Item, frame: Live<Placement, W>, waypoints: readonly Waypoint<W>[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
   let start = NaN;
   let runs: Run[] = [];
   let from: Required<Placement> | undefined;
-  const moving = legs.some(([, to]) => typeof to === 'function');
-  const total = legs.reduce((sum, [seconds]) => sum + seconds / pace, 0);
+  const moving = waypoints.some(([, to]) => typeof to === 'function');
+  const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
   const to = (f: Frame<W>): Required<Placement> => {
     const place = live(frame, f);
     const at = { position: place.position, quaternion: place.quaternion ?? IDENTITY };
     if (from === undefined) {
       start = f.time;
       const inverse = at.quaternion.clone().invert();
-      // (where it sets out from, in the frame unscaled: the legs' placements are scaled)
+      // (where it sets out from, in the frame unscaled: the waypoints' placements are scaled)
       from = { position: item.current.position.clone().sub(at.position).applyQuaternion(inverse).divideScalar(scale), quaternion: inverse.multiply(item.current.quaternion) };
     }
     if (!runs.length || moving) {
       const stops: Required<Placement>[] = [from];
-      for (const [, leg] of legs) {
+      for (const [, point] of waypoints) {
         const last = stops[stops.length - 1];
-        const next = typeof leg === 'function' ? leg(f, from, last) : leg;
+        const next = typeof point === 'function' ? point(f, from, last) : point;
         stops.push({ position: next.position.clone(), quaternion: (next.quaternion ?? last.quaternion).clone() });
       }
-      runs = runsOf(stops, legs.map(([seconds]) => seconds / pace));
+      runs = runsOf(stops, waypoints.map(([seconds]) => seconds / pace));
     }
     let t = Math.max(0, f.time - start - delay);
     let i = 0;
@@ -63,7 +63,7 @@ export function course<W>(item: Item, frame: Live<Placement, W>, legs: readonly 
   return { to, over: (f) => !Number.isNaN(start) && f.time - start >= delay + total };
 }
 
-/** a leg that stays where the one before ended: a moment held still */
+/** a waypoint that stays where the one before ended: a moment held still */
 export const still = (_f: Frame, _start: Required<Placement>, last: Placement) => last;
 
 /** a stretch of a course gone without stopping: how long it takes (s), and where it is a share `s` of its length along */
@@ -77,7 +77,7 @@ const TURN = 0.1;
 /** how sharply the way may bend at a placement and still be passed without stopping (rad): a hand sweeps round a bend, but stops to go back the way it came */
 const REVERSE = (3 * Math.PI) / 4;
 
-/** the course through `stops`, each leg taking `seconds`, cut into runs where it holds still or turns back on itself */
+/** the course through `stops`, each waypoint taking `seconds`, cut into runs where it holds still or turns back on itself */
 function runsOf(stops: readonly Required<Placement>[], seconds: readonly number[]): Run[] {
   const runs: Run[] = [];
   let first = 0;
@@ -106,7 +106,7 @@ function stay(at: Required<Placement>, seconds: number): Run {
   return { seconds, at: (_, out) => (out.position.copy(at.position), out.quaternion.copy(at.quaternion), out) };
 }
 
-/** how long a leg from `a` to `b` is (m): its way and its turn (`TURN`) */
+/** how long the way from `a` to `b` is (m): its way and its turn (`TURN`) */
 function lengthOf(a: Required<Placement>, b: Required<Placement>): number {
   return a.position.distanceTo(b.position) + TURN * a.quaternion.angleTo(b.quaternion);
 }

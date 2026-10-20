@@ -138,7 +138,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           const props: Prop[] = [...armoury(top, stand, wall, rack, rise), ...all.flatMap(drawn), ...pieces.flatMap(drawn)];
           const body = knight?.h;
           const hips = body ? body.pose.position(INDEX.hips).clone().addScaledVector(UP, 0.05 * body.proportions.scale) : new Vector3(0, -10, 0);
-          props.push(...strap(gear.buckle.item.current.position, gear.tongue.item.current.position, hips, body?.gait.facing ?? 0, { height: top, away: new Vector3(0, 0, 1) }));
+          props.push(...strap(gear.buckle.item.current.position, gear.tongue.item.current.position, hips, body?.locomotion.facing ?? 0, { height: top, away: new Vector3(0, 0, 1) }));
           return props;
         },
         solids: () => all.flatMap(solidsOf),
@@ -184,7 +184,7 @@ function armed(h: Humanoid<World>, gear: { buckle: Gear; tongue: Gear; scabbard:
     h.holding.left?.item === gear.shield.item &&
     h.holding.right?.item === gear.lance.item &&
     Math.hypot(hips.x - yard.x, hips.z - yard.z) < 0.3 &&
-    h.gait.settled
+    h.locomotion.settled
   );
 }
 

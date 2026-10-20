@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Carrier, createWorld, handTo, idle, lookAt, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { createWorld, handTo, idle, lookAt, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { Carrier } from '../../../packages/animate/src/core/carrier';
 import type { Prop, Scenario } from '../scenario';
 import { Report, reported } from '../report';
 

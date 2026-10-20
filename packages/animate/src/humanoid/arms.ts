@@ -31,17 +31,17 @@ export const ARM_REACH = 0.95;
 
 /**
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
- * steps as a pendulum (`h.gait`'s stride), opposite the legs, wider and bent walking faster; the
+ * steps as a pendulum (`h.locomotion`'s stride), opposite the legs, wider and bent walking faster; the
  * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
  * task let go of swings back into it. A hand holding any item follows its grip until release, including supported and worn items.
  */
 export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
   return function* () {
     const goals = new Map<number, TrackedRotation>();
-    let phase = h.gait.phase;
+    let phase = h.locomotion.phase;
     yield* action<Frame<W>>({
       update: (f) => {
-        const g = h.gait;
+        const g = h.locomotion;
         // Recalled pendulum floor: at least 0.25 s between arm reversals, including entrainment.
         phase += clamp(wrapAngle(g.phase - phase), 0, 4 * Math.PI * f.dt);
         const lead = lerp(LEAD.walk, LEAD.run, g.run);

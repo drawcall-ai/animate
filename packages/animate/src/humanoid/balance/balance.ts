@@ -5,11 +5,11 @@ import { follow } from '../../core/follow';
 import type { Behaviour } from '../../core/goal';
 import { clampRotation } from '../../core/limits';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
-import { createAsks, takeAsks, type Asks } from '../asks';
+import { createAsks, takeAsks, type Asks, type Stance } from '../../core/asks';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { forwardOf, smoothstep, softMin, yawOf } from '../../core/math';
-import { defaultStance, OVER_ANKLES, type Stance } from '../stance';
+import { defaultStance, OVER_ANKLES } from '../stance';
 import { seedOf } from '../../core/random';
 import { Life } from './life';
 import { Carriage } from './carriage';
@@ -19,33 +19,6 @@ import { stepFeet } from './steps';
 import { checkFeet, checkSupport } from './checks';
 
 
-/** Walk state: balance owns the motion; walkTo publishes and clears its arrival estimate. */
-export interface Gait {
-  /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
-  phase: number;
-  /** 0 standing … 1 walking, 0 walking … 1 running */
-  walk: number;
-  run: number;
-  /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
-  facing: number;
-  /** Core pursuit heading half a second ahead, for anticipatory gaze. */
-  facingAhead?: number;
-  velocity: Vector3;
-  /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
-  eta: number;
-  /** a walk is under way */
-  moving: boolean;
-  /** come to rest: no walk under way, both feet planted a while and none wanting to step */
-  settled: boolean;
-  /** seconds standing on planted feet since the current walk started; balance resets it on a new go request */
-  planted: number;
-  /** the thorax's rotation with the stride (rad, + to the left) */
-  thoraxYaw: number;
-  /** the requested quiet stance displacement from the centred stance (m, world) */
-  quiet: Vector3;
-}
-
-export const createGait = (facing: number): Gait => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, planted: 0, thoraxYaw: 0, quiet: new Vector3() });
 
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
 export const BOW = { accel: 6, speed: 1.2 };
@@ -64,7 +37,7 @@ export const SETTLED = 0.4;
  * (`lower`, `bow`), stands in `stance` (and `asks.stance` over it); the pelvis bobs, sways and
  * lists with the steps, the thorax counter-rotates, the trunk nods; the feet strike with the heel,
  * roll and push off; arriving it squares the feet into the stance. It reads and clears `h.asks` at
- * the start of every sub-step, and writes `h.feet` and `h.gait`. Put it first: it writes the root.
+ * the start of every sub-step, and writes `h.feet` and `h.locomotion`. Put it first: it writes the root.
  */
 export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour<W> {
   return function* () {
@@ -155,7 +128,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
         if (adjusted) SIDES.forEach((_, s) => { if (c.steps[s].swing) swingPose(f, c, s, feet[s]); });
         SIDES.forEach((side, s) => solveLeg(f, c, side, feet[s]));
 
-        const g = h.gait;
+        const g = h.locomotion;
         [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
         g.planted = go === lastGo && !c.moving && c.steps.every((st) => !st.swing) ? g.planted + f.dt : 0;
         lastGo = go;

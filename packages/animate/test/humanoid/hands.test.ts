@@ -2,7 +2,8 @@ import { createWorld, type World } from '../../src/humanoid/world';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { approach, carry, grab, handTo, hold, idle, INDEX, Item, reachFor, release, when, type Behaviour, type Frame, type Leg } from '../../src';
+import { approach, carry, grab, handTo, hold, idle, INDEX, Item, release, when, type Behaviour, type Frame, type Waypoint } from '../../src';
+import { reachFor } from '../../src/humanoid/hands/reach';
 import { gazeOff } from '../../src/core/gaze';
 import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
@@ -66,7 +67,7 @@ describe('grab', () => {
     for (let tick = 0; tick < 600 && Number.isNaN(stood); tick++) {
       h.update(1 / 60);
       const time = (tick + 1) / 60;
-      walking ||= h.gait.velocity.length() > 0.5;
+      walking ||= h.locomotion.velocity.length() > 0.5;
       if (gazeOff(h.gazer, h.pose, load.current.position) >= 0.2) looking = NaN;
       else if (Number.isNaN(looking)) looking = time;
       h.feet.forEach((foot, s) => {
@@ -78,7 +79,7 @@ describe('grab', () => {
         }
         was.phase = foot.phase;
       });
-      if (walking && !h.gait.moving) stood = time;
+      if (walking && !h.locomotion.moving) stood = time;
     }
     expect(stood).toBeGreaterThan(touchdown);
     // research-contact §3: derived acceptance bounds, not measured human thresholds.
@@ -99,8 +100,8 @@ describe('grab', () => {
     for (let tick = 0; tick < 240; tick++) {
       taking.update(1 / 60);
       walking.update(1 / 60);
-      if (taking.gait.eta <= 1) break;
-      if (!Number.isFinite(taking.gait.eta)) continue;
+      if (taking.locomotion.eta <= 1) break;
+      if (!Number.isFinite(taking.locomotion.eta)) continue;
       samples++;
       for (const side of ['left', 'right'] as const) for (const joint of ['UpperArm', 'LowerArm', 'Hand'] as const) {
         const bone = INDEX[`${side}${joint}`];
@@ -116,7 +117,7 @@ describe('grab', () => {
     const load = box(new Vector3(0, 0.88, 0.61));
     let finished = false;
     const h = standing((h) => [function* () {
-      yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { face: 0, stand: { ahead: 1.05 * h.proportions.armLength } })();
+      yield* grab(h, { left: [load, 'left'], right: [load, 'right'] }, { face: 0, spot: { ahead: 1.05 * h.proportions.armLength } })();
       finished = true;
     }]);
     let knee = 0, bow = 0;
@@ -155,7 +156,7 @@ describe('grab', () => {
               const hand = onHips(h, 'right');
               if (Number.isNaN(at.hands) && f.time > 0.5 && hand.distanceTo(was) * 60 > 0.15) at.hands = f.time;
               was.copy(hand);
-              if (Number.isNaN(at.stood) && f.time > 1 && h.gait.velocity.length() < 0.05) at.stood = f.time;
+              if (Number.isNaN(at.stood) && f.time > 1 && h.locomotion.velocity.length() < 0.05) at.stood = f.time;
             },
           }),
         );
@@ -182,7 +183,7 @@ describe('grab low', () => {
           update: (f) => {
             const hips = f.prev.position(INDEX.hips).y;
             standing = Number.isNaN(standing) ? hips : standing;
-            const v = h.gait.velocity.length();
+            const v = h.locomotion.velocity.length();
             if (v > 0.3) walked = true;
             if (walked && Number.isNaN(at.arrived) && v < 0.05) at.arrived = f.time;
             if (Number.isNaN(at.down) && hips < standing - 0.1) at.down = f.time;
@@ -304,7 +305,7 @@ describe('two hands', () => {
   it('carrying an item each: the left goes a moment after the right', () => {
     const a = box(new Vector3(0.2, 1.0, 0.35));
     const b = box(new Vector3(-0.2, 1.0, 0.35));
-    const legs = (x: number): Leg[] => [[0.8, { position: new Vector3(x, 1.25, 0.4) }], [0.8, { position: new Vector3(x, 1.0, 0.3) }]];
+    const legs = (x: number): Waypoint[] => [[0.8, { position: new Vector3(x, 1.25, 0.4) }], [0.8, { position: new Vector3(x, 1.0, 0.3) }]];
     // (the items' speeds: each where its hands carry it)
     const v: Record<Side, number[]> = { left: [], right: [] };
     speeds(

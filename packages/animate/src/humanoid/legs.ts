@@ -3,12 +3,12 @@ import type { Proportions } from './proportions';
 import { INDEX, SIDES } from './bones';
 import type { JointCycle } from '../core/legs/cycle';
 import type { LegChain } from '../core/legs/legs';
-import type { LegGait } from '../core/legs/gait';
+import type { Gait } from '../core/legs/gait';
 import { powerGait } from '../core/legs/schedule';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992). */
 // Tuned in the spike: below 0.5 m/s shorten the stride instead of slowing its cadence.
-export const humanGait = (p: Proportions): LegGait => powerGait(p.hipHeight, 0.5, [0, 0.5], 2.49, 0.79, [0.013, 0.013]);
+export const humanGait = (p: Proportions): Gait => powerGait(p.hipHeight, 0.5, [0, 0.5], 2.49, 0.79, [0.013, 0.013]);
 
 /** Recalled: the cycles below follow normal free walking, % of the cycle from heel strike, toe-off at 62% (recalled: Perry 1992; Winter 2009, Biomechanics and Motor Control, App. A) */
 const cycle = (keys: [number, number][]): JointCycle => ({ duty: 0.62, keys });

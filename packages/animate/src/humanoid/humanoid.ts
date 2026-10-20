@@ -1,137 +1,87 @@
 import { Quaternion, Vector3 } from 'three';
 import { NECK_PITCH } from './profile/limits';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Body, type Frame } from '../core/body';
-import type { Item } from '../core/carrier';
+import { Body, type BodyOptions } from '../core/body';
 import { solveChain } from '../core/chain';
 import type { Gazer } from '../core/gaze';
 import type { Behaviour } from '../core/goal';
-import { Pose, type ReadonlyPose } from '../core/pose';
-import { createAsks, type Asks } from './asks';
-import { createGait, type Gait } from './balance/balance';
+import { Pose } from '../core/pose';
+import type { Dressed } from '../core/worn';
 import { footRotation, type Foot } from './balance/foot';
 import { legOf } from './balance/legs';
 import { STANDING_REACH } from './balance/posture';
-import { INDEX, SIDES, type Side } from './bones';
-import { forwardOf, leftOf, yawOf } from '../core/math';
+import { INDEX, SIDES } from './bones';
+import { forwardOf, leftOf } from '../core/math';
 import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
 import { gazeAsks } from './reach-posture';
 import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
-import { load, dress, type Bearing } from './worn';
 import { followHeld } from './hands/hold';
-import type { Dressed } from './worn';
 
-export interface HumanoidOptions<W> {
-  world?: W;
-  /** Enable final-pose checks and read-only watchers. Default off. */
-  dev?: boolean;
+export interface HumanoidOptions<W> extends Pick<BodyOptions<W>, 'world' | 'dev'> {
   /** where the body stands (on the floor, y = 0) */
   position?: { x: number; z: number };
   /** its facing about +Y (0 faces +Z) */
   yaw?: number;
-  /** what it wears from the start, for its proportions (harness it stands in: worn and borne from the first sub-step, where each piece sits on its bone) */
+  /** what it wears from the start, placed for its proportions (`BodyOptions.wearing`) */
   wearing?: (p: Proportions) => readonly Dressed[];
 }
 
 /**
  * A @pmndrs/viverse character model as a body stepping `behaviour` (made for this humanoid: it
  * may read the rig and the proportions), the model posed after every update. The body starts
- * standing relaxed in its stance where `options` puts it. After the behaviour, every sub-step, it
- * moves the items it wears and loads what it holds and wears onto its bones (their mass counts in
- * its centre of mass). One Humanoid per model.
+ * standing relaxed in its stance where `options` puts it, its hands `left` and `right`. One
+ * Humanoid per model.
  */
-export class Humanoid<W = unknown> {
+export class Humanoid<W = unknown> extends Body<W> {
   readonly rig: Rig;
   /** measured from the model's rest pose */
   readonly proportions: Proportions;
-  /** what the tasks ask of `balance` (see `Asks`) */
-  readonly asks: Asks = createAsks();
   /** where the feet stand or, stepping, land [left, right]: `balance`'s output */
   readonly feet: [Foot, Foot];
-  /** Shared walk state: balance reports motion, walkTo owns the arrival estimate. */
-  readonly gait: Gait;
-  /** the neck and the eyes, for `lookAt` */
-  readonly gazer: Gazer;
-  /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
-  get worn() { return this.body.worn; }
-  /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it (kept by the body) */
-  readonly borne = new Map<Item, Bearing>();
-  /** what each hand holds, by which grip (`closeHand`, `openHand`) */
-  readonly holding: Record<Side, { item: Item; grip: string } | null> = { left: null, right: null };
-  private readonly body: Body<W>;
-  private readonly ground = new Vector3();
+  declare readonly gazer: Gazer;
 
   constructor(
     readonly model: CharacterModel,
     behaviour: (h: Humanoid<W>) => Behaviour<W>,
     options: HumanoidOptions<W> = {},
   ) {
-    const rig = (this.rig = new Rig(model));
-    const p = (this.proportions = rig.proportions);
-    const yaw = options.yaw ?? 0;
+    const rig = new Rig(model);
+    const p = rig.proportions, yaw = options.yaw ?? 0;
     const start = standing(p, new Pose(rig.skeleton), options.position ?? { x: 0, z: 0 }, yaw);
-    this.feet = start.feet;
-    this.gait = createGait(yaw);
     const eyes = rig.points.eyes;
+    let made: Behaviour<W> | null = null;
+    super(rig.skeleton, function* () {
+      if (!made) throw new Error('the humanoid is not made yet');
+      yield* made();
+    }, {
+      world: options.world, dev: options.dev, pose: start.pose, scale: p.scale, wearing: options.wearing?.(p),
+      hands: { bones: { left: INDEX.leftHand, right: INDEX.rightHand }, hold: (body) => followHeld(humanoid(body)) },
+    });
     this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180,
-      lead: (pose, point) => gazeAsks(this, pose, point),
-    };
-    const worn = dress(this, start.pose, options.wearing?.(p) ?? []);
-    const moveHeld = followHeld(this);
-    const humanoid = this;
-    this.body = new class extends Body<W> {
-      protected afterWorn(f: Frame<W>) { moveHeld(f); load(humanoid, f); }
-    }(
-      rig.skeleton,
-      behaviour(this),
-      { world: options.world, pose: start.pose, dev: options.dev, scale: p.scale, worn },
-    );
-    rig.write(this.body.pose, 0);
-  }
-
-  get scale(): number { return this.proportions.scale; }
-
-  /** Development problems from checks and watchers. */
-  get log() { return this.body.log; }
-
-  /** Development measurements reported only (see `Dev.notes`). */
-  get notes() { return this.body.notes; }
-
-  /** Current sub-step, for reading live goals when a behaviour starts. */
-  get frame(): Frame<W> { return this.body.frame; }
-
-  /** the last final pose */
-  get pose(): ReadonlyPose {
-    return this.body.pose;
-  }
-
-  /** the body's facing about +Y (0 faces +Z): the hips' */
-  get yaw(): number {
-    return yawOf(this.pose.local(0));
-  }
-
-  /** the body's ground velocity over the last sub-step: its centre of mass's, horizontal (m/s); read-only */
-  get velocity(): Readonly<Vector3> {
-    const { prev, prev2, dt } = this.body.frame;
-    const v = prev.com(this.ground).sub(prev2.com(_v)).divideScalar(dt);
-    return v.setY(0);
-  }
-
-  /** a copy of the last final pose, as other bodies read it */
-  snapshot(): Pose {
-    return new Pose(this.rig.skeleton).copy(this.pose);
+      lead: (pose, point) => gazeAsks(this, pose, point) };
+    // (facing as given, not as read back off the pose)
+    this.locomotion.facing = yaw;
+    this.rig = rig;
+    this.proportions = p;
+    this.feet = start.feet;
+    made = behaviour(this);
+    rig.write(this.pose, 0);
   }
 
   /** Advances the body by `dt` seconds and poses the model; a VRM is updated by `dt` too. */
   update(dt: number) {
-    this.body.update(dt);
-    this.rig.write(this.body.pose, dt);
+    super.update(dt);
+    this.rig.write(this.pose, dt);
   }
 }
 
-const _v = new Vector3();
+/** `body` as the humanoid it is */
+function humanoid<W>(body: Body<W>): Humanoid<W> {
+  if (!(body instanceof Humanoid)) throw new Error('not a humanoid');
+  return body;
+}
 
 /**
  * How far the eyes turn in the head comfortably (rad): down, the preferred declination of the line

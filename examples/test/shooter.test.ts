@@ -34,12 +34,12 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
     const root = player.root;
     if (!root) throw new Error('missing root');
     lag = Math.max(lag, Math.hypot(h.pose.position(0).x - root.position.x, h.pose.position(0).z - root.position.z));
-    const speed = h.gait.velocity.length();
+    const speed = h.locomotion.velocity.length();
     if (`${input.move.x},${input.move.z},${input.sprint},${input.ads}` !== lastMove) [moved, lastMove] = [sim.t, `${input.move.x},${input.move.z},${input.sprint},${input.ads}`];
     // (once the speed has settled after a change of keys: 10 m/s² takes at most 0.5 s)
     if (speed > 0.5 && sim.t - moved > 0.5) {
-      facing = Math.max(facing, Math.abs(wrapAngle(h.gait.facing - input.aimYaw)));
-      const local = Math.atan2(h.gait.velocity.x, h.gait.velocity.z) - input.aimYaw;
+      facing = Math.max(facing, Math.abs(wrapAngle(h.locomotion.facing - input.aimYaw)));
+      const local = Math.atan2(h.locomotion.velocity.x, h.locomotion.velocity.z) - input.aimYaw;
       const asked = Math.atan2(input.move.x, input.move.z);
       if (input.move.x || input.move.z) heading = Math.max(heading, Math.abs(wrapAngle(local - asked)));
     }
@@ -58,7 +58,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
     if (input.ads && sim.t - steady > 0.5 && sim.t - lastFire > 0.5) {
       const wanted = new Vector3(Math.sin(input.aimYaw) * Math.cos(input.aimPitch), Math.sin(input.aimPitch), Math.cos(input.aimYaw) * Math.cos(input.aimPitch));
       sight = Math.max(sight, new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(wanted));
-      if (h.gait.walk < 0.01) {
+      if (h.locomotion.walk < 0.01) {
         const eye = player.eyes();
         const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(eye);
         sightLine = Math.max(sightLine, at.addScaledVector(wanted, -at.dot(wanted)).length());
@@ -71,7 +71,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
       const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(player.eyes());
       if (Math.hypot(at.x, at.y) <= 0.01 && new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(new Vector3(0, 0, 1)) < 2 * Math.PI / 180) raised = Math.min(raised, sim.t - 13);
     }
-    if (input.ads && sim.t - steady > 0.5 && sim.t - lastFire > 0.5 && h.gait.walk < 0.01) {
+    if (input.ads && sim.t - steady > 0.5 && sim.t - lastFire > 0.5 && h.locomotion.walk < 0.01) {
       const sight = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).project(camera);
       expect(Math.hypot(sight.x, sight.y)).toBeLessThan(0.035);
     }
@@ -93,7 +93,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
       expect(player.eyes().y - rifle.current.position.y).toBeGreaterThan(0.2);
     }
     planted = contacts[0];
-    if (h.gait.velocity.length() > 0.5 && h.gait.velocity.length() < 1.5 && sim.t < 16) {
+    if (h.locomotion.velocity.length() > 0.5 && h.locomotion.velocity.length() < 1.5 && sim.t < 16) {
       walking++;
       // (walking upright: steady walking, not the moment of a reversal)
       if (sim.t - moved > 0.5) low = Math.min(low, h.pose.position(0).y / h.proportions.hipHeight);
@@ -181,8 +181,8 @@ it('ADS overrides held sprint and keeps both grips during the raise', () => {
       expect(h.pose.position(bone).distanceTo(target)).toBeLessThanOrEqual(0.01);
     }
   }
-  expect(sim.actors[0].gait.velocity.length()).toBeLessThanOrEqual(0.91);
-  expect(sim.actors[0].gait.run).toBe(0);
+  expect(sim.actors[0].locomotion.velocity.length()).toBeLessThanOrEqual(0.91);
+  expect(sim.actors[0].locomotion.run).toBe(0);
   expect(sim.actors[0].log).toEqual([]);
 });
 
@@ -291,6 +291,6 @@ it('sprinting cancels a reload before the magazine is out, and the hand goes bac
   const h = sim.actors[0];
   expect(player.status!().steps).toEqual(['to magazine', 'cancelled']);
   expect(h.holding.left?.grip).toBe('foregrip');
-  expect(h.gait.run).toBeGreaterThan(0.5);
+  expect(h.locomotion.run).toBeGreaterThan(0.5);
   expect(h.log).toEqual([]);
 });

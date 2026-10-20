@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { INDEX } from '../../packages/animate/src/humanoid/bones';
+import { legSystem } from '../../packages/animate/src/humanoid/idle';
 import { stroll, walkThere } from '../src/scenarios/stroll';
 import { checks, failed, measure as metricsOf } from './metrics';
 import type { Frame } from './frame';
@@ -10,13 +11,6 @@ import { SCENARIOS } from '../src/scenarios';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { knownFailure } from '../scripts/run';
-
-const path = vi.hoisted((): { legs?: 'old' | 'core' } => ({}));
-vi.mock('../../packages/animate/src/humanoid/idle', async (original) => {
-  const actual = await original<typeof import('../../packages/animate/src/humanoid/idle')>();
-  // A driven body (a player) owns its root: only the balance path is switched.
-  return { ...actual, idle: ((h, options = {}) => actual.idle(h, { ...options, legs: typeof options.legs === 'object' ? options.legs : path.legs })) satisfies typeof actual.idle };
-});
 
 // Core-only migration scaffolding: exact remaining failures, tagged with their implementing stage.
 // The complete straight stroll below has no expected failures; old-path checks remain strict.
@@ -43,7 +37,7 @@ const coreFailures: Record<string, { checks: Record<string, MigrationStage | rea
 };
 
 function measure(sc: Scenario, legs?: 'old' | 'core') {
-  path.legs = legs;
+  legSystem.path = legs ?? 'old';
   const sim = new Simulation(sc, undefined, true);
   const hash = createHash('sha256');
   const standing = sim.actors.map(() => 0);
@@ -52,10 +46,10 @@ function measure(sc: Scenario, legs?: 'old' | 'core') {
     sim.step();
     sim.actors.forEach((h, i) => {
       // Count non-go standing lifts, including balancing and squaring adjustments.
-      if (!before[i].go && !h.gait.moving && h.gait.velocity.length() < 0.05) {
+      if (!before[i].go && !h.locomotion.moving && h.locomotion.velocity.length() < 0.05) {
         h.feet.forEach((foot, s) => { if (before[i].phases[s] === 'planted' && foot.phase === 'swing') standing[i]++; });
       }
-      hash.update(JSON.stringify([h.pose.position(0), h.pose.skeleton.bones.map((_, b) => [h.pose.local(b), h.pose.load(b)]), h.feet, h.gait]));
+      hash.update(JSON.stringify([h.pose.position(0), h.pose.skeleton.bones.map((_, b) => [h.pose.local(b), h.pose.load(b)]), h.feet, h.locomotion]));
     });
   };
   let error: string | undefined;
@@ -91,7 +85,7 @@ for (const sc of SCENARIOS) {
 }
 
 function straight(legs: 'old' | 'core') {
-  path.legs = legs;
+  legSystem.path = legs;
   const sim = new Simulation(stroll({ radius: Infinity }), undefined, true);
   const previous = ['planted', 'planted'];
   const contacts = new Map<number, Vector3>();

@@ -8,6 +8,13 @@ import { wrapAngle, yawOf } from '../../src/core/math';
 import { Legs } from '../../src/core/legs/legs';
 import { humanGait, humanLegs } from '../../src/humanoid/legs';
 import { createSkeletonModel } from '../../src/humanoid/model';
+import { legSystem } from '../../src/humanoid/idle';
+
+/** `idle` on the old or the core legs (the migration's switch, read as `idle` is called) */
+function idleOn(h: Humanoid, legs: 'old' | 'core') {
+  legSystem.path = legs;
+  try { return idle(h); } finally { legSystem.path = 'old'; }
+}
 
 const dt = 1 / 60;
 
@@ -33,7 +40,7 @@ describe('balance', () => {
     const start = h.feet.map((f) => f.position.clone());
     for (let k = 0; k < 120; k++) h.update(dt);
     expect(h.feet.every((f, s) => f.phase === 'planted' && f.position.equals(start[s]))).toBe(true);
-    expect(h.gait.settled).toBe(true);
+    expect(h.locomotion.settled).toBe(true);
     // (cleared by balance before each sub-step's tasks ask again)
     expect(asked.every((x) => x === 0)).toBe(true);
   });
@@ -43,16 +50,16 @@ describe('balance', () => {
     let arrived = -1;
     const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
-        yield* parallel<Frame>('all', idle(h, { legs }), function* () {
+        yield* parallel<Frame>('all', idleOn(h, legs), function* () {
           yield* walkTo(h, { to, face: 0.5 })();
-          arrived = h.gait.moving ? -2 : 1;
+          arrived = h.locomotion.moving ? -2 : 1;
         });
       },
     );
     for (let k = 0; k < 8 * 60 && arrived < 0; k++) h.update(dt);
     expect(arrived).toBe(1);
     expect(h.pose.com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
-    expect(Math.abs(h.gait.facing - 0.5)).toBeLessThan(0.15);
+    expect(Math.abs(h.locomotion.facing - 0.5)).toBeLessThan(0.15);
     for (const [s, f] of h.feet.entries()) expect(Math.abs(f.yaw - (0.5 + (s === 0 ? 0.12 : -0.12)))).toBeLessThan(0.1);
   });
 
@@ -60,15 +67,15 @@ describe('balance', () => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = false;
     const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-      yield* parallel<Frame>('all', idle(h, { legs: 'core' }), function* () {
+      yield* parallel<Frame>('all', idleOn(h, 'core'), function* () {
         yield* walkTo(h, { to })();
         arrived = true;
       });
     }, { dev: true });
     for (let k = 0; k < 8 * 60 && !arrived; k++) h.update(dt);
     expect(arrived).toBe(true);
-    expect(h.gait.moving).toBe(false);
-    expect(h.gait.settled).toBe(true);
+    expect(h.locomotion.moving).toBe(false);
+    expect(h.locomotion.settled).toBe(true);
     expect(h.pose.com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
     h.update(dt);
     expect(h.log).toEqual([]);
@@ -76,7 +83,7 @@ describe('balance', () => {
 
   it.each(['old', 'core'] as const)('%s bounds pelvis excursion and contact ringing in each steady stride and after stopping', (legs) => {
     const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-      yield* parallel<Frame>('all', idle(h, { legs }), walkTo(h, { to: new Vector3(0, 0, 12) }));
+      yield* parallel<Frame>('all', idleOn(h, legs), walkTo(h, { to: new Vector3(0, 0, 12) }));
     });
     const samples: { y: number; speed: number }[] = [];
     const contacts: number[] = [];
@@ -108,11 +115,11 @@ describe('balance', () => {
         }
         phases[s] = h.feet[s].phase;
       }
-      samples.push({ y: h.pose.position(0).y, speed: h.gait.velocity.length() });
+      samples.push({ y: h.pose.position(0).y, speed: h.locomotion.velocity.length() });
       const on = h.feet[0].phase === 'planted';
       if (on && !planted) contacts.push(tick);
       planted = on;
-      if (tick > 3 * 60 && h.gait.settled) settled = Math.min(settled, tick);
+      if (tick > 3 * 60 && h.locomotion.settled) settled = Math.min(settled, tick);
     }
     const range = (ys: number[]) => Math.max(...ys) - Math.min(...ys);
     const reversals = (ys: number[]) => {
@@ -163,24 +170,24 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('core arrives facing %s without
   const to = new Vector3(0, 0, 4);
   let arrived = false;
   const h = new Humanoid(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idle(h, { legs: 'core' }), function* () {
+    yield* parallel<Frame>('all', idleOn(h, 'core'), function* () {
       yield* walkTo(h, { to, face })();
       arrived = true;
     });
   }, { dev: true });
   const phases = h.feet.map((foot) => foot.phase);
   const landings: { yaw: number; error: number; t: number }[] = [];
-  let distance = 0, last = h.pose.com(new Vector3()).setY(0), facing = h.gait.facing, sign = 0, reversed = 0;
+  let distance = 0, last = h.pose.com(new Vector3()).setY(0), facing = h.locomotion.facing, sign = 0, reversed = 0;
   for (let tick = 0; tick < 12 * 60 && !arrived; tick++) {
     h.update(dt);
-    const delta = wrapAngle(h.gait.facing - facing);
+    const delta = wrapAngle(h.locomotion.facing - facing);
     if (!sign && Math.abs(delta) > 1e-6) sign = Math.sign(delta);
-    reversed += Math.max(0, -sign * delta); facing = h.gait.facing;
+    reversed += Math.max(0, -sign * delta); facing = h.locomotion.facing;
     const at = h.pose.com(new Vector3()).setY(0);
     distance += at.distanceTo(last);
     last = at;
     h.feet.forEach((foot, s) => {
-      if (foot.phase === 'planted' && phases[s] === 'swing' && h.gait.velocity.length() > 0.05) {
+      if (foot.phase === 'planted' && phases[s] === 'swing' && h.locomotion.velocity.length() > 0.05) {
         landings.push({ yaw: yawOf(h.pose.rotation(0)), error: Math.abs(wrapAngle(face + (s === 0 ? 0.12 : -0.12) - yawOf(h.pose.rotation(s === 0 ? INDEX.leftFoot : INDEX.rightFoot)))), t: tick * dt });
       }
       phases[s] = foot.phase;

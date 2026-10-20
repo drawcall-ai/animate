@@ -135,7 +135,7 @@ export class GaitKinematics {
   see(frame: Frame) {
     const { t, h, asked } = frame;
     const j = (n: string) => jointOf(h, n);
-    const yaw = h.gait.facing;
+    const yaw = h.locomotion.facing;
     const fwd = forwardOf(yaw);
     const left = leftOf(yaw);
     const angles = (l: Vector3, r: Vector3) => {
@@ -158,8 +158,8 @@ export class GaitKinematics {
     this.samples.push({
       t,
       yaw,
-      speed: Math.hypot(h.gait.velocity.x, h.gait.velocity.z),
-      ahead: h.gait.velocity.x * fwd.x + h.gait.velocity.z * fwd.z,
+      speed: Math.hypot(h.locomotion.velocity.x, h.locomotion.velocity.z),
+      ahead: h.locomotion.velocity.x * fwd.x + h.locomotion.velocity.z * fwd.z,
       hips: j('hips'),
       standing: h.proportions.hipHeight,
       chest: j('chest'),

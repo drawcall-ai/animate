@@ -1,16 +1,17 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action } from '@pmndrs/timeline';
-import { Body, course, Item, still, type Frame, type Leg } from '../../src';
+import { Body, Item, still, type Frame, type Waypoint } from '../../src';
+import { course } from '../../src/humanoid/course';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
 const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 
-/** where an item carried along `legs` from the origin is at each sub-step, and when its course is over */
-function sampled(legs: Leg[], seconds: number) {
+/** where an item carried along `waypoints` from the origin is at each sub-step, and when its course is over */
+function sampled(waypoints: Waypoint[], seconds: number) {
   const item = new Item(new Vector3(), new Quaternion(), {});
-  const c = course(item, WORLD, legs);
+  const c = course(item, WORLD, waypoints);
   const path: { t: number; position: Vector3; quaternion: Quaternion; over: boolean }[] = [];
   const body = new Body(leg(), function* () {
     yield* action<Frame>({ update: (f) => void path.push({ t: f.time - STEP, ...c.to(f), over: c.over(f) }) });

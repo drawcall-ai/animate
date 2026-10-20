@@ -1,9 +1,11 @@
-import { humanGait, humanLegs } from '@drawcall/animate';
+import { humanGait, humanLegs } from '../../../packages/animate/src/humanoid/legs';
 import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, HORSE_WALK, Legs, Pose, createWorld, horseLegs, minimumJerk, yawOf, type Frame, type LegGait, type ReadonlyPose, type World } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, Legs, Pose, createWorld, yawOf, type Frame, type Gait, type ReadonlyPose, type World } from '@drawcall/animate';
+import { HORSE_WALK, horseLegs } from '../../../packages/animate/src/horse/legs';
+import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
 
@@ -74,7 +76,7 @@ export function legsHorse(): Scenario {
     description: 'Two horses: walk and trot along scripted roots. No balance.',
     stage: (dev = false) => {
       const engines: Legs[] = [];
-      const make = (gait: LegGait, pace: number, x: number) => {
+      const make = (gait: Gait, pace: number, x: number) => {
         const pose = new Pose(HORSE_SKELETON);
         // Tuned: 8 cm reach reserve for the fixed root through stance and breakover.
         const route = scriptedRoot(1.32, pace, new Vector3(x, 0, 0));

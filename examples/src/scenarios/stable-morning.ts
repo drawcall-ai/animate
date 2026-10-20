@@ -1,11 +1,8 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import {
-  Body, HORSE_SKELETON, Item, Pose, Rope,
-  place, facingAt, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle,
-  named, onBone, reachFor, release, watch, wear, when, walkTo, withGaze, yawOf,
-  type Behaviour, type Frame, type Humanoid, type World,
-} from '@drawcall/animate';
+import { Body, HORSE_SKELETON, Item, Pose, place, facingAt, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { Rope } from '../../../packages/animate/src/core/rope';
+import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
@@ -102,7 +99,7 @@ export function stableMorning(): Scenario {
         // The gate and horse share this straight lane; do not chase the handler's pelvic sway.
         const target = new Vector3(HORSE.x, HORSE.y, HORSE.z + ahead);
         const velocity = leadStart !== null && handler
-          ? new Vector3(0, 0, handler.gait.velocity.z * (1 - reserve * ease / length)) : new Vector3();
+          ? new Vector3(0, 0, handler.locomotion.velocity.z * (1 - reserve * ease / length)) : new Vector3();
         return { position: target, velocity };
       }, { person: () => handler?.pose.position(handler.pose.skeleton.index('head')),
         tether: () => rope.supported ? { position: KNOT, length: 1.2 } : undefined });
@@ -193,7 +190,7 @@ export function stableMorning(): Scenario {
           b: RACK.clone().add(new Vector3(x, 0, 0)).setY(0.71),
           radius: Math.SQRT2 * 0.03, touches: [],
         })),
-        done: () => saddle.wornBy === horse && lookedBack && horse.pose.position(0).clone().sub(gate).dot(forwardOf(0)) > 0 && !!handler?.gait.settled,
+        done: () => saddle.wornBy === horse && lookedBack && horse.pose.position(0).clone().sub(gate).dot(forwardOf(0)) > 0 && !!handler?.locomotion.settled,
         props: () => {
           const muzzle = horse.pose.point(HEAD, new Vector3(0, -0.42, 0.33), new Vector3());
           const poll = horse.pose.position(HEAD);

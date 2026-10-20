@@ -81,7 +81,7 @@ export class FreeArms {
 
   see(frame: Frame) {
     const { t, h } = frame;
-    const speed = Math.hypot(h.gait.velocity.x, h.gait.velocity.z);
+    const speed = Math.hypot(h.locomotion.velocity.x, h.locomotion.velocity.z);
     const moving = h.feet.some((f) => f.phase !== 'planted');
     const com = comOf(h);
     const sinking = this.com && com.distanceTo(this.com) / FIXED_DT > 0.1;
@@ -159,7 +159,7 @@ export class ArmTurns {
   see(frame: Frame) {
     const { t, h } = frame;
     if (tasked(frame)) this.held.push(t);
-    const stepping = (h.feet.some((f) => f.phase === 'swing') || Math.hypot(h.gait.velocity.x, h.gait.velocity.z) > 0.1);
+    const stepping = (h.feet.some((f) => f.phase === 'swing') || Math.hypot(h.locomotion.velocity.x, h.locomotion.velocity.z) > 0.1);
     if (tasked(frame) || !stepping) {
       for (const s of this.sides) s.end = NaN;
       return;

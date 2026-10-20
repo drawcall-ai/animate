@@ -3,7 +3,7 @@ import { STEP, type Frame } from '../body';
 import { follow } from '../follow';
 import type { Motion } from '../goal';
 import { clamp, wrapAngle, yawOf } from '../math';
-import { strideAt, type LegGait } from './gait';
+import { strideAt, type Gait } from './gait';
 import type { LegStep } from './legs';
 
 export interface RootState {
@@ -14,7 +14,7 @@ export interface RootState {
 }
 
 /** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: LegGait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion)): Omit<LegStep, 'root'> & { root(time: number): RootState } {
+export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion)): Omit<LegStep, 'root'> & { root(time: number): RootState } {
   if (share === 0 && !facing) {
     const position = previous.position.clone();
     const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));

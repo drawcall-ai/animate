@@ -6,7 +6,10 @@ import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Carrier, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, closeHand, hold, named, walkTo, onBone, reachFor, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Carrier } from '../../src/core/carrier';
+import { closeHand } from '../../src/humanoid/hands/grips';
+import { reachFor } from '../../src/humanoid/hands/reach';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
@@ -48,7 +51,7 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
       yield* reachFor(h, { right: [item, 'handle'] })();
       yield* carry(h, item, [[0.5, { position: goal }]])();
       world = item.current.position.clone();
-      yield* carry(h, item, [[0.5, { position: new Vector3(-0.15, 0.15, 0.3) }]], { on: () => frame.current })();
+      yield* carry(h, item, [[0.5, { position: new Vector3(-0.15, 0.15, 0.3) }]], { frame: () => frame.current })();
       done = true;
     }], height);
   for (let i = 0; i < 360; i++) h.update(STEP);
@@ -219,7 +222,7 @@ it('follows destination translation and rotation during the lift and approach', 
     yield* place(h, item, destination)();
     done = true;
   }, action<Frame<World>>({ update: (f) => {
-    if (h.gait.moving) {
+    if (h.locomotion.moving) {
       walking++;
       advanced = Math.max(advanced, destination(f).position.z - 2);
       const go = h.asks.go;
@@ -254,8 +257,8 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   }]);
   for (let i = 0; i < 1200 && !done; i++) {
     h.update(STEP);
-    if (h.gait.velocity.length() > 0.15 && h.gait.eta <= RAISE_LEAD && item.current.position.y > carried(h)(h.frame).position.y + 0.01) raisingOnStep++;
-    if (h.gait.moving && h.gait.eta > RAISE_LEAD) {
+    if (h.locomotion.velocity.length() > 0.15 && h.locomotion.eta <= RAISE_LEAD && item.current.position.y > carried(h)(h.frame).position.y + 0.01) raisingOnStep++;
+    if (h.locomotion.moving && h.locomotion.eta > RAISE_LEAD) {
       walking++;
       expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
     }

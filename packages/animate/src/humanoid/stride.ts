@@ -10,16 +10,17 @@ import { clampRotation } from '../core/limits';
 import { wrapAngle, yawOf } from '../core/math';
 import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
-import { createAsks, takeAsks, type Asks } from './asks';
+import { createAsks, takeAsks, type Asks } from '../core/asks';
 import { BOW, PELVIS, TURN, SETTLED, followed } from './balance/balance';
 import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './balance/carriage';
 import { checkSupport } from './balance/checks';
 import { Life } from './balance/life';
-import { BOB, LOWER, Posture, entrain, walking, type Carried, type Trunk } from './balance/posture';
+import { BOB, LOWER, Posture, entrain, walking, type Upright, type Trunk } from './balance/posture';
 import { INDEX } from './bones';
 import type { Humanoid } from './humanoid';
 import { humanGait, humanLegs } from './legs';
-import { defaultStance, type Stance } from './stance';
+import { defaultStance } from './stance';
+import type { Stance } from '../core/asks';
 
 /** Human posture over the shared leg controller. Temporary opt-in during migration. */
 export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number }): Behaviour<W> {
@@ -38,7 +39,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       return { ...leg, rocker: [...leg.rocker.slice(0, flat), [1, toeOff]] };
     });
     const legs = new Legs(h.pose, chains, gait);
-    const c: Carried = { p, root: h.pose.position(0).clone().setY(0), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false,
+    const c: Upright = { p, root: h.pose.position(0).clone().setY(0), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false,
       stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion() };
     const posture = new Posture();
     const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
@@ -59,7 +60,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       if (f.dev) checkSupport(h, f, f.dev);
       const dt = f.dt;
       const go = takeAsks(h.asks, asks).go;
-      const speed = h.gait.velocity.length();
+      const speed = h.locomotion.velocity.length();
       c.stance = asks.stance ? { ...base, ...asks.stance } : base;
       c.walk = walking(c.walk, speed, dt);
       const timing = strideAt(gait, speed, 0);
@@ -114,7 +115,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
           if (time <= f.time) { forecastWalk = c.walk; forecastSpeed = root.velocity.length(); return { position: root.position.clone().sub(motor).add(current.position), quaternion: root.quaternion.clone().multiply(inverse).multiply(current.quaternion) }; }
           forecastWalk = walking(forecastWalk, forecastSpeed, dt); forecastSpeed = root.velocity.length();
           const t = strideAt(gait, root.velocity.length(), 0);
-          const future: Carried = { ...c, offset: neutral, walk: forecastWalk, root: root.position.clone().add(center).setY(0), yaw: yawOf(root.quaternion), pelvis: new Vector3(), pelvisRotation: new Quaternion() };
+          const future: Upright = { ...c, offset: neutral, walk: forecastWalk, root: root.position.clone().add(center).setY(0), yaw: yawOf(root.quaternion), pelvis: new Vector3(), pelvisRotation: new Quaternion() };
           const step = ((phase - t.duty) % 0.5 + 0.5) % 0.5, progress = Math.min(1, step / (1 - t.duty));
           posture.forecast().carry({ prev: f.prev, dt: 0 }, future, requested, { chest: new Quaternion(), thoraxYaw: 0 }, life,
             { phase: 2 * Math.PI * (phase - t.duty), bob: bob(phase, t.duty), nod: Math.cos(2 * Math.PI * progress), compression: 0 },
@@ -122,12 +123,12 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
           return { position: future.pelvis, quaternion: future.pelvisRotation };
         });
       if (legs.events.some((event) => event.type === 'land')) starting = false;
-      h.gait.velocity.copy(legs.root.velocity);
+      h.locomotion.velocity.copy(legs.root.velocity);
       c.yaw = yawOf(legs.root.quaternion);
       c.root.copy(legs.root.position).add(center).setY(0);
       offsets[0].copy(offsets[1]);
       offsets[1].copy(f.current.position(0)).sub(c.root).setY(0);
-      if (c.root.distanceTo(stop) < STOP.distance * p.scale && h.gait.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed) c.moving = false;
+      if (c.root.distanceTo(stop) < STOP.distance * p.scale && h.locomotion.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed) c.moving = false;
       legs.legs.forEach((leg, s) => {
         const foot = h.feet[s];
         foot.position.copy(leg.foothold.position);
@@ -135,7 +136,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
         foot.phase = leg.planted ? 'planted' : 'swing';
         landed[s] = leg.planted ? landed[s] + dt : 0;
       });
-      const g = h.gait;
+      const g = h.locomotion;
       [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [phase, c.walk, 0, c.yaw, c.moving, trunk.thoraxYaw];
       g.facingAhead = yawOf(legs.facingAhead);
       g.planted = go === lastGo && !c.moving && legs.legs.every((leg) => leg.planted) ? g.planted + dt : 0;

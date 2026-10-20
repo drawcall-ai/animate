@@ -3,7 +3,6 @@ import { STEP } from './body';
 import type { Frame } from './body';
 import type { Placement, Target } from './goal';
 import { spinOf } from './rotation';
-import type { Wearer } from './worn';
 
 /**
  * A rigid frame things move on (a cart, a board, a held box), with a history like a body's:
@@ -75,8 +74,8 @@ export interface ItemOptions {
  */
 export class Item extends Carrier {
   readonly name: string;
-  /** Which body wears it; null while unattached. */
-  wornBy: Wearer | null = null;
+  /** Which body wears it (a `Body`); null while unattached. */
+  wornBy: object | null = null;
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
   readonly bounds: Box3;

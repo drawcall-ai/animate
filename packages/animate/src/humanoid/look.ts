@@ -31,7 +31,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
     let up = 0;
     const p = h.proportions;
     yield* lookAt<W>(h.gazer, (f) => {
-        const g = h.gait;
+        const g = h.locomotion;
         // (glances only standing still: walking, the eyes are on the way)
         if (g.walk > 0.05) {
           next = Math.max(next, f.time + GLANCES.every[0]);
@@ -56,7 +56,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
 export function pathAhead<W>(h: Humanoid<W>, pose: ReadonlyPose, out: Vector3): Vector3 {
   return out.copy(pose.com(_com)).setY(AHEAD.walk.height * h.proportions.height)
-    .addScaledVector(forwardOf(h.gait.facingAhead ?? h.gait.facing, _v), AHEAD.walk.distance);
+    .addScaledVector(forwardOf(h.locomotion.facingAhead ?? h.locomotion.facing, _v), AHEAD.walk.distance);
 }
 
 const _com = new Vector3();
@@ -114,7 +114,7 @@ export function aimAt<W>(h: Humanoid<W>, at: Live<Vector3, W>): Behaviour<W> {
   return function* () {
     yield* parallel<Frame<W>>('all', lookAt(h.gazer, at, SHIFT), action<Frame<W>>({ update: (f) => {
       const direction = live(at, f).clone().sub(h.gazer.eyes(f.prev, new Vector3()));
-      const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.gait.facing);
+      const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.locomotion.facing);
       const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
       // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation.
       h.asks.twist = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw));

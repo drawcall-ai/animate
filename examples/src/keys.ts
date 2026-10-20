@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { minimumJerk } from '@drawcall/animate';
+import { minimumJerk } from '../../packages/animate/src/core/math';
 
 /** A key: a value at a time (s). */
 export type Key<T> = [time: number, value: T];

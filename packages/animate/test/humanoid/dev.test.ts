@@ -101,7 +101,7 @@ it('checks standing CoM against the soles once the final pose is still', () => {
     yield* parallel<Frame>('all', idle(h), function* () {
       yield* action<Frame>({ update: (f) => {
         f.current.copy(pose);
-        h.gait.settled = true;
+        h.locomotion.settled = true;
         for (const foot of h.feet) foot.phase = 'planted';
       } });
     });

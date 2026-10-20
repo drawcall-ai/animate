@@ -3,7 +3,7 @@ import { STEP, type Frame } from '../body';
 import type { Motion, Placement, Target } from '../goal';
 import type { ReadonlyPose } from '../pose';
 import type { JointCycle } from './cycle';
-import { checkGait, offsetAt, strideAt, speedOf, type LegGait } from './gait';
+import { checkGait, offsetAt, strideAt, speedOf, type Gait } from './gait';
 import { rootPlan, type RootState } from './root';
 import { HORIZON, Limb, type Walker } from './limb';
 import { wrapAngle, yawOf } from '../math';
@@ -51,14 +51,14 @@ export interface LegStep {
   travel?(time: number): Required<Placement>;
   /** Path bearing (rad) when facing is independent; undefined while stationary. Otherwise root yaw supplies curvature. */
   heading?(time: number): number | undefined;
-  gait?: LegGait;
+  gait?: Gait;
 }
 
 interface LegMotion {
   speed: number;
   nextLift: number;
   walkers: Walker[];
-  gait: LegGait;
+  gait: Gait;
 }
 
 /** Stateful leg solver: write a root then `update`, or let `toward` preflight and move it. Ground is y=0. */
@@ -97,7 +97,7 @@ export class Legs {
     this.limbs.forEach((limb, i) => { limb.restPitch = pitches[i]; });
   }
 
-  constructor(pose: ReadonlyPose, private readonly chains: readonly LegChain[], private gait: LegGait) {
+  constructor(pose: ReadonlyPose, private readonly chains: readonly LegChain[], private gait: Gait) {
     if (!chains.length) throw new Error('legs needs at least one chain');
     this.standingHeight = pose.position(0).y;
     this.root = { position: pose.position(0).clone(), quaternion: new Quaternion().setFromAxisAngle(UP, yawOf(pose.rotation(0))), velocity: new Vector3(), angular: 0 };

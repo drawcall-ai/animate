@@ -1,4 +1,4 @@
-import type { Asks } from '../asks';
+import type { Asks } from '../../core/asks';
 import type { Humanoid } from '../humanoid';
 import { Vector3 } from 'three';
 import { lerp, smoothstep } from '../../core/math';
@@ -30,7 +30,7 @@ export class Life {
   }
 
   quiet<W>(asks: Asks, h: Humanoid<W>): boolean {
-    return !asks.go && !h.gait.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0;
+    return !asks.go && !h.locomotion.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0;
   }
 
   update(dt: number, quiet: boolean, speed: number) {

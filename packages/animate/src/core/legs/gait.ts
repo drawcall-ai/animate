@@ -1,7 +1,8 @@
+import { Vector3 } from 'three';
 import { GRAVITY } from '../math';
 
 /** A contact table, in leg order. All functions read speed (m/s) and Froude v²/(g·height). */
-export interface LegGait {
+export interface Gait {
   frequency(speed: number, froude: number): number;
   readonly contacts: readonly { offset: number | ((speed: number, froude: number) => number); duty(speed: number, froude: number): number; stanceCenter?: number }[];
   /** Below this speed the cycle keeps its cadence but shortens its motion. */
@@ -23,12 +24,12 @@ export interface Stride {
   stanceCenter?: number;
 }
 
-export function checkGait(gait: LegGait, count: number): void {
+export function checkGait(gait: Gait, count: number): void {
   if (gait.referenceBlend !== undefined && !(gait.referenceBlend >= 0 && gait.referenceBlend <= 1)) throw new Error('reference blend must be in [0, 1]');
   if (!(gait.height > 0 && Number.isFinite(gait.height) && gait.slowest > 0 && Number.isFinite(gait.slowest)) || (gait.referenceSpeed !== undefined && !(gait.referenceSpeed > 0 && Number.isFinite(gait.referenceSpeed))) || gait.contacts.length !== count || gait.clearance.length !== count) throw new Error('gait and chains do not match');
 }
 
-export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
+export function strideAt(gait: Gait, speed: number, leg: number): Stride {
   speed = speedOf(speed);
   if (!(speed >= 0 && Number.isFinite(speed))) throw new Error('leg speed must be finite and nonnegative');
   const v = Math.max(gait.slowest, speed);
@@ -41,7 +42,7 @@ export function strideAt(gait: LegGait, speed: number, leg: number): Stride {
   return { frequency, duty, stanceCenter, referenceBlend: gait.referenceBlend, stepping: Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest)) };
 }
 
-export function offsetAt(gait: LegGait, speed: number, leg: number): number {
+export function offsetAt(gait: Gait, speed: number, leg: number): number {
   const offset = gait.contacts[leg].offset;
   const value = typeof offset === 'number' ? offset : offset(speed, speed * speed / (GRAVITY * gait.height));
   if (!(value >= 0 && value < 1)) throw new Error('a gait offset must be in [0, 1)');
@@ -50,3 +51,31 @@ export function offsetAt(gait: LegGait, speed: number, leg: number): number {
 
 /** Round only negative speed noise; real reverse speeds still fail validation. */
 export const speedOf = (speed: number) => speed < 0 && speed > -1e-9 ? 0 : speed;
+
+/** Walk state, of any legs: the legs report the motion; walkTo publishes and clears its arrival estimate. */
+export interface Locomotion {
+  /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
+  phase: number;
+  /** 0 standing … 1 walking, 0 walking … 1 running */
+  walk: number;
+  run: number;
+  /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
+  facing: number;
+  /** Core pursuit heading half a second ahead, for anticipatory gaze. */
+  facingAhead?: number;
+  velocity: Vector3;
+  /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
+  eta: number;
+  /** a walk is under way */
+  moving: boolean;
+  /** come to rest: no walk under way, both feet planted a while and none wanting to step */
+  settled: boolean;
+  /** seconds standing on planted feet since the current walk started; balance resets it on a new go request */
+  planted: number;
+  /** the thorax's rotation with the stride (rad, + to the left) */
+  thoraxYaw: number;
+  /** the requested quiet stance displacement from the centred stance (m, world) */
+  quiet: Vector3;
+}
+
+export const createLocomotion = (facing: number): Locomotion => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, planted: 0, thoraxYaw: 0, quiet: new Vector3() });

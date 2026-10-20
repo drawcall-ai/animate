@@ -1,6 +1,6 @@
 import { Box3, MathUtils, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { approach, arriving, carried, eyesOnBefore, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, type Behaviour, type Frame, type Humanoid, type Leg, type Placement, type Target, type World } from '@drawcall/animate';
+import { approach, arriving, carried, eyesOnBefore, carry, createWorld, grab, hold, idle, Item, lookAt, when, release, type Behaviour, type Frame, type Humanoid, type Waypoint, type Placement, type Target, type World } from '@drawcall/animate';
 import type { Prop, Scenario } from '../scenario';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -97,8 +97,8 @@ function tasks(h: Humanoid<World>, box: Item, size: Vector3, top: number, lift: 
  * front of the chest, turning square with the body (the chest as the body will stand: its hips
  * over the feet, not back where they squat)
  */
-function lifted(h: Humanoid<World>, box: Item, seconds: number): Leg<World>[] {
-  const ahead = forwardOf(h.gait.facing);
+function lifted(h: Humanoid<World>, box: Item, seconds: number): Waypoint<World>[] {
+  const ahead = forwardOf(h.locomotion.facing);
   return [
     [seconds / 2, { position: box.current.position.clone().addScaledVector(ahead, 0.12).setY(KNEES) }],
     [seconds / 2, carried(h)],
@@ -116,10 +116,10 @@ function shelve(h: Humanoid<World>, box: Item, size: Vector3, top: number): Beha
   const carryPose = carried(h);
   const raised = (f: Frame<World>): Placement => {
     const at = carryPose(f);
-    at.position.y += RAISED * (1 - MathUtils.smoothstep(h.gait.eta, 0, RAISING));
+    at.position.y += RAISED * (1 - MathUtils.smoothstep(h.locomotion.eta, 0, RAISING));
     return at;
   };
-  const up: Leg[] = [
+  const up: Waypoint[] = [
     [PLACE.over, { position: new Vector3(SHELF.x, top + size.y / 2 + 0.03, front - 0.02), quaternion: new Quaternion() }],
     [PLACE.onto, { position: new Vector3(SHELF.x, top + size.y / 2 + 0.005, front + size.z / 2 + 0.01) }],
   ];

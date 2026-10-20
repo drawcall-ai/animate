@@ -16,7 +16,7 @@ import { loadFactor } from '../core/load';
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9 };
 export function twistToward<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1) {
   const hips = pose.position(0);
-  const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.gait.facing);
+  const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.locomotion.facing);
   const distance = Math.hypot(point.x - hips.x, point.z - hips.z);
   share *= smoothstep(h.proportions.shoulderHalfWidth, h.proportions.armLength, distance);
   const turn = Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start));
@@ -33,20 +33,20 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   const bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
   if (low) h.asks.bowLimit = Math.min(h.asks.bowLimit, bowLimit);
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
-  if (low && factor > 1 && h.gait.moving) return;
+  if (low && factor > 1 && h.locomotion.moving) return;
   // research-contact §4 rule 3 [C]: ≥10–15° knees under load. Tuned 30° ceiling
   // on each leg segment (knee flexion is their sum), scaled by the same load law.
   if (low) h.asks.lower = Math.max(h.asks.lower, p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share);
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.
-  const allowance = h.gait.moving ? 0.06 * p.scale : 0;
+  const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
   const deficit = shoulder.distanceTo(hand) - p.armLength - allowance;
-  if (h.gait.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
+  if (h.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back. Every reach is planned from the support station,
   // so that counter-shift cannot make a shoulder ask for still more bow.
   const from = _v.copy(hand).sub(f.prev.com(_station));
-  const ahead = from.dot(forwardOf(h.gait.facing, _forward));
-  const lateral = from.dot(_left.set(Math.cos(h.gait.facing), 0, -Math.sin(h.gait.facing))) - (side === 'left' ? 1 : -1) * p.shoulderHalfWidth;
+  const ahead = from.dot(forwardOf(h.locomotion.facing, _forward));
+  const lateral = from.dot(_left.set(Math.cos(h.locomotion.facing), 0, -Math.sin(h.locomotion.facing))) - (side === 'left' ? 1 : -1) * p.shoulderHalfWidth;
   // Tuned 2% reserve for the articulated shoulder arc: its single lever slightly
   // overestimates the reach available when the pelvis tucks in a deep squat.
   const reach = 0.98 * ARM_REACH * p.armLength;

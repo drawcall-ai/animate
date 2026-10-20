@@ -3,13 +3,13 @@ import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { live, type Behaviour, type Live } from '../core/goal';
 import type { UntilCondition } from '@pmndrs/timeline';
-import type { Go } from './asks';
+import type { Go } from '../core/asks';
 import { heldMass } from './hands/grips';
 import { loadFactor } from '../core/load';
 import { when } from '../core/when';
 import type { Humanoid } from './humanoid';
 import { forwardOf, headingOf, wrapAngle } from '../core/math';
-import type { Stance } from './stance';
+import type { Stance } from '../core/asks';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
 const STROLL = { speed: 1.3, accel: 1.2 };
@@ -24,18 +24,18 @@ const CLOSE = 1;
 export function arriving<W>(h: Humanoid<W>, seconds: number) {
   let idleAt = NaN;
   return (f: Frame<W>): boolean => {
-    if (h.gait.eta !== Infinity) {
+    if (h.locomotion.eta !== Infinity) {
       idleAt = NaN;
-      return h.gait.eta <= seconds;
+      return h.locomotion.eta <= seconds;
     }
     if (Number.isNaN(idleAt)) idleAt = f.time;
-    return f.time > idleAt && h.gait.settled;
+    return f.time > idleAt && h.locomotion.settled;
   };
 }
 
 /** Wait until a sibling walk has relinquished the feet and its arrival estimate. */
 export function* waitForWalk<W>(h: Humanoid<W>) {
-  if (h.asks.go) yield* when(() => h.gait.eta === Infinity);
+  if (h.asks.go) yield* when(() => h.locomotion.eta === Infinity);
 }
 
 /** about how fast the body turns (rad/s), and its minimum estimated starting pace (m/s) */
@@ -62,7 +62,7 @@ export interface WalkOptions<W> {
 /**
  * Walking to `to` (or turning in place to `face`): it asks `balance` to go there every sub-step
  * (`h.asks.go`, `h.asks.face`), and ends once the body has arrived, turned and settled on its
- * squared feet (`h.gait.settled`); given `until`, when that is met instead (a point that moves on is followed). It writes no
+ * squared feet (`h.locomotion.settled`); given `until`, when that is met instead (a point that moves on is followed). It writes no
  * bones. With `within`, it stops short with the point that far ahead, facing `face` (default:
  * facing the point). Within 0.6 m, at a travel speed below 0.6 m/s, short side steps to a
  * still goal and back steps toward a goal behind retain the requested facing.
@@ -106,17 +106,17 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
       return leg < via.length ? null : yaw;
     };
     yield* action<Frame<W>>({
-      init: () => () => { h.gait.eta = Infinity; },
+      init: () => () => { h.locomotion.eta = Infinity; },
       update: (f) => {
         const yaw = where(f);
         h.asks.go = go;
         if (options.stance) h.asks.stance = options.stance;
-        h.gait.eta = etaOf(h, f.prev.com(_com), go, yaw);
+        h.locomotion.eta = etaOf(h, f.prev.com(_com), go, yaw);
         if (leg < via.length) {
           let previous = go.to;
           for (let i = leg + 1; i <= via.length; i++) {
             const next = i < via.length ? live(via[i], f) : end;
-            h.gait.eta += Math.hypot(next.x - previous.x, next.z - previous.z) / go.speed;
+            h.locomotion.eta += Math.hypot(next.x - previous.x, next.z - previous.z) / go.speed;
             previous = next;
           }
         }
@@ -131,8 +131,8 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
         if (options.until) return options.until(f, clock, time);
         const body = f.prev.com(_com);
         const there = Math.hypot(body.x - go.to.x, body.z - go.to.z) < ARRIVED.distance * h.scale;
-        const turned = yaw === null || Math.abs(wrapAngle(yaw - h.gait.facing)) < ARRIVED.yaw;
-        return there && turned && h.gait.settled;
+        const turned = yaw === null || Math.abs(wrapAngle(yaw - h.locomotion.facing)) < ARRIVED.yaw;
+        return there && turned && h.locomotion.settled;
       },
     });
   };
@@ -145,9 +145,9 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
  */
 function etaOf<W>(h: Humanoid<W>, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
   const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * h.scale;
-  const v = Math.min(go.speed, Math.max(h.gait.velocity.length(), SETTING_OFF));
+  const v = Math.min(go.speed, Math.max(h.locomotion.velocity.length(), SETTING_OFF));
   const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;
-  const turn = yaw === null ? 0 : Math.max(0, Math.abs(wrapAngle(yaw - h.gait.facing)) - ARRIVED.yaw) / TURNING;
+  const turn = yaw === null ? 0 : Math.max(0, Math.abs(wrapAngle(yaw - h.locomotion.facing)) - ARRIVED.yaw) / TURNING;
   return Math.max(walk, turn);
 }
 
