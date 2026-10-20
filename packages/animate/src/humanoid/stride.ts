@@ -6,7 +6,9 @@ import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import type { Stance } from '../core/asks';
 import { clampRotation } from '../core/limits';
-import type { Stepping } from '../core/legs/stepper';
+import type { Stepper, Stepping } from '../core/legs/stepper';
+import { hullOf, past } from '../core/legs/support';
+import { footprint } from './balance/foot';
 import { BOW, PELVIS, TURN, followed } from './balance/balance';
 import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './balance/carriage';
 import { checkSupport } from './balance/checks';
@@ -31,12 +33,23 @@ import { defaultStance } from './stance';
 export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour<W> {
   const p = h.proportions, s = p.scale, toeOut = defaultStance(p).toeOut, base = { ...defaultStance(p), ...options.stance };
   const stepping = walkerStepping(p), stop = new Vector3(), velocity = new Vector3();
-  let planner: Planner | null = null, moving = false, starting = false, seen = false, phase = 0;
+  let planner: Planner | null = null, moving = false, starting = false, seen = false, phase = 0, still: Vector3 | null = null, leaning = false;
   const c: Upright = { p, root: new Vector3(), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false, stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion() };
   const posture = new Posture(), life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
   const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 }, asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
   const offsets = [new Vector3(), new Vector3()], tilts = [new Quaternion(), new Quaternion()];
+  // (`from` shifted by `lean` as far as the planted feet hold it, `LEAN.inside` within their edge)
+  const within = (from: Vector3, lean: Vector3 | null, stepper: Stepper) => {
+    if (!lean) return from;
+    const hull = hullOf(stepper.legs.filter((leg) => !leg.swing).flatMap((leg) => footprint(p, leg.anchor, leg.yaw)));
+    if (hull.length < 3) return from;
+    const at = (t: number) => from.clone().addScaledVector(lean, t);
+    if (past(hull, at(1)) <= -LEAN.inside * s) return at(1);
+    let [lo, hi] = [0, 1];
+    for (let k = 0; k < 12; k++) [lo, hi] = past(hull, at((lo + hi) / 2)) <= -LEAN.inside * s ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
+    return at(lo);
+  };
   return drivenBy(h, (f, asks, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
     if (f.dev) checkSupport(h, f, f.dev);
@@ -56,16 +69,21 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
       stop.copy(go.to).setY(0);
     } else velocity.set(0, 0, 0);
     seen = !!go;
-    if (!moving && (root.distanceTo(stop) > START.distance * s || velocity.length() > START.speed)) [moving, starting] = [true, true];
+    // (where it rests: its weight shifted from there as a reach asks, back there after)
+    still = moving ? null : leaning ? still : root.clone();
+    if (!moving && ((still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed)) [moving, starting, still, leaning] = [true, true, null, false];
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
     const yaw = asks.face?.yaw ?? (moving ? travelYaw : plan.root.yaw);
     const faced = !!asks.face || !moving || Math.abs(wrapAngle(heading - plan.root.yaw)) >= Math.PI / 4;
     const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - leg.sign * toeOut - plan.root.yaw), 0) / stepper.legs.length + plan.root.yaw;
-    // (stopped close to a goal still asked, the body edges on onto it, the feet staying put)
-    const r = plan.step(f, { position: moving || go ? stop : root.clone(), velocity: moving ? velocity : new Vector3(), yaw: faced ? yaw : undefined },
-      { accel: go?.accel ?? 1.2 * s, speed: moving ? Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity) : go ? EDGE * s : 0, turnSpeed: asks.face?.rate },
+    // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
+    const lean = !moving && !go ? asks.lean : null;
+    const leaned = still && (lean || leaning) ? within(still, lean, stepper) : null;
+    leaning = !!leaned && (!!lean || root.distanceTo(leaned) > LEAN.back * s);
+    const r = plan.step(f, { position: moving || go ? stop : leaned ?? root.clone(), velocity: moving ? velocity : new Vector3(), yaw: faced ? yaw : undefined },
+      { accel: go?.accel ?? 1.2 * s, speed: moving ? Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity) : go ? EDGE * s : leaned ? LEAN.speed * s : 0, turnSpeed: asks.face?.rate },
       stance, (forecast) => stepper.reachable(forecast));
     if (root.distanceTo(stop) < STOP.distance * s && r.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed) moving = false;
 
@@ -133,6 +151,8 @@ const CAPTURE = 0.07;
 const PUSH = 20 * Math.PI / 180;
 /** Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low: ~0.26 m); a deeper ask waits for it to slow */
 const WALKING_CROUCH = 0.5;
+/** Tuned: at rest, the weight shifts toward a reach this fast (m/s), its centre of mass kept this far within the feet's edge (m), and back till this near where it rested (m) */
+const LEAN = { speed: 0.15, inside: 0.03, back: 0.001 };
 /** Tuned: stopped close to a goal still asked (within `STOP`), the body edges onto it this fast (m/s) */
 const EDGE = 0.03;
 /** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */

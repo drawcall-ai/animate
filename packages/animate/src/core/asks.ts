@@ -49,10 +49,12 @@ export interface Asks {
   onto: 'left' | 'right' | null;
   /** stand otherwise than the body's stance */
   stance: Partial<Stance> | null;
+  /** standing, shift the weight this far (m, on the floor) within the feet: toward what a hand falls short of */
+  lean: Vector3 | null;
 }
 
 /** nothing asked */
-export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, onto: null, stance: null });
+export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, onto: null, stance: null, lean: null });
 
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {

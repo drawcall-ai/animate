@@ -13,28 +13,37 @@ import type { Dev } from './dev';
  * as the swing passes it). Into `out`.
  */
 export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = coordinates()): Coordinates {
-  const off = limit.neutral ? _q.copy(limit.neutral).invert().premultiply(q) : _q.copy(q);
-  const sign = off.w < 0 ? -1 : 1;
-  const c = [sign * off.x, sign * off.y, sign * off.z];
-  const w = sign * off.w;
+  // (q · neutral⁻¹ written out as three's product has it, term for term: it runs in every limb's searches)
+  const n = limit.neutral, bx = n ? -n.x : 0, by = n ? -n.y : 0, bz = n ? -n.z : 0, bw = n ? n.w : 1;
+  const ox = n ? q.x * bw + q.w * bx + q.y * bz - q.z * by : q.x;
+  const oy = n ? q.y * bw + q.w * by + q.z * bx - q.x * bz : q.y;
+  const oz = n ? q.z * bw + q.w * bz + q.x * by - q.y * bx : q.z;
+  const ow = n ? q.w * bw - q.x * bx - q.y * by - q.z * bz : q.w;
+  const sign = ow < 0 ? -1 : 1;
+  const w = sign * ow;
   const i = limit.axis;
-  const j = (i + 1) % 3;
-  const k = (i + 2) % 3;
+  // (the components along the axis and the two across it, in turn)
+  const ci = sign * (i === 0 ? ox : i === 1 ? oy : oz);
+  const cj = sign * (i === 0 ? oy : i === 1 ? oz : ox);
+  const ck = sign * (i === 0 ? oz : i === 1 ? ox : oy);
   // q = swing · twist: the twist is q's part about the axis, the swing q · twist⁻¹
-  const tl = Math.sqrt(c[i] * c[i] + w * w);
-  const a = tl > 1e-9 ? c[i] / tl : 0;
+  const tl = Math.sqrt(ci * ci + w * w);
+  const a = tl > 1e-9 ? ci / tl : 0;
   const b = tl > 1e-9 ? w / tl : 1;
-  const sj = b * c[j] - a * c[k];
-  const sk = b * c[k] + a * c[j];
+  const sj = b * cj - a * ck;
+  const sk = b * ck + a * cj;
   const sl = Math.sqrt(sj * sj + sk * sk);
-  const phi = 2 * Math.atan2(sl, w * b + c[i] * a);
+  const phi = 2 * Math.atan2(sl, w * b + ci * a);
   const f = sl > 1e-9 ? phi / sl : 2;
   out.value[0] = sj * f;
   out.value[1] = sk * f;
   out.value[2] = 2 * Math.atan2(a, b);
   out.range[0] = limit.swing[0];
   out.range[1] = limit.swing[1];
-  out.range[2] = twistRange(limit, phi);
+  // (the twist's range written into `out`'s own: as `twistRange` has it)
+  const open = smoothstep(TWIST_FADE, Math.PI, phi), lo = limit.twist[0], hi = limit.twist[1];
+  out.range[2][0] = lo - (Math.PI + lo) * open;
+  out.range[2][1] = hi + (Math.PI - hi) * open;
   return out;
 }
 
@@ -94,7 +103,6 @@ export function beyond(q: Quaternion, limit: Limit): number {
 /** the swing (rad) from which the twist's range opens up, to all of it at the opposite turn */
 const TWIST_FADE = 0.75 * Math.PI;
 
-const _q = new Quaternion();
 const _c = coordinates();
 
 /** Range checks read the completed pose, including writes after a solve. Half a degree allows numerical settling. */

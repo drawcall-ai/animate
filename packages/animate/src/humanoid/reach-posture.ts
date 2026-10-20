@@ -41,6 +41,13 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
   // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.
   const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
   const deficit = shoulder.distanceTo(hand) - p.armLength - allowance;
+  // (standing, a hand short of what is at or above the hips — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
+  // as far as the feet let it: before a step)
+  const short = shoulder.distanceTo(hand) - ARM_REACH * p.armLength;
+  if (!h.locomotion.moving && !low && short > 0) {
+    const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
+    if (toward.lengthSq() > 1e-12 && toward.setLength(short * share).length() > (h.asks.lean?.length() ?? 0)) h.asks.lean = toward;
+  }
   if (h.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back. Every reach is planned from the support station,
   // so that counter-shift cannot make a shoulder ask for still more bow.

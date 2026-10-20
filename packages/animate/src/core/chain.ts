@@ -129,18 +129,19 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     // with a tip rotation the middle joint's and the tip's as they would share its twist
     const bent = _bent.setFromAxisAngle(h, bend).multiply(neutral);
     const swivelled = (angle: number) => local[0].copy(c.base).invert().multiply(_q.setFromAxisAngle(T, angle)).multiply(r0);
-    const strain = (angle: number) => {
-      const first = swivelled(angle);
-      const upper = _upper.copy(c.base).multiply(first);
-      // (the first joint's limit before the tip's turn: it keeps the tip on the goal)
-      return 100 * excess(first, limits[0]) + (quaternion ? shared(upper, bent, a, quaternion, limits, twist) : 0);
+    // (the first joint's limit before the tip's turn: it keeps the tip on the goal)
+    const first = (angle: number) => {
+      const turned = swivelled(angle);
+      _upper.copy(c.base).multiply(turned);
+      return 100 * excess(turned, limits[0]);
     };
+    const tip = () => quaternion ? shared(_upper, bent, a, quaternion, limits, twist) : 0;
+    const strain = (angle: number) => first(angle) + tip();
     // as the pole has it, unless a swivel searched with the preferred twist fits better
     let swivel = 0;
     let left = strain(0);
     if (left >= FITS) {
-      const searched = least(strain, -Math.PI, Math.PI, 0);
-      const there = strain(searched);
+      const [searched, there] = least(first, tip, -Math.PI, Math.PI, 0);
       if (there < left) [swivel, left] = [searched, there];
     }
     swivelled(swivel);
@@ -181,16 +182,20 @@ function tipped(upper: Quaternion, middle: Quaternion, axis: Vector3, twist: num
 
 /** The best joint fit and cost of leaving the preferred twist, used by both twist and swivel searches. */
 function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], twist: number | undefined): number {
-  const at = (twist: number) => {
-    const tip = tipped(upper, middle, axis, twist, quaternion);
-    return excess(_twisted, limits[1]) + excess(tip, limits[2]);
+  // (the tip's limit first: it rules out more twists alone)
+  const tipOf = (twist: number) => {
+    tipped(upper, middle, axis, twist, quaternion);
+    return excess(_tip, limits[2]);
   };
+  const middleOf = () => excess(_twisted, limits[1]);
   // Both joints' limits are evaluated together, from the preferred twist or an even split.
   const whole = twistAbout(tipped(upper, middle, axis, 0, quaternion), axis);
   const [lo, hi] = limits[1]?.twist ?? [-Math.PI, Math.PI];
   const split = Math.min(hi, Math.max(lo, twist ?? whole / 2));
-  const fitted = least(at, lo, hi, split);
-  return at(fitted) + NEAREST * Math.abs(fitted - split);
+  const [fitted, value] = least(tipOf, middleOf, lo, hi, split);
+  // (the middle bone turned as fitted, into `_twisted`)
+  tipped(upper, middle, axis, fitted, quaternion);
+  return value + NEAREST * Math.abs(fitted - split);
 }
 
 /** a middle joint as a hinge: its axis and range in its parent's frame, the rotation it bends from, and how far it is bent now */
@@ -225,19 +230,23 @@ function nearest(a: number, b: number, hinge: Hinge): number {
 }
 
 /**
- * the x within lo…hi where `f` (≥ 0) is least, `start` if it is (all but) 0 there: sampled, then
- * refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than it must)
+ * the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) is least, `start` if it is
+ * (all but) 0 there: sampled, then refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than
+ * it must), and `f` there. An x whose `part` alone is no less than the least yet is passed over without its `rest`: `f` there is no less.
  */
-function least(f: (x: number) => number, lo: number, hi: number, start: number): number {
+function least(part: (x: number) => number, rest: () => number, lo: number, hi: number, start: number): [x: number, f: number] {
   start = Math.min(hi, Math.max(lo, start));
-  const g = (x: number) => f(x) + NEAREST * Math.abs(x - start);
+  const near = (x: number) => NEAREST * Math.abs(x - start);
   let best = start;
-  let low = g(start);
-  if (low < FITS) return start;
+  let value = part(start) + rest();
+  let low = value + near(start);
+  if (low < FITS) return [start, value];
   const see = (x: number) => {
     x = Math.min(hi, Math.max(lo, x));
-    const e = g(x);
-    if (e < low) [low, best] = [e, x];
+    const cheap = part(x);
+    if (cheap + near(x) >= low) return;
+    const f = cheap + rest(), e = f + near(x);
+    if (e < low) [low, best, value] = [e, x, f];
   };
   for (let k = 0; k <= 24; k++) see(lo + ((hi - lo) * k) / 24);
   for (let step = (hi - lo) / 48; step > 1e-6; step /= 2) {
@@ -245,7 +254,7 @@ function least(f: (x: number) => number, lo: number, hi: number, start: number):
     see(at - step);
     see(at + step);
   }
-  return best;
+  return [best, value];
 }
 
 /** how much `least` holds each radian away from its start against what it minimises: next to nothing (ties broken toward the start) */
