@@ -4,12 +4,20 @@ import type { Frame } from './body';
 import type { Placement, Target } from './goal';
 import { spinOf } from './rotation';
 
+/** Where a carrier is at a sub-step (`current`) and the two before. */
+export interface Placed {
+  readonly prev2: Required<Placement>;
+  readonly prev: Required<Placement>;
+  readonly current: Required<Placement>;
+}
+
 /**
  * A rigid frame things move on (a cart, a board, a held box), with a history like a body's:
- * `current` where it is at the sub-step being posed, `prev` and `prev2` the two before. Its one
- * mover moves it once per sub-step, before anything that reads it.
+ * `current` where it was last moved to, `prev` and `prev2` the two sub-steps before. Its one
+ * mover moves it once per sub-step: a scene before the bodies that read it, a body that wears it
+ * after its behaviour. Read it at a sub-step's time (`at`).
  */
-export class Carrier {
+export class Carrier implements Placed {
   readonly prev2: Required<Placement>;
   readonly prev: Required<Placement>;
   readonly current: Required<Placement>;
@@ -35,6 +43,33 @@ export class Carrier {
     this.time = time;
   }
 
+  /**
+   * where it is at `time` (s) and the two sub-steps before: its fields, but while the body that wears it is posing that
+   * sub-step (`due`) — it moves its worn items after its behaviour — carried on as it last moved
+   */
+  at(time: number): Placed {
+    if (this.dueAt !== time || this.moved(time)) return this;
+    const { position, quaternion } = this.ahead;
+    position.copy(this.current.position).multiplyScalar(2).sub(this.prev.position);
+    quaternion.copy(this.prev.quaternion).invert().premultiply(this.current.quaternion).multiply(this.current.quaternion).normalize();
+    return { prev2: this.prev, prev: this.current, current: this.ahead };
+  }
+
+  /** Its mover moves it at `time` (s), after what reads it then: a body wearing it, posing that sub-step. */
+  due(time: number): void {
+    this.dueAt = time;
+  }
+
+  private dueAt = NaN;
+  private readonly ahead = { position: new Vector3(), quaternion: new Quaternion() };
+
+  /** put where it is at `time` (s), as if it had stood there all along (made somewhere else, it starts on a body) */
+  place(time: number, position: Readonly<Vector3>, quaternion: Readonly<Quaternion>): void {
+    this.move(time, position, quaternion);
+    copy(this.prev, this.current);
+    copy(this.prev2, this.current);
+  }
+
   /** its velocity (m/s) and spin (rad/s) over the last sub-step */
   velocity(out: Vector3): Vector3 {
     return out.subVectors(this.current.position, this.prev.position).divideScalar(STEP);
@@ -44,15 +79,15 @@ export class Carrier {
     return spinOf(this.prev.quaternion, this.current.quaternion, STEP, out);
   }
 
-  /** `local` (in its frame) in the world as it is now, into `out`: moving with it (v + ω × r) */
-  toWorld(local: Placement, out: Target & { velocity: Vector3; spin: Vector3 }): Target & { velocity: Vector3; spin: Vector3 } {
-    const { position, quaternion } = this.current;
+  /** `local` (in its frame) in the world as it is now — at `time` (s), if given (`at`) — into `out`: moving with it (v + ω × r) */
+  toWorld(local: Placement, out: Target & { velocity: Vector3; spin: Vector3 }, time?: number): Target & { velocity: Vector3; spin: Vector3 } {
+    const { prev, current: { position, quaternion } } = time === undefined ? this : this.at(time);
     const r = _r.copy(local.position).applyQuaternion(quaternion);
     out.position.copy(r).add(position);
     if (local.quaternion) (out.quaternion ??= new Quaternion()).copy(quaternion).multiply(local.quaternion);
     else out.quaternion = undefined;
-    this.spin(out.spin);
-    this.velocity(out.velocity).add(_v.crossVectors(out.spin, r));
+    spinOf(prev.quaternion, quaternion, STEP, out.spin);
+    out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(out.spin, r));
     return out;
   }
 }
@@ -103,7 +138,7 @@ export class Item extends Carrier {
 
 /** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
 export function onItem<W>(item: Carrier, local: Placement = { position: new Vector3(), quaternion: new Quaternion() }): (f: Frame<W>) => Target {
-  return () => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() });
+  return (f) => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }, f.time);
 }
 
 function copy(to: Required<Placement>, from: Required<Placement>) {

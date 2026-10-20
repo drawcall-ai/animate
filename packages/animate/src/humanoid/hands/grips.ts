@@ -1,9 +1,7 @@
-import type { Vector3 } from 'three';
-import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import { heldItems } from '../../core/worn';
 import type { Behaviour, Target } from '../../core/goal';
-import { INDEX, SIDES, type Side } from '../bones';
+import { SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 
 // Grips: what each hand takes hold of, and the hands closing and opening on them.
@@ -55,13 +53,6 @@ export function gripsOf<W>(h: Humanoid<W>, item: Item): Grips {
   return Object.fromEntries(SIDES.flatMap((side) => h.holding[side]?.item === item ? [[side, h.holding[side]?.grip]] : []));
 }
 
-
-/** Grip errors in the completed pose. */
-export function offGrips<W>(f: Frame<W>, hands: readonly { side: Side; item: Item; grip: string; at: Readonly<Vector3> }[]): string[] {
-  return hands.map(({ side, item, grip, at }) => {
-    return `"${item.name}" ${side} grip "${grip}": ${f.prev.position(INDEX[`${side}Hand`]).distanceTo(at).toFixed(3)} m off`;
-  });
-}
 
 /** Unsupported weight borne through the hands, counting each item once. */
 export function heldMass<W>(h: Humanoid<W>): number {

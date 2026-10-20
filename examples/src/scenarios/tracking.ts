@@ -354,7 +354,7 @@ export function reach(v: Variation = {}): Scenario {
               return hand;
             };
             // (on the far target, once it has stopped there)
-            const there = (f: Frame<World>) => f.time >= LAST / pace && reached(f.prev2, f.prev, f.dt, h.rig.skeleton.index('rightHand'), target(f));
+            const there = (f: Frame<World>) => f.time >= LAST / pace && reached(f, h.rig.skeleton.index('rightHand'), target(f));
             yield* parallel<Frame<World>>('all', idle(h), function* () {
               yield* action({ until: timePassed(0.4 / pace, 'seconds') });
               yield* parallel<Frame<World>>(

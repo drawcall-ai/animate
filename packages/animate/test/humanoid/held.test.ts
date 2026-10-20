@@ -6,7 +6,7 @@ import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Humanoid, createSkeletonModel, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, Humanoid, createSkeletonModel, idle, INDEX, Item, place, carryTogether, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { Carrier } from '../../src/core/carrier';
 import { closeHand } from '../../src/humanoid/hands/grips';
 import { reachFor } from '../../src/humanoid/hands/reach';
@@ -85,16 +85,14 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
   expect(body.worn.size).toBe(0);
 });
 
-it('reports time, beat, cause, item, grip and distance with dev off', () => {
+it('never throws on a late reach — its beat, item, grip and distance go to the dev log — while errors carry time and beat', () => {
   const item = new Item(new Vector3(0, 1, 4), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'saddle' });
-  const h = standing((h) => [named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 }))]);
-  let caught: unknown;
-  try { h.update(1); } catch (cause) { caught = cause; }
-  expect(caught).toBeInstanceOf(Error);
-  if (!(caught instanceof Error)) throw new Error('expected a contextual reach error');
-  expect(caught.message).toMatch(/\d+\.\d+ s, "fetch saddle": "saddle" right grip "handle": [\d.]+ m off/);
-  expect(caught.cause).toBeInstanceOf(Error);
-  expect(h.log).toEqual([]);
+  const h = new Humanoid<World>(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame<World>>('all', idle(h), named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 })));
+  }, { world: createWorld(), dev: true });
+  h.update(1);
+  expect(h.log.map(({ check, where, beat }) => ({ check, where, beat }))).toEqual([{ check: 'late reach: grip distance after 0.1 s (m)', where: 'saddle right handle', beat: 'fetch saddle' }]);
+  expect(h.log[0].value).toBeGreaterThan(1);
   const cause = new Error('attachment failed');
   const instant = new Body(leg(), named('attach saddle', function* () { throw cause; }));
   expect(() => instant.update(STEP)).toThrow('0.017 s, "attach saddle": attachment failed');

@@ -2,7 +2,7 @@ import { Box3, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';
-import type { Behaviour, Target } from '../../core/goal';
+import { REACHED, type Behaviour, type Target } from '../../core/goal';
 import { seeded, seedOf } from '../../core/random';
 import { reached } from '../../core/tip';
 import { handTo } from '../arms';
@@ -10,7 +10,8 @@ import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { lerp } from '../../core/math';
 import { LOAD_RESERVE } from './clearance';
-import { closeHand, offGrips, gripOf, held, openHand, type Grips, type Holds } from './grips';
+import { closeHand, gripOf, held, openHand, type Grips, type Holds } from './grips';
+import { heldItems } from '../../core/worn';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
 
@@ -21,24 +22,30 @@ const REACHING = 4;
  * The hands open, go to their grips together (one shared condition: each stays on its way until
  * every one is there; the body bowing and bending as low as they are) and close on them. Both
  * going, the right hand leads and the left sets off a moment after it, a little slower (`LEADING`,
- * seeded by what it goes for), its arm kept as it is till then. A hand not there within `limit` s throws.
+ * seeded by what it goes for), its arm kept as it is till then. Hands not there within `limit` s are a problem in the dev log
+ * (`Body.log`), and they keep going: lateness never throws.
  */
 export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } = {}): Behaviour<W> {
   return function* () {
     const hands = held(holds), began = h.frame.time;
-    const there = (f: Frame<W>) => hands.every(({ side, item, grip }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], gripOf(item, grip), item));
+    const there = (f: Frame<W>) => hands.every(({ side, item, grip }) => reached(f, INDEX[`${side}Hand`], gripOf(item, grip), item));
+    let late = false;
     const until = (ready: (f: Frame<W>) => boolean) => (f: Frame<W>) => {
       if (ready(f)) return true;
-      if (f.time - began > limit) {
-        const off = offGrips(f, hands.map((hand) => ({ ...hand, at: hand.item.toWorld(gripOf(hand.item, hand.grip), _world).position.clone() })));
-        throw new Error(`${off.join('; ')} after ${limit} s`);
+      if (!late && f.time - began > limit) {
+        late = true;
+        for (const { side, item, grip } of hands) {
+          const value = f.prev.position(INDEX[`${side}Hand`]).distanceTo(item.toWorld(gripOf(item, grip), _world, f.time).position);
+          f.dev?.append(f.time, { check: `late reach: grip distance after ${limit} s (m)`, value, limit: REACHED.distance, where: `${item.name} ${side} ${grip}` });
+        }
       }
       return false;
     };
     const plan = hands.map(({ side, item, grip }) => {
       const goal = gripOf(item, grip);
       const from = h.pose.position(INDEX[`${side}Hand`]).clone().sub(item.current.position).applyQuaternion(item.current.quaternion.clone().invert());
-      const route = outside(item, goal.position, from, LOAD_RESERVE * h.scale);
+      // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly)
+      const route = item.wornBy || heldItems(h).includes(item) ? [] : outside(item, goal.position, from, LOAD_RESERVE * h.scale);
       const points = route.length ? route : [goal.position];
       let was = from;
       const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
@@ -48,7 +55,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
       const seconds = reachTime(distance / h.scale, seedOf(grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower);
       return { side, item, goal, points, lengths, distance, route, delay, seconds };
     });
-    const arrived = until((f) => plan.every(({ side, item, points }) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], { position: points[points.length - 1] }, item)));
+    const arrived = until((f) => plan.every(({ side, item, points }) => reached(f, INDEX[`${side}Hand`], { position: points[points.length - 1] }, item)));
     const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
     for (const { side } of hands) yield* openHand(h, side)();
     yield* parallel<Frame<W>>('all', ...plan.map((p) => function* () {
@@ -72,7 +79,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
 /** Route around the envelope to its nearest grip face; the final closure is separate. */
 function outside(item: Item, grip: Vector3, from: Vector3, reserve: number): Vector3[] {
   const bounds = item.bounds, size = bounds.getSize(new Vector3());
-  if (item.wornBy || size.x * size.y * size.z === 0) return [];
+  if (size.x * size.y * size.z === 0) return [];
   const box = bounds.clone().expandByScalar(reserve);
   const { axis, end } = face(bounds, grip), sign = end ? 1 : -1;
   const edge = (end ? box.max : box.min).getComponent(axis);

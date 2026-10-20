@@ -43,7 +43,9 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
     }) : [];
     for (const item of heldItems(h)) {
       const aim = carryAims(h).get(item);
-      if (!aim && !item.supported && !item.wornBy && !item.moved(f.time)) {
+      // (what another moves — a scene, another body — the hands keep to, the body not coming along for it)
+      const moved = item.moved(f.time);
+      if (!aim && !item.supported && !item.wornBy && !moved) {
         const turn = new Quaternion().copy(f.current.rotation(0)).multiply(new Quaternion().copy(f.prev.rotation(0)).invert());
         const at = item.current.position.clone().sub(f.prev.position(0)).applyQuaternion(turn).add(f.current.position(0));
         item.move(f.time, at, turn.multiply(item.current.quaternion));
@@ -53,7 +55,7 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
       for (const side of sides) {
         const bones = [INDEX[`${side}Shoulder`], ...f.current.skeleton.chain(`${side}Arm`)];
         if (bones.some((bone) => !f.current.local(bone).equals(f.prev.local(bone)))) continue;
-        handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy }, arms[side]);
+        handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy && !moved }, arms[side]);
       }
       if (aim) fit(f, item, aim, grips, sides);
       // Worn-item contact has one rigid owner; check after that owner and both arms moved.

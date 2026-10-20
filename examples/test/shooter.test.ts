@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Vector3 } from 'three';
+import { Euler, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { INDEX } from '@drawcall/animate';
 import { shooter } from '../src/scenarios/shooter';
@@ -47,7 +47,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
     if (!rifle) continue;
     if (acquired === Infinity && h.holding.left?.item !== rifle) continue;
     acquired = Math.min(acquired, sim.t);
-    expect(h.worn.get(rifle)?.on).toBe(INDEX.rightHand);
+    expect(h.holding.right?.grip).toBe('pistol');
     // (each hand on whatever grip it holds: the support hand's off the handguard only through a reload)
     for (const side of ['left', 'right'] as const) {
       const held = h.holding[side];
@@ -150,6 +150,60 @@ it('switches view without changing any body motion', () => {
   }
   expect(difference).toBe(0);
   expect(a.stage.done() && b.stage.done()).toBe(true);
+});
+
+/** The worst grip error (m) of either hand. */
+const gripError = (h: Simulation['actors'][number]) => Math.max(0, ...(['left', 'right'] as const).map((side) => {
+  const held = h.holding[side];
+  return held ? h.pose.position(INDEX[`${side}Hand`]).distanceTo(held.item.grips[held.grip].position.clone().applyQuaternion(held.item.current.quaternion).add(held.item.current.position)) : 0;
+}));
+
+it('keeps the rifle on the aim through fast turns: standing and walking, at the hip and aiming', () => {
+  const sim = new Simulation(shooter(), undefined, true);
+  sim.advanceTo(2.5);
+  const player = sim.stage.player!, h = sim.actors[0];
+  player.live = true;
+  Object.assign(player.input, { move: { x: 0, z: 0 }, aimYaw: 0, aimPitch: 0, ads: false, sprint: false, fire: false, crouch: false, jump: false, reload: false });
+  // (the rifle's turn in the look's frame: steady, as the aim has it, however the look turns)
+  const relative = () => new Quaternion().setFromEuler(new Euler(-player.input.aimPitch, player.input.aimYaw, 0, 'YXZ')).invert().multiply(h.holding.right!.item.current.quaternion);
+  const ease = (x: number) => x <= 0 ? 0 : x >= 1 ? 1 : x * x * x * (10 - 15 * x + 6 * x * x);
+  const worst: Record<string, { angle: number; grip: number }> = {};
+  for (const [name, move, ads] of [['hip', 0, false], ['aiming', 0, true], ['hip walking', 1, false]] as const) {
+    Object.assign(player.input, { ads, move: { x: 0, z: move } });
+    sim.advanceTo(sim.t + 1);
+    const steady = relative(), from = sim.t;
+    let angle = 0, grip = 0;
+    // (6 rad/s mouse sweeps, 86° one way, 172° back and 86° again, each reversal within 0.1 s)
+    while (sim.t < from + 1.2) {
+      const u = sim.t - from, at = (t: number) => ease((u - t + 0.05) / 0.1);
+      player.input.aimYaw += 6 / 60 * (at(0) - 2 * at(0.25) + 2 * at(0.75) - at(1));
+      sim.step();
+      angle = Math.max(angle, relative().angleTo(steady));
+      grip = Math.max(grip, gripError(h));
+    }
+    worst[name] = { angle: angle * 180 / Math.PI, grip };
+  }
+  console.log('fast turns', worst);
+  for (const [name, { angle, grip }] of Object.entries(worst)) {
+    expect(angle).toBeLessThanOrEqual(name === 'aiming' ? 2 : 5);
+    expect(grip).toBeLessThanOrEqual(0.01);
+  }
+  // (the arms move with it within their joints' pace; the feet, spinning this fast, may not — the legs are the stepper's)
+  expect(h.log.filter((entry) => /Arm|Hand|Shoulder/.test(entry.where))).toEqual([]);
+});
+
+it('takes the foregrip while the player keeps turning, and never throws on a late reach', () => {
+  const sim = new Simulation(shooter(), undefined, true);
+  sim.advanceTo(0.5);
+  const player = sim.stage.player!;
+  player.live = true;
+  // (turning 3 rad/s, back and forth, through the reach for the foregrip: it once stayed behind and threw after 4 s)
+  while (sim.t < 6) {
+    player.input.aimYaw += 3 / 60 * Math.sign(Math.sin(sim.t * 1.3));
+    sim.step();
+  }
+  expect(sim.actors[0].holding.left?.grip).toBe('foregrip');
+  expect(gripError(sim.actors[0])).toBeLessThanOrEqual(0.01);
 });
 
 it('ADS overrides held sprint and keeps both grips during the raise', () => {

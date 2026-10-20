@@ -8,7 +8,7 @@ import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
 import { course, type Waypoint } from '../course';
 import type { Humanoid } from '../humanoid';
-import { grip, gripOf, gripsOf, offGrips } from './grips';
+import { grip, gripOf, gripsOf } from './grips';
 import { following, LEADING } from './reach';
 import { clearBody } from './clearance';
 import { carryAims } from './hold';
@@ -33,7 +33,8 @@ interface CarryOptions<W> {
  * Carry a held item along `waypoints`, in metres in the world by default. `frame` selects an item frame
  * or a bone frame through `onItem` or `onBone`. Waypoint seconds describe an unloaded
  * item: its mass divides the course pace by `loadFactor(mass)`. Ends within 5 mm and 5 cm/s of
- * the cleared course end; throws after `limit` seconds of settling outside reach.
+ * the cleared course end; still settling `limit` s after the course is over, it is a problem in the dev log
+ * (`Body.log`) and keeps going: lateness never throws.
  */
 export function carry<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>[], options: CarryOptions<W> = {}): Behaviour<W> {
   return carrying(h, item, waypoints, options);
@@ -54,7 +55,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>
     // Mass slows the lift’s acceleration and path.
     const path = course(item, frame, waypoints, { pace: pace * (1 - lag.slower) / factor, delay: lag.delay });
     const end = new TrackedEnd();
-    let since = NaN;
+    let since = NaN, late = false;
     let dip = 0;
     const seconds = 2.4 * load;
     const there = (f: Frame<W>) => {
@@ -67,12 +68,9 @@ function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>
       // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
       dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
       if (end.holds(f, item, goal) && (dip === 0 || f.time - since >= seconds)) return true;
-      if (f.time - since > limit) {
-        const off = offGrips(f, SIDES.flatMap((side) => {
-          const name = grips[side];
-          return name === undefined ? [] : [{ side, item, grip: name, at: gripOf(item, name).position.clone().applyQuaternion(placement.quaternion).add(goal) }];
-        }));
-        throw new Error(`${off.join('; ')}; ${item.current.position.distanceTo(goal).toFixed(3)} m off course end after ${limit} s`);
+      if (!late && f.time - since > limit) {
+        late = true;
+        f.dev?.append(f.time, { check: `late carry: course end distance after ${limit} s (m)`, value: item.current.position.distanceTo(goal), limit: END.distance, where: item.name });
       }
       return false;
     };
@@ -102,6 +100,8 @@ export function carryTogether<W>(h: Humanoid<W>, carries: readonly (readonly [It
  * 5 mm of it and moving with it to within 5 cm/s — read as the item was last moved, a sub-step
  * before (against where the end was then, and how fast it went)
  */
+const END = { distance: 0.005, speed: 0.05 };
+
 class TrackedEnd {
   private end: Carrier | null = null;
 
@@ -110,7 +110,7 @@ class TrackedEnd {
     if (!end.moved(f.time)) end.move(f.time, at);
     const velocity = _v.subVectors(end.prev.position, end.prev2.position).divideScalar(f.dt);
     const off = item.velocity(new Vector3()).sub(velocity);
-    return item.current.position.distanceTo(end.prev.position) < 0.005 && off.length() < 0.05;
+    return item.current.position.distanceTo(end.prev.position) < END.distance && off.length() < END.speed;
   }
 }
 

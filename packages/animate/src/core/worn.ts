@@ -127,7 +127,7 @@ export function dress<W>(h: Body<W>, pose: Pose, wearing: readonly Dressed[]): v
     h.worn.set(item, { on, to: null, motion: SETTLING, sits: sitsAt(position, quaternion) });
     item.wornBy = h;
     item.supported = false;
-    item.move(0, position.clone().applyQuaternion(pose.rotation(on)).add(pose.position(on)), pose.rotation(on).clone().multiply(quaternion));
+    item.place(0, position.clone().applyQuaternion(pose.rotation(on)).add(pose.position(on)), pose.rotation(on).clone().multiply(quaternion));
     h.borne.set(item, { share: 1, prev: 1, prev2: 1, kg: item.mass, bones: [on] });
   }
   loadBones(h, pose);

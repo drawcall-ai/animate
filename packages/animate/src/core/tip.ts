@@ -1,11 +1,11 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from './body';
-import type { Carrier } from './carrier';
+import type { Carrier, Placed } from './carrier';
 import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { clampRotation } from './limits';
-import { live, REACHED, type Behaviour, type Live, type Motion, type Target, type Until } from './goal';
+import { live, REACHED, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
@@ -36,8 +36,8 @@ export interface TipOptions<W> extends Motion {
  */
 export class ChainTip {
   private readonly joints = new Map<number, TrackedRotation>();
-  /** where it moved the tip the last two sub-steps (world) and when last */
-  private readonly moved = { before: new Vector3(), last: new Vector3(), placed: new Vector3(), time: NaN };
+  /** where it moved the tip the last two sub-steps (world) and when last; on a carrier, where it took the carrier to be then */
+  private readonly moved = { before: new Vector3(), last: new Vector3(), placed: new Vector3(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
   private on?: Carrier;
@@ -55,18 +55,29 @@ export class ChainTip {
     const own = !options.contact && this.on === on && Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
     this.on = on;
     if (!own) this.joints.clear();
+    const placed = on?.at(f.time);
+    // (the intended path on a carrier, moved with it from where it was foreseen to be to where it was: one worn by a body still
+    // posing was carried on as it moved, its actual placement known only once it has moved)
+    if (own && placed) for (const [point, at, then] of [[moved.last, moved.frames[1], placed.prev], [moved.before, moved.frames[0], placed.prev2]] as const) {
+      if (at.position.equals(then.position) && at.quaternion.equals(then.quaternion)) continue;
+      point.sub(at.position).applyQuaternion(_r.copy(at.quaternion).invert()).applyQuaternion(then.quaternion).add(then.position);
+    }
     const prev2 = own ? moved.before : f.prev2.position(tip);
     const prev = own ? moved.last : f.prev.position(tip);
-    const position = follow(prev2, prev, target.position, { accel, speed, velocity: target.velocity, on }, f.dt, _position);
+    const position = follow(prev2, prev, target.position, { accel, speed, velocity: target.velocity, on: placed }, f.dt, _position);
     let quaternion: Quaternion | undefined;
     if (target.quaternion) {
       if (turnAccel === undefined) throw new Error(`chain "${chain}": a target rotation needs a turnAccel`);
-      const goal = target.axis ? rolled(target.quaternion, target.axis, near(f.prev.rotation(tip), on)) : target.quaternion;
-      quaternion = followRotation(f.prev2.rotation(tip), f.prev.rotation(tip), goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on }, f.dt, _quaternion);
+      const goal = target.axis ? rolled(target.quaternion, target.axis, near(f.prev.rotation(tip), placed)) : target.quaternion;
+      quaternion = followRotation(f.prev2.rotation(tip), f.prev.rotation(tip), goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
     }
     moved.before.copy(own ? moved.last : f.prev.position(tip));
     moved.last.copy(position);
     moved.time = f.time;
+    if (placed) for (const [k, at] of [placed.prev, placed.current].entries()) {
+      moved.frames[k].position.copy(at.position);
+      moved.frames[k].quaternion.copy(at.quaternion);
+    }
     // (no further than all but the chain's full length: a chain pulled straight swivels on any wobble)
     const base = f.current.position(bones[0]);
     let length = 0;
@@ -88,9 +99,10 @@ export class ChainTip {
         f.current.setLocal(b, q);
       }
     }
-    // Joint damping must not separate an acquired contact; retain the damped bend and wrist
-    // while satisfying the positional constraint within the chain's existing joint limits.
-    if (options.contact) solveChain(f, chain, { tip: { position, quaternion: f.current.rotation(tip).clone() }, pole: f.current.position(bones[1]).clone() });
+    // Joint damping must not separate an acquired contact: re-solved to it (and to its rotation, if it has one) from the damped
+    // bend. A grip without a rotation leaves the damped wrist free: pinned, a folded arm would swivel round to keep it.
+    const off = f.current.position(tip).distanceTo(position) > 1e-6 || (quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > 1e-6);
+    if (options.contact && off) solveChain(f, chain, { tip: { position, quaternion }, pole: f.current.position(bones[1]).clone() });
     moved.placed.copy(f.current.position(tip));
   }
 
@@ -108,36 +120,42 @@ export function chainTo<W>(chain: string, target: Live<Target, W>, options: TipO
     const tip = new ChainTip(chain);
     yield* action<Frame<W>>({
       update: (f) => void tip.to(f, live(target, f), options),
-      until: until === 'reached' ? (f) => reached(f.prev2, f.prev, f.dt, tipOf(f, chain), live(target, f), options.on) : until,
+      until: until === 'reached' ? (f) => reached(f, tipOf(f, chain), live(target, f), options.on) : until,
     });
   };
 }
 
 /**
- * Bone `tip` of a body (its last poses `prev2`, `prev`, `dt` apart) is on `target` (on a carrier, in
- * its frame): within REACHED's distance and angle, and moving with it to within its speed. The last
- * pose is a frame old, so it is judged against where the target was then (moved back by its velocity).
+ * Bone `tip` of a body (its last poses `prev2`, `prev`, `dt` apart, before the sub-step at `time`) is on `target`: within
+ * REACHED's distance and angle, and moving with it to within its speed. The last pose is a sub-step old, so it is judged
+ * against where the target was then: on a carrier (in its frame), as the carrier was placed then and the sub-step before
+ * (`Carrier.at`); else moved back by its velocity.
  */
-export function reached(prev2: ReadonlyPose, prev: ReadonlyPose, dt: number, tip: number, target: Target, on?: Carrier): boolean {
-  let goal = target.position;
-  const velocity = _velocity.copy(target.velocity ?? ZERO);
-  if (on) {
-    on.toWorld(target, _goal);
-    goal = _goal.position;
-    velocity.applyQuaternion(on.current.quaternion).add(_goal.velocity);
+export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number; time: number }, tip: number, target: Target, on?: Carrier): boolean {
+  const { prev2, prev, dt } = f;
+  const placed = on?.at(f.time);
+  const then = _then, velocity = _velocity, moved = target.velocity ?? ZERO;
+  if (on && placed) {
+    // (the target point as the carrier was placed `back` sub-steps before `time`)
+    const was = (back: number, at: Required<Placement>, out: Vector3) => out.copy(target.position).addScaledVector(moved, -back * dt).applyQuaternion(at.quaternion).add(at.position);
+    const goal = on.toWorld(target, _goal, f.time);
+    then.copy(goal.position).addScaledVector(velocity.copy(moved).applyQuaternion(placed.current.quaternion).add(goal.velocity), -dt);
+    velocity.subVectors(was(1, placed.prev, _was), was(2, placed.prev2, _was2)).divideScalar(dt);
+  } else {
+    velocity.copy(moved);
+    then.copy(target.position).addScaledVector(velocity, -dt);
   }
   const at = prev.position(tip);
-  const then = _then.copy(goal).addScaledVector(velocity, -dt);
   const moving = _v.subVectors(at, prev2.position(tip)).divideScalar(dt).sub(velocity);
   if (at.distanceTo(then) > REACHED.distance || moving.length() > REACHED.speed) return false;
   if (!target.quaternion) return true;
   // (in the frame the target is given in, rolled about its axis as near the tip as it may be)
-  const turned = near(prev.rotation(tip), on);
+  const turned = near(prev.rotation(tip), placed && { current: placed.prev });
   return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned) <= REACHED.angle;
 }
 
-/** a world rotation in the frame a target is given in: on a carrier, its (as it is now) */
-function near(world: Readonly<Quaternion>, on?: Carrier): Quaternion {
+/** a world rotation in the frame a target is given in: on a carrier, its (as placed `current`) */
+function near(world: Readonly<Quaternion>, on?: Pick<Placed, 'current'>): Quaternion {
   return on ? _near.copy(on.current.quaternion).invert().multiply(world) : _near.copy(world);
 }
 
@@ -156,6 +174,7 @@ const ZERO = new Vector3();
 const _position = new Vector3();
 const _quaternion = new Quaternion();
 const _joint = new Quaternion();
+const _r = new Quaternion();
 const _v = new Vector3();
 const _axis = new Vector3();
 const _d = new Quaternion();
@@ -163,6 +182,8 @@ const _roll = new Quaternion();
 const _near = new Quaternion();
 const _velocity = new Vector3();
 const _then = new Vector3();
+const _was = new Vector3();
+const _was2 = new Vector3();
 const _goal: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 
 /** the tip bone of chain `chain` */

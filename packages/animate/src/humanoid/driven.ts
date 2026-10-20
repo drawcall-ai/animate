@@ -22,6 +22,17 @@ import { humanStepping } from './legs';
 const CROUCH_LEAN = 0.3, RUN_LEAN = 0.12, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
 /** Recalled: anterior pelvic tilt grows with speed (~5° walking, ~15° running; Novacheck 1998); tuned: changing within `accel` (rad/s²). */
 const TILT = { walk: 0.06, run: 0.25, accel: 8 };
+/**
+ * Read (Novacheck 1998): the pelvis turns forward on the side of the leg in midswing, the shoulders counter-rotating about it; here
+ * the thorax keeps square to the facing. Tuned: ±2° (rad, peak) — recalled, the pelvis turns ±4–6°, but this pelvis does not sway
+ * aside as a free one does, and more would swing the leaning chest wider than it.
+ */
+const PELVIC_ROTATION = 0.035;
+/**
+ * Read (Novacheck 1998): the trunk leans forward to speed up, keeping the ground's push behind the centre of mass; tuned: `share` of
+ * the lean atan(a / g) that would put it through the centre of mass, at most `ahead` (rad), and back slowing down at most `back`.
+ */
+const SPEEDING = { share: 0.4, ahead: 0.35, back: 0.15 };
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1 };
 
@@ -51,7 +62,7 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
       } };
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
-    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0];
+    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], was = new Vector3();
     yield* action<Frame<W>>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
       takeAsks(h.asks, asks);
@@ -65,10 +76,17 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
         // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
         const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
         [tilts[0], tilts[1]] = [tilts[1], tilt];
-        f.current.setLocal(0, quatYXZ(yaw, tilt, 0, _q));
-        // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land)
+        // (turned toward the swinging leg's side as it comes through, the thorax back the other way)
+        const turn = -PELVIC_ROTATION * moving * legs.reduce((sum, leg) => sum + (leg.swing ? leg.sign * Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0);
+        f.current.setLocal(0, quatYXZ(yaw + turn, tilt, 0, _q));
+        // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land; it leans into
+        // speeding up and back from slowing down)
         const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
-        const bend = quatYXZ(Math.max(-0.8, Math.min(0.8, asks.twist)), asks.bow + RUN_LEAN * run + CROUCH_LEAN * k - tilt + nod, 0, _bend).slerp(IDENTITY, 0.5);
+        const speeding = _v.subVectors(r.velocity, was).divideScalar(dt).dot(forwardOf(yaw, _f));
+        was.copy(r.velocity);
+        const lean = stepper.airborne ? 0 : clamp(SPEEDING.share * Math.atan2(speeding, GRAVITY), -SPEEDING.back, SPEEDING.ahead);
+        const twist = clamp(asks.twist - turn, -0.8, 0.8);
+        const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean - tilt + nod, 0, _bend).slerp(IDENTITY, 0.5);
         [INDEX.spine, INDEX.chest].forEach((bone, k) => {
           const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
           if (limit) clampRotation(local, limit);
@@ -146,4 +164,4 @@ function check<W>(h: Humanoid<W>, f: Frame<W>, legs: readonly Leg[]) {
 }
 
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _bend = new Quaternion(), _local = new Quaternion();
-const [_a, _b, _pole] = [new Vector3(), new Vector3(), new Vector3()];
+const [_a, _b, _pole, _v, _f] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];

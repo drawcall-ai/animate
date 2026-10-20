@@ -1,9 +1,10 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, createWorld, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
-import { Carrier } from '../../../packages/animate/src/core/carrier';
+import { INDEX, Item, aimAt, createWorld, follow, followRotation, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
 import { closeHand } from '../../../packages/animate/src/humanoid/hands/grips';
 import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
+import { reached } from '../../../packages/animate/src/core/tip';
+import { spinOf } from '../../../packages/animate/src/core/rotation';
 import { scalar } from '../keys';
 import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
@@ -24,9 +25,14 @@ const MAGAZINE = new Vector3(0.03, 0.15, 0.07);
 const WELL = { position: new Vector3(0, -0.055, 0.09), quaternion: new Quaternion().setFromEuler(new Euler(-0.15, 0, 0)) };
 // (drawn out of the well, below it)
 const OUT = { position: new Vector3(0, -0.2, 0.08), quaternion: WELL.quaternion };
-// Tuned support-hand reach for a reload: its least time (s), the rifle as long done turning (s; its wrist catching up), closing within `near` (m) of the grip moving with it to `speed` (m/s) —
-// the grips are on worn items, whose hold is checked to 1 cm from the first sub-step — its pace (m/s², m/s, rad/s², rad/s).
-const TAKE = { seconds: 0.15, still: 0.15, steady: 3, near: 0.006, speed: 0.2, bring: 0.3, motion: { accel: 80, speed: 5, turnAccel: 300, turnSpeed: 25 }, seat: { accel: 20, speed: 1, turnAccel: 100, turnSpeed: 10 } };
+// Tuned support-hand reach for a reload: its least time (s), a magazine brought within `near` (m) or for at most `bring` (s), its pace
+// and a magazine's seating (m/s², m/s, rad/s², rad/s).
+const TAKE = { seconds: 0.15, near: 0.006, bring: 0.3, motion: { accel: 80, speed: 5, turnAccel: 300, turnSpeed: 25 }, seat: { accel: 20, speed: 1, turnAccel: 100, turnSpeed: 10 } };
+// Tuned: how fast the rifle's place in the aim frame changes, carry to aim and back in ~250 ms (m/s², rad/s²).
+const SWAY = { accel: 24, turnAccel: 120 };
+// Tuned: the most the rifle's turn speeds up or slows (rad/s²): a 6 rad/s mouse sweep reversed within 0.1 s (~230 rad/s² at most)
+// is followed exactly; the hands turning with it stay within the development check's 100,000°/s² for a joint.
+const FLICK = 600;
 // Tuned pouches on the left hip, in the hips' frame (+x left, +z ahead): beside the trunk, clear of it.
 const POUCHES = [new Vector3(0.17, -0.04, 0.05), new Vector3(0.17, -0.04, -0.03)];
 export const SHOOTER_DURATION = 53;
@@ -106,19 +112,19 @@ export class Controller {
 export function shooter(): Scenario {
   return {
     id: 'shooter', title: 'Full-body shooter',
-    description: 'Click to play · WASD move (relative to where you look) · Shift sprint · right mouse ADS · mouse look · left click fire · V first/third person · Esc release mouse. The body always faces where you look; the legs step to keep up.',
+    description: 'Click to play · mouse look · WASD move (relative to where you look) · Shift sprint · right mouse aim down sights · left click fire · Space jump · C or Ctrl crouch · R reload · V first/third person · Esc release mouse. The body always faces where you look; the legs step to keep up.',
     duration: SHOOTER_DURATION, actors: [{}], cameraDistance: 4,
     stage: () => {
       const report = new Report();
       const rifle = new Item(new Vector3(), new Quaternion(), {
-        pistol: { position: new Vector3() }, foregrip: { position: FOREGRIP },
+        pistol: { position: new Vector3(), quaternion: HAND }, foregrip: { position: FOREGRIP },
       }, { name: 'rifle', mass: 3, bounds: new Box3(new Vector3(-0.1075, -0.155, -0.29), new Vector3(0.035, 0.1325, 0.64)) });
       // two magazines: one in the rifle, one in a pouch; a reload swaps them, the spent one into the free pouch
       const magazine = (name: string) => new Item(new Vector3(), new Quaternion(), { grip: { position: new Vector3(0, -0.065, 0) } },
         { name, mass: 0.5, bounds: new Box3(MAGAZINE.clone().multiplyScalar(-0.5), MAGAZINE.clone().multiplyScalar(0.5)) });
       const magazines = [magazine('magazine 1'), magazine('magazine 2')];
       let loaded = magazines[0], spare = magazines[1], stowed = 0, free = 1;
-      let reloading = false, pulled = false, wanted = false, reload = 0, canted = false, turned = 0;
+      let reloading = false, pulled = false, wanted = false, reload = 0, canted = false;
       const steps: string[] = [];
       let actor: Humanoid<World> | null = null;
       let acquired = false;
@@ -133,18 +139,53 @@ export function shooter(): Scenario {
         live: false,
         root: controller.root,
         status: () => ({ reloading, steps, magazines }),
+        // (the eye the aim is placed from: as the body stood when the sub-step being posed set out — where the camera looks from,
+        // as a game's camera, a sub-step behind the body)
         eyes: () => {
           if (!actor) throw new Error('player camera needs its actor');
           const eye = actor.rig.points.rightEye;
-          return actor.pose.point(eye.bone, eye.at, new Vector3());
+          return now > 0 ? aimedFrom.clone() : actor.pose.point(eye.bone, eye.at, new Vector3());
         },
       };
       const direction = () => new Vector3(0, 0, 1).applyQuaternion(rotation());
       const rotation = () => new Quaternion().setFromEuler(new Euler(-player.input.aimPitch - 0.012 * recoil(), player.input.aimYaw, 0, 'YXZ'));
-      const aim = () => player.eyes().addScaledVector(direction(), 20);
+      const ahead = () => player.eyes().addScaledVector(direction(), 20);
       const recoil = () => {
         const u = (now - lastShot) / 0.2; // Tuned: requested 200 ms recovery, zero velocity at each end.
         return u >= 0 && u < 1 ? Math.sin(Math.PI * u) ** 2 : 0;
+      };
+      // The rifle in the aim frame — the eye, turned as the player looks — as games lock a weapon to the camera: the scene moves it,
+      // before the body poses, and the hands hold it where it is. Turning, at any rate, never leaves it behind (within `FLICK`); only
+      // its place in that frame — carry, aim, sprint, reload — is followed, so changes of pose sway in at `SWAY`'s pace.
+      // Tuned carry offsets (m) and muzzle rotations (rad), +X screen-left along +Z: the hip muzzle converges inward; sprint
+      // lowers it diagonally across the chest; the reload cant raises the muzzle a little and draws the rifle in toward the body
+      // and the left hand — the well within the eyes' downward reach. Derived: aiming puts the sight below the dominant eye.
+      const aimedFrom = new Vector3(), looked = new Quaternion();
+      let aimed = false;
+      // (its place in the frame now, the sub-step before, the one before that)
+      const local = [0, 1, 2].map(() => ({ position: new Vector3(), quaternion: new Quaternion() }));
+      const aimRifle = (t: number, dt: number) => {
+        const view = rotation(), eye = aimedFrom;
+        if (!aimed) {
+          aimed = true;
+          looked.copy(view);
+          for (const at of local) {
+            at.position.copy(rifle.current.position).sub(eye).applyQuaternion(view.clone().invert());
+            at.quaternion.copy(view).invert().multiply(rifle.current.quaternion);
+          }
+        }
+        [local[0], local[1], local[2]] = [local[2], local[0], local[1]];
+        const [now, was, before] = local;
+        const blend = ads * ads * (3 - 2 * ads), run = sprint * sprint * (3 - 2 * sprint), turn = reload * reload * (3 - 2 * reload);
+        const to = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn, -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn, 0.22 - 0.1 * run - 0.012 * recoil() - 0.04 * turn);
+        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn, 0.12 * (1 - blend) + 0.2 * run, 0));
+        follow(before.position, was.position, to, SWAY, dt, now.position);
+        followRotation(before.quaternion, was.quaternion, tilt, { accel: SWAY.turnAccel }, dt, now.quaternion);
+        const spin = spinOf(looked, view, dt, new Vector3());
+        looked.copy(view);
+        const turned = followRotation(rifle.prev.quaternion, rifle.current.quaternion, view.multiply(now.quaternion), { accel: FLICK, velocity: spin }, dt);
+        const frame = turned.clone().multiply(now.quaternion.clone().invert());
+        rifle.move(t, now.position.clone().applyQuaternion(frame).add(eye), turned);
       };
       const part = (at: Vector3, size: Vector3): Prop => ({ kind: 'box',
         position: at.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position),
@@ -160,6 +201,8 @@ export function shooter(): Scenario {
           const dt = t - now;
           now = t;
           if (!player.live) shooterTrack(t, player.input);
+          const point = actor.rig.points.rightEye;
+          actor.pose.point(point.bone, point.at, aimedFrom);
           // (aiming waits for a reload; sprinting cancels one before the magazine is out, then waits)
           const input = { ...player.input, ads: player.input.ads && !reloading };
           controller.hold = reloading && pulled;
@@ -169,8 +212,9 @@ export function shooter(): Scenario {
           const approach = (value: number, target: number) => value + Math.max(-dt / 0.25, Math.min(dt / 0.25, target - value));
           ads = approach(ads, Number(input.ads));
           reload = approach(reload, Number(canted));
-          if (reload !== Number(canted)) turned = t;
           sprint = approach(sprint, input.ads ? 0 : Math.max(actor?.locomotion.run ?? 0, Number(controller.sprinting(input))));
+          // (the rifle where the aim has it, once off the hand it starts in)
+          if (!rifle.wornBy) aimRifle(t, dt);
           if (player.input.aimYaw !== previousYaw || player.input.aimPitch !== previousPitch || player.input.ads !== previousAds) steadySince = t;
           previousYaw = player.input.aimYaw;
           previousPitch = player.input.aimPitch;
@@ -193,30 +237,11 @@ export function shooter(): Scenario {
           actor = h;
           // (the loaded magazine starts in the well, worn on the rifle from the first sub-step)
           loaded.move(0, WELL.position.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position), rifle.current.quaternion.clone().multiply(WELL.quaternion));
-          const eyes = new Carrier(new Vector3());
-          const hand = (f: Frame<World>) => {
-            const view = rotation();
-            const blend = ads * ads * (3 - 2 * ads);
-            const run = sprint * sprint * (3 - 2 * sprint);
-            // Tuned carry offsets (m) and muzzle rotations (rad); +X is screen-left along +Z.
-            // Hip muzzle converges inward; sprint lowers it diagonally across the chest.
-            const turn = reload * reload * (3 - 2 * reload);
-            // Tuned reload cant: the muzzle up a little, the rifle raised and drawn in toward the body and the left hand —
-            // the well within the eyes' downward reach, not bowing the trunk to see it (rolling it too swung the
-            // foregrip out of the support hand's reach as the cant came off).
-            const q = view.clone().multiply(new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn, 0.12 * (1 - blend) + 0.2 * run, 0)));
-            // Derived: sight height below the dominant eye, pistol grip ahead of the shoulder.
-            const point = h.rig.points.rightEye;
-            const eye = f.current.point(point.bone, point.at, new Vector3());
-            eyes.move(f.time, eye);
-            const at = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn, -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn, 0.22 - 0.1 * run - 0.012 * recoil() - 0.04 * turn).applyQuaternion(view);
-            return { position: at, quaternion: q.multiply(HAND) };
-          };
           const well = (f: Frame<World>) => onItem<World>(rifle, WELL)(f).position;
-          // The support hand off what it holds and onto `grip` of `item` in a quick reach, closing on it there: its
-          // pace keeps up with a walking body (the library reach's calm hand pace is the world's, a walk's own).
-          // A held magazine brought to `to` (world, moving), at the support hand's pace, till it is there or `TAKE.bring` s
-          // are up (kept clear of the trunk, it may stop short: the pouch or the well then seats it).
+          // The support hand off what it holds and onto `grip` of `item` in a quick reach, closing on it there (it follows
+          // the grip in the item's frame: the body moves what it wears and holds, so its walk or the aim's turn never leaves
+          // the hand behind). A held magazine brought to `to` (world, moving), at the support hand's pace, till it is there
+          // or `TAKE.bring` s are up (kept clear of the trunk, it may stop short: the pouch or the well then seats it).
           const bring = (item: Item, to: (f: Frame<World>) => Placement) => function* () {
             const began = now;
             yield* hold(h, item, { to, motion: TAKE.motion, until: (f) => item.current.position.distanceTo(to(f).position) < TAKE.near || now - began > TAKE.bring })();
@@ -224,25 +249,10 @@ export function shooter(): Scenario {
           const take = (item: Item, grip: string) => function* () {
             yield* release(h, ['left'], { away: null })();
             const began = now;
-            let steady = 0;
-            // (the grip where it will be once the body has moved what it wears this sub-step: moving on as it moved, its
-            // speed changing as it did — a walking body's arms carry what they wear with ~30 m/s² swings)
-            const at = (f: Frame<World>) => {
-              const [now, was, before] = [item.current, item.prev, item.prev2].map((placed) => item.grips[grip].position.clone().applyQuaternion(placed.quaternion).add(placed.position));
-              const change = now.clone().sub(was).multiplyScalar(2).sub(was).add(before);
-              return { position: now.clone().add(change), velocity: change.divideScalar(f.dt) };
-            };
-            // (there once the wrist is on the grip, moving with it, and the rifle no longer turning)
-            const there = (f: Frame<World>) => {
-              const goal = onItem<World>(item, item.grips[grip])(f), hand = f.prev.position(INDEX.leftHand);
-              const moving = hand.clone().sub(f.prev2.position(INDEX.leftHand)).divideScalar(f.dt).sub(goal.velocity ?? new Vector3());
-              steady = hand.distanceTo(goal.position) < TAKE.near && moving.length() < TAKE.speed ? steady + 1 : 0;
-              return now - began >= TAKE.seconds && now - turned >= TAKE.still && steady >= TAKE.steady;
-            };
             // (the hand kept on it through the sub-step it closes — the free arm's swing, which runs first, let it go
             // only after — and held there the next, before it moves on with what it took)
-            yield* parallel<Frame<World>>('race', handTo(h, 'left', at, { lead: false, ...TAKE.motion }), function* () {
-              yield* when<World>(there);
+            yield* parallel<Frame<World>>('race', handTo(h, 'left', item.grips[grip], { on: item, lead: false, ...TAKE.motion }), function* () {
+              yield* when<World>((f) => now - began >= TAKE.seconds && reached(f, INDEX.leftHand, item.grips[grip], item));
               yield* closeHand(h, 'left', item, grip)();
             });
             const closed = now;
@@ -280,13 +290,17 @@ export function shooter(): Scenario {
               yield* bring(full, onItem(rifle, WELL))();
               yield* wear(h, full, rifle, { to: WELL, motion: TAKE.seat })();
             })();
-            // (the rifle turned back as the hand returns: still again by the time it closes on the handguard)
+            // (the rifle turned back as the hand returns to the handguard)
             steps.push('handguard');
             canted = false;
             yield* take(rifle, 'foregrip')();
             [loaded, spare, stowed, free] = [full, spent, slot, emptied];
           };
           return function* () {
+            // (held from the first sub-step, off the hand it starts in: from the next the scene moves it into the aim)
+            yield* wear(h, loaded, rifle)();
+            yield* takeOff(h, rifle)();
+            yield* closeHand(h, 'right', rifle, 'pistol')();
             yield* parallel<Frame<World>>('all',
               watch('weapon pose', () => {
                 if (!acquired || now - steadySince < 0.5 || now - lastShot < 0.5) return null;
@@ -298,14 +312,10 @@ export function shooter(): Scenario {
                 return value > 0.01 ? { check: 'sight line offset (m)', value, limit: 0.01, where: 'rifle' } : null;
               }),
               idle(h, { root: controller.root }),
-              aimAt(h, aim),
+              aimAt(h, ahead),
               reporting(report, ['leftHand', 'rightHand', 'gaze'], function* () {
                 yield* parallel<Frame<World>>('all',
-                  // Tuned responsiveness for the 250 ms carry/ADS transition (m/s², rad/s²).
-                  handTo(h, 'right', hand, { on: eyes, lead: false, accel: 24, turnAccel: 120 }),
                   function* () {
-                    yield* wear(h, loaded, rifle)();
-                    yield* closeHand(h, 'right', rifle, 'pistol')();
                     yield* when<World>((f) => f.time >= 0.9);
                     yield* named('take foregrip', reachFor(h, { left: [rifle, 'foregrip'] }))();
                     acquired = true;

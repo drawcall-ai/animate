@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — a humanoid (`Humanoid`, `idle`, `walkTo`, `grab`, `hold`, `carry`, `place`, `release`, `wear`, `withGaze`) or any other body (`Body`, `Legs`, a shipped horse) moved by @pmndrs/timeline behaviours that flow into one another. Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a humanoid (`Humanoid`, `idle`, `walkTo`, `grab`, `hold`, `carry`, `place`, `release`, `wear`, `withGaze`) or any other body (`Body`, `Legs`, a shipped horse) moved by @pmndrs/timeline behaviours that flow into one another, scripted or driven by a player (`idle(h, { root })`, `aimAt`). Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -112,13 +112,13 @@ const horse: Body = new Body(HORSE_SKELETON, horseFollow(start, (f) => {
 
 ## Checking
 
-Develop with `{ dev: true }` on every body: each sub-step checks the final pose (joint ranges and speeds, planted feet) and appends problems to `body.log`, each with its time and beat. `named('beat', task)` labels beats; wrap a one-shot timeline as `named('beat', () => parallel<Frame>('all', a, b))`. Thrown errors carry the label too:
+Develop with `{ dev: true }` on every body: each sub-step checks the final pose (joint ranges and speeds, planted feet) and appends problems to `body.log`, each with its time and beat. `named('beat', task)` labels beats; wrap a one-shot timeline as `named('beat', () => parallel<Frame>('all', a, b))`. A body throws only for misuse (an item worn twice, a grip that does not exist), and the error carries the time and beat. Something running late never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going.
 
 ```text
-13.350 s, "saddle the horse": "saddle" left grip "left": 0.035 m off; right grip "right": 0.035 m off; 0.035 m off course end after 2 s
+{ time: 4.917, beat: 'take foregrip', check: 'late reach: grip distance after 4 s (m)', value: 0.081, limit: 0.01, where: 'rifle left foregrip' }
 ```
 
-A throw like this means the goal is out of reach from where the body stands: change where it stands (approach its destination placement) or the course; a longer `limit` only throws later. Name every `Item` so errors say which.
+So a scripted story fails by stalling, not by throwing: keep dev on in its tests and assert `body.log` is empty and the story finished. A late entry means the goal is out of reach from where the body stands: change where it stands (approach its destination placement) or the course. A longer `limit` only reports it later. Name every `Item` so entries say which.
 
 Expectations of the scene are watchers, composed before the story; they read final poses and cost nothing with dev off:
 
@@ -132,6 +132,12 @@ yield* parallel<Frame>('all',
   idle(h), story,
 );
 ```
+
+## Player control
+
+For a body the player drives, call `idle(h, { root })` with a `DrivenRoot` that your controller moves every frame: the body stands exactly on it and faces its `yaw`, and the legs step to keep up. Ask a leap with `h.stepper.jump(speed)` and read `h.stepper.airborne`. `aimAt(h, point)` turns the trunk and gaze toward where the player looks.
+
+A held tool that must stay steady in the player's view, such as a first-person weapon, belongs to the aim, not to a hand. Move it yourself every frame, before updating the body: place it in the camera's frame (eye position plus look rotation), follow only its place in that frame (`follow` / `followRotation`, for carry, aim and sprint poses that sway into each other), and hold it in both hands (`hold(h, item)` with no `to`). Hands holding an item that something else moves keep to its grips at any turn rate, and the body does not lean after it. If a hand chases a camera-relative target with `handTo` instead, the tool lags and overshoots on fast turns. Keep the tool where the arms can reach it, because a hand can only keep up with a grip that is within reach.
 
 ## Any rig
 

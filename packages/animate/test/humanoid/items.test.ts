@@ -9,13 +9,14 @@ import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
 /** a humanoid stepping `behaviour` (over its base) for `seconds` */
-function run(behaviour: (h: Humanoid) => Behaviour, seconds: number): Humanoid {
+function run(behaviour: (h: Humanoid) => Behaviour, seconds: number, dev = false): Humanoid {
   // (from the first sub-step on: a timeline starts running as its body is made, before the body is there to read)
   const h = new Humanoid(createSkeletonModel(), (h) =>
     function* () {
       yield* when(() => true);
       yield* parallel<Frame>('all', idle(h), behaviour(h));
     },
+    { dev },
   );
   for (let t = 0; t < seconds; t += 1 / 60) h.update(1 / 60);
   return h;
@@ -123,21 +124,24 @@ describe('items on the body', () => {
 });
 
 describe('hands that cannot get there', () => {
-  it('fail visibly: a reach and a carry out of the arms throw, a release off a folded arm does not hang', () => {
+  it('fail visibly, never by throwing: a reach and a carry out of the arms are late in the dev log and keep going; a release off a folded arm does not hang', () => {
     const far = box(new Vector3(0, 1, 3));
-    expect(() => run((h) => reachFor(h, { left: [far, 'left'], right: [far, 'right'] }), 6)).toThrow(/grip "left": [\d.]+ m off/);
+    const reaching = run((h) => reachFor(h, { left: [far, 'left'], right: [far, 'right'] }), 6, true);
+    expect(reaching.log.filter((entry) => entry.check.startsWith('late reach')).map((entry) => entry.where)).toEqual(['item left left', 'item right right']);
+    expect(reaching.holding.left).toBe(null);
     const held = box(new Vector3(0, 1.1, 0.35));
     const goal = { position: new Vector3(0, 1.1, 3) };
-    expect(() =>
-      run(
-        (h) =>
-          function* () {
-            yield* reachFor(h, { left: [held, 'left'], right: [held, 'right'] })();
-            yield* carry(h, held, [[1, goal]])();
-          },
-        12,
-      ),
-    ).toThrow(/m off course end/);
+    const carrying = run(
+      (h) =>
+        function* () {
+          yield* reachFor(h, { left: [held, 'left'], right: [held, 'right'] })();
+          yield* carry(h, held, [[1, goal]])();
+        },
+      12,
+      true,
+    );
+    expect(carrying.log.filter((entry) => entry.check.startsWith('late carry')).map((entry) => entry.where)).toEqual(['item']);
+    expect(carrying.holding.left?.item).toBe(held);
     // (the hand at the shoulder: back and down from there is behind it)
     let done = false;
     run(

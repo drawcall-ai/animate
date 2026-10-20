@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
+import { Carrier } from '../../src/core/carrier';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
 import { Body, chainTo, lookAt, Skeleton, TrackedRotation, type BoneDef, type Frame } from '../../src';
@@ -160,7 +161,17 @@ describe('reached', () => {
     const pose = (x: number) => ({ position: () => new Vector3(x, 0, 0) }) as unknown as ReadonlyPose;
     const target = { position: new Vector3(speed * 2 * dt, 0, 0), velocity: new Vector3(speed, 0, 0) };
     // the tip was on the target both earlier frames; now the target is a frame (1.5 cm) further on
-    expect(reached(pose(0), pose(speed * dt), dt, 0, target)).toBe(true);
-    expect(reached(pose(0), pose(0), dt, 0, target)).toBe(false);
+    expect(reached({ prev2: pose(0), prev: pose(speed * dt), dt, time: 2 * dt }, 0, target)).toBe(true);
+    expect(reached({ prev2: pose(0), prev: pose(0), dt, time: 2 * dt }, 0, target)).toBe(false);
+  });
+
+  it('counts a tip riding a fast-turning carrier, judged over the same sub-steps as the carrier moved', () => {
+    // (a point 0.5 m out on a carrier turning 6 rad/s: 3 m/s, its velocity turning 0.1 rad a sub-step)
+    const on = new Carrier(new Vector3());
+    const turned = (k: number) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 6 * k * dt);
+    for (let k = 1; k <= 2; k++) on.move(k * dt, new Vector3(), turned(k));
+    const grip = { position: new Vector3(0.5, 0, 0) };
+    const pose = (k: number) => ({ position: () => grip.position.clone().applyQuaternion(turned(k)) }) as unknown as ReadonlyPose;
+    expect(reached({ prev2: pose(0), prev: pose(1), dt, time: 2 * dt }, 0, grip, on)).toBe(true);
   });
 });

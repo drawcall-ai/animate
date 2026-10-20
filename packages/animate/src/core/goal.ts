@@ -1,7 +1,7 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { ReusableTimeline, UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from './body';
-import type { Carrier } from './carrier';
+import type { Placed } from './carrier';
 
 /** A behaviour: a timeline a body steps every sub-step, writing its pose. */
 export type Behaviour<W = unknown> = ReusableTimeline<Frame<W>>;
@@ -42,8 +42,8 @@ export interface Motion {
 export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
   /** the goal's own velocity (per s; for a rotation its angular velocity, rad/s), followed without lag (default still) */
   velocity?: V;
-  /** the goal (and its velocity) is in this carrier's frame: the value is followed relative to it */
-  on?: Carrier;
+  /** the goal (and its velocity) is in this carrier's frame, placed so at the step's time and the two before (`Carrier.at`): the value is followed relative to it */
+  on?: Placed;
 };
 
 /** When a goal-following behaviour ends: a condition, or once it has `'reached'` its goal (within 1 cm and 2°, under 5 cm/s off its velocity). */

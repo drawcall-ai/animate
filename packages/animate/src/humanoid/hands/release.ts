@@ -63,7 +63,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
       });
       return goals;
     };
-    const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], off(f)[k]));
+    const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f, INDEX[`${side}Hand`], off(f)[k]));
     if (options.away === null) { open(); return; }
     yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
   };

@@ -2,9 +2,10 @@ import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
 import { Item, type Carrier } from '../core/carrier';
+import { heldItems } from '../core/worn';
 import { followRotation } from '../core/follow';
 import { Glide } from '../core/glide';
-import { live, type Behaviour, type Live, type Motion, type Target, type Until } from '../core/goal';
+import { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from '../core/goal';
 import { clampRotation } from '../core/limits';
 import { ChainTip, reached } from '../core/tip';
 import { TrackedRotation } from '../core/track';
@@ -154,11 +155,19 @@ export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, o
           for (const [b, q] of kept) set(f, joints, b, q);
           return;
         }
-        // (the target in the world, the hand gliding to it from where it is and how it moves)
+        // (the hand gliding to the target from where it is and how it moves: on what the body itself wears or holds, in its
+        // frame — the body moves that, so its turning or speeding up never leaves the hand behind — else in the world, the
+        // target's own motion fed forward)
         const on = options.on;
-        const world = on ? { ...on.toWorld(goal, _world), axis: goal.axis && _axis.copy(goal.axis).applyQuaternion(on.current.quaternion) } : { ...goal, velocity: goal.velocity ?? ZERO };
-        const moving = _m.subVectors(f.prev.position(bone), f.prev2.position(bone)).divideScalar(f.dt);
-        glide.step(f.prev.position(bone), moving, world.position, world.velocity ?? ZERO, f.dt, _glided);
+        const own = on instanceof Item && (on.wornBy === h || heldItems(h).includes(on)) ? on : undefined, placed = own?.at(f.time);
+        const world = on ? { ...on.toWorld(goal, _world, f.time), axis: goal.axis && _axis.copy(goal.axis).applyQuaternion(on.current.quaternion) } : { ...goal, velocity: goal.velocity ?? ZERO };
+        const aim = placed ? { ...goal, velocity: goal.velocity ?? ZERO } : world;
+        const from = _from.copy(f.prev.position(bone)), was = _was.copy(f.prev2.position(bone));
+        if (placed) {
+          toFrame(placed.prev, from);
+          toFrame(placed.prev2, was);
+        }
+        glide.step(from, _m.subVectors(from, was).divideScalar(f.dt), aim.position, aim.velocity ?? ZERO, f.dt, _glided);
         // (the arm as it stood when the hand set off — its clavicle, where its elbow pointed — turning
         // to what the reach wants as the hand goes: aimed at once where the hand goes, the solve would
         // swing the arm round, drawing the hand back, before it sets off)
@@ -168,14 +177,14 @@ export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, o
           start = {
             elbow: f.prev.position(INDEX[`${side}LowerArm`]).clone().sub(f.prev.position(INDEX[`${side}UpperArm`])).applyQuaternion(_c.copy(f.prev.rotation(INDEX.chest)).invert()),
             clavicle: f.prev.local(INDEX[`${side}Shoulder`]).clone(),
-            off: _glided.position.distanceTo(world.position),
+            off: _glided.position.distanceTo(aim.position),
           };
         }
-        const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(world.position) / start.off) : 1;
+        const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(aim.position) / start.off) : 1;
         const pole = options.pole === undefined ? elbowPole(f, h.proportions, side, world.position, _pole).lerp(_bend.copy(start.elbow).applyQuaternion(chest).add(shoulder), 1 - share) : live(options.pole, f);
-        handStep(h, f, side, { ...world, position: _glided.position, velocity: _glided.velocity }, { ...options, on: undefined, pole }, arm, { at: world.position, center: on?.current.position, clavicle: start.clavicle, share });
+        handStep(h, f, side, { ...aim, position: _glided.position, velocity: _glided.velocity }, { ...options, on: own, pole }, arm, { at: world.position, center: on?.current.position, clavicle: start.clavicle, share });
       },
-      until: until === 'reached' ? (f) => reached(f.prev2, f.prev, f.dt, INDEX[`${side}Hand`], live(target, f), options.on) : until,
+      until: until === 'reached' ? (f) => reached(f, INDEX[`${side}Hand`], live(target, f), options.on) : until,
     });
   };
 }
@@ -186,7 +195,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
   if (wearing && typeof wearing.on === 'number' && f.current.skeleton.chain(`${side}Arm`).includes(wearing.on)) return;
   const p = h.proportions;
-  const at = options.on ? options.on.toWorld(target, _world).position : target.position;
+  const at = options.on ? options.on.toWorld(target, _target, f.time).position : target.position;
   shrug(f, p, side, toward?.at ?? at, toward);
   const pole = options.pole === undefined ? elbowPole(f, p, side, at, _pole) : live(options.pole, f);
   // (gliding from where the hand is: an arm hanging all but straight is not drawn in at once)
@@ -249,6 +258,11 @@ function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Ve
   return out.applyQuaternion(chest).setLength(p.upperArm).add(shoulder);
 }
 
+/** `world` into the frame of a carrier placed `at` */
+function toFrame(at: Required<Placement>, world: Vector3): Vector3 {
+  return world.sub(at.position).applyQuaternion(_frame.copy(at.quaternion).invert());
+}
+
 /** an arm's joints, from the clavicle out */
 const ARM = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const;
 const X = new Vector3(1, 0, 0);
@@ -270,8 +284,12 @@ const _rest = new Vector3();
 const _pole = new Vector3();
 const _bend = new Vector3();
 const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _target: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _m = new Vector3();
 const _axis = new Vector3();
+const _from = new Vector3();
+const _was = new Vector3();
+const _frame = new Quaternion();
 const _glided = { position: new Vector3(), velocity: new Vector3() };
 const ZERO = new Vector3();
 

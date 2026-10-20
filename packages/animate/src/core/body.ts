@@ -177,6 +177,7 @@ export class Body<W = unknown> {
     frame.beats.clear();
     frame.time += dt;
     clock.delta = dt;
+    for (const item of this.worn.keys()) item.due(frame.time);
     (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
     if (frame.dev) frame.dev.beat = frame.beats.size ? [...frame.beats].join(' ∥ ') : undefined;
     moveWorn(this, frame);
