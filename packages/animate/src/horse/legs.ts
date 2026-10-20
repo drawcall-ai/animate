@@ -3,7 +3,8 @@ import { live, type Behaviour, type Live, type Target } from '../core/goal';
 import type { ReadonlyPose } from '../core/pose';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { clamp, minimumJerk, yawOf } from '../core/math';
-import { irregular, seeded, seedOf } from '../core/random';
+import { irregular, seedOf } from '../core/random';
+import { Life, swing, type Rhythm } from '../core/life';
 import { strideAt, type Gait } from '../core/legs/gait';
 import type { Frame } from '../core/body';
 import { Legs, type LegChain } from '../core/legs/legs';
@@ -133,7 +134,15 @@ export interface HorseAttention {
 }
 
 const turn = (x = 0, y = 0, z = 0, out = _q) => out.setFromEuler(_e.set(x, y, z, 'YXZ'));
-const channel = (lo: number, hi: number, rate: number, rand: () => number) => ({ lo, hi, rate, next: lo + (hi - lo) * rand(), aim: 0, value: 0 });
+/**
+ * A horse's quiet life [C]: ears flick every 2–6 s, the tail swishes every 5–20 s, the head turns every 10–30 s and the weight
+ * shifts every 20–60 s (tuned: the first at 2–6 s); each goal crosses neutral so every change shows [D].
+ */
+const HORSE_LIFE: readonly (readonly [string, Rhythm])[] = [
+  ['leftEar', { every: [2, 6], rate: 8, pick: swing }], ['rightEar', { every: [2, 6], rate: 8, pick: swing }],
+  ['tail', { every: [5, 20], rate: 1, pick: swing }], ['head', { every: [10, 30], rate: 1, pick: swing }],
+  ['weight', { every: [20, 60], first: [2, 6], rate: 1, pick: swing }],
+];
 
 /** Attention-only halter point: ignores gait pitch/nod so a lead hand need not chase them. */
 export const horseLeadPoint = (pose: ReadonlyPose, out: Vector3): Vector3 =>
@@ -144,12 +153,7 @@ export const horseLeadPoint = (pose: ReadonlyPose, out: Vector3): Vector3 =>
 /** Posture before contact solving; research-contact.md §§5–6: [R-s] contact phase, [C] idle/tail timing.
  * Gait ranges retain the file's [R via summary]/[R/R-s] provenance, not fresh paper readings. */
 export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(start.position(0).x, start.position(0).z)) {
-  const height = start.position(0).y, rand = seeded(seed), driftPhase = rand() * 2 * Math.PI;
-  const idle = { ears: { left: channel(2, 6, 8, rand), right: channel(2, 6, 8, rand) },
-    tail: channel(5, 20, 1, rand), head: channel(10, 30, 1, rand), weight: channel(20, 60, 1, rand) };
-  const channels = [idle.ears.left, idle.ears.right, idle.tail, idle.head, idle.weight];
-  // Tuned first shift at 2–6 s; later shifts 20–60 s and hind rest after 60–180 s quiet [C].
-  idle.weight.next = 2 + (idle.weight.next - 20) / 10;
+  const height = start.position(0).y, idle = new Life(seed, HORSE_LIFE), rand = idle.rand, driftPhase = idle.phase;
   const rest = { quiet: 0, value: 0, side: 0, at: 60 + 120 * rand(), pitches: [0, 0, 0, 0] };
   const reaction = new Vector3(), tied = { position: new Vector3(), length: 0 }, tail = { angle: 0, rate: 0 };
   let moving = 0, responseTime = Infinity, swish = Infinity;
@@ -169,15 +173,8 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
       const phase = 2 * Math.PI * (legs.legs[0].phase + (speed > 0 ? stride.frequency * f.dt : 0));
       const wave = Math.cos(2 * phase), hind = 2 * Math.PI * (legs.legs[2].phase + (speed > 0 ? stride.frequency * f.dt : 0));
       swish += f.dt;
-      // [D] Ear/head goals cross neutral so each scheduled posture change remains visible.
-      for (const c of channels) {
-        if (t >= c.next) {
-          c.aim = (c.aim > 0 ? -1 : 1) * (0.25 + 0.75 * rand());
-          if (c === idle.tail) swish = 0;
-          c.next = t + c.lo + (c.hi - c.lo) * rand();
-        }
-        c.value += (c.aim - c.value) * (1 - Math.exp(-c.rate * f.dt));
-      }
+      idle.update(t, f.dt);
+      if (idle.fired('tail')) swish = 0;
       if (rest.quiet >= rest.at) { rest.side = rest.side ? -rest.side : (rand() < 0.5 ? 1 : -1); rest.at = rest.quiet + 60 + 240 * rand(); }
       rest.value += ((rest.quiet >= 60 ? rest.side : 0) * (1 - m) - rest.value) * (1 - Math.exp(-f.dt));
       rest.pitches[2] = -25 * Math.max(0, rest.value); rest.pitches[3] = 25 * Math.min(0, rest.value);
@@ -195,7 +192,7 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
       // Retained avoidance: 0.8 m / 0.3 m transition, 0.5 rad, 0.25 s response.
       const away = person ? -Math.sign(_person.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3)) : 0;
       // Tuned gains (rad): neck .35/head .2 sum to 31.5° look-back [D]; ears −.3, pelvis .025, tail .2.
-      const wanted = away || (0.3 * attended * (1 - m) + 0.18 * idle.head.value * (1 - m) + 0.35 * toward * response);
+      const wanted = away || (0.3 * attended * (1 - m) + 0.18 * idle.value('head') * (1 - m) + 0.35 * toward * response);
       const yaw = previous + (clamp(wanted, -0.55, 0.55) - previous) * (1 - Math.exp(-4 * f.dt));
       // Tuned: inherited drift frequencies .79/1.37/2.11 rad/s, not measured physiology.
       const drift = irregular(t, driftPhase, 0.79, 1.37, 2.11) * (1 - m);
@@ -206,16 +203,16 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
       f.current.setRoot(_point.copy(f.prev.position(0)).setY(rootHeight));
       f.current.setLocal(0, turn(pitch, yawOf(f.prev.rotation(0))));
       // [D] Hip-axis roll within the skeleton's range shifts the croup up to 2.5 cm; rests take over.
-      f.current.setLocal(SPINE, turn(body.spine * DEG * Math.cos(theta - body.spinePhase) * m, 0, WEIGHT_ROLL * idle.weight.value * (1 - m) * (1 - Math.abs(rest.value))));
+      f.current.setLocal(SPINE, turn(body.spine * DEG * Math.cos(theta - body.spinePhase) * m, 0, WEIGHT_ROLL * idle.value('weight') * (1 - m) * (1 - Math.abs(rest.value))));
       f.current.setLocal(PELVIS, turn(0, 2.5 * DEG * sway * m, body.roll * DEG * sway * m + (-0.12 * rest.value + 0.025 * toward * response) * (1 - m)));
       const neckBase = f.current.position(NECK).y;
       const poll = height + NECK_BASE.y + POLL.y + body.headWithers * withers + body.headRise * wave * m;
       const nod = Math.atan2(POLL.y, POLL.z) - Math.asin(clamp((poll - neckBase) / Math.hypot(POLL.y, POLL.z), -0.9, 0.9)) - pitch;
       f.current.setLocal(NECK, turn(nod + 0.025 * drift, yaw));
       f.current.setLocal(HEAD, turn(body.headPitch * DEG * wave * m - pitch - nod, 0.2 * toward * response));
-      EARS.forEach((ear, i) => f.current.setLocal(ear, turn(-0.3 * response, clamp(attended + (i === 0 ? idle.ears.left : idle.ears.right).value * 0.7 + toward * response, -2, 2)), 1 - Math.exp(-10 * f.dt)));
+      EARS.forEach((ear, i) => f.current.setLocal(ear, turn(-0.3 * response, clamp(attended + idle.value(i === 0 ? 'leftEar' : 'rightEar') * 0.7 + toward * response, -2, 2)), 1 - Math.exp(-10 * f.dt)));
       // [C] Critically damped follower, ~0.15 s lag; independent seeded fly swishes.
-      const tailGoal = -2 * _e.setFromQuaternion(f.current.local(PELVIS), 'YXZ').z + 0.7 * Math.sin(2 * Math.PI * Math.min(1, swish / 1.2)) * Math.sign(idle.tail.aim) * (1 - m) + 0.03 * drift + 0.2 * response;
+      const tailGoal = -2 * _e.setFromQuaternion(f.current.local(PELVIS), 'YXZ').z + 0.7 * Math.sin(2 * Math.PI * Math.min(1, swish / 1.2)) * Math.sign(idle.aim('tail')) * (1 - m) + 0.03 * drift + 0.2 * response;
       tail.rate += (100 * (tailGoal - tail.angle) - 20 * tail.rate) * f.dt;
       tail.angle += tail.rate * f.dt;
       f.current.setLocal(TAIL, turn(0.05 * m * Math.sin(2 * phase - 1), tail.angle));

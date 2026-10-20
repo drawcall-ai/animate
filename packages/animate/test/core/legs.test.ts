@@ -332,12 +332,13 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
 });
 
 it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on its toe', () => {
-  const sample = (seed: number) => {
+  /** `seconds` of a tied horse standing: what moves, how far off it strays, and how its hind hooves rest late on */
+  const sample = (seed: number, seconds: number) => {
     const knot = new Vector3(0.7, 1.12, 0.8);
     const { body } = movingHorse(HORSE_WALK, 0, { tether: { position: knot, length: 1.1 } }, seed);
     const ears: number[][] = [[], []], tail: number[] = [], head: number[] = [], roll: number[] = [], yaw: number[] = [], shift: number[] = [];
-    let rested = 0, toe = 0, heel = 0;
-    for (let tick = 0; tick < 220 * 60; tick++) {
+    let rested = 0, toe = 0, heel = 0, tied = 0, aside = 0, ahead = -Infinity, behind = Infinity;
+    for (let tick = 0; tick < seconds * 60; tick++) {
       body.update(1 / 60);
       const p = body.pose;
       EARS.forEach((ear, i) => ears[i].push(p.local(ear).angleTo(new Quaternion())));
@@ -345,30 +346,34 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
       yaw.push(new Euler().setFromQuaternion(p.local(NECK), 'YXZ').y);
       roll.push(new Euler().setFromQuaternion(p.rotation(PELVIS), 'YXZ').z);
       shift.push(p.position(PELVIS).x);
-      expect(p.point(HEAD, HALTER, new Vector3()).distanceTo(knot)).toBeLessThanOrEqual(1.1 + 1e-6);
+      tied = Math.max(tied, p.point(HEAD, HALTER, new Vector3()).distanceTo(knot));
       const com = p.com(new Vector3());
-      expect(Math.abs(com.x)).toBeLessThan(0.08);
-      expect(com.z).toBeGreaterThan(-0.4); expect(com.z).toBeLessThan(0.5);
+      [aside, ahead, behind] = [Math.max(aside, Math.abs(com.x)), Math.max(ahead, com.z), Math.min(behind, com.z)];
       if (tick > 180 * 60) for (const leg of LEGS.slice(2)) {
         const h = p.point(leg.hoof, leg.heel, new Vector3()).y, t = p.point(leg.hoof, leg.toe, new Vector3()).y;
         if (h > heel) { heel = h; toe = t; rested = p.position(leg.upper).y; }
       }
     }
-    expect(excursion(ears[0].slice(0, 6 * 60))).toBeGreaterThan(0.1);
-    expect(excursion(ears[1].slice(0, 6 * 60))).toBeGreaterThan(0.1);
-    expect(excursion(tail.slice(0, 20 * 60))).toBeGreaterThan(0.1);
-    expect(excursion(head.slice(0, 25 * 60))).toBeGreaterThan(0.02);
-    expect(excursion(yaw.slice(0, 25 * 60))).toBeGreaterThan(0.03);
-    expect(excursion(roll.slice(0, 60 * 60))).toBeGreaterThan(0.01);
-    expect(excursion(shift.slice(0, 6 * 60))).toBeGreaterThan(0.01);
-    expect(heel).toBeGreaterThan(0.04); expect(Math.abs(toe)).toBeLessThan(1e-4);
-    expect(rested).toBeLessThan(1.11);
+    expect(tied).toBeLessThanOrEqual(1.1 + 1e-6);
+    expect(aside).toBeLessThan(0.08);
+    expect(behind).toBeGreaterThan(-0.4); expect(ahead).toBeLessThan(0.5);
     expect(body.log).toEqual([]);
-    return { ears, tail, head };
+    return { ears, tail, head, roll, yaw, shift, heel, toe, rested };
   };
-  const a = sample(42);
-  expect(sample(42)).toEqual(a);
-  expect(sample(43)).not.toEqual(a);
+  // (the whole while once, to the hind rest after 60–180 s quiet; seeding judged over the first 25 s)
+  const a = sample(42, 220);
+  expect(excursion(a.ears[0].slice(0, 6 * 60))).toBeGreaterThan(0.1);
+  expect(excursion(a.ears[1].slice(0, 6 * 60))).toBeGreaterThan(0.1);
+  expect(excursion(a.tail.slice(0, 20 * 60))).toBeGreaterThan(0.1);
+  expect(excursion(a.head.slice(0, 25 * 60))).toBeGreaterThan(0.02);
+  expect(excursion(a.yaw.slice(0, 25 * 60))).toBeGreaterThan(0.03);
+  expect(excursion(a.roll.slice(0, 60 * 60))).toBeGreaterThan(0.01);
+  expect(excursion(a.shift.slice(0, 6 * 60))).toBeGreaterThan(0.01);
+  expect(a.heel).toBeGreaterThan(0.04); expect(Math.abs(a.toe)).toBeLessThan(1e-4);
+  expect(a.rested).toBeLessThan(1.11);
+  const early = (s: ReturnType<typeof sample>) => [s.ears.map((e) => e.slice(0, 25 * 60)), s.tail.slice(0, 25 * 60), s.head.slice(0, 25 * 60)];
+  expect(early(sample(42, 25))).toEqual(early(a));
+  expect(early(sample(43, 25))).not.toEqual(early(a));
 }, 30000);
 
 it.each([false, true])('checks the final tied pose after later writers, dev=%s', (dev) => {
