@@ -6,7 +6,7 @@ import { forwardOf, leftOf } from '../../src/core/math';
 const dt = 1 / 60;
 
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
-function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0) {
+function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid<unknown>) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
   const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { legs: { root } }), { dev: true });
   let lag = 0, steps = 0;
@@ -16,6 +16,7 @@ function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => 
     root.position.addScaledVector(root.velocity, dt);
     root.yaw += (yaw(t) - root.yaw) * (1 - Math.exp(-dt / 0.025));
     h.update(dt);
+    each?.(t, root, h);
     const hips = h.pose.position(0);
     lag = Math.max(lag, Math.hypot(hips.x - root.position.x, hips.z - root.position.z));
     h.feet.forEach((foot, s) => { if (foot.phase === 'swing' && phases[s] === 'planted') steps++; phases[s] = foot.phase; });
@@ -62,4 +63,36 @@ it('walks a curve while turning, then stops and turns back in place', () => {
   expect(lag).toBe(0);
   expect(h.log).toEqual([]);
   expect(Math.abs(h.gait.facing + 0.6)).toBeLessThan(0.01);
+});
+
+it('crouches as asked: the pelvis let down smoothly, feet wider, steps still clean crouch-walking', () => {
+  let low = Infinity, standing = 0;
+  const { h } = drive(6, moving(2, 4.5, forwardOf(0).multiplyScalar(0.8)), () => 0, (t, root, h) => {
+    root.crouch = Math.min(1, Math.max(0, (t - 0.5) / 0.25), Math.max(0, (5.25 - t) / 0.25));
+    if (t < 0.5) standing = h.pose.position(0).y;
+    if (t > 1 && t < 5) low = Math.min(low, h.pose.position(0).y);
+  });
+  expect(standing - low).toBeGreaterThan(0.33);
+  expect(standing - low).toBeLessThan(0.42);
+  expect(h.log).toEqual([]);
+});
+
+it.each([
+  ['standing', 0],
+  ['from a walk', 1.4],
+  ['from a sprint', 3.5],
+])('jumps %s: dips, flies the ballistic arc, lands it with the knees, without a slide or a knee snap', (_, speed) => {
+  let pressed = NaN, off = NaN, landed = NaN, top = 0, standing = 0;
+  const { h, lag } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, root, h) => {
+    if (Math.abs(t - 1.5) < dt / 2) [root.jump, pressed, standing] = [2.5, t, h.pose.position(0).y];
+    if (root.airborne && Number.isNaN(off)) off = t;
+    if (!root.airborne && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
+    if (root.airborne) top = Math.max(top, h.pose.position(0).y - standing);
+  });
+  expect(off - pressed).toBeLessThanOrEqual(0.12);
+  expect(landed - off).toBeGreaterThan(0.45);
+  expect(landed - off).toBeLessThan(0.6);
+  expect(top).toBeGreaterThan(0.25);
+  expect(lag).toBe(0);
+  expect(h.log).toEqual([]);
 });

@@ -13,6 +13,8 @@ const MIN_SPEED = 0.6;
 const FORWARD = 0.8;
 /** strides with the trunk flexed further than this (rad), or the stride before, are a stooped walk (or going into or out of one), not the upright gait measured here */
 const STOOPED = 0.26;
+/** strides with the hips lower than this share of their standing height (a crouch-walk), or rising and falling over more than `range` (m; a leap), or the stride before, are not the upright gait measured here */
+const LEVEL = { low: 0.8, range: 0.15 };
 /** how long before the first step and after coming to rest setting off and stopping count (s) */
 const TRANSITION = 1;
 /** strides faster than this (m/s) are running */
@@ -28,6 +30,8 @@ interface Sample {
   /** ground speed along the facing (m/s) */
   ahead: number;
   hips: Vector3;
+  /** the hips' standing height (m) */
+  standing: number;
   chest: Vector3;
   head: Vector3;
   /** pelvic obliquity (+ = left hip up), rotation (+ = left hip forward), thorax roll and yaw, trunk lean (hips → neck, + = to the left), head roll and yaw (rad) */
@@ -157,6 +161,7 @@ export class GaitKinematics {
       speed: Math.hypot(h.gait.velocity.x, h.gait.velocity.z),
       ahead: h.gait.velocity.x * fwd.x + h.gait.velocity.z * fwd.z,
       hips: j('hips'),
+      standing: h.proportions.hipHeight,
       chest: j('chest'),
       head: eyesOf(h),
       pelvisRoll: pelvis.roll,
@@ -204,6 +209,8 @@ export class GaitKinematics {
       if (mean < MIN_SPEED || Math.max(...speeds) - Math.min(...speeds) > STEADY * mean) continue;
       if (S.slice(a, b).reduce((x, s) => x + s.ahead, 0) / n < FORWARD * mean) continue;
       if (S.slice(a - n, b).some((s) => s.trunk > STOOPED)) continue;
+      const heights = S.slice(a - n, b).map((s) => s.hips.y);
+      if (Math.min(...heights) < LEVEL.low * S[a].standing || Math.max(...heights) - Math.min(...heights) > LEVEL.range) continue;
       // (turning anywhere within a stride of it, a bend setting in or easing off shifts the moving
       // averages; steady, it turns alike over it and the stride before)
       const rate = (k: number) => Math.abs(S[k + n].yaw - S[k].yaw) / (S[k + n].t - S[k].t);

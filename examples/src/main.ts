@@ -227,7 +227,7 @@ function bindPlayerInput() {
   const clearInput = () => {
     keys.clear();
     const player = playback.sim.stage.player;
-    if (player) { player.input.move.x = 0; player.input.move.z = 0; player.input.fire = false; player.input.ads = false; player.input.sprint = false; }
+    if (player) Object.assign(player.input, { move: { x: 0, z: 0 }, fire: false, ads: false, sprint: false, crouch: false, jump: false, reload: false });
   };
   const moveInput = () => {
     const player = playback.sim.stage.player;
@@ -235,6 +235,9 @@ function bindPlayerInput() {
     player.input.move.x = Number(keys.has('KeyA')) - Number(keys.has('KeyD'));
     player.input.move.z = Number(keys.has('KeyW')) - Number(keys.has('KeyS'));
     player.input.sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
+    player.input.crouch = keys.has('KeyC') || keys.has('ControlLeft') || keys.has('ControlRight');
+    player.input.jump = keys.has('Space');
+    player.input.reload = keys.has('KeyR');
   };
   canvas.addEventListener('click', () => {
     const player = playback.sim.stage.player;
@@ -254,7 +257,7 @@ function bindPlayerInput() {
     moveInput();
     const player = playback.sim.stage.player;
     if (event.code === 'KeyV' && !event.repeat && player) player.input.view = player.input.view === 'first' ? 'third' : 'first';
-    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyV'].includes(event.code)) event.preventDefault();
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyV', 'KeyC', 'KeyR', 'Space', 'ControlLeft', 'ControlRight'].includes(event.code)) event.preventDefault();
   });
   document.addEventListener('keyup', (event) => { keys.delete(event.code); moveInput(); });
   document.addEventListener('mousemove', (event) => {

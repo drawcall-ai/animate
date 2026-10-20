@@ -16,10 +16,12 @@ export interface Role {
 
 /** A run of a scenario: its world, its scenery and carriers, and its actors' behaviours (made fresh for every run). */
 export interface Player {
-  input: { move: { x: number; z: number }; aimYaw: number; aimPitch: number; fire: boolean; ads: boolean; sprint: boolean; view: 'first' | 'third' };
+  input: { move: { x: number; z: number }; aimYaw: number; aimPitch: number; fire: boolean; ads: boolean; sprint: boolean; crouch: boolean; jump: boolean; reload: boolean; view: 'first' | 'third' };
   live: boolean;
   /** the root the player drives: where the body is on the floor, how fast it goes, which way it faces */
-  root?: { position: Vector3; velocity: Vector3; yaw: number };
+  root?: { position: Vector3; velocity: Vector3; yaw: number; crouch?: number; jump?: number; airborne?: boolean };
+  /** what the player is doing beyond moving (a reload under way, its steps so far, the items it moves) */
+  status?: () => { reloading: boolean; steps: readonly string[]; magazines: readonly Item[] };
   eyes(): Vector3;
 }
 
