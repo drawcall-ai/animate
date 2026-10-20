@@ -10,7 +10,7 @@ import type { Carriage } from './carriage';
 import { ankleFor, footprint, MAX_HEEL } from './foot';
 import type { Frame } from '../../core/body';
 import { liftOff } from './legs';
-import { hullOf, outside, past } from './support';
+import { hullOf, outside, past } from '../../core/legs/support';
 import { REACH } from './posture';
 import { leadTime, type Timing } from './timing';
 

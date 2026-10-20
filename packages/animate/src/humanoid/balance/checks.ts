@@ -7,7 +7,7 @@ import type { Stepping } from './carriage';
 import type { Humanoid } from '../humanoid';
 import { solePoints } from '../landmarks';
 import { ballOf, footRotation, heelOf, footprint } from './foot';
-import { hullOf, outside } from './support';
+import { hullOf, outside } from '../../core/legs/support';
 
 /** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
 export function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {

@@ -34,11 +34,11 @@ export class Planner {
     const goalTurn = last && speed > 1e-6 && last.lengthSq() > 1e-12 ? wrapAngle(Math.atan2(velocity.x, velocity.z) - Math.atan2(last.x, last.z)) / f.dt : 0;
     (this.goalVelocity ??= new Vector3()).copy(velocity);
     const facing = goal.yaw === undefined ? undefined : new Quaternion().setFromAxisAngle(UP, goal.yaw);
-    let plan = rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, 1, goalTurn, 1, stance);
+    let plan = rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, 1, goalTurn, 1, stance, true);
     for (let share = SHORTEN, k = 0; k < TRIES; k++, share *= SHORTEN) {
       const at = (ahead: number) => { const root = plan.root(f.time + ahead); return { position: root.position, yaw: yawOf(root.quaternion) }; };
       if (holds(at)) break;
-      plan = rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, share, goalTurn, k === TRIES - 1 ? 0 : share, stance);
+      plan = rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, 1, this.state, acceleration, facing, share, goalTurn, k === TRIES - 1 ? 0 : share, stance, true);
     }
     const chosen = plan, now = f.time;
     this.root.forecast = (ahead) => { const root = chosen.root(now + ahead); return { position: root.position.clone().setY(0), yaw: yawOf(root.quaternion) }; };

@@ -17,22 +17,12 @@ import { knownFailure } from '../scripts/run';
 type MigrationStage = 3 | 4;
 const coreFailures: Record<string, { checks: Record<string, MigrationStage | readonly MigrationStage[]>; error?: { stage: MigrationStage; message: string } }> = {
   'stroll': { checks: {} },
-  'pickup-shelf': {
-    // The stride's third step lands short of the XCoM (2.1 s, 0.115 m): capture stepping, stage 3. It squats but cannot reach the
-    // box (lowering/bowing toward it, the squat's landing): stage 4.
-    checks: { 'XCoM outside support (m)': 3, 'driven touchdown vertical speed (m/s)': 4, 'pickup-shelf: scenario unfinished': 4 },
-  },
+  'pickup-shelf': { checks: {} },
   'hand-over': { checks: {} },
-  'knight-arming': {
-    // Initial table turn passes; the loaded lance is stage 4.
-    checks: { 'XCoM outside support (m)': 4 },
-  },
+  'knight-arming': { checks: {} },
   'idle-life': { checks: {} },
   'reach-around': { checks: {} },
-  'lift-heavy': {
-    // Lowered toward the floor box below the stepper's own crouch, a planted foot slides and a swinging sole sinks.
-    checks: { 'driven planted slide (m)': 4, 'driven swing sole sink (m)': 4 },
-  },
+  'lift-heavy': { checks: {} },
 };
 
 function measure(sc: Scenario, legs?: 'old' | 'core') {
@@ -174,9 +164,9 @@ for (const [name, scene, stages] of [
   ['left yaw', stroll({ yaw: 0.3 }), {}],
   ['right yaw', stroll({ yaw: -0.3 }), {}],
   ['quarter turn', stroll({ yaw: Math.PI / 2 }), {}],
-  ['half turn', stroll({ yaw: Math.PI }), { 'XCoM outside support (m)': 4 }],
+  ['half turn', stroll({ yaw: Math.PI }), {}],
   ['turn in place', walkThere(new Vector3(), Math.PI), {}],
-  ['turning arrival', walkThere(new Vector3(0, 0, 4), Math.PI), { 'XCoM outside support (m)': 4 }],
+  ['turning arrival', walkThere(new Vector3(0, 0, 4), Math.PI), {}],
 ] as const) it(`core stage 2: ${name}`, async () => {
   // Let the runner flush progress between synchronous simulations.
   await new Promise<void>((resolve) => setImmediate(resolve));

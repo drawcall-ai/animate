@@ -8,6 +8,7 @@ import type { ReadonlyPose } from '../pose';
 import { follow } from '../follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle } from '../math';
 import { quintic } from './swing';
+import { hullOf, outside, type Spot } from './support';
 
 /** The root a scene drives: its point on the floor, its velocity over it (m/s), its facing (rad about +Y), how far it crouches (0 standing … 1 a deep crouch). */
 export interface DrivenRoot {
@@ -15,6 +16,15 @@ export interface DrivenRoot {
   velocity: Vector3;
   yaw: number;
   crouch?: number;
+  /** where the hips are over the floor from the root, if not over it (m): the root then the feet's middle under the body's centre of mass, the
+   * hips swaying, sitting back or leaning over the toes from it; by default the hips are the root, the feet a crouch's `ahead` of them */
+  hips?: Vector3;
+  /** how far up on the balls of its feet (m): the planted feet roll onto them as the hips rise */
+  tiptoe?: number;
+  /** the feet stay where they stand but to keep the balance or even out a staggered stance (a body let down or up to reach) */
+  still?: boolean;
+  /** the extrapolated centre of mass on the floor now, if the body knows it better than its root's (a pose's: its centre of mass carried on at its speed for √(l/g)) */
+  xcom?: Vector3;
   /** where it will be and face `ahead` s on, if it knows (a planner's root): a landing foresees that, not a straight run at its turning rate */
   forecast?: (ahead: number) => { position: Vector3; yaw: number };
 }
@@ -34,6 +44,8 @@ export interface Stepping {
   bob: number; drop: { walk: number; side: number; run: number }; lift: { walk: number; run: number; jump: number }; arc: number;
   strike: { walk: number; run: number; ahead: number }; pitch: { heel: number; ball: number }; dorsiflexion: number;
   crouch: { depth: number; wider: number; ahead: number; travel: number; lift: number }; reach: number; swingReach: number; clearance: number;
+  /** how far past the feet (m) the extrapolated centre of mass is caught by a step; none: the legs only follow the root (a player's) */
+  capture?: number;
 }
 
 /**
@@ -47,10 +59,12 @@ export interface Feet {
   rotation(yaw: number, pitch: number, out: Quaternion): Quaternion;
   sole(i: number, ankle: Vector3, foot: Quaternion, toes: Quaternion): number;
   lean(i: number, pose: ReadonlyPose, yaw: number): number;
+  /** the corners of the sole standing flat with its ankle at `anchor`, heading `yaw`, on the floor */
+  print(i: number, anchor: Readonly<Vector3>, yaw: number): Spot[];
 }
 
 export interface FootPose { ankle: Vector3; foot: Quaternion; toes: Quaternion; yaw: number }
-interface Swing { u: number; age: number; rest: number; T: number; x: Vector3; v: Vector3; a: Vector3; fromYaw: number; fromPitch: number; toes: Quaternion; strike: number; lift: number; run: number; rel: { x: number; v: number; a: number } | null }
+interface Swing { capture: boolean; u: number; age: number; rest: number; T: number; x: Vector3; v: Vector3; a: Vector3; fromYaw: number; fromPitch: number; toes: Quaternion; strike: number; lift: number; run: number; rel: { x: number; v: number; a: number } | null }
 export interface Leg { i: number; leapt?: boolean; sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean; planted: number; lifted: number; strike: number; landed: boolean; swing: Swing | null }
 type Leap = { phase: 'ground' | 'launch' | 'air' | 'landed' | 'down' | 'up'; since: number; speed: number; land: number; bottom: number; rise: number; vy: number; a: number };
 
@@ -59,11 +73,14 @@ type Leap = { phase: 'ground' | 'launch' | 'air' | 'landed' | 'down' | 'up'; sin
  * is due (its gait share of a cycle after the leg before it lifted; standing, after `square` s) and is `distance` (m; standing still and
  * upright: `still`, the stance squared up evenly) off its home, or turned `turn` (rad; still: `squared`) off it; at once if it would hold the
  * pelvis `short` (m) below its height, or is `medial` (m) in from its hip under the body, or a whole stance's travel behind it. A step that
- * would end `BLOCKED` (m) across the other foot waits for the other to step first. The pelvis turns at most `PELVIS_TURN` (rad) from a planted
+ * would end `BLOCKED` (m) across the other foot waits for the other to step first (a walker's — a foreseen root's — instead closes beside
+ * it, needing no gap from it once `SPAN` (m) or more ahead or behind; it opens a side-step with the foot on the side it goes (moving more
+ * than `SIDE` of its speed sideways), lands flat but `BACKSTEP` (m) or more behind its hip, and, still, steps only to even out feet
+ * `STAGGERED` (m) apart fore and aft). The pelvis turns at most `PELVIS_TURN` (rad) from a planted
  * foot's facing (the trunk and gaze take the rest), at `TURN` (rad/s², rad/s); a landing foresees at most `SPIN` (rad/s) of the root's turn;
  * turning steps as quick as walking `TURNING` m/s per rad/s turned or rad behind.
  */
-const DUE = 1.5, BLOCKED = 0.05, PELVIS_TURN = (50 * Math.PI) / 180, SPIN = 1.5, TURNING = 0.5, TURN = { accel: 80, speed: 8 };
+const DUE = 1.5, BLOCKED = 0.05, SPAN = 0.25, SIDE = 0.5, BACKSTEP = 0.1, STAGGERED = 0.08, PELVIS_TURN = (50 * Math.PI) / 180, SPIN = 1.5, TURNING = 0.5, TURN = { accel: 80, speed: 8 };
 const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
 /**
  * Tuned: a strike rolls flat in `ROLL` s; the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend; within `PIVOT` (m) of
@@ -71,9 +88,9 @@ const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared:
  * `RISING` s sooner for a foot out of reach: it steps before its leg goes straight. The feet let the pelvis down at most `LOWEST` (m: a foot
  * past reach leaves the leg straight instead), and it takes its height up again within `RISE` (m/s²); a landing is kept within the leg's
  * reach with the pelvis let down `LANDING.drop` (m) more, never nearer than `least` (m). A swing's duration grows with the gait's at most
- * `PACE` (s/s); past `SETTLE` of it even a hard stop no longer moves its landing. Landing a leap, the foot comes down at `TOUCH` of the body's fall.
+ * `PACE` (s/s); past `SETTLE` of it even a hard stop no longer moves its landing (a walker's: past `AIMED`). Landing a leap, the foot comes down at `TOUCH` of the body's fall.
  */
-const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, TOUCH = 0.85;
+const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85;
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
@@ -97,7 +114,7 @@ export class Stepper {
   private readonly before: number[]; private readonly gap: number[]; private readonly yaws: number[];
   private asked: number | undefined; private stand = NaN; private last: number; private rootYaw: number;
   private readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
-  private low = NaN;
+  private low = NaN; private most = Infinity; private readonly hips = new Vector3();
   private readonly heights = [0, 0]; private readonly velocity = new Vector3(); private poses: (FootPose | null)[] = [];
 
   constructor(private readonly st: Stepping, private readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number) {
@@ -118,7 +135,8 @@ export class Stepper {
     if (Number.isNaN(this.stand)) this.stand = heights[0] = heights[1] = f.prev.position(0).y;
     const v = Math.hypot(r.velocity.x, r.velocity.z);
     // (crouched: lower, the feet wider and a little ahead of the hips — the hips sit back — shorter, lower steps)
-    const k = minimumJerk(clamp(r.crouch ?? 0, 0, 1));
+    const k = minimumJerk(clamp(r.crouch ?? 0, 0, 1)), sitting = r.hips ? 0 : st.crouch.ahead * s * k, toes = Math.max(0, r.tiptoe ?? 0);
+    const hips = this.hips.copy(r.hips ?? ZERO).setY(0), pelvis = _p.copy(r.position).add(hips);
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)
     leap(jump, this.asked, smoothstep(st.run[0], st.run[1], v), s, dt);
     this.asked = undefined;
@@ -153,26 +171,35 @@ export class Stepper {
     const goal = low <= high ? clamp(wanted, low, high) : (low + high) / 2;
     const rate = Math.abs(goal - this.last) / dt < 2 * TURN.speed ? (goal - this.last) / dt : 0;
     this.last = goal;
-    const yaw = follow(yaws[0], yaws[1], goal, { ...TURN, velocity: rate }, dt);
+    let yaw = follow(yaws[0], yaws[1], goal, { ...TURN, velocity: rate }, dt);
+    // (with a foreseen root: never past the feet's reach of it, braking into the limit; caught up with a root still turning on, it waits
+    // for it rather than turn back)
+    if (r.forecast) {
+      if (low <= high) yaw = clamp(yaw, low, high);
+      if (spin !== 0 && (yaw - yaws[1]) * spin < 0 && (yaws[1] - goal) * spin > 0) yaw = yaws[1];
+    }
     [yaws[0], yaws[1]] = [yaws[1], yaw];
     // side-stepping, the feet open wider and close in to the narrowest: their travel never crosses
     const widthAt = (speed: number) => Math.max(lerp(lerp(st.width.stand, st.width.walk * s, smoothstep(0, 1, speed)), st.width.run * s, smoothstep(st.run[0], st.run[1], speed)), (st.width.narrowest * s + Math.abs(across) * speed * Ts) / 2) + st.crouch.wider * s * k;
     const width = widthAt(v);
-    const home = (leg: Leg, ahead: number, out: Vector3) => (r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead)).addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forwardOf(yaw), st.crouch.ahead * s * k).setY(feet.ankleHeight);
+    const home = (leg: Leg, ahead: number, out: Vector3) => (r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead)).addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forwardOf(yaw), sitting).setY(feet.ankleHeight);
     // the pelvis' height: let down walking, bobbing lowest after contact (running: mid-stance), as high as the feet reach
-    const hip = (leg: Leg) => _hip.copy(r.position).addScaledVector(leftOf(yaw), leg.sign * feet.hip);
+    const hip = (leg: Leg) => _hip.copy(pelvis).addScaledVector(leftOf(yaw), leg.sign * feet.hip);
     const moving = smoothstep(0, 1, v);
-    const standing = this.stand - st.crouch.depth * s * k;
+    const standing = this.stand - st.crouch.depth * s * k + toes;
     const nominal = () => standing + rise - (lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run) + st.bob * lerp(1 - Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0)),
       Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / Ts)) ** 2), 0)), run)) * s * moving;
     // (a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends)
-    const rolled = (leg: Leg) => lerp(rollOf(leg), pivotLimit(leg), smoothstep(PIVOT * s, 2 * PIVOT * s, Math.abs(aheadOf(leg))));
+    const rolled = (leg: Leg) => lerp(rollOf(leg), pivotLimit(leg), Math.max(Number(toes > 0), smoothstep(PIVOT * s, 2 * PIVOT * s, Math.abs(aheadOf(leg)))));
     const reach = (leg: Leg, ankle = feet.ankle(leg.i, leg.anchor, leg.yaw, rolled(leg), _a)) => {
       const at = hip(leg), horizontal = Math.hypot(ankle.x - at.x, ankle.z - at.z);
       return ankle.y + Math.sqrt(Math.max(0, (st.reach * feet.length) ** 2 - horizontal ** 2));
     };
     // the furthest from under its hip a foot lands (m)
     const landingReach = Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * feet.length) ** 2 - (Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s) - feet.ankleHeight) ** 2)));
+    // (the extrapolated centre of mass `ahead` s on)
+    const xcom = (ahead: number, out: Vector3) => travel(ahead, out).addScaledVector(forwardOf(yaw, _f), sitting)
+      .addScaledVector(_x.copy(r.velocity).addScaledVector(accel, ahead).setY(0), Math.sqrt(feet.length / GRAVITY)).setY(0);
     // the feet: swings on, then those too far from home lift (the furthest first)
     for (const leg of legs) {
       leg.landed = false;
@@ -184,36 +211,56 @@ export class Stepper {
         w.rest = (1 - w.u) * w.T;
         w.u = Math.min(1, w.u + dt / w.T);
         w.age += dt;
-        // (re-aimed through the first half of the swing in time, frozen after: but for a hard stop, pulling it back into reach till late)
-        if (airborne || w.age < (1 - w.u) * w.T) [leg.anchor, leg.yaw] = landing(leg, (1 - w.u) * w.T);
-        if (w.u < SETTLE && !airborne) settle(leg, w, w.age < (1 - w.u) * w.T);
+        // (a walker's — a foreseen root's — landing moves no more once `AIMED` of the swing is gone: moved late, it reads as a stumble;
+        // before, one that would leave the extrapolated centre of mass past the feet catches it instead)
+        const settling = r.forecast ? AIMED : SETTLE;
+        if (!w.capture && !airborne && st.capture !== undefined && w.u < settling) w.capture = outside(hullOf(legs.flatMap((other) => other === leg || !other.swing ? feet.print(other.i, other.anchor, other.yaw) : [])), xcom((1 - w.u) * w.T, _c)) > st.capture * s;
+        // (re-aimed through the first half of the swing in time, frozen after: but for a hard stop, pulling it back into reach till late; a catch
+        // as long as it may still move)
+        if (airborne || w.age < (1 - w.u) * w.T || (w.capture && w.u < settling)) [leg.anchor, leg.yaw] = landing(leg, (1 - w.u) * w.T);
+        if (w.u < settling && !airborne) settle(leg, w, w.age < (1 - w.u) * w.T);
         if (w.u >= 1 - 1e-9) [leg.swing, leg.planted, leg.landed, leg.strike, leg.leapt] = [null, 0, true, w.strike, !!w.rel];
       } else leg.planted += dt;
       leg.lifted += dt;
     }
     const off = (leg: Leg, ahead: number) => home(leg, ahead, _v).sub(leg.anchor).setY(0).length();
+    // (balance first: the extrapolated centre of mass — the stance's middle carried on at its speed for √(l/g), Hof — past the feet
+    // standing and landing by `capture`, the foot furthest from it steps at once, to under it)
+    const support = hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw)));
+    const centre = r.xcom ? r.xcom.clone().setY(0) : xcom(0, new Vector3()), falling = !airborne && st.capture !== undefined && outside(support, centre) > st.capture * s;
+    // (of the feet that may, the one that catches it without crossing the other, else the one furthest from it)
+    const crossing = (leg: Leg) => Number(landing(leg, Tsw - dt)[2] > BLOCKED * s);
+    const catcher = falling ? legs.filter((leg) => !leg.swing).sort((a, b) => crossing(a) - crossing(b) || b.anchor.distanceToSquared(centre) - a.anchor.distanceToSquared(centre))[0] : undefined;
     // (still and no longer turned, the feet square up closer to the facing)
     const turn = lerp(STEP.squared, STEP.turn, smoothstep(0, 0.3, v + Math.abs(spin)));
     // (moving, a foot lifts its share of a cycle after the leg before it did: the steps stay even; standing, after a moment)
     const due = (leg: Leg) => moving > 0 ? legs[before[leg.i]].lifted >= C * this.gap[leg.i] || leg.planted >= Ts * DUE : leg.planted >= STEP.square;
-    const wants = (leg: Leg) => (off(leg, lead) > (v > 0 || spin !== 0 || k > 0 ? STEP.distance : STEP.still) * s && due(leg)) || off(leg, lead) > Math.max(STEP.distance * s, DUE * v * Ts) || Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn;
+    // (still, the feet stay but to even out a stance staggered fore and aft: a squat needs them side by side)
+    const staggered = (leg: Leg) => Math.abs(_b.subVectors(legs[before[leg.i]].anchor, leg.anchor).dot(forwardOf(yaw, _f))) > STAGGERED * s;
+    const wants = (leg: Leg) => (!r.still || staggered(leg)) && ((off(leg, lead) > (v > 0 || spin !== 0 || k > 0 ? STEP.distance : STEP.still) * s && due(leg)) || off(leg, lead) > Math.max(STEP.distance * s, DUE * v * Ts) || Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn);
     for (const leg of [...legs].sort((a, b) => off(b, lead) - off(a, lead))) {
       const other = legs[before[leg.i]];
       // alternate: lift once the other foot has stood (walking) or before it lands (running, a flight)
       const otherLands = other.swing ? (1 - other.swing.u) * other.swing.T : -other.planted;
       // (a foot about to be out of reach, or under the body, steps at once, the other in the air or not)
       // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
-      const urgent = airborne ? !leg.swing && air > 0 : reach(leg) < nominal() + Math.max(0, vy) * RISING - STEP.short * s || _v.subVectors(hip(leg), leg.anchor).dot(leftOf(yaw)) * leg.sign > STEP.medial * s || aheadOf(leg) > most;
+      // (but for being out of reach, not in the sub-step it touches down: there it stands first; with a foreseen root, a walker's, nor
+      // while the other is in the air: it walks, never leaving the floor)
+      const urgent = airborne ? !leg.swing && air > 0 : reach(leg) < nominal() + Math.max(0, vy) * RISING - STEP.short * s
+        || (!leg.landed && (!other.swing || !r.forecast) && (leg === catcher || _v.subVectors(hip(leg), leg.anchor).dot(leftOf(yaw)) * leg.sign > STEP.medial * s || aheadOf(leg) > most));
       if (airborne && !urgent) continue;
       // (a foot lands before it lifts again, unless it would be out of reach: not in the sub-step it touches down)
       if (leg.swing || !(urgent || (!leg.landed && wants(leg) && otherLands + Ts - C * this.gap[leg.i] <= 1e-9))) continue;
       // (a foot that would have to cross the other, or will be nearer its home than the other a swing on, lets the other step first)
-      if (!urgent && !other.swing && !airborne && (landing(leg, Tsw - dt)[2] > BLOCKED * s || off(other, lead + Tsw) > off(leg, lead + Tsw) + STEP.distance * s)) continue;
+      // (a walker's — a foreseen root's — closes beside the other instead: left waiting, it would trail out of reach)
+      // (a walker side-stepping opens with the foot on the side it goes, the other closing after it: first it does not step away from its way)
+      if (!urgent && !other.swing && r.forecast && v > 0 && across * leg.sign < -SIDE && leg.lifted <= other.lifted) continue;
+      if (!urgent && !other.swing && !airborne && ((!r.forecast && landing(leg, Tsw - dt)[2] > BLOCKED * s) || off(other, lead + Tsw) > off(leg, lead + Tsw) + STEP.distance * s)) continue;
       const bone = feet.legs[leg.i].foot;
       const x = f.prev.position(bone).clone(), velocity = x.clone().sub(f.prev2.position(bone)).divideScalar(dt);
       const toes = f.prev.local(feet.legs[leg.i].toes).clone();
       const T = airborne ? air + dt : Tsw;
-      leg.swing = { u: dt / T, age: dt, rest: T, T, x, v: velocity, a: new Vector3(), fromYaw: leg.yaw, fromPitch: leg.pitch, toes, strike: 0,
+      leg.swing = { capture: leg === catcher, u: dt / T, age: dt, rest: T, T, x, v: velocity, a: new Vector3(), fromYaw: leg.yaw, fromPitch: leg.pitch, toes, strike: 0,
         lift: (airborne ? st.lift.jump : lerp(st.lift.walk, st.lift.run, run) * (1 - st.crouch.lift * k)) * s, run, rel: null };
       [leg.anchor, leg.yaw] = landing(leg, T - dt);
       settle(leg, leg.swing);
@@ -222,10 +269,12 @@ export class Stepper {
     }
     /** a landing kept within reach of the hip as it will be (a hard stop pulls it in), heel first only ahead of it */
     function settle(leg: Leg, w: Swing, aiming = true) {
-      const at = travel((1 - w.u) * w.T, _v).addScaledVector(leftOf(yaw), leg.sign * feet.hip);
+      const at = travel((1 - w.u) * w.T, _v).add(hips).addScaledVector(leftOf(yaw), leg.sign * feet.hip);
       const out = _b.subVectors(leg.anchor, at).setY(0);
       if (out.length() > landingReach) uncross(leg, leg.anchor.copy(at).add(out.setLength(landingReach)).setY(feet.ankleHeight), leftOf(leg.yaw - leg.sign * toeOut, _l));
-      if (aiming) w.strike = lerp(st.strike.walk, st.strike.run, run) * clamp(out.dot(forwardOf(leg.yaw)) / (st.strike.ahead * s), -1, 1);
+      // (a walker's — a foreseen root's — foot landing just behind its hip, squaring up, lands flat: toes first only stepping back)
+      const ahead = out.dot(forwardOf(leg.yaw)), aim = r.forecast && ahead < 0 ? Math.min(0, ahead + BACKSTEP * s) : ahead;
+      if (aiming) w.strike = lerp(st.strike.walk, st.strike.run, run) * clamp(aim / (st.strike.ahead * s), -1, 1);
     }
     function landing(leg: Leg, remaining: number): [Vector3, number, number] {
       // turned toward the root's facing, as far as the other foot lets the pelvis
@@ -239,8 +288,23 @@ export class Stepper {
       const landed = _w.copy(r.velocity).addScaledVector(accel, remaining), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
       // (along the way it will go, round its curve, but as far as it goes now: a stop is caught by a foot further on)
       const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, far = Math.max(chord?.length() ?? 0, v * (remaining + lead));
-      const to = (chord && chord.lengthSq() > 1e-12 ? new Vector3().copy(r.position).addScaledVector(chord, far / chord.length()) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead)).addScaledVector(side, leg.sign * widthAt(speed))
-        .addScaledVector(forwardOf(turned, _f), st.crouch.ahead * s * k).setY(feet.ankleHeight);
+      const to = (chord && chord.lengthSq() > 1e-12 ? new Vector3().copy(r.position).addScaledVector(chord, far / chord.length()) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead))
+        .addScaledVector(side, leg.sign * widthAt(speed)).addScaledVector(forwardOf(turned, _f), sitting).setY(feet.ankleHeight);
+      // (a walker's step whose landing would leave the extrapolated centre of mass as it will be past the feet lands under it instead, just
+      // to its side; and no further from it as it is now than the other foot and it hold it: a first step is a short one)
+      if (st.capture !== undefined && !airborne) {
+        const yawed = turned + leg.sign * toeOut, others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw);
+        const past = (at: Vector3, centre: Vector3) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > st.capture! * s;
+        const centre = xcom(remaining, new Vector3()), under = (c: Vector3) => c.clone().addScaledVector(side, leg.sign * st.width.narrowest * s / 2).setY(feet.ankleHeight);
+        if (past(to, centre)) to.copy(under(centre));
+        const now = r.xcom;
+        if (now && !other.swing && past(to, now)) {
+          const from = to.clone(), toward = under(now);
+          let [lo, hi] = [0, 1];
+          for (let k = 0; k < 12; k++) [lo, hi] = past(_n.lerpVectors(from, toward, (lo + hi) / 2), now) ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
+          to.lerpVectors(from, toward, hi);
+        }
+      }
       return [to, turned + leg.sign * toeOut, uncross(leg, to, side)];
     }
     /** `to` moved onto its own side of the other foot, as the body will face (`side`, its left) and as it faces now; how far it was across (m) */
@@ -248,9 +312,11 @@ export class Stepper {
       const other = legs[before[leg.i]];
       let across = 0;
       for (const axis of [side, leftOf(yaw, _m)]) {
-        const gap = _v.subVectors(to, other.anchor).dot(axis) * leg.sign;
-        if (gap < st.width.narrowest * s) to.addScaledVector(axis, leg.sign * (st.width.narrowest * s - gap));
-        across = Math.max(across, st.width.narrowest * s - gap);
+        // (with a foreseen root, a foot landing a foot's length or more ahead of or behind the other need not land beside it: the shanks pass apart)
+        const along = Math.abs(_v.subVectors(to, other.anchor).dot(_n.set(-axis.z, 0, axis.x))), apart = r.forecast ? 1 - smoothstep(SPAN * s, 2 * SPAN * s, along) : 1;
+        const gap = _v.dot(axis) * leg.sign, narrowest = st.width.narrowest * s * apart;
+        if (gap < narrowest) to.addScaledVector(axis, leg.sign * (narrowest - gap));
+        across = Math.max(across, narrowest - gap);
       }
       return across;
     }
@@ -269,13 +335,13 @@ export class Stepper {
     const base = airborne ? flying : Math.min(Math.max(y - rise, standing - LOWEST * s), lifted);
     [heights[0], heights[1]] = [heights[1], base + crouched];
     y = base + rise;
-    f.current.setRoot(_v.copy(r.position).setY(y));
+    f.current.setRoot(_v.copy(pelvis).setY(y));
     const stepping = legs.some((leg) => leg.swing);
     this.phase += Math.PI * dt / (C / 2) * Number(stepping);
     [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, moving, run, Ts, C];
     this.settled = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > 0.4) && legs.every((leg) => !wants(leg));
     this.plant = (leg, at) => plantedPose(leg, at);
-    this.low = standing - LOWEST * s;
+    [this.low, this.most] = [standing - (st.bob + STEP.short) * s, most];
 
     /** a swinging foot: minimum jerk toward its landing (heel strike), the lift arc over it, clear of the floor */
     function swingPose(leg: Leg): FootPose {
@@ -295,7 +361,7 @@ export class Stepper {
       const hipLands = _hipAt.copy(hip(leg)).addScaledVector(r.velocity, w.rest).setY(f.prev.position(top).y);
       const strike = w.strike - beyond(shankLean(hipLands, feet.ankle(leg.i, leg.anchor, leg.yaw, w.strike, _a), leg.yaw) + w.strike - st.dorsiflexion) * minimumJerk((u - 0.5) / 0.5);
       const land = feet.ankle(leg.i, leg.anchor, leg.yaw, strike, new Vector3());
-      if (airborne) for (const axis of ['x', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis] - r.position[axis] - r.velocity[axis] * air, -r.velocity[axis], w.rest, dt);
+      if (airborne) for (const axis of ['x', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis] - pelvis[axis] - r.velocity[axis] * air, -r.velocity[axis], w.rest, dt);
       else for (const axis of ['x', 'y', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis], 0, w.rest, dt);
       const yawNow = w.fromYaw + wrapAngle(leg.yaw - w.fromYaw) * minimumJerk(u);
       leg.pitch = w.fromPitch * (1 - minimumJerk(u / 0.45)) + strike * minimumJerk((u - 0.6) / 0.4);
@@ -313,7 +379,7 @@ export class Stepper {
         // between; landing, the foot comes down with the body, slowed a little by the knees bending)
         const rel = w.rel!, pelvis = flying + rise, falls = rise + vy * air - GRAVITY * air * air / 2;
         [rel.x, rel.v, rel.a] = quintic(rel.x, rel.v, rel.a, flying + falls - land.y, (1 - TOUCH) * (vy - GRAVITY * air), w.rest, dt);
-        ankle.set(r.position.x + w.x.x, pelvis - rel.x + arc, r.position.z + w.x.z);
+        ankle.set(_p.x + w.x.x, pelvis - rel.x + arc, _p.z + w.x.z);
       }
       const lowest = feet.sole(leg.i, ankle, foot, toes);
       const soft = 0.004 * Math.sin(Math.PI * u) ** 2 + Number.EPSILON;
@@ -337,7 +403,7 @@ export class Stepper {
     /** the most a planted foot rolls to help the hip reach it: onto its heel when it is ahead, its ball when behind */
     function pivotLimit(leg: Leg): number {
       // (it changes ends only while it needs no roll past its strike's: changed mid-roll, the roll would jump)
-      if (leg.free) leg.heel = aheadOf(leg) < 0;
+      if (leg.free) leg.heel = toes === 0 && aheadOf(leg) < 0;
       // (just landed, it first rolls off its strike: the pivot is given over as the roll ends)
       return lerp(rollOf(leg), leg.heel ? st.pitch.heel : st.pitch.ball, minimumJerk(leg.planted / ROLL));
     }
@@ -365,17 +431,31 @@ export class Stepper {
     const { st, feet, legs, before } = this, most = st.reach * feet.length;
     if (Number.isNaN(this.low)) return true;
     const within = (leg: Leg, ahead: number, pitches: readonly number[]) => {
-      const at = forecast(ahead), hip = _w.copy(at.position).addScaledVector(leftOf(at.yaw, _m), leg.sign * feet.hip).setY(0);
-      // (and turned no further from a planted foot than the pelvis may)
+      const at = forecast(ahead), hip = _w.copy(at.position).add(this.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * feet.hip).setY(0);
+      // (and turned no further from a planted foot than the pelvis may, the hip not in over it nor a stance's travel past it)
       if (!leg.swing && Math.abs(wrapAngle(at.yaw - leg.yaw + leg.sign * st.toeOut)) > PELVIS_TURN) return false;
+      if (!leg.swing && (_b.subVectors(hip, leg.anchor).dot(leftOf(at.yaw, _l)) * leg.sign > STEP.medial * st.scale || _b.subVectors(hip, leg.anchor).dot(forwardOf(leg.yaw, _f)) > this.most)) return false;
       return pitches.some((pitch) => {
         const ankle = feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a);
         return Math.hypot(ankle.x - hip.x, ankle.z - hip.z) ** 2 + Math.max(0, this.low - ankle.y) ** 2 <= most * most;
       });
     };
+    // (balance first: a walker's extrapolated centre of mass kept within the feet as they stand and land — no further past them than it is)
+    if (st.capture !== undefined && legs.some((leg) => leg.swing)) {
+      const support = hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw))), omega = Math.sqrt(feet.length / GRAVITY), dt = 1 / 60;
+      const xcom = (t: number) => { const at = forecast(t).position, next = forecast(t + dt).position; return _x.copy(at).addScaledVector(_c.subVectors(next, at), omega / dt).setY(0); };
+      const allowed = Math.max(st.capture * st.scale, outside(support, xcom(0))), rest = Math.max(...legs.map((leg) => leg.swing ? (1 - leg.swing.u) * leg.swing.T : 0));
+      for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (outside(support, xcom(t)) > allowed + 1e-6) return false;
+    }
     return legs.every((leg) => {
       const w = leg.swing;
-      if (w) return w.u < SETTLE || within(leg, (1 - w.u) * w.T, [0]);
+      if (w) {
+        // (turned no further from a swinging foot, as it turns on to its landing, than the pelvis may: nor further than it is already)
+        const turned = (t: number) => Math.abs(wrapAngle(forecast(t).yaw - (w.fromYaw + wrapAngle(leg.yaw - w.fromYaw) * minimumJerk(w.u + t / w.T)) + leg.sign * st.toeOut));
+        const allowed = Math.max(PELVIS_TURN, turned(0)), rest = (1 - w.u) * w.T;
+        for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (turned(t) > allowed + 1e-6) return false;
+        return w.u < SETTLE || within(leg, rest, [0]);
+      }
       const other = legs[before[leg.i]].swing, wait = other ? (1 - other.u) * other.T : 0;
       for (let t = 0; t <= wait + 1e-9; t += Math.max(1 / 60, wait / 6)) if (!within(leg, t, [0, st.pitch.heel, st.pitch.ball])) return false;
       return true;
@@ -421,5 +501,6 @@ const beyond = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2)
 /** a planted foot's roll off its strike (rad): flat after `ROLL` */
 const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 
+const ZERO = new Vector3(), _p = new Vector3();
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion();
-const [_v, _w, _a, _b, _c, _hip, _hipAt, _accel, _l, _f, _m, _d] = Array.from({ length: 12 }, () => new Vector3());
+const [_v, _w, _a, _b, _c, _x, _n, _hip, _hipAt, _accel, _l, _f, _m, _d] = Array.from({ length: 14 }, () => new Vector3());

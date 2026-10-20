@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../body';
 import { follow } from '../follow';
 import type { Motion } from '../goal';
-import { clamp, wrapAngle, yawOf } from '../math';
+import { clamp, lerp, smoothstep, wrapAngle, yawOf } from '../math';
 import { strideAt, type Gait } from './gait';
 import type { LegStep } from './legs';
 
@@ -14,7 +14,7 @@ export interface RootState {
 }
 
 /** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion)): Omit<LegStep, 'root'> & { root(time: number): RootState } {
+export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion), travelFirst = false): Omit<LegStep, 'root'> & { root(time: number): RootState } {
   if (share === 0 && !facing) {
     const position = previous.position.clone();
     const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));
@@ -61,7 +61,11 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const turning = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, from.velocity.length())) * turnShare;
     const untilFacing = remaining === 0 ? 0 : Math.max(2 * Math.sqrt(remaining / turnAccel), remaining / turning);
     // [D] Keep translating until the remaining turn can finish, rather than exhaust the approach first.
-    const closing = arrival > 0 && untilFacing > 0 ? Math.min(speed, distance / untilFacing) : speed;
+    // (`travelFirst`: a goal far off the facing — further than it may face off its way, `sidelong`: near a still goal, any way — is
+    // walked to more and more slowly, then turned to first, as the old balance's carriage did)
+    const sidelong = travelFirst ? lerp(Math.PI, SIDELONG, Math.max(smoothstep(ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance, distance), smoothstep(STILL, 2 * STILL, goalSpeed))) : Math.PI;
+    const first = travelFirst ? 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], Math.abs(wrapAngle(heading - yawOf(from.quaternion))) - sidelong + SIDELONG) : 1;
+    const closing = (arrival > 0 && untilFacing > 0 ? Math.min(speed, distance / untilFacing) : speed) * first;
     const wanted = forward ? delta.setLength(distance > 1e-9 ? Math.sqrt(2 * Math.max(0, accel + Math.min(0, acceleration)) * distance) : 0)
       .add(futureVelocity).clampLength(0, closing) : delta.set(0, 0, 0);
     const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * STEP));
@@ -69,8 +73,11 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const yaw = yawOf(from.quaternion);
     const travelYaw = v > 1e-4 ? Math.atan2(next.x, next.z) : facing ? heading : yaw;
     const goalAngle = facing ? wrapAngle(yawOf(facing) - travelYaw) : 0, direction = Math.sign(goalAngle);
-    const progress = Math.max(Math.abs(goalAngle) * arrival, direction * wrapAngle(stanceYaw - travelYaw), direction * wrapAngle(yaw - travelYaw));
-    const bearing = facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress) : travelYaw;
+    // (`travelFirst`: the body faces the way it goes, as people do, until it arrives; only arriving does it hold what it has turned)
+    const holding = travelFirst ? smoothstep(0, ARRIVING, arrival) : 1;
+    const progress = Math.max(Math.abs(goalAngle) * arrival, holding * direction * wrapAngle(stanceYaw - travelYaw), holding * direction * wrapAngle(yaw - travelYaw));
+    // (and turns from the way it goes no further than `sidelong`: nobody walks off sideways or backward but for the last steps)
+    const bearing = facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress, sidelong) : travelYaw;
     const angle = wrapAngle(bearing - yaw);
     const turn = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, v)) * turnShare;
     const desired = Math.sign(angle) * Math.min(turn, Math.abs(angle) / STEP);
@@ -96,4 +103,14 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
   } : undefined };
 }
 
+/**
+ * Tuned, for a body walking facing its way (`travelFirst`): how far into its arrival turn (share) it comes to hold the turn it has made
+ * toward the asked facing; until this close (× its stride's mid-stance travel: ~0.45–1.1 m walking) it faces no further than `SIDELONG`
+ * (rad) off the way it goes (the old balance's carriage turned to an asked facing only once near and slow)
+ */
+const ARRIVING = 0.2, ARRIVAL_TURN = [1, 2.5] as const, SIDELONG = 0.3;
+/** Inherited (the old balance's carriage): a goal this far off the facing (rad) is walked to more and more slowly, then turned to first */
+const TURN_FIRST = [0.6, 1.3] as const;
+/** Inherited (the old balance's carriage): a goal moving slower than this (m/s) is still: arrived at, it may be faced any way */
+const STILL = 0.08;
 const UP = new Vector3(0, 1, 0);

@@ -10,9 +10,9 @@ import { clamp, forwardOf, GRAVITY, lerp, minimumJerk, pointSegmentDistance, qua
 import { Stepper, type DrivenRoot, type Feet, type Leg, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
-import { ankleFor, ballOf, footRotation, heelOf } from './balance/foot';
+import { ankleFor, ballOf, footprint, footRotation, heelOf } from './balance/foot';
 import { shankTilt } from './balance/legs';
-import { hullOf, outside } from './balance/support';
+import { hullOf, outside } from '../core/legs/support';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { solePoints } from './landmarks';
@@ -44,6 +44,7 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
       legs: SIDES.map((side, i) => ({ sign: i === 0 ? 1 : -1, foot: INDEX[`${side}Foot`], toes: INDEX[`${side}Toes`], top: INDEX[`${side}UpperLeg`] })),
       ankle: (i, anchor, yaw, pitch, out) => ankleFor(p, SIDES[i], anchor, yaw, pitch, out),
       lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
+      print: (_, anchor, yaw) => footprint(p, anchor, yaw),
       sole: (i, ankle, foot, toes) => {
         const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle), sign = i === 0 ? 1 : -1;
         return Math.min(heelOf(p, _a).applyQuaternion(foot).y + ankle.y, ...[p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y));
