@@ -96,6 +96,9 @@ export class Humanoid<W = unknown> {
   /** Development problems from checks and watchers. */
   get log() { return this.body.log; }
 
+  /** Development measurements reported only (see `Dev.notes`). */
+  get notes() { return this.body.notes; }
+
   /** Current sub-step, for reading live goals when a behaviour starts. */
   get frame(): Frame<W> { return this.body.frame; }
 

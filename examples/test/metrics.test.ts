@@ -37,6 +37,8 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   if (sc.id === 'reach') options.wrist = 0.17;
   if (sc.id === 'look-around') options.head = 0.075;
   if (sc.id === 'vr') { options.wrist = 0.165; options.head = 0.165; }
+  // The player's body keeps exactly to the root it is driven by: no pelvic sway or thorax counter-rotation to judge.
+  if (sc.id === 'shooter') options.driven = true;
   if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
   expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
   const fails = checks(m, options).filter(failed).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);

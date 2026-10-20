@@ -24,10 +24,16 @@ export type WatchFrame<W = unknown> = Readonly<Omit<Frame<W>, 'current' | 'dev' 
 /** One body's development log. Absent entirely when dev is off. */
 export class Dev {
   readonly log: LogEntry[] = [];
+  /** Bounds a body only reports (a driven body's balance): measured, never failures. */
+  readonly notes: LogEntry[] = [];
   beat?: string;
 
   append(time: number, problem: Problem): void {
     this.log.push({ ...problem, time, ...(this.beat === undefined ? {} : { beat: this.beat }) });
+  }
+
+  note(time: number, problem: Problem): void {
+    this.notes.push({ ...problem, time, ...(this.beat === undefined ? {} : { beat: this.beat }) });
   }
 }
 

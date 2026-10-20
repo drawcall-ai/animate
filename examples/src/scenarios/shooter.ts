@@ -1,8 +1,9 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import { INDEX, Carrier, Item, aimAt, closeHand, createWorld, handTo, hold, idle, named, reachFor, watch, when,
-  type Frame, type Humanoid, type World } from '@drawcall/animate';
-import { forwardOf, wrapAngle } from '../math';
+  type DrivenRoot, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { scalar } from '../keys';
+import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
 import type { Player, Prop, Scenario } from '../scenario';
 
@@ -17,24 +18,63 @@ const SIGHT = new Vector3(0, 0.12, 0);
 // Tuned dropped/offset butt pad reaches the shoulder pocket below the eye-line; a proxy, not a measured firearm.
 const STOCK = new Vector3(-0.07, -0.075, -0.24);
 export const SHOOTER_DURATION = 38;
+// Tuned mouse turns (minimum jerk): a turn while walking, then a quick turn standing.
+const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6]]);
 
 /** Deterministic input, shared by headless runs and unattended playback. */
 export function shooterTrack(t: number, input: Player['input']) {
-  input.move.x = 0;
-  input.move.z = (t >= 3 && t < 8) || (t >= 15 && t < 25) ? 1 : 0;
-  // Tuned demo: hip walk, ADS bursts, straight sprint, stop and reacquire ADS.
-  input.ads = (t >= 9 && t < 15) || t >= 27;
-  input.sprint = t >= 16 && t < 24;
-  input.aimYaw = 0;
+  // Demo: walk forward, strafe left and right, back-pedal, ADS standing and walking, sprint,
+  // walk while turning, stop and turn in place, ADS and fire.
+  const between = (from: number, to: number) => t >= from && t < to;
+  input.move.z = between(3, 6) || between(15.5, 17) || between(18, 28) ? 1 : between(10, 12) ? -1 : 0;
+  input.move.x = between(6, 8) ? 1 : between(8, 10) ? -1 : 0;
+  input.ads = between(13, 17) || t >= 32;
+  input.sprint = between(18.5, 23.5);
+  input.aimYaw = TURNS(t);
   input.aimPitch = 0;
-  input.fire = (t > 11 && t < 11.7) || (t > 29 && t < 29.7);
+  input.fire = between(14.5, 15.2) || between(34, 34.7);
   input.view = Math.floor(t / 7) % 2 ? 'first' : 'third';
+}
+
+/**
+ * The player's root: always facing the look yaw (≤ 50 ms smoothing), moving as the keys ask
+ * relative to it at the speed the keys allow, accelerating and braking at `ACCEL`.
+ */
+// Recalled game-feel norms (e.g. Unreal's Character Movement defaults, CS/COD movement): ~1.4 m/s
+// walk, slower back and sideways, ~3.5 m/s sprint forward only, ADS slows; tuned 10 m/s² response.
+const SPEED = { forward: 1.4, back: 1.1, side: 1.1, sprint: 3.5, ads: 0.65 };
+const ACCEL = 10;
+const FACING = 0.025;
+export class Controller {
+  readonly root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+
+  step(input: Player['input'], dt: number) {
+    const r = this.root;
+    r.yaw += wrapAngle(input.aimYaw - r.yaw) * (1 - Math.exp(-dt / FACING));
+    const { x, z } = input.move, length = Math.hypot(x, z);
+    const sprinting = this.sprinting(input);
+    const wanted = new Vector3();
+    if (length > 0) {
+      const speed = 1 / Math.hypot(x / length / SPEED.side, z / length / (z > 0 ? (sprinting ? SPEED.sprint : SPEED.forward) : SPEED.back));
+      wanted.copy(forwardOf(input.aimYaw)).multiplyScalar(z).addScaledVector(leftOf(input.aimYaw), x).setLength(speed * (input.ads ? SPEED.ads : 1));
+    }
+    const change = wanted.sub(r.velocity);
+    r.velocity.add(change.clampLength(0, ACCEL * dt));
+    r.position.addScaledVector(r.velocity, dt);
+  }
+
+  start(at: Vector3, yaw: number) {
+    this.root.position.copy(at).setY(0);
+    this.root.yaw = yaw;
+  }
+
+  sprinting(input: Player['input']) { return input.sprint && !input.ads && input.move.z > 0; }
 }
 
 export function shooter(): Scenario {
   return {
     id: 'shooter', title: 'Full-body shooter',
-    description: 'Click to play · WASD walk · Shift sprint · right mouse ADS · mouse look · left click fire · V first/third person · Esc release mouse. The body turns to walk in the movement direction.',
+    description: 'Click to play · WASD move (relative to where you look) · Shift sprint · right mouse ADS · mouse look · left click fire · V first/third person · Esc release mouse. The body always faces where you look; the legs step to keep up.',
     duration: SHOOTER_DURATION, actors: [{}], cameraDistance: 4,
     stage: () => {
       const report = new Report();
@@ -48,11 +88,11 @@ export function shooter(): Scenario {
       let previousYaw = 0, previousPitch = 0, previousAds = false;
       let now = 0;
       let ads = 0, sprint = 0;
-      let travel = 0;
-      let destination: Vector3 | null = null;
+      const controller = new Controller();
       const player: Player = {
         input: { move: { x: 0, z: 0 }, aimYaw: 0, aimPitch: 0, fire: false, ads: false, sprint: false, view: 'third' },
         live: false,
+        root: controller.root,
         eyes: () => {
           if (!actor) throw new Error('player camera needs its actor');
           const eye = actor.rig.points.rightEye;
@@ -73,13 +113,17 @@ export function shooter(): Scenario {
         world: createWorld(), report, player,
         wearing: () => [{ item: rifle, on: INDEX.rightHand, at: { position: new Vector3(), quaternion: HAND.clone().invert() } }],
         move: (t) => {
+          if (!actor) throw new Error('the player drives its actor');
+          // (the root starts where the body stands)
+          if (now === 0) controller.start(actor.pose.position(0), actor.yaw);
           const dt = t - now;
           now = t;
           if (!player.live) shooterTrack(t, player.input);
+          controller.step(player.input, dt);
           // Tuned 250 ms pose transitions, independent of camera/view.
           const approach = (value: number, target: number) => value + Math.max(-dt / 0.25, Math.min(dt / 0.25, target - value));
           ads = approach(ads, Number(player.input.ads));
-          sprint = approach(sprint, player.input.ads ? 0 : Math.max(actor?.gait.run ?? 0, Number(player.input.sprint && Math.hypot(player.input.move.x, player.input.move.z) > 0)));
+          sprint = approach(sprint, player.input.ads ? 0 : Math.max(actor?.gait.run ?? 0, Number(controller.sprinting(player.input))));
           if (player.input.aimYaw !== previousYaw || player.input.aimPitch !== previousPitch || player.input.ads !== previousAds) steadySince = t;
           previousYaw = player.input.aimYaw;
           previousPitch = player.input.aimPitch;
@@ -111,7 +155,7 @@ export function shooter(): Scenario {
             const point = h.rig.points.rightEye;
             const eye = f.current.point(point.bone, point.at, new Vector3());
             eyes.move(f.time, eye);
-            const at = new Vector3(-0.13 * (1 - blend) + 0.1 * run, -SIGHT.y - 0.18 * (1 - blend), 0.22 - 0.1 * run - 0.012 * recoil()).applyQuaternion(view);
+            const at = new Vector3(-0.13 * (1 - blend) + 0.1 * run, -SIGHT.y - 0.14 * (1 - blend), 0.22 - 0.1 * run - 0.012 * recoil()).applyQuaternion(view);
             return { position: at, quaternion: q.multiply(HAND) };
           };
           return function* () {
@@ -125,7 +169,7 @@ export function shooter(): Scenario {
                 const value = sight.addScaledVector(direction(), -sight.dot(direction())).length();
                 return value > 0.01 ? { check: 'sight line offset (m)', value, limit: 0.01, where: 'rifle' } : null;
               }),
-              idle(h),
+              idle(h, { legs: { root: controller.root } }),
               aimAt(h, aim),
               reporting(report, ['leftHand', 'rightHand', 'gaze'], function* () {
                 yield* parallel<Frame<World>>('all',
@@ -143,28 +187,6 @@ export function shooter(): Scenario {
                     const input = player.input;
                     report.asked.set('torsoYaw', { time: f.time, value: h.asks.twist });
                     if (input.fire && sprint === 0 && now - lastShot >= 0.24) lastShot = now; // Tuned demo burst cadence.
-                    const moving = Math.hypot(input.move.x, input.move.z) > 0;
-                    const offset = wrapAngle(input.aimYaw - h.gait.facing);
-                    if (moving) {
-                      // Recalled: camera-relative input; forward locomotion turns toward travel.
-                      let wanted = input.aimYaw + Math.atan2(input.move.x, input.move.z);
-                      const relative = wrapAngle(input.aimYaw - wanted);
-                      wanted += relative - Math.max(-Math.PI / 3, Math.min(Math.PI / 3, relative));
-                      // Tuned walking turn rate: radius >= 3 m at 0.9 m/s; avoids tight curved steps.
-                      travel += Math.max(-0.3 * f.dt, Math.min(0.3 * f.dt, wrapAngle(wanted - travel)));
-                      // Scene-level adapter: a world-space moving goal avoids feeding pelvic sway back into travel.
-                      // Tuned 3.4 m/s within the requested sprint range; inherited 0.9 m/s walk.
-                      const speed = input.sprint && !input.ads ? 3.4 : 0.9;
-                      const velocity = forwardOf(travel).multiplyScalar(speed);
-                      destination ??= f.prev.com(new Vector3()).setY(0).addScaledVector(forwardOf(travel), 1);
-                      destination.addScaledVector(velocity, f.dt);
-                      h.asks.go = { to: destination, velocity, speed, accel: 1.2 };
-                      h.asks.face = { yaw: travel };
-                    } else {
-                      destination = null;
-                      travel = h.gait.facing;
-                      if (Math.abs(offset) > 65 * DEG) h.asks.face = { yaw: input.aimYaw - Math.sign(offset) * 40 * DEG };
-                    }
                   } }),
                 );
               }),

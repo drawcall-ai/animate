@@ -14,7 +14,8 @@ import { knownFailure } from '../scripts/run';
 const path = vi.hoisted((): { legs?: 'old' | 'core' } => ({}));
 vi.mock('../../packages/animate/src/humanoid/idle', async (original) => {
   const actual = await original<typeof import('../../packages/animate/src/humanoid/idle')>();
-  return { ...actual, idle: ((h, options = {}) => actual.idle(h, { ...options, legs: path.legs })) satisfies typeof actual.idle };
+  // A driven body (a player) owns its root: only the balance path is switched.
+  return { ...actual, idle: ((h, options = {}) => actual.idle(h, { ...options, legs: typeof options.legs === 'object' ? options.legs : path.legs })) satisfies typeof actual.idle };
 });
 
 // Core-only migration scaffolding: exact remaining failures, tagged with their implementing stage.

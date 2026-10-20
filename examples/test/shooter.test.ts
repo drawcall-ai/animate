@@ -6,6 +6,7 @@ import { Simulation } from '../src/simulation';
 import { PlayerCamera } from '../src/stage/camera';
 import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { vary } from '../scripts/run';
+import { wrapAngle } from '../src/math';
 
 it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean #%i', (seed) => {
   const scene = shooter();
@@ -14,7 +15,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
   let steady = 0, lastYaw = 0, lastPitch = 0, lastFire = 0, sightFrames = 0, lastAds = false;
   const camera = new PerspectiveCamera(90, 16 / 9, 0.02, 1000);
   const framing = new PlayerCamera();
-  let hipFrames = 0, flight = 0, flightTime = 0, raised = Infinity;
+  let hipFrames = 0, flight = 0, flightTime = 0, raised = Infinity, lag = 0, facing = 0, heading = 0, moved = 0, lastMove = '';
   const flights: number[] = [], landings: { time: number; z: number }[] = [];
   let planted = true;
   while (sim.t < scene.duration) {
@@ -29,6 +30,19 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
     lastYaw = input.aimYaw;
     lastPitch = input.aimPitch;
     lastAds = input.ads;
+    // The player owns the root: the body is where the controller puts it, facing where it looks.
+    const root = player.root;
+    if (!root) throw new Error('missing root');
+    lag = Math.max(lag, Math.hypot(h.pose.position(0).x - root.position.x, h.pose.position(0).z - root.position.z));
+    const speed = h.gait.velocity.length();
+    if (`${input.move.x},${input.move.z},${input.sprint},${input.ads}` !== lastMove) [moved, lastMove] = [sim.t, `${input.move.x},${input.move.z},${input.sprint},${input.ads}`];
+    // (once the speed has settled after a change of keys: 10 m/s² takes at most 0.5 s)
+    if (speed > 0.5 && sim.t - moved > 0.5) {
+      facing = Math.max(facing, Math.abs(wrapAngle(h.gait.facing - input.aimYaw)));
+      const local = Math.atan2(h.gait.velocity.x, h.gait.velocity.z) - input.aimYaw;
+      const asked = Math.atan2(input.move.x, input.move.z);
+      if (input.move.x || input.move.z) heading = Math.max(heading, Math.abs(wrapAngle(local - asked)));
+    }
     if (!rifle) continue; // Visible acquisition precedes the active grip, never a teleport.
     acquired = Math.min(acquired, sim.t);
     expect(h.holding.right?.item).toBe(rifle);
@@ -50,15 +64,15 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
     }
     framing.apply(camera, player, 'first', 1 / 60);
     camera.updateMatrixWorld();
-    if (input.ads && sim.t > 9 && sim.t < 10) {
+    if (input.ads && sim.t > 13 && sim.t < 14) {
       const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(player.eyes());
-      if (Math.hypot(at.x, at.y) <= 0.01 && new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(new Vector3(0, 0, 1)) < 2 * Math.PI / 180) raised = Math.min(raised, sim.t - 9);
+      if (Math.hypot(at.x, at.y) <= 0.01 && new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(new Vector3(0, 0, 1)) < 2 * Math.PI / 180) raised = Math.min(raised, sim.t - 13);
     }
     if (input.ads && sim.t - steady > 0.5 && sim.t - lastFire > 0.5 && h.gait.walk < 0.01) {
       const sight = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).project(camera);
       expect(Math.hypot(sight.x, sight.y)).toBeLessThan(0.035);
     }
-    if (!input.ads && !input.sprint && sim.t - steady > 0.5 && sim.t < 16) {
+    if (!input.ads && !input.sprint && sim.t - steady > 0.5 && sim.t < 13) {
       const projected = new Vector3(0, 0.06, 0.12).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).project(camera);
       expect(projected.x).toBeGreaterThan(0);
       expect(projected.x).toBeLessThan(1);
@@ -85,7 +99,12 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
   const first = landings[0], last = landings[landings.length - 1];
   const stride = (last.z - first.z) / (landings.length - 1);
   const cadence = 120 * (landings.length - 1) / (last.time - first.time);
-  console.log('shooter', seed, { grip, sight, sightLine, raised, cadence, stride, flightSeconds: [Math.min(...flights.slice(1)), Math.max(...flights.slice(1))] });
+  console.log('shooter', seed, { grip, sight, sightLine, raised, cadence, stride, flightSeconds: [Math.min(...flights.slice(1)), Math.max(...flights.slice(1))], lag, facing, heading, low,
+    xcom: Math.max(0, ...sim.actors[0].notes.map((note) => note.value)) });
+  expect(lag).toBe(0);
+  // (the facing eases toward the look over 25 ms; turning harder than the feet can follow, the trunk takes the rest)
+  expect(facing).toBeLessThan(0.1);
+  expect(heading).toBeLessThan(0.15);
   expect(raised).toBeLessThanOrEqual(0.3);
   expect(cadence).toBeGreaterThan(150);
   expect(stride).toBeGreaterThan(2);
@@ -97,8 +116,11 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
   expect(sightLine).toBeLessThanOrEqual(0.01);
   expect(sightFrames).toBeGreaterThan(120);
   expect(walking).toBeGreaterThan(300);
-  expect(low).toBeGreaterThan(0.9);
+  // (driven legs let the pelvis down as far as the feet need, a few frames strafing or back-pedalling)
+  expect(low).toBeGreaterThan(0.88);
   expect(sim.actors[0].log).toEqual([]);
+  // A driven body follows its player, not its balance: the XCoM bound is only noted.
+  expect(sim.actors[0].notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
   expect(sim.stage.done()).toBe(true);
 });
 

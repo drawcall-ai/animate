@@ -12,6 +12,8 @@ export interface MetricsOptions {
   head?: number;
   startStop: number | null;
   clearance?: number;
+  /** the pelvis is a player's root (driven legs): it does not sway over the stance foot, the thorax does not counter-rotate */
+  driven?: boolean;
 }
 const TRACKED = 0.8;
 const LATE_RETARGET = 0.03;
@@ -89,23 +91,24 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
     if (!g) continue;
     const gait = (what: string, value: number, bound: Check['bound'], lim: number) => add(`${curve ? 'curve' : 'straight'} ${run ? 'running' : 'walking'} strides: ${what}`, value, bound, lim);
     // walking pelvis sway ~3–5 cm peak to peak (Orendurff 2004), a runner's less
-    gait('pelvis lateral p2p (m)', g.pelvisLat, 'min', run ? 0.01 : 0.025);
+    if (!limit.driven) gait('pelvis lateral p2p (m)', g.pelvisLat, 'min', run ? 0.01 : 0.025);
     gait('pelvis lateral p2p (m)', g.pelvisLat, 'max', run ? 0.045 : 0.06);
     // the upper body rides the pelvis's sway, no wider, and stays near vertical over it
     gait('chest lateral p2p (m)', g.chestLat, 'max', g.pelvisLat + 0.005);
     gait('trunk lateral lean (°)', g.lean, 'max', 2.5);
     gait('head roll (°)', g.headRoll, 'max', 2);
     // smooth: one sway per stride, over the stance foot at mid-stance, no jitter
-    gait('chest sway beyond the stride frequency', g.chestResidual, 'max', 0.4);
+    // (no sway to hold the chest's to: a driven pelvis keeps to its root)
+    if (!limit.driven) gait('chest sway beyond the stride frequency', g.chestResidual, 'max', 0.4);
     // the steps alike: left and right as long, on a curve too
     gait('step length asymmetry', g.stepAsymmetry, 'max', ASYMMETRY);
     gait('chest lateral jerk (m/s³)', g.chestJerk, 'max', 50);
-    gait('pelvis over the stance foot at mid-stance', g.phase, 'min', 0.7);
+    if (!limit.driven) gait('pelvis over the stance foot at mid-stance', g.phase, 'min', 0.7);
     // the whole body moves as in motion capture (CMU walks at 1.0–1.4 m/s, runs at 3.2–3.6):
     // the thorax rolls with its rotation, the forward shoulder up (corr ~0.95); the head goes
     // along with ~55% of that rotation; the trunk nods forward at each double support (±1.2°
     // walking, ±3° running); the ankle pushes off; the knee stays bent late into the swing
-    gait('thorax roll with its rotation', g.rollWithYaw, 'min', 0.7);
+    if (!limit.driven) gait('thorax roll with its rotation', g.rollWithYaw, 'min', 0.7);
     if (!Number.isNaN(g.headCarry)) {
       gait("the head's share of the thorax rotation", g.headCarry, 'min', 0.35);
       gait("the head's share of the thorax rotation", g.headCarry, 'max', 0.8);

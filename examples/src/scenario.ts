@@ -18,6 +18,8 @@ export interface Role {
 export interface Player {
   input: { move: { x: number; z: number }; aimYaw: number; aimPitch: number; fire: boolean; ads: boolean; sprint: boolean; view: 'first' | 'third' };
   live: boolean;
+  /** the root the player drives: where the body is on the floor, how fast it goes, which way it faces */
+  root?: { position: Vector3; velocity: Vector3; yaw: number };
   eyes(): Vector3;
 }
 

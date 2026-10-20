@@ -95,6 +95,9 @@ export class Body<W = unknown> {
   /** Development problems; empty when dev is off. */
   get log(): readonly LogEntry[] { return this.frame.dev?.log ?? EMPTY_LOG; }
 
+  /** Development measurements that are reported, not failures; empty when dev is off. */
+  get notes(): readonly LogEntry[] { return this.frame.dev?.notes ?? EMPTY_LOG; }
+
   /** the last final pose */
   get pose(): ReadonlyPose {
     return this.frame.prev;
