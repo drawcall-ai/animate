@@ -212,7 +212,7 @@ it('core toward turns from rest, forecasts facing, squares its anchors and then 
   const start = legs.root.position.clone();
   const anchors = h.feet.map((foot) => foot.position.clone().sub(start));
   const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
-  const body = new Body(h.pose.skeleton, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: h.pose.skeleton }, () => action<Frame>({ update: (f) => {
     legs.toward(f, { position: start, quaternion: facing }, { accel: 1.2, speed: 0 });
   } }), { pose: h.pose, dev: true });
   let lead = 0;

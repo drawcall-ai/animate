@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { clamp, wrapAngle, smoothstep } from './math';
 import { action } from '@pmndrs/timeline';
-import type { Frame } from './body';
+import type { Body, Frame } from './body';
 import { followRotation } from './follow';
 import { live, type Behaviour, type Live, type Motion } from './goal';
 import { clampRotation } from './limits';
@@ -19,7 +19,7 @@ export interface Gazer {
   /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
   pitch?: number;
   /** Ask the body to help before aiming the head. */
-  lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
+  lead?(body: Body, pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
 
 /** the most a head turns to look about (rad/s², rad/s): a glance aside, at most */
@@ -32,14 +32,16 @@ export const GLANCE = { turnAccel: 40, turnSpeed: 6 };
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
 /**
- * The gazer's eyes on `target` (world), the head upright (rest: facing +Z, +Y up), every sub-step,
+ * The body's eyes (`Species.gaze`) on `target` (world), the head upright (rest: facing +Z, +Y up), every sub-step,
  * endless. The head turns most of the way and the eyes the rest (a quarter, a few degrees at most:
  * a large shift ends with the eyes a little off the head's line). The neck's whole turn is followed
  * from its history as fast as the gaze shift is large (the head's main sequence: a small look
  * slowly, a large one briskly, a bell either way), at most at `motion`'s pace, and shared evenly
  * over the neck chain's bones, each within its limit.
  */
-export function lookAt(gazer: Gazer, target: Live<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour {
+export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour {
+  const gazer = body.gazer;
+  if (!gazer) throw new Error('lookAt: the body has no gaze');
   return function* () {
     let over: boolean | null = null;
     /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
@@ -56,7 +58,7 @@ export function lookAt(gazer: Gazer, target: Live<Vector3>, motion: Required<Pic
         const pose = f.current;
         const bones = pose.skeleton.chain(gazer.neck);
         const point = live(target, f);
-        gazer.lead?.(f.prev, point);
+        gazer.lead?.(body, f.prev, point);
         // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
         const distance = aimed?.distanceTo(point) ?? Infinity;
         const jumped = distance > JUMP * f.dt;

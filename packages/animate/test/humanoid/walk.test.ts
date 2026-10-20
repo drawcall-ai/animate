@@ -193,7 +193,7 @@ it('returns to its starting point after an internal route without a final target
 it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including aside and rejects a blocked explicit face: %s', (kind) => {
   const other = new Pose(leg());
   other.setRoot(new Vector3(-0.35, 1, 1.6));
-  const world = new World().add(new Body(other.skeleton, function* () {}, { pose: other }));
+  const world = new World().add(new Body({ skeleton: other.skeleton }, function* () {}, { pose: other }));
   const item = new Item(new Vector3(0, 1.2, 2), new Quaternion(), {
     left: { position: new Vector3(0.15, 0, 0) },
     right: { position: new Vector3(-0.15, 0, 0) },

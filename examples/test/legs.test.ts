@@ -3,13 +3,15 @@ import { HORSE_TROT } from '../../packages/animate/src/horse/legs';
 import { expect, it } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, Humanoid, Legs, Pose, type Frame, type Gait, type LegStep } from '@drawcall/animate';
+import { Body, horse as horseSpecies, Humanoid, Legs, Pose, type Frame, type Gait, type LegStep } from '@drawcall/animate';
 import { HORSE_WALK, horseLegs } from '../../packages/animate/src/horse/legs';
 import { beyond } from '../../packages/animate/src/core/limits';
 import { createOpenPoseModel } from '../src/openpose';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { bipedRoot, legsBiped, legsHorse, scriptedRoot } from '../src/scenarios/legs';
+
+const HORSE = horseSpecies().skeleton;
 
 function human(brake = 3, pace = 1.3, supported = false) {
   let engine: Legs | undefined;
@@ -30,12 +32,12 @@ function human(brake = 3, pace = 1.3, supported = false) {
 }
 
 function horse(gait: Gait, pace: number, brake = 2, radius = 15, supported = false) {
-  const pose = new Pose(HORSE_SKELETON);
+  const pose = new Pose(HORSE);
   const route = scriptedRoot(1.32, pace, new Vector3(), 0, 0, brake, radius);
   pose.setRoot(route.at(0).position);
   const engine = new Legs(pose, horseLegs(), gait);
   const move = supported ? supportRoute(engine, route) : null;
-  const body = new Body(HORSE_SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body(horseSpecies(), () => action<Frame>({ update: (f) => {
     if (move) return move.update(f);
     const at = route.at(f.time);
     f.current.setRoot(at.position);

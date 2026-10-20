@@ -22,7 +22,7 @@ it('checks a planted foot in the final pose after a later writer moved it', () =
 });
 
 it('attributes a watcher to the beat that made the previous final pose, even on handover', () => {
-  const body = new Body(leg(), function* () {
+  const body = new Body({ skeleton: leg() }, function* () {
     yield* parallel<Frame>('all', watch('scene', (f) => ({ check: 'too far', value: f.prev.position(0).x, limit: 1, where: 'root' })), function* () {
       yield* named('first', function* () {
         yield* action<Frame>({ update: (f) => f.current.setRoot(new Vector3(2, 0, 0)), until: timePassed(STEP, 'seconds') });
@@ -127,7 +127,7 @@ it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as co
 });
 
 it('clears the development beat when nothing is running', () => {
-  const body = new Body(leg(), named('one step', function* () {
+  const body = new Body({ skeleton: leg() }, named('one step', function* () {
     yield () => 'finished';
   }), { dev: true });
   body.update(STEP);

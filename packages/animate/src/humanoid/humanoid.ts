@@ -52,15 +52,13 @@ export class Humanoid extends Body {
     const start = standing(p, new Pose(rig.skeleton), options.position ?? { x: 0, z: 0 }, yaw);
     const eyes = rig.points.eyes;
     let made: Behaviour | null = null;
-    super(rig.skeleton, function* () {
+    super({ skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: INDEX.leftHand, right: INDEX.rightHand } }, function* () {
       if (!made) throw new Error('the humanoid is not made yet');
       yield* made();
     }, {
       dev: options.dev, pose: start.pose, scale: p.scale, wearing: options.wearing?.(p),
-      hands: { bones: { left: INDEX.leftHand, right: INDEX.rightHand }, hold: (body) => followHeld(humanoid(body)) },
+      hold: (body) => followHeld(humanoid(body)),
     });
-    this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180,
-      lead: (pose, point) => gazeAsks(this, pose, point) };
     // (facing as given, not as read back off the pose)
     this.locomotion.facing = yaw;
     this.rig = rig;
@@ -76,6 +74,10 @@ export class Humanoid extends Body {
     this.rig.write(this.pose, dt);
   }
 }
+
+/** a person's gaze: the neck chain turns the head, the eyes the rest; looking low, the body bows */
+const humanGaze = (eyes: Rig['points']['eyes']): Gazer => ({ neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),
+  range: EYES, pitch: NECK_PITCH * Math.PI / 180, lead: (body, pose, point) => gazeAsks(humanoid(body), pose, point) });
 
 /** `body` as the humanoid it is */
 function humanoid(body: Body): Humanoid {

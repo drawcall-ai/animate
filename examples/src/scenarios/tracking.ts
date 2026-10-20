@@ -360,7 +360,7 @@ export function reach(v: Variation = {}): Scenario {
                 // (the body ahead of the hand: turned and stepped to where it is going)
                 ask(h, comeAlong(h, 'right', (f) => play.place(going(play.time(f.time), ahead)), pace)),
                 // (the eyes lead the hand: where it is going a moment on)
-                lookAt(h.gazer, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look)), SHIFT),
+                lookAt(h, reported(report, 'gaze', (f) => point(f.time + GLANCE / pace, look)), SHIFT),
               );
               yield* reporting(report, ['rightHand'], release(h, ['right'], { away: { right: new Vector3(0, -0.3, -0.3) } }))();
               released = true;

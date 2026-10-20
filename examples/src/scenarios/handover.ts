@@ -58,9 +58,9 @@ export const handOver: Scenario = {
             // back to the ball a moment before it comes down (eyes first, then the hand)
             function* () {
               const ballAt = () => ball.current.position;
-              yield* parallel<Frame>('race', lookAt(h.gazer, reported(report, 'gaze', ballAt)), action({ until: timePassed(OVERRIDE[0] - LEAD, 'seconds') }));
-              yield* parallel<Frame>('race', lookAt(h.gazer, reported(report, 'gaze', RAISED)), action({ until: timePassed(OVERRIDE[1], 'seconds') }));
-              yield* lookAt(h.gazer, reported(report, 'gaze', ballAt))();
+              yield* parallel<Frame>('race', lookAt(h, reported(report, 'gaze', ballAt)), action({ until: timePassed(OVERRIDE[0] - LEAD, 'seconds') }));
+              yield* parallel<Frame>('race', lookAt(h, reported(report, 'gaze', RAISED)), action({ until: timePassed(OVERRIDE[1], 'seconds') }));
+              yield* lookAt(h, reported(report, 'gaze', ballAt))();
             },
             // over that, for a while: the right hand raised
             function* () {

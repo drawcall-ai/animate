@@ -10,6 +10,10 @@ import { Legs, type LegChain } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import { EARS, HALTER, HEAD, LEGS, NECK, PELVIS, SKELETON, SPINE, TAIL } from './skeleton';
 import { powerGait } from '../core/legs/schedule';
+import type { Species } from '../core/species';
+
+/** a horse */
+export const horse = (): Species => ({ skeleton: SKELETON });
 
 const DEG = Math.PI / 180;
 const WITHERS = SKELETON.bones[LEGS[0].scapula ?? fail('a foreleg without a scapula')].offset.z;

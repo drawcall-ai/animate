@@ -39,7 +39,7 @@ it('leg contact checks read the final pose after a later writer, and disappear w
     const root = { position: pose.position(0).clone(), quaternion: new Quaternion() };
     const joints = horseLegs()[0].joints;
     const terminal = joints[joints.length - 1].bone;
-    const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
       engine.update(f, { root: () => root, speed: 0 });
       if (f.time > 0.05) {
         f.current.setLocal(terminal, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.3));
@@ -61,7 +61,7 @@ it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3
     const pose = new Pose(SKELETON);
     const engine = new Legs(pose, horseLegs(), HORSE_WALK);
     let landed = -1;
-    const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+    const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
       engine.toward(f, { position: new Vector3(0, pose.position(0).y, 20) }, { speed: 0.95, accel: 0.65 });
       if (landed < 0 && engine.events.some((event) => event.type === 'land')) {
         landed = f.time;
@@ -83,7 +83,7 @@ it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', (
   const pose = new Pose(SKELETON);
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
   const root = { position: pose.position(0).clone(), quaternion: new Quaternion() };
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     engine.update(f, { root: () => root, speed: () => -8.9e-16 });
   } }), { pose });
   for (let tick = 0; tick < 60; tick++) body.update(1 / 60);
@@ -118,7 +118,7 @@ it('follows a moving goal with supported contacts and a root that turns toward i
   const pose = new Pose(SKELETON);
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
   let turned = 0;
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     engine.toward(f, { position: new Vector3(0.05, pose.position(0).y, 2 + 0.75 * f.time), velocity: new Vector3(0, 0, 0.75) }, { speed: 0.95, accel: 0.65 });
     turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w)));
   } }), { pose, dev: true });
@@ -143,7 +143,7 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
   pose.setRoot(new Vector3(0, 1.37, 0));
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
   const motion = horseMotion(pose, HORSE_WALK);
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     motion.prepare(f, engine);
     engine.toward(f, { position: new Vector3(0, 1.37, 20) }, { speed: 0.95, accel: 0.65 });
   } }), { pose, dev: true });
@@ -202,7 +202,7 @@ it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goal
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
   const goal = new Vector3(x, pose.position(0).y, z);
   const start = pose.position(0).clone();
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
   } }), { pose, dev: true });
   for (let tick = 0; tick < 120; tick++) body.update(1 / 60);
@@ -216,7 +216,7 @@ it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goal
 it('brakes for a moving goal that crosses behind a travelling root', () => {
   const pose = new Pose(SKELETON);
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     const goal = f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2);
     engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
   } }), { pose, dev: true });
@@ -235,7 +235,7 @@ it('rejects invalid follower goals and motion instead of waiting', () => {
   ] as const) {
     const pose = new Pose(SKELETON);
     const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-    const body = new Body(SKELETON, () => action<Frame>({ update: (f) => engine.toward(f, { position }, motion) }), { pose });
+    const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => engine.toward(f, { position }, motion) }), { pose });
     expect(() => body.update(1 / 60)).toThrow(/root (goal|motion|turn motion)/);
   }
 });
@@ -244,7 +244,7 @@ it('reuses each travel forecast across root-height candidates', () => {
   const pose = new Pose(SKELETON);
   const engine = new Legs(pose, horseLegs(), HORSE_WALK);
   const goal = new Vector3(1, pose.position(0).y, 2);
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
   } }), { pose, dev: true });
   const forecast = vi.spyOn(pursuit, 'rootPlan');
@@ -266,7 +266,7 @@ function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention =
   const chains = horseLegs().map(chain => Object.freeze(chain));
   const legs = new Legs(pose, chains, gait);
   const motion = horseMotion(pose, gait, seed);
-  const body = new Body(SKELETON, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
     motion.prepare(f, legs, attention);
     legs.toward(f, { position: new Vector3(0, 1.32, speed ? 100 : 0) }, { speed, accel: 1.85 });
   } }), { pose, dev: true });
@@ -376,7 +376,7 @@ it.each([false, true])('checks the final tied pose after later writers, dev=%s',
   const chains = horseLegs(), legs = new Legs(pose, chains, HORSE_WALK);
   const motion = horseMotion(pose, HORSE_WALK);
   const tether = { position: new Vector3(0.7, 1.12, 0.8), length: 0.9 };
-  const body = new Body(SKELETON, () => action<Frame>({ update: f => {
+  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: f => {
     motion.prepare(f, legs, { tether: f.time < 0.02 ? tether : undefined });
     if (f.time < 0.02) f.current.setLocal(NECK, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -0.5));
   } }), { pose, dev });

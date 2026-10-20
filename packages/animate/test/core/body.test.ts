@@ -13,7 +13,7 @@ const every = (write: (f: Frame) => void, seconds?: number) =>
 
 describe('Body', () => {
   it('layers its behaviours: the later writer wins on the bones it writes, a weighted one blends over', () => {
-    const body = new Body(leg(), function* () {
+    const body = new Body({ skeleton: leg() }, function* () {
       yield* parallel<Frame>(
         'all',
         every((f) => {
@@ -31,7 +31,7 @@ describe('Body', () => {
 
   it('sets its behaviour out on the first update: the behaviour may read the body it moves as it sets out', () => {
     let read = NaN;
-    const body: Body = new Body(leg(), function* () {
+    const body: Body = new Body({ skeleton: leg() }, function* () {
       read = body.pose.local(1).w;
       yield* every(() => {})();
     });
@@ -42,7 +42,7 @@ describe('Body', () => {
   it('hands over continuously when a layer ends: the one below follows its pose from the motion there is', () => {
     const accel = 40;
     const rest = new Quaternion();
-    const body = new Body(leg(), function* () {
+    const body = new Body({ skeleton: leg() }, function* () {
       yield* parallel<Frame>(
         'all',
         every((f) => f.current.setLocal(2, followRotation(f.prev2.local(2), f.prev.local(2), rest, { accel }, f.dt, new Quaternion()))),
@@ -66,8 +66,7 @@ describe('Body', () => {
   it('keeps the final poses as history: current becomes prev, prev becomes prev2', () => {
     const seen: [number, number, number][] = [];
     const angle = (q: Quaternion) => 2 * Math.acos(Math.min(1, Math.abs(q.w)));
-    const body = new Body(
-      leg(),
+    const body = new Body({ skeleton: leg() },
       every((f) => {
         seen.push([angle(f.prev2.local(2)), angle(f.prev.local(2)), angle(f.current.local(2))]);
         f.current.setLocal(2, turn(1, 0, 0, 0.1 * Math.round(f.time * 60)));
@@ -89,8 +88,7 @@ describe('Body', () => {
     const goal = new Vector3(1, 0, 0);
     const run = (updates: number[]) => {
       const roots: Vector3[] = [];
-      const body = new Body(
-        leg(),
+      const body = new Body({ skeleton: leg() },
         every((f) => {
           f.current.setRoot(follow(f.prev2.position(0), f.prev.position(0), goal, { accel: 10 }, f.dt, new Vector3()));
           roots.push(f.current.position(0).clone());
@@ -123,8 +121,7 @@ describe('Body', () => {
     const start = new Pose(skeleton);
     start.setLocal(2, turn(1, 0, 0, 0.5));
     let read = false;
-    const body = new Body(
-      skeleton,
+    const body = new Body({ skeleton },
       every((f) => {
         expect(f.prev2.local(2).equals(f.prev.local(2))).toBe(true);
         expect(f.world.bodies).toEqual([]);

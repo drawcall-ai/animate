@@ -85,7 +85,7 @@ function tasks(h: Humanoid, box: Item, size: Vector3, top: number, lift: number,
         });
         yield* shelve(h, box, size, top)();
       }),
-      lookAt(h.gazer, reported(report, 'gaze', () => gaze.on)),
+      lookAt(h, reported(report, 'gaze', () => gaze.on)),
     );
     yield* reporting(report, HANDS, release(h, ['left', 'right']))();
   };

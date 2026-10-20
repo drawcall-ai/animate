@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import type { Frame } from '../core/body';
+import type { Body, Frame } from '../core/body';
 import { gazeOff, lookAt, SHIFT } from '../core/gaze';
 import { when } from '../core/when';
 import { live, type Behaviour, type Live } from '../core/goal';
@@ -30,7 +30,7 @@ export function lookAround(h: Humanoid, options: { seed?: number } = {}): Behavi
     let aside = 0;
     let up = 0;
     const p = h.proportions;
-    yield* lookAt(h.gazer, (f) => {
+    yield* lookAt(h, (f) => {
         const g = h.locomotion;
         // (glances only standing still: walking, the eyes are on the way)
         if (g.walk > 0.05) {
@@ -71,7 +71,7 @@ const _v = new Vector3();
  * `task` sets off at once (the eyes on what the hands already work). Put it after the
  * base (its `lookAt` overrides `lookAround`'s).
  */
-export function withGaze(h: Humanoid, at: Live<Vector3>, task: Behaviour, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour {
+export function withGaze(h: Body, at: Live<Vector3>, task: Behaviour, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour {
   const { bow = 0, first = false } = options;
   return function* () {
     yield* parallel<Frame>(
@@ -80,20 +80,22 @@ export function withGaze(h: Humanoid, at: Live<Vector3>, task: Behaviour, option
         if (first) yield* gazeLead(h, at, options.lead)();
         yield* task();
       },
-      lookAt(h.gazer, at, SHIFT),
+      lookAt(h, at, SHIFT),
       action<Frame>({ update: () => { h.asks.bow = Math.max(h.asks.bow, bow); } }),
     );
   };
 }
 
 /** Wait for the current gaze before starting a task; does not own or move the eyes. */
-export function gazeLead(h: Humanoid, at: Live<Vector3>, seconds = NaN): Behaviour {
+export function gazeLead(h: Body, at: Live<Vector3>, seconds = NaN): Behaviour {
+  const gazer = h.gazer;
+  if (!gazer) throw new Error('gazeLead: the body has no gaze');
   return function* () {
     let lead = seconds;
     yield* when((f, _, time) => {
       const point = live(at, f);
       if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
-      return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
+      return gazeOff(gazer, f.prev, point) < ARRIVED || time > LONGEST;
     });
     yield* when(timePassed(lead, 'seconds'));
   };
@@ -110,10 +112,12 @@ const LEAD = [0.1, 0.3];
  * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
  * The existing posture and gaze owners retain their motion limits and final-pose checks.
  */
-export function aimAt(h: Humanoid, at: Live<Vector3>): Behaviour {
+export function aimAt(h: Body, at: Live<Vector3>): Behaviour {
+  const gazer = h.gazer;
+  if (!gazer) throw new Error('aimAt: the body has no gaze');
   return function* () {
-    yield* parallel<Frame>('all', lookAt(h.gazer, at, SHIFT), action<Frame>({ update: (f) => {
-      const direction = live(at, f).clone().sub(h.gazer.eyes(f.prev, new Vector3()));
+    yield* parallel<Frame>('all', lookAt(h, at, SHIFT), action<Frame>({ update: (f) => {
+      const direction = live(at, f).clone().sub(gazer.eyes(f.prev, new Vector3()));
       const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.locomotion.facing);
       const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
       // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation.

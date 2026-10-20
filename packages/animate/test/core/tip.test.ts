@@ -15,7 +15,7 @@ describe('chainTo', () => {
   it("moves a chain's tip on to its target, its joints braked to `turnAccel`, and ends there once reached", () => {
     const goal = new Vector3(0.25, 0.35, 0.3);
     let ended = -1;
-    const body = new Body(leg(), function* () {
+    const body = new Body({ skeleton: leg() }, function* () {
       yield* chainTo('leg', { position: goal }, { accel: 6, speed: 1, turnAccel: 40, pole: new Vector3(0.1, 0.6, 2), until: 'reached' })();
       yield* action<Frame>({ init: () => void (ended = body.frame.time), update: () => false });
     });
@@ -35,7 +35,7 @@ describe('chainTo', () => {
       const u = Math.max(0, Math.min(1, t));
       return u ** 3 * (10 - 15 * u + 6 * u * u);
     };
-    const body = new Body(leg(), () => parallel<Frame>('all',
+    const body = new Body({ skeleton: leg() }, () => parallel<Frame>('all',
       action({ update: (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)) }),
       chainTo('leg', (f) => {
         const u = Math.max(0, Math.min(1, f.time - 1));
@@ -51,7 +51,7 @@ describe('TrackedRotation', () => {
   it('holds a joint to its acceleration where its goal jumps, and follows a goal moving smoothly without lag', () => {
     const joint = new TrackedRotation();
     let goal = (t: number) => turn(1, 0, 0, Math.sin(2 * t));
-    const body = new Body(leg(), function* () {
+    const body = new Body({ skeleton: leg() }, function* () {
       yield* action<Frame>({
         update: (f) => void f.current.setLocal(2, joint.follow(f.prev2.local(2), f.prev.local(2), goal(f.time), { accel: 30, speed: 8 }, f.dt, new Quaternion())),
       });
@@ -76,7 +76,7 @@ describe('lookAt', () => {
     const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
     const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
     const point = new Vector3(2, 1.2, 1);
-    const body = new Body(skeleton, lookAt(gazer, point));
+    const body: Body = new Body({ skeleton, gaze: gazer }, () => lookAt(body, point)());
     for (let k = 0; k < 120; k++) body.update(dt);
     const head = body.pose.rotation(2);
     const forward = new Vector3(0, 0, 1).applyQuaternion(head);
@@ -93,7 +93,7 @@ describe('lookAt', () => {
     const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
     const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
     const point = new Vector3(0.05, 0, -0.3);
-    const body = new Body(skeleton, lookAt(gazer, point));
+    const body: Body = new Body({ skeleton, gaze: gazer }, () => lookAt(body, point)());
     for (let k = 0; k < 120; k++) body.update(dt);
     // (still facing the way the chest does, not turned half round)
     expect(new Vector3(1, 0, 0).applyQuaternion(body.pose.rotation(2)).x).toBeGreaterThan(0.9);
@@ -106,10 +106,10 @@ describe('lookAt', () => {
     // (a hilt at the left hip, seen from above: down, a little left and ahead)
     const point = new Vector3(0.17, 0.95, 0.2);
     const sway = (t: number) => turn(0, 1, 0, 0.04 * Math.sin(2 * Math.PI * 3 * t)).multiply(turn(1, 0, 0, 0.4));
-    const body = new Body(skeleton, function* () {
+    const body: Body = new Body({ skeleton, gaze: gazer }, function* () {
       yield* parallel<Frame>('all', function* () {
         yield* action<Frame>({ update: (f) => void f.current.setLocal(0, sway(f.time)) });
-      }, lookAt(gazer, point));
+      }, lookAt(body, point));
     });
     const heads: Quaternion[] = [];
     let missed = 0;
@@ -131,7 +131,7 @@ describe('lookAt', () => {
     /** the head's speed (rad/s) every step of a look `yaw` aside, and how far it turned */
     const look = (yaw: number) => {
       const eyes = new Vector3(0, 1.65, 0.08);
-      const body = new Body(skeleton, lookAt(gazer, eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3)), SHIFT));
+      const body: Body = new Body({ skeleton, gaze: gazer }, () => lookAt(body, eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3)), SHIFT)());
       const speeds: number[] = [];
       let last = new Quaternion();
       for (let k = 0; k < 180; k++) {

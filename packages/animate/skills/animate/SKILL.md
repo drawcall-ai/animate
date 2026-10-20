@@ -13,7 +13,7 @@ A humanoid's behaviour is `parallel('all', idle(h), story)`. `idle` already bala
 
 ## A story, end to end
 
-A groom fetches a saddle, puts it on a horse, and leads the horse out (`horse` and `HEAD` come from *Other bodies*):
+A groom fetches a saddle, puts it on a horse, and leads the horse out (`mare` and `HEAD` come from *Other bodies*):
 
 ```ts
 const across = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
@@ -29,10 +29,10 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
     // walks up; eyes, hands and bow set off before it stands there
     yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
     yield* named('saddle the horse', function* () {
-      yield* place(h, saddle, onBone(horse, 0, onBack))();
-      yield* wear(horse, saddle, 0)(); // the horse moves it from now on
+      yield* place(h, saddle, onBone(mare, 0, onBack))();
+      yield* wear(mare, saddle, 0)(); // the horse moves it from now on
     })();
-    yield* named('check the fit', withGaze(h, () => horse.pose.position(HEAD), release(h, ['left', 'right'])))();
+    yield* named('check the fit', withGaze(h, () => mare.pose.position(HEAD), release(h, ['left', 'right'])))();
     yield* named('lead out', function* () {
       yield* grab(h, { right: [rope, 'knot'] })();
       const near = facingAt(h, h.pose.skeleton.index('chest'), { position: new Vector3(-0.28, 0.04, 0.55) });
@@ -44,7 +44,7 @@ const groom = new Humanoid(await loadCharacterModel(), (h) => function* () {
     })();
   });
 }, { position: { x: -1.5, z: 0 } });
-const world = new World().add(groom, horse); // each reads the others' last poses
+const world = new World().add(groom, mare); // each reads the others' last poses
 function update(dt: number) {
   world.update(dt);
 }
@@ -58,7 +58,7 @@ People look at, turn to and reach for the next thing while still finishing the l
 // beat to beat: eyes on the horse a second before the walk arrives; hands letting go while the next grab sets off
 yield* parallel<Frame>('all', walkTo(h, { to: stall }), function* () {
   yield* when(arriving(h, 1));
-  yield* withGaze(h, () => horse.pose.position(HEAD), () => when(timePassed(1.5, 'seconds')))();
+  yield* withGaze(h, () => mare.pose.position(HEAD), () => when(timePassed(1.5, 'seconds')))();
 });
 yield* parallel<Frame>('all', release(h, ['left', 'right']), grab(h, { right: [rope, 'knot'] }));
 
@@ -78,7 +78,7 @@ One verb per intent: `grab` gets (it walks up and looks unless `walk: false`), `
 
 Metres, seconds, radians; +Y up, the floor at y = 0; yaw 0 faces +Z and +X is then the body's left. Goals live in one of three frames: the world (the default), a bone (`onBone(body, bone, local)` or `facingAt(h, bone, local)`), or an item (`onItem(item, local)`). For a carry on another body, use `{ frame: onBone(body, bone) }`; for an item, `{ frame: onItem(item) }`. Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
 
-Place what belongs to a body in its frame: `carried(h)` rather than a carry height like `y: 1.08` (right for one stature only), `onBone(horse, …)` rather than the horse's position plus an offset (right only while it stands still). Time beats by task conditions or distances to props, not raw coordinates such as `root.z > 8.2`.
+Place what belongs to a body in its frame: `carried(h)` rather than a carry height like `y: 1.08` (right for one stature only), `onBone(mare, …)` rather than the horse's position plus an offset (right only while it stands still). Time beats by task conditions or distances to props, not raw coordinates such as `root.z > 8.2`.
 
 ## Leave placement to the library
 
@@ -90,14 +90,15 @@ What you author: the scene, the order of beats, the places on props a course pas
 
 A `Body` is any skeleton with a behaviour. A horse ships with the package: `horseFollow` moves it toward a floor goal with its pelvis, legs and head working together. A `Humanoid` is a `Body` too. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `frame` place things on it as it moves. Add every body, the horse too, to one `World` (`world.add(...)`) and update the world each frame: approaches then choose stands clear of the other bodies' low segments.
 
-`horseFollow` walks. Pass a live `person` point for attention and close head avoidance, and a live `tether` (`position`, `length`) while tied; return `undefined` when absent or untied. Keep the returned behaviour to call `follow.react(handler.pose.position(0))` once at saddle placement or girth tightening. Each explicit event copies the point and settles in about four seconds; live getters may return fresh vectors freely. Use `horseLeadPoint(horse.pose, out)` for an attention-following hand station that ignores gait pitch and nod; draw the rope from the actual halter. Standing ears, tail and head move within 25 seconds; hind-leg rest starts after at least 60 seconds of quiet.
+`horseFollow` walks. Pass a live `person` point for attention and close head avoidance, and a live `tether` (`position`, `length`) while tied; return `undefined` when absent or untied. Keep the returned behaviour to call `follow.react(handler.pose.position(0))` once at saddle placement or girth tightening. Each explicit event copies the point and settles in about four seconds; live getters may return fresh vectors freely. Use `horseLeadPoint(mare.pose, out)` for an attention-following hand station that ignores gait pitch and nod; draw the rope from the actual halter. Standing ears, tail and head move within 25 seconds; hind-leg rest starts after at least 60 seconds of quiet.
 
 ```ts
-const HEAD = HORSE_SKELETON.index('head');
-const start = new Pose(HORSE_SKELETON);
+const species = horse();
+const HEAD = species.skeleton.index('head');
+const start = new Pose(species.skeleton);
 start.setRoot(new Vector3(1.2, start.position(0).y, 3));
 // Tied up until the rope is taken; then follow a rope's length behind the groom.
-const horse: Body = new Body(HORSE_SKELETON, horseFollow(start, (f) => {
+const mare: Body = new Body(species, horseFollow(start, (f) => {
   if (rope.supported) return { position: start.position(0) };
   const at = groom.pose.position(0);
   const back = f.prev.position(0).clone().sub(at).setY(0);
@@ -121,7 +122,7 @@ Expectations of the scene are watchers, composed before the story; they read fin
 yield* parallel<Frame>('all',
   eyesOnBefore(h, saddle, 0.4), // the eyes are on it 0.4 s before a hand takes it
   watch('horse clear of the face', (f) => {
-    const d = horse.pose.position(HEAD).distanceTo(f.prev.position(INDEX.head));
+    const d = mare.pose.position(HEAD).distanceTo(f.prev.position(INDEX.head));
     return d < 0.5 ? { check: 'head clearance (m)', value: d, limit: 0.5, where: 'head' } : null;
   }),
   idle(h), story,
@@ -138,7 +139,7 @@ A held tool that must stay steady in the player's view, such as a first-person w
 
 ```ts
 const skeleton = new Skeleton(bones, { limits, chains: { arm: ['shoulder', 'elbow', 'hand'] } });
-const body = new Body(skeleton, chainTo('arm', { position: goal }, { accel: 6, speed: 1, turnAccel: 40, until: 'reached' }));
+const body = new Body({ skeleton }, chainTo('arm', { position: goal }, { accel: 6, speed: 1, turnAccel: 40, until: 'reached' }));
 ```
 
-Bones are listed parents first, bone 0 the root, rest rotations identity (+Y up, facing +Z). Build your own behaviours from `follow` / `followRotation`, `TrackedPoint` / `TrackedRotation`, `ChainTip` and `solveChain`: each moves from the history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it.
+A body is made from a `Species` (its skeleton, and optionally its `gaze` for `lookAt`/`withGaze`/`aimAt` and its `hands` by name). Bones are listed parents first, bone 0 the root, rest rotations identity (+Y up, facing +Z). Build your own behaviours from `follow` / `followRotation`, `TrackedPoint` / `TrackedRotation`, `ChainTip` and `solveChain`: each moves from the history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it.

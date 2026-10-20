@@ -62,11 +62,11 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
 it('wears on a generic body, follows its bone from another frame, and takes off without another mover', () => {
   const item = new Item(new Vector3(0.2, 1, 0), new Quaternion(), { grip: { position: new Vector3() } });
   const local = { position: new Vector3(0.1, 0.2, 0) };
-  const body: Body = new Body(leg(), function* () {
+  const body: Body = new Body({ skeleton: leg() }, function* () {
     yield* wear(body, item, 0, { to: local })();
     yield* action<Frame>({ update: (f) => f.current.setRoot(new Vector3(f.time, 1, 0)) });
   }, { scale: 2 });
-  const other = new Body(leg(), () => when(() => false));
+  const other = new Body({ skeleton: leg() }, () => when(() => false));
   const goal = onBone(body, 0, local);
   for (let i = 0; i < 180; i++) body.update(STEP);
   expect(item.current.position.distanceTo(body.pose.position(0).clone().add(new Vector3(0.2, 0.4, 0)))).toBeLessThan(0.001);
@@ -76,7 +76,7 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
   other.update(STEP);
   body.update(STEP);
   expect(goal(other.frame).velocity.x).toBeCloseTo(1);
-  const off = new Body(leg(), takeOff(body, item));
+  const off = new Body({ skeleton: leg() }, takeOff(body, item));
   off.update(STEP);
   const at = item.current.position.clone();
   body.update(STEP);
@@ -93,7 +93,7 @@ it('never throws on a late reach — its beat, item, grip and distance go to the
   expect(h.log.map(({ check, where, beat }) => ({ check, where, beat }))).toEqual([{ check: 'late reach: grip distance after 0.1 s (m)', where: 'saddle right handle', beat: 'fetch saddle' }]);
   expect(h.log[0].value).toBeGreaterThan(1);
   const cause = new Error('attachment failed');
-  const instant = new Body(leg(), named('attach saddle', function* () { throw cause; }));
+  const instant = new Body({ skeleton: leg() }, named('attach saddle', function* () { throw cause; }));
   expect(() => instant.update(STEP)).toThrow('0.017 s, "attach saddle": attachment failed');
 });
 
@@ -128,7 +128,7 @@ it('an unsupported hold travels with the body between carries, and an explicit m
 
 it('follows a grip worn by another body without asking the humanoid to lower for it', () => {
   const item = new Item(new Vector3(0.15, 0.9, 0.3), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 8 });
-  const wearer: Body = new Body(leg(), wearFromStart);
+  const wearer: Body = new Body({ skeleton: leg() }, wearFromStart);
   function* wearFromStart() { yield* wear(wearer, item, 0)(); }
   wearer.update(STEP);
   let done = false;

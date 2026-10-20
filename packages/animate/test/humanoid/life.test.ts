@@ -42,7 +42,7 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
 it('turns the trunk for an across-body reach and for an over-shoulder look within ROM', () => {
   for (const look of [false, true]) {
     const h = body((h) => function* () {
-      yield* parallel<Frame>('race', look ? lookAt(h.gazer, new Vector3(-2, 1.4, -1)) : handTo(h, 'right', { position: new Vector3(0.45, 1.2, 0.25) }), when(timePassed(3, 'seconds')));
+      yield* parallel<Frame>('race', look ? lookAt(h, new Vector3(-2, 1.4, -1)) : handTo(h, 'right', { position: new Vector3(0.45, 1.2, 0.25) }), when(timePassed(3, 'seconds')));
     });
     step(h, 3);
     const turn = new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').y;

@@ -3,11 +3,13 @@ import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, Legs, Pose, yawOf, type Frame, type Gait, type ReadonlyPose } from '@drawcall/animate';
+import { Body, horse as horseSpecies, Legs, Pose, yawOf, type Frame, type Gait, type ReadonlyPose } from '@drawcall/animate';
 import { HORSE_WALK, horseLegs } from '../../../packages/animate/src/horse/legs';
 import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
+
+const HORSE = horseSpecies().skeleton;
 
 /** Script only: integrate a smooth speed ramp, then a broad bend and a smooth stop. No balance or body planner. */
 export function scriptedRoot(height: number, pace: number, origin = new Vector3(), yaw = 0, start = 0, brake = 2, radius = 15) {
@@ -77,13 +79,13 @@ export function legsHorse(): Scenario {
     stage: (dev = false) => {
       const engines: Legs[] = [];
       const make = (gait: Gait, pace: number, x: number) => {
-        const pose = new Pose(HORSE_SKELETON);
+        const pose = new Pose(HORSE);
         // Tuned: 8 cm reach reserve for the fixed root through stance and breakover.
         const route = scriptedRoot(1.32, pace, new Vector3(x, 0, 0));
         pose.setRoot(route.at(0).position);
         const engine = new Legs(pose, horseLegs(), gait);
         engines.push(engine);
-        return new Body(HORSE_SKELETON, () => action<Frame>({ update: (f) => {
+        return new Body(horseSpecies(), () => action<Frame>({ update: (f) => {
           const at = route.at(f.time);
           f.current.setRoot(at.position);
           f.current.setLocal(0, at.quaternion);

@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import type { Stepper } from './legs/stepper';
 import { TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
-import type { Skeleton } from './skeleton';
+import type { Species } from './species';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
 import { SnapChecks } from './rotation';
@@ -50,10 +50,8 @@ export interface BodyOptions {
   pose?: ReadonlyPose;
   /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone */
   wearing?: readonly Dressed[];
-  /** its hands, by name, each the bone it holds with; and how they keep to what they hold, every sub-step after the worn items move */
-  hands?: { bones: Readonly<Record<string, number>>; hold: (body: Body) => (f: Frame) => void };
-  /** its neck and eyes, for `lookAt` */
-  gazer?: Gazer;
+  /** how its hands keep to what they hold, every sub-step after the worn items move */
+  hold?: (body: Body) => (f: Frame) => void;
 }
 
 /**
@@ -70,7 +68,7 @@ export class Body {
   readonly worn = new Map<Item, Wearing>();
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it */
   readonly borne = new Map<Item, Bearing>();
-  /** its hands' bones, by name (`BodyOptions.hands`) */
+  /** its hands' bones, by name (`Species.hands`) */
   readonly hands: Readonly<Record<string, number>>;
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
   readonly holding: Record<string, { item: Item; grip: string } | null>;
@@ -78,6 +76,7 @@ export class Body {
   readonly asks: Asks = createAsks();
   /** its walk, as the legs report it; walkTo publishes its arrival estimate there */
   readonly locomotion: Locomotion;
+  /** its neck and eyes (`Species.gaze`) */
   readonly gazer?: Gazer;
   /** the stepper keeping its legs under a root the scene drives, if any: ask it to `jump`, read whether it is `airborne` */
   stepper: Stepper | null = null;
@@ -96,17 +95,18 @@ export class Body {
   private world: World | null = null;
   private alone: World | null = null;
 
-  constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame>, options: BodyOptions = {}) {
+  constructor(readonly species: Species, behaviour: ReusableTimeline<Frame>, options: BodyOptions = {}) {
+    const { skeleton } = species;
     this.scale = options.scale ?? 1;
-    this.gazer = options.gazer;
+    this.gazer = species.gaze;
     const start = new Pose(skeleton);
     if (options.pose) start.copy(options.pose);
     start.forward();
     this.locomotion = createLocomotion(yawOf(start.local(0)));
-    this.hands = options.hands?.bones ?? {};
+    this.hands = species.hands ?? {};
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     dress(this, start, options.wearing ?? []);
-    this.hold = options.hands?.hold(this) ?? null;
+    this.hold = options.hold?.(this) ?? null;
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const body = this;
     this.frame = {

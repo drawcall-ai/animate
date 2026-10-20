@@ -36,7 +36,7 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour {
     yield* eyesOn(k, () => helmet.current.position, along(k, helmet, [[1.0, at(0, 0.14, 0.3, new Quaternion())], [0.4, still]], { frame: level }))();
     yield* along(k, helmet, [[0.7, at(0, 0.42, 0.26)], [0.6, at(0, 0.4, 0.02)]], { frame: level })();
     yield* wear(k.h, helmet, INDEX.head, { to: HELMED })();
-    yield* parallel<F>('race', () => when(timePassed(1.2 / k.pace, 'seconds')), lookAt(k.h.gazer, reported(k.report, 'gaze', (f) => down(f).position)));
+    yield* parallel<F>('race', () => when(timePassed(1.2 / k.pace, 'seconds')), lookAt(k.h, reported(k.report, 'gaze', (f) => down(f).position)));
     // (the chin strap: its ends from by the jaw, buckled under the chin, a tug)
     yield* busy(k, function* () {
       yield* grab(k.h, { left: [helmet, 'strapLeft'], right: [helmet, 'strapRight'] }, { walk: false, look: false })();

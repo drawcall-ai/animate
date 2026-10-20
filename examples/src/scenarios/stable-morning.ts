@@ -1,11 +1,13 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
+import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
 import { Rope } from '../../../packages/animate/src/core/rope';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
 import { skeletonProps, line } from '../stage/props';
+
+const HORSE_SKELETON = horseSpecies().skeleton;
 
 const UP = new Vector3(0, 1, 0);
 // Tuned: 3 cm below square standing, rather than an 8 cm crouch; contacts plan further reserve.
@@ -102,7 +104,7 @@ export function stableMorning(): Scenario {
         return { position: target, velocity };
       }, { person: () => handler?.pose.position(handler.pose.skeleton.index('head')),
         tether: () => rope.supported ? { position: KNOT, length: 1.2 } : undefined });
-      const horse = new Body(HORSE_SKELETON, follow, { pose, dev });
+      const horse = new Body(horseSpecies(), follow, { pose, dev });
       const halterAt = () => horse.pose.point(HEAD, HALTER, new Vector3());
       const lead = new Rope(halterAt(), KNOT.clone().lerp(halterAt(), -1 / KNOT_AT + 1), LEAD_ROPE);
       let gathering = false;
