@@ -39,7 +39,7 @@ export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
  * slowly, a large one briskly, a bell either way), at most at `motion`'s pace, and shared evenly
  * over the neck chain's bones, each within its limit.
  */
-export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour<W> {
+export function lookAt(gazer: Gazer, target: Live<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour {
   return function* () {
     let over: boolean | null = null;
     /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
@@ -51,7 +51,7 @@ export function lookAt<W>(gazer: Gazer, target: Live<Vector3, W>, motion: Requir
     /** where the target was the sub-step before (null: not yet seen) */
     let aimed: Vector3 | null = null;
     let eyePitch = 0, declination = 0;
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         const pose = f.current;
         const bones = pose.skeleton.chain(gazer.neck);

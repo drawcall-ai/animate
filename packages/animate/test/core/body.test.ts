@@ -118,7 +118,7 @@ describe('Body', () => {
     expect(() => run([NaN])).toThrow(/cannot update/);
   });
 
-  it('starts still at the pose it is given, and reads its world only if it has one', () => {
+  it('starts still at the pose it is given, alone in a world of none', () => {
     const skeleton = leg();
     const start = new Pose(skeleton);
     start.setLocal(2, turn(1, 0, 0, 0.5));
@@ -127,7 +127,7 @@ describe('Body', () => {
       skeleton,
       every((f) => {
         expect(f.prev2.local(2).equals(f.prev.local(2))).toBe(true);
-        expect(() => f.world).toThrow(/without a world/);
+        expect(f.world.bodies).toEqual([]);
         read = true;
       }),
       { pose: start },

@@ -71,7 +71,7 @@ export function shankTilt(pose: ReadonlyPose, side: Side, yaw: number): number {
 export const foldedReach = (p: Proportions, bend: number) => Math.sqrt(p.thigh ** 2 + p.shin ** 2 + 2 * p.thigh * p.shin * Math.cos(bend));
 
 /** Follow heel loading into the ankle's stance roll; the leg solve enforces its joint range. */
-export function rollFoot(f: Frame<unknown>, c: Carriage, s: number): number {
+export function rollFoot(f: Frame, c: Carriage, s: number): number {
   const st = c.steps[s];
   const goal = plantedPitch(f, c, s);
   // Derived finite difference: follow the moving roll goal without a cadence-dependent lag.
@@ -86,7 +86,7 @@ export function rollFoot(f: Frame<unknown>, c: Carriage, s: number): number {
  * heel rises once the shank tilts past what the ankle allows, more as it pushes off (walking
  * through the double support, running through the stance's second half).
  */
-function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number {
+function plantedPitch(f: Frame, c: Carriage, s: number): number {
   const st = c.steps[s];
   const foot = c.feet[s];
   const strike = st.landPitch;
@@ -101,7 +101,7 @@ function plantedPitch(f: Frame<unknown>, c: Carriage, s: number): number {
 }
 
 /** a swing taking off now: from where the foot is (as the last pose has it, heading `fromYaw`), toward its landing `to`, the hip carried at `velocity` */
-export function liftOff(f: Frame<unknown>, side: Side, fromYaw: number, to: Readonly<Vector3>, hip: Readonly<Vector3>, velocity: Readonly<Vector3>, swing: Pick<Swing, 'duration' | 'lift' | 'strike' | 'standing'>): Swing {
+export function liftOff(f: Frame, side: Side, fromYaw: number, to: Readonly<Vector3>, hip: Readonly<Vector3>, velocity: Readonly<Vector3>, swing: Pick<Swing, 'duration' | 'lift' | 'strike' | 'standing'>): Swing {
   const bone = INDEX[`${side}Foot`];
   const from = f.prev.position(bone).clone();
   const q = f.prev.rotation(bone);
@@ -141,7 +141,7 @@ export interface FootPose {
  * the floor, past the standing foot to its own side; the ankle carrying its push-off back to
  * neutral, then turning toes-up into the heel strike), into `out`.
  */
-export function swingPose(f: Frame<unknown>, c: Carriage, s: number, out: FootPose): FootPose {
+export function swingPose(f: Frame, c: Carriage, s: number, out: FootPose): FootPose {
   const st = c.steps[s];
   const w = st.swing;
   if (!w) throw new Error(`the ${st.side} foot is not swinging`);
@@ -213,7 +213,7 @@ export function plantedPose(p: Proportions, side: Side, foot: Foot, pitch: numbe
 }
 
 /** The shared hip, knee and ankle constraints for a leg pose. */
-function legGoal(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose): ChainGoal {
+function legGoal(f: Frame, c: Carriage, side: Side, pose: FootPose): ChainGoal {
   const hip = c.hip(side, _hip);
   const across = _v.set(1, 0, 0).applyQuaternion(pose.foot);
   const pole = kneePole(side, Math.atan2(-across.z, across.x), c.yaw + c.stance.blade, hip, pose.ankle, _pole).multiplyScalar(c.p.thigh).add(hip);
@@ -228,7 +228,7 @@ function legGoal(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose): Ch
 }
 
 /** leg `side` solved down to the foot's pose, with toes turned to their world goal */
-export function solveLeg(f: Frame<unknown>, c: Carriage, side: Side, pose: FootPose) {
+export function solveLeg(f: Frame, c: Carriage, side: Side, pose: FootPose) {
   solveChain(f, legOf(side), legGoal(f, c, side, pose));
   const foot = INDEX[`${side}Foot`];
   const toes = INDEX[`${side}Toes`];
@@ -280,7 +280,7 @@ const _spin = new Quaternion();
 const _arc = new Quaternion();
 
 /** Authoritative reach bound from applied hips and final foot goals; posture.reachLimit only plans the carriage. */
-export function pelvisHeight<W>(f: Frame<W>, c: Carriage, feet: readonly FootPose[]): number {
+export function pelvisHeight(f: Frame, c: Carriage, feet: readonly FootPose[]): number {
   let floor = -Infinity;
   let ceiling = Infinity;
   SIDES.forEach((side, s) => {

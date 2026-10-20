@@ -21,7 +21,7 @@ const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
  * of the thorax's swing), and, standing still for a while, a glance aside now and then (seeded: the
  * same `seed`, the same glances). Endless.
  */
-export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): Behaviour<W> {
+export function lookAround(h: Humanoid, options: { seed?: number } = {}): Behaviour {
   return function* () {
     const rand = seeded(options.seed ?? 1);
     const target = new Vector3();
@@ -30,7 +30,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
     let aside = 0;
     let up = 0;
     const p = h.proportions;
-    yield* lookAt<W>(h.gazer, (f) => {
+    yield* lookAt(h.gazer, (f) => {
         const g = h.locomotion;
         // (glances only standing still: walking, the eyes are on the way)
         if (g.walk > 0.05) {
@@ -54,7 +54,7 @@ export function lookAround<W>(h: Humanoid<W>, options: { seed?: number } = {}): 
 }
 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
-export function pathAhead<W>(h: Humanoid<W>, pose: ReadonlyPose, out: Vector3): Vector3 {
+export function pathAhead(h: Humanoid, pose: ReadonlyPose, out: Vector3): Vector3 {
   return out.copy(pose.com(_com)).setY(AHEAD.walk.height * h.proportions.height)
     .addScaledVector(forwardOf(h.locomotion.facingAhead ?? h.locomotion.facing, _v), AHEAD.walk.distance);
 }
@@ -71,26 +71,26 @@ const _v = new Vector3();
  * `task` sets off at once (the eyes on what the hands already work). Put it after the
  * base (its `lookAt` overrides `lookAround`'s).
  */
-export function withGaze<W>(h: Humanoid<W>, at: Live<Vector3, W>, task: Behaviour<W>, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour<W> {
+export function withGaze(h: Humanoid, at: Live<Vector3>, task: Behaviour, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour {
   const { bow = 0, first = false } = options;
   return function* () {
-    yield* parallel<Frame<W>>(
+    yield* parallel<Frame>(
       'race',
       function* () {
         if (first) yield* gazeLead(h, at, options.lead)();
         yield* task();
       },
       lookAt(h.gazer, at, SHIFT),
-      action<Frame<W>>({ update: () => { h.asks.bow = Math.max(h.asks.bow, bow); } }),
+      action<Frame>({ update: () => { h.asks.bow = Math.max(h.asks.bow, bow); } }),
     );
   };
 }
 
 /** Wait for the current gaze before starting a task; does not own or move the eyes. */
-export function gazeLead<W>(h: Humanoid<W>, at: Live<Vector3, W>, seconds = NaN): Behaviour<W> {
+export function gazeLead(h: Humanoid, at: Live<Vector3>, seconds = NaN): Behaviour {
   return function* () {
     let lead = seconds;
-    yield* when<W>((f, _, time) => {
+    yield* when((f, _, time) => {
       const point = live(at, f);
       if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
       return gazeOff(h.gazer, f.prev, point) < ARRIVED || time > LONGEST;
@@ -110,9 +110,9 @@ const LEAD = [0.1, 0.3];
  * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
  * The existing posture and gaze owners retain their motion limits and final-pose checks.
  */
-export function aimAt<W>(h: Humanoid<W>, at: Live<Vector3, W>): Behaviour<W> {
+export function aimAt(h: Humanoid, at: Live<Vector3>): Behaviour {
   return function* () {
-    yield* parallel<Frame<W>>('all', lookAt(h.gazer, at, SHIFT), action<Frame<W>>({ update: (f) => {
+    yield* parallel<Frame>('all', lookAt(h.gazer, at, SHIFT), action<Frame>({ update: (f) => {
       const direction = live(at, f).clone().sub(h.gazer.eyes(f.prev, new Vector3()));
       const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.locomotion.facing);
       const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));

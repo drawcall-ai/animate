@@ -21,9 +21,9 @@ const CLOSE = 1;
 /** A walk arrives within `seconds`, or no walk runs and the body is settled.
  * Observe an idle body on two sub-steps so a parallel walk can publish its goal first.
  */
-export function arriving<W>(h: Humanoid<W>, seconds: number) {
+export function arriving(h: Humanoid, seconds: number) {
   let idleAt = NaN;
-  return (f: Frame<W>): boolean => {
+  return (f: Frame): boolean => {
     if (h.locomotion.eta !== Infinity) {
       idleAt = NaN;
       return h.locomotion.eta <= seconds;
@@ -34,7 +34,7 @@ export function arriving<W>(h: Humanoid<W>, seconds: number) {
 }
 
 /** Wait until a sibling walk has relinquished the feet and its arrival estimate. */
-export function* waitForWalk<W>(h: Humanoid<W>) {
+export function* waitForWalk(h: Humanoid) {
   if (h.asks.go) yield* when(() => h.locomotion.eta === Infinity);
 }
 
@@ -42,11 +42,11 @@ export function* waitForWalk<W>(h: Humanoid<W>) {
 const TURNING = 2;
 const SETTING_OFF = 0.5;
 
-export interface WalkOptions<W> {
+export interface WalkOptions {
   /** where to go, on the floor (default: where it stands: a turn in place) */
-  to?: Live<Vector3, W>;
+  to?: Live<Vector3>;
   /** the facing to arrive with (rad; default the way it arrives, or toward `to` with `within`) */
-  face?: Live<number, W>;
+  face?: Live<number>;
   /** stop with `to` this far ahead (m): in reach of it */
   within?: number;
   /** Explicit pace; otherwise the default walk slows with the weight held. */
@@ -56,7 +56,7 @@ export interface WalkOptions<W> {
   /** arriving, square the feet into the stance (default true) */
   plant?: boolean;
   /** ends once met (the body comes to a stop where it can), and only then: until it, it follows `to` however it moves, standing at it while it is still */
-  until?: UntilCondition<Frame<W>>;
+  until?: UntilCondition<Frame>;
 }
 
 /**
@@ -67,12 +67,12 @@ export interface WalkOptions<W> {
  * facing the point). Within 0.6 m, at a travel speed below 0.6 m/s, short side steps to a
  * still goal and back steps toward a goal behind retain the requested facing.
  */
-export function walkTo<W>(h: Humanoid<W>, options: WalkOptions<W>): Behaviour<W> {
+export function walkTo(h: Humanoid, options: WalkOptions): Behaviour {
   return route(h, options);
 }
 
 /** Internal approach route: ETA includes every intermediate point. */
-export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly Live<Vector3, W>[] = []): Behaviour<W> {
+export function route(h: Humanoid, options: WalkOptions, via: readonly Live<Vector3>[] = []): Behaviour {
   const { within = 0, speed = STROLL.speed, accel = STROLL.accel, plant } = options;
   return function* () {
     // A sibling walk owns the feet until its cleanup publishes an infinite ETA.
@@ -85,7 +85,7 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
     // (within reach, the way to the point is fixed once close: from where the body then stands it
     // would drift as the body settles off the line to it)
     let fixed: number | null = null;
-    const where = (f: Frame<W>) => {
+    const where = (f: Frame) => {
       const mass = heldMass(h);
       const effort = loadFactor(mass);
       go.speed = options.speed ?? speed / effort;
@@ -105,7 +105,7 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
       go.to.copy(leg < via.length ? live(via[leg], f) : end).setY(0);
       return leg < via.length ? null : yaw;
     };
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       init: () => () => { h.locomotion.eta = Infinity; },
       update: (f) => {
         const yaw = where(f);
@@ -143,7 +143,7 @@ export function route<W>(h: Humanoid<W>, options: WalkOptions<W>, via: readonly 
  * the pace it walks (at least as if setting off), plus slowing to a stop, or the turn left, whichever
  * is longer (the trajectory a motion-matching query predicts, here from the walk's own goal)
  */
-function etaOf<W>(h: Humanoid<W>, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
+function etaOf(h: Humanoid, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
   const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * h.scale;
   const v = Math.min(go.speed, Math.max(h.locomotion.velocity.length(), SETTING_OFF));
   const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;

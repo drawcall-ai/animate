@@ -14,7 +14,7 @@ import { loadFactor } from '../core/load';
  * within lumbar rotation and leaves the neck to finish an over-shoulder look. Requests
  * combine by magnitude, so task order cannot cancel a stronger turn. */
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9 };
-export function twistToward<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1) {
+export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1) {
   const hips = pose.position(0);
   const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.locomotion.facing);
   const distance = Math.hypot(point.x - hips.x, point.z - hips.z);
@@ -25,7 +25,7 @@ export function twistToward<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readon
 }
 
 /** Standing reach requests, closed against the solved shoulder and chest. */
-export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0) {
+export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0) {
   const p = h.proportions;
   const factor = loadFactor(Math.max(mass, heldMass(h)));
   const low = hand.y < p.hipHeight;
@@ -71,7 +71,7 @@ export function bringShoulder<W>(h: Humanoid<W>, f: Frame<W>, side: Side, hand: 
 }
 
 /** Downward gaze recruits the same bow solver once neck and eye declination run out. */
-export function gazeAsks<W>(h: Humanoid<W>, pose: ReadonlyPose, point: Readonly<Vector3>) {
+export function gazeAsks(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>) {
   twistToward(h, pose, point);
   const p = h.proportions;
   const hips = pose.position(0);

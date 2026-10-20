@@ -1,7 +1,7 @@
 // Scenario statistics and task accuracy under small changes. Run: pnpm metrics [-- -t <id>]
 import { Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { createWorld, type Frame as BodyFrame, type World } from '@drawcall/animate';
+import { type Frame as BodyFrame } from '@drawcall/animate';
 import { expect, it } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
@@ -163,13 +163,12 @@ it('runs a scenario through the metrics: two actors standing still, relaxed, eac
     duration: 0.49,
     actors: [{ position: { x: -1, z: 0 } }, { position: { x: 1, z: 0 }, yaw: Math.PI }],
     stage: () => ({
-      world: createWorld(),
       report: new Report(),
       done: () => true,
       props: () => [],
       script: (_, index) =>
         function* () {
-          yield* action<BodyFrame<World>>({ update: (f) => void seen.push(f.world.bodies[1 - index].com(new Vector3()).x) });
+          yield* action<BodyFrame>({ update: (f) => void seen.push(f.world.bodies[1 - index].com(new Vector3()).x) });
         },
     }),
   };

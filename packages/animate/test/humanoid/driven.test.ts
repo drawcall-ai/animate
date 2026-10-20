@@ -6,7 +6,7 @@ import { forwardOf, leftOf } from '../../src/core/math';
 const dt = 1 / 60;
 
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
-function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid<unknown>) => void) {
+function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
   const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { dev: true });
   let lag = 0, steps = 0;

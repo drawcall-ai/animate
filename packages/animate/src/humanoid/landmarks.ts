@@ -92,7 +92,7 @@ export function pointsOf(p: Proportions): Record<PointName, BonePoint> {
 }
 
 /** The three support points of one sole, in world space. */
-export function solePoints<W>(h: Humanoid<W>, pose: ReadonlyPose, side: Side): Vector3[] {
+export function solePoints(h: Humanoid, pose: ReadonlyPose, side: Side): Vector3[] {
   return (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
     const point = h.rig.points[`${side}${name}`];
     return pose.point(point.bone, point.at, new Vector3());

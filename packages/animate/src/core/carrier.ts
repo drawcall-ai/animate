@@ -1,6 +1,6 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { STEP } from './body';
-import type { Frame } from './body';
+import type { Body, Frame } from './body';
 import type { Placement, Target } from './goal';
 import { spinOf } from './rotation';
 
@@ -109,8 +109,8 @@ export interface ItemOptions {
  */
 export class Item extends Carrier {
   readonly name: string;
-  /** Which body wears it (a `Body`); null while unattached. */
-  wornBy: object | null = null;
+  /** which body wears it; null while unattached */
+  wornBy: Body | null = null;
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
   readonly bounds: Box3;
@@ -137,7 +137,7 @@ export class Item extends Carrier {
 }
 
 /** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
-export function onItem<W>(item: Carrier, local: Placement = { position: new Vector3(), quaternion: new Quaternion() }): (f: Frame<W>) => Target {
+export function onItem(item: Carrier, local: Placement = { position: new Vector3(), quaternion: new Quaternion() }): (f: Frame) => Target {
   return (f) => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }, f.time);
 }
 

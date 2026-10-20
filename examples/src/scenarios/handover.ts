@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { createWorld, handTo, idle, lookAt, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { handTo, idle, lookAt, type Frame, type Humanoid } from '@drawcall/animate';
 import { Carrier } from '../../../packages/animate/src/core/carrier';
 import type { Prop, Scenario } from '../scenario';
 import { Report, reported } from '../report';
@@ -35,9 +35,8 @@ export const handOver: Scenario = {
     const ball = new Carrier(circle(0));
     const at = new Vector3();
     const report = new Report();
-    let body: Humanoid<World> | null = null;
+    let body: Humanoid | null = null;
     return {
-      world: createWorld(),
       report,
       move: (t) => ball.move(t, circle(t, at)),
       // (the hand back on the ball)
@@ -50,7 +49,7 @@ export const handOver: Scenario = {
       script: (h) =>
         function* () {
           body = h;
-          yield* parallel<Frame<World>>(
+          yield* parallel<Frame>(
             'all',
             idle(h),
             // over it: the right hand on the ball
@@ -59,14 +58,14 @@ export const handOver: Scenario = {
             // back to the ball a moment before it comes down (eyes first, then the hand)
             function* () {
               const ballAt = () => ball.current.position;
-              yield* parallel<Frame<World>>('race', lookAt(h.gazer, reported(report, 'gaze', ballAt)), action({ until: timePassed(OVERRIDE[0] - LEAD, 'seconds') }));
-              yield* parallel<Frame<World>>('race', lookAt(h.gazer, reported(report, 'gaze', RAISED)), action({ until: timePassed(OVERRIDE[1], 'seconds') }));
+              yield* parallel<Frame>('race', lookAt(h.gazer, reported(report, 'gaze', ballAt)), action({ until: timePassed(OVERRIDE[0] - LEAD, 'seconds') }));
+              yield* parallel<Frame>('race', lookAt(h.gazer, reported(report, 'gaze', RAISED)), action({ until: timePassed(OVERRIDE[1], 'seconds') }));
               yield* lookAt(h.gazer, reported(report, 'gaze', ballAt))();
             },
             // over that, for a while: the right hand raised
             function* () {
               yield* action({ until: timePassed(OVERRIDE[0], 'seconds') });
-              yield* parallel<Frame<World>>('race', action({ until: timePassed(OVERRIDE[1], 'seconds') }), handTo(h, 'right', reported(report, 'rightHand', { position: RAISED })));
+              yield* parallel<Frame>('race', action({ until: timePassed(OVERRIDE[1], 'seconds') }), handTo(h, 'right', reported(report, 'rightHand', { position: RAISED })));
             },
           );
         },

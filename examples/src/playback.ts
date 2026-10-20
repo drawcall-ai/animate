@@ -1,4 +1,4 @@
-import { Humanoid, yawOf, type Body, type World } from '@drawcall/animate';
+import { Humanoid, yawOf, type Body } from '@drawcall/animate';
 import { Bone, Box3, Quaternion, Vector3, type Object3D } from 'three';
 import type { Prop } from './scenario';
 import type { Simulation } from './simulation';
@@ -100,7 +100,7 @@ export class Playback {
     this.prevRoot.copy(this.root());
   }
 
-  private subject(): Humanoid<World> | Body {
+  private subject(): Humanoid | Body {
     const body = this.sim.actors[0] ?? this.sim.stage.bodies?.[0];
     if (!body) throw new Error('playback needs a humanoid or an articulated body');
     return body;

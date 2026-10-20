@@ -22,8 +22,8 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 /** the longest a carried item takes to come to rest at its course's end once it is over, unless told (s) */
 const RESTING = 2;
 
-interface CarryOptions<W> {
-  frame?: Live<Placement, W>;
+interface CarryOptions {
+  frame?: Live<Placement>;
   pace?: number;
   motion?: Motion;
   limit?: number;
@@ -36,11 +36,11 @@ interface CarryOptions<W> {
  * the cleared course end; still settling `limit` s after the course is over, it is a problem in the dev log
  * (`Body.log`) and keeps going: lateness never throws.
  */
-export function carry<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>[], options: CarryOptions<W> = {}): Behaviour<W> {
+export function carry(h: Humanoid, item: Item, waypoints: readonly Waypoint[], options: CarryOptions = {}): Behaviour {
   return carrying(h, item, waypoints, options);
 }
 
-function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>[], options: CarryOptions<W>, together?: (ready: boolean) => boolean): Behaviour<W> {
+function carrying(h: Humanoid, item: Item, waypoints: readonly Waypoint[], options: CarryOptions, together?: (ready: boolean) => boolean): Behaviour {
   return function* () {
     const { pace = 1, limit = RESTING } = options;
     const frame = options.frame ?? WORLD;
@@ -58,7 +58,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>
     let since = NaN, late = false;
     let dip = 0;
     const seconds = 2.4 * load;
-    const there = (f: Frame<W>) => {
+    const there = (f: Frame) => {
       if (!path.over(f)) return false;
       if (Number.isNaN(since)) since = f.time;
       aim.read(f, to);
@@ -74,7 +74,7 @@ function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>
       }
       return false;
     };
-    const to = (f: Frame<W>) => {
+    const to = (f: Frame) => {
       const goal = path.to(f);
       const u = Number.isNaN(since) || seconds === 0 ? 0 : Math.min(1, (f.time - since) / seconds);
       if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
@@ -85,10 +85,10 @@ function carrying<W>(h: Humanoid<W>, item: Item, waypoints: readonly Waypoint<W>
 }
 
 /** Carry several held items together: each keeps its grips at its endpoint until every carry settles. */
-export function carryTogether<W>(h: Humanoid<W>, carries: readonly (readonly [Item, readonly Waypoint<W>[]])[], options: CarryOptions<W> = {}): Behaviour<W> {
+export function carryTogether(h: Humanoid, carries: readonly (readonly [Item, readonly Waypoint[]])[], options: CarryOptions = {}): Behaviour {
   return function* () {
     const ready = carries.map(() => false);
-    yield* parallel<Frame<W>>('all', ...carries.map(([item, waypoints], i) => carrying(h, item, waypoints, options, (there) => {
+    yield* parallel<Frame>('all', ...carries.map(([item, waypoints], i) => carrying(h, item, waypoints, options, (there) => {
       ready[i] = there;
       return ready.every(Boolean);
     })));
@@ -105,7 +105,7 @@ const END = { distance: 0.005, speed: 0.05 };
 class TrackedEnd {
   private end: Carrier | null = null;
 
-  holds<W>(f: Frame<W>, item: Item, at: Readonly<Vector3>): boolean {
+  holds(f: Frame, item: Item, at: Readonly<Vector3>): boolean {
     const end = this.end ??= new Carrier(new Vector3().copy(at));
     if (!end.moved(f.time)) end.move(f.time, at);
     const velocity = _v.subVectors(end.prev.position, end.prev2.position).divideScalar(f.dt);
@@ -122,12 +122,12 @@ class TrackedEnd {
  * The arm solver bounds the wrists; carry rejects an unreachable endpoint rather than moving it
  * silently within reach. The after-hook follows the grips and fits the item to the wrists.
  */
-export function hold<W>(h: Humanoid<W>, item: Item, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
+export function hold(h: Humanoid, item: Item, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
   return () => holding(h, item, new CarryAim(h, item, options.motion ?? CARRYING), options)();
 }
 
 /** One load path: clear its course before following it, and judge the same endpoint. */
-class CarryAim<W> {
+class CarryAim {
   readonly goal = { position: new Vector3(), quaternion: new Quaternion() };
   private readonly carrier: Carrier;
   private readonly nominal: Carrier;
@@ -137,14 +137,14 @@ class CarryAim<W> {
   private readonly turned = new Quaternion();
   private time = NaN;
 
-  constructor(private readonly h: Humanoid<W>, private readonly item: Item, private readonly motion: Motion) {
+  constructor(private readonly h: Humanoid, private readonly item: Item, private readonly motion: Motion) {
     this.nominal = new Carrier(item.current.position, item.current.quaternion);
     this.carrier = new Carrier(item.current.position, item.current.quaternion);
     this.nominal.prev.position.copy(item.prev.position);
     this.nominal.prev.quaternion.copy(item.prev.quaternion);
   }
 
-  read(f: Frame<W>, to: Live<Placement, W>): Carrier {
+  read(f: Frame, to: Live<Placement>): Carrier {
     if (this.time === f.time) return this.carrier;
     this.time = f.time;
     const { nominal: aim, goal, h, item, motion } = this;
@@ -164,25 +164,25 @@ class CarryAim<W> {
   }
 }
 
-function holding<W>(h: Humanoid<W>, item: Item, path: CarryAim<W>, options: { to?: Live<Placement, W>; motion?: Motion; until?: Exclude<Until<W>, 'reached'> } = {}): Behaviour<W> {
+function holding(h: Humanoid, item: Item, path: CarryAim, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
   const { to } = options;
   return function* () {
     const grips = gripsOf(h, item);
     const sides = SIDES.filter((s) => grips[s] !== undefined);
     if (!sides.length) throw new Error(`"${item.name}" is not held by either hand`);
     if (!to) {
-      yield* action<Frame<W>>({ until: options.until });
+      yield* action<Frame>({ until: options.until });
       return;
     }
     if (item.supported && item.mass > 2 && (item.current.position.y >= h.proportions.hipHeight || h.proportions.hipHeight - h.pose.position(0).y < 0.005 * h.scale)) {
       // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
-      yield* action<Frame<W>>({ update: () => {
+      yield* action<Frame>({ update: () => {
         h.asks.lower = Math.max(h.asks.lower, 0.005 * h.scale);
       }, until: timePassed(0.1, 'seconds') });
     }
     // (carried off whatever it rested on)
     item.supported = false;
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         if (carryAims(h).has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
         const aim = path.read(f, to);

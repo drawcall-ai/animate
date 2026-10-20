@@ -3,7 +3,7 @@ import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, Legs, Pose, createWorld, yawOf, type Frame, type Gait, type ReadonlyPose, type World } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, Legs, Pose, yawOf, type Frame, type Gait, type ReadonlyPose } from '@drawcall/animate';
 import { HORSE_WALK, horseLegs } from '../../../packages/animate/src/horse/legs';
 import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
@@ -52,13 +52,13 @@ export function legsBiped(): Scenario {
     stage: () => {
       let engine: Legs | null = null;
       return {
-        world: createWorld(), report: new Report(), props: () => [],
+        report: new Report(), props: () => [],
         done: () => !!engine && engine.legs.every((l) => l.planted),
         script: (h) => function* () {
           const gait = humanGait(h.proportions);
           const route = bipedRoot(h.pose, h.proportions.scale);
           engine = new Legs(h.pose, humanLegs(h.proportions), gait);
-          yield* action<Frame<World>>({ update: (f) => {
+          yield* action<Frame>({ update: (f) => {
             const at = route.at(f.time);
             f.current.setRoot(at.position);
             f.current.setLocal(0, at.quaternion);
@@ -92,7 +92,7 @@ export function legsHorse(): Scenario {
       };
       const bodies = [make(HORSE_WALK, 1.6, -2), make(HORSE_TROT, 3.7, 2)];
       return {
-        world: createWorld(), report: new Report(), bodies,
+        report: new Report(), bodies,
         props: () => bodies.flatMap((body) => skeletonProps(body.pose)),
         done: () => engines.every((e) => e.legs.every((l) => l.planted)),
         script: () => { throw new Error('horse scenario has no humanoids'); },

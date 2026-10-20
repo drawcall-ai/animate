@@ -1,6 +1,6 @@
 import { MathUtils, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { createWorld, idle, walkTo, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { idle, walkTo, type Frame, type Humanoid } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
 import { Report, reported } from '../report';
 
@@ -39,9 +39,8 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variati
     stage: () => {
       const report = new Report();
       const point = new Vector3();
-      let walker: Humanoid<World> | null = null;
+      let walker: Humanoid | null = null;
       return {
-        world: createWorld(),
         report,
         props: () => [],
         // (come to rest at the point where it stopped)
@@ -52,10 +51,10 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variati
             let s = 0;
             // (it slows once as far along the arc at any pace: as many strides on it, slower or faster)
             const slow = 1.65 + (STRAIGHT + ARC) / (PACE * speed);
-            const tasks = parallel<Frame<World>>(
+            const tasks = parallel<Frame>(
               'all',
               // the point glides along the path, speeding up into a stroll and slowing to a stop
-              action<Frame<World>>({
+              action<Frame>({
                 update: ({ time: t, dt }) => {
                   s += PACE * speed * smoothstep(t, 0.8, 2.5) * (halt ? (t < slow ? 1 : 0) : 1 - smoothstep(t, slow, slow + 2)) * dt;
                   path(s, STRAIGHT, radius, point);
@@ -64,7 +63,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variati
               // (after it, until it has long stopped)
               walkTo(h, { to: reported(report, 'go', point), speed: PACE * speed, until: timePassed(22, 'seconds') }),
             );
-            yield* parallel<Frame<World>>('all', idle(h), tasks);
+            yield* parallel<Frame>('all', idle(h), tasks);
           },
       };
     },
@@ -83,10 +82,9 @@ export function walkThere(to: Vector3, face?: number, within = 0): Scenario {
     duration: 8,
     actors: [{}],
     stage: () => {
-      let walker: Humanoid<World> | null = null;
+      let walker: Humanoid | null = null;
       let ended = false;
       return {
-        world: createWorld(),
         report: new Report(),
         props: () => [],
         done: () => {
@@ -99,7 +97,7 @@ export function walkThere(to: Vector3, face?: number, within = 0): Scenario {
         script: (h) =>
           function* () {
             walker = h;
-            yield* parallel<Frame<World>>(
+            yield* parallel<Frame>(
               'all',
               idle(h),
               function* () {

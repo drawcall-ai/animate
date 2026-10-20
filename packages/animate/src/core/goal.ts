@@ -4,17 +4,17 @@ import type { Frame } from './body';
 import type { Placed } from './carrier';
 
 /** A behaviour: a timeline a body steps every sub-step, writing its pose. */
-export type Behaviour<W = unknown> = ReusableTimeline<Frame<W>>;
+export type Behaviour = ReusableTimeline<Frame>;
 
 /** A goal as it is, or as it is at each sub-step (`T` is never itself a function). */
-export type Live<T, W = unknown> = T | ((f: Frame<W>) => T);
+export type Live<T> = T | ((f: Frame) => T);
 
 /** what a live goal is at `f` */
-export function live<T, W>(goal: Live<T, W>, f: Frame<W>): T {
+export function live<T>(goal: Live<T>, f: Frame): T {
   return isRead(goal) ? goal(f) : goal;
 }
 
-const isRead = <T, W>(goal: Live<T, W>): goal is (f: Frame<W>) => T => typeof goal === 'function';
+const isRead = <T>(goal: Live<T>): goal is (f: Frame) => T => typeof goal === 'function';
 
 /** Where something is, and turned how (world, or a carrier's frame). */
 export interface Placement {
@@ -47,7 +47,7 @@ export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
 };
 
 /** When a goal-following behaviour ends: a condition, or once it has `'reached'` its goal (within 1 cm and 2°, under 5 cm/s off its velocity). */
-export type Until<W = unknown> = UntilCondition<Frame<W>> | 'reached';
+export type Until = UntilCondition<Frame> | 'reached';
 
 /** what `'reached'` allows: m, rad, m/s */
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };

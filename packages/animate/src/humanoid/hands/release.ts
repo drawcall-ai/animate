@@ -20,11 +20,11 @@ import { heldItems } from '../../core/worn';
  * take them. What they let go of that nothing else holds or wears rests where it was put
  * (`supported`: on a shelf, a table). With `away: null`, only open: the next task owns the hands.
  */
-export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number } = {}): Behaviour<W> {
+export function release(h: Humanoid, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number } = {}): Behaviour {
   const { limit = LETTING_GO } = options;
   return function* () {
     const p = h.proportions;
-    let targets: ((f: Frame<W>) => Target)[] | null = null;
+    let targets: ((f: Frame) => Target)[] | null = null;
     let time = NaN;
     let goals: Target[] = [];
     const open = () => {
@@ -34,7 +34,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
     };
     // Keep held contact until the release's hand mover actually starts.
     // (where each hand goes, from how it moved as it let go)
-    const off = (f: Frame<W>): Target[] => {
+    const off = (f: Frame): Target[] => {
       if (time === f.time) return goals;
       if (!targets) open();
       targets ??= sides.map((side) => {
@@ -54,7 +54,7 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
         const reach = at.sub(shoulder);
         reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), ARM_REACH * p.armLength));
         const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -h.locomotion.facing)).divideScalar(p.scale);
-        return facingAt<W>(h, INDEX.hips, { position: local });
+        return facingAt(h, INDEX.hips, { position: local });
       });
       time = f.time;
       goals = targets.map((target) => {
@@ -63,9 +63,9 @@ export function release<W>(h: Humanoid<W>, sides: readonly Side[], options: { aw
       });
       return goals;
     };
-    const until = (f: Frame<W>, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f, INDEX[`${side}Hand`], off(f)[k]));
+    const until = (f: Frame, _: unknown, time: number) => time > limit || sides.every((side, k) => reached(f, INDEX[`${side}Hand`], off(f)[k]));
     if (options.away === null) { open(); return; }
-    yield* parallel<Frame<W>>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
+    yield* parallel<Frame>('all', ...sides.map((side, k) => handTo(h, side, (f) => off(f)[k], { lead: false, until })));
   };
 }
 

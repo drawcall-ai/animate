@@ -1,10 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Spot, type World } from '@drawcall/animate';
+import { handTo, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Spot } from '@drawcall/animate';
 import { headingOf } from '../../../../packages/animate/src/core/math';
 import { along, at, eyesOn, take, turn, type Knight } from './knight';
 
-type F = Frame<World>;
+type F = Frame;
 
 /** where the other hand holds a gauntlet open for hand `side` (its wrist, in the chest's frame): before the belly, fingers ahead and 20° across, palm down */
 const heldOpen = (side: Side) => {
@@ -18,7 +18,7 @@ const heldOpen = (side: Side) => {
  * hand goes to its mouth and slides in (slowly, in line); worn on that hand, home on it. The other
  * hand is left holding the cuff: it lets go as the next thing sets off (`flow`).
  */
-export function don(k: Knight, gauntlet: Item, side: Side, spot: Spot): Behaviour<World> {
+export function don(k: Knight, gauntlet: Item, side: Side, spot: Spot): Behaviour {
   const other: Side = side === 'left' ? 'right' : 'left';
   const fingers = new Vector3(side === 'left' ? 1 : -1, 0, 0).applyQuaternion(gauntlet.current.quaternion);
   return function* () {
@@ -36,7 +36,7 @@ export function don(k: Knight, gauntlet: Item, side: Side, spot: Spot): Behaviou
  * wrist is there (within 1 cm: the hand's turn is as near as the arm takes it). Not there within
  * SLIDING s, it throws.
  */
-export function slideIn(k: Knight, side: Side, item: Item, entry: string, inside: string): Behaviour<World> {
+export function slideIn(k: Knight, side: Side, item: Item, entry: string, inside: string): Behaviour {
   const off = (grip: string) => (f: F) => f.prev.position(INDEX[`${side}Hand`]).distanceTo(onItem(item, item.grips[grip])(f).position);
   const until = (grip: string, within: number) => (f: F, _: unknown, time: number) => {
     if (off(grip)(f) < within) return true;

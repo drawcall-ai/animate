@@ -120,7 +120,7 @@ export class Posture {
   readonly quiet = new Vector3();
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Pick<Frame<unknown>, 'prev' | 'dt'>, c: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
+  carry(f: Pick<Frame, 'prev' | 'dt'>, c: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
     const { lower, bow, twist } = asks;
     const { onto } = life;
     const { p } = c;
@@ -173,7 +173,7 @@ export class Posture {
   }
 
   /** The old controller follows the CoM; its pelvis offset is measured from the completed pose. */
-  center(f: Frame<unknown>): Vector3 {
+  center(f: Frame): Vector3 {
     const offset = f.prev.com(_o).sub(f.prev.position(0)).negate().setY(0);
     // Under-relax the pose-to-CoM feedback rather than apply the full knee response again.
     return (this.offset ??= offset.clone()).lerp(offset, 0.95);

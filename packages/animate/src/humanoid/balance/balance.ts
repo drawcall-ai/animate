@@ -39,7 +39,7 @@ export const SETTLED = 0.4;
  * roll and push off; arriving it squares the feet into the stance. It reads and clears `h.asks` at
  * the start of every sub-step, and writes `h.feet` and `h.locomotion`. Put it first: it writes the root.
  */
-export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour<W> {
+export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
   return function* () {
     const p = h.proportions;
     const base: Stance = { ...defaultStance(p), ...options.stance };
@@ -55,7 +55,7 @@ export function balance<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; 
     const feet: [FootPose, FootPose] = [footPose(), footPose()];
     let started = false;
     let lastGo: Asks['go'] = null;
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         if (f.dev) {
           checkFeet(h, f, f.dev, c.steps);

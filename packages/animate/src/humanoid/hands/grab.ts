@@ -2,7 +2,6 @@ import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import { live, type Behaviour, type Live, type Placement, type Target } from '../../core/goal';
-import type { World } from '../world';
 import { loadFactor } from '../../core/load';
 import { when } from '../../core/when';
 import { ARM_REACH, handTo } from '../arms';
@@ -48,7 +47,7 @@ export const SEGMENT_RADIUS = 0.06;
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); within the last estimated second, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead.
  */
-export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3, W>; bow?: number; first?: boolean } = {}): Behaviour<W> {
+export function grab(h: Humanoid, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean } = {}): Behaviour {
   const { look = true, bow } = options;
   return function* () {
     let stood = false;
@@ -57,9 +56,9 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
       yield* reachFor(h, holds)();
     };
     const preparing = arriving(h, LOWERING);
-    const hands = () => parallel<Frame<W>>('race', reach, function* () {
-      yield* when((f: Frame<W>) => stood || preparing(f));
-      yield* action<Frame<W>>({ update: (f) => held(holds).forEach(({ side, item, grip }) =>
+    const hands = () => parallel<Frame>('race', reach, function* () {
+      yield* when((f: Frame) => stood || preparing(f));
+      yield* action<Frame>({ update: (f) => held(holds).forEach(({ side, item, grip }) =>
         bringShoulder(h, f, side, item.toWorld(gripOf(item, grip), _world).position, 1, item.mass)) });
     });
     const walk = function* () {
@@ -73,24 +72,24 @@ export function grab<W extends World>(h: Humanoid<W>, holds: Holds, options: { f
     let noticed = NaN;
     let returning = false;
     // Two-step gaze horizon (research-contact §3 [R-s]); default-body distance proxy: 1.6 m [D].
-    const close = (f: Frame<W>) => flat(f.prev.com(com), middleOf(holds)) < 1.6 * h.scale;
-    const seen = (f: Frame<W>) => {
+    const close = (f: Frame) => flat(f.prev.com(com), middleOf(holds)) < 1.6 * h.scale;
+    const seen = (f: Frame) => {
       const at = middleOf(holds);
       f.prev.com(com);
       return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - h.locomotion.facing)) < IN_VIEW;
     };
     const target = look === true ? () => middleOf(holds) : look;
     const waitingHands = function* () {
-      yield* when((f: Frame<W>) => stood || (seen(f) && raising(f)));
-      yield* parallel<Frame<W>>('race', when((f: Frame<W>) => stood || near(f)),
-        () => parallel<Frame<W>>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => ({
+      yield* when((f: Frame) => stood || (seen(f) && raising(f)));
+      yield* parallel<Frame>('race', when((f: Frame) => stood || near(f)),
+        () => parallel<Frame>('all', ...held(holds).map(({ side, item, grip }) => handTo(h, side, (f) => ({
           position: f.prev.position(INDEX[`${side}UpperArm`]).clone().lerp(item.toWorld(gripOf(item, grip), _world).position, 0.5),
         }), { lead: false }))));
       yield* hands();
     };
-    yield* parallel<Frame<W>>('all', walk, function* () {
+    yield* parallel<Frame>('all', walk, function* () {
       if (target === false) { yield* waitingHands(); return; }
-      yield* when((f: Frame<W>) => stood || seen(f));
+      yield* when((f: Frame) => stood || seen(f));
       yield* withGaze(h, (f) => {
         if (Number.isNaN(noticed)) noticed = f.time;
         returning ||= close(f) || near(f);
@@ -125,7 +124,7 @@ const LOWERING = 0.3;
  * bowing and lowering during the reach. A destination placement uses the held grips at its
  * orientation to choose the facing, so both hands can reach it; a blocked explicit `face` throws; translation and rotation are followed live.
  */
-export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3 | Live<Placement, W>, options: { face?: number; spot?: Spot } = {}): Behaviour<W> {
+export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, options: { face?: number; spot?: Spot } = {}): Behaviour {
   const { aside = 0 } = options.spot ?? {};
   return function* () {
     const moving = typeof holds === 'function' ? holds : null;
@@ -189,20 +188,20 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
     face = yaw;
     const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.locomotion.facing)) < SQUARE;
     if (options.spot === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) return;
-    const rotation = (f: Frame<W>) => {
+    const rotation = (f: Frame) => {
       const current = moving ? live(moving, f) : null;
       return start?.quaternion && current?.quaternion
         ? current.quaternion.clone().multiply(start.quaternion.clone().invert())
         : new Quaternion();
     };
-    const facing = (f: Frame<W>) => {
+    const facing = (f: Frame) => {
       const forward = forwardOf(face).applyQuaternion(rotation(f));
       return headingOf(forward.x, forward.z);
     };
-    const moved = (point: Vector3, f: Frame<W>) => moving && start
+    const moved = (point: Vector3, f: Frame) => moving && start
       ? point.clone().sub(start.position).applyQuaternion(rotation(f)).add(live(moving, f).position)
       : point;
-    const destination = (f: Frame<W>) => moved(to, f);
+    const destination = (f: Frame) => moved(to, f);
     const body = h.pose.com(new Vector3()).setY(0);
     const way = there.clone().sub(body).setY(0);
     const length = way.length();
@@ -215,7 +214,7 @@ export function approach<W extends World>(h: Humanoid<W>, holds: Holds | Vector3
     // only clear the support when the straight path passes through it.
     const entry = point && grips.length > 1 && Math.abs(lateral) > Math.max(ROUND * p.scale, ROUND_ASIDE * frontal);
     const blocked = along > 0 && along < length - ROUND * p.scale && flat(nearest, middle) < ROUND * p.scale;
-    const via: Live<Vector3, W>[] = [];
+    const via: Live<Vector3>[] = [];
     if (entry || blocked) {
       const yaw = entry ? face : headingOf(way.x, way.z);
       const anchor = entry ? there : middle.clone().addScaledVector(way, ON * ROUND * p.scale / length);
@@ -238,7 +237,7 @@ function middleOf(holds: Holds | Vector3): Vector3 {
 }
 
 /** the facing to take grips `grips` with: the left hand's to the left of the right's, or toward a single one from where the body stands */
-function facingFor<W>(h: Humanoid<W>, grips: { side?: Side; at: Vector3 }[]): number {
+function facingFor(h: Humanoid, grips: { side?: Side; at: Vector3 }[]): number {
   const left = grips.find((g) => g.side === 'left');
   const right = grips.find((g) => g.side === 'right');
   if (left && right) return Math.atan2(-(left.at.z - right.at.z), left.at.x - right.at.x);

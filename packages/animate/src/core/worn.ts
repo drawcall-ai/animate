@@ -28,7 +28,7 @@ export const SETTLING = { accel: 2, speed: 0.4, turnAccel: 8, turnSpeed: 2 } sat
  * its weight (taking it up as it does what it holds). What it wears from the start, it is made with
  * (`BodyOptions.wearing`). At once.
  */
-export function wear<W>(h: Body<W>, item: Item, on: number | Item, options: { to?: Placement; motion?: Motion } = {}): Behaviour<W> {
+export function wear(h: Body, item: Item, on: number | Item, options: { to?: Placement; motion?: Motion } = {}): Behaviour {
   return function* () {
     if (item.wornBy) throw new Error('the item is worn already');
     if (on === item) throw new Error('an item cannot be worn on itself');
@@ -41,7 +41,7 @@ export function wear<W>(h: Body<W>, item: Item, on: number | Item, options: { to
 }
 
 /** `item` taken off: from this sub-step on, whatever moves it next (the hands that hold it). At once. */
-export function takeOff<W>(h: Body<W>, item: Item): Behaviour<W> {
+export function takeOff(h: Body, item: Item): Behaviour {
   return function* () {
     if (!h.worn.delete(item)) throw new Error('the item is not worn');
     item.wornBy = null;
@@ -49,7 +49,7 @@ export function takeOff<W>(h: Body<W>, item: Item): Behaviour<W> {
 }
 
 /** Move attachments after the body's behaviour, before its pose becomes history. */
-export function moveWorn<W>(body: Body<W>, f: Frame<W>): void {
+export function moveWorn(body: Body, f: Frame): void {
   const order = [...body.worn.keys()].sort((a, b) => depthOf(body.worn, a) - depthOf(body.worn, b));
   for (const item of order) {
     const wearing = body.worn.get(item);
@@ -71,7 +71,7 @@ function depthOf(worn: ReadonlyMap<Item, Wearing>, item: Item): number {
 }
 
 /** `item` moved to where it sits on its carrier now (put on: as it sits there now; settling: on toward where it goes) */
-function place<W>(f: Frame<W>, item: Item, wearing: Wearing, worn: ReadonlyMap<Item, Wearing>) {
+function place(f: Frame, item: Item, wearing: Wearing, worn: ReadonlyMap<Item, Wearing>) {
   const on = wearing.on;
   const [position, quaternion] = typeof on === 'number' ? [f.current.position(on), _r.copy(f.current.rotation(on))] : [on.current.position, _r.copy(on.current.quaternion)];
   if (!wearing.sits) {
@@ -120,7 +120,7 @@ export interface Bearing {
 const BEARING = { accel: 16, speed: 4 };
 
 /** `wearing` worn and borne from the start, each item placed where it sits on its bone in `pose` (the body's first) and its weight loaded there */
-export function dress<W>(h: Body<W>, pose: Pose, wearing: readonly Dressed[]): void {
+export function dress(h: Body, pose: Pose, wearing: readonly Dressed[]): void {
   for (const { item, on, at } of wearing) {
     const position = at.position.clone();
     const quaternion = at.quaternion?.clone() ?? new Quaternion();
@@ -134,7 +134,7 @@ export function dress<W>(h: Body<W>, pose: Pose, wearing: readonly Dressed[]): v
 }
 
 /** the weight the body bears, its share of each item's followed on, loaded onto its bones in this sub-step's pose */
-export function load<W>(h: Body<W>, f: Frame<W>) {
+export function load(h: Body, f: Frame) {
   /** the bones `item` bears on: the one it is worn on (through what it hangs from), or the hands holding it (or what it hangs from) off its support */
   const bearers = (item: Item): number[] => {
     let at: number | Item = item;
@@ -168,7 +168,7 @@ export function load<W>(h: Body<W>, f: Frame<W>) {
 }
 
 /** what the body bears (`borne`) loaded onto the bones bearing it in `pose`, each item's at its centre of mass */
-function loadBones<W>(h: Body<W>, pose: Pose) {
+function loadBones(h: Body, pose: Pose) {
   const mass = new Map<number, number>();
   const moment = new Map<number, Vector3>();
   for (const [item, bearing] of h.borne) {
@@ -202,6 +202,6 @@ export interface Dressed {
 }
 
 /** Held items, counting a two-handed load once. */
-export function heldItems<W>(h: Body<W>): Item[] {
+export function heldItems(h: Body): Item[] {
   return [...new Set(Object.values(h.holding).flatMap((held) => held?.item ?? []))];
 }

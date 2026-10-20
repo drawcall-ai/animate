@@ -19,7 +19,7 @@ import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { followHeld } from './hands/hold';
 
-export interface HumanoidOptions<W> extends Pick<BodyOptions<W>, 'world' | 'dev'> {
+export interface HumanoidOptions extends Pick<BodyOptions, 'dev'> {
   /** where the body stands (on the floor, y = 0) */
   position?: { x: number; z: number };
   /** its facing about +Y (0 faces +Z) */
@@ -34,7 +34,7 @@ export interface HumanoidOptions<W> extends Pick<BodyOptions<W>, 'world' | 'dev'
  * standing relaxed in its stance where `options` puts it, its hands `left` and `right`. One
  * Humanoid per model.
  */
-export class Humanoid<W = unknown> extends Body<W> {
+export class Humanoid extends Body {
   readonly rig: Rig;
   /** measured from the model's rest pose */
   readonly proportions: Proportions;
@@ -44,19 +44,19 @@ export class Humanoid<W = unknown> extends Body<W> {
 
   constructor(
     readonly model: CharacterModel,
-    behaviour: (h: Humanoid<W>) => Behaviour<W>,
-    options: HumanoidOptions<W> = {},
+    behaviour: (h: Humanoid) => Behaviour,
+    options: HumanoidOptions = {},
   ) {
     const rig = new Rig(model);
     const p = rig.proportions, yaw = options.yaw ?? 0;
     const start = standing(p, new Pose(rig.skeleton), options.position ?? { x: 0, z: 0 }, yaw);
     const eyes = rig.points.eyes;
-    let made: Behaviour<W> | null = null;
+    let made: Behaviour | null = null;
     super(rig.skeleton, function* () {
       if (!made) throw new Error('the humanoid is not made yet');
       yield* made();
     }, {
-      world: options.world, dev: options.dev, pose: start.pose, scale: p.scale, wearing: options.wearing?.(p),
+      dev: options.dev, pose: start.pose, scale: p.scale, wearing: options.wearing?.(p),
       hands: { bones: { left: INDEX.leftHand, right: INDEX.rightHand }, hold: (body) => followHeld(humanoid(body)) },
     });
     this.gazer = { neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180,
@@ -78,7 +78,7 @@ export class Humanoid<W = unknown> extends Body<W> {
 }
 
 /** `body` as the humanoid it is */
-function humanoid<W>(body: Body<W>): Humanoid<W> {
+function humanoid(body: Body): Humanoid {
   if (!(body instanceof Humanoid)) throw new Error('not a humanoid');
   return body;
 }

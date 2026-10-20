@@ -249,7 +249,7 @@ export class Limb {
   }
 
   /** the leg posed for `state` at the walker's phase, its swing clearing the ground by `clearance` (m) */
-  pose(f: Frame<unknown>, walker: Walker, state: Timing, clearance: number) {
+  pose(f: Frame, walker: Walker, state: Timing, clearance: number) {
     const { leg, solver } = this;
     const { duty, stepping } = walker.stride;
     const p = f.current;
@@ -281,7 +281,7 @@ export class Limb {
   }
 
   /** the swing this tick: its plan stepped toward the landing as now seen, its shape over it, the ground kept */
-  private swung(f: Frame<unknown>, walker: Walker, state: Timing, clearance: number) {
+  private swung(f: Frame, walker: Walker, state: Timing, clearance: number) {
     const { leg, solver } = this;
     const p = f.current;
     const left = walker.timeTo(state.footfall);
@@ -342,7 +342,7 @@ export class Limb {
   }
 
   /** Start from the last two completed sole poses in world space. */
-  private lifted(f: Frame<unknown>, walker: Walker): Swing {
+  private lifted(f: Frame, walker: Walker): Swing {
     const at = f.prev.position(this.terminal).clone().setY(Math.max(0, this.lowest(f.prev)));
     const previous = f.prev2.position(this.terminal).clone().setY(Math.max(0, this.lowest(f.prev2)));
     const blend = walker.stride.referenceBlend ?? 0;

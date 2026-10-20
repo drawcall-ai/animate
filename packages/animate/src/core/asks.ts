@@ -67,9 +67,9 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
  * Asks `balance` for what `asks` gives (the fields it has; the rest as other tasks ask), every
  * sub-step, endless or until `until`: a task of its own for what no other task asks (shift weight, turn to a facing while the hands work).
  */
-export function ask<W>(h: Body<W>, asks: Live<Partial<Asks>, W>, until?: UntilCondition<Frame<W>>): Behaviour<W> {
+export function ask(h: Body, asks: Live<Partial<Asks>>, until?: UntilCondition<Frame>): Behaviour {
   return function* () {
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         Object.assign(h.asks, live(asks, f));
       },

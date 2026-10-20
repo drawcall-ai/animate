@@ -36,11 +36,11 @@ export const ARM_REACH = 0.95;
  * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
  * task let go of swings back into it. A hand holding any item follows its grip until release, including supported and worn items.
  */
-export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
+export function hangArms(h: Humanoid): Behaviour {
   return function* () {
     const goals = new Map<number, TrackedRotation>();
     let phase = h.locomotion.phase;
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         const g = h.locomotion;
         // Recalled pendulum floor: at least 0.25 s between arm reversals, including entrainment.
@@ -80,7 +80,7 @@ export function hangArms<W>(h: Humanoid<W>): Behaviour<W> {
 }
 
 /** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh. */
-export function clearArm<W>(h: Humanoid<W>, f: Frame<W>, side: Side, at: Vector3): Vector3 {
+export function clearArm(h: Humanoid, f: Frame, side: Side, at: Vector3): Vector3 {
   const sign = side === 'left' ? 1 : -1, hips = f.current.position(0);
   const yaw = yawOf(f.current.local(0));
   const inverse = _r.setFromAxisAngle(Y, -yaw);
@@ -99,7 +99,7 @@ export function clearArm<W>(h: Humanoid<W>, f: Frame<W>, side: Side, at: Vector3
 }
 
 /** joint `bone` turned on from its history toward `goal` (its own motion followed) */
-function set<W>(f: Frame<W>, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion) {
+function set(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion) {
   let joint = joints.get(bone);
   if (!joint) joints.set(bone, (joint = new TrackedRotation()));
   const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
@@ -109,9 +109,9 @@ function set<W>(f: Frame<W>, joints: Map<number, TrackedRotation>, bone: number,
 }
 
 /** How a hand goes to its target. */
-export interface HandOptions<W> extends Partial<Motion> {
+export interface HandOptions extends Partial<Motion> {
   /** where the elbow bends toward (world; default as where the hand is asks: down and back hanging, out reaching across, …) */
-  pole?: Live<Vector3, W>;
+  pole?: Live<Vector3>;
   /** the target is on this carrier, in its frame */
   on?: Carrier;
   /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default true); false: the hand only follows (a tracked controller: the head leads) */
@@ -120,7 +120,7 @@ export interface HandOptions<W> extends Partial<Motion> {
   seconds?: number;
   /** with `seconds`: the reach sets off this long after (s), the arm kept as it is till then */
   after?: number;
-  until?: Until<W>;
+  until?: Until;
 }
 
 /**
@@ -131,7 +131,7 @@ export interface HandOptions<W> extends Partial<Motion> {
  * arm reaches standing asks `balance` to bow and bend the knees for it, one above to go up on the
  * toes (`h.asks`).
  */
-export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, options: HandOptions<W> = {}): Behaviour<W> {
+export function handTo(h: Humanoid, side: Side, target: Live<Target>, options: HandOptions = {}): Behaviour {
   const { until, seconds, after = 0 } = options;
   return function* () {
     const arm = new ChainTip(`${side}Arm`);
@@ -145,7 +145,7 @@ export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, o
     // (gliding: as the arm stood when the hand set off — where the elbow was from the shoulder, in the
     // chest's frame; the clavicle — and how far the hand had to go)
     let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         const goal = live(target, f);
         if (!glide) return void handStep(h, f, side, goal, options, arm);
@@ -190,7 +190,7 @@ export function handTo<W>(h: Humanoid<W>, side: Side, target: Live<Target, W>, o
 }
 
 /** one sub-step of `handTo`, its arm's tip `arm` */
-export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Target, options: HandOptions<W>, arm: ChainTip, toward?: { at: Readonly<Vector3>; center?: Readonly<Vector3>; clavicle: Readonly<Quaternion>; share: number }) {
+export function handStep(h: Humanoid, f: Frame, side: Side, target: Target, options: HandOptions, arm: ChainTip, toward?: { at: Readonly<Vector3>; center?: Readonly<Vector3>; clavicle: Readonly<Quaternion>; share: number }) {
   const wearing = options.on instanceof Item ? h.worn.get(options.on) : undefined;
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
   if (wearing && typeof wearing.on === 'number' && f.current.skeleton.chain(`${side}Arm`).includes(wearing.on)) return;
@@ -212,7 +212,7 @@ export function handStep<W>(h: Humanoid<W>, f: Frame<W>, side: Side, target: Tar
  * the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward
  * toward one far out (the old core's, a801be4:packages/core/src/limbs/arms.ts)
  */
-function shrug<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
+function shrug(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
   const pose = f.current;
   const bone = INDEX[`${side}Shoulder`];
   const clavicle = pose.position(bone);
@@ -241,7 +241,7 @@ function shrug<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Vector
  * forward, up, out and across, in the chest's frame (the old core's; up, the elbow out to the side:
  * forward, the arm near straight overhead would swivel to and fro)
  */
-function elbowPole<W>(f: Frame<W>, p: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
+function elbowPole(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
   const sign = side === 'left' ? 1 : -1;
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   const chest = _c.copy(f.current.rotation(INDEX.chest));

@@ -71,7 +71,7 @@ const settle = (c: Carriage) => (c.walked && c.plant ? SETTLE.stopped : SETTLE.s
  * one along, its landing fine-tuned through the first part of its swing (one that moves later
  * reads as a stumble) and put down at its end; then a step taken if one is due. Returns whether one was.
  */
-export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): boolean {
+export function stepFeet(f: Frame, c: Carriage, xcom: Readonly<Vector3>): boolean {
   c.steps.forEach((st, s) => {
     const w = st.swing;
     if (!w) return;
@@ -115,7 +115,7 @@ export function stepFeet(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>
 const ADAPT = { rate: 20, until: [0.4, 0.75] as const };
 
 /** the step to take now (null: none), from the last final pose and the body's extrapolated centre of mass */
-function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift | null {
+function nextStep(f: Frame, c: Carriage, xcom: Readonly<Vector3>): Lift | null {
   const dt = f.dt;
   const t = c.timing();
   const { steps } = c;
@@ -169,7 +169,7 @@ function nextStep(f: Frame<unknown>, c: Carriage, xcom: Readonly<Vector3>): Lift
 }
 
 /** Twist left in the direction the body is turning (rad); the foot and knee lag behind it. */
-function twistMargin(f: Frame<unknown>, side: Side, turn: number): number {
+function twistMargin(f: Frame, side: Side, turn: number): number {
   let margin = Infinity;
   for (const bone of [INDEX[`${side}UpperLeg`], INDEX[`${side}Foot`]]) {
     const limit = f.prev.skeleton.limits[bone];

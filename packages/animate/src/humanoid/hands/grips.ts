@@ -13,14 +13,14 @@ export type Grips = Partial<Record<Side, string>>;
 export type Holds = Partial<Record<Side, readonly [Item, string]>>;
 
 /** Hand `side` open (a stub: the hand has no fingers yet): holding nothing, at once. */
-export function openHand<W>(h: Humanoid<W>, side: Side): Behaviour<W> {
+export function openHand(h: Humanoid, side: Side): Behaviour {
   return function* () {
     h.holding[side] = null;
   };
 }
 
 /** Hand `side` closed on `item`'s grip `grip` (a stub: marked held at once, no fingers yet). */
-export function closeHand<W>(h: Humanoid<W>, side: Side, item: Item, grip: string): Behaviour<W> {
+export function closeHand(h: Humanoid, side: Side, item: Item, grip: string): Behaviour {
   return function* () {
     h.holding[side] = { item, grip };
   };
@@ -49,12 +49,12 @@ export function grip(grips: Grips, side: Side): string {
 }
 
 /** Grips of one item currently taken by this body. */
-export function gripsOf<W>(h: Humanoid<W>, item: Item): Grips {
+export function gripsOf(h: Humanoid, item: Item): Grips {
   return Object.fromEntries(SIDES.flatMap((side) => h.holding[side]?.item === item ? [[side, h.holding[side]?.grip]] : []));
 }
 
 
 /** Unsupported weight borne through the hands, counting each item once. */
-export function heldMass<W>(h: Humanoid<W>): number {
+export function heldMass(h: Humanoid): number {
   return heldItems(h).reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
 }

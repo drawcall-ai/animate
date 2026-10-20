@@ -45,13 +45,13 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
  * the weight; the pelvis' height is the legs' own (`crouch`, a leap): `lower` is not taken.
  * Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
-export function driven<W>(h: Humanoid<W>, root: Live<DrivenRoot, W>): Behaviour<W> {
+export function driven(h: Humanoid, root: Live<DrivenRoot>): Behaviour {
   return drivenBy(h, (f) => live(root, f));
 }
 
 /** `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`). */
-export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, stepper: Stepper) => DrivenRoot,
-  carry?: (f: Frame<W>, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour<W> {
+export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => DrivenRoot,
+  carry?: (f: Frame, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour {
   return function* () {
     const p = h.proportions;
     const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: p.ankleHeight, rotation: footRotation,
@@ -66,7 +66,7 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], was = new Vector3();
-    yield* action<Frame<W>>({ update: (f) => {
+    yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
       takeAsks(h.asks, asks);
       const dt = f.dt, r = rootOf(f, asks, stepper), k = minimumJerk(clamp(r.crouch ?? 0, 0, 1));
@@ -133,7 +133,7 @@ export function drivenBy<W>(h: Humanoid<W>, rootOf: (f: Frame<W>, asks: Asks, st
 }
 
 /** Final-pose checks of the last sub-step, against the legs as they were posed then. */
-function check<W>(h: Humanoid<W>, f: Frame<W>, legs: readonly Leg[]) {
+function check(h: Humanoid, f: Frame, legs: readonly Leg[]) {
   const dev = f.dev!, p = h.proportions, time = f.time - f.dt;
   legs.forEach((leg, i) => {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];

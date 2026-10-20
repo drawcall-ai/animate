@@ -1,6 +1,5 @@
 import { clearBody } from '../../src/humanoid/hands/clearance';
 import { pointSegmentDistance } from '../../src/core/math';
-import { createWorld, type World } from '../../src/humanoid/world';
 import { RAISE_LEAD } from '../../src/humanoid/hands/place';
 import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
@@ -28,7 +27,7 @@ it('keeps an unsupported grip through the next task’s gaze opening, then relea
         yield* release(h, ['right'])();
         released = true;
       }, { first: true })();
-    }, action<Frame<World>>({ update: (f) => {
+    }, action<Frame>({ update: (f) => {
       if (!gap) return;
       samples++;
       off = Math.max(off, f.current.position(INDEX.rightHand).distanceTo(item.current.position));
@@ -63,9 +62,9 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
 it('wears on a generic body, follows its bone from another frame, and takes off without another mover', () => {
   const item = new Item(new Vector3(0.2, 1, 0), new Quaternion(), { grip: { position: new Vector3() } });
   const local = { position: new Vector3(0.1, 0.2, 0) };
-  const body: Body<World> = new Body(leg(), function* () {
+  const body: Body = new Body(leg(), function* () {
     yield* wear(body, item, 0, { to: local })();
-    yield* action<Frame<World>>({ update: (f) => f.current.setRoot(new Vector3(f.time, 1, 0)) });
+    yield* action<Frame>({ update: (f) => f.current.setRoot(new Vector3(f.time, 1, 0)) });
   }, { scale: 2 });
   const other = new Body(leg(), () => when(() => false));
   const goal = onBone(body, 0, local);
@@ -87,9 +86,9 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
 
 it('never throws on a late reach — its beat, item, grip and distance go to the dev log — while errors carry time and beat', () => {
   const item = new Item(new Vector3(0, 1, 4), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'saddle' });
-  const h = new Humanoid<World>(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame<World>>('all', idle(h), named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 })));
-  }, { world: createWorld(), dev: true });
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', idle(h), named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 })));
+  }, { dev: true });
   h.update(1);
   expect(h.log.map(({ check, where, beat }) => ({ check, where, beat }))).toEqual([{ check: 'late reach: grip distance after 0.1 s (m)', where: 'saddle right handle', beat: 'fetch saddle' }]);
   expect(h.log[0].value).toBeGreaterThan(1);
@@ -137,7 +136,7 @@ it('follows a grip worn by another body without asking the humanoid to lower for
   const h = standing((h) => [function* () {
       yield* reachFor(h, { left: [item, 'grip'] })();
       done = true;
-    }, action<Frame<World>>({ update: () => { lower = Math.max(lower, h.asks.lower); } })]);
+    }, action<Frame>({ update: () => { lower = Math.max(lower, h.asks.lower); } })]);
   for (let i = 0; i < 180; i++) h.update(STEP);
   expect(done).toBe(true);
   expect(lower).toBe(0);
@@ -151,8 +150,8 @@ it('keeps both carry grips until the slower course ends', () => {
   let done = false;
   let samples = 0;
   let off = 0;
-  const h = new Humanoid<World>(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame<World>>('all', action<Frame<World>>({ update: (f) => {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', action<Frame>({ update: (f) => {
       const at = f.current.position(INDEX.hips).clone();
       at.x = 0.04 * Math.sin(3 * f.time);
       f.current.setRoot(at);
@@ -160,12 +159,12 @@ it('keeps both carry grips until the slower course ends', () => {
       yield* reachFor(h, { left: [a, 'grip'], right: [b, 'grip'] })();
       yield* carryTogether(h, [[a, [[0.3, { position: new Vector3(0.2, 1.15, 0.3) }]]], [b, [[1.5, { position: new Vector3(-0.2, 1.15, 0.3) }]]]])();
       done = true;
-    }, action<Frame<World>>({ update: (f) => {
+    }, action<Frame>({ update: (f) => {
       if (done || f.time < 1.5) return;
       samples++;
       off = Math.max(off, f.current.position(INDEX.leftHand).distanceTo(a.current.position));
     } }));
-  }, { world: createWorld() });
+  });
   for (let i = 0; i < 300; i++) h.update(STEP);
   expect(done).toBe(true);
   expect(samples).toBeGreaterThan(10);
@@ -212,14 +211,14 @@ it('follows destination translation and rotation during the lift and approach', 
   let walking = 0;
   let advanced = 0;
   let stand: number | null = null;
-  const turn = (f: Frame<World>) => 0.2 * Math.min(f.time, 4);
-  const destination = (f: Frame<World>) => ({ position: new Vector3(0, 1.2, 2 + 0.35 * Math.min(f.time, 4)),
+  const turn = (f: Frame) => 0.2 * Math.min(f.time, 4);
+  const destination = (f: Frame) => ({ position: new Vector3(0, 1.2, 2 + 0.35 * Math.min(f.time, 4)),
     quaternion: new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), turn(f)) });
   const h = standing((h) => [function* () {
     yield* reachFor(h, { left: [item, 'left'], right: [item, 'right'] })();
     yield* place(h, item, destination)();
     done = true;
-  }, action<Frame<World>>({ update: (f) => {
+  }, action<Frame>({ update: (f) => {
     if (h.locomotion.moving) {
       walking++;
       advanced = Math.max(advanced, destination(f).position.z - 2);

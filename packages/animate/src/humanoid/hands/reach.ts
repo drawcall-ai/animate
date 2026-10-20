@@ -25,12 +25,12 @@ const REACHING = 4;
  * seeded by what it goes for), its arm kept as it is till then. Hands not there within `limit` s are a problem in the dev log
  * (`Body.log`), and they keep going: lateness never throws.
  */
-export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } = {}): Behaviour<W> {
+export function reachFor(h: Humanoid, holds: Holds, { limit = REACHING } = {}): Behaviour {
   return function* () {
     const hands = held(holds), began = h.frame.time;
-    const there = (f: Frame<W>) => hands.every(({ side, item, grip }) => reached(f, INDEX[`${side}Hand`], gripOf(item, grip), item));
+    const there = (f: Frame) => hands.every(({ side, item, grip }) => reached(f, INDEX[`${side}Hand`], gripOf(item, grip), item));
     let late = false;
-    const until = (ready: (f: Frame<W>) => boolean) => (f: Frame<W>) => {
+    const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
       if (ready(f)) return true;
       if (!late && f.time - began > limit) {
         late = true;
@@ -58,7 +58,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
     const arrived = until((f) => plan.every(({ side, item, points }) => reached(f, INDEX[`${side}Hand`], { position: points[points.length - 1] }, item)));
     const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
     for (const { side } of hands) yield* openHand(h, side)();
-    yield* parallel<Frame<W>>('all', ...plan.map((p) => function* () {
+    yield* parallel<Frame>('all', ...plan.map((p) => function* () {
       for (const [i, position] of p.points.entries()) {
         const began = h.frame.time;
         const seconds = p.distance > 0 ? p.seconds * p.lengths[i] / p.distance : p.seconds;
@@ -71,7 +71,7 @@ export function reachFor<W>(h: Humanoid<W>, holds: Holds, { limit = REACHING } =
       }
     }));
     // Both hands reach the outside staging points before closing on the actual grips.
-    if (plan.some(({ route }) => route.length)) yield* parallel<Frame<W>>('all', ...plan.map(({ side, item, goal }) => handTo(h, side, goal, { on: item, lead: !item.wornBy, until: until(there) })));
+    if (plan.some(({ route }) => route.length)) yield* parallel<Frame>('all', ...plan.map(({ side, item, goal }) => handTo(h, side, goal, { on: item, lead: !item.wornBy, until: until(there) })));
     for (const { side, item, grip } of hands) yield* closeHand(h, side, item, grip)();
   };
 }

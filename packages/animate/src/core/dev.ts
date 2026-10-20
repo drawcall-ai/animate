@@ -19,7 +19,7 @@ export interface LogEntry extends Problem {
 }
 
 /** Watchers read the last final poses; they cannot write this step's pose. */
-export type WatchFrame<W = unknown> = Readonly<Omit<Frame<W>, 'current' | 'dev' | 'beats'>>;
+export type WatchFrame = Readonly<Omit<Frame, 'current' | 'dev' | 'beats'>>;
 
 /** One body's development log. Absent entirely when dev is off. */
 export class Dev {
@@ -38,9 +38,9 @@ export class Dev {
 }
 
 /** Labels a behaviour's contributions to each final pose (parallel labels are joined). */
-export function named<W>(label: string, behaviour: Behaviour<W>): Behaviour<W> {
+export function named(label: string, behaviour: Behaviour): Behaviour {
   return function* () {
-    const context: { frame?: Frame<W> } = {};
+    const context: { frame?: Frame } = {};
     // Receive the frame before starting the generator: even an immediate throw has a beat.
     yield (f) => { context.frame = f; return 'skipped'; };
     try {
@@ -60,9 +60,9 @@ export function named<W>(label: string, behaviour: Behaviour<W>): Behaviour<W> {
 }
 
 /** A read-only expectation, composed in parallel with the story; dev off never calls read. */
-export function watch<W>(label: string, read: (f: WatchFrame<W>) => Problem | null): Behaviour<W> {
+export function watch(label: string, read: (f: WatchFrame) => Problem | null): Behaviour {
   return function* () {
-    yield* action<Frame<W>>({ update: (f) => {
+    yield* action<Frame>({ update: (f) => {
       if (!f.dev || f.time <= f.dt) return;
       const { dt, time, prev2, prev } = f;
       const problem = read({ dt, time: time - dt, get world() { return f.world; }, prev2, prev });

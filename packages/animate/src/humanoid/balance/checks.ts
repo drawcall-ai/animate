@@ -10,7 +10,7 @@ import { ballOf, footRotation, heelOf, footprint } from './foot';
 import { hullOf, outside } from '../../core/legs/support';
 
 /** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
-export function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
+export function checkSupport(h: Humanoid, f: Frame, dev: Dev): void {
   if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
@@ -30,7 +30,7 @@ export function checkSupport<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev): void {
 }
 
 /** Read the final planted foot, allowing its roll about the heel or ball, never the solve's goal. */
-export function checkFeet<W>(h: Humanoid<W>, f: Frame<W>, dev: Dev, steps: readonly Pick<Stepping, 'plantedTime'>[]): void {
+export function checkFeet(h: Humanoid, f: Frame, dev: Dev, steps: readonly Pick<Stepping, 'plantedTime'>[]): void {
   if (f.time <= f.dt) return;
   SIDES.forEach((side, s) => {
     const foot = h.feet[s];

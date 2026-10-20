@@ -29,7 +29,7 @@ export class Life {
     return this.time < this.until ? this.side : null;
   }
 
-  quiet<W>(asks: Asks, h: Humanoid<W>): boolean {
+  quiet(asks: Asks, h: Humanoid): boolean {
     return !asks.go && !h.locomotion.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0;
   }
 

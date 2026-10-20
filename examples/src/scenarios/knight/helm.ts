@@ -1,14 +1,14 @@
 import { ARM_REACH } from '../../../../packages/animate/src/humanoid/arms';
 import { Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
-import { approach, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item, type World } from '@drawcall/animate';
+import { approach, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item } from '@drawcall/animate';
 import { closeHand } from '../../../../packages/animate/src/humanoid/hands/grips';
 import { reached } from '../../../../packages/animate/src/core/tip';
 import { reachFor } from '../../../../packages/animate/src/humanoid/hands/reach';
 import { reported } from '../../report';
 import { along, at, busy, eyesOn, pause, type Knight } from './knight';
 
-type F = Frame<World>;
+type F = Frame;
 
 /** where the helm sits on the head (its middle in the head's frame: round the skull, a finger's breadth all round) */
 export const HELMED = at(0, 0.15, 0.02, new Quaternion());
@@ -19,7 +19,7 @@ export const HELMED = at(0, 0.15, 0.02, new Quaternion());
  * it (the eyes ahead and down); worn on the head, settling onto it; the hands go to its chin
  * strap's ends and buckle it under the chin; they let go as the next thing sets off (`flow`).
  */
-export function putOnHelmet(k: Knight, helmet: Item): Behaviour<World> {
+export function putOnHelmet(k: Knight, helmet: Item): Behaviour {
   // A level frame at the head keeps its turn independent of the gaze.
   const level = facingAt(k.h, INDEX.head, { position: new Vector3() });
   const down = facingAt(k.h, INDEX.hips, at(0, 0.15, 1.6));

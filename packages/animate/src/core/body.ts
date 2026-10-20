@@ -12,6 +12,7 @@ import { createAsks, type Asks } from './asks';
 import { createLocomotion, type Locomotion } from './legs/gait';
 import type { Gazer } from './gaze';
 import { yawOf } from './math';
+import { World } from './world';
 
 /** the sub-step (s): fixed, so that what behaviours read off the history (velocities) does not depend on the frame rate */
 export const STEP = 1 / 60;
@@ -22,13 +23,13 @@ export const STEP = 1 / 60;
  * steps them, so a later writer wins on the bones it writes. The poses rotate every sub-step:
  * read them from the frame each time, do not keep them.
  */
-export interface Frame<W = unknown> {
+export interface Frame {
   /** the sub-step's length (s): always `STEP` */
   dt: number;
   /** the time `current` is posed for (s); the body starts at 0 */
   time: number;
-  /** the world the body was made with; throws when it was made without one */
-  readonly world: W;
+  /** the world the body is in (`World.add`); alone, a world of none */
+  readonly world: World;
   /** the final pose two sub-steps ago */
   prev2: ReadonlyPose;
   /** the final pose of the last sub-step */
@@ -40,8 +41,7 @@ export interface Frame<W = unknown> {
   readonly beats: Set<string>;
 }
 
-export interface BodyOptions<W> {
-  world?: W;
+export interface BodyOptions {
   /** Scale applied only to placements in bone frames. */
   scale?: number;
   /** Checks final poses and records problems; default off. */
@@ -51,7 +51,7 @@ export interface BodyOptions<W> {
   /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone */
   wearing?: readonly Dressed[];
   /** its hands, by name, each the bone it holds with; and how they keep to what they hold, every sub-step after the worn items move */
-  hands?: { bones: Readonly<Record<string, number>>; hold: (body: Body<W>) => (f: Frame<W>) => void };
+  hands?: { bones: Readonly<Record<string, number>>; hold: (body: Body) => (f: Frame) => void };
   /** its neck and eyes, for `lookAt` */
   gazer?: Gazer;
 }
@@ -63,9 +63,9 @@ export interface BodyOptions<W> {
  * the history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
  * covers and carry the rest over; the body shows its last final pose.
  */
-export class Body<W = unknown> {
+export class Body {
   /** after an update: `prev` is the final pose, `prev2` the one before, `dt` the last sub-step */
-  readonly frame: Frame<W>;
+  readonly frame: Frame;
   /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
   readonly worn = new Map<Item, Wearing>();
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it */
@@ -84,16 +84,19 @@ export class Body<W = unknown> {
   readonly scale: number;
   /** the poses `frame` shows, as [prev2, prev, current] */
   private poses: [Pose, Pose, Pose];
-  private readonly behaviour: ReusableTimeline<Frame<W>>;
+  private readonly behaviour: ReusableTimeline<Frame>;
   /** made on the first update: a behaviour may read the body (its pose) as it sets out */
-  private runner: TimelineRunner<Frame<W>> | null = null;
+  private runner: TimelineRunner<Frame> | null = null;
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
   private readonly snaps = new SnapChecks();
-  private readonly hold: ((f: Frame<W>) => void) | null;
+  private readonly hold: ((f: Frame) => void) | null;
+  /** the world it joined; until then one of its own, empty */
+  private world: World | null = null;
+  private alone: World | null = null;
 
-  constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame<W>>, options: BodyOptions<W> = {}) {
+  constructor(skeleton: Skeleton, behaviour: ReusableTimeline<Frame>, options: BodyOptions = {}) {
     this.scale = options.scale ?? 1;
     this.gazer = options.gazer;
     const start = new Pose(skeleton);
@@ -105,15 +108,14 @@ export class Body<W = unknown> {
     dress(this, start, options.wearing ?? []);
     this.hold = options.hands?.hold(this) ?? null;
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
-    const { world } = options;
+    const body = this;
     this.frame = {
       dev: options.dev ? new Dev() : undefined,
       beats: new Set(),
       dt: STEP,
       time: 0,
       get world() {
-        if (world === undefined) throw new Error('this body was made without a world');
-        return world;
+        return body.world ?? (body.alone ??= new World());
       },
       prev2: this.poses[0],
       prev: this.poses[1],
@@ -144,9 +146,10 @@ export class Body<W = unknown> {
     return yawOf(this.pose.local(0));
   }
 
-  /** a copy of the last final pose, as other bodies read it */
-  snapshot(): Pose {
-    return new Pose(this.pose.skeleton).copy(this.pose);
+  /** in `world` from now on (`World.add`: join through it) */
+  join(world: World): void {
+    if (this.world) throw new Error('a body is in one world');
+    this.world = world;
   }
 
   /** advances by `dt` (s): every whole `STEP` it covers, with what earlier updates left over */

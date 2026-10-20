@@ -1,6 +1,6 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, createWorld, follow, followRotation, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { INDEX, Item, aimAt, follow, followRotation, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid } from '@drawcall/animate';
 import { closeHand } from '../../../packages/animate/src/humanoid/hands/grips';
 import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
 import { reached } from '../../../packages/animate/src/core/tip';
@@ -126,7 +126,7 @@ export function shooter(): Scenario {
       let loaded = magazines[0], spare = magazines[1], stowed = 0, free = 1;
       let reloading = false, pulled = false, wanted = false, reload = 0, canted = false;
       const steps: string[] = [];
-      let actor: Humanoid<World> | null = null;
+      let actor: Humanoid | null = null;
       let acquired = false;
       let lastShot = -Infinity;
       let steadySince = 0;
@@ -191,7 +191,7 @@ export function shooter(): Scenario {
         position: at.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position),
         size, quaternion: rifle.current.quaternion.clone() });
       return {
-        world: createWorld(), report, player,
+        report, player,
         wearing: () => [{ item: rifle, on: INDEX.rightHand, at: { position: new Vector3(), quaternion: HAND.clone().invert() } },
           { item: spare, on: INDEX.hips, at: { position: POUCHES[0].clone() } }],
         move: (t) => {
@@ -237,12 +237,12 @@ export function shooter(): Scenario {
           actor = h;
           // (the loaded magazine starts in the well, worn on the rifle from the first sub-step)
           loaded.move(0, WELL.position.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position), rifle.current.quaternion.clone().multiply(WELL.quaternion));
-          const well = (f: Frame<World>) => onItem<World>(rifle, WELL)(f).position;
+          const well = (f: Frame) => onItem(rifle, WELL)(f).position;
           // The support hand off what it holds and onto `grip` of `item` in a quick reach, closing on it there (it follows
           // the grip in the item's frame: the body moves what it wears and holds, so its walk or the aim's turn never leaves
           // the hand behind). A held magazine brought to `to` (world, moving), at the support hand's pace, till it is there
           // or `TAKE.bring` s are up (kept clear of the trunk, it may stop short: the pouch or the well then seats it).
-          const bring = (item: Item, to: (f: Frame<World>) => Placement) => function* () {
+          const bring = (item: Item, to: (f: Frame) => Placement) => function* () {
             const began = now;
             yield* hold(h, item, { to, motion: TAKE.motion, until: (f) => item.current.position.distanceTo(to(f).position) < TAKE.near || now - began > TAKE.bring })();
           };
@@ -251,12 +251,12 @@ export function shooter(): Scenario {
             const began = now;
             // (the hand kept on it through the sub-step it closes — the free arm's swing, which runs first, let it go
             // only after — and held there the next, before it moves on with what it took)
-            yield* parallel<Frame<World>>('race', handTo(h, 'left', item.grips[grip], { on: item, lead: false, ...TAKE.motion }), function* () {
-              yield* when<World>((f) => now - began >= TAKE.seconds && reached(f, INDEX.leftHand, item.grips[grip], item));
+            yield* parallel<Frame>('race', handTo(h, 'left', item.grips[grip], { on: item, lead: false, ...TAKE.motion }), function* () {
+              yield* when((f) => now - began >= TAKE.seconds && reached(f, INDEX.leftHand, item.grips[grip], item));
               yield* closeHand(h, 'left', item, grip)();
             });
             const closed = now;
-            yield* when<World>(() => now > closed);
+            yield* when(() => now > closed);
           };
           // Recalled reload staging (e.g. common FPS reloads, ~2–2.5 s): the support hand off the
           // handguard to the magazine, drawn out and stowed in the free pouch, the full one taken
@@ -265,8 +265,8 @@ export function shooter(): Scenario {
             const [spent, full, slot, emptied] = [loaded, spare, free, stowed];
             let cancelled = false;
             steps.push('to magazine');
-            yield* parallel<Frame<World>>('race', take(spent, 'grip'),
-              when<World>(() => (cancelled = controller.sprinting(player.input))));
+            yield* parallel<Frame>('race', take(spent, 'grip'),
+              when(() => (cancelled = controller.sprinting(player.input))));
             if (cancelled) {
               steps.push('cancelled');
               canted = false;
@@ -301,7 +301,7 @@ export function shooter(): Scenario {
             yield* wear(h, loaded, rifle)();
             yield* takeOff(h, rifle)();
             yield* closeHand(h, 'right', rifle, 'pistol')();
-            yield* parallel<Frame<World>>('all',
+            yield* parallel<Frame>('all',
               watch('weapon pose', () => {
                 if (!acquired || now - steadySince < 0.5 || now - lastShot < 0.5) return null;
                 if (ads < 1) return null;
@@ -314,9 +314,9 @@ export function shooter(): Scenario {
               idle(h, { root: controller.root }),
               aimAt(h, ahead),
               reporting(report, ['leftHand', 'rightHand', 'gaze'], function* () {
-                yield* parallel<Frame<World>>('all',
+                yield* parallel<Frame>('all',
                   function* () {
-                    yield* when<World>((f) => f.time >= 0.9);
+                    yield* when((f) => f.time >= 0.9);
                     yield* named('take foregrip', reachFor(h, { left: [rifle, 'foregrip'] }))();
                     acquired = true;
                     for (;;) {
@@ -326,7 +326,7 @@ export function shooter(): Scenario {
                       reloading = false;
                     }
                   },
-                  () => action<Frame<World>>({ update: (f) => {
+                  () => action<Frame>({ update: (f) => {
                     if (!acquired) return;
                     const input = player.input;
                     report.asked.set('torsoYaw', { time: f.time, value: h.asks.twist });

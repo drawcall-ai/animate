@@ -9,7 +9,6 @@ import { arriving } from '../walk';
 import { when } from '../../core/when';
 import { carry, hold } from './carry';
 import { approach } from './grab';
-import type { World } from '../world';
 
 // Inherited unchanged from iteration 10 (c3f8368); never re-tuned (unloaded s).
 const LIFT = 0.5;
@@ -22,7 +21,7 @@ export const RAISE_LEAD = 0.9;
 const APPROACH_RISE = 2 / 3;
 /** Lift close to the body, approach, then transfer onto the destination during the last step.
  * A live destination follows translation and rotation throughout the approach and transfer. */
-export function place<W extends World>(h: Humanoid<W>, item: Item, to: Live<Placement, W>): Behaviour<W> {
+export function place(h: Humanoid, item: Item, to: Live<Placement>): Behaviour {
   return function* () {
     let lifting = true;
     const watched = item.current.position.clone();
@@ -32,9 +31,9 @@ export function place<W extends World>(h: Humanoid<W>, item: Item, to: Live<Plac
       const rise = atBody(h.frame).position.y - from;
       const near = arriving(h, RAISE_LEAD);
       let approached = false;
-      yield* parallel<Frame<W>>('all', function* () {
+      yield* parallel<Frame>('all', function* () {
         // Extension and turning overlap; a level or downward carry has no rise to wait for.
-        yield* when<W>(() => rise <= 0 || item.current.position.y >= from + rise * APPROACH_RISE);
+        yield* when(() => rise <= 0 || item.current.position.y >= from + rise * APPROACH_RISE);
         yield* approach(h, to)();
         approached = true;
       }, function* () {

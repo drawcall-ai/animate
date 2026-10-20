@@ -2,6 +2,7 @@
 export { Skeleton, type BoneDef, type Limit, type SkeletonOptions } from './core/skeleton';
 export { Pose, type ReadonlyPose } from './core/pose';
 export { Body, type BodyOptions, type Frame } from './core/body';
+export { World } from './core/world';
 export { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './core/goal';
 export { when } from './core/when';
 export { named, watch, type LogEntry, type Problem, type WatchFrame } from './core/dev';
@@ -23,7 +24,6 @@ export { SKELETON as HORSE_SKELETON } from './horse/skeleton';
 // A humanoid: a viverse character model as a body.
 export { Humanoid, type HumanoidOptions } from './humanoid/humanoid';
 export { createSkeletonModel } from './humanoid/model';
-export { createWorld, type World } from './humanoid/world';
 export { INDEX, SIDES, type BoneName, type Side } from './humanoid/bones';
 export type { Proportions } from './humanoid/proportions';
 export { idle } from './humanoid/idle';

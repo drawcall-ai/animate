@@ -30,7 +30,7 @@ import { defaultStance } from './stance';
  * hands (the centre of mass kept over the root), the thorax counter-rotating, the trunk bowed and twisted as asked; `lower` lets the
  * stepper crouch (below none: up on the toes).
  */
-export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour<W> {
+export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
   const p = h.proportions, s = p.scale, toeOut = defaultStance(p).toeOut, base = { ...defaultStance(p), ...options.stance };
   const stepping = walkerStepping(p), stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, moving = false, starting = false, seen = false, phase = 0, still: Vector3 | null = null, leaning = false;

@@ -9,12 +9,12 @@ import { minimumJerk } from '../core/math';
  * A goal may also read the fixed course start and the preceding place in that frame.
  * `still` pauses at the preceding place.
  */
-export type Waypoint<W = unknown> = [seconds: number, to: Placement | ((f: Frame<W>, start: Required<Placement>, last: Required<Placement>) => Placement)];
+export type Waypoint = [seconds: number, to: Placement | ((f: Frame, start: Required<Placement>, last: Required<Placement>) => Placement)];
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
-export interface Course<W = unknown> {
-  to: (f: Frame<W>) => Required<Placement>;
-  over: (f: Frame<W>) => boolean;
+export interface Course {
+  to: (f: Frame) => Required<Placement>;
+  over: (f: Frame) => boolean;
 }
 
 /**
@@ -27,13 +27,13 @@ export interface Course<W = unknown> {
  * stops to reverse), it comes to rest there and sets off again.
  * It sets off `delay` s after it is first read.
  */
-export function course<W>(item: Item, frame: Live<Placement, W>, waypoints: readonly Waypoint<W>[], { scale = 1, pace = 1, delay = 0 } = {}): Course<W> {
+export function course(item: Item, frame: Live<Placement>, waypoints: readonly Waypoint[], { scale = 1, pace = 1, delay = 0 } = {}): Course {
   let start = NaN;
   let runs: Run[] = [];
   let from: Required<Placement> | undefined;
   const moving = waypoints.some(([, to]) => typeof to === 'function');
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  const to = (f: Frame<W>): Required<Placement> => {
+  const to = (f: Frame): Required<Placement> => {
     const place = live(frame, f);
     const at = { position: place.position, quaternion: place.quaternion ?? IDENTITY };
     if (from === undefined) {

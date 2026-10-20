@@ -1,6 +1,6 @@
 import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { ask, createWorld, handTo, headTo, idle, lookAt, release, type Asks, type Frame, type Humanoid, type Placement, type Target, type World, yawOf } from '@drawcall/animate';
+import { ask, handTo, headTo, idle, lookAt, release, type Asks, type Frame, type Humanoid, type Placement, type Target, yawOf } from '@drawcall/animate';
 import { CALM } from '../../../packages/animate/src/humanoid/arms';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { SHIFT } from '../../../packages/animate/src/core/gaze';
@@ -45,13 +45,13 @@ function moved(ways: Way[], { shift = { x: 0, z: 0 }, rise = 0 }: Variation, whi
 }
 
 /** a headset's recorded skull centre's height scaled to this body (a headset is calibrated to its wearer) */
-const heightScale = (h: Humanoid<World>) => (h.proportions.eyeHeight - h.proportions.eyes.y + h.proportions.headCenter.y) / RECORDED;
+const heightScale = (h: Humanoid) => (h.proportions.eyeHeight - h.proportions.eyes.y + h.proportions.headCenter.y) / RECORDED;
 
 /**
  * a headset recording as where the eyes are and the head is turned (into one placement): the skull
  * centre at `center`'s point, its height scaled to the body, turned `yaw` then pitched `pitch`
  */
-function headset(h: Humanoid<World>, v: Variation, center: (t: number, out: Vector3) => Vector3, yaw: (t: number) => number, pitch: (t: number) => number, out: Required<Placement>): (f: Frame<World>) => Required<Placement> {
+function headset(h: Humanoid, v: Variation, center: (t: number, out: Vector3) => Vector3, yaw: (t: number) => number, pitch: (t: number) => number, out: Required<Placement>): (f: Frame) => Required<Placement> {
   const play = playback(v);
   const p = h.proportions;
   const k = heightScale(h);
@@ -66,7 +66,7 @@ function headset(h: Humanoid<World>, v: Variation, center: (t: number, out: Vect
 }
 
 /** the eyes on the head's tracked placement at the end (m), the body come to rest facing as it does (rad) */
-function underHead(h: Humanoid<World>, head: Required<Placement>): boolean {
+function underHead(h: Humanoid, head: Required<Placement>): boolean {
   const eyes = h.pose.point(h.rig.skeleton.index('head'), h.proportions.eyes, new Vector3());
   return eyes.distanceTo(head.position) < 0.03 && h.locomotion.settled && Math.abs(wrapAngle(yawOf(head.quaternion) - h.locomotion.facing)) < 0.3;
 }
@@ -119,16 +119,15 @@ export function lookAround(v: Variation = {}): Scenario {
     stage: () => {
       const report = new Report();
       const head = { position: new Vector3(), quaternion: new Quaternion() };
-      let body: Humanoid<World> | null = null;
+      let body: Humanoid | null = null;
       return {
-        world: createWorld(),
         report,
         props: () => [],
         done: () => !!body && underHead(body, head),
         script: (h) =>
           function* () {
             body = h;
-            yield* parallel<Frame<World>>('all', idle(h), headTo(h, reported(report, 'head', headset(h, v, center, yaw, pitch, head)), { lead: true }));
+            yield* parallel<Frame>('all', idle(h), headTo(h, reported(report, 'head', headset(h, v, center, yaw, pitch, head)), { lead: true }));
           },
       };
     },
@@ -142,7 +141,7 @@ const CONTROLLER = { accel: 30, speed: 4, turnAccel: 200, turnSpeed: 15, lead: f
  * a controller recording as a wrist target (into `out`, with its velocity): the recorded point,
  * its height scaled to the body, `paint` added
  */
-function controller(h: Humanoid<World>, v: Variation, track: (t: number, out: Vector3) => Vector3, out: Target & { velocity: Vector3 }, paint: (t: number, out: Vector3) => Vector3 = (_, o) => o): (f: Frame<World>) => Target {
+function controller(h: Humanoid, v: Variation, track: (t: number, out: Vector3) => Vector3, out: Target & { velocity: Vector3 }, paint: (t: number, out: Vector3) => Vector3 = (_, o) => o): (f: Frame) => Target {
   const play = playback(v);
   const k = heightScale(h);
   const at = (t: number, into: Vector3) => {
@@ -227,9 +226,8 @@ export function vr(v: Variation = {}): Scenario {
       const report = new Report();
       const head = { position: new Vector3(), quaternion: new Quaternion() };
       const wrists = { left: { position: new Vector3(), velocity: new Vector3() }, right: { position: new Vector3(), velocity: new Vector3() } };
-      let body: Humanoid<World> | null = null;
+      let body: Humanoid | null = null;
       return {
-        world: createWorld(),
         report,
         props: () => [wrists.left, wrists.right].map((w): Prop => ({ kind: 'ball', position: w.position.clone(), radius: 0.03 })),
         // (stood under the head where the side-step took it, the hands on the controllers)
@@ -237,7 +235,7 @@ export function vr(v: Variation = {}): Scenario {
         script: (h) =>
           function* () {
             body = h;
-            yield* parallel<Frame<World>>(
+            yield* parallel<Frame>(
               'all',
               idle(h),
               headTo(h, reported(report, 'head', headset(h, v, center, () => 0, pitch, head)), { lead: true }),
@@ -261,7 +259,7 @@ export function vr(v: Variation = {}): Scenario {
 const LEADS = { round: 0.7, faced: 0.3, turn: 2.0, out: 0.95, stand: 0.55, speed: 1.3, accel: 1.2 };
 
 /** what a hand's target `target` asks of the body for hand `side` (see LEADS), every sub-step */
-function comeAlong(h: Humanoid<World>, side: 'left' | 'right', target: (f: Frame<World>) => Vector3, pace: number): (f: Frame<World>) => Partial<Asks> {
+function comeAlong(h: Humanoid, side: 'left' | 'right', target: (f: Frame) => Vector3, pace: number): (f: Frame) => Partial<Asks> {
   const p = h.proportions;
   const sign = side === 'left' ? 1 : -1;
   const go = { to: new Vector3(NaN, 0, 0), speed: LEADS.speed * pace, accel: LEADS.accel * pace ** 2 };
@@ -336,7 +334,6 @@ export function reach(v: Variation = {}): Scenario {
       const look = new Vector3();
       let released = false;
       return {
-        world: createWorld(),
         report,
         props: (t) => [{ kind: 'ball', position: point(t, new Vector3()), radius: 0.035 }],
         // (the hand on the far target, and let go of it)
@@ -344,7 +341,7 @@ export function reach(v: Variation = {}): Scenario {
         script: (h) =>
           function* () {
             let set = false;
-            const target = (f: Frame<World>) => {
+            const target = (f: Frame) => {
               if (!set) {
                 set = true;
                 setOff(f.prev.position(h.rig.skeleton.index('rightHand')).clone());
@@ -354,10 +351,10 @@ export function reach(v: Variation = {}): Scenario {
               return hand;
             };
             // (on the far target, once it has stopped there)
-            const there = (f: Frame<World>) => f.time >= LAST / pace && reached(f, h.rig.skeleton.index('rightHand'), target(f));
-            yield* parallel<Frame<World>>('all', idle(h), function* () {
+            const there = (f: Frame) => f.time >= LAST / pace && reached(f, h.rig.skeleton.index('rightHand'), target(f));
+            yield* parallel<Frame>('all', idle(h), function* () {
               yield* action({ until: timePassed(0.4 / pace, 'seconds') });
-              yield* parallel<Frame<World>>(
+              yield* parallel<Frame>(
                 'race',
                 handTo(h, 'right', reported(report, 'rightWrist', target), { ...REACHING, until: there }),
                 // (the body ahead of the hand: turned and stepped to where it is going)

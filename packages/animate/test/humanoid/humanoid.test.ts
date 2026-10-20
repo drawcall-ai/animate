@@ -31,7 +31,7 @@ describe('Humanoid', () => {
     expect(at(h, 'hips').distanceTo(new Vector3(1, h.proportions.hips.y, 2))).toBeLessThan(0.02);
     // the arms hang
     for (const side of ['left', 'right']) expect(at(h, `${side}UpperArm`).y - at(h, `${side}Hand`).y).toBeGreaterThan(0.95 * h.proportions.armLength);
-    expect(h.snapshot().position(INDEX.head).distanceTo(at(h, 'head'))).toBeLessThan(1e-6);
+    expect(h.pose.position(INDEX.head).distanceTo(at(h, 'head'))).toBeLessThan(1e-6);
   });
 
   it('solves its named chains within its ranges of motion: a wrist onto a point in reach', () => {

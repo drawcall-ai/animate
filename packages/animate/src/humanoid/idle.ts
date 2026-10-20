@@ -19,10 +19,10 @@ export const legSystem: { path: 'old' | 'core' } = { path: 'old' };
  * of these take back on from where it is. `seed` fixes the variation of sway, breathing and spontaneous weight shifts.
  * `root`: the scene owns the root (a player), `driven` legs keep up with it instead of `balance`.
  */
-export function idle<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; seed?: number; root?: Live<DrivenRoot, W> } = {}): Behaviour<W> {
+export function idle(h: Humanoid, options: { stance?: Partial<Stance>; seed?: number; root?: Live<DrivenRoot> } = {}): Behaviour {
   const { root } = options, path = legSystem.path;
   return function* () {
     const legs = root ? driven(h, root) : path === 'core' ? stride(h, options) : balance(h, options);
-    yield* parallel<Frame<W>>('all', legs, hangArms(h), lookAround(h, { seed: options.seed }));
+    yield* parallel<Frame>('all', legs, hangArms(h), lookAround(h, { seed: options.seed }));
   };
 }

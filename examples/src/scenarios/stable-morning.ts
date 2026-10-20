@@ -1,6 +1,6 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, HORSE_SKELETON, Item, Pose, place, facingAt, createWorld, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid, type World } from '@drawcall/animate';
+import { Body, HORSE_SKELETON, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
 import { Rope } from '../../../packages/animate/src/core/rope';
 import { reachFor } from '../../../packages/animate/src/humanoid/hands/reach';
 import { forwardOf } from '../math';
@@ -84,7 +84,7 @@ export function stableMorning(): Scenario {
       const loose = new Item(KNOT.clone(), new Quaternion(), {
         end: { position: new Vector3() },
       }, { name: 'rope slack' });
-      let handler: Humanoid<World> | null = null;
+      let handler: Humanoid | null = null;
       let lookedBack = false;
       let leadStart: number | null = null;
       const pose = new Pose(HORSE_SKELETON);
@@ -110,7 +110,7 @@ export function stableMorning(): Scenario {
 
       const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(-Math.PI / 2) });
       const gate = new Vector3(-0.2, 0, 8.2);
-      const tasks = (h: Humanoid<World>): Behaviour<World> => function* () {
+      const tasks = (h: Humanoid): Behaviour => function* () {
         yield* named('fetch the saddle', reporting(report, HANDS,
           grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }, {
             look: reported(report, 'gaze', () => saddle.current.position),
@@ -122,7 +122,7 @@ export function stableMorning(): Scenario {
           follow.react(h.pose.position(0));
           yield* release(h, ['left', 'right'])();
           let start: number | null = null;
-          yield* parallel<Frame<World>>('all',
+          yield* parallel<Frame>('all',
             withGaze(h, reported(report, 'gaze', (f) => {
               start ??= f.time;
               const u = Math.min(1, (f.time - start) / INSPECT);
@@ -131,7 +131,7 @@ export function stableMorning(): Scenario {
             function* () {
               yield* when(timePassed(INSPECT / 2, 'seconds'));
               follow.react(h.pose.position(0));
-              yield* parallel<Frame<World>>('race',
+              yield* parallel<Frame>('race',
                 () => when(timePassed(INSPECT / 2, 'seconds')),
                 handTo(h, 'right', reported(report, 'rightHand', () => ({ position: saddle.current.position.clone().add(new Vector3(0.27, -0.25, 0)) })), { lead: false }),
               );
@@ -143,7 +143,7 @@ export function stableMorning(): Scenario {
         }))();
         yield* named('lead out through the gate', reporting(report, HANDS, function* () {
           const comfortable = facingAt(h, h.pose.skeleton.index('chest'), { position: NEAR_HAND });
-          const near = (f: Frame<World>) => {
+          const near = (f: Frame) => {
             const heading = yawOf(horse.pose.rotation(0));
             const halter = horseLeadPoint(horse.pose, new Vector3()), goal = comfortable(f);
             const aside = forwardOf(heading + Math.PI / 2);
@@ -151,7 +151,7 @@ export function stableMorning(): Scenario {
             return goal;
           };
           const slack = facingAt(h, 0, { position: SLACK_HAND });
-          yield* parallel<Frame<World>>('race',
+          yield* parallel<Frame>('race',
             function* () {
               yield* when(() => h.feet.some((foot) => foot.phase === 'swing'));
               leadStart = h.pose.position(0).z;
@@ -183,7 +183,7 @@ export function stableMorning(): Scenario {
         }))();
       };
       return {
-        world: createWorld(), report, bodies: [horse],
+        report, bodies: [horse],
         solids: () => [-0.2, 0.2].map((x) => ({
           name: 'saddle rack leg',
           a: RACK.clone().add(new Vector3(x, 0, 0)).setY(0.03),
@@ -218,7 +218,7 @@ export function stableMorning(): Scenario {
             const leftHand = h.pose.skeleton.index('leftHand');
             let caught = false;
             let gatherAt = GATHER_AT;
-            const swing = action<Frame<World>>({
+            const swing = action<Frame>({
               update: (f) => {
                 const hand = f.current.position(leftHand);
                 if (gathering && !caught) gatherAt = lead.nearest(hand, KNOT_AT + 0.1, 1);
@@ -232,7 +232,7 @@ export function stableMorning(): Scenario {
                 if (!gathered() && !loose.moved(f.time)) loose.move(f.time, caught ? hand : lead.at(gatherAt));
               },
             });
-            yield* parallel<Frame<World>>('all',
+            yield* parallel<Frame>('all',
               eyesOnBefore(h, saddle, 0.4), eyesOnBefore(h, rope, 0.4),
               watch('gather the loose end', (f) => {
                 if (h.holding.right?.item !== rope || h.holding.left?.item === loose) return null;

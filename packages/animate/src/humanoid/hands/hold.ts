@@ -29,7 +29,7 @@ export const GRIP_TAKEN = REACHED.distance + 0.02;
 const _taken: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 
 /** One owner of held hands and carried-item fitting, after all body and item movers. */
-export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
+export function followHeld(h: Humanoid): (f: Frame) => void {
   const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
   const previous: Holds = {};
   return (f) => {
@@ -79,7 +79,7 @@ export function followHeld<W>(h: Humanoid<W>): (f: Frame<W>) => void {
  * wrists — turned so the line between two grips lies along the line between the wrists, moved so
  * their middle is the wrists' middle
  */
-function fit<W>(f: Frame<W>, item: Item, aim: Carrier, grips: Grips, sides: readonly Side[]) {
+function fit(f: Frame, item: Item, aim: Carrier, grips: Grips, sides: readonly Side[]) {
   const at = (side: Side, out: Vector3) => out.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
   const wrist = (side: Side, out: Vector3) => out.copy(f.current.position(INDEX[`${side}Hand`]));
   const turn = _turn.identity();

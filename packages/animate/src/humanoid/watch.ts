@@ -11,11 +11,11 @@ import { heldItems } from '../core/worn';
  * one's own worn item by feel is excluded. The head's comfortable eye range allows the
  * eyes to look within the head: down further than up or aside (see Humanoid's gazer).
  */
-export function eyesOnBefore<W>(h: Humanoid<W>, item: Item, seconds: number): Behaviour<W> {
+export function eyesOnBefore(h: Humanoid, item: Item, seconds: number): Behaviour {
   return function* () {
     let since: number | null = null;
     let held = false;
-    yield* watch<W>('eyesOnBefore', (f) => {
+    yield* watch('eyesOnBefore', (f) => {
       const on = gazeOff(h.gazer, f.prev, item.current.position) === 0;
       if (on) since ??= f.time;
       else since = null;

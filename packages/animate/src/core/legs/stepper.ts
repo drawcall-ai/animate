@@ -138,7 +138,7 @@ export class Stepper {
   jump(speed: number) { this.asked = speed; }
 
   /** Step for this sub-step under `r` and set the root's position; the swinging feet's poses are planned now, the planted ones by `pose` once the hips are placed. */
-  move(f: Frame<unknown>, r: DrivenRoot) {
+  move(f: Frame, r: DrivenRoot) {
     const { st, feet, legs, jumping: jump, yaws, heights, velocity, before } = this, s = st.scale, toeOut = st.toeOut, dt = f.dt;
     if (Number.isNaN(this.stand)) this.stand = heights[0] = heights[1] = f.prev.position(0).y;
     const v = Math.hypot(r.velocity.x, r.velocity.z);

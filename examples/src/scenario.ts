@@ -1,5 +1,5 @@
 import type { Quaternion, Vector3 } from 'three';
-import type { Body, Behaviour, Dressed, Humanoid, Item, Proportions, World } from '@drawcall/animate';
+import type { Body, Behaviour, Dressed, Humanoid, Item, Proportions } from '@drawcall/animate';
 import type { Report } from './report';
 
 export const FIXED_DT = 1 / 60;
@@ -27,7 +27,6 @@ export interface Player {
 
 export interface Stage {
   player?: Player;
-  world: World;
   /** Generic articulated bodies stepped alongside the humanoid cast. */
   bodies?: readonly Body[];
   /** what the script asked of the first actor, for the metrics */
@@ -46,7 +45,7 @@ export interface Stage {
    * the behaviour of actor `index` of `cast` (made in order: while the behaviours are being made,
    * `cast` holds only the actors before; by the time they run, all)
    */
-  script(actor: Humanoid<World>, index: number, cast: readonly Humanoid<World>[]): Behaviour<World>;
+  script(actor: Humanoid, index: number, cast: readonly Humanoid[]): Behaviour;
 }
 
 /** A scenario: its actors and how they are shown; `stage` makes a run of it. */

@@ -10,9 +10,9 @@ import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
 /** How a chain's tip goes to its target. */
-export interface TipOptions<W> extends Motion {
+export interface TipOptions extends Motion {
   /** where a two-segment chain's middle joint bends toward (world) */
-  pole?: Live<Vector3, W>;
+  pole?: Live<Vector3>;
   /** the target is on this carrier, in its frame: the tip goes with it */
   on?: Carrier;
   /**
@@ -44,7 +44,7 @@ export class ChainTip {
 
   constructor(readonly chain: string) {}
 
-  to<W>(f: Frame<W>, target: Target, options: TipOptions<W>): void {
+  to(f: Frame, target: Target, options: TipOptions): void {
     const { chain } = this;
     const { skeleton } = f.current;
     const bones = skeleton.chain(chain);
@@ -114,11 +114,11 @@ export class ChainTip {
 }
 
 /** A chain's tip moved to `target` (a `ChainTip`) every sub-step: endless, or until `until`. */
-export function chainTo<W>(chain: string, target: Live<Target, W>, options: TipOptions<W> & { until?: Until<W> }): Behaviour<W> {
+export function chainTo(chain: string, target: Live<Target>, options: TipOptions & { until?: Until }): Behaviour {
   const { until } = options;
   return function* () {
     const tip = new ChainTip(chain);
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => void tip.to(f, live(target, f), options),
       until: until === 'reached' ? (f) => reached(f, tipOf(f, chain), live(target, f), options.on) : until,
     });
@@ -187,7 +187,7 @@ const _was2 = new Vector3();
 const _goal: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 
 /** the tip bone of chain `chain` */
-function tipOf<W>(f: Frame<W>, chain: string): number {
+function tipOf(f: Frame, chain: string): number {
   const bones = f.current.skeleton.chain(chain);
   return bones[bones.length - 1];
 }

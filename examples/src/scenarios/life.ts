@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { carried, carry, createWorld, grab, handTo, hold, idle, Item, walkTo, withGaze, type Frame, type World } from '@drawcall/animate';
+import { carried, carry, grab, handTo, hold, idle, Item, walkTo, withGaze, type Frame } from '@drawcall/animate';
 import { forwardOf } from '../math';
 import type { Scenario } from '../scenario';
 import { Report, reported, reporting } from '../report';
@@ -11,7 +11,7 @@ export const idleLife: Scenario = {
   description: 'Breathing, quiet sway and an occasional shift of weight, without a task.',
   duration: 25,
   actors: [{}],
-  stage: () => ({ world: createWorld(), report: new Report(), props: () => [], done: () => true, script: (h) => idle(h) }),
+  stage: () => ({ report: new Report(), props: () => [], done: () => true, script: (h) => idle(h) }),
 };
 
 export const reachAround: Scenario = {
@@ -24,13 +24,13 @@ export const reachAround: Scenario = {
     let done = false;
     const report = new Report();
     return {
-      world: createWorld(), report,
+      report,
       props: () => points.map((position) => ({ kind: 'ball', position, radius: 0.025 })),
       done: () => done,
       script: (h) => function* () {
-        yield* parallel<Frame<World>>('all', idle(h), function* () {
+        yield* parallel<Frame>('all', idle(h), function* () {
           for (const position of points) {
-            yield* reporting(report, ['rightHand'], withGaze(h, position, () => parallel<Frame<World>>('all',
+            yield* reporting(report, ['rightHand'], withGaze(h, position, () => parallel<Frame>('all',
               walkTo(h, { to: position, within: 0.4 }),
               handTo(h, 'right', reported(report, 'rightWrist', { position }), { seconds: 1, until: 'reached' }),
             )))();
@@ -55,15 +55,15 @@ export const liftHeavy: Scenario = {
     let done = false;
     const report = new Report();
     return {
-      world: createWorld(), report,
+      report,
       props: () => [{ kind: 'box', position: box.current.position.clone(), quaternion: box.current.quaternion.clone(), size }],
       done: () => done,
       script: (h) => function* () {
-        yield* parallel<Frame<World>>('all', idle(h), function* () {
+        yield* parallel<Frame>('all', idle(h), function* () {
           yield* reporting(report, ['leftHand', 'rightHand'], grab(h, { left: [box, 'left'], right: [box, 'right'] }, { first: true }))();
           yield* carry(h, box, [[1.5, carried(h)]])();
           const there = h.pose.com(new Vector3()).setY(0).addScaledVector(forwardOf(h.locomotion.facing), 3);
-          yield* parallel<Frame<World>>('race', hold(h, box, { to: carried(h) }), walkTo(h, { to: there }));
+          yield* parallel<Frame>('race', hold(h, box, { to: carried(h) }), walkTo(h, { to: there }));
           done = true;
           yield* hold(h, box, { to: carried(h) })();
         });

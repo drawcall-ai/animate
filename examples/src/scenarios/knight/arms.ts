@@ -1,13 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, hold, INDEX, facingAt, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement, type World } from '@drawcall/animate';
+import { handTo, hold, INDEX, facingAt, release, wear, yawOf, type Behaviour, type Frame, type Item, type Placement } from '@drawcall/animate';
 import { closeHand } from '../../../../packages/animate/src/humanoid/hands/grips';
 import { slideIn } from './gauntlets';
 import { along, at, busy, eyesOn, take, turn, type Knight } from './knight';
 
 // Shield and lance: taken up and borne.
 
-type F = Frame<World>;
+type F = Frame;
 
 /**
  * the left fist on the shield's grip as the shield is borne (in the hips' frame, facing as the body
@@ -22,7 +22,7 @@ const FIST = at(0.1, 0.16, 0.32, turn(0, Math.PI + 0.35, 0).multiply(new Quatern
  * the strap to the grip; worn on the left forearm, the right hand lets go and the left fist lifts
  * it off the peg and draws it back. Then bear it (`bearShield`).
  */
-export function takeShield(k: Knight, shield: Item): Behaviour<World> {
+export function takeShield(k: Knight, shield: Item): Behaviour {
   const steady = hold(k.h, shield);
   return function* () {
     // Both grips must be in reach, with room between the shield's face and the sword at the hip.
@@ -40,7 +40,7 @@ export function takeShield(k: Knight, shield: Item): Behaviour<World> {
 const BORNE = { accel: 30, speed: 3 };
 
 /** the shield borne on the left arm across the belly: endless */
-export const bearShield = (k: Knight): Behaviour<World> => handTo(k.h, 'left', facingAt(k.h, INDEX.hips, FIST), BORNE);
+export const bearShield = (k: Knight): Behaviour => handTo(k.h, 'left', facingAt(k.h, INDEX.hips, FIST), BORNE);
 
 /**
  * the lance borne upright in the right hand, the fist by the right side at the lower ribs (pulled in:
@@ -50,7 +50,7 @@ export const bearShield = (k: Knight): Behaviour<World> => handTo(k.h, 'left', f
 const UPRIGHT = at(-0.27, 0.3, 0.1, new Quaternion());
 
 /** The lance out of its rack: the right hand takes it (the lance ahead of the right shoulder: the head clear of the shaft), lifts it out of its socket and brings it in upright by the right side. Then bear it (`bearLance`). */
-export function takeLance(k: Knight, lance: Item): Behaviour<World> {
+export function takeLance(k: Knight, lance: Item): Behaviour {
   const lift = (_f: Frame, s: Required<Placement>) => at(s.position.x, s.position.y + 0.1, s.position.z);
   return function* () {
     yield* take(k, { right: [lance, 'grip'] }, { spot: { aside: -0.22 } })();
@@ -59,4 +59,4 @@ export function takeLance(k: Knight, lance: Item): Behaviour<World> {
 }
 
 /** the lance borne upright by the right side: endless */
-export const bearLance = (k: Knight, lance: Item): Behaviour<World> => hold(k.h, lance, { to: facingAt(k.h, INDEX.hips, UPRIGHT) });
+export const bearLance = (k: Knight, lance: Item): Behaviour => hold(k.h, lance, { to: facingAt(k.h, INDEX.hips, UPRIGHT) });

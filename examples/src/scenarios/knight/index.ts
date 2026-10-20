@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { createWorld, idle, INDEX, when, wear, type Frame, type Humanoid, type Item, type Placement, type World } from '@drawcall/animate';
+import { idle, INDEX, when, wear, type Frame, type Humanoid, type Item, type Placement } from '@drawcall/animate';
 import { forwardOf, leftOf } from '../../math';
 import { Report } from '../../report';
 import type { Prop, Scenario } from '../../scenario';
@@ -111,7 +111,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
               upright = true;
               yield* bearLance(k, gear.lance.item)();
             };
-            yield* parallel<Frame<World>>('all', bearShield(k), lance, function* () {
+            yield* parallel<Frame>('all', bearShield(k), lance, function* () {
               yield* when(() => upright);
               yield* walkOut(k, yard, 0, SIGHTS)();
             });
@@ -131,7 +131,6 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           )();
         };
       return {
-        world: createWorld(),
         report,
         done: () => !!knight && armed(knight.h, gear, yard),
         props: () => {
@@ -148,10 +147,10 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           pieces = dressed.map(({ gear }) => gear);
           return dressed.map(({ bone, gear }) => ({ item: gear.item, on: INDEX[bone], at: { position: new Vector3() } }));
         },
-        script: (h: Humanoid<World>) => {
+        script: (h: Humanoid) => {
           const k: Knight = (knight = { h, report, pace });
           return function* () {
-            yield* parallel<Frame<World>>('all', idle(h), story(k));
+            yield* parallel<Frame>('all', idle(h), story(k));
           };
         },
       };
@@ -164,7 +163,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
  * gauntlets worn where they go and home there; the shield on the left forearm, the fist on its
  * grip; the lance in the right hand; come to rest in the yard
  */
-function armed(h: Humanoid<World>, gear: { buckle: Gear; tongue: Gear; scabbard: Gear; sword: Gear; gauntlets: { left: Gear; right: Gear }; helmet: Gear; shield: Gear; lance: Gear }, yard: Vector3): boolean {
+function armed(h: Humanoid, gear: { buckle: Gear; tongue: Gear; scabbard: Gear; sword: Gear; gauntlets: { left: Gear; right: Gear }; helmet: Gear; shield: Gear; lance: Gear }, yard: Vector3): boolean {
   const on = (g: Gear, carrier: number | Item) => h.worn.get(g.item)?.on === carrier;
   const home = (g: Gear, bone: number, local: Vector3, within: number) => {
     const at = local.clone().multiplyScalar(h.proportions.scale).applyQuaternion(h.pose.rotation(bone)).add(h.pose.position(bone));

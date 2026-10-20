@@ -35,10 +35,10 @@ const SPOT_RATE = 10;
 /** how fast the body walks round and over under a head (m/s, m/s²) */
 const UNDER = { speed: 1.0, accel: 1.2 };
 
-export interface HeadOptions<W> extends Partial<Motion> {
+export interface HeadOptions extends Partial<Motion> {
   /** the body follows the head (a headset): it turns round, steps over, bows and squats as the head asks (`h.asks`); otherwise only the spine reaches */
   lead?: boolean;
-  until?: UntilCondition<Frame<W>>;
+  until?: UntilCondition<Frame>;
 }
 
 /**
@@ -52,7 +52,7 @@ export interface HeadOptions<W> extends Partial<Motion> {
  * turns round under a head turned further than the trunk and neck take, stands where the eyes are
  * over it, bows and squats for a head lower than standing and goes up on its toes for one higher.
  */
-export function headTo<W>(h: Humanoid<W>, eyes: Live<Placement, W>, options: HeadOptions<W> = {}): Behaviour<W> {
+export function headTo(h: Humanoid, eyes: Live<Placement>, options: HeadOptions = {}): Behaviour {
   const { lead = false, until } = options;
   const pace = { ...HEADSET, ...options };
   return function* () {
@@ -61,7 +61,7 @@ export function headTo<W>(h: Humanoid<W>, eyes: Live<Placement, W>, options: Hea
     const joints = SPINE.map(() => new TrackedRotation());
     const head = { position: new Vector3(), quaternion: new Quaternion() };
     const under = lead ? new Under(h) : null;
-    yield* action<Frame<W>>({
+    yield* action<Frame>({
       update: (f) => {
         const goal = live(eyes, f);
         const p = h.proportions;
@@ -90,7 +90,7 @@ export function headTo<W>(h: Humanoid<W>, eyes: Live<Placement, W>, options: Hea
  * bowed and let down as far as the eyes go ahead and down (`stoop`); standing where that puts the
  * eyes, walking there (its way fed forward) once it is far enough to.
  */
-class Under<W> {
+class Under {
   private readonly go = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER };
   private readonly face = { yaw: NaN };
   /** turning after the head; how long it has been turned past TURN (s); the eyes' last height */
@@ -98,10 +98,10 @@ class Under<W> {
   private off = 0;
   private height = NaN;
 
-  constructor(private readonly h: Humanoid<W>) {}
+  constructor(private readonly h: Humanoid) {}
 
   /** asks for the eyes at `eyes`, the head facing `yaw` */
-  ask(f: Frame<W>, eyes: Vector3, yaw: number) {
+  ask(f: Frame, eyes: Vector3, yaw: number) {
     const { h, go, face } = this;
     const p = h.proportions;
     const facing = h.locomotion.facing;

@@ -1,3 +1,4 @@
+import { World } from '../../src/core/world';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
@@ -121,7 +122,7 @@ it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as co
   // The other foot is outside this pivot check.
   h.feet[1].phase = 'swing';
   const dev = new Dev();
-  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, beats: new Set(), world: undefined }, dev, [{ plantedTime: 1 }, { plantedTime: 1 }]);
+  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, beats: new Set(), world: new World() }, dev, [{ plantedTime: 1 }, { plantedTime: 1 }]);
   expect(dev.log).toContainEqual(expect.objectContaining({ check: 'planted foot slide (m)', where: 'leftFoot', limit: 0.01 }));
 });
 
@@ -141,7 +142,7 @@ it('measures touchdown from the final poses, independently of the next pose', ()
   pose.setRoot(pose.position(0).clone().add(new Vector3(0, 0.01, 0)));
   pose.setRotation(INDEX.leftFoot, footRotation(h.feet[0].yaw, 0.1));
   const dev = new Dev();
-  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: new Pose(h.rig.skeleton).copy(h.pose), beats: new Set(), world: undefined }, dev, [{ plantedTime: 0 }, { plantedTime: 1 }]);
+  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: new Pose(h.rig.skeleton).copy(h.pose), beats: new Set(), world: new World() }, dev, [{ plantedTime: 0 }, { plantedTime: 1 }]);
   expect(dev.log).toContainEqual(expect.objectContaining({ check: 'touchdown vertical speed (m/s)', limit: 0.1, where: 'leftFoot', time: STEP }));
   expect(dev.log).toContainEqual(expect.objectContaining({ check: 'touchdown pitch step (°)', limit: 1.5, where: 'leftFoot', time: STEP }));
 });

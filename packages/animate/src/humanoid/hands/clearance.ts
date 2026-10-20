@@ -12,7 +12,7 @@ const BODY_RADIUS = 0.06;
 export const LOAD_RESERVE = 0.04;
 
 /** Clear a load position against the trunk and neck→head chain; returns the same vector. */
-export function clearBody<W>(h: Humanoid<W>, f: Frame<W>, item: Item, at: Vector3, rotation: Quaternion): Vector3 {
+export function clearBody(h: Humanoid, f: Frame, item: Item, at: Vector3, rotation: Quaternion): Vector3 {
   if (item.wornBy) return at;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
   const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);

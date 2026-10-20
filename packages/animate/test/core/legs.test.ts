@@ -260,7 +260,7 @@ it('reuses each travel forecast across root-height candidates', () => {
 });
 
 
-function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention<unknown> = {}, seed = 42) {
+function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention = {}, seed = 42) {
   const pose = new Pose(SKELETON);
   pose.setRoot(new Vector3(0, 1.32, 0));
   const chains = horseLegs().map(chain => Object.freeze(chain));

@@ -1,7 +1,8 @@
+import { Body } from '../../src/core/body';
+import { World } from '../../src/core/world';
 import { SEGMENT_RADIUS } from '../../src/humanoid/hands/grab';
 import { leg } from '../core/rigs';
 import { Pose } from '../../src/core/pose';
-import { createWorld, type World } from '../../src/humanoid/world';
 import { route } from '../../src/humanoid/walk';
 import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
@@ -20,7 +21,7 @@ it('publishes arrival and starts a waiting grab before the walk ends without rep
   const goals: number[] = [];
   let finished = false;
   const h = standing((h) => [function* () {
-      yield* parallel<Frame<World>>('all', function* () {
+      yield* parallel<Frame>('all', function* () {
         yield* walkTo(h, { to })();
         ended = true;
       }, function* () {
@@ -28,7 +29,7 @@ it('publishes arrival and starts a waiting grab before the walk ends without rep
         started = !ended && h.locomotion.eta > 0;
         yield* grab(h, { right: [item, 'grip'] }, { face, spot, look: false })();
         finished = true;
-      }, action<Frame<World>>({ until: () => ended, update: () => {
+      }, action<Frame>({ until: () => ended, update: () => {
         estimates.push(h.locomotion.eta);
         if (!started || ended) return;
         goals.push(h.asks.go?.to.distanceTo(to) ?? Infinity);
@@ -53,10 +54,10 @@ it('clears the estimate when a walk is cancelled', () => {
   let cancelled = false;
   let near = true;
   const h = standing((h) => [function* () {
-      yield* parallel<Frame<World>>('race', walkTo(h, { to: new Vector3(0, 0, 10) }), when(timePassed(0.5, 'seconds')));
+      yield* parallel<Frame>('race', walkTo(h, { to: new Vector3(0, 0, 10) }), when(timePassed(0.5, 'seconds')));
       cancelled = true;
       const arrival = arriving(h, 1);
-      yield* action<Frame<World>>({ update: (f) => { near = arrival(f); } });
+      yield* action<Frame>({ update: (f) => { near = arrival(f); } });
     }]);
   h.update(0.25);
   expect(Number.isFinite(h.locomotion.eta)).toBe(true);
@@ -77,7 +78,7 @@ it.each([false, true])('waits for the next walk to publish with the waiting bran
         estimate = h.locomotion.eta;
       };
       const walk = walkTo(h, { to: new Vector3(0, 0, 2) });
-      yield* parallel<Frame<World>>('all', ...(waitingFirst ? [wait, walk] : [walk, wait]));
+      yield* parallel<Frame>('all', ...(waitingFirst ? [wait, walk] : [walk, wait]));
     }]);
   h.update(0.25);
   expect(started).toBe(false);
@@ -97,7 +98,7 @@ it('grabs without a walk, then ends an arrival hold when already in reach', () =
       yield* grab(h, { right: [item, 'grip'] }, { face: 0, look: false })();
       expect(h.holding.right?.item).toBe(item);
       expect(h.locomotion.eta).toBe(Infinity);
-      yield* parallel<Frame<World>>('all', approach(h, item.current.position, { face: 0 }),
+      yield* parallel<Frame>('all', approach(h, item.current.position, { face: 0 }),
         hold(h, item, { to: carried(h, 'right'), until: arriving(h, 0.3) }));
       finished = true;
     }]);
@@ -137,14 +138,14 @@ it.each([
 
 it('rejects unreachable stands before asking for a walk', () => {
   for (const [point, ahead] of [[new Vector3(0, 1.4, 2), 2], [new Vector3(0, 10, 2), 0]] as const) {
-    const far = new Humanoid<World>(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }), { world: createWorld() });
+    const far = new Humanoid(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }));
     expect(() => far.update(STEP)).toThrow(/point .* from shoulder middle .* exceeds arm reach/);
     expect(far.asks.go).toBeNull();
   }
 });
 
 it('rejects a vertically unreachable placing point with the default stand before walking', () => {
-  const h = new Humanoid<World>(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)), { world: createWorld() });
+  const h = new Humanoid(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)));
   expect(() => h.update(STEP)).toThrow(/point .* from shoulder middle .* exceeds arm reach/);
   expect(h.asks.go).toBeNull();
 });
@@ -167,7 +168,7 @@ it('includes intermediate legs in arrival anticipation', () => {
   let near = NaN;
   let done = false;
   const h = standing((h) => [function* () {
-    yield* parallel<Frame<World>>('all', route(h, { to: new Vector3(0, 0, 3) }, [new Vector3(0, 0, 1)]), function* () {
+    yield* parallel<Frame>('all', route(h, { to: new Vector3(0, 0, 3) }, [new Vector3(0, 0, 1)]), function* () {
       yield* when(arriving(h, 0.6));
       near = h.pose.position(0).z;
     });
@@ -192,15 +193,15 @@ it('returns to its starting point after an internal route without a final target
 it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including aside and rejects a blocked explicit face: %s', (kind) => {
   const other = new Pose(leg());
   other.setRoot(new Vector3(-0.35, 1, 1.6));
-  const world = createWorld({ bodies: [other] });
+  const world = new World().add(new Body(other.skeleton, function* () {}, { pose: other }));
   const item = new Item(new Vector3(0, 1.2, 2), new Quaternion(), {
     left: { position: new Vector3(0.15, 0, 0) },
     right: { position: new Vector3(-0.15, 0, 0) },
     middle: { position: new Vector3() },
   });
   let done = false;
-  const h = new Humanoid<World>(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame<World>>('all', idle(h), function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    yield* parallel<Frame>('all', idle(h), function* () {
       const grips = kind === 'placement' ? item.current.position : kind === 'one grip'
         ? { right: [item, 'middle'] as const }
         : { left: [item, 'left'] as const, right: [item, 'right'] as const };
@@ -208,7 +209,8 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
       yield* approach(h, grips, { spot: { ahead: 0.4, aside: 0.25 } })();
       done = true;
     });
-  }, { world });
+  });
+  world.add(h);
   for (let t = 0; t < 8; t += STEP) h.update(STEP);
   expect(done).toBe(true);
   expect(Math.abs(h.locomotion.facing)).toBeGreaterThan(0.3);

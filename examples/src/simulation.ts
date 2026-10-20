@@ -1,15 +1,13 @@
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Humanoid, Pose, type World } from '@drawcall/animate';
+import { Humanoid, World } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
 import { FIXED_DT, type Prop, type Role, type Scenario, type Stage } from './scenario';
 
-/** Deterministic fixed-step run of a scenario: its carriers moved, then every actor stepped, at 60 Hz. */
+/** Deterministic fixed-step run of a scenario: its carriers moved, then every actor and body stepped, at 60 Hz. */
 export class Simulation {
   readonly stage: Stage;
-  readonly world: World;
-  readonly actors: Humanoid<World>[] = [];
-  /** the actors' poses as the world shows them: as they were last step */
-  private readonly bodies: Pose[];
+  readonly world = new World();
+  readonly actors: Humanoid[] = [];
   /** s */
   t = 0;
 
@@ -20,27 +18,20 @@ export class Simulation {
     dev = false,
   ) {
     this.stage = scenario.stage(dev);
-    this.world = this.stage.world;
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
-      cast.push(new Humanoid(model(role), (h) => {
-        return this.stage.script(h, i, cast);
-      }, { dev, world: this.world, position: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [] }));
+      cast.push(new Humanoid(model(role), (h) => this.stage.script(h, i, cast),
+        { dev, position: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [] }));
     });
-    this.bodies = [...cast.map((h) => h.snapshot()), ...(this.stage.bodies ?? []).map((b) => new Pose(b.pose.skeleton).copy(b.pose))];
-    this.world.bodies = this.bodies;
+    this.world.add(...cast, ...this.stage.bodies ?? []);
   }
 
-  /** one fixed step: the carriers to where they are then, every actor reading the others as they were last step */
+  /** one fixed step: the carriers to where they are then, every body reading the others as they were last step */
   step() {
     this.stage.move?.(this.t + FIXED_DT);
-    this.actors.forEach((h, i) => this.bodies[i].copy(h.pose));
-    this.stage.bodies?.forEach((b, i) => this.bodies[this.actors.length + i].copy(b.pose));
-    for (const h of this.actors) h.update(FIXED_DT);
-    this.stage.bodies?.forEach((b) => b.update(FIXED_DT));
+    this.world.update(FIXED_DT);
     this.t += FIXED_DT;
   }
-
   advanceTo(t: number) {
     while (this.t + FIXED_DT * 0.5 < t) this.step();
   }

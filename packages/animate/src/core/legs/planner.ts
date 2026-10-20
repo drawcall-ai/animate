@@ -27,7 +27,7 @@ export class Planner {
   }
 
   /** One sub-step toward `goal`; `stance`: the feet's mean facing (rad); `holds`: whether the legs keep up with a forecast. */
-  step(f: Frame<unknown>, goal: PlannerGoal, motion: Motion, stance: number, holds: (forecast: (ahead: number) => { position: Vector3; yaw: number }) => boolean): DrivenRoot {
+  step(f: Frame, goal: PlannerGoal, motion: Motion, stance: number, holds: (forecast: (ahead: number) => { position: Vector3; yaw: number }) => boolean): DrivenRoot {
     const velocity = goal.velocity ?? new Vector3(), speed = velocity.length(), last = this.goalVelocity;
     // (the goal's own speeding up and turning, foreseen)
     const acceleration = last && speed > 1e-6 ? Math.max(-motion.accel, Math.min(motion.accel, velocity.clone().sub(last).dot(velocity) / (speed * f.dt))) : 0;
