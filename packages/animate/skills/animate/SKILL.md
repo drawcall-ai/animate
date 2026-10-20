@@ -109,25 +109,29 @@ A held tool that must stay steady in view, such as a first-person weapon, belong
 
 ## Life
 
-A person's quiet life is part of `idle`. A species gives its own in its posture with a `Life`: named rhythms, each firing every few seconds (seeded) and easing a value to a new aim, which the posture turns into motion. The dog's tail-wag bursts below are one.
+A person's quiet life is part of `idle`. A species gives its own as rhythms in its `carriage`: each fires every few seconds (seeded) and eases a value to a new aim, and the carriage turns `head` into a glance about, `weight` into a roll of the spine and `tail` into a swish. A species with a posture of its own reads further rhythms from a `Life`.
 
 ## Your own creature
 
-A species is data: a skeleton (bones parents first, bone 0 the root, rest rotations identity, standing square), chains for the neck and for each hand, leg chains with their foot geometry, a gait, and a posture. This dog trots, looks about, takes things in its jaw and wags its tail:
+A species is data: a skeleton (bones parents first, bone 0 the root, rest rotations identity, standing square), chains for the neck and for each hand, leg chains with their foot geometry, a gait with how it carries the body (`body`: the trunk's bounce, pitch and roll, the head's nod), and which bones that carriage moves. This dog trots, its whole body riding on the trot, looks about, takes things in its jaw and wags its tail:
 
 ```ts
 const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
 // each bone: its name, its parent's, where its joint is standing square, its mass (kg)
-const joints: [string, string, Vector3, number][] = [['trunk', '', v(0, 0.46, 0), 19], ['neck', 'trunk', v(0, 0.44, 0.27), 2],
-  ['head', 'neck', v(0, 0.62, 0.45), 2.5], ['jaw', 'head', v(0, 0.54, 0.67), 0.3], ['tail', 'trunk', v(0, 0.47, -0.32), 0.3]];
+const joints: [string, string, Vector3, number][] = [['trunk', '', v(0, 0.46, 0), 15], ['pelvis', 'trunk', v(0, 0.45, -0.16), 4],
+  ['neck', 'trunk', v(0, 0.44, 0.27), 2], ['head', 'neck', v(0, 0.62, 0.45), 2.5], ['jaw', 'head', v(0, 0.54, 0.67), 0.3],
+  ['tail', 'pelvis', v(0, 0.47, -0.32), 0.3]];
 const legs = ['leftFore', 'rightFore', 'leftHind', 'rightHind'];
 for (const leg of legs) {
-  const x = leg.startsWith('left') ? 0.08 : -0.08, fore = leg.endsWith('Fore'), z = fore ? 0.22 : -0.24, knee = fore ? -0.04 : 0.08;
-  [v(x, 0.43, z), v(x, 0.28, z + knee), v(x, 0.1, z - knee / 2), v(x, 0.03, z)].forEach((at, k) => joints.push([`${leg}${k}`, k ? `${leg}${k - 1}` : 'trunk', at, 1.5 / (k + 1)]));
+  // (top, knee or elbow, hock or wrist, paw: the elbow bends back, the stifle forward)
+  const x = leg.startsWith('left') ? 0.08 : -0.08, fore = leg.endsWith('Fore'), z = fore ? 0.22 : -0.24, knee = fore ? -0.06 : 0.1;
+  [v(x, 0.43, z), v(x, 0.28, z + knee), v(x, 0.1, z - knee / 2), v(x, 0.03, z)]
+    .forEach((at, k) => joints.push([`${leg}${k}`, k ? `${leg}${k - 1}` : fore ? 'trunk' : 'pelvis', at, 1.5 / (k + 1)]));
 }
 const at = (name: string) => joints.find(([n]) => n === name)![2];
 const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ name, parent: joints.findIndex(([n]) => n === parent), offset: parent ? joint.clone().sub(at(parent)) : joint, mass, com: v(0, 0, 0) })),
   { chains: { neck: ['neck', 'head'], mouth: ['neck', 'head', 'jaw'] } });
+
 const dog: Species = {
   skeleton,
   gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.02, 0.1), out), range: { down: 0.5, up: 0.4, side: 0.6 } },
@@ -135,11 +139,12 @@ const dog: Species = {
   legs: {
     chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
       heel: v(0, -0.03, -0.02), toe: v(0, -0.03, 0.04), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
-    gait: powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.33, clearance: [0.03, 0.03, 0.03, 0.03] }),
-    posture: () => {
-      const life = new Life(7, [['wag', { every: [2, 5], hold: [1, 3], rate: 4, pick: swing }]]);
-      return { prepare: (f) => { life.update(f.time, f.dt); f.current.setLocal(skeleton.index('tail'), new Quaternion().setFromAxisAngle(v(0, 1, 0), 0.6 * Math.abs(life.value('wag')) * Math.sin(18 * f.time))); } };
+    gait: {
+      ...powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.33, clearance: [0.03, 0.03, 0.03, 0.03] }),
+      body: { withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
     },
+    carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
+      life: [['tail', { every: [2, 5], rate: 1, pick: swing }]] },
   },
 };
 
@@ -149,7 +154,7 @@ const rex: Body = new Body(dog, () => parallel<Frame>('all', idle(rex), function
 }), { dev: true });
 ```
 
-A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range, though the dog does without them. The gait's offsets place each leg's footfall in the cycle in the order of the chains; diagonal pairs together make a trot.
+A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range, though the dog does without them. The gait's offsets place each leg's footfall in the cycle in the order of the chains (fore-left, fore-right, hind-left, hind-right); diagonal pairs together make a trot. Each leg needs some bend standing, a reserve for the trunk's bounce.
 
 ## Checking
 

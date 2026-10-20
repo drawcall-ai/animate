@@ -39,7 +39,7 @@ export function line(a: Vector3, b: Vector3, radius: number, color: number): Pro
   return { kind: 'cylinder', position: a.clone().lerp(b, 0.5), radius, length: delta.length(), quaternion: new Quaternion().setFromUnitVectors(UP, delta.normalize()), color };
 }
 
-export function skeletonProps(pose: ReadonlyPose): Prop[] {
-  return pose.skeleton.bones.flatMap((bone, i) => bone.parent < 0 ? [] : [line(pose.position(bone.parent), pose.position(i), 0.035, 0xdba66b)]);
+export function skeletonProps(pose: ReadonlyPose, radius = 0.035): Prop[] {
+  return pose.skeleton.bones.flatMap((bone, i) => bone.parent < 0 ? [] : [line(pose.position(bone.parent), pose.position(i), radius, 0xdba66b)]);
 }
 const UP = new Vector3(0, 1, 0);

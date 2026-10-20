@@ -3,6 +3,7 @@ import type { Frame } from './body';
 import type { Gazer } from './gaze';
 import type { Live } from './goal';
 import type { Gait } from './legs/gait';
+import type { CarriedBones } from './legs/carriage';
 import type { LegChain, Legs } from './legs/legs';
 import type { ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
@@ -14,8 +15,11 @@ export interface Species {
   gaze?: Gazer;
   /** its hands (or a jaw), by name: the skeleton's chain each reaches with, the hand its tip (`grab`, `hold`) */
   hands?: Readonly<Record<string, string>>;
-  /** its legs, their gait, and the posture its trunk, head and tail take over them (`idle` walks it on them) */
-  legs?: { chains: readonly LegChain[]; gait: Gait; posture?: (start: ReadonlyPose) => Posture };
+  /**
+   * its legs (`idle` walks it on them), their gait, and what the gait carries over them (`carriage`: the trunk, spine, pelvis, head and
+   * tail as the gait's `body` has them, and the quiet life of these) — or a posture of its own, written in their place
+   */
+  legs?: { chains: readonly LegChain[]; gait: Gait; carriage?: CarriedBones; posture?: (start: ReadonlyPose) => Posture };
 }
 
 /** What a creature heeds as it stands and walks besides what it looks at (`lookAt`): a tether it is tied by, a startle (a new point each time). */

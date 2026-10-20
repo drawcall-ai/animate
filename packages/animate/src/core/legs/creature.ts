@@ -6,6 +6,8 @@ import { createAsks, takeAsks } from '../asks';
 import type { Behaviour } from '../goal';
 import type { Attention } from '../species';
 import { Legs } from './legs';
+import { carriage } from './carriage';
+import { seedOf } from '../random';
 
 /**
  * A creature's base, endless: its species' legs carry it where a walk asks (`asks.go`), no faster than it
@@ -17,10 +19,12 @@ export function creature(body: Body, attention: Attention = {}): Behaviour {
   if (!kind) throw new Error('idle: the species has no legs');
   return function* () {
     const legs = new Legs(body.pose, kind.chains, kind.gait), posture = kind.posture?.(body.pose), asks = createAsks();
+    const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, kind.gait, seedOf(start.x, start.z)) : null;
     let round = false;
     yield* action<Frame>({ update: (f) => {
       const { go } = takeAsks(body.asks, asks), still = _still.set(0, 0, 0), g = body.locomotion;
       posture?.prepare(f, legs, attention, asks.look);
+      if (carried) { carried.step(f, legs); carried.write(f); }
       const goal = go?.to ?? f.prev.position(0), velocity = go?.velocity ?? still, accel = go?.accel ?? 1;
       const gap = _gap.copy(goal).sub(f.prev.position(0)).setY(0).length();
       const pace = Math.max(kind.gait.slowest, velocity.length());

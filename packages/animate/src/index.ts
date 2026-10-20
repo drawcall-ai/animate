@@ -22,6 +22,7 @@ export { Legs, type LegChain, type LegStep } from './core/legs/legs';
 export type { JointCycle } from './core/legs/cycle';
 export type { Gait, Locomotion } from './core/legs/gait';
 export { powerGait } from './core/legs/schedule';
+export type { Carriage, CarriedBones } from './core/legs/carriage';
 export { horse, horseLeadPoint } from './horse/legs';
 
 // A humanoid: a viverse character model as a body.

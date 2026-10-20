@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
-import { strideAt } from '../../src/core/legs/gait';
+import { strideAt, type Gait } from '../../src/core/legs/gait';
 import { Limb, type Walker } from '../../src/core/legs/limb';
 import { Solver } from '../../src/core/legs/solve';
 import * as pursuit from '../../src/core/legs/root';
@@ -10,7 +10,6 @@ import { Legs } from '../../src/core/legs/legs';
 import { quintic } from '../../src/core/legs/swing';
 import { HORSE_WALK, HORSE_TROT, horseLegs, horseLeadPoint } from '../../src/horse/legs';
 import { horseMotion } from '../../src/horse/legs';
-import { type HorseGait } from '../../src/horse/legs';
 import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
@@ -261,7 +260,7 @@ it('reuses each travel forecast across root-height candidates', () => {
 });
 
 
-function movingHorse(gait: HorseGait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null) {
+function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null) {
   const pose = new Pose(SKELETON);
   pose.setRoot(new Vector3(0, 1.32, 0));
   const chains = horseLegs().map(chain => Object.freeze(chain));

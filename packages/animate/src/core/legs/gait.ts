@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { GRAVITY } from '../math';
+import type { Carriage } from './carriage';
 
 /** A contact table, in leg order. All functions read speed (m/s) and Froude v²/(g·height). */
 export interface Gait {
@@ -13,6 +14,8 @@ export interface Gait {
   readonly referenceBlend?: number;
   readonly height: number;
   readonly clearance: readonly number[];
+  /** how the gait carries a four-legged body (`Carriage`), if it does */
+  readonly body?: Carriage;
 }
 
 export interface Stride {
