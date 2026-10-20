@@ -11,7 +11,7 @@ import { defaultStance } from './stance';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992). */
 // Tuned in the spike: below 0.5 m/s shorten the stride instead of slowing its cadence.
-export const humanGait = (p: Proportions): Gait => powerGait(p.hipHeight, 0.5, [0, 0.5], 2.49, 0.79, [0.013, 0.013]);
+export const humanGait = (p: Proportions): Gait => powerGait({ height: p.hipHeight, slowest: 0.5, offsets: [0, 0.5], stride: 2.49, stance: 0.79, clearance: [0.013, 0.013] });
 
 /** Recalled: the cycles below follow normal free walking, % of the cycle from heel strike, toe-off at 62% (recalled: Perry 1992; Winter 2009, Biomechanics and Motor Control, App. A) */
 const cycle = (keys: [number, number][]): JointCycle => ({ duty: 0.62, keys });

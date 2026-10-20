@@ -52,7 +52,7 @@ export class Humanoid extends Body {
     const start = standing(p, new Pose(rig.skeleton), options.position ?? { x: 0, z: 0 }, yaw);
     const eyes = rig.points.eyes;
     let made: Behaviour | null = null;
-    super({ skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: INDEX.leftHand, right: INDEX.rightHand } }, function* () {
+    super({ skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' } }, function* () {
       if (!made) throw new Error('the humanoid is not made yet');
       yield* made();
     }, {

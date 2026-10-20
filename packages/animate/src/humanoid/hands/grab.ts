@@ -6,7 +6,9 @@ import { loadFactor } from '../../core/load';
 import { when } from '../../core/when';
 import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
-import type { Humanoid } from '../humanoid';
+import { Humanoid } from '../humanoid';
+import type { Body } from '../../core/body';
+import { take } from './creature';
 import { gazeLead, pathAhead, withGaze } from '../look';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../core/math';
 import { arriving, route } from '../walk';
@@ -46,9 +48,11 @@ export const SEGMENT_RADIUS = 0.06;
  * them (`approach`); once they are in view (IN_VIEW), one gaze notices them, follows the path during a long approach, and returns within two steps or LOOKING s before arrival to
  * them (`withGaze`: on the grips' middle, or `look`; `false`: not); within the last estimated second, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
  * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead. `walk: false` takes them from where it
- * stands: the hands go straight to them (on them already, they close at once).
+ * stands: the hands go straight to them (on them already, they close at once). Another body takes hold with the chain its
+ * species names for the hand, one at a time (`Species.hands`): it walks up, the chain's tip reaches the grip, the hand closes.
  */
-export function grab(h: Humanoid, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean; walk?: boolean } = {}): Behaviour {
+export function grab(h: Body, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean; walk?: boolean } = {}): Behaviour {
+  if (!(h instanceof Humanoid)) return take(h, holds, { look: options.look !== false, walk: options.walk });
   const { look = true, bow } = options;
   if (options.walk === false) return look === false ? reachFor(h, holds) : withGaze(h, look === true ? () => middleOf(holds) : look, reachFor(h, holds), { bow });
   return function* () {
@@ -131,19 +135,20 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
   return function* () {
     const moving = typeof holds === 'function' ? holds : null;
     const source = live(holds, h.frame);
-    const start = moving && 'position' in source ? source : null;
+    const placed = source instanceof Vector3 || !(source.position instanceof Vector3) ? null : source as Placement;
+    const start = moving && placed;
     const grips: { side?: Side; at: Vector3 }[] = [];
-    const point = source instanceof Vector3 || 'position' in source;
+    const point = source instanceof Vector3 || !!placed;
     if (source instanceof Vector3) grips.push({ at: source.clone() });
-    else if ('position' in source) {
-      const { position, quaternion } = source;
+    else if (placed) {
+      const { position, quaternion } = placed;
       if (quaternion) for (const side of SIDES) {
         const held = h.holding[side];
         if (held) grips.push({ side, at: gripOf(held.item, held.grip).position.clone().applyQuaternion(quaternion).add(position) });
       }
       if (!grips.length) grips.push({ at: position.clone() });
-    } else for (const { side, item, grip } of held(source)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
-    const mass = !point ? Math.max(...held(source).map(({ item }) => item.mass)) : 0;
+    } else for (const { side, item, grip } of held(source as Holds)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
+    const mass = !point ? Math.max(...held(source as Holds).map(({ item }) => item.mass)) : 0;
     let face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;

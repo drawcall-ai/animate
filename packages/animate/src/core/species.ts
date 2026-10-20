@@ -12,8 +12,8 @@ export interface Species {
   skeleton: Skeleton;
   /** its neck and eyes, for `lookAt` and the gazes built on it */
   gaze?: Gazer;
-  /** its hands (or a jaw): the bone each holds with, by name */
-  hands?: Readonly<Record<string, number>>;
+  /** its hands (or a jaw), by name: the skeleton's chain each reaches with, the hand its tip (`grab`, `hold`) */
+  hands?: Readonly<Record<string, string>>;
   /** its legs, their gait, and the posture its trunk, head and tail take over them (`idle` walks it on them) */
   legs?: { chains: readonly LegChain[]; gait: Gait; posture?: (start: ReadonlyPose) => Posture };
 }

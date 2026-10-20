@@ -29,7 +29,7 @@ const WEIGHT_ROLL = SKELETON.limits[SPINE]?.swing[0][1] ?? fail('spine without r
 // [C] Spike: 1.2 m hip, .8 m/s slow walk; Hildebrand walk/Clayton-Hobbs trot offsets;
 // Alexander/Jayes stride coefficients, Hodson stance at 1.6/3.7 m/s.
 // [D] 5 cm proxy-hoof clearance in both gaits keeps the early sole-height peak above the passive fold.
-const walk = powerGait(1.2, 0.8, [0.25, 0.75, 0, 0.5], 2.3, 0.68 * Math.pow(1.6, 0.7), [0.05, 0.05, 0.05, 0.05]);
+const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5], stride: 2.3, stance: 0.68 * Math.pow(1.6, 0.7), clearance: [0.05, 0.05, 0.05, 0.05] });
 export const HORSE_WALK = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
   // research-contact.md §5: [R via summary] Dunbar ranges; [D] landmark/hip phase after solving.
@@ -44,7 +44,7 @@ export const HORSE_WALK = {
   })),
 };
 export const HORSE_TROT = {
-  ...powerGait(1.2, 0.8, [0.52, 0.02, 0, 0.5], 2.15, 0.3 * Math.pow(3.7, 0.7), [0.05, 0.05, 0.05, 0.05]),
+  ...powerGait({ height: 1.2, slowest: 0.8, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.3 * Math.pow(3.7, 0.7), clearance: [0.05, 0.05, 0.05, 0.05] }),
   // [R via summary] Dunbar: 1° trunk ROM is the low end of 2±1°; [R/R-s] back 4–6°, roll 9.5°.
   body: { withers: -0.045, trunk: (theta: number) => 0.5 * DEG * Math.cos(theta),
     spine: 3, spinePhase: 0, roll: 4.75, headPitch: 2.5, headRise: 0, headWithers: 1 },

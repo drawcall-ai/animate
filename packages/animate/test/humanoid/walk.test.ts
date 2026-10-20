@@ -1,6 +1,7 @@
 import { Body } from '../../src/core/body';
 import { World } from '../../src/core/world';
 import { SEGMENT_RADIUS } from '../../src/humanoid/hands/grab';
+import type { Holds } from '../../src/humanoid/hands/grips';
 import { leg } from '../core/rigs';
 import { Pose } from '../../src/core/pose';
 import { route } from '../../src/humanoid/walk';
@@ -202,7 +203,7 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
   let done = false;
   const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), function* () {
-      const grips = kind === 'placement' ? item.current.position : kind === 'one grip'
+      const grips: Vector3 | Holds = kind === 'placement' ? item.current.position : kind === 'one grip'
         ? { right: [item, 'middle'] as const }
         : { left: [item, 'left'] as const, right: [item, 'right'] as const };
       expect(() => approach(h, grips, { face: 0, spot: { ahead: 0.4, aside: 0.25 } })().next()).toThrow('explicit face has a blocked stand');

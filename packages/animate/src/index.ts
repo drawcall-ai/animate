@@ -3,7 +3,8 @@ export { Skeleton, type BoneDef, type Limit, type SkeletonOptions } from './core
 export { Pose, type ReadonlyPose } from './core/pose';
 export { Body, type BodyOptions, type Frame } from './core/body';
 export { World } from './core/world';
-export type { Species } from './core/species';
+export type { Attention, Posture, Species } from './core/species';
+export { Life, swing, type Rhythm } from './core/life';
 export { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './core/goal';
 export { when } from './core/when';
 export { named, watch, type LogEntry, type Problem, type WatchFrame } from './core/dev';
@@ -19,6 +20,7 @@ export { lookAt, type Gazer } from './core/gaze';
 // legs for any creature, and a horse
 export { Legs, type LegChain, type LegStep } from './core/legs/legs';
 export type { Gait, Locomotion } from './core/legs/gait';
+export { powerGait } from './core/legs/schedule';
 export { horse, horseLeadPoint } from './horse/legs';
 
 // A humanoid: a viverse character model as a body.

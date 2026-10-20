@@ -10,8 +10,8 @@ import type { Humanoid } from '../humanoid';
 /** Which of an item's grips each hand takes (by name). */
 export type Grips = Partial<Record<Side, string>>;
 
-/** What each hand takes hold of: an item, by which of its grips. */
-export type Holds = Partial<Record<Side, readonly [Item, string]>>;
+/** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. */
+export type Holds = Readonly<Record<string, readonly [Item, string]>>;
 
 /** Hand `side` open (a stub: the hand has no fingers yet): holding nothing, at once. */
 export function openHand(h: Humanoid, side: Side): Behaviour {
@@ -27,8 +27,9 @@ export function closeHand(h: Humanoid, side: Side, item: Item, grip: string): Be
   };
 }
 
-/** the holds, side by side */
+/** a person's holds, side by side */
 export function held(holds: Holds) {
+  for (const hand of Object.keys(holds)) if (!(SIDES as readonly string[]).includes(hand)) throw new Error(`a person has no hand "${hand}"`);
   return SIDES.flatMap((side) => {
     const hold = holds[side];
     return hold ? [{ side, item: hold[0], grip: hold[1] }] : [];

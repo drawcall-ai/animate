@@ -205,3 +205,21 @@ export interface Dressed {
 export function heldItems(h: Body): Item[] {
   return [...new Set(Object.values(h.holding).flatMap((held) => held?.item ?? []))];
 }
+
+/** How a body without a hold of its own (`BodyOptions.hold`) keeps what its hands hold: each item stays where it was on its hand's bone when taken. */
+export function weld(body: Body): (f: Frame) => void {
+  const on = new Map<string, { item: Item; position: Vector3; quaternion: Quaternion }>();
+  return (f) => {
+    for (const [hand, bone] of Object.entries(body.hands)) {
+      const held = body.holding[hand], item = held?.item;
+      if (!item || item.moved(f.time)) { on.delete(hand); continue; }
+      const turn = f.current.rotation(bone), at = f.current.position(bone);
+      let welded = on.get(hand);
+      if (welded?.item !== item) {
+        const back = _q.copy(turn).invert();
+        on.set(hand, welded = { item, position: item.current.position.clone().sub(at).applyQuaternion(back), quaternion: back.multiply(item.current.quaternion).clone() });
+      }
+      item.move(f.time, _p.copy(welded.position).applyQuaternion(turn).add(at), _q.copy(turn).multiply(welded.quaternion));
+    }
+  };
+}

@@ -6,7 +6,7 @@ import type { Species } from './species';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
 import { SnapChecks } from './rotation';
-import { dress, load, moveWorn, type Bearing, type Dressed, type Wearing } from './worn';
+import { dress, load, moveWorn, weld, type Bearing, type Dressed, type Wearing } from './worn';
 import type { Item } from './carrier';
 import { createAsks, type Asks } from './asks';
 import { createLocomotion, type Locomotion } from './legs/gait';
@@ -50,7 +50,7 @@ export interface BodyOptions {
   pose?: ReadonlyPose;
   /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone */
   wearing?: readonly Dressed[];
-  /** how its hands keep to what they hold, every sub-step after the worn items move */
+  /** how its hands keep to what they hold, every sub-step after the worn items move (default: each item stays where it was on its hand when taken) */
   hold?: (body: Body) => (f: Frame) => void;
 }
 
@@ -68,7 +68,7 @@ export class Body {
   readonly worn = new Map<Item, Wearing>();
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it */
   readonly borne = new Map<Item, Bearing>();
-  /** its hands' bones, by name (`Species.hands`) */
+  /** its hands' bones, by name: the tips of their chains (`Species.hands`) */
   readonly hands: Readonly<Record<string, number>>;
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
   readonly holding: Record<string, { item: Item; grip: string } | null>;
@@ -90,7 +90,7 @@ export class Body {
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
   private readonly snaps = new SnapChecks();
-  private readonly hold: ((f: Frame) => void) | null;
+  private readonly hold: (f: Frame) => void;
   /** the world it joined; until then one of its own, empty */
   private world: World | null = null;
   private alone: World | null = null;
@@ -103,10 +103,10 @@ export class Body {
     if (options.pose) start.copy(options.pose);
     start.forward();
     this.locomotion = createLocomotion(yawOf(start.local(0)));
-    this.hands = species.hands ?? {};
+    this.hands = Object.fromEntries(Object.entries(species.hands ?? {}).map(([hand, chain]) => [hand, skeleton.chain(chain).slice(-1)[0]]));
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     dress(this, start, options.wearing ?? []);
-    this.hold = options.hold?.(this) ?? null;
+    this.hold = (options.hold ?? weld)(this);
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const body = this;
     this.frame = {
@@ -184,7 +184,7 @@ export class Body {
     (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
     if (frame.dev) frame.dev.beat = frame.beats.size ? [...frame.beats].join(' ∥ ') : undefined;
     moveWorn(this, frame);
-    this.hold?.(frame);
+    this.hold(frame);
     load(this, frame);
     clock.prevDelta = dt;
     clock.frame++;

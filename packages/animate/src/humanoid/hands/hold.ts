@@ -6,7 +6,7 @@ import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { grip, gripOf, gripsOf, type Grips, type Holds } from './grips';
+import { grip, gripOf, gripsOf, type Grips } from './grips';
 import { heldItems } from '../../core/worn';
 
 const aims = new WeakMap<object, Map<Item, Carrier>>();
@@ -31,7 +31,7 @@ const _taken: Target & { velocity: Vector3; spin: Vector3 } = { position: new Ve
 /** One owner of held hands and carried-item fitting, after all body and item movers. */
 export function followHeld(h: Humanoid): (f: Frame) => void {
   const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
-  const previous: Holds = {};
+  const previous: Partial<Record<Side, readonly [Item, string]>> = {};
   return (f) => {
     // Preserve acquisition points before wrist fitting can move an item onto a distant hand.
     const taking = f.dev ? SIDES.flatMap((side) => {

@@ -7,7 +7,9 @@ import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
 import { course, type Course, type Waypoint } from '../course';
-import type { Humanoid } from '../humanoid';
+import { Humanoid } from '../humanoid';
+import type { Body } from '../../core/body';
+import { keep } from './creature';
 import { grip, gripOf, gripsOf } from './grips';
 import { following, LEADING } from './reach';
 import { clearBody } from './clearance';
@@ -142,9 +144,14 @@ class TrackedEnd {
  * the hands carry it there: they go for its grips
  * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward).
  * The arm solver bounds the wrists; carry rejects an unreachable endpoint rather than moving it
- * silently within reach. The after-hook follows the grips and fits the item to the wrists.
+ * silently within reach. The after-hook follows the grips and fits the item to the wrists. Another body's hand
+ * (`Species.hands`) goes back to rest with the item and keeps it there (`to` and `motion` are a person's).
  */
-export function hold(h: Humanoid, item: Item, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
+export function hold(h: Body, item: Item, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
+  if (!(h instanceof Humanoid)) {
+    if (options.to || options.motion) throw new Error('hold: only a person carries an item somewhere');
+    return keep(h, item, options.until);
+  }
   return () => holding(h, item, new CarryAim(h, item, options.motion ?? CARRYING), options)();
 }
 
