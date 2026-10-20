@@ -1,6 +1,6 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseFollow, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
+import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseLeadPoint, idle, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
 import { Rope } from '../../../packages/animate/src/core/rope';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -12,6 +12,8 @@ const HORSE_SKELETON = horseSpecies().skeleton;
 const UP = new Vector3(0, 1, 0);
 // Tuned: 3 cm below square standing, rather than an 8 cm crouch; contacts plan further reserve.
 export const HORSE = new Vector3(-1.2, 1.37, 3);
+// Tuned (from the old follower): the horse's catch-up walk, capped at its reference walk (m/s, m/s²).
+const HORSE_PACE = { speed: 1.6, accel: 0.65 };
 const RACK = new Vector3(1.1, 0.88, 2);
 const KNOT = new Vector3(-0.25, 1.12, 3.6);
 const HEAD = HORSE_SKELETON.index('head');
@@ -90,7 +92,8 @@ export function stableMorning(): Scenario {
       let leadStart: number | null = null;
       const pose = new Pose(HORSE_SKELETON);
       pose.setRoot(HORSE);
-      const follow = horseFollow(pose, () => {
+      // (it walks where its lead puts it, a rope's length behind the handler once led out; tied, it stands)
+      const led = () => {
         const travel = leadStart !== null && handler ? Math.max(0, handler.pose.position(0).z - leadStart) : 0;
         const reserve = leadStart === null ? 0 : HANDLER_AHEAD - (leadStart - HORSE.z);
         // Keep the target moving forward: the station change consumes at most half of the handler's travel.
@@ -102,9 +105,13 @@ export function stableMorning(): Scenario {
         const velocity = leadStart !== null && handler
           ? new Vector3(0, 0, handler.locomotion.velocity.z * (1 - reserve * ease / length)) : new Vector3();
         return { position: target, velocity };
-      }, { person: () => handler?.pose.position(handler.pose.skeleton.index('head')),
-        tether: () => rope.supported ? { position: KNOT, length: 1.2 } : undefined });
-      const horse = new Body(horseSpecies(), follow, { pose, dev });
+      };
+      let startle: Vector3 | undefined;
+      const horse: Body = new Body(horseSpecies(), () => parallel<Frame>('all',
+        idle(horse, { attention: { person: () => handler?.pose.position(handler.pose.skeleton.index('head')),
+          tether: () => rope.supported ? { position: KNOT, length: 1.2 } : undefined, startle: () => startle } }),
+        walkTo(horse, { to: () => led().position, velocity: () => led().velocity, speed: HORSE_PACE.speed, accel: HORSE_PACE.accel, until: () => false }),
+      ), { pose, dev });
       const halterAt = () => horse.pose.point(HEAD, HALTER, new Vector3());
       const lead = new Rope(halterAt(), KNOT.clone().lerp(halterAt(), -1 / KNOT_AT + 1), LEAD_ROPE);
       let gathering = false;
@@ -120,7 +127,7 @@ export function stableMorning(): Scenario {
           place(h, saddle, saddlePlace)))();
         yield* named('hands off, check the fit', function* () {
           yield* wear(horse, saddle, 0, { to: { position: SADDLED, quaternion: yaw(-Math.PI / 2) } })();
-          follow.react(h.pose.position(0));
+          startle = h.pose.position(0).clone();
           yield* release(h, ['left', 'right'])();
           let start: number | null = null;
           yield* parallel<Frame>('all',
@@ -131,7 +138,7 @@ export function stableMorning(): Scenario {
             }), () => when(timePassed(INSPECT, 'seconds'))),
             function* () {
               yield* when(timePassed(INSPECT / 2, 'seconds'));
-              follow.react(h.pose.position(0));
+              startle = h.pose.position(0).clone();
               yield* parallel<Frame>('race',
                 () => when(timePassed(INSPECT / 2, 'seconds')),
                 handTo(h, 'right', reported(report, 'rightHand', () => ({ position: saddle.current.position.clone().add(new Vector3(0.27, -0.25, 0)) })), { lead: false }),

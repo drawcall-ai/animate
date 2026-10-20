@@ -1,3 +1,4 @@
+import type { Body } from '../../core/body';
 import type { Item } from '../../core/carrier';
 import { heldItems } from '../../core/worn';
 import type { Behaviour, Target } from '../../core/goal';
@@ -55,6 +56,6 @@ export function gripsOf(h: Humanoid, item: Item): Grips {
 
 
 /** Unsupported weight borne through the hands, counting each item once. */
-export function heldMass(h: Humanoid): number {
+export function heldMass(h: Body): number {
   return heldItems(h).reduce((sum, item) => sum + (item.supported ? 0 : item.mass), 0);
 }

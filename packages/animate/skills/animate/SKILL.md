@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters with @drawcall/animate — a humanoid (`Humanoid`, `idle`, `walkTo`, `grab`, `hold`, `carry`, `place`, `release`, `wear`, `withGaze`) or any other body (`Body`, `Legs`, a shipped horse) moved by @pmndrs/timeline behaviours that flow into one another, scripted or driven by a player (`idle(h, { root })`, `aimAt`). Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters with @drawcall/animate — a humanoid (`Humanoid`, `idle`, `walkTo`, `grab`, `hold`, `carry`, `place`, `release`, `wear`, `withGaze`) or any other body (`Body`, `Species`, `Legs`, a shipped `horse()`) moved by @pmndrs/timeline behaviours that flow into one another, scripted or driven by a player (`idle(h, { root })`, `aimAt`). Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -88,22 +88,26 @@ What you author: the scene, the order of beats, the places on props a course pas
 
 ## Other bodies
 
-A `Body` is any skeleton with a behaviour. A horse ships with the package: `horseFollow` moves it toward a floor goal with its pelvis, legs and head working together. A `Humanoid` is a `Body` too. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `frame` place things on it as it moves. Add every body, the horse too, to one `World` (`world.add(...)`) and update the world each frame: approaches then choose stands clear of the other bodies' low segments.
+A `Body` is any species with a behaviour. A horse ships with the package (`horse()`): like a humanoid it stands and walks with `idle` and goes where `walkTo` asks, its pelvis, legs and head working together. A `Humanoid` is a `Body` too. For your own creature, `Legs` steps legs under a root the behaviour moves. Any body can `wear` items, and `onBone` and `carry`'s `frame` place things on it as it moves. Add every body, the horse too, to one `World` (`world.add(...)`) and update the world each frame: approaches then choose stands clear of the other bodies' low segments.
 
-`horseFollow` walks. Pass a live `person` point for attention and close head avoidance, and a live `tether` (`position`, `length`) while tied; return `undefined` when absent or untied. Keep the returned behaviour to call `follow.react(handler.pose.position(0))` once at saddle placement or girth tightening. Each explicit event copies the point and settles in about four seconds; live getters may return fresh vectors freely. Use `horseLeadPoint(mare.pose, out)` for an attention-following hand station that ignores gait pitch and nod; draw the rope from the actual halter. Standing ears, tail and head move within 25 seconds; hind-leg rest starts after at least 60 seconds of quiet.
+A creature's `idle` heeds its `attention`: a live `person` point (it looks round at them, and keeps its head away when they come close), a live `tether` (`position`, `length`) while tied, and a `startle` point — a new point each time, such as the groom's position at saddle placement or girth tightening, which it turns to and settles from in about four seconds. Return `undefined` when absent or untied. To follow someone, run `walkTo` with a live `to` (and its `velocity`) and `until: () => false`. Use `horseLeadPoint(mare.pose, out)` for an attention-following hand station that ignores gait pitch and nod; draw the rope from the actual halter. Standing ears, tail and head move within 25 seconds; hind-leg rest starts after at least 60 seconds of quiet.
 
 ```ts
 const species = horse();
 const HEAD = species.skeleton.index('head');
 const start = new Pose(species.skeleton);
 start.setRoot(new Vector3(1.2, start.position(0).y, 3));
-// Tied up until the rope is taken; then follow a rope's length behind the groom.
-const mare: Body = new Body(species, horseFollow(start, (f) => {
-  if (rope.supported) return { position: start.position(0) };
-  const at = groom.pose.position(0);
-  const back = f.prev.position(0).clone().sub(at).setY(0);
-  return { position: back.length() < 2.4 ? f.prev.position(0) : back.setLength(2.4).add(at) };
-}), { pose: start });
+let startle: Vector3 | undefined; // set a new point to startle it
+// Tied up until the rope is taken; then a rope's length behind the groom.
+const behind = (f: Frame) => {
+  if (rope.supported) return start.position(0);
+  const at = groom.pose.position(0), back = f.prev.position(0).clone().sub(at).setY(0);
+  return back.length() < 2.4 ? f.prev.position(0).clone() : back.setLength(2.4).add(at);
+};
+const mare: Body = new Body(species, () => parallel<Frame>('all',
+  idle(mare, { attention: { person: () => groom.pose.position(INDEX.head), startle: () => startle } }),
+  walkTo(mare, { to: behind, speed: 1.6, accel: 0.65, until: () => false }),
+), { pose: start });
 ```
 
 ## Checking

@@ -19,7 +19,7 @@ export { lookAt, type Gazer } from './core/gaze';
 // legs for any creature, and a horse
 export { Legs, type LegChain, type LegStep } from './core/legs/legs';
 export type { Gait, Locomotion } from './core/legs/gait';
-export { horse, horseFollow, horseLeadPoint } from './horse/legs';
+export { horse, horseLeadPoint } from './horse/legs';
 
 // A humanoid: a viverse character model as a body.
 export { Humanoid, type HumanoidOptions } from './humanoid/humanoid';

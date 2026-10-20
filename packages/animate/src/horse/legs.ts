@@ -1,5 +1,4 @@
-import { action } from '@pmndrs/timeline';
-import { live, type Behaviour, type Live, type Target } from '../core/goal';
+import { live } from '../core/goal';
 import type { ReadonlyPose } from '../core/pose';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { clamp, minimumJerk, yawOf } from '../core/math';
@@ -7,14 +6,14 @@ import { irregular, seedOf } from '../core/random';
 import { Life, swing, type Rhythm } from '../core/life';
 import { strideAt, type Gait } from '../core/legs/gait';
 import type { Frame } from '../core/body';
-import { Legs, type LegChain } from '../core/legs/legs';
+import type { LegChain, Legs } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import { EARS, HALTER, HEAD, LEGS, NECK, PELVIS, SKELETON, SPINE, TAIL } from './skeleton';
 import { powerGait } from '../core/legs/schedule';
-import type { Species } from '../core/species';
+import type { Attention, Species } from '../core/species';
 
-/** a horse */
-export const horse = (): Species => ({ skeleton: SKELETON });
+/** a horse: its walk, and its posture over its legs as it heeds a person, a tether and a startle */
+export const horse = (): Species => ({ skeleton: SKELETON, legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
 
 const DEG = Math.PI / 180;
 const WITHERS = SKELETON.bones[LEGS[0].scapula ?? fail('a foreleg without a scapula')].offset.z;
@@ -108,31 +107,7 @@ export const horseLegs = (): readonly LegChain[] => LEGS.map((leg): LegChain => 
 
 function fail(what: string): never { throw new Error(what); }
 
-// Tuned follower acceleration (m/s²); catch-up speed is capped at the reference walk.
-const FOLLOW_ACCEL = 0.65;
-/** Follow a floor goal with the horse's pelvis, legs and head working together. */
-export function horseFollow(start: ReadonlyPose, goal: Live<Pick<Target, 'position' | 'velocity'>>, options: HorseAttention = {}): Behaviour & { react(point: Readonly<Vector3>): void } {
-  const body = horseMotion(start, HORSE_WALK);
-  return Object.assign(function* () {
-    const legs = new Legs(start, horseLegs(), HORSE_WALK);
-    yield* action<Frame>({ update: (f) => {
-      body.prepare(f, legs, options);
-      const target = live(goal, f);
-      const pace = Math.max(HORSE_WALK.slowest, target.velocity?.length() ?? 0);
-      const gap = target.position.clone().sub(f.prev.position(0)).setY(0).length();
-      const speed = Math.min(HORSE_WALK.referenceSpeed, Math.sqrt(pace ** 2 + 2 * FOLLOW_ACCEL * gap));
-      legs.toward(f, target, { speed, accel: FOLLOW_ACCEL });
-    } });
-  }, { react: body.react });
-}
-
 export type HorseGait = Gait & { body: typeof HORSE_WALK.body };
-export interface HorseAttention {
-  person?: Live<Readonly<Vector3> | undefined>;
-  /** Maximum halter-to-knot distance while tied. */
-  tether?: Live<{ position: Readonly<Vector3>; length: number } | undefined>;
-}
-
 const turn = (x = 0, y = 0, z = 0, out = _q) => out.setFromEuler(_e.set(x, y, z, 'YXZ'));
 /**
  * A horse's quiet life [C]: ears flick every 2–6 s, the tail swishes every 5–20 s, the head turns every 10–30 s and the weight
@@ -156,11 +131,15 @@ export function horseMotion(start: ReadonlyPose, gait: HorseGait, seed = seedOf(
   const height = start.position(0).y, idle = new Life(seed, HORSE_LIFE), rand = idle.rand, driftPhase = idle.phase;
   const rest = { quiet: 0, value: 0, side: 0, at: 60 + 120 * rand(), pitches: [0, 0, 0, 0] };
   const reaction = new Vector3(), tied = { position: new Vector3(), length: 0 }, tail = { angle: 0, rate: 0 };
-  let moving = 0, responseTime = Infinity, swish = Infinity;
+  let moving = 0, responseTime = Infinity, swish = Infinity, startled: Readonly<Vector3> | undefined;
+  /** a saddle/girth event at a world point: the horse turns to it and settles over about four seconds */
+  const react = (point: Readonly<Vector3>): void => { reaction.copy(point); responseTime = 0; };
   return {
-    /** Explicit saddle/girth event at a world point; call once per event, not from a live getter. */
-    react(point: Readonly<Vector3>): void { reaction.copy(point); responseTime = 0; },
-    prepare(f: Frame, legs: Legs, attention: HorseAttention = {}): void {
+    react,
+    prepare(f: Frame, legs: Legs, attention: Attention = {}): void {
+      // (a new startle point is a new event)
+      const startle = attention.startle && live(attention.startle, f);
+      if (startle && startle !== startled) react(startled = startle);
       if (tied.length) {
         const stretch = f.prev.point(HEAD, HALTER, _point).distanceTo(tied.position);
         if (stretch > tied.length + 1e-4) f.dev?.append(f.time - f.dt, { check: 'horse tether (m)', value: stretch, limit: tied.length, where: 'halter' });

@@ -10,7 +10,8 @@ import { Legs } from '../../src/core/legs/legs';
 import { quintic } from '../../src/core/legs/swing';
 import { HORSE_WALK, HORSE_TROT, horseLegs, horseLeadPoint } from '../../src/horse/legs';
 import { horseMotion } from '../../src/horse/legs';
-import { type HorseAttention, type HorseGait } from '../../src/horse/legs';
+import { type HorseGait } from '../../src/horse/legs';
+import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
 

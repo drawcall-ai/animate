@@ -1,4 +1,10 @@
+import type { Vector3 } from 'three';
+import type { Frame } from './body';
 import type { Gazer } from './gaze';
+import type { Live } from './goal';
+import type { Gait } from './legs/gait';
+import type { LegChain, Legs } from './legs/legs';
+import type { ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
 
 /** What kind of body it is, as data: its skeleton, how it looks about, and the bones it holds things with, by name. */
@@ -8,4 +14,12 @@ export interface Species {
   gaze?: Gazer;
   /** its hands (or a jaw): the bone each holds with, by name */
   hands?: Readonly<Record<string, number>>;
+  /** its legs, their gait, and the posture its trunk, head and tail take over them (`idle` walks it on them) */
+  legs?: { chains: readonly LegChain[]; gait: Gait; posture?: (start: ReadonlyPose) => Posture };
 }
+
+/** What a creature heeds as it stands and walks: a person to attend, a tether it is tied by, a startle (a new point each time). */
+export interface Attention { person?: Live<Readonly<Vector3> | undefined>; tether?: Live<{ position: Readonly<Vector3>; length: number } | undefined>; startle?: Live<Readonly<Vector3> | undefined> }
+
+/** A species' posture over its legs, written each sub-step before the legs step. */
+export interface Posture { prepare(f: Frame, legs: Legs, attention: Attention): void }
