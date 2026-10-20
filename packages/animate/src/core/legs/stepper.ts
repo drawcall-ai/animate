@@ -46,6 +46,8 @@ export interface Stepping {
   crouch: { depth: number; wider: number; ahead: number; travel: number; lift: number }; reach: number; swingReach: number; clearance: number;
   /** how far past the feet (m) the extrapolated centre of mass is caught by a step; none: the legs only follow the root (a player's) */
   capture?: number;
+  /** how far the ankle plantarflexes just after the toes leave the floor (rad); none: it follows the foot */
+  push?: number;
 }
 
 /**
@@ -90,8 +92,10 @@ const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared:
  * past reach leaves the leg straight instead), and it takes its height up again within `RISE` (m/s²); a landing is kept within the leg's
  * reach with the pelvis let down `LANDING.drop` (m) more, never nearer than `least` (m). A swing's duration grows with the gait's at most
  * `PACE` (s/s); past `SETTLE` of it even a hard stop no longer moves its landing (a walker's: past `AIMED`). Landing a leap, the foot comes down at `TOUCH` of the body's fall.
+ * Recalled (Perry 1992): the push-off peaks just after toe-off, gone by mid-swing; tuned: it eases in and out over the first `PUSHED` of a swing.
+ * A bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing.
  */
-const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85;
+const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85, PUSHED = 0.5, BEND_SPAN = 0.1;
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
@@ -296,6 +300,13 @@ export class Stepper {
       const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, far = Math.max(chord?.length() ?? 0, v * (remaining + lead));
       const to = (chord && chord.lengthSq() > 1e-12 ? new Vector3().copy(r.position).addScaledVector(chord, far / chord.length()) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead))
         .addScaledVector(side, leg.sign * widthAt(speed)).addScaledVector(forwardOf(turned, _f), sitting).setY(feet.ankleHeight);
+      // (rounding a bend the body leans in: the feet land out from its way as far as the extrapolated centre of mass runs out from it — its
+      // speed × turn rate (the sideways acceleration) × l/g, halved: Hof's √(l/g) ahead along the tangent, off the arc by its square over twice the radius)
+      if (then) {
+        const t = remaining + lead, before = r.forecast!(Math.max(0, t - BEND_SPAN)).position, after = r.forecast!(t + BEND_SPAN).position;
+        const turn = wrapAngle(Math.atan2(after.x - then.position.x, after.z - then.position.z) - Math.atan2(then.position.x - before.x, then.position.z - before.z));
+        to.addScaledVector(leftOf(Math.atan2(after.x - before.x, after.z - before.z), _n), -((after.distanceTo(before) / (2 * BEND_SPAN)) ** 2) * turn / BEND_SPAN * feet.length / GRAVITY / 2);
+      }
       // (a walker's step whose landing would leave the extrapolated centre of mass as it will be past the feet lands under it instead, just
       // to its side; and no further from it as it is now than the other foot and it hold it: a first step is a short one)
       if (st.capture !== undefined && !airborne) {
@@ -371,7 +382,10 @@ export class Stepper {
       else for (const axis of ['x', 'y', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis], 0, w.rest, dt);
       const yawNow = w.fromYaw + wrapAngle(leg.yaw - w.fromYaw) * minimumJerk(u);
       leg.pitch = w.fromPitch * (1 - minimumJerk(u / 0.45)) + strike * minimumJerk((u - 0.6) / 0.4);
-      leg.pitch -= beyond(feet.lean(leg.i, f.prev, yawNow) + leg.pitch - st.dorsiflexion);
+      const lean = feet.lean(leg.i, f.prev, yawNow);
+      // (walking, pushed off: the ankle plantarflexed most just after the toes leave the floor, in line again by mid-swing)
+      if (st.push && !airborne) leg.pitch = Math.min(leg.pitch, lerp(leg.pitch, Math.max(st.pitch.ball, -st.push - lean), moving * Math.sin(Math.PI * Math.min(1, u / PUSHED)) ** 2));
+      leg.pitch -= beyond(lean + leg.pitch - st.dorsiflexion);
       const foot = feet.rotation(yawNow, leg.pitch, new Quaternion());
       // (the toes relax off the floor into line, and landing toes first come down flat)
       const toes = foot.clone().multiply(_q.copy(w.toes).slerp(IDENTITY, minimumJerk(u / 0.3)))

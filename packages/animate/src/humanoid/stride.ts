@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Behaviour } from '../core/goal';
 import { Planner } from '../core/legs/planner';
-import { clamp, forwardOf, GRAVITY, minimumJerk, wrapAngle } from '../core/math';
+import { clamp, forwardOf, GRAVITY, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
 import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import type { Stance } from '../core/asks';
@@ -90,7 +90,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
     const com = f.prev.com(new Vector3()), xcom = com.clone().addScaledVector(com.clone().sub(f.prev2.com(new Vector3())), 1 / (dt * Math.sqrt(GRAVITY / p.legLength))).setY(0);
     // (let down as asked: the stepper crouches, the feet staying put; asked below none, up on the toes)
     return { ...r, xcom, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
-      hips: offset.clone().add(behind), crouch: crouchFor(requested.lower / (stepping.crouch.depth * s)), tiptoe: Math.max(0, -requested.lower),
+      hips: offset.clone().add(behind), crouch: Math.min(crouchFor(requested.lower / (stepping.crouch.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed))), tiptoe: Math.max(0, -requested.lower),
       still: !moving && Math.abs(requested.lower) > LOWERED * s };
   }, (f, _asks, stepper) => {
     // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest
@@ -116,7 +116,7 @@ export function stride<W>(h: Humanoid<W>, options: { stance?: Partial<Stance>; s
  */
 const walkerStepping = (p: Proportions): Stepping => {
   const player = humanStepping(p);
-  return { ...player, reach: 0.997, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: SQUAT * p.height / p.scale, wider: 0 }, capture: CAPTURE };
+  return { ...player, reach: 0.997, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: SQUAT * p.height / p.scale, wider: 0 }, capture: CAPTURE, push: PUSH };
 };
 
 /** the crouch (0 … 1) that lets the pelvis down `share` of the stepper's depth (its `minimumJerk` easing undone) */
@@ -129,6 +129,10 @@ function crouchFor(share: number): number {
 
 /** Tuned: a walker catches its extrapolated centre of mass this far past its feet (m; the checks allow 0.1) */
 const CAPTURE = 0.07;
+/** Recalled (Perry 1992; Winter 1991): the ankle plantarflexes ~20° just after toe-off, at any walking speed (rad) */
+const PUSH = 20 * Math.PI / 180;
+/** Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low: ~0.26 m); a deeper ask waits for it to slow */
+const WALKING_CROUCH = 0.5;
 /** Tuned: stopped close to a goal still asked (within `STOP`), the body edges onto it this fast (m/s) */
 const EDGE = 0.03;
 /** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */
