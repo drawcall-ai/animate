@@ -135,16 +135,17 @@ export class Solver {
 
   /**
    * The joints posed for `target` this tick, off `pose`'s posed parents, written into it (the
-   * previous coordinates kept). Stance starts from bent references; swing continues its last pose. Returns the terminal's miss (m).
+   * previous coordinates kept). Stance starts from bent references; swing continues its last pose (a miss retried from the
+   * references, unless not to `retry`: a leg that must not jump). Returns the terminal's miss (m).
    */
-  solve(pose: Pose, target: LegTarget, seed = this.ref): number {
+  solve(pose: Pose, target: LegTarget, seed = this.ref, retry = true): number {
     this.prior.set(seed);
     this.q.set(seed);
     this.baseTurn.copy(pose.rotation(pose.skeleton.bones[this.bones[0]].parent));
     this.basePosition.copy(pose.position(this.bones[0]));
     let miss = this.iterate(target);
     const last = this.bones.length - 1;
-    if (seed !== this.ref && (miss > 1e-5 || target.above.some((point) => _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y < (target.floor ?? 0) - 1e-5))) {
+    if (retry && seed !== this.ref && (miss > 1e-5 || target.above.some((point) => _p.copy(point).applyQuaternion(this.rotations[last]).add(this.positions[last]).y < (target.floor ?? 0) - 1e-5))) {
       const kept = this.q.slice(), cost = this.cost(target, _r), previous = miss;
       this.q.set(this.ref);
       miss = this.iterate(target);

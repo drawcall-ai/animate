@@ -5,7 +5,7 @@ import { clamp, yawOf } from '../math';
 import { Pose, type ReadonlyPose } from '../pose';
 import { irregular } from '../random';
 import { strideAt, type Gait } from './gait';
-import type { LegChain, Legs } from './legs';
+import type { LegChain } from './legs';
 
 /**
  * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with θ = 2 · the fore leg's phase − 2π · its duty, twice a
@@ -53,6 +53,16 @@ export interface Extras {
   tail?: number;
 }
 
+/**
+ * The legs a carriage rides on, as it reads them: each leg's phase through its stride (0 at landing, in cycles), the root's height the
+ * legs hold this sub-step if they set it (the carriage's rise and fall then only ever let it down from there), and a resting foot's tip.
+ */
+export interface Striding {
+  readonly legs: readonly { readonly phase: number }[];
+  readonly height?: number;
+  rest(pitches: readonly number[]): void;
+}
+
 /** The carriage of one body, a sub-step at a time: `step` reads the stride, then `write` poses the trunk, head and tail before the legs step. */
 export interface Carried {
   /** 0 standing … 1 at least at the gait's slowest pace, eased */
@@ -60,7 +70,7 @@ export interface Carried {
   /** the ground speed (m/s) and the fore and hind phases (rad), as `step` read them */
   readonly speed: number;
   readonly life: Life;
-  step(f: Frame, legs: Legs): void;
+  step(f: Frame, legs: Striding): void;
   write(f: Frame, extras?: Extras): void;
 }
 
@@ -75,7 +85,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
   const weightRoll = spine === undefined ? 0 : s.limits[spine]?.swing[0][1] ?? 0;
   const neckBase = neck === undefined ? null : s.bones[neck].offset, poll = head === undefined ? null : s.bones[head].offset;
   const swing = { angle: 0, rate: 0 };
-  let moving = 0, speed = 0, phase = 0, hind = 0, swish = Infinity;
+  let moving = 0, speed = 0, phase = 0, hind = 0, swish = Infinity, base: number | undefined;
   const body = (): Carriage => gait.body ?? STILL;
   return {
     get moving() { return moving; },
@@ -88,6 +98,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       phase = 2 * Math.PI * (legs.legs[0].phase + (speed > 0 ? stride.frequency * f.dt : 0));
       hind = 2 * Math.PI * (legs.legs[2].phase + (speed > 0 ? stride.frequency * f.dt : 0));
       swish += f.dt;
+      base = legs.height;
       life.update(f.time, f.dt);
       if (names.has('tail') && life.fired('tail')) swish = 0;
     },
@@ -97,11 +108,14 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       const drift = irregular(t, life.phase, 0.79, 1.37, 2.11) * (1 - m);
       const theta = 2 * phase - 2 * Math.PI * strideAt(gait, speed, 0).duty;
       const sway = Math.cos(hind - Math.PI * strideAt(gait, speed, 2).duty);
-      const withers = b.withers * Math.cos(theta) * m;
+      // (on legs that hold the root's height, the withers rise to it at most: they only ever let it down)
+      const withers = b.withers * Math.cos(theta) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
       const pitch = Math.asin((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span) * m;
-      const rootHeight = height + withers + withersAt * Math.sin(pitch) + (extras.lift ?? 0) + 0.003 * drift;
-      f.current.setRoot(_v.copy(f.prev.position(0)).setY(rootHeight));
-      f.current.setLocal(0, turn(pitch, yawOf(f.prev.rotation(0))));
+      // (on legs that hold the root's height, the croup no higher than it stood either: pitched, the root lets down what it would lift it)
+      const croupRise = base === undefined ? 0 : Math.max(0, withers + span * Math.sin(pitch));
+      const rootHeight = standing + withers + withersAt * Math.sin(pitch) - croupRise + (extras.lift ?? 0) + 0.003 * drift;
+      f.current.setRoot(_v.copy(f.current.position(0)).setY(rootHeight));
+      f.current.setLocal(0, turn(pitch, yawOf(f.current.rotation(0))));
       const glance = names.has('head') ? life.value('head') : 0, weight = names.has('weight') ? life.value('weight') : 0;
       if (spine !== undefined) f.current.setLocal(spine, turn(b.spine * DEG * Math.cos(theta - b.spinePhase) * m, 0, weightRoll * weight * (1 - m) * (extras.weight ?? 1)));
       if (pelvis !== undefined) f.current.setLocal(pelvis, turn(0, b.yaw * DEG * sway * m, b.roll * DEG * sway * m + (extras.pelvisRoll ?? 0)));
@@ -112,7 +126,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
         const yaw = previous + (clamp(wanted, -0.55, 0.55) - previous) * (1 - Math.exp(-4 * f.dt));
         const base = f.current.position(neck).y;
         // (the poll kept at its standing height, rising with the withers and the stride as the gait has it)
-        const at = height + neckBase.y + poll.y + b.headWithers * withers + b.headRise * wave * m;
+        const at = standing + neckBase.y + poll.y + b.headWithers * withers + b.headRise * wave * m;
         const nod = Math.atan2(poll.y, poll.z) - Math.asin(clamp((at - base) / Math.hypot(poll.y, poll.z), -0.9, 0.9)) - pitch;
         f.current.setLocal(neck, turn(nod + 0.025 * drift, yaw));
         f.current.setLocal(head, turn(b.headPitch * DEG * wave * m - pitch - nod, extras.headYaw ?? 0));

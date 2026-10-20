@@ -3,8 +3,8 @@ import type { Frame } from './body';
 import type { Gazer } from './gaze';
 import type { Live } from './goal';
 import type { Gait } from './legs/gait';
-import type { CarriedBones } from './legs/carriage';
-import type { LegChain, Legs } from './legs/legs';
+import type { CarriedBones, Striding } from './legs/carriage';
+import type { LegChain } from './legs/legs';
 import type { ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
 
@@ -26,4 +26,4 @@ export interface Species {
 export interface Attention { tether?: Live<{ position: Readonly<Vector3>; length: number } | undefined>; startle?: Live<Readonly<Vector3> | undefined> }
 
 /** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */
-export interface Posture { prepare(f: Frame, legs: Legs, attention: Attention, look: Readonly<Vector3> | null): void }
+export interface Posture { prepare(f: Frame, legs: Striding, attention: Attention, look: Readonly<Vector3> | null): void }

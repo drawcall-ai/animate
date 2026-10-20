@@ -5,9 +5,9 @@ import { clamp, minimumJerk, yawOf } from '../core/math';
 import { seedOf } from '../core/random';
 import { swing } from '../core/life';
 import type { Gait } from '../core/legs/gait';
-import { carriage, type CarriedBones } from '../core/legs/carriage';
+import { carriage, type CarriedBones, type Striding } from '../core/legs/carriage';
 import type { Frame } from '../core/body';
-import type { LegChain, Legs } from '../core/legs/legs';
+import type { LegChain } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import { EARS, HALTER, HEAD, LEGS, NECK, SKELETON } from './skeleton';
 import { powerGait } from '../core/legs/schedule';
@@ -136,7 +136,7 @@ export function horseMotion(start: ReadonlyPose, gait: Gait, seed = seedOf(start
   const react = (point: Readonly<Vector3>): void => { reaction.copy(point); responseTime = 0; };
   return {
     react,
-    prepare(f: Frame, legs: Legs, attention: Attention = {}, look: Readonly<Vector3> | null = null): void {
+    prepare(f: Frame, legs: Striding, attention: Attention = {}, look: Readonly<Vector3> | null = null): void {
       // (a new startle point is a new event)
       const startle = attention.startle && live(attention.startle, f);
       if (startle && startle !== startled) react(startled = startle);
