@@ -33,8 +33,8 @@ export interface DrivenRoot {
 }
 
 /**
- * A species' stepping, in metres of its default body (× `scale`) and seconds (the human one, `humanStepping`, gives each value's
- * provenance): each leg's place in the cycle (`offsets`, 0 … 1: a leg follows the one just before it); the feet's `toeOut` (rad, × side);
+ * A species' stepping, in metres of its default body (× `scale`) and seconds (the human one gives each value's
+ * provenance in the source): each leg's place in the cycle (`offsets`, 0 … 1: a leg follows the one just before it); the feet's `toeOut` (rad, × side);
  * the `cadence` (cycle 2 / (base + perSpeed v)); `duty` walking, side-stepping, running (`run`: between these speeds); the most `travel`
  * of a stance; the landing's `lead`; half the feet's spread (`width.stand` already scaled); the pelvis' `bob` and `drop`; the swing's
  * `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the most a planted foot rolls (`pitch`, rad) and the ankle bends
@@ -71,7 +71,7 @@ export interface Feet {
   legs: readonly { sign: 1 | -1; foot: number; toes?: number; top: number; partner?: number; ahead?: number; home?: number; hip?: number; up?: number; length?: number;
     /** how far below its top the leg reaches its foot (m) at an offset across (+ out from the body) and ahead of it (m), its joints' ranges as they allow; none: a sphere of its length */
     depth?: (out: number, ahead: number, pitch?: number) => number;
-    /** how far a planted foot may stray across from where it stands under its hip (m; none: a person's `STEP.medial`, inward only) */
+    /** how far a planted foot may stray across from where it stands under its hip (m; none: a person's, inward only) */
     stray?: number;
     /** how far fore and aft together a planted foot reaches from under its hip, standing (m) */
     span?: number }[];
@@ -133,7 +133,7 @@ const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3 };
 
 /**
  * Legs under a root the scene drives (`move`, read every sub-step): the pelvis exactly over it,
- * facing its yaw (within `PELVIS_TURN` of a planted foot), bobbing with the steps and let down by
+ * facing its yaw (within a set turn of a planted foot), bobbing with the steps and let down by
  * `crouch`; each foot stays where it stands until it falls too far from its home under its hip
  * (or is turned too far from it), then steps — after the leg before it in the gait, with a flight running — to
  * where its home will be as it lands: re-aimed through the first half of the swing, frozen after;

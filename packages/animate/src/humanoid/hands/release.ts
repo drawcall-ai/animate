@@ -12,8 +12,16 @@ import { heldItems } from '../../core/worn';
 
 // Letting go.
 
+/** How `release` goes about it. */
+export interface ReleaseOptions<H extends string = string> {
+  /** where each hand goes off to (m, in the body's frame), or `null`: only open */
+  away?: Partial<Record<H, Vector3>> | null;
+  /** seconds before the free arms take the hands, there or not */
+  limit?: number;
+}
+
 /**
- * Letting go with the hands `sides`: they open and go off what they held, together, each carried
+ * Letting go with `hands`: they open and go off what they held, together, each carried
  * on the way it was going (its follow-through) and away from what it held (toward the hand's rest beside its thigh), or by `away`
  * (m; in the body's frame facing as it does: left +x, up +y, ahead +z) — as near as its arm
  * reaches (never folded on itself nor stretched out; the body not bowing nor rising after it).
@@ -22,9 +30,9 @@ import { heldItems } from '../../core/worn';
  * (`supported`: on a shelf, a table). With `away: null`, only open: the next task owns the hands. Another body's hands let go and
  * go back to where its base has them.
  */
-export function release<H extends string>(body: Body<H>, hands: readonly H[], options: { away?: Partial<Record<H, Vector3>> | null; limit?: number } = {}): Behaviour {
+export function release<H extends string>(body: Body<H>, hands: readonly H[], options: ReleaseOptions<H> = {}): Behaviour {
   if (!isPerson(body)) return letGo(body, hands);
-  return person(body, hands as readonly string[] as readonly Side[], options as { away?: Partial<Record<Side, Vector3>> | null; limit?: number });
+  return person(body, hands as readonly string[] as readonly Side[], options as ReleaseOptions<Side>);
 }
 
 function person(h: Humanoid, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number }): Behaviour {

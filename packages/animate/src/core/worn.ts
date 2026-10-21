@@ -19,6 +19,13 @@ export interface Wearing {
 }
 
 /** how a worn item settles where it goes unless asked otherwise (m/s², m/s, rad/s², rad/s): gently, as a helm onto the head */
+/** How `wear` puts it on. */
+export interface WearOptions {
+  /** where it settles, in the frame of what it is worn on */
+  to?: Placement;
+  /** the pace it settles at */
+  motion?: Motion;
+}
 export const SETTLING = { accel: 2, speed: 0.4, turnAccel: 8, turnSpeed: 2 } satisfies Motion;
 /**
  * `item` worn on `on` (a bone, or another item) from this sub-step on: it goes with it as it sat
@@ -28,7 +35,7 @@ export const SETTLING = { accel: 2, speed: 0.4, turnAccel: 8, turnSpeed: 2 } sat
  * its weight (taking it up as it does what it holds). What it wears from the start, it is made with
  * (`BodyOptions.wearing`). At once.
  */
-export function wear(h: Body, item: Item, on: number | Item, options: { to?: Placement; motion?: Motion } = {}): Behaviour {
+export function wear(h: Body, item: Item, on: number | Item, options: WearOptions = {}): Behaviour {
   return function* () {
     if (item.wornBy) throw new Error('the item is worn already');
     if (on === item) throw new Error('an item cannot be worn on itself');

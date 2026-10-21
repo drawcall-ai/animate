@@ -66,7 +66,7 @@ export function perBone<V>(make: (b: BoneName) => V): Record<BoneName, V> {
   };
 }
 
-/** each bone's index in BONES: its index in the skeleton */
+/** each person's bone's index in the skeleton, by name */
 export const INDEX = perBone((b) => BONES.indexOf(b));
 
 export const CHILD_BONES = BONES.filter((b): b is ChildBone => b !== 'hips');

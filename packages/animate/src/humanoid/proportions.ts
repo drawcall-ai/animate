@@ -13,7 +13,7 @@ export const DEFAULT_HEIGHT = 1.75;
 export interface Proportions extends Rest {
   /** floor to the top of the head, standing */
   readonly height: number;
-  /** `height / DEFAULT_HEIGHT`: scales distances tuned for the default body */
+  /** `height` over the default body's: scales distances tuned for the default body */
   readonly scale: number;
   /** in the head bone's frame */
   readonly head: { eye: Vector3; ear: Vector3; nose: Vector3; top: Vector3 };

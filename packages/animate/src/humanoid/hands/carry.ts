@@ -24,11 +24,26 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 /** the longest a carried item takes to come to rest at its course's end once it is over, unless told (s) */
 const RESTING = 2;
 
-interface CarryOptions {
+/** How `carry` goes about it. */
+export interface CarryOptions {
+  /** the frame the ways are in (by default the world) */
   frame?: Live<Placement>;
+  /** the speed along the ways (1: as their seconds say, 2: twice as fast) */
   pace?: number;
+  /** the hands' pace toward their goals */
   motion?: Motion;
+  /** seconds after the way's end to report the hands late */
   limit?: number;
+}
+
+/** How `hold` goes about it. */
+export interface HoldOptions {
+  /** carry it there; without it, the hands go where the item goes */
+  to?: Live<Placement>;
+  /** the hands' pace toward `to` */
+  motion?: Motion;
+  /** hold until this; by default endless */
+  until?: Exclude<Until, 'reached'>;
 }
 
 
@@ -36,7 +51,7 @@ interface CarryOptions {
  * Carry a held item along `way` and end once it has come to rest there; or several held items at once,
  * `[item, way]` each, every one kept at its end until all have come to rest. Waypoints are in metres in
  * the world by default; `frame` selects an item frame or a bone frame through `onItem` or `onBone`.
- * Waypoint seconds describe an unloaded item: its mass divides the course pace by `loadFactor(mass)`.
+ * Waypoint seconds describe an unloaded item: a heavier item goes slower.
  * A placement `way` is followed at `motion`'s pace. Ends within 5 mm and 5 cm/s of the cleared end;
  * still settling `limit` s after the course is over, it is a problem in the dev log (`Body.log`) and
  * keeps going: lateness never throws.
@@ -150,7 +165,7 @@ class TrackedEnd {
  * silently within reach. The after-hook follows the grips and fits the item to the wrists. Another body's hand
  * (`Species.hands`) goes back to rest with the item and keeps it there (`to` and `motion` are a person's).
  */
-export function hold(h: Body, item: Item, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
+export function hold(h: Body, item: Item, options: HoldOptions = {}): Behaviour {
   if (!isPerson(h)) {
     if (options.to) return bring(h, item, options.to, true);
     return keep(h, item, options.until);

@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { follow, followRotation } from '../../src';
+import { follow, followRotation } from '../../src/rig';
 import { Carrier } from '../../src/core/carrier';
 import type { FollowOptions } from '../../src/core/goal';
 import { turn } from './rigs';

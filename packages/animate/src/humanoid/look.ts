@@ -13,12 +13,18 @@ const AHEAD = { stand: { height: 0.75, distance: 3 }, walk: { height: 0.35, dist
 /** standing still, a glance aside every so often (s apart, s held, rad aside at most and up or down at most) */
 const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
 
+/** How `lookAround` glances. */
+export interface LookAroundOptions {
+  /** the same seed, the same glances */
+  seed?: number;
+}
+
 /**
  * The eyes when nothing else asks for them: ahead (on the path, walking, the head carrying a share
  * of the thorax's swing), and, standing still for a while, a glance aside now and then (seeded: the
  * same `seed`, the same glances). Endless.
  */
-export function lookAround(h: Humanoid, options: { seed?: number } = {}): Behaviour {
+export function lookAround(h: Humanoid, options: LookAroundOptions = {}): Behaviour {
   return function* () {
     const rand = seeded(options.seed ?? 1);
     const target = new Vector3();

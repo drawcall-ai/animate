@@ -177,16 +177,26 @@ export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<
   };
 }
 
+/** How `withGaze` leads with the eyes. */
+export interface GazeOptions {
+  /** with `first`, seconds more before the task sets off */
+  lead?: number;
+  /** bow at least this much (rad) */
+  bow?: number;
+  /** the task waits until the eyes are there */
+  first?: boolean;
+}
+
 /**
  * `task` with the eyes on `at`. With `first: true`, `task` sets off once they are within 1° of comfortable eye range or after 1.2 s, and
  * a moment more, `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the
  * hand goes for ~0.5 s before it (Land & Hayhoe 2001) — and they stay till it ends. For a point
- * further below the eyes than the neck pitches the head, the body bows to see it (asks `balance`),
+ * further below the eyes than the neck pitches the head, the body bows to see it (asking the base),
  * or at least `bow` (rad: work at the waist, the eyes over the hands). By default
  * `task` sets off at once (the eyes on what the hands already work). Put it after the
  * base (its `lookAt` overrides `lookAround`'s).
  */
-export function withGaze(h: Body, at: Live<Vector3>, task: Behaviour, options: { lead?: number; bow?: number; first?: boolean } = {}): Behaviour {
+export function withGaze(h: Body, at: Live<Vector3>, task: Behaviour, options: GazeOptions = {}): Behaviour {
   const { bow = 0, first = false } = options;
   return function* () {
     yield* parallel<Frame>(
@@ -223,7 +233,7 @@ const LEAD = [0.1, 0.3];
 
 /** Upper-body aim, with the gait's counter-rotation and balance preserved.
  * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck.
- * Tuned torso shares: 65% yaw, 25% pitch; balance shares them over spine/chest,
+ * Tuned torso shares: 65% yaw, 25% pitch; the base shares them over spine/chest,
  * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
  * The existing posture and gaze owners retain their motion limits and final-pose checks.
  */

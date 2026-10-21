@@ -38,7 +38,7 @@ export const isPerson = <H extends string>(body: Body<H>): body is Body<H> & Hum
 
 /** A person's body (`human()`): the rig its pose drives, its measures, and where its feet stand. */
 export class Humanoid extends Body<Side> {
-  /** where the feet stand or, stepping, land [left, right]: `balance`'s output */
+  /** where the feet stand or, stepping, land [left, right]: the base's */
   readonly feet: [Foot, Foot];
   declare readonly gazer: Gazer;
   private readonly measured: Proportions;

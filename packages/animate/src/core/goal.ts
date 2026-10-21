@@ -43,7 +43,7 @@ export interface Motion {
 export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
   /** the goal's own velocity (per s; for a rotation its angular velocity, rad/s), followed without lag (default still) */
   velocity?: V;
-  /** the goal (and its velocity) is in this carrier's frame, placed so at the step's time and the two before (`Carrier.at`): the value is followed relative to it */
+  /** the goal (and its velocity) is in this carrier's frame, placed so at the step's time and the two before (its `at`): the value is followed relative to it */
   on?: Placed;
 };
 

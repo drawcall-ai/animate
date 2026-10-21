@@ -30,7 +30,7 @@ export interface Carriage {
  * What of a species' skeleton its gait carries (`Species.legs.carriage`), by bone name — the legs ordered fore-left, fore-right,
  * hind-left, hind-right; the trunk is the root — and its quiet life: rhythms named `head` (the neck turns to glance about), `weight`
  * (the spine rolls the weight over) and `tail` (each change swishes the tail `swish.cycles` times, `swish.period` s each, by
- * `swish.amplitude` rad, standing), each acted on only where it is given; other rhythms are the posture's own (`Carried.life`).
+ * `swish.amplitude` rad, standing), each acted on only where it is given; other rhythms are its posture's own.
  */
 export interface CarriedBones {
   spine?: string;

@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, follow, followRotation, Pose, type Frame } from '../../src';
+import { Body, Pose, type Frame } from '../../src';
+import { follow, followRotation } from '../../src/rig';
 import { rng } from '../humanoid/fixtures';
 import { leg, turn } from './rigs';
 

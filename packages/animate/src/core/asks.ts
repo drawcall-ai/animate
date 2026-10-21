@@ -28,8 +28,8 @@ export interface Stance {
 }
 
 /**
- * What the tasks ask of `balance`, which alone moves the root, the legs and the trunk's posture.
- * Every field is last-writer-wins: a task rewrites what it needs every sub-step it runs; `balance`
+ * What the tasks ask of the base, which alone moves the root, the legs and the trunk's posture.
+ * Every field is last-writer-wins: a task rewrites what it needs every sub-step it runs; the base
  * reads them at the start of its update and clears them (so it acts on them a sub-step later).
  */
 export interface Asks {
@@ -64,7 +64,7 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
 }
 
 /**
- * Asks `balance` for what `asks` gives (the fields it has; the rest as other tasks ask), every
+ * Asks the base for what `asks` gives (the fields it has; the rest as other tasks ask), every
  * sub-step, endless or until `until`: a task of its own for what no other task asks (shift weight, turn to a facing while the hands work).
  */
 export function ask(h: Body, asks: Live<Partial<Asks>>, until?: UntilCondition<Frame>): Behaviour {

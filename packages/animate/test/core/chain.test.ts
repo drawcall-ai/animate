@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose, solveChain, type Skeleton } from '../../src';
+import { Pose, type Skeleton } from '../../src';
+import { solveChain } from '../../src/rig';
 import { beyond } from '../../src/core/limits';
 import { hinge, horseLeg, leg, turn } from './rigs';
 

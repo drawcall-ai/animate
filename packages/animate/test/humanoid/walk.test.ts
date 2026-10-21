@@ -11,7 +11,8 @@ import { standing } from './fixtures';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { approach, arriving, carried, hold, handTo, type Humanoid, createSkeletonModel, INDEX, grab, Item, walkTo, when, type Frame } from '../../src';
+import { arriving, carried, hold, handTo, type Humanoid, createSkeletonModel, INDEX, grab, Item, walkTo, when, type Frame } from '../../src';
+import { approach } from '../../src/rig';
 import { STEP } from '../../src/core/body';
 
 it('publishes arrival and starts a waiting grab before the walk ends without replacing its goal', () => {

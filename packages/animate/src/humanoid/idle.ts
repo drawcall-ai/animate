@@ -14,9 +14,9 @@ import { stride } from './stride';
 export const legSystem: { path: 'old' | 'core' } = { path: 'old' };
 
 /**
- * A person's base, endless, root to tip: `balance` (root, legs, trunk), `hangArms`, `lookAround`; the story runs over it: what it writes
+ * A person's base, endless, root to tip: its balance (root, legs, trunk), its free arms hanging, `lookAround`; the story runs over it: what it writes
  * wins, and what it lets go of these take back on from where it is. `seed` fixes the variation of sway, breathing and spontaneous weight
- * shifts. `root`: the scene owns the root (a player), `driven` legs keep up with it instead of `balance`.
+ * shifts. `root`: the scene owns the root (a player), and the legs keep up with it.
  */
 export function personIdle(h: Humanoid, options: IdleOptions = {}): Behaviour {
   const { root } = options, path = legSystem.path;
@@ -26,7 +26,7 @@ export function personIdle(h: Humanoid, options: IdleOptions = {}): Behaviour {
   };
 }
 
-/** A body's base to compose by hand (with `idle: false`): a person's (`personIdle`), else its species' legs (`creature`). */
+/** A body's base to compose by hand (with `idle: false`): a person's (`personIdle`), else its species' legs and carriage. */
 export function idle(body: Body, options: IdleOptions = {}): Behaviour {
   return isPerson(body) ? personIdle(body, options) : creature(body, options.attention, options.root);
 }

@@ -117,7 +117,7 @@ export interface HandOptions extends Partial<Motion> {
   on?: Carrier;
   /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default true); false: the hand only follows (a tracked controller: the head leads) */
   lead?: boolean;
-  /** a reach that takes this long (s): the hand goes along a minimum-jerk path to the target (`Glide`: a bell of speed), then stays on it */
+  /** a reach that takes this long (s): the hand goes along a minimum-jerk path to the target (a bell of speed), then stays on it */
   seconds?: number;
   /** with `seconds`: the reach sets off this long after (s), the arm kept as it is till then */
   after?: number;
@@ -125,12 +125,12 @@ export interface HandOptions extends Partial<Motion> {
 }
 
 /**
- * Hand `side`'s wrist (and, given its rotation, the hand) to `target`, every sub-step, endless or
- * until `until`: the hand moving on from its history at `Motion`'s pace (default `CALM`), its arm
+ * Hand `hand`'s wrist (and, given its rotation, the hand) to `target`, every sub-step, endless or
+ * until `until`: the hand moving on from its history at `Motion`'s pace (calm by default), its arm
  * solved to it and braked; the clavicle shrugging for a hand up high and drawn forward for one far
  * out; the elbow swivelled as where the hand is asks. Leading (by default), a target below what the
- * arm reaches standing asks `balance` to bow and bend the knees for it, one above to go up on the
- * toes (`h.asks`).
+ * arm reaches standing asks the base to bow and bend the knees for it, one above to go up on the
+ * toes. Another body's hand is its chain's tip, moved there until `until`.
  */
 export function handTo<H extends string>(body: Body<H>, hand: H, target: Live<Target>, options: HandOptions = {}): Behaviour {
   if (!isPerson(body)) return tipToward(body, hand, target, options.until);

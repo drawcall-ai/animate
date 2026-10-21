@@ -5,7 +5,7 @@ import { exp, log } from './rotation';
 /**
  * The next value of something moving toward `target` from its history (`prev2`, `prev`) over
  * `dt`, as fast as `options` allow: it closes in at most at `speed`, and no faster than it can
- * still brake to the goal in steps of `dt` at `accel` (`brakingSpeed`), and its velocity changes
+ * still brake to the goal in steps of `dt` at `accel`, and its velocity changes
  * by at most `accel · dt` per step, braking toward the goal before anything else. So it hands
  * over continuously from any motion it has; given the goal's velocity, it follows a steadily
  * moving goal exactly; and it never passes a still goal it moves straight at (or starts still

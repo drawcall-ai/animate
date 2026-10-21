@@ -1,7 +1,8 @@
 import { ARM_REACH } from '../../../../packages/animate/src/humanoid/arms';
 import { Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
-import { approach, grab, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item } from '@drawcall/animate';
+import { grab, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item } from '@drawcall/animate';
+import { approach } from '@drawcall/animate/rig';
 import { reached } from '../../../../packages/animate/src/core/tip';
 import { reported } from '../../report';
 import { along, at, busy, eyesOn, pause, type Knight } from './knight';

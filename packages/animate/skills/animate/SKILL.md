@@ -67,7 +67,7 @@ There is one verb per intent, for any body with hands: a person's `left` and `ri
 - `touch` reaches to a point without taking anything: it walks up, looks, and ends once the hand is there.
 - `wear` and `takeOff` attach an item to any body's bone and detach it.
 
-What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl)`); any task can ask the same with `ask(body, { lower, bow })`.
+What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
 
 ```ts
 const across = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
@@ -106,7 +106,7 @@ const taker: Body<Side> = new Body(human(), (h) => function* () {
 
 A goal lives in one of three frames: the world (the default), a bone (`onBone(body, bone, local)`, or `facingAt` turned with the body's facing rather than the bone), or an item (`onItem(item, local)`). Put what belongs to a body in its frame. `carried(h)` is a carry pose for this body's stature, and `onBone(mare, …)` stays right as the horse moves; the horse's position plus an offset is right only while it stands. In a course, `[seconds, still]` pauses on purpose, and course seconds are written for an unloaded item.
 
-Leave placement to the library: a hand-placed number usually reads worse and breaks for another body. `grab` and `approach` stand where the grips are in comfortable reach, facing squarely; give `face` only for a particular orientation. `release` follows through and settles where the free arms take over. What you author is the scene, the order of beats, the places on props that a course passes, and how long a pause lasts.
+Leave placement to the library: a hand-placed number usually reads worse and breaks for another body. `grab` stands where the grips are in comfortable reach, facing squarely; give `face` only for a particular orientation. `release` follows through and settles where the free arms take over. What you author is the scene, the order of beats, the places on props that a course passes, and how long a pause lasts.
 
 ## Gaze
 
@@ -116,7 +116,7 @@ Leave placement to the library: a hand-placed number usually reads worse and bre
 
 For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that your controller moves every frame. The body stands exactly on it and faces its `yaw`, and the legs step to keep up. Ask for a leap with `h.stepper?.jump(speed)`, and read `h.stepper?.airborne` to know when it is in the air.
 
-A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach.
+A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation` from `@drawcall/animate/rig`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach.
 
 ## Life
 
@@ -200,7 +200,7 @@ const watchedGroom = new Body(human(), watched, { dev: true });
 
 ## Any rig
 
-A skeleton with named chains is enough for a body: build its behaviours from `chainTo` / `ChainTip` / `solveChain` and `follow` / `followRotation` / `TrackedPoint` / `TrackedRotation`. Each of these moves from the pose history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it.
+A skeleton with named chains is enough for a body: build its behaviours from the parts in `@drawcall/animate/rig` — `chainTo` / `ChainTip` / `solveChain` and `follow` / `followRotation` / `TrackedPoint` / `TrackedRotation`. Each of these moves from the pose history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it. The rig also holds what the verbs are made of: `ask` (what a task asks of the base's legs and balance), `approach` (walking up to take something without taking it) and `idle` (the base, to run yourself under `idle: false`).
 
 ```ts
 const arm = new Skeleton(bones, { chains: { arm: ['shoulder', 'elbow', 'hand'] } });

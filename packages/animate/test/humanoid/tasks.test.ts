@@ -3,7 +3,8 @@ import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { ask, headTo, type Asks, type Behaviour, type Frame } from '../../src';
+import { headTo, type Behaviour, type Frame } from '../../src';
+import { ask, type Asks } from '../../src/rig';
 import { beyond } from '../../src/core/limits';
 
 import { INDEX } from '../../src/humanoid/bones';

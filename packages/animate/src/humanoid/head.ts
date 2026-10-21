@@ -44,7 +44,7 @@ export interface HeadOptions extends Partial<Motion> {
 /**
  * The eyes (their midpoint) at `eyes`, the head turned as it says (default: level, facing as the
  * pelvis does), every sub-step, endless or until `until`: the target moved on from where it was
- * (`HEADSET` pace by default, its own motion fed forward), and the spine, lumbar to skull, placed
+ * (a headset's pace by default, its own motion fed forward), and the spine, lumbar to skull, placed
  * for it — the turn and bend shared over the lower back, the thorax, the neck and the head first,
  * then the trunk swinging the head over where the eyes go and the neck turning it again, each joint
  * within its range and braked. It writes the spine, chest, neck and head: put it after `idle` and

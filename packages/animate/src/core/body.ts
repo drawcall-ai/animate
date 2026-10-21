@@ -29,7 +29,7 @@ export const STEP = 1 / 60;
  * read them from the frame each time, do not keep them.
  */
 export interface Frame {
-  /** the sub-step's length (s): always `STEP` */
+  /** the sub-step's length (s): always 1/60 */
   dt: number;
   /** the time `current` is posed for (s); the body starts at 0 */
   time: number;
@@ -83,7 +83,7 @@ export interface BodyOptions {
 /**
  * A body of a species, moved by its story (`story(body)`, run once it is made; none: it only idles) over its base (`IdleOptions`: it stands and walks, looks
  * about, keeps its arms as the species does), standing `at` facing `yaw`; `done` once the story has ended (the base goes on). A person
- * (`human()`) is a body like any other. Each sub-step of `STEP` the base and the story write `current`; then the items it wears move with it, its hands keep to what they hold, the
+ * (`human()`) is a body like any other. Each 1/60 s sub-step the base and the story write `current`; then the items it wears move with it, its hands keep to what they hold, the
  * weight it bears loads its bones, and its world transforms are brought up to date and it becomes
  * the history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
  * covers and carry the rest over; the body shows its last final pose.
@@ -97,7 +97,7 @@ export class Body<H extends string = string> {
   readonly borne = new Map<Item, Bearing>();
   /** its hands' bones, by name: the tips of their chains (`Species.hands`) */
   declare readonly hands: Readonly<Record<H, number>>;
-  /** what each hand holds, by which grip (`closeHand`, `openHand`) */
+  /** what each hand holds, by which grip */
   declare readonly holding: Record<H, { item: Item; grip: string } | null>;
   /** what the tasks ask of its legs (see `Asks`) */
   readonly asks: Asks = createAsks();
@@ -209,7 +209,7 @@ export class Body<H extends string = string> {
     this.world = world;
   }
 
-  /** advances by `dt` (s): every whole `STEP` it covers, with what earlier updates left over */
+  /** advances by `dt` (s): every whole 1/60 s sub-step it covers, with what earlier updates left over */
   update(dt: number): void {
     if (!(dt >= 0 && Number.isFinite(dt))) throw new Error(`cannot update by ${dt} s`);
     this.pending += dt;

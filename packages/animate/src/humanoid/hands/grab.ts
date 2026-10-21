@@ -29,6 +29,22 @@ export interface Spot {
   aside?: number;
 }
 
+/** How `grab` goes about it. */
+export interface GrabOptions {
+  /** the yaw to stand at (rad); by default the one that faces the grips square */
+  face?: number;
+  /** where to stand */
+  spot?: Spot;
+  /** where the eyes go: the grips' middle (`true`, the default), a point, or nowhere (`false`) */
+  look?: boolean | Live<Vector3>;
+  /** bow at least this much while reaching (rad) */
+  bow?: number;
+  /** the eyes there before the hands set off */
+  first?: boolean;
+  /** `false`: take them from where the body stands */
+  walk?: boolean;
+}
+
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
 // Inherited low two-hand stand distance: 1.05 arm lengths, leaving room to bend.
@@ -49,13 +65,14 @@ export const SEGMENT_RADIUS = 0.06;
 
 /**
  * Taking hold of things, each step under way before the last is over: the body walks up to take
- * them (`approach`); once they are in view (IN_VIEW), one gaze notices them, follows the path during a long approach, and returns within two steps or LOOKING s before arrival to
- * them (`withGaze`: on the grips' middle, or `look`; `false`: not); within the last estimated second, the hands set off toward them; the body bows and bends with the reach (`reachFor`). It ends with the hands on the grips: hold on with
+ * them; once they are in view, the eyes notice them, follow the path during a long approach, and return to them
+ * within two steps of arriving (on the grips' middle, or `look`; `false`: not); within the last second, the hands set off toward them, the body
+ * bowing and bending with the reach. It ends with the hands on the grips: hold on with
  * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead. `walk: false` takes them from where it
  * stands: the hands go straight to them (on them already, they close at once). Another body takes hold with the chain its
  * species names for the hand, one at a time (`Species.hands`): it walks up, the chain's tip reaches the grip, the hand closes.
  */
-export function grab<H extends string>(h: Body<H>, holds: Holds<H>, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean; walk?: boolean } = {}): Behaviour {
+export function grab<H extends string>(h: Body<H>, holds: Holds<H>, options: GrabOptions = {}): Behaviour {
   if (!isPerson(h)) return take(h, holds, { look: options.look !== false, walk: options.walk });
   const { look = true, bow } = options;
   if (options.walk === false) return look === false ? reachFor(h, holds) : withGaze(h, look === true ? () => middleOf(holds) : look, reachFor(h, holds), { bow });
@@ -145,11 +162,11 @@ const LOWERING = 0.3;
  * the body (default: in reach, squarely; facing so the left hand's grip is on the left, or toward a
  * single grip) — no step if every grip is in reach of its shoulder already. The last leg arrives
  * clear of the support and, for a rigid two-hand placement, within a cone of its facing
- * (lateral offset at most ROUND_ASIDE of forward distance). A waypoint ROUND beside the
+ * (aside at most half as far as ahead). A waypoint beside the
  * final leg opens that approach when the direct path would cut through the support or across the load. It ends there, turned and come to rest (or
- * stood still on planted feet a while: a step of a few cm `balance` may not take). The first half
+ * stood still on planted feet a while: a step of a few cm the base may not take). The first half
  * of `grab`. A placing point is measured from the middle of the shoulders, rather than either
- * hand. A point must be within ARM_REACH of that middle at the requested stand, the shoulders lowered and bowed as far as
+ * hand. A point must be within the arms' comfortable reach of that middle at the requested stand, the shoulders lowered and bowed as far as
  * a low point needs (at most a squat and the deepest bow); one out of reach even so, or no stand clear, is a problem in the dev log
  * and the body stands where it is. Grips may recruit
  * bowing and lowering during the reach. A destination placement uses the held grips at its
