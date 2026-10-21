@@ -14,6 +14,10 @@ export class Targets {
   private readonly headPeak = new Peak();
   private readonly gazePeak = new Peak();
   private readonly headOffPeak = new Peak();
+  /** the most the eyes turn in the head to the gaze target (°), and the longest the target stays past the comfortable turn by `PAST` (s) */
+  readonly eyesPeak = new Peak();
+  readonly pastPeak = new Peak();
+  private past = NaN;
   /** the largest error of a tracked wrist target (m), judged only by its course (`over`), not a fixed bound */
   private readonly trackedPeak = new Peak();
   /** how far a tracked target's error goes past the bound its course sets (m; see `judge`), and on which target and course */
@@ -73,7 +77,13 @@ export class Targets {
         this.judged++;
         const off = (forward.angleTo(toward) * 180) / Math.PI;
         this.headOffPeak.see(off, t);
-        this.gazePeak.see(beyondEyes(toward.applyQuaternion(head.getWorldQuaternion(new Quaternion()).invert()), off), t);
+        const beyond = beyondEyes(toward.applyQuaternion(head.getWorldQuaternion(new Quaternion()).invert()), off);
+        this.gazePeak.see(beyond, t);
+        this.eyesPeak.see(off, t);
+        // (how long on end the target lies past the comfortable turn by more than `PAST`: a brief eccentric glance as the head comes
+        // round is normal, a held one is not)
+        this.past = beyond > PAST ? (Number.isNaN(this.past) ? t : this.past) : NaN;
+        if (!Number.isNaN(this.past)) this.pastPeak.see(t - this.past + DT, t);
       }
     }
     const head = positionOf(asked.get('head'));
@@ -193,6 +203,10 @@ export function beyondEyes(local: Vector3, off: number): number {
   const s = Math.hypot(side / EYES.side, down / (down > 0 ? EYES.down : EYES.up));
   return s > 1 ? off * (1 - 1 / s) : 0;
 }
+
+/** how far past the eyes' comfortable turn a gaze target may lie for a moment (°), and the length of a frame (s) */
+export const PAST = 5;
+const DT = 1 / 60;
 
 /** how long a gaze target stays put before the eyes are judged on it (s): a gaze shift takes ~0.3–0.5 s */
 const SETTLE = 0.6;

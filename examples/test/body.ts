@@ -62,8 +62,14 @@ export const SLOW_WIDTH = {
    * walkers — 0.19 H at the top of either (straight walking's widest 0.13 m, 0.07 H)
    */
   turning: 0.19,
-  /** side-stepping or lifting (a wide base under a load): the user's provisional 0.25 H (2026-10-21); no source read yet */
+  /** lifting (a wide base under a load): the user's provisional 0.25 H (2026-10-21); no source read yet */
   wide: 0.25,
+  /**
+   * side-stepping: read (Fujimoto et al. 2021, Front Sports Act Living 3:670649, Methods, following Tateuchi et al. 2011): a lateral
+   * step of 10–20% of body height from a stance of 10% inter-malleolar — the feet 0.20–0.30 H apart as it lands; the top of that
+   * (2026-10-22, test-changes.md)
+   */
+  sideways: 0.3,
 } as const;
 
 /**
@@ -101,7 +107,7 @@ export class Landings {
       const lifting = Object.values(h.holding).some((held) => held && held.item.mass > 0);
       // (a step of several kinds gets the largest bound among them: a turning side-step is a side-step too — not the turn's first, as it
       // was; 2026-10-22, test-changes.md)
-      const bound = Math.max(SLOW_WIDTH.straight, turned ? SLOW_WIDTH.turning : 0, sideways || lifting ? SLOW_WIDTH.wide : 0);
+      const bound = Math.max(SLOW_WIDTH.straight, turned ? SLOW_WIDTH.turning : 0, lifting ? SLOW_WIDTH.wide : 0, sideways ? SLOW_WIDTH.sideways : 0);
       this.wide.see(across / (bound * h.proportions.height), t);
     });
   }

@@ -15,7 +15,8 @@ export interface MetricsOptions {
 }
 const TRACKED = 0.8;
 const LATE_RETARGET = 0.03;
-const GAZE = 5;
+/** a gaze target past the eyes' comfortable turn by `PAST` at most this long (s, tuned), and at most this far in the head (°) */
+const GAZE = { held: 0.3, eyes: 45 };
 /**
  * the most one step's length differs from the next (share of their mean): straight 0.05; on a curve 0.10 — read (Courtine & Schieppati
  * 2003, Eur J Neurosci 18:191, "Human walking along a curved path. II", abstract): the inner and outer strides diverge in length and
@@ -77,7 +78,11 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   // (a tracked target is judged by its course — held, moving, within reach — not one margin over the old engine's misses: `Targets.judge`)
   if (m.targets.tracked.judged || m.targets.tracked.head) add(`tracked target past its course's bound (m): ${m.targets.over.what}`, m.targets.over.value, 'max', 0, m.targets.over.at);
   add('tracked wrists: frames judged (share of those asked)', m.targets.tracked.asked ? m.targets.tracked.judged / m.targets.tracked.asked : 1, 'min', TRACKED);
-  add("gaze target beyond the eyes' comfortable turn (°)", m.targets.gaze, 'max', GAZE, m.targets.gazeAt);
+  // (the gaze target past the eyes' comfortable turn by more than 5° only for a moment — at most `GAZE.held` s on end — and never
+  // further in the head than the eyes turn at all: brief eccentric eye-in-head positions are normal as the head comes round, within the
+  // oculomotor range of ±45–55°, Guitton & Volle 1987, recalled; settled from the time series, 2026-10-22, test-changes.md)
+  add("gaze target beyond the eyes' comfortable turn by 5°: longest (s)", m.targets.pastPeak.value, 'max', GAZE.held, m.targets.pastPeak.at);
+  add('gaze target in the head (°)', m.targets.eyesPeak.value, 'max', GAZE.eyes, m.targets.eyesPeak.at);
   // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
   if (m.targets.asked > 0) add('gaze: frames judged', m.targets.judged, 'min', 1);
   if (limit.strides) {
