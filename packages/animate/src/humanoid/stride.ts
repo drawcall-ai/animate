@@ -71,7 +71,10 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     seen = !!go;
     // (where it rests: its weight shifted from there as a reach asks, back there after)
     still = moving ? null : leaning ? still : root.clone();
-    if (!moving && ((still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed)) [moving, starting, still, leaning] = [true, true, null, false];
+    // (a walk is under way while the body turns to a facing asked too, as the old carriage had it: turning on the spot, a goal moving off
+    // is walked after at once, not once it is a start's distance away)
+    const unturned = asks.face ? Math.abs(wrapAngle(asks.face.yaw - plan.root.yaw)) : 0;
+    if (!moving && ((still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced)) [moving, starting, still, leaning] = [true, true, null, false];
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
@@ -88,7 +91,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
       { accel: go?.accel ?? 1.2 * s, speed: moving ? Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity) : go ? EDGE * s : leaned ? LEAN.speed * s : 0, turnSpeed: asks.face?.rate },
       // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
       stance, (forecast) => stepper.reachable((t) => { const at = forecast(t); return { position: at.position.clone().sub(behind), yaw: at.yaw }; }));
-    if (root.distanceTo(stop) < STOP.distance * s && r.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed) moving = false;
+    if (root.distanceTo(stop) < STOP.distance * s && r.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed && unturned < STOP.yaw) moving = false;
 
     // the hips carried off the root: swaying and turning with the stride, back from it as far as the body's mass leans ahead of them
     const speed = r.velocity.length();
