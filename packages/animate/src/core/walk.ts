@@ -17,6 +17,9 @@ const STROLL = { speed: 1.3, accel: 1.2 };
 const ARRIVED = { distance: 0.15, yaw: 0.15 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
 const CLOSE = 1;
+/** stalled: a walk that is to end on arriving, no nearer its goal by this much (m, default body; a radian of facing left
+ * counting as `turn` m) for this long (s) — longer than a creature takes to come round on an arc to a goal behind it */
+const STALL = { nearer: 0.02, turn: 0.3, seconds: 6 };
 
 /** A walk arrives within `seconds`, or no walk runs and the body is settled.
  * Observe an idle body on two sub-steps so a parallel walk can publish its goal first.
@@ -73,8 +76,9 @@ export function walkTo(h: Body, options: WalkOptions): Behaviour {
   return route(h, options);
 }
 
-/** Internal approach route: ETA includes every intermediate point. */
-export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>[] = []): Behaviour {
+/** Internal approach route: ETA includes every intermediate point. One that is to end on arriving (no `until`, or
+ * `arrives`: its `until` is an arrival) logs once if it stalls (STALL), and goes on. */
+export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>[] = [], arrives = !options.until): Behaviour {
   const { within = 0, speed = STROLL.speed, accel = STROLL.accel, plant } = options;
   return function* () {
     // A sibling walk owns the feet until its cleanup publishes an infinite ETA.
@@ -92,7 +96,7 @@ export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>
       const effort = loadFactor(mass);
       go.speed = options.speed ?? speed / effort;
       go.accel = options.accel ?? accel / effort;
-      const body = f.prev.com(_com).setY(0);
+      const body = placeOf(h, f).setY(0);
       at ??= body.clone();
       if (leg < via.length && body.distanceTo(_v.copy(live(via[leg], f)).setY(0)) < ARRIVED.distance * h.scale) {
         leg++;
@@ -107,14 +111,25 @@ export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>
       go.to.copy(leg < via.length ? live(via[leg], f) : end).setY(0);
       return leg < via.length ? null : yaw;
     };
+    let best = Infinity, since = 0, stalled = false;
     yield* action<Frame>({
       init: () => () => { h.locomotion.eta = Infinity; },
       update: (f) => {
         const yaw = where(f);
+        if (arrives && !stalled && f.dev) {
+          const body = placeOf(h, f);
+          const left = Math.hypot(body.x - go.to.x, body.z - go.to.z) + (yaw === null ? 0 : Math.abs(wrapAngle(yaw - h.locomotion.facing)) * STALL.turn * h.scale);
+          if (!Number.isFinite(left)) since = f.time;
+          else if (left < best - STALL.nearer * h.scale) { best = left; since = f.time; }
+          else if (f.time - since > STALL.seconds) {
+            stalled = true;
+            f.dev.append(f.time, { check: `stalled walk: no nearer its goal for ${STALL.seconds} s (m left)`, value: Math.hypot(body.x - go.to.x, body.z - go.to.z), limit: ARRIVED.distance * h.scale, where: 'walk' });
+          }
+        }
         go.velocity = options.velocity === undefined ? undefined : live(options.velocity, f);
         h.asks.go = go;
         if (options.stance) h.asks.stance = options.stance;
-        h.locomotion.eta = etaOf(h, f.prev.com(_com), go, yaw);
+        h.locomotion.eta = etaOf(h, placeOf(h, f), go, yaw);
         if (leg < via.length) {
           let previous = go.to;
           for (let i = leg + 1; i <= via.length; i++) {
@@ -132,8 +147,8 @@ export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>
         const yaw = where(f);
         if (leg < via.length) return false;
         if (options.until) return options.until(f, clock, time);
-        const body = f.prev.com(_com);
-        const there = Math.hypot(body.x - go.to.x, body.z - go.to.z) < ARRIVED.distance * h.scale;
+        const body = placeOf(h, f);
+        const there = Math.hypot(body.x - go.to.x, body.z - go.to.z) < ARRIVED.distance * h.scale || h.locomotion.there;
         const turned = yaw === null || Math.abs(wrapAngle(yaw - h.locomotion.facing)) < ARRIVED.yaw;
         return there && turned && h.locomotion.settled;
       },
@@ -154,5 +169,7 @@ function etaOf(h: Body, body: Readonly<Vector3>, go: Go, yaw: number | null): nu
   return Math.max(walk, turn);
 }
 
+/** where a walk takes the body: a person's centre of mass (its balance carries it there), another body's root (its legs do) */
+const placeOf = (h: Body, f: Frame) => (h.species.person ? f.prev.com(_com) : _com.copy(f.prev.position(0))).setY(0);
 const _com = new Vector3();
 const _v = new Vector3();

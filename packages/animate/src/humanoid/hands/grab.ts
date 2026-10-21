@@ -289,7 +289,7 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
     yield* route(h, { to: destination, face: facing, within: ahead, until: (f) => {
       const there = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
       return turned(facing(f)) && flat(f.prev.com(_com), there) < ARRIVED * p.scale && (!h.locomotion.moving && h.feet.some((foot) => foot.phase === 'planted'));
-    } }, via)();
+    } }, via, true)();
   };
 }
 

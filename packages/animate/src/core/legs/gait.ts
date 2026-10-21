@@ -64,7 +64,7 @@ export interface Locomotion {
   run: number;
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
-  /** Core pursuit heading half a second ahead, for anticipatory gaze. */
+  /** the heading it will walk with half a second ahead (rad), for the eyes to lead */
   facingAhead?: number;
   velocity: Vector3;
   /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
@@ -73,7 +73,10 @@ export interface Locomotion {
   moving: boolean;
   /** come to rest: no walk under way, both feet planted a while and none wanting to step */
   settled: boolean;
-  /** seconds standing on planted feet since the current walk started; balance resets it on a new go request */
+  /** the legs hold the walk's still goal reached, as near as they take the body to it (a creature stops just short of or past it rather than
+   * edging about); a walk ends there as it does within its own reach of the goal */
+  there: boolean;
+  /** seconds standing on planted feet since the current walk started; the base resets it on a new walk */
   planted: number;
   /** the thorax's rotation with the stride (rad, + to the left) */
   thoraxYaw: number;
@@ -81,4 +84,4 @@ export interface Locomotion {
   quiet: Vector3;
 }
 
-export const createLocomotion = (facing: number): Locomotion => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, planted: 0, thoraxYaw: 0, quiet: new Vector3() });
+export const createLocomotion = (facing: number): Locomotion => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0, thoraxYaw: 0, quiet: new Vector3() });

@@ -72,9 +72,10 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
       const asked = followed?.clone() ?? go?.to.clone().setY(0) ?? root.clone();
       if (!going && (asked.distanceTo(root) > STOP.start || (go?.velocity?.lengthSq() ?? 0) > 0)) going = true;
       if (going && asked.distanceTo(root) < STOP.distance && speed0 < STOP.speed && !go?.velocity) going = false;
-      // (a still goal it has come past, nearer than its feet stand, it does not turn round for: it is there)
+      // (a still goal behind it, nearer than its feet stand, it does not turn round for: come past it, it is there; asked a facing, it
+      // steps back to it)
       const behind = _gap.copy(asked).sub(root).dot(forwardOf(planner.root.yaw, _to)) < 0;
-      if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius) going = false;
+      if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && !asks.face) going = false;
       const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
       const faced = asks.face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
       // (or where the scene drives it)
@@ -120,6 +121,7 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
       });
       g.velocity.copy(r.velocity).setY(0);
       [g.facing, g.moving, g.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
+      g.there = !!go && !go.velocity?.lengthSq() && !going;
     } });
   };
 }

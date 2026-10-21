@@ -1,5 +1,5 @@
 import { Box3, Quaternion, Vector3 } from 'three';
-import { parallel } from '@pmndrs/timeline';
+import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Body, carried, carry, holds, offer, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
@@ -39,11 +39,44 @@ for (const [name, species, size] of [['dog', DOG, 1], ['horse', horse(), 2.5]] a
     check(`a ${name} walks to a still goal ${angle}° off its facing, ${distance} body lengths away`, () =>
       expect(run(creature(species), (b) => walkTo(b, { to: around(angle, distance * size) }), 25 * Math.sqrt(size))).toEqual(ok));
   }
+  check(`a ${name} walks on to a still goal after a walk its until ended`, () => {
+    expect(run(creature(species), (b) => function* () {
+      yield* walkTo(b, { to: (f) => around(f.time * 20, 3 * size), until: timePassed(4, 'seconds') })();
+      yield* walkTo(b, { to: around(-90, 2 * size) })();
+    }, 40 * Math.sqrt(size))).toEqual(ok);
+  });
+  // (a walk after one its `until` ended, on a body run alone: it stops where it can, measured as its legs carry it)
+  for (const [then, next] of [['comes to a stop', () => ({})], ['walks back to where it stood', (b: Body) => ({ to: b.pose.position(0).clone().setY(0) })]] as const) {
+    for (const seconds of [0.5, 4]) check(`a ${name} ${then} after a walk its until ended at ${seconds} s`, () => {
+      expect(run(creature(species), (b) => function* () {
+        yield* walkTo(b, { to: around(0, 4 * size), until: timePassed(seconds, 'seconds') })();
+        yield* walkTo(b, next(b))();
+      }, 30)).toEqual(ok);
+    });
+  }
+  check(`a ${name} goes once round a circle after a carrot, then stops`, () => {
+    const R = 1.6 * size, centre = new Vector3(0, 0, R), angle = (p: Vector3) => Math.atan2(p.z - centre.z, p.x - centre.x);
+    let swept = 0, last = angle(new Vector3());
+    expect(run(creature(species), (b) => function* () {
+      yield* walkTo(b, {
+        to: () => { const a = angle(b.pose.position(0)) + 1.5 * size / R; return new Vector3(centre.x + R * Math.cos(a), 0, centre.z + R * Math.sin(a)); },
+        until: () => {
+          const a = angle(b.pose.position(0));
+          swept += Math.atan2(Math.sin(a - last), Math.cos(a - last)); last = a;
+          return swept >= 2 * Math.PI;
+        },
+      })();
+      yield* walkTo(b, {})();
+    }, 90)).toEqual(ok);
+  });
   check(`a ${name} walks round a circle`, () => {
     const points = Array.from({ length: 8 }, (_, k) => around(90 + k * 45, 2 * size).add(new Vector3(-2 * size, 0, 0)));
     expect(run(creature(species), (b) => function* () { for (const to of points) yield* walkTo(b, { to })(); }, 60 * Math.sqrt(size))).toEqual(ok);
   });
 }
+
+check('a dog walks 0.5 m back, keeping its facing', () =>
+  expect(run(creature(DOG), (b) => walkTo(b, { to: around(180, 0.5), face: 0 }), 10)).toEqual(ok));
 
 for (const [angle, distance, height] of [[0, 2, 0.04], [90, 2, 0.04], [180, 2, 0.04], [45, 1, 0.01], [0, 2, 0.2]]) {
   check(`a dog takes a ball ${angle}° off its facing, ${distance} m away, ${height} m up, and holds it`, () => {
@@ -153,6 +186,23 @@ for (const [what, story] of [
     for (let i = 0; i < 10 * 60; i++) body.update(1 / 60);
     expect(body.log.length).toBe(1);
     expect(body.pose.position(0).distanceTo(start)).toBeLessThan(0.05);
+  });
+}
+
+// (a story that can never finish says so: a walk, approach or placement no nearer its goal for a while logs it once and goes on)
+for (const [what, species, story] of [
+  ['a dog asked to put a ball down under its own chest', DOG, (b: Body) => function* () {
+    const ball = ballAt(around(0, 1.5, 0.04));
+    yield* grab(b, { jaw: [ball, 'middle'] })();
+    yield* place(b, ball, () => ({ position: b.pose.position(0).setY(0.04) }))();
+  }],
+  ['a dog asked to walk up to a goal that keeps ahead of it', DOG, (b: Body) => walkTo(b, { to: (f) => f.prev.position(0).add(new Vector3(0, 0, 1)) })],
+] as const) {
+  it(`${what} logs that it stalled`, () => {
+    const result = run(creature(species), story, 30);
+    expect(result.done).toBe(false);
+    expect(result.log.length).toBe(1);
+    expect(result.log[0]).toMatch(/^stalled walk/);
   });
 }
 
