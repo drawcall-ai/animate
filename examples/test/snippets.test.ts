@@ -10,7 +10,7 @@ import * as rig from '@drawcall/animate/rig';
 // async generator, with the package's exports in scope and the scene's own things (a story, a saddle, the frame's delta…) declared.
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '../..');
 const DOCS = ['packages/animate/skills/animate/SKILL.md', 'README.md'];
-const TYPES = ['Behaviour', 'Frame', 'Side', 'Species', 'BoneDef', 'DrivenRoot', 'Placement', 'Holds'];
+const TYPES = ['Behaviour', 'Frame', 'Side', 'Species', 'BoneDef', 'DrivenRoot', 'Placement', 'Grips'];
 /** what a snippet takes from the scene around it */
 const SCENE: Record<string, string> = {
   story: '(b: Body<Side>) => Behaviour', saddle: 'Item', rope: 'Item', ball: 'Item', item: 'Item', mare: 'Body', groom: 'Body<Side>',

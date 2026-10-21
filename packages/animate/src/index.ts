@@ -36,7 +36,7 @@ export { arriving, walkTo, type WalkOptions } from './core/walk';
 export type { Stance } from './core/asks';
 export { grab, type GrabOptions, type Spot } from './humanoid/hands/grab';
 export { carry, hold, type CarryOptions, type HoldOptions } from './humanoid/hands/carry';
-export type { Holds, Way } from './core/hands';
+export type { Grips, Way } from './core/hands';
 export { still, type Waypoint } from './core/course';
 export { place } from './humanoid/hands/place';
 export { release, type ReleaseOptions } from './humanoid/hands/release';

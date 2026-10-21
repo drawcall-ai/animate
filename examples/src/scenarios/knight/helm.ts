@@ -1,7 +1,7 @@
 import { ARM_REACH } from '../../../../packages/animate/src/humanoid/arms';
 import { Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
-import { grab, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Holds, type Item } from '@drawcall/animate';
+import { grab, handTo, hold, INDEX, lookAt, facingAt, still, wear, when, type Behaviour, type Frame, type Grips, type Item } from '@drawcall/animate';
 import { approach } from '@drawcall/animate/rig';
 import { reached } from '../../../../packages/animate/src/core/tip';
 import { reported } from '../../report';
@@ -24,7 +24,7 @@ export function putOnHelmet(k: Knight, helmet: Item): Behaviour {
   const down = facingAt(k.h, INDEX.hips, at(0, 0.15, 1.6));
   return function* () {
     // (its grips are toward its front, away from him: he stands back from them)
-    const hands: Holds = { left: [helmet, 'left'], right: [helmet, 'right'] };
+    const hands: Grips = { left: [helmet, 'left'], right: [helmet, 'right'] };
     yield* approach(k.h, hands, { spot: { ahead: ARM_REACH * k.h.proportions.armLength } })();
     // Reach around the sides of the crown, with the elbows outside the helmet.
     const there = (f: F) => (['left', 'right'] as const).every((side) => reached(f, INDEX[`${side}Hand`], helmet.grips[side], helmet));

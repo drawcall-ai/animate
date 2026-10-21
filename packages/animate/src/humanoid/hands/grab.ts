@@ -15,7 +15,7 @@ import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '.
 import { arriving, route } from '../../core/walk';
 import { held } from './grips';
 import { gripOf } from '../../core/carrier';
-import type { Holds } from '../../core/hands';
+import type { Grips } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
 import { bowLever, lowering, MOST_BOW, SQUAT } from '../posture/posture';
@@ -74,7 +74,7 @@ export const SEGMENT_RADIUS = 0.06;
  * stands: the hands go straight to them (on them already, they close at once). Another body takes hold with the chain its
  * species names for the hand, one at a time (`Species.hands`): it walks up, the chain's tip reaches the grip, the hand closes.
  */
-export function grab<H extends string>(h: Body<H>, holds: Holds<H>, options: GrabOptions = {}): Behaviour {
+export function grab<H extends string>(h: Body<H>, holds: Grips<H>, options: GrabOptions = {}): Behaviour {
   if (!isPerson(h)) {
     personOnly('grab', options, ['face', 'spot', 'bow', 'first']);
     return take(h, holds, { look: options.look, walk: options.walk });
@@ -170,7 +170,7 @@ const LOWERING = 0.3;
  * bowing and lowering during the reach. A destination placement uses the held grips at its
  * orientation to choose the facing, so both hands can reach it; a blocked explicit `face` is logged too; translation and rotation are followed live.
  */
-export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, options: { face?: number; spot?: Spot } = {}): Behaviour {
+export function approach(h: Humanoid, holds: Grips | Vector3 | Live<Placement>, options: { face?: number; spot?: Spot } = {}): Behaviour {
   const { aside = 0 } = options.spot ?? {};
   return function* () {
     const moving = typeof holds === 'function' ? holds : null;
@@ -187,8 +187,8 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
         if (held) grips.push({ side, at: gripOf(held.item, held.grip).position.clone().applyQuaternion(quaternion).add(position) });
       }
       if (!grips.length) grips.push({ at: position.clone() });
-    } else for (const { side, item, grip } of held(source as Holds)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
-    const mass = !point ? Math.max(...held(source as Holds).map(({ item }) => item.mass)) : 0;
+    } else for (const { side, item, grip } of held(source as Grips)) grips.push({ side, at: item.toWorld(gripOf(item, grip), _world).position.clone() });
+    const mass = !point ? Math.max(...held(source as Grips).map(({ item }) => item.mass)) : 0;
     let face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
@@ -291,7 +291,7 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
 }
 
 /** the middle of the grips `holds` take, where they are now */
-function middleOf(holds: Holds | Vector3): Vector3 {
+function middleOf(holds: Grips | Vector3): Vector3 {
   if (holds instanceof Vector3) return holds.clone();
   const hands = held(holds);
   return hands.reduce((sum, { item, grip }) => sum.add(item.toWorld(gripOf(item, grip), _world).position), new Vector3()).divideScalar(hands.length);

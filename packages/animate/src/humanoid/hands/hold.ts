@@ -6,7 +6,7 @@ import { ChainTip } from '../../core/tip';
 import { handStep } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
-import { grip, gripsOf, type Grips } from './grips';
+import { grip, gripsOf, type ItemGrips } from './grips';
 import { heldItems } from '../../core/worn';
 
 /** Tuned: how briskly a holding hand keeps to its grip as the item or the body moves (m/s², m/s, rad/s², rad/s): a firm hold, far quicker
@@ -74,7 +74,7 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
  * wrists — turned so the line between two grips lies along the line between the wrists, moved so
  * their middle is the wrists' middle
  */
-function fit(h: Humanoid, f: Frame, item: Item, aim: Carrier, grips: Grips, sides: readonly Side[]) {
+function fit(h: Humanoid, f: Frame, item: Item, aim: Carrier, grips: ItemGrips, sides: readonly Side[]) {
   const at = (side: Side, out: Vector3) => out.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
   const wrist = (side: Side, out: Vector3) => out.copy(f.current.position(h.hands[side]));
   const turn = _turn.identity();

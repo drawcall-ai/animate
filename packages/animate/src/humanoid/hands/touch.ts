@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { Item } from '../../core/carrier';
-import type { Holds } from '../../core/hands';
+import type { Grips } from '../../core/hands';
 import type { Body } from '../../core/body';
 import { withGaze } from '../../core/gaze';
 import { live, type Behaviour, type Live } from '../../core/goal';
@@ -25,7 +25,7 @@ export function touch<H extends string>(body: Body<H>, hand: H, target: Live<Vec
   return function* () {
     // (standing to it as to a grip there for that hand: it in that hand's comfortable reach)
     const at = live(target, body.frame).clone(), spot = new Item(at, new Quaternion(), { touched: { position: new Vector3() } }, { name: 'touched' });
-    yield* approach(body, { [side]: [spot, 'touched'] } as Holds<Side>)();
+    yield* approach(body, { [side]: [spot, 'touched'] } as Grips<Side>)();
     // (there once the hand is within a palm of it: the wrist goes for it, the palm and fingers meet it)
     const hand = INDEX[`${side}Hand`], there = (f: Frame) => f.prev.position(hand).distanceTo(live(target, f)) < PALM * body.scale;
     yield* withGaze(body, target, handTo(body, side, (f) => ({ position: live(target, f) }), { until: there }))();

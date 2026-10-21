@@ -19,7 +19,7 @@ import { request } from './asks';
 
 /** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. A body without hands
  * (`Species<never>`, a horse's) takes hold of nothing. */
-export type Holds<H extends string = string> = [H] extends [never] ? { readonly [hand: string]: never } : Readonly<Partial<Record<H, readonly [Item, string]>>>;
+export type Grips<H extends string = string> = [H] extends [never] ? { readonly [hand: string]: never } : Readonly<Partial<Record<H, readonly [Item, string]>>>;
 
 /** Tuned: how long (s) a creature's hand, let go, takes to be its base's again */
 const HANDING = 0.6;
@@ -37,7 +37,7 @@ const PRESSING = 0.1;
  * hand's chain reaches it, the hand closes and goes back to where the body's base has it, with what it took. Not there within REACHING s, it is a problem in the dev log and keeps going; a grip
  * out of its reach from anywhere it could stand is one too, and it stands where it is.
  */
-export function take<H extends string>(body: Body<H>, holds: Holds<H>, options: { look?: boolean | Live<Vector3>; walk?: boolean } = {}): Behaviour {
+export function take<H extends string>(body: Body<H>, holds: Grips<H>, options: { look?: boolean | Live<Vector3>; walk?: boolean } = {}): Behaviour {
   const [hand, ...more] = Object.keys(holds) as H[], hold = holds[hand];
   if (!hold || more.length) throw new Error('a creature takes hold with one hand at a time');
   const [item, grip] = hold, goal = gripOf(item, grip), chain = chainOf(body, hand);

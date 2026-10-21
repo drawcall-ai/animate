@@ -10,8 +10,8 @@ import { SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { lerp } from '../../core/math';
 import { LOAD_RESERVE } from './clearance';
-import { closeHand, held, openHand, type Grips } from './grips';
-import type { Holds } from '../../core/hands';
+import { closeHand, held, openHand, type ItemGrips } from './grips';
+import type { Grips } from '../../core/hands';
 import { heldItems } from '../../core/worn';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
@@ -24,7 +24,7 @@ import { heldItems } from '../../core/worn';
  * seeded by what it goes for), its arm kept as it is till then. Hands not there within `limit` s are a problem in the dev log
  * (`Body.log`), and they keep going: lateness never throws.
  */
-export function reachFor(h: Humanoid, holds: Holds, { limit = REACHING } = {}): Behaviour {
+export function reachFor(h: Humanoid, holds: Grips, { limit = REACHING } = {}): Behaviour {
   return function* () {
     const hands = held(holds), began = h.frame.time;
     const there = (f: Frame) => hands.every(({ side, item, grip }) => reached(f, h.hands[side], gripOf(item, grip), item));
@@ -127,7 +127,7 @@ export const LEADING: Side = 'right';
 const FOLLOWING = { delay: [0.06, 0.12], slower: [0.05, 0.1] };
 
 /** how much later and slower the other hand goes for `item` by `grips` (seeded by them and where it is: the same each run) */
-export function following(item: Item, grips: Grips) {
+export function following(item: Item, grips: ItemGrips) {
   const at = item.current.position;
   const rand = seeded(seedOf(...SIDES.map((s) => grips[s] ?? ''), Math.round(at.x * 1000), Math.round(at.y * 1000), Math.round(at.z * 1000)));
   return { delay: lerp(FOLLOWING.delay[0], FOLLOWING.delay[1], rand()), slower: lerp(FOLLOWING.slower[0], FOLLOWING.slower[1], rand()) };

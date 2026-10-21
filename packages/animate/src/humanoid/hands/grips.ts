@@ -1,13 +1,13 @@
 import type { Item } from '../../core/carrier';
 import type { Behaviour } from '../../core/goal';
-import type { Holds } from '../../core/hands';
+import type { Grips } from '../../core/hands';
 import { SIDES, type Side } from '../bones';
 import type { Humanoid } from '../humanoid';
 
 // Grips: what each hand takes hold of, and the hands closing and opening on them.
 
 /** Which of an item's grips each hand takes (by name). */
-export type Grips = Partial<Record<Side, string>>;
+export type ItemGrips = Partial<Record<Side, string>>;
 
 
 /** Hand `side` open (a stub: the hand has no fingers yet): holding nothing, at once. */
@@ -25,7 +25,7 @@ export function closeHand(h: Humanoid, side: Side, item: Item, grip: string): Be
 }
 
 /** a person's holds, side by side */
-export function held(holds: Holds) {
+export function held(holds: Grips) {
   for (const hand of Object.keys(holds)) if (!(SIDES as readonly string[]).includes(hand)) throw new Error(`a person has no hand "${hand}"`);
   return SIDES.flatMap((side) => {
     const hold = holds[side];
@@ -34,14 +34,14 @@ export function held(holds: Holds) {
 }
 
 /** the name of the grip hand `side` takes (it must take one) */
-export function grip(grips: Grips, side: Side): string {
+export function grip(grips: ItemGrips, side: Side): string {
   const name = grips[side];
   if (name === undefined) throw new Error(`no grip for the ${side} hand`);
   return name;
 }
 
-/** Grips of one item currently taken by this body. */
-export function gripsOf(h: Humanoid, item: Item): Grips {
+/** the grips of one item this body has taken, by side */
+export function gripsOf(h: Humanoid, item: Item): ItemGrips {
   return Object.fromEntries(SIDES.flatMap((side) => h.holding[side]?.item === item ? [[side, h.holding[side]?.grip]] : []));
 }
 
