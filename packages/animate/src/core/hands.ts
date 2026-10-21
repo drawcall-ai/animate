@@ -3,7 +3,8 @@ import { action, parallel } from '@pmndrs/timeline';
 import type { Body, Frame } from './body';
 import { gripOf, type Carrier, type Item } from './carrier';
 import { lookAt } from './gaze';
-import { live, REACHED, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './goal';
+import { problemOnce } from './dev';
+import { live, REACHED, REACHING, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './goal';
 import { course, type Waypoint } from './course';
 import { Pose, type ReadonlyPose } from './pose';
 import { STOOPING } from './legs/creature';
@@ -24,8 +25,6 @@ export type Holds<H extends string = string> = [H] extends [never] ? { readonly 
 const HANDING = 0.6;
 /** Tuned: how a creature's hand goes to a grip (m/s², m/s) and back to rest (rad/s², rad/s): a calm dip of the head */
 const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };
-/** the longest a hand takes to get to its grip before it is a problem in the dev log (s) */
-const REACHING = 3;
 /** Tuned: standing to take something, the share of the hand's chain it reaches out to, and the share of that reach along the floor the grip is ahead of the chain's base */
 const OUT = 0.9;
 const AHEAD = 0.6;
@@ -48,11 +47,7 @@ export function take<H extends string>(body: Body<H>, holds: Holds<H>, options: 
     // standing where it is, doing nothing more for it)
     const off = standOff(body, chain, at());
     if (typeof off !== 'number') {
-      let logged = false;
-      yield* action<Frame>({ update: (f) => {
-        if (!logged) f.dev?.append(f.time, { check: 'grab out of reach: grip from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chain}` });
-        logged = true;
-      } });
+      yield* problemOnce({ check: 'grab out of reach: grip from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chain}` })();
       return;
     }
     if (options.walk !== false) {
@@ -183,7 +178,7 @@ export function nuzzle(body: Body, hand: string, target: Live<Vector3>): Behavio
     };
     const off = standOff(body, chain, at(), lowest + (legs.length ? lever(body.frame) * Math.sin(STOOPING.bow) : 0));
     if (typeof off !== 'number') {
-      yield* unreachableHere(body, 'touch out of reach: target from the hand\'s base, up or down, lowered (m)', off, chain)();
+      yield* problemOnce({ check: 'touch out of reach: target from the hand\'s base, up or down, lowered (m)', ...off, where: chain })();
       return;
     }
     const walk = walkTo(body, { to: at, within: off });
@@ -216,14 +211,6 @@ export function nuzzle(body: Body, hand: string, target: Live<Vector3>): Behavio
   };
 }
 
-/** a problem in the dev log, once: the body stands where it is, doing nothing more for it */
-function unreachableHere(_body: Body, check: string, off: { value: number; limit: number }, where: string): Behaviour {
-  return function* () {
-    let logged = false;
-    yield* action<Frame>({ update: (f) => { if (!logged) f.dev?.append(f.time, { check, ...off, where }); logged = true; } });
-  };
-}
-
 /** the chain of `bones` laid out end to end (m) */
 function chainLength(body: Body, bones: readonly number[]): number {
   return bones.slice(1).reduce((sum, b) => sum + body.pose.skeleton.bones[b].offset.length(), 0);
@@ -236,11 +223,7 @@ export function put(body: Body, item: Item, to: Live<Placement>): Behaviour {
     if (!hand) throw new Error(`"${item.name}" is not held`);
     const at = () => live(to, body.frame).position.clone(), off = standOff(body, chainOf(body, hand), at());
     if (typeof off !== 'number') {
-      let logged = false;
-      yield* action<Frame>({ update: (f) => {
-        if (!logged) f.dev?.append(f.time, { check: 'place out of reach: placement from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chainOf(body, hand)}` });
-        logged = true;
-      } });
+      yield* problemOnce({ check: 'place out of reach: placement from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chainOf(body, hand)}` })();
       return;
     }
     yield* walkTo(body, { to: at, within: off })();
@@ -268,7 +251,7 @@ function itemIn(pose: ReadonlyPose, bone: number, item: Item): Required<Placemen
 /** `hold` for a body other than a person: the chain of the hand holding `item` goes back to rest (the item on it) and keeps it there, endless or until `until`. */
 export function keep(body: Body, item: Item, until?: Exclude<Until, 'reached'>): Behaviour {
   return function* () {
-    const hand = Object.keys(body.holding).find((hand) => body.holding[hand]?.item === item);
+    const hand = handHolding(body, item);
     if (!hand) throw new Error(`"${item.name}" is not held`);
     item.supported = false;
     const bones = body.pose.skeleton.chain(chainOf(body, hand));
@@ -294,7 +277,7 @@ function chainOf(body: Body, hand: string): string {
  */
 function standOff(body: Body, chain: string, point: Readonly<Vector3>, lowered = 0): number | { value: number; limit: number } {
   const { skeleton } = body.pose, bones = skeleton.chain(chain);
-  const base = body.pose.position(bones[0]), length = bones.slice(1).reduce((sum, b) => sum + skeleton.bones[b].offset.length(), 0);
+  const base = body.pose.position(bones[0]), length = chainLength(body, bones);
   const out = OUT * length, drop = Math.max(-out, base.y - lowered - point.y);
   if (drop > out || base.y - point.y < -out) return { value: Math.abs(base.y - point.y), limit: out + lowered };
   return _v.subVectors(base, body.pose.position(0)).dot(forwardOf(body.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);

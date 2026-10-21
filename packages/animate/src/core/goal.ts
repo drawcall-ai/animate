@@ -51,6 +51,8 @@ export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
 export type Until = UntilCondition<Frame> | 'reached';
 
 /** what `'reached'` allows: m, rad, m/s */
+/** the longest a hand takes to get to its goal, unless told, before it is a problem in the dev log (s): a person's and another body's alike */
+export const REACHING = 4;
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };
 
 /** A placement on a bone, scaled with its body and followed from final poses. */

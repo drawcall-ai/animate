@@ -19,6 +19,7 @@ import type { Holds } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
 import { bowLever, lowering, MOST_BOW, SQUAT } from '../posture/posture';
+import { problemOnce } from '../../core/dev';
 
 // Taking hold of things: walking up to them, the eyes and hands going ahead.
 
@@ -151,13 +152,6 @@ function stoop(p: Humanoid['proportions'], want: number): { drop: number; forwar
   return { drop, forward: lever * Math.sin(bow) };
 }
 
-/** a problem in the dev log, once; the body then stands where it is, asking nothing more */
-function unreachable(check: string, value: number, limit: number, where: string): Behaviour {
-  return function* () {
-    let logged = false;
-    yield* action<Frame>({ update: (f) => { if (!logged) f.dev?.append(f.time, { check, value, limit, where }); logged = true; } });
-  };
-}
 
 /** Prepare the knees during the last landing (s before arrival). */
 const LOWERING = 0.3;
@@ -221,7 +215,7 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
     if (point) {
       const distance = Math.hypot(Math.max(0, ahead - forward), aside, height - shoulders);
       if (options.spot ? distance > reach : Math.hypot(aside, height - shoulders) > reach) {
-        yield* unreachable(`approach: placing point from the shoulders' middle, lowered and bowed (m)`, distance, reach, `${grips.length} grips`)();
+        yield* problemOnce({ check: `approach: placing point from the shoulders' middle, lowered and bowed (m)`, value: distance, limit: reach, where: `${grips.length} grips` })();
         return;
       }
     }
@@ -249,7 +243,7 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
     };
     const yaw = clearFacing();
     if (yaw === undefined) {
-      yield* unreachable(options.face === undefined ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand', 1, 0, `${grips.length} grips`)();
+      yield* problemOnce({ check: options.face === undefined ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand', value: 1, limit: 0, where: `${grips.length} grips` })();
       return;
     }
     face = yaw;

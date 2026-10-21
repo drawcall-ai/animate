@@ -2,7 +2,7 @@ import { Box3, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import { gripOf, type Item } from '../../core/carrier';
-import { REACHED, type Behaviour, type Target } from '../../core/goal';
+import { REACHED, type Behaviour, type Target, REACHING } from '../../core/goal';
 import { seeded, seedOf } from '../../core/random';
 import { reached } from '../../core/tip';
 import { handTo } from '../arms';
@@ -16,8 +16,6 @@ import { heldItems } from '../../core/worn';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
 
-/** the longest the hands take to get to their grips, unless told (s) */
-const REACHING = 4;
 
 /**
  * The hands open, go to their grips together (already on them, they close at once) (one shared condition: each stays on its way until

@@ -10,7 +10,7 @@ import { live, type Behaviour, type Live, type Motion, type Placement, type Targ
 import { clampRotation } from '../core/limits';
 import { ChainTip, reached } from '../core/tip';
 import { TrackedRotation } from '../core/track';
-import { INDEX, SIDES, type Side } from './bones';
+import { INDEX, SIDES, sideOf, type Side } from './bones';
 import { isPerson, type Humanoid } from './humanoid';
 import { bringShoulder, twistToward } from './reach-posture';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../core/math';
@@ -137,7 +137,7 @@ export function handTo<H extends string>(body: Body<H>, hand: H, target: Live<Ta
     personOnly('handTo', options, ['pole', 'lead', 'seconds', 'after']);
     return tipToward(body, hand, target, { on: options.on, accel: options.accel, speed: options.speed, until: options.until });
   }
-  return personHandTo(body, hand as string as Side, target, options);
+  return personHandTo(body, sideOf(hand), target, options);
 }
 
 function personHandTo(h: Humanoid, side: Side, target: Live<Target>, options: HandOptions): Behaviour {

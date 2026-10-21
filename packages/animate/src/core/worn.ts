@@ -18,7 +18,6 @@ export interface Wearing {
   sits: { position: Vector3; quaternion: Quaternion; prev: Vector3; prev2: Vector3; prevQ: Quaternion; prev2Q: Quaternion } | null;
 }
 
-/** how a worn item settles where it goes unless asked otherwise (m/s², m/s, rad/s², rad/s): gently, as a helm onto the head */
 /** How `wear` puts it on. */
 export interface WearOptions {
   /** where it settles, in the frame of what it is worn on */
@@ -26,6 +25,7 @@ export interface WearOptions {
   /** the pace it settles at */
   motion?: Motion;
 }
+/** how a worn item settles where it goes unless asked otherwise (m/s², m/s, rad/s², rad/s): gently, as a helm onto the head */
 export const SETTLING = { accel: 2, speed: 0.4, turnAccel: 8, turnSpeed: 2 } satisfies Motion;
 /**
  * `item` worn on `on` (a bone, or another item) from this sub-step on: it goes with it as it sat
@@ -104,7 +104,7 @@ function place(f: Frame, item: Item, wearing: Wearing, worn: ReadonlyMap<Item, W
 }
 
 /** Attachment history starts stationary at this local placement. */
-export function sitsAt(position: Vector3, quaternion: Quaternion): NonNullable<Wearing['sits']> {
+function sitsAt(position: Vector3, quaternion: Quaternion): NonNullable<Wearing['sits']> {
   return { position, quaternion, prev: position.clone(), prev2: position.clone(), prevQ: quaternion.clone(), prev2Q: quaternion.clone() };
 }
 

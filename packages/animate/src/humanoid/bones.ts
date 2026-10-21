@@ -39,6 +39,13 @@ export type ChildBone = Exclude<BoneName, 'hips'>;
 export const SIDES = ['left', 'right'] as const;
 export type Side = (typeof SIDES)[number];
 
+/** `hand` as a person's side: a person's hands are `left` and `right` (a hand of another name is a misuse, said at once) */
+export function sideOf(hand: string): Side {
+  const side = SIDES.find((s) => s === hand);
+  if (!side) throw new Error(`a person's hands are left and right, not "${hand}"`);
+  return side;
+}
+
 /** One fresh value per bone. */
 export function perBone<V>(make: (b: BoneName) => V): Record<BoneName, V> {
   return {

@@ -5,7 +5,7 @@ import { letGo, personOnly } from '../../core/hands';
 import type { Behaviour, Target } from '../../core/goal';
 import { reached } from '../../core/tip';
 import { ARM_REACH, clearArm, handTo } from '../arms';
-import { INDEX, type Side } from '../bones';
+import { INDEX, sideOf, type Side } from '../bones';
 import { isPerson, type Humanoid } from '../humanoid';
 import { facingAt } from '../../core/goal';
 import { heldItems } from '../../core/worn';
@@ -35,7 +35,7 @@ export function release<H extends string>(body: Body<H>, hands: readonly H[], op
     personOnly('release', options, ['away', 'limit']);
     return letGo(body, hands);
   }
-  return person(body, hands as readonly string[] as readonly Side[], options as ReleaseOptions<Side>);
+  return person(body, hands.map(sideOf), { limit: options.limit, away: options.away === null ? null : options.away && Object.fromEntries(Object.entries(options.away).map(([hand, at]) => [sideOf(hand), at])) });
 }
 
 function person(h: Humanoid, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number }): Behaviour {

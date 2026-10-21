@@ -12,8 +12,16 @@ import { rests } from '../core/hands';
 export function carried<H extends string>(body: Body<H>, hand?: H): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
   // (another body's: where its hand rests)
   if (!isPerson(body)) {
-    const rest = rests(body, hand ?? (Object.keys(body.hands)[0] as H));
-    return (f) => ({ ...rest(f), velocity: new Vector3() });
+    const rest = rests(body, hand ?? (Object.keys(body.hands)[0] as H)), velocity = new Vector3();
+    let last: { time: number; position: Vector3 } | null = null;
+    // (moving as the body carries it: a goal on the move is followed, not lagged behind)
+    return (f) => {
+      const at = rest(f);
+      if (last && Math.abs(f.time - f.dt - last.time) < 1e-9) velocity.subVectors(at.position, last.position).divideScalar(f.dt);
+      else if (!last || last.time !== f.time) velocity.set(0, 0, 0);
+      if (!last || last.time !== f.time) last = { time: f.time, position: at.position.clone() };
+      return { ...at, velocity: velocity.clone() };
+    };
   }
   return personCarried(body, hand as Side | undefined);
 }

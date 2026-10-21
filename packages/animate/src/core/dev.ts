@@ -40,6 +40,14 @@ export class Dev {
   }
 }
 
+/** a problem in the dev log, once: the body then stands where it is, asking nothing more — what a verb does for a goal it can never get to */
+export function problemOnce(problem: Problem): Behaviour {
+  return function* () {
+    let logged = false;
+    yield* action<Frame>({ update: (f) => { if (!logged) f.dev?.append(f.time, problem); logged = true; } });
+  };
+}
+
 /** Labels a behaviour's contributions to each final pose (parallel labels are joined): a behaviour, or a timeline already made
  * (`parallel(…)`, which then runs once). */
 export function named(label: string, behaviour: Behaviour | NonReuseableTimeline<Frame>): Behaviour {

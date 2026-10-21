@@ -9,6 +9,8 @@ import type { Humanoid } from '../humanoid';
 import { grip, gripsOf, type Grips } from './grips';
 import { heldItems } from '../../core/worn';
 
+/** Tuned: how briskly a holding hand keeps to its grip as the item or the body moves (m/s², m/s, rad/s², rad/s): a firm hold, far quicker
+ * than a reach, so it never trails what it holds */
 const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
 /**
@@ -16,7 +18,7 @@ const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
  * `REACHED.distance`, and the same frame's hold step and fit may pull it up to ~2 cm more (tuned
  * against the scenes' grabs, none of which comes closer than 1 cm to this limit).
  */
-export const GRIP_TAKEN = REACHED.distance + 0.02;
+const GRIP_TAKEN = REACHED.distance + 0.02;
 
 const _taken: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 

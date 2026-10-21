@@ -218,6 +218,8 @@ class CarryAim {
   }
 }
 
+/** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
+const PREPARED = 2;
 /** Tuned: a held goal moved further than this (m, × the body's scale) to clear the neck and head is noted */
 const CLEARED = 0.02;
 
@@ -231,7 +233,7 @@ function holding(h: Humanoid, item: Item, path: CarryAim, options: { to?: Live<P
       yield* action<Frame>({ until: options.until });
       return;
     }
-    if (item.supported && item.mass > 2 && (item.current.position.y >= h.proportions.hipHeight || h.proportions.hipHeight - h.pose.position(0).y < 0.005 * h.scale)) {
+    if (item.supported && item.mass > PREPARED && (item.current.position.y >= h.proportions.hipHeight || h.proportions.hipHeight - h.pose.position(0).y < 0.005 * h.scale)) {
       // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
       yield* action<Frame>({ update: () => {
         request(h.asks, { lower: 0.005 * h.scale });

@@ -6,7 +6,7 @@ import { withGaze } from '../../core/gaze';
 import { live, type Behaviour, type Live } from '../../core/goal';
 import { nuzzle } from '../../core/hands';
 import { handTo } from '../arms';
-import { INDEX, type Side } from '../bones';
+import { INDEX, sideOf, type Side } from '../bones';
 import type { Frame } from '../../core/body';
 import { isPerson } from '../humanoid';
 import { approach } from './grab';
@@ -21,7 +21,7 @@ const PALM = 0.04;
  */
 export function touch<H extends string>(body: Body<H>, hand: H, target: Live<Vector3>): Behaviour {
   if (!isPerson(body)) return nuzzle(body, hand, target);
-  const side = hand as string as Side;
+  const side = sideOf(hand);
   return function* () {
     // (standing to it as to a grip there for that hand: it in that hand's comfortable reach)
     const at = live(target, body.frame).clone(), spot = new Item(at, new Quaternion(), { touched: { position: new Vector3() } }, { name: 'touched' });
