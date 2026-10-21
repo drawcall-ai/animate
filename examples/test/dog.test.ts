@@ -3,13 +3,13 @@ import { expect, it } from 'vitest';
 import { dogFetch } from '../src/scenarios/dog';
 
 it('a dog made of data only trots to a ball, takes it in its jaw and carries it back, its whole body riding on the trot', () => {
-  const stage = dogFetch().stage(true);
+  const scenario = dogFetch(), stage = scenario.stage(true);
   const [dog] = stage.bodies ?? [];
   const s = dog.pose.skeleton, jaw = s.index('jaw'), withersAt = s.index('leftFore0'), pelvis = s.index('pelvis');
   const paws = dog.species.legs!.chains.map((leg) => leg.joints[3].bone);
   let off = 0, taken = NaN, up = paws.map(() => false);
   const landed: [time: number, trotting: boolean][][] = paws.map(() => []), withers: number[] = [], croup: number[] = [], roll: number[] = [], yaw: number[] = [];
-  for (let i = 0; i < 14 * 60; i++) {
+  for (let i = 0; i < scenario.duration * 60; i++) {
     dog.update(1 / 60);
     const ball = dog.holding.jaw?.item;
     if (ball) {

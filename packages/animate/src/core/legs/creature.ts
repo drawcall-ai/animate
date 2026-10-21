@@ -15,7 +15,7 @@ import { Stepper } from './stepper';
 import { strideAt } from './gait';
 
 /** Not public: the legs a creature stands and walks on until the stepper replaces `Legs` (the tests compare the two). */
-export const creatureLegs: { path: 'legs' | 'stepper' } = { path: 'legs' };
+export const creatureLegs: { path: 'legs' | 'stepper' } = { path: 'stepper' };
 
 /**
  * A creature's base, endless: its species' legs carry it where a walk asks (`asks.go`), no faster than it
@@ -58,26 +58,31 @@ function stepping(body: Body, attention: Attention): Behaviour {
   const kind = body.species.legs!, gait = kind.gait;
   return function* () {
     const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest));
-    const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth)), record = steppingOf(gait, feet, Math.min(...posers.map((poser) => poser.turn)));
+    const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth)), record = steppingOf(gait, feet, Math.min(...posers.map((poser) => poser.turn)), Math.max(...posers.map((poser) => poser.ball)));
     const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone().setY(feet.ankleHeight), yaw: body.yaw }));
     const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw));
     const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
-    const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius);
+    const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius, false);
     // (it turns no faster than a planted foot, stepping in its turn, swings from one side of where its leg reaches to the other)
     const slowest = strideAt(gait, gait.slowest, 0), turning = TURNING * 2 * Math.min(...feet.legs.map((leg) => leg.stray ?? 0)) / (radius * slowest.duty / slowest.frequency);
     const posture = kind.posture?.(body.pose), asks = createAsks();
     const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seedOf(start.x, start.z)) : null;
     const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
-    let going = false;
+    let going = false, followed: Vector3 | null = null;
     const legs: Striding & { height: number } = { legs: phases, height: start.y, rest: (p) => p.forEach((pitch, i) => { pitches[i] = pitch; }) };
     yield* action<Frame>({ update: (f) => {
       const { go } = takeAsks(body.asks, asks), g = body.locomotion;
       if (f.time > f.dt) posers.forEach((poser) => poser.check(f));
       const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - planner.root.yaw), 0) / stepper.legs.length + planner.root.yaw;
       // (a goal off its way it turns to first, as a person does: facing it till it is on its way; nearer than its feet stand, it is there)
-      // (it sets off for a goal further than `STOP.start` and stops within `STOP.distance` of it, slow: there it stands, not edging about)
-      const root = planner.root.position, asked = go?.to.clone().setY(0) ?? root.clone(), speed0 = planner.root.velocity.length();
-      if (!going && asked.distanceTo(root) > STOP.start) going = true;
+      // (it sets off for a goal further than `STOP.start`, or one on the move, and stops within `STOP.distance` of a still one, slow:
+      // there it stands, not edging about)
+      const root = planner.root.position, speed0 = planner.root.velocity.length();
+      // (a goal on the move followed as it goes, carried on at its speed and drawn to where it is `FOLLOWING` /s: not its every sway)
+      if (go?.velocity && followed) followed.addScaledVector(go.velocity, f.dt).lerp(go.to, Math.min(1, FOLLOWING * f.dt)).setY(0);
+      else followed = go?.velocity ? go.to.clone().setY(0) : null;
+      const asked = followed?.clone() ?? go?.to.clone().setY(0) ?? root.clone();
+      if (!going && (asked.distanceTo(root) > STOP.start || (go?.velocity?.lengthSq() ?? 0) > 0)) going = true;
       if (going && asked.distanceTo(root) < STOP.distance && speed0 < STOP.speed && !go?.velocity) going = false;
       const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
       const faced = asks.face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
@@ -85,17 +90,28 @@ function stepping(body: Body, attention: Attention): Behaviour {
         { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(asks.face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));
       stepper.move(f, r);
       f.current.setLocal(0, _yaw.setFromAxisAngle(UP, stepper.yaw));
-      // (each leg's phase through its stride, 0 as it lands: its stance, then its swing)
-      stepper.legs.forEach((leg, i) => { phases[i].phase = leg.swing ? (stepper.Ts + leg.swing.u * (stepper.cycle - stepper.Ts)) / stepper.cycle : (leg.planted / stepper.cycle) % 1; });
+      // (each leg's phase through its stride, 0 as it lands: its stance, then its swing — run on at the cadence and drawn toward where the
+      // foot is, `LOCKING` /s, so a change of cadence does not jolt what rides on it)
+      stepper.legs.forEach((leg, i) => {
+        const at = leg.swing ? (stepper.Ts + leg.swing.u * (stepper.cycle - stepper.Ts)) / stepper.cycle : (leg.planted / stepper.cycle) % 1;
+        const p = phases[i], ahead = p.phase + f.dt / stepper.cycle, off = at - ahead - Math.round(at - ahead);
+        p.phase = f.time <= f.dt ? at : (((ahead + off * Math.min(1, LOCKING * f.dt)) % 1) + 1) % 1;
+      });
       legs.height = f.current.position(0).y;
       posture?.prepare(f, legs, attention, asks.look);
       if (carried) { carried.step(f, legs); carried.write(f); }
       const speed = Math.hypot(r.velocity.x, r.velocity.z), walking = Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest));
-      const duty = strideAt(gait, speed, 0).duty;
       stepper.legs.forEach((leg, i) => {
-        const top = f.current.position(feet.legs[i].top), foot = stepper.pose(i, top);
-        const u = leg.swing ? duty + leg.swing.u * (1 - duty) : Math.min(duty, duty * leg.planted / stepper.Ts);
-        posers[i].pose(f, foot, u, leg.swing ? leg.swing.u : null, gait, speed, walking, stepper.yaw);
+        // (each leg through its own stride by the cycle, as the gait's cycles are read: a stance cut short swings on from where it is)
+        const top = f.current.position(feet.legs[i].top), foot = stepper.pose(i, top), duty = strideAt(gait, speed, i).duty;
+        // (a foot the posture rests, standing, tips onto its toe (° toes down), its toe kept where it stands)
+        if (!leg.swing && pitches[i] !== 0) {
+          const pitch = pitches[i] * Math.PI / 180;
+          feet.ankle(i, leg.anchor, leg.yaw, pitch, foot.ankle);
+          feet.rotation(leg.yaw, pitch, foot.foot);
+        }
+        const u = leg.swing ? duty + leg.swing.u * (1 - duty) : Math.min(duty, leg.planted / stepper.cycle);
+        posers[i].pose(f, foot, u, leg.swing ? leg.swing.u : null, gait, speed, walking, stepper.yaw, i);
       });
       g.velocity.copy(r.velocity).setY(0);
       [g.facing, g.moving, g.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
@@ -109,5 +125,9 @@ const TURN = { gap: 0.3, cone: 0.35, ahead: 1, motion: { turnAccel: 2, turnSpeed
 const STOP = { start: 0.05, distance: 0.03, speed: 0.1 };
 /** the share of the turn its feet's stray lets it make */
 const TURNING = 2;
+/** Tuned (1/s): how fast a followed goal on the move is drawn to where it is */
+const FOLLOWING = 3;
+/** Tuned (1/s): how fast the phase the carriage rides on is drawn to the feet's */
+const LOCKING = 6;
 const UP = new Vector3(0, 1, 0);
 const _gap = new Vector3(), _still = new Vector3(), _to = new Vector3(), _yaw = new Quaternion();

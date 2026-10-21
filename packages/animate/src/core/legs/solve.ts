@@ -156,7 +156,7 @@ export class Solver {
   }
 
   /** the joints `q` (rad, written back; starting from the references) that reach `target` off a base turned `turn` at `top` (the top joint's world position), the pose untouched. Returns the miss (m). */
-  reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array, seed = this.ref): number {
+  reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array, seed = this.ref, steps = STEPS): number {
     const was = _was.subarray(0, this.n);
     was.set(this.q);
     this.prior.set(seed);
@@ -164,12 +164,12 @@ export class Solver {
     this.baseTurn.copy(turn);
     this.basePosition.copy(top);
     const heading = () => Math.abs(wrapAngle(yawOf(target.rotation) - yawOf(this.rotations[this.bones.length - 1])));
-    let miss = this.iterate(target), angle = heading(), rotation = target.rotation.angleTo(this.rotations[this.bones.length - 1]);
+    let miss = this.iterate(target, steps), angle = heading(), rotation = target.rotation.angleTo(this.rotations[this.bones.length - 1]);
     q.set(this.q);
     // An orientation-constrained reference can converge on the wrong branch; also try the completed pose.
     if (angle > 1e-4 || (seed !== this.ref && (miss > 1e-6 || rotation > 1e-4))) {
       this.q.set(seed === this.ref ? was : this.ref);
-      const next = this.iterate(target), turn = heading();
+      const next = this.iterate(target, steps), turn = heading();
       if (Math.max(next, turn) < Math.max(miss, angle)) { miss = next; angle = turn; rotation = target.rotation.angleTo(this.rotations[this.bones.length - 1]); q.set(this.q); }
     }
     this.q.set(was);
@@ -191,14 +191,14 @@ export class Solver {
   }
 
   /** Bounded damped Gauss-Newton (straight knees are singular): terminal miss in m. */
-  private iterate(target: LegTarget): number {
+  private iterate(target: LegTarget, steps = STEPS): number {
     const { n, q, H, g, d, J, lo: lb, hi: ub, fixed, weight, ref, trial } = this;
     this.bound(q);
     const r = _r;
     const wp = this.stiffness(target, Math.sqrt(STIFF)), wr = this.stiffness(target, this.weightSum);
     let cost = this.cost(target, r);
     let damping = 1e-3;
-    for (let step = 0; step < STEPS; step++) {
+    for (let step = 0; step < steps; step++) {
       this.linearise(target, r);
       // H = Jᵀ W J + S, g = Jᵀ W r + S (q − ref).
       for (let i = 0; i < n; i++) {

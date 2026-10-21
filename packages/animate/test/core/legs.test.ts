@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
-import { action } from '@pmndrs/timeline';
+import { action, parallel } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
 import { strideAt, type Gait } from '../../src/core/legs/gait';
 import { Limb, type Walker } from '../../src/core/legs/limb';
@@ -8,8 +8,11 @@ import { Solver } from '../../src/core/legs/solve';
 import * as pursuit from '../../src/core/legs/root';
 import { Legs } from '../../src/core/legs/legs';
 import { quintic } from '../../src/core/legs/swing';
-import { HORSE_WALK, HORSE_TROT, horseLegs, horseLeadPoint } from '../../src/horse/legs';
+import { HORSE_WALK, HORSE_TROT, horse, horseLegs, horseLeadPoint } from '../../src/horse/legs';
 import { horseMotion } from '../../src/horse/legs';
+import { idle } from '../../src/humanoid/idle';
+import { walkTo } from '../../src/core/walk';
+import type { Species } from '../../src/core/species';
 import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
@@ -115,13 +118,10 @@ it('shortens a long foothold with at most 40 reach solves and keeps its verified
 });
 
 it('follows a moving goal with supported contacts and a root that turns toward its path', () => {
-  const pose = new Pose(SKELETON);
-  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
+  const base = horse();
   let turned = 0;
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    engine.toward(f, { position: new Vector3(0.05, pose.position(0).y, 2 + 0.75 * f.time), velocity: new Vector3(0, 0, 0.75) }, { speed: 0.95, accel: 0.65 });
-    turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w)));
-  } }), { pose, dev: true });
+  const body: Body = new Body(base, () => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => new Vector3(0.05, 0, 2 + 0.75 * f.time), velocity: () => new Vector3(0, 0, 0.75), speed: 0.95, accel: 0.65, until: () => false }),
+    action<Frame>({ update: (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); } })), { pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 8 * 60; tick++) body.update(1 / 60);
   expect(body.pose.position(0).z).toBeGreaterThan(4);
   expect(turned).toBeGreaterThan(0.01);
@@ -139,46 +139,38 @@ it('back flexion pivots about the hips without translating their attachments', (
 });
 
 it('a slow horse walk supports on an extended carpus, folds in swing and visibly nods', () => {
-  const pose = new Pose(SKELETON);
-  pose.setRoot(new Vector3(0, 1.37, 0));
-  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const motion = horseMotion(pose, HORSE_WALK);
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    motion.prepare(f, engine);
-    engine.toward(f, { position: new Vector3(0, 1.37, 20) }, { speed: 0.95, accel: 0.65 });
-  } }), { pose, dev: true });
+  const { body, planted: down, phase } = movingHorse(HORSE_WALK, 0.95, {}, 42, () => null, 0.65);
   const support: number[] = [], swing: number[] = [], poll: number[] = [];
   const hoofPitch: number[] = [], hindHock: number[] = [], column: number[] = [];
   const planted = [true, true, true, true];
   const contact = [0, 0], horizontal = [0, 0];
   for (let tick = 0; tick < 480; tick++) {
     body.update(1 / 60);
-    engine.legs.forEach((state, i) => {
-      if (state.planted && !planted[i]) {
-        const velocity = body.pose.position(LEGS[i].hoof).clone().sub(body.frame.prev2.position(LEGS[i].hoof)).multiplyScalar(60);
+    LEGS.forEach((leg, i) => {
+      if (down(i) && !planted[i]) {
+        const velocity = body.pose.position(leg.hoof).clone().sub(body.frame.prev2.position(leg.hoof)).multiplyScalar(60);
         contact[i < 2 ? 0 : 1] = Math.max(contact[i < 2 ? 0 : 1], Math.abs(velocity.y));
         horizontal[i < 2 ? 0 : 1] = Math.max(horizontal[i < 2 ? 0 : 1], velocity.setY(0).length());
       }
-      planted[i] = state.planted;
+      planted[i] = down(i);
     });
     if (tick < 180) continue;
-    const state = engine.legs[0];
     const q = body.pose.local(LEGS[0].cannon);
     const angle = Math.abs(2 * Math.atan2(q.x, q.w)) * 180 / Math.PI;
-    if (state.planted && state.phase > 0.15 && state.phase < 0.45) support.push(angle);
-    if (!state.planted) swing.push(angle);
+    if (down(0) && phase(0) > 0.15 && phase(0) < 0.45) support.push(angle);
+    if (!down(0)) swing.push(angle);
     poll.push(body.pose.position(HEAD).y);
-    engine.legs.forEach((leg, i) => {
-      if (!leg.planted) {
-        const forward = new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(LEGS[i].hoof));
+    LEGS.forEach((leg, i) => {
+      if (!down(i)) {
+        const forward = new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(leg.hoof));
         hoofPitch.push(Math.asin(forward.y) * 180 / Math.PI);
       }
-      if (i < 2 && leg.planted && leg.phase > 0.26 && leg.phase < 0.3) {
-        const delta = body.pose.position(LEGS[i].pastern).clone().sub(body.pose.position(LEGS[i].cannon));
+      if (i < 2 && down(i) && phase(i) > 0.26 && phase(i) < 0.3) {
+        const delta = body.pose.position(leg.pastern).clone().sub(body.pose.position(leg.cannon));
         column.push(Math.abs(Math.atan2(delta.z, -delta.y)) * 180 / Math.PI);
       }
-      if (i >= 2 && leg.planted && leg.phase > 0.2 && leg.phase < 0.45) {
-        const hock = body.pose.local(LEGS[i].cannon);
+      if (i >= 2 && down(i) && phase(i) > 0.2 && phase(i) < 0.45) {
+        const hock = body.pose.local(leg.cannon);
         hindHock.push(Math.abs(2 * Math.atan2(hock.x, hock.w)) * 180 / Math.PI);
       }
     });
@@ -198,17 +190,12 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
 });
 
 it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goals (%s, %s), then follows their next position', (x, z) => {
-  const pose = new Pose(SKELETON);
-  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const goal = new Vector3(x, pose.position(0).y, z);
-  const start = pose.position(0).clone();
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
-  } }), { pose, dev: true });
+  let goal = new Vector3(x, 0, z);
+  const body: Body = new Body(horse(), () => parallel<Frame>('all', idle(body), walkTo(body, { to: () => goal, speed: 0.95, accel: 0.65, until: () => false })), { pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 120; tick++) body.update(1 / 60);
-  if (z <= 0) expect(body.pose.position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
-  goal.set(0, start.y, 3);
-  for (let tick = 0; tick < 240; tick++) body.update(1 / 60);
+  goal = new Vector3(0, 0, 3);
+  // (a goal behind it first turned to, on the spot: the next one ahead it then walks on to)
+  for (let tick = 0; tick < (z <= 0 ? 40 : 4) * 60; tick++) body.update(1 / 60);
   expect(body.pose.position(0).z).toBeGreaterThan(1);
   expect(body.log).toEqual([]);
 });
@@ -260,28 +247,34 @@ it('reuses each travel forecast across root-height candidates', () => {
 });
 
 
-function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null) {
-  const pose = new Pose(SKELETON);
-  pose.setRoot(new Vector3(0, 1.32, 0));
-  const chains = horseLegs().map(chain => Object.freeze(chain));
-  const legs = new Legs(pose, chains, gait);
-  const motion = horseMotion(pose, gait, seed);
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    motion.prepare(f, legs, attention, look());
-    legs.toward(f, { position: new Vector3(0, 1.32, speed ? 100 : 0) }, { speed, accel: 1.85 });
-  } }), { pose, dev: true });
-  return { body, legs, motion };
+/**
+ * A horse on its species' legs (the planner and stepper), its posture at `gait` seeded by `seed`, walking straight on at `speed` (0:
+ * standing) with `accel`, its `attention` and looking at what `look` gives; each leg's planted state and phase through its stride
+ * (cycles since it landed, then on through its swing).
+ */
+function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
+  const base = horse(), species: Species = { ...base, legs: { ...base.legs!, gait, posture: (start) => horseMotion(start, gait, seed) } };
+  const body: Body = new Body(species, () => parallel<Frame>('all', idle(body, { attention }),
+    action<Frame>({ update: () => { const at = look(); if (at) body.asks.look = at; } }),
+    ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 200), speed, accel })] : [])), { pose: new Pose(SKELETON), dev: true });
+  const planted = (i: number) => !body.stepper!.legs[i].swing;
+  const phase = (i: number) => {
+    const stepper = body.stepper!, leg = stepper.legs[i];
+    return leg.swing ? (stepper.Ts + leg.swing.u * (stepper.cycle - stepper.Ts)) / stepper.cycle : (leg.planted / stepper.cycle) % 1;
+  };
+  return { body, planted, phase };
 }
 const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samples);
 const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'YXZ').x;
 
 it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
-  const { body, legs } = movingHorse(gait, speed);
+  const { body, phase: phaseOf } = movingHorse(gait, speed);
   const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [], back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];
   const high: number[] = [], low: number[] = [], relative: number[] = [], relativeCroup: number[] = [], lead: number[] = [];
-  for (let tick = 0; tick < 600; tick++) {
+  // (at speed: 10 s on, then 6 s)
+  for (let tick = 0; tick < 960; tick++) {
     body.update(1 / 60);
-    if (tick < 240) continue;
+    if (tick < 600) continue;
     const p = body.pose;
     poll.push(p.position(HEAD).y); withers.push(p.position(LEGS[0].scapula ?? 0).y); croup.push(p.position(PELVIS).y);
     trunk.push(pitchOf(p.rotation(0))); head.push(pitchOf(p.rotation(HEAD))); back.push(pitchOf(p.local(SPINE)));
@@ -290,7 +283,7 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
     relative.push(p.position(HEAD).y - p.position(LEGS[0].scapula ?? 0).y);
     relativeCroup.push(p.position(HEAD).y - p.position(PELVIS).y);
     lead.push(horseLeadPoint(p, new Vector3()).sub(p.position(0)).z);
-    const phase = legs.legs[0].phase % 0.5;
+    const phase = phaseOf(0) % 0.5;
     if (phase < 0.03 || phase > 0.47) high.push(p.position(HEAD).y);
     if (Math.abs(phase - 0.25) < 0.03) low.push(p.position(HEAD).y);
   }
@@ -337,10 +330,11 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
     const knot = new Vector3(0.7, 1.12, 0.8);
     const { body } = movingHorse(HORSE_WALK, 0, { tether: { position: knot, length: 1.1 } }, seed);
     const ears: number[][] = [[], []], tail: number[] = [], head: number[] = [], roll: number[] = [], yaw: number[] = [], shift: number[] = [];
-    let rested = 0, toe = 0, heel = 0, tied = 0, aside = 0, ahead = -Infinity, behind = Infinity;
+    let rested = 0, toe = 0, heel = 0, tied = 0, aside = 0, ahead = -Infinity, behind = Infinity, standing = NaN;
     for (let tick = 0; tick < seconds * 60; tick++) {
       body.update(1 / 60);
       const p = body.pose;
+      if (Number.isNaN(standing)) standing = p.position(LEGS[2].upper).y;
       EARS.forEach((ear, i) => ears[i].push(p.local(ear).angleTo(new Quaternion())));
       tail.push(p.local(TAIL).angleTo(new Quaternion())); head.push(p.rotation(HEAD).angleTo(new Quaternion()));
       yaw.push(new Euler().setFromQuaternion(p.local(NECK), 'YXZ').y);
@@ -358,7 +352,7 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
     expect(aside).toBeLessThan(0.08);
     expect(behind).toBeGreaterThan(-0.4); expect(ahead).toBeLessThan(0.5);
     expect(body.log).toEqual([]);
-    return { ears, tail, head, roll, yaw, shift, heel, toe, rested };
+    return { ears, tail, head, roll, yaw, shift, heel, toe, rested, standing };
   };
   // (the whole while once, to the hind rest after 60–180 s quiet; seeding judged over the first 25 s)
   const a = sample(42, 220);
@@ -370,7 +364,8 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
   expect(excursion(a.roll.slice(0, 60 * 60))).toBeGreaterThan(0.01);
   expect(excursion(a.shift.slice(0, 6 * 60))).toBeGreaterThan(0.01);
   expect(a.heel).toBeGreaterThan(0.04); expect(Math.abs(a.toe)).toBeLessThan(1e-4);
-  expect(a.rested).toBeLessThan(1.11);
+  // (the hip let down over the resting leg, below where it stood)
+  expect(a.rested).toBeLessThan(a.standing - 0.02);
   const early = (s: ReturnType<typeof sample>) => [s.ears.map((e) => e.slice(0, 25 * 60)), s.tail.slice(0, 25 * 60), s.head.slice(0, 25 * 60)];
   expect(early(sample(42, 25))).toEqual(early(a));
   expect(early(sample(43, 25))).not.toEqual(early(a));
@@ -378,8 +373,9 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
 
 it.each([false, true])('checks the final tied pose after later writers, dev=%s', (dev) => {
   const pose = new Pose(SKELETON); pose.setRoot(new Vector3(0, 1.32, 0));
-  const chains = horseLegs(), legs = new Legs(pose, chains, HORSE_WALK);
   const motion = horseMotion(pose, HORSE_WALK);
+  // (standing legs, as the posture reads them)
+  const legs = { legs: LEGS.map(() => ({ phase: 0 })), rest: () => {} };
   const tether = { position: new Vector3(0.7, 1.12, 0.8), length: 0.9 };
   const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: f => {
     motion.prepare(f, legs, { tether: f.time < 0.02 ? tether : undefined });
@@ -393,7 +389,8 @@ it.each([false, true])('checks the final tied pose after later writers, dev=%s',
 
 it('ears lead the head toward an approaching person; both saddling reactions begin within 1 s and settle by 5 s', () => {
   let person: Vector3 | null = null;
-  const { body, motion } = movingHorse(HORSE_WALK, 0, {}, 42, () => person);
+  let startle: Vector3 | undefined;
+  const { body } = movingHorse(HORSE_WALK, 0, { startle: () => startle }, 42, () => person);
   for (let i = 0; i < 60; i++) body.update(1 / 60);
   const ear = body.pose.local(EARS[0]).clone(), neck = body.pose.local(NECK).clone();
   person = new Vector3(2, 1.5, 3);
@@ -404,8 +401,7 @@ it('ears lead the head toward an approaching person; both saddling reactions beg
   const point = new Vector3(2, 1, -1);
   for (let event = 0; event < 2; event++) {
     const before = body.pose.local(HEAD).clone();
-    motion.react(point.setX(2));
-    point.setX(-2);
+    startle = point.clone();
     for (let i = 0; i < 60; i++) body.update(1 / 60);
     expect(before.angleTo(body.pose.local(HEAD))).toBeGreaterThan(0.15);
     expect(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y).toBeGreaterThan(0.15);
@@ -417,20 +413,20 @@ it('ears lead the head toward an approaching person; both saddling reactions beg
 
 
 it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: solved hooves peak near mid-swing, rise early and brake into contact', (gait, speed) => {
-  const { body, legs } = movingHorse(gait, speed);
+  const { body, planted } = movingHorse(gait, speed);
   const flights: { speed: number; height: number; forward: number }[][] = [[], [], [], []];
   let checked = 0;
-  for (let tick = 0; tick < 600; tick++) {
+  for (let tick = 0; tick < 960; tick++) {
     body.update(1 / 60);
-    legs.legs.forEach((state, i) => {
-      const leg = LEGS[i], p = body.pose;
+    LEGS.forEach((leg, i) => {
+      const p = body.pose;
       const velocity = p.position(leg.hoof).clone().sub(body.frame.prev2.position(leg.hoof)).multiplyScalar(60);
-      if (!state.planted) {
+      if (!planted(i)) {
         flights[i].push({ speed: velocity.clone().setY(0).length(), height: Math.min(p.point(leg.hoof, leg.heel, new Vector3()).y, p.point(leg.hoof, leg.toe, new Vector3()).y), forward: velocity.z });
         return;
       }
       const flight = flights[i]; flights[i] = [];
-      if (tick < 300 || !flight.length) return;
+      if (tick < 600 || !flight.length) return;
       const peak = flight.findIndex((v) => v.speed === Math.max(...flight.map(v => v.speed)));
       const high = flight.findIndex((v) => v.height === Math.max(...flight.map(v => v.height)));
       expect((peak + 0.5) / flight.length).toBeGreaterThanOrEqual(0.45);

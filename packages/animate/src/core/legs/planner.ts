@@ -20,8 +20,12 @@ export class Planner {
   private readonly state: RootState;
   private goalVelocity: Vector3 | null = null;
 
-  /** `radius`: the hips' furthest reach from the root (m), how wide it turns about itself */
-  constructor(at: Vector3, yaw: number, private readonly gait: Gait, private readonly radius: number) {
+  /**
+   * `radius`: the hips' furthest reach from the root (m), how wide it turns about itself; `easing`: held back, it first takes the largest
+   * share of its acceleration and turn the legs keep up with, still going for its full speed, before it gives up speed itself — a body
+   * whose feet adapt their stride only as they step (a gait's) gets there over a few strides
+   */
+  constructor(at: Vector3, yaw: number, private readonly gait: Gait, private readonly radius: number, private readonly easing = false) {
     this.state = { position: at.clone().setY(0), quaternion: new Quaternion().setFromAxisAngle(UP, yaw), velocity: new Vector3(), angular: 0 };
     this.root = { position: this.state.position.clone(), velocity: new Vector3(), yaw };
   }
@@ -38,10 +42,14 @@ export class Planner {
     const kept = (plan: ReturnType<typeof planned>) => holds((ahead) => { const root = plan.root(f.time + ahead); return { position: root.position, yaw: yawOf(root.quaternion) }; });
     // (the largest share of its speed and turn the legs keep up with, found to within `PRECISION`: none, it stands)
     let plan = planned(1);
+    this.root.turning = undefined;
     if (!kept(plan)) {
-      let [lo, hi] = [0, 1];
-      while (hi - lo > PRECISION) { const mid = (lo + hi) / 2; if (kept(planned(mid))) lo = mid; else hi = mid; }
-      plan = planned(lo);
+      this.root.turning = plan.root(f.time).angular;
+      const eased = (share: number) => rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, share, this.state, acceleration, facing, share, goalTurn, 1, stance, true);
+      const easing = this.easing && kept(eased(PRECISION)), plans = easing ? eased : planned;
+      let [lo, hi] = [easing ? PRECISION : 0, 1];
+      while (hi - lo > PRECISION) { const mid = (lo + hi) / 2; if (kept(plans(mid))) lo = mid; else hi = mid; }
+      plan = plans(lo);
     }
     const chosen = plan, now = f.time;
     this.root.forecast = (ahead) => { const root = chosen.root(now + ahead); return { position: root.position.clone().setY(0), yaw: yawOf(root.quaternion) }; };

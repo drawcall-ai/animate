@@ -128,9 +128,19 @@ for (const leg of legs) {
   [v(x, 0.43, z), v(x, 0.28, z + knee), v(x, 0.1, z - knee / 2), v(x, 0.03, z)]
     .forEach((at, k) => joints.push([`${leg}${k}`, k ? `${leg}${k - 1}` : fore ? 'trunk' : 'pelvis', at, 1.5 / (k + 1)]));
 }
-const at = (name: string) => joints.find(([n]) => n === name)![2];
-const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ name, parent: joints.findIndex(([n]) => n === parent), offset: parent ? joint.clone().sub(at(parent)) : joint, mass, com: v(0, 0, 0) })),
-  { chains: { neck: ['neck', 'head'], mouth: ['neck', 'head', 'jaw'] } });
+// each leg joint's range (°): sideways, fore and aft (+ its end back), twist — top, knee or elbow, hock or wrist, paw
+const RANGES: Record<string, number[][]> = { Fore: [[25, -70, 70, 20], [5, -100, 30, 5], [5, -10, 110, 5], [15, -60, 90, 10]],
+  Hind: [[25, -70, 70, 20], [5, -40, 100, 5], [5, -100, 30, 5], [15, -60, 90, 10]] };
+const at = (name: string) => joints.find(([n]) => n === name)![2], deg = Math.PI / 180;
+const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ name, parent: joints.findIndex(([n]) => n === parent), offset: parent ? joint.clone().sub(at(parent)) : joint, mass, com: v(0, 0, 0) })), {
+  chains: { neck: ['neck', 'head'], mouth: ['neck', 'head', 'jaw'] },
+  limits: joints.flatMap(([name], bone) => {
+    const [, end, k] = /^(?:left|right)(Fore|Hind)(\d)$/.exec(name) ?? [];
+    if (!end) return [];
+    const [z, back, forth, twist] = RANGES[end][Number(k)];
+    return [{ bone, axis: 1 as const, swing: [[-z * deg, z * deg], [back * deg, forth * deg]] as [[number, number], [number, number]], twist: [-twist * deg, twist * deg] as [number, number] }];
+  }),
+});
 
 const dog: Species = {
   skeleton,
@@ -154,7 +164,7 @@ const rex: Body = new Body(dog, () => parallel<Frame>('all', idle(rex), function
 }), { dev: true });
 ```
 
-A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range, though the dog does without them. The gait's offsets place each leg's footfall in the cycle in the order of the chains (fore-left, fore-right, hind-left, hind-right); diagonal pairs together make a trot. Each leg needs some bend standing, a reserve for the trunk's bounce.
+A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range; a leg needs them, for how far each leg reaches — and so how far it strides and strays as it turns — is read from its joints' ranges. The gait's offsets place each leg's footfall in the cycle in the order of the chains (fore-left, fore-right, hind-left, hind-right); diagonal pairs together make a trot. Each leg needs some bend standing, a reserve for the trunk's bounce.
 
 ## Checking
 

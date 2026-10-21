@@ -111,8 +111,9 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       // (on legs that hold the root's height, the withers rise to it at most: they only ever let it down)
       const withers = b.withers * Math.cos(theta) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
       const pitch = Math.asin((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span) * m;
-      // (on legs that hold the root's height, the croup no higher than it stood either: pitched, the root lets down what it would lift it)
-      const croupRise = base === undefined ? 0 : Math.max(0, withers + span * Math.sin(pitch));
+      // (on legs that hold the root's height, the croup no higher than it stood either: pitched, the root lets down what it would lift it —
+      // `HOLD` of its most over the stride all along, so the croup keeps nearly its whole rise and fall, the rest as it comes)
+      const held = base === undefined ? 0 : HOLD * riseOver(b, m, span), croupRise = base === undefined ? 0 : held + Math.max(0, withers + span * Math.sin(pitch) - held);
       const rootHeight = standing + withers + withersAt * Math.sin(pitch) - croupRise + (extras.lift ?? 0) + 0.003 * drift;
       f.current.setRoot(_v.copy(f.current.position(0)).setY(rootHeight));
       f.current.setLocal(0, turn(pitch, yawOf(f.current.rotation(0))));
@@ -145,6 +146,20 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
 }
 
 const DEG = Math.PI / 180;
+/** the most the croup would rise over a stride, pitched as the gait has it with the withers let down (m) */
+function riseOver(b: Carriage, m: number, span: number): number {
+  let most = 0;
+  for (let k = 0; k < RISE_SAMPLES; k++) {
+    const theta = 2 * Math.PI * k / RISE_SAMPLES, withers = b.withers * Math.cos(theta) * m - Math.abs(b.withers) * m;
+    const pitch = Math.asin((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span) * m;
+    most = Math.max(most, withers + span * Math.sin(pitch));
+  }
+  return most;
+}
+/** Tuned: the share of the croup's most rise over a stride the root is let down by all along */
+const HOLD = 0.6;
+/** how finely a stride is looked over for the croup's highest */
+const RISE_SAMPLES = 24;
 const STILL: Carriage = { withers: 0, croup: [0, 0], spine: 0, spinePhase: 0, roll: 0, yaw: 0, headPitch: 0, headRise: 0, headWithers: 0 };
 const turn = (x = 0, y = 0, z = 0, out = _t) => out.setFromEuler(_e2.set(x, y, z, 'YXZ'));
 const _t = new Quaternion(), _v = new Vector3(), _e = new Euler(), _e2 = new Euler();

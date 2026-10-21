@@ -8,11 +8,8 @@ import { DOG } from '../src/scenarios/dog';
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed in `OPEN`
 // (expected to fail: each one fixed comes off the list).
 const OPEN = new Set([
-  'a dog walks to a still goal 45° off its facing, 4 body lengths away', 'a dog walks to a still goal 90° off its facing, 1.5 body lengths away',
-  'a dog walks to a still goal 135° off its facing, 1.5 body lengths away', 'a dog walks round a circle',
-  ...[45, 90, 135, 180].flatMap((angle) => [1.5, 4].map((d) => `a horse walks to a still goal ${angle}° off its facing, ${d} body lengths away`)),
+  ...[180].flatMap((angle) => [1.5, 4].map((d) => `a horse walks to a still goal ${angle}° off its facing, ${d} body lengths away`)),
   'a horse walks round a circle',
-  'a dog takes a ball 90° off its facing, 2 m away, 0.04 m up, and holds it',
   'a person takes a cup 0.05 m up, 0° off its facing', 'a person takes a cup 0.05 m up, 120° off its facing',
   'a person takes a cup 0.5 m up, 0° off its facing',
   ...[0.3, 0.5, 0.75].map((h) => `a person takes a box ${h} m up in both hands`),
