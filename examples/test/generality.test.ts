@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, carried, carry, touch, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, carried, carry, holds, offer, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 
@@ -112,6 +112,27 @@ for (const height of [0.1, 0.4, 1.2]) {
 }
 check('a dog touches a point on the floor 1.5 m away', () => {
   expect(run(creature(DOG), (b) => touch(b, 'jaw', around(10, 1.5, 0.01)), 20)).toEqual(ok);
+});
+// (a hand-over: one story offers, the other takes; they meet on a condition, not on time)
+check('a person hands a bottle to another, who takes it and carries it off', () => {
+  const bottle = new Item(around(0, 1.2, 0.9), new Quaternion(), { bottom: { position: new Vector3(0, -0.08, 0) }, top: { position: new Vector3(0, 0.08, 0) } },
+    { name: 'bottle', mass: 0.5, bounds: new Box3(new Vector3(-0.04, -0.12, -0.04), new Vector3(0.04, 0.12, 0.04)) });
+  const giver = new Body(human(), (h) => function* () {
+    yield* grab(h, { right: [bottle, 'bottom'] })();
+    yield* offer(h, bottle, taker)();
+  }, { dev: true });
+  const taker: Body<Side> = new Body(human(), (h) => function* () {
+    yield* when(() => holds(giver, bottle)); // it comes for it once it is held out
+    yield* grab(h, { right: [bottle, 'top'] })();
+    yield* hold(h, bottle, { to: carried(h, 'right') })();
+  }, { at: { x: 0, z: 3 }, yaw: Math.PI, dev: true });
+  const world = new World().add(giver, taker);
+  let error = '';
+  try { for (let i = 0; i < 20 * 60 && !(giver.done && holds(taker, bottle) && !holds(giver, bottle)); i++) world.update(1 / 60); } catch (cause) { error = String(cause); }
+  expect(error).toBe('');
+  expect(giver.done).toBe(true);
+  expect(holds(taker, bottle)).toBe(true);
+  expect([...giver.log, ...taker.log]).toEqual([]);
 });
 it('a hand a body does not have fails to compile', () => {
   const ball = ballAt(around(0, 1.5, 0.04));

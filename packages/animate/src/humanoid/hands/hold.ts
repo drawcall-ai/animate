@@ -57,7 +57,8 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
         if (bones.some((bone) => !f.current.local(bone).equals(f.prev.local(bone)))) continue;
         handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy && !moved }, arms[side]);
       }
-      if (aim) fit(h, f, item, aim, grips, sides);
+      // (an item another body has moved this sub-step — handed over, both hands on it — that one carries: these keep to it)
+      if (aim && !item.moved(f.time)) fit(h, f, item, aim, grips, sides);
       // Worn-item contact has one rigid owner; check after that owner and both arms moved.
       // A carried item instead fits compliant wrists; its course owns endpoint accuracy.
       if (f.dev && item.wornBy) for (const side of sides) {

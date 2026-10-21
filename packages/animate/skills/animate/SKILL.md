@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters and creatures with @drawcall/animate — every body is a `new Body(species, story, options)`, a person's species `human(model)`, the shipped `horse()` or your own from data — moved by @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself — `walkTo`, `grab`/`hold`/`carry`/`place`/`release`/`touch`/`handTo`/`wear`, `lookAt`/`withGaze`/`aimAt` — scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters and creatures with @drawcall/animate — every body is a `new Body(species, story, options)`, a person's species `human(model)`, the shipped `horse()` or your own from data — moved by @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself — `walkTo`, `grab`/`hold`/`carry`/`place`/`release`/`offer`/`touch`/`handTo`/`wear`, `lookAt`/`withGaze`/`aimAt` — scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -88,6 +88,20 @@ const story = (h: Body<Side>): Behaviour => function* () {
   yield* carry(h, rope, facingAt(h, INDEX.head, { position: new Vector3(0, -0.15, 0.35) }))();
   yield* carry(h, rope, [[0.6, carried(h, 'right')], [1.5, still]])();
 };
+```
+
+A hand-over is two stories meeting on a condition, never on time: one body `offer`s what it holds (it holds it out toward the other and lets go once the other has it in a hand), the other comes for it once it is held out (`holds(body, item)`) and takes it by another grip:
+
+```ts
+const giver = new Body(human(), (h) => function* () {
+  yield* grab(h, { right: [rope, 'knot'] })();
+  yield* offer(h, rope, taker)();
+});
+const taker: Body<Side> = new Body(human(), (h) => function* () {
+  yield* when(() => holds(giver, rope));
+  yield* grab(h, { left: [rope, 'loop'] })();
+  yield* hold(h, rope, { to: carried(h, 'left') })();
+}, { at: { x: 0, z: 3 }, yaw: Math.PI });
 ```
 
 A goal lives in one of three frames: the world (the default), a bone (`onBone(body, bone, local)`, or `facingAt` turned with the body's facing rather than the bone), or an item (`onItem(item, local)`). Put what belongs to a body in its frame. `carried(h)` is a carry pose for this body's stature, and `onBone(mare, …)` stays right as the horse moves; the horse's position plus an offset is right only while it stands. In a course, `[seconds, still]` pauses on purpose, and course seconds are written for an unloaded item.
