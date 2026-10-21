@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { jointOf } from '../src/joints';
-import { forwardOf, leftOf } from '../src/math';
+import { forwardOf, leftOf, wrapAngle } from '../src/math';
 import { comOf } from './com';
 import { Peak, type Frame, type Actor } from './frame';
 
@@ -48,8 +48,23 @@ export class Feet {
 const LATE = 0.6;
 /** below this speed (m/s) a step is a slow one: stopping, turning, standing */
 const SLOW = 0.6;
-/** the default stance's width, ankle to ankle (× height) */
-const STANCE = 0.13;
+/** a slow step turns (rad: the body's facing over its swing, or the foot against the other) or side-steps (its way's share across the
+ * facing: 30° off it or more) beyond these */
+const TURNED = 0.26, ACROSS = 0.5;
+
+/** how far apart sideways the feet may land, slow (× height), by the step's kind (`Landings.wide`) */
+export const SLOW_WIDTH = {
+  /** stopping or standing straight: a quiet stance is narrower (decided 2026-10-21 as the user's bound) */
+  straight: 0.15,
+  /**
+   * turning: read (Xu et al. 2022, J Biomech, "Frontal plane balance during pre-planned and late-cued 90 degree turns while walking",
+   * PMC10722562, Table 1): the widest stride of a 90° turn 0.28 m (IQR 0.24–0.33) pre-planned, up to 0.34 m late-cued, for 1.79 m
+   * walkers — 0.19 H at the top of either (straight walking's widest 0.13 m, 0.07 H)
+   */
+  turning: 0.19,
+  /** side-stepping or lifting (a wide base under a load): the user's provisional 0.25 H (2026-10-21); no source read yet */
+  wide: 0.25,
+} as const;
 
 /**
  * Late retargeting: how far a swinging foot's planned landing still moves in the last 40%
@@ -58,9 +73,9 @@ const STANCE = 0.13;
  */
 export class Landings {
   readonly late = new Peak();
-  /** slow steps' width: the feet apart sideways as one lands, below SLOW (× the stance's width, STANCE) */
+  /** slow steps' width: the feet apart sideways as one lands, below SLOW, as a share of what its kind allows (`SLOW_WIDTH`: 1 at the bound) */
   readonly wide = new Peak();
-  private readonly swings = new Map<Actor, ({ t: number; p: Vector3 }[] | null)[]>();
+  private readonly swings = new Map<Actor, ({ t: number; p: Vector3; facing: number }[] | null)[]>();
 
   see({ t, h }: Frame) {
     const swings = this.swings.get(h) ?? [null, null];
@@ -69,7 +84,7 @@ export class Landings {
       const track = swings[s];
       if (f.phase === 'swing') {
         swings[s] = track ?? [];
-        swings[s].push({ t, p: f.position.clone() });
+        swings[s].push({ t, p: f.position.clone(), facing: h.locomotion.facing });
         return;
       }
       swings[s] = null;
@@ -80,12 +95,17 @@ export class Landings {
       const other = h.feet[1 - s];
       if (Math.hypot(h.locomotion.velocity.x, h.locomotion.velocity.z) >= SLOW || other.phase !== 'planted') return;
       const across = Math.abs(f.position.clone().sub(other.position).dot(leftOf(h.locomotion.facing)));
-      this.wide.see(across / (STANCE * h.proportions.height), t);
+      // (its kind: turning — the body turned over the swing, or the foot landing turned against the other — side-stepping or lifting, else straight)
+      const turned = Math.abs(wrapAngle(h.locomotion.facing - track[0].facing)) > TURNED || Math.abs(wrapAngle(f.yaw - other.yaw)) > TURNED + 0.24;
+      const v = h.locomotion.velocity, sideways = Math.hypot(v.x, v.z) > 0.05 && Math.abs(v.dot(leftOf(h.locomotion.facing))) > ACROSS * Math.hypot(v.x, v.z);
+      const lifting = Object.values(h.holding).some((held) => held && held.item.mass > 0);
+      const bound = turned ? SLOW_WIDTH.turning : sideways || lifting ? SLOW_WIDTH.wide : SLOW_WIDTH.straight;
+      this.wide.see(across / (bound * h.proportions.height), t);
     });
   }
 
   toString() {
-    return `late landing retarget max ${this.late}, slow step width max ${this.wide.value.toFixed(2)} stances @${this.wide.at.toFixed(2)}s`;
+    return `late landing retarget max ${this.late}, slow step width max ${this.wide.value.toFixed(2)} of its bound @${this.wide.at.toFixed(2)}s`;
   }
 }
 

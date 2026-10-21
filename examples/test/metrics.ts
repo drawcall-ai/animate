@@ -16,8 +16,13 @@ export interface MetricsOptions {
 const TRACKED = 0.8;
 const LATE_RETARGET = 0.03;
 const GAZE = 5;
-const WIDE = 1.5;
-const ASYMMETRY = 0.05;
+/**
+ * the most one step's length differs from the next (share of their mean): straight 0.05; on a curve 0.10 — read (Courtine & Schieppati
+ * 2003, Eur J Neurosci 18:191, "Human walking along a curved path. II", abstract): the inner and outer strides diverge in length and
+ * the two legs move with a 7% phase lag of the cycle, so on a curve one step takes up to ~14% more of the cycle than the next; 0.10 keeps
+ * within that (decided 2026-10-21)
+ */
+const ASYMMETRY = { straight: 0.05, curve: 0.10 };
 /** every metric over a run of scenario `id`: `steps` gives each fixed step's frames, one per actor (the feet are every actor's, the rest the first's) */
 export function measure(id: string, steps: Iterable<readonly Frame[]>) {
   const feet = new Feet();
@@ -64,8 +69,8 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   add('ankle pointed (°)', 180 - m.feet.ankle.min.value, 'min', pointed - 1, m.feet.ankle.min.at);
   add('ankle flexed up (°)', m.feet.ankle.max.value, 'max', flexed + 1, m.feet.ankle.max.at);
   add('late landing retarget (m)', m.landings.late.value, 'max', LATE_RETARGET, m.landings.late.at);
-  // stopping and standing, no wide catching steps: the feet land at most WIDE stances apart
-  add('slow step width (× stance)', m.landings.wide.value, 'max', WIDE, m.landings.wide.at);
+  // stopping and standing, no wide catching steps: the feet land at most as far apart as the step's kind allows (`SLOW_WIDTH`, × height)
+  add('slow step width (share of its bound)', m.landings.wide.value, 'max', 1, m.landings.wide.at);
   add('leg-crossing frames', m.feet.crossings, 'max', 0);
   // (what is held or tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
   if (limit.wrist !== undefined) add('wrist off its grip or target (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
@@ -98,7 +103,7 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
     // smooth: one sway per stride, over the stance foot at mid-stance, no jitter
     gait('chest sway beyond the stride frequency', g.chestResidual, 'max', 0.4);
     // the steps alike: left and right as long, on a curve too
-    gait('step length asymmetry', g.stepAsymmetry, 'max', ASYMMETRY);
+    gait('step length asymmetry', g.stepAsymmetry, 'max', curve ? ASYMMETRY.curve : ASYMMETRY.straight);
     gait('chest lateral jerk (m/s³)', g.chestJerk, 'max', 50);
     gait('pelvis over the stance foot at mid-stance', g.phase, 'min', 0.7);
     // the whole body moves as in motion capture (CMU walks at 1.0–1.4 m/s, runs at 3.2–3.6):
