@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Behaviour } from '../core/goal';
 import { Planner } from '../core/legs/planner';
-import { clamp, forwardOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
+import { clamp, forwardOf, leftOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
 import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import type { Stance } from '../core/asks';
@@ -111,7 +111,8 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     const xcom = xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3());
     // (let down as asked: the stepper crouches, the feet staying put; asked below none, up on the toes)
     return { ...r, xcom, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
-      hips: offset.clone().add(behind), crouch: Math.min(crouchFor(requested.lower / (stepping.crouch.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed))), tiptoe: Math.max(0, -requested.lower),
+      // (the centre of mass sways with the hips but stays over the root fore and aft: the hips sit back under a bow, it does not)
+      hips: offset.clone().add(behind), com: behind.clone().addScaledVector(leftOf(stepper.yaw), offset.dot(leftOf(stepper.yaw))), crouch: Math.min(crouchFor(requested.lower / (stepping.crouch.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed))), tiptoe: Math.max(0, -requested.lower),
       still: !moving && Math.abs(requested.lower) > LOWERED * s };
   }, (f, _asks, stepper) => {
     // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest

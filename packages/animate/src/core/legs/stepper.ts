@@ -24,6 +24,9 @@ export interface RootGoal extends DrivenRoot {
   /** where the hips are over the floor from the root, if not over it (m): the root then the feet's middle under the body's centre of mass, the
    * hips swaying, sitting back or leaning over the toes from it; by default the hips are the root, the feet a crouch's `ahead` of them */
   hips?: Vector3;
+  /** where the centre of mass is over the floor from the root, if the body knows (m; a walker's: a little ahead of its feet's middle);
+   * by default over the hips */
+  com?: Vector3;
   /** how far up on the balls of its feet (m): the planted feet roll onto them as the hips rise */
   tiptoe?: number;
   /** the feet stay where they stand but to keep the balance or even out a staggered stance (a body let down or up to reach) */
@@ -287,8 +290,9 @@ export class Stepper {
     // (the height a landing must hold the hip at, and how far out it may land so, as the legs stand before they move this sub-step)
     const holding = Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
     const landingReaches = legs.map((leg) => Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - feet.ankleHeight) ** 2))));
-    // (the extrapolated centre of mass `ahead` s on: over the pelvis, the root carried on, as `r.xcom` is)
-    const xcom = (ahead: number, out: Vector3) => xcomOf(travel(ahead, out).add(hips).addScaledVector(forwardOf(yaw, _f), sitting), pace(ahead, _x), feet.length, out);
+    // (the extrapolated centre of mass `ahead` s on: the root carried on, the centre of mass where it is over it — as `r.xcom` is)
+    const over = _over.copy(r.com ?? hips).setY(0);
+    const xcom = (ahead: number, out: Vector3) => xcomOf(travel(ahead, out).add(over).addScaledVector(forwardOf(yaw, _f), sitting), pace(ahead, _x), feet.length, out);
     // the feet: swings on, then those too far from home lift (the furthest first)
     for (const leg of legs) {
       leg.landed = false;
@@ -449,12 +453,6 @@ export class Stepper {
       const on = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
       const to = (chord && on ? new Vector3().copy(r.position).add(chord).addScaledVector(forwardOf(turned, _f), Math.max(0, on.dot(forwardOf(turned, _f)))) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead))
         .addScaledVector(side, leg.sign * widthAt(speed)).addScaledVector(forwardOf(turned, _f), sitting + homeOf(leg)).setY(feet.ankleHeight);
-      // (still, a step evening out a staggered stance lands beside the other foot, not ahead or behind it again: a squat, a reach, a lift
-      // stand on feet side by side)
-      if (r.still && !other.swing) {
-        const behind = _v.subVectors(other.anchor, to).dot(forwardOf(turned, _f));
-        if (Math.abs(behind) > STAGGERED * s) to.addScaledVector(_f, behind);
-      }
       // (rounding a bend the body leans in: the feet land out from its way as far as the extrapolated centre of mass runs out from it — its
       // speed × turn rate (the sideways acceleration) × l/g, halved: Hof's √(l/g) ahead along the tangent, off the arc by its square over twice the radius)
       if (then) {
@@ -726,5 +724,5 @@ const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 
 const ZERO = new Vector3();
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion();
-const _centre = new Vector3();
+const _centre = new Vector3(), _over = new Vector3();
 const [_v, _w, _a, _b, _c, _x, _n, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot] = Array.from({ length: 16 }, () => new Vector3());
