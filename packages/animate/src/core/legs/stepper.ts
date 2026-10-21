@@ -127,9 +127,10 @@ const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared:
  * `PACE` (s/s); past `SETTLE` of it even a hard stop no longer moves its landing (a walker's: past `AIMED`). Landing a leap, the foot comes down at `TOUCH` of the body's fall.
  * Recalled (Perry 1992): the push-off peaks just after toe-off, gone by mid-swing; tuned: it eases in and out over the first `PUSHED` of a swing.
  * A bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing. Tuned (the old balance shuffled hip-wide
- * steps): a walker's slow step lands at most `WIDE.stances` standing stances aside of the other foot, as balance lets it.
+ * steps): a walker's slow step lands at most `WIDE.stances` standing stances aside of the other foot, as balance lets it (1.1: within
+ * the metrics' 0.15 H for a straight stop).
  */
-const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85, PUSHED = 0.5, BEND_SPAN = 0.1, WIDE = { stances: 1.4, within: 0.03 };
+const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85, PUSHED = 0.5, BEND_SPAN = 0.1, WIDE = { stances: 1.1, within: 0.03 };
 /** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
  * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
 const CROUCHING = { accel: 90, speed: 7.5 };
