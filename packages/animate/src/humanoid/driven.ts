@@ -8,7 +8,7 @@ import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { clampRotation } from '../core/limits';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle } from '../core/math';
-import { Stepper, type DrivenRoot, type Feet, type Leg, type Stepping } from '../core/legs/stepper';
+import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
 import { ankleFor, ballOf, footprint, footRotation, heelOf } from './posture/foot';
@@ -63,7 +63,7 @@ export function driven(h: Humanoid, root: Live<DrivenRoot>): Behaviour {
 }
 
 /** `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`). */
-export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => DrivenRoot,
+export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal,
   carry?: (f: Frame, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour {
   return function* () {
     const p = h.proportions;

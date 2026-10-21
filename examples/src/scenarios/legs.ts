@@ -2,7 +2,8 @@ import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../../packages/animate/s
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { Body, horse as horseSpecies, type Humanoid, Pose, yawOf, type DrivenRoot, type Frame, type Gait, type Species } from '@drawcall/animate';
-import { idle, type Stepper } from '@drawcall/animate/rig';
+import { idle } from '@drawcall/animate/rig';
+import type { RootGoal, Stepper } from '../../../packages/animate/src/core/legs/stepper';
 import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
@@ -31,8 +32,8 @@ export function scriptedRoot(height: number, pace: number, origin = new Vector3(
   };
 }
 
-/** The legs under a route: its point on the floor, velocity and facing each sub-step, and where it will be ahead (as a player's root). */
-export function along(route: ReturnType<typeof scriptedRoot>): (f: Frame) => DrivenRoot {
+/** The legs under a route: its point on the floor, velocity and facing each sub-step, and where it will be ahead (as a planner knows it: the stepper's fuller root) */
+export function along(route: ReturnType<typeof scriptedRoot>): (f: Frame) => RootGoal {
   return (f) => {
     const at = route.at(f.time), next = route.at(f.time + f.dt), position = at.position.clone().setY(0);
     return { position, velocity: next.position.clone().setY(0).sub(position).divideScalar(f.dt), yaw: yawOf(at.quaternion),

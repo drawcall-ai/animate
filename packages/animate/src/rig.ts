@@ -11,6 +11,7 @@ export type { Gazer } from './core/gaze';
 export { idle, personIdle } from './humanoid/idle';
 // what tasks ask of the base's legs and balance
 export { ask, request, type Asks, type Go } from './core/asks';
-export { Stepper, type Stepping, type Feet } from './core/legs/stepper';
+// rhythms for a posture of a species' own
+export { Life } from './core/life';
 // where a person stands to take something
 export { approach } from './humanoid/hands/grab';

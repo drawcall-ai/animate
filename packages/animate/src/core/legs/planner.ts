@@ -5,7 +5,7 @@ import type { Motion } from '../goal';
 import { wrapAngle, yawOf } from '../math';
 import type { Gait } from './gait';
 import { rootPlan, type RootState } from './root';
-import type { DrivenRoot } from './stepper';
+import type { RootGoal } from './stepper';
 
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
 export interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number }
@@ -16,7 +16,7 @@ export interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: numb
  * accepts — at full speed and turn, else the largest share of both it accepts, at last standing — so the legs can keep up (`Stepper.reachable`).
  */
 export class Planner {
-  readonly root: DrivenRoot;
+  readonly root: RootGoal;
   private readonly state: RootState;
   private goalVelocity: Vector3 | null = null;
 
@@ -31,7 +31,7 @@ export class Planner {
   }
 
   /** One sub-step toward `goal`; `stance`: the feet's mean facing (rad); `holds`: whether the legs keep up with a forecast. */
-  step(f: Frame, goal: PlannerGoal, motion: Motion, stance: number, holds: (forecast: (ahead: number) => { position: Vector3; yaw: number }) => boolean): DrivenRoot {
+  step(f: Frame, goal: PlannerGoal, motion: Motion, stance: number, holds: (forecast: (ahead: number) => { position: Vector3; yaw: number }) => boolean): RootGoal {
     const velocity = goal.velocity ?? new Vector3(), speed = velocity.length(), last = this.goalVelocity;
     // (the goal's own speeding up and turning, foreseen)
     const acceleration = last && speed > 1e-6 ? Math.max(-motion.accel, Math.min(motion.accel, velocity.clone().sub(last).dot(velocity) / (speed * f.dt))) : 0;

@@ -12,7 +12,7 @@ import type { Species } from '../../src/core/species';
 import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
-import type { Stepper } from '../../src/rig';
+import type { Stepper } from '../../src/core/legs/stepper';
 import type { DrivenRoot } from '../../src/core/legs/stepper';
 import { human } from '../../src/humanoid/humanoid';
 import { INDEX } from '../../src/humanoid/bones';

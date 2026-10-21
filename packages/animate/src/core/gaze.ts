@@ -237,7 +237,6 @@ const LEAD = [0.1, 0.3];
  * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck.
  * Tuned torso shares: 65% yaw, 25% pitch; the base shares them over spine/chest,
  * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
- * The existing posture and gaze owners retain their motion limits and final-pose checks.
  */
 export function aimAt(h: Body, at: Live<Vector3>): Behaviour {
   const gazer = h.gazer;

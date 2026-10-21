@@ -17,6 +17,10 @@ export interface DrivenRoot {
   velocity: Vector3;
   yaw: number;
   crouch?: number;
+}
+
+/** A root as the stepper takes it: a scene's (`DrivenRoot`), or the planner's and a walker's, who know more of the body over it. */
+export interface RootGoal extends DrivenRoot {
   /** where the hips are over the floor from the root, if not over it (m): the root then the feet's middle under the body's centre of mass, the
    * hips swaying, sitting back or leaning over the toes from it; by default the hips are the root, the feet a crouch's `ahead` of them */
   hips?: Vector3;
@@ -33,8 +37,7 @@ export interface DrivenRoot {
 }
 
 /**
- * A species' stepping, in metres of its default body (× `scale`) and seconds (the human one gives each value's
- * provenance in the source): each leg's place in the cycle (`offsets`, 0 … 1: a leg follows the one just before it); the feet's `toeOut` (rad, × side);
+ * A species' stepping, in metres of its default body (× `scale`) and seconds: each leg's place in the cycle (`offsets`, 0 … 1: a leg follows the one just before it); the feet's `toeOut` (rad, × side);
  * the `cadence` (cycle 2 / (base + perSpeed v)); `duty` walking, side-stepping, running (`run`: between these speeds); the most `travel`
  * of a stance; the landing's `lead`; half the feet's spread (`width.stand` already scaled); the pelvis' `bob` and `drop`; the swing's
  * `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the most a planted foot rolls (`pitch`, rad) and the ankle bends
@@ -190,7 +193,7 @@ export class Stepper {
   jump(speed: number) { this.asked = speed; }
 
   /** Step for this sub-step under `r` and set the root's position; the swinging feet's poses are planned now, the planted ones by `pose` once the hips are placed. */
-  move(f: Frame, r: DrivenRoot) {
+  move(f: Frame, r: RootGoal) {
     const { st, feet, legs, jumping: jump, yaws, heights, velocity, before, pair } = this, s = st.scale, toeOut = st.toeOut, dt = f.dt, pelvisTurn = st.twist ?? PELVIS_TURN, clocked = !!st.gait;
     // (first moved: standing where it is, moving as the root already does — a body spawned on the move gets no jolt)
     if (Number.isNaN(this.stand)) { this.stand = heights[0] = heights[1] = f.prev.position(0).y; velocity.copy(r.velocity); }

@@ -108,7 +108,7 @@ export class Body<H extends string = string> {
   declare readonly hands: Readonly<Record<H, number>>;
   /** what each hand holds, by which grip */
   declare readonly holding: Record<H, { item: Item; grip: string } | null>;
-  /** what the tasks ask of its legs (see `Asks`) */
+  /** what the tasks ask of its legs and balance (`Asks`, `ask` and `request` in `@drawcall/animate/rig`) */
   readonly asks: Asks = createAsks();
   /** its walk, as the legs report it; walkTo publishes its arrival estimate there */
   declare readonly locomotion: Locomotion;

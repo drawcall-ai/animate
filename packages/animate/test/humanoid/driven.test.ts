@@ -4,7 +4,7 @@ import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
 import { type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
 import { forwardOf, leftOf } from '../../src/core/math';
-import type { Stepper } from '../../src/rig';
+import type { Stepper } from '../../src/core/legs/stepper';
 
 const dt = 1 / 60;
 

@@ -45,7 +45,7 @@ export class Carrier implements Placed {
 
   /**
    * where it is at `time` (s) and the two sub-steps before: its fields, but while the body that wears it is posing that
-   * sub-step (`due`) — it moves its worn items after its behaviour — carried on as it last moved
+   * sub-step — the body moves what it wears after its behaviour — carried on as it last moved
    */
   at(time: number): Placed {
     // (not moved the sub-step before nor this one, it has stood still since it last moved: no motion carried over)
