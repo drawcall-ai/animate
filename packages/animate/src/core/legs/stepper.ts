@@ -352,7 +352,10 @@ export class Stepper {
       : moving > 0 ? legs[before[leg.i]].lifted >= C * this.gap[leg.i] || leg.planted >= Ts * DUE : leg.planted >= STEP.square;
     // (still, the feet stay but to even out a stance staggered fore and aft: a squat needs them side by side)
     const staggered = (leg: Leg) => Math.abs(_b.subVectors(legs[pair[leg.i]].anchor, leg.anchor).dot(forwardOf(yaw, _f))) > STAGGERED * s;
-    const turnedOff = (leg: Leg) => Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn;
+    // (a walker's foot turned toward the facing foreseen a swing on is where the body is turning, not off it: stepping it again would
+    // leave the one turned behind waiting: that one steps first)
+    const turningTo = r.forecast && !clocked ? r.forecast(Tsw).yaw : yaw;
+    const turnedOff = (leg: Leg) => Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn && Math.abs(wrapAngle(leg.yaw - turningTo - leg.sign * toeOut)) > turn;
     // (a gait's foot steps only in its turn, having stood a while: off its home, turned off it, or overdue; out of turn, only fallen
     // `BEHIND` of a stance's travel further behind than its stance takes it from where it lands)
     const wants = (leg: Leg) => (!r.still || staggered(leg)) && (clocked ? leg.planted >= SLOT * C && ((due(leg) && (held || off(leg, lead) > (v > 0 || spin !== 0 ? STEP.distance : STEP.still) * s || turnedOff(leg))) || off(leg, lead) > (1 + BEHIND) * most)
