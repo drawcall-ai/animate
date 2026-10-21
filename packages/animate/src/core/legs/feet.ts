@@ -112,7 +112,7 @@ const DROP = 0;
 /** Tuned: a stance travels at most this share of how far its legs reach fore and aft, walking: the rest is the landing's spare */
 const SPANNING = 0.65;
 /** Tuned: a planted foot strays across at most this share of how far its leg reaches either way at its standing height */
-const STRAYING = 0.7;
+const STRAYING = 0.6;
 /** [D from recalled, as `loft`] a hoof or paw lifts early, peaking ~30% into its swing, and comes down long: u^ARC (1 − u)³ */
 const ARC = 1.3;
 /** Tuned: a swinging foot is not drawn in toward its top short of this share of its leg (its joints bound it) */

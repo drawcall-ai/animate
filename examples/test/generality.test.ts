@@ -35,14 +35,15 @@ const person = (story: (body: Body) => Behaviour) => new Humanoid(createSkeleton
 const around = (degrees: number, distance: number, y = 0) => new Vector3(Math.sin(degrees * DEG) * distance, y, Math.cos(degrees * DEG) * distance);
 const ok = { done: true, error: '', log: [] };
 
+// (a body `size` times the dog's takes √size as long: dynamically similar gaits, at equal Froude numbers, last ∝ √length)
 for (const [name, species, size] of [['dog', DOG, 1], ['horse', horse(), 2.5]] as const) {
   for (const angle of [0, 45, 90, 135, 180]) for (const distance of [1.5, 4]) {
     check(`a ${name} walks to a still goal ${angle}° off its facing, ${distance} body lengths away`, () =>
-      expect(run(creature(species), (b) => walkTo(b, { to: around(angle, distance * size) }), 25)).toEqual(ok));
+      expect(run(creature(species), (b) => walkTo(b, { to: around(angle, distance * size) }), 25 * Math.sqrt(size))).toEqual(ok));
   }
   check(`a ${name} walks round a circle`, () => {
     const points = Array.from({ length: 8 }, (_, k) => around(90 + k * 45, 2 * size).add(new Vector3(-2 * size, 0, 0)));
-    expect(run(creature(species), (b) => function* () { for (const to of points) yield* walkTo(b, { to })(); }, 60)).toEqual(ok);
+    expect(run(creature(species), (b) => function* () { for (const to of points) yield* walkTo(b, { to })(); }, 60 * Math.sqrt(size))).toEqual(ok);
   });
 }
 

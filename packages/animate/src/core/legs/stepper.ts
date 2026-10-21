@@ -611,8 +611,11 @@ export class Stepper {
       // — the hip not in over it nor a stance's travel past it)
       if (!st.gait && !leg.swing && Math.abs(wrapAngle(at.yaw - leg.yaw + leg.sign * st.toeOut)) > (st.twist ?? PELVIS_TURN)) return false;
       if (!leg.swing && (strayed(st, feet, leg, _b.subVectors(hip, leg.anchor).dot(leftOf(at.yaw, _l)) * leg.sign) || _b.subVectors(hip, leg.anchor).dot(forwardOf(leg.yaw, _f)) > this.most)) return false;
+      // (a gait's planted foot that pivots will have turned in place with the body by then)
+      const pivots = !leg.swing && st.gait && feet.turnAbout, anchor = pivots ? _pivot.copy(leg.anchor) : leg.anchor, yaw = pivots ? at.yaw + leg.sign * st.toeOut : leg.yaw;
       return pitches.some((pitch) => {
-        const ankle = feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a);
+        if (pivots) feet.turnAbout!(leg.i, anchor.copy(leg.anchor), leg.yaw, yaw, pitch);
+        const ankle = feet.ankle(leg.i, anchor, yaw, pitch, _a);
         const most = st.reach * (feet.legs[leg.i].length ?? feet.length), depth = feet.legs[leg.i].depth;
         if (depth) return depth(_n.subVectors(ankle, hip).dot(leftOf(at.yaw, _l)) * leg.sign, _n.dot(forwardOf(at.yaw, _f)), pitch) >= this.low + (feet.legs[leg.i].up ?? 0) - ankle.y;
         return Math.hypot(ankle.x - hip.x, ankle.z - hip.z) ** 2 + Math.max(0, this.low + (feet.legs[leg.i].up ?? 0) - ankle.y) ** 2 <= most * most;
@@ -638,7 +641,9 @@ export class Stepper {
       // (a gait's foot may next lift once the others in the air have landed, or as its turn comes round if the gait has it leave the floor
       // before they do: it holds till then)
       const other = legs[pair[leg.i]].swing, landed = Math.max(0, ...legs.map((l) => l.swing ? (1 - l.swing.u) * l.swing.T : 0));
-      const wait = st.gait ? Math.min(landed, (this.scheduled[leg.i] < STANDING ? (((this.lifts[leg.i] - this.clock) % 1) + 1) % 1 * this.cycle : Infinity)) : other ? (1 - other.u) * other.T : 0;
+      // (and, turning on the spot, till its own turn comes round: before then it stays)
+      const own = (((this.lifts[leg.i] - this.clock) % 1) + 1) % 1 * this.cycle;
+      const wait = st.gait ? Math.max(Math.min(landed, this.scheduled[leg.i] < STANDING ? own : Infinity), this.moving > 0.05 ? 0 : own) : other ? (1 - other.u) * other.T : 0;
       for (let t = 0; t <= wait + 1e-9; t += Math.max(1 / 60, wait / 6)) if (!within(leg, t, [0, st.pitch.heel, st.pitch.ball])) return false;
       return true;
     });
@@ -695,4 +700,4 @@ const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 
 const ZERO = new Vector3(), _p = new Vector3();
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion();
-const [_v, _w, _a, _b, _c, _x, _n, _hip, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen] = Array.from({ length: 16 }, () => new Vector3());
+const [_v, _w, _a, _b, _c, _x, _n, _hip, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot] = Array.from({ length: 17 }, () => new Vector3());

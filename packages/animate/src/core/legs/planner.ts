@@ -44,7 +44,8 @@ export class Planner {
     let plan = planned(1);
     this.root.turning = undefined;
     if (!kept(plan)) {
-      this.root.turning = plan.root(f.time).angular;
+      // (the turn it is held back from, as it would be under way)
+      this.root.turning = plan.root(f.time + PRESSING).angular;
       const eased = (share: number) => rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, share, this.state, acceleration, facing, share, goalTurn, 1, stance, true);
       const easing = this.easing && kept(eased(PRECISION)), plans = easing ? eased : planned;
       let [lo, hi] = [easing ? PRECISION : 0, 1];
@@ -65,6 +66,8 @@ export class Planner {
   }
 }
 
+/** Tuned: how far ahead (s) the turn it is held back from is read, under way */
+const PRESSING = 0.5;
 /** Tuned: how finely the share of speed and turn the legs keep up with is found */
 const PRECISION = 1 / 64;
 const UP = new Vector3(0, 1, 0);

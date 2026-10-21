@@ -15,7 +15,7 @@ import type { Attention, Species } from '../core/species';
 
 /** a horse: its walk, and its posture over its legs as it heeds what it looks at, a tether and a startle */
 export const horse = (): Species => ({ skeleton: SKELETON, gaze: { eyes: (pose, out) => pose.point(HEAD, EYES, out), range: EYE_RANGE },
-  legs: { chains: horseLegs(true), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
+  legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
 /** [D] between the eyes, about a third of the way from the poll to the muzzle (m, head bone) */
 const EYES = new Vector3(0, -0.12, 0.1);
 /** Tuned (rad): the eyes add little to where the head turns (the posture turns it) */

@@ -4,7 +4,6 @@ import { follow } from '../follow';
 import type { Motion } from '../goal';
 import { clamp, lerp, smoothstep, wrapAngle, yawOf } from '../math';
 import { strideAt, type Gait } from './gait';
-import type { LegStep } from './legs';
 
 export interface RootState {
   position: Vector3;
@@ -14,11 +13,14 @@ export interface RootState {
 }
 
 /** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion), travelFirst = false): Omit<LegStep, 'root'> & { root(time: number): RootState } {
+/** a planned root: its speed (m/s) and where it is (`RootState`) at a time (s), and the bearing of its way while it travels (rad) */
+export interface RootPlan { speed(time: number): number; root(time: number): RootState; heading?(time: number): number | undefined }
+
+export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion), travelFirst = false): RootPlan {
   if (share === 0 && !facing) {
     const position = previous.position.clone();
     const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));
-    return { root: () => ({ position, quaternion, velocity: new Vector3(), angular: 0 }), speed: 0 };
+    return { root: () => ({ position, quaternion, velocity: new Vector3(), angular: 0 }), speed: () => 0 };
   }
   const accel = motion.accel * (facing ? 1 : share);
   const speed = share === 0 ? 0 : (motion.speed ?? Infinity) * speedShare;

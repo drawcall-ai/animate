@@ -21,10 +21,10 @@ export const legSystem: { path: 'old' | 'core' } = { path: 'old' };
  * `lookAround`. Run the tasks after it, in parallel: what a task writes wins, and what it lets go
  * of these take back on from where it is. `seed` fixes the variation of sway, breathing and spontaneous weight shifts.
  * `root`: the scene owns the root (a player), `driven` legs keep up with it instead of `balance`.
- * Any other body stands and walks on its species' legs (`creature`), heeding `attention`.
+ * Any other body stands and walks on its species' legs (`creature`), heeding `attention`, or where `root` drives it.
  */
 export function idle(h: Body, options: { stance?: Partial<Stance>; seed?: number; root?: Live<DrivenRoot>; attention?: Attention } = {}): Behaviour {
-  if (!(h instanceof Humanoid)) return creature(h, options.attention);
+  if (!(h instanceof Humanoid)) return creature(h, options.attention, options.root);
   const { root } = options, path = legSystem.path;
   return function* () {
     const legs = root ? driven(h, root) : path === 'core' ? stride(h, options) : balance(h, options);

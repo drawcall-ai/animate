@@ -1,12 +1,10 @@
-import { Quaternion, Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { Humanoid, Body, idle, walkTo, type Frame } from '../../src';
+import { Humanoid, idle, walkTo, type Frame } from '../../src';
 import { INDEX } from '../../src/humanoid/bones';
 import { heelOf, swingProgress } from '../../src/humanoid/balance/foot';
 import { wrapAngle, yawOf } from '../../src/core/math';
-import { Legs } from '../../src/core/legs/legs';
-import { humanGait, humanLegs } from '../../src/humanoid/legs';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import { legSystem } from '../../src/humanoid/idle';
 
@@ -204,34 +202,4 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('core arrives facing %s without
   h.update(dt);
   // XCoM capture remains stage 4; contact, ROM and rate checks still apply here.
   expect(h.log.filter((entry) => entry.check !== 'XCoM outside support (m)')).toEqual([]);
-}, 20000);
-
-it('core toward turns from rest, forecasts facing, squares its anchors and then stops the clock', () => {
-  const h = new Humanoid(createSkeletonModel(), () => function* () {});
-  const legs = new Legs(h.pose, humanLegs(h.proportions), humanGait(h.proportions));
-  const start = legs.root.position.clone();
-  const anchors = h.feet.map((foot) => foot.position.clone().sub(start));
-  const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
-  const body = new Body({ skeleton: h.pose.skeleton }, () => action<Frame>({ update: (f) => {
-    legs.toward(f, { position: start, quaternion: facing }, { accel: 1.2, speed: 0 });
-  } }), { pose: h.pose, dev: true });
-  let lead = 0;
-  for (let tick = 0; tick < 600; tick++) {
-    body.update(dt);
-    lead = Math.max(lead, Math.abs(wrapAngle(yawOf(legs.facingAhead) - yawOf(legs.root.quaternion))));
-  }
-  expect(lead).toBeGreaterThan(0.1);
-  expect(legs.root.quaternion.angleTo(facing)).toBeLessThan(0.05);
-  expect(legs.settled).toBe(true);
-  for (const [s, leg] of legs.legs.entries()) {
-    const bone = s === 0 ? INDEX.leftFoot : INDEX.rightFoot;
-    const goal = anchors[s].clone().applyQuaternion(legs.root.quaternion).add(legs.root.position);
-    expect(body.pose.position(bone).clone().setY(0).distanceTo(goal.setY(0))).toBeLessThanOrEqual(0.02);
-    expect(Math.abs(wrapAngle(yawOf(body.pose.rotation(bone)) - Math.PI - (s === 0 ? 0.12 : -0.12)))).toBeLessThanOrEqual(0.05);
-    expect(leg.planted).toBe(true);
-  }
-  const phase = legs.phase;
-  for (let tick = 0; tick < 60; tick++) body.update(dt);
-  expect(legs.phase).toBe(phase);
-  expect(body.log).toEqual([]);
 }, 20000);

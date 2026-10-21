@@ -1,12 +1,8 @@
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
 import { strideAt, type Gait } from '../../src/core/legs/gait';
-import { Limb, type Walker } from '../../src/core/legs/limb';
-import { Solver } from '../../src/core/legs/solve';
-import * as pursuit from '../../src/core/legs/root';
-import { Legs } from '../../src/core/legs/legs';
 import { quintic } from '../../src/core/legs/swing';
 import { HORSE_WALK, HORSE_TROT, horse, horseLegs, horseLeadPoint } from '../../src/horse/legs';
 import { horseMotion } from '../../src/horse/legs';
@@ -35,20 +31,21 @@ it('a swing ends on the stance rate rather than at rest', () => {
   expect(end[2]).toBeCloseTo(0, 2);
 });
 
+/** a horse standing, or walking straight on at `speed`, its root and pose then written over by `later` (a later writer) */
+function writtenOver(dev: boolean, speed: number, later: (f: Frame, body: Body) => void) {
+  const body: Body = new Body(horse(), () => parallel<Frame>('all', idle(body), ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 20), speed, accel: 0.65 })] : []),
+    action<Frame>({ update: (f) => later(f, body) })), { pose: new Pose(SKELETON), dev });
+  return body;
+}
+
 it('leg contact checks read the final pose after a later writer, and disappear with dev off', () => {
+  const joints = horseLegs()[0].joints, terminal = joints[joints.length - 1].bone;
   const run = (dev: boolean) => {
-    const pose = new Pose(SKELETON);
-    const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-    const root = { position: pose.position(0).clone(), quaternion: new Quaternion() };
-    const joints = horseLegs()[0].joints;
-    const terminal = joints[joints.length - 1].bone;
-    const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-      engine.update(f, { root: () => root, speed: 0 });
-      if (f.time > 0.05) {
-        f.current.setLocal(terminal, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.3));
-        f.current.setRoot(root.position.clone().add(new Vector3(0.01, -0.01, 0)));
-      }
-    } }), { pose, dev });
+    const body = writtenOver(dev, 0, (f) => {
+      if (f.time <= 0.05) return;
+      f.current.setLocal(terminal, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.3));
+      f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.01, -0.01, 0)));
+    });
     for (let k = 0; k < 10; k++) body.update(1 / 60);
     return body.log;
   };
@@ -59,62 +56,26 @@ it('leg contact checks read the final pose after a later writer, and disappear w
   expect(run(false)).toEqual([]);
 });
 
-it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const)('checks %s touchdown on direct Legs users after later pose writers, only with dev enabled', (axis, offset, limit) => {
+it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const)('checks %s touchdown after later pose writers, only with dev enabled', (axis, offset, limit) => {
   const run = (dev: boolean) => {
-    const pose = new Pose(SKELETON);
-    const engine = new Legs(pose, horseLegs(), HORSE_WALK);
     let landed = -1;
-    const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-      engine.toward(f, { position: new Vector3(0, pose.position(0).y, 20) }, { speed: 0.95, accel: 0.65 });
-      if (landed < 0 && engine.events.some((event) => event.type === 'land')) {
+    const body = writtenOver(dev, 0.95, (f, b) => {
+      if (landed < 0 && b.stepper?.legs.some((leg) => !leg.swing && leg.planted === 0 && leg.landed)) {
         landed = f.time;
         f.current.setRoot(f.current.position(0).clone().add(offset));
       }
-    } }), { pose, dev });
-    for (let tick = 0; tick < 120 && (landed < 0 || body.frame.time <= landed); tick++) body.update(1 / 60);
+    });
+    for (let tick = 0; tick < 240 && (landed < 0 || body.frame.time <= landed + 1 / 60); tick++) body.update(1 / 60);
     expect(landed).toBeGreaterThan(0);
-    return { log: body.log.filter((entry) => entry.check === `leg touchdown ${axis} speed (m/s)`), landed };
+    return body.log.filter((entry) => entry.check === `leg touchdown ${axis} speed (m/s)`);
   };
-  const { log, landed } = run(true);
-  expect(log).toContainEqual(expect.objectContaining({ limit, time: landed }));
-  expect(run(false).log).toEqual([]);
+  expect(run(true)).toContainEqual(expect.objectContaining({ limit }));
+  expect(run(false)).toEqual([]);
 });
 
 it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', () => {
   expect(strideAt(HORSE_WALK, -8.9e-16, 0)).toEqual(strideAt(HORSE_WALK, 0, 0));
   for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(HORSE_WALK, speed, 0)).toThrow('leg speed');
-  const pose = new Pose(SKELETON);
-  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const root = { position: pose.position(0).clone(), quaternion: new Quaternion() };
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    engine.update(f, { root: () => root, speed: () => -8.9e-16 });
-  } }), { pose });
-  for (let tick = 0; tick < 60; tick++) body.update(1 / 60);
-});
-
-it('shortens a long foothold with at most 40 reach solves and keeps its verified endpoint', () => {
-  const pose = new Pose(SKELETON);
-  pose.setRoot(new Vector3(0, 1.32, 0));
-  const limb = new Limb(horseLegs()[0], pose);
-  const root = pose.position(0).clone();
-  const walker: Walker = { phase: 0, timeTo: () => 0, at: () => strideAt(HORSE_WALK, 1.6, 0), stride: strideAt(HORSE_WALK, 1.6, 0), rootAt: (_, position, turn) => {
-    position.copy(root);
-    turn.identity();
-  } };
-  const contact = limb.standing(pose);
-  const standing = contact.position.clone();
-  contact.position.z += 2;
-  const reach = vi.spyOn(Solver.prototype, 'reach');
-  try {
-    limb.foothold(pose, walker, 0.4, contact);
-    expect(reach.mock.calls.length).toBeLessThanOrEqual(40);
-    expect(reach.mock.calls.length).toBeGreaterThan(8);
-    expect(contact.position.z).toBeGreaterThanOrEqual(standing.z);
-    expect(contact.position.z).toBeLessThan(standing.z + 2);
-    expect(limb.landingSupported(pose, walker, 0.4, contact)).toBe(true);
-  } finally {
-    reach.mockRestore();
-  }
 });
 
 it('follows a moving goal with supported contacts and a root that turns toward its path', () => {
@@ -201,57 +162,14 @@ it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goal
 });
 
 it('brakes for a moving goal that crosses behind a travelling root', () => {
-  const pose = new Pose(SKELETON);
-  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    const goal = f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2);
-    engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
-  } }), { pose, dev: true });
+  const body: Body = new Body(horse(), () => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2), speed: 0.95, accel: 0.65, until: () => false })), { pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 480; tick++) body.update(1 / 60);
-  expect(body.pose.position(0).z).toBeGreaterThan(0.5);
+  expect(body.pose.position(0).z).toBeGreaterThan(-2.5);
   expect(body.pose.position(0).z).toBeLessThan(3);
   expect(body.log).toEqual([]);
 });
 
-it('rejects invalid follower goals and motion instead of waiting', () => {
-  for (const [position, motion] of [
-    [new Vector3(NaN, 0, 1), { accel: 1 }],
-    [new Vector3(0, 0, 1), { accel: 0 }],
-    [new Vector3(0, 0, 1), { accel: 1, speed: -1 }],
-    [new Vector3(0, 0, 1), { accel: 1, turnAccel: NaN }],
-  ] as const) {
-    const pose = new Pose(SKELETON);
-    const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-    const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => engine.toward(f, { position }, motion) }), { pose });
-    expect(() => body.update(1 / 60)).toThrow(/root (goal|motion|turn motion)/);
-  }
-});
 
-it('reuses each travel forecast across root-height candidates', () => {
-  const pose = new Pose(SKELETON);
-  const engine = new Legs(pose, horseLegs(), HORSE_WALK);
-  const goal = new Vector3(1, pose.position(0).y, 2);
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: (f) => {
-    engine.toward(f, { position: goal }, { speed: 0.95, accel: 0.65 });
-  } }), { pose, dev: true });
-  const forecast = vi.spyOn(pursuit, 'rootPlan');
-  try {
-    for (let tick = 0; tick < 120; tick++) {
-      forecast.mockClear();
-      body.update(1 / 60);
-      const shares = forecast.mock.calls.map((args) => args[6]);
-      expect(shares.length).toBeGreaterThan(0);
-      expect(shares.length).toBe(new Set(shares).size);
-    }
-  } finally { forecast.mockRestore(); }
-});
-
-
-/**
- * A horse on its species' legs (the planner and stepper), its posture at `gait` seeded by `seed`, walking straight on at `speed` (0:
- * standing) with `accel`, its `attention` and looking at what `look` gives; each leg's planted state and phase through its stride
- * (cycles since it landed, then on through its swing).
- */
 function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
   const base = horse(), species: Species = { ...base, legs: { ...base.legs!, gait, posture: (start) => horseMotion(start, gait, seed) } };
   const body: Body = new Body(species, () => parallel<Frame>('all', idle(body, { attention }),

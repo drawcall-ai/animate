@@ -1,10 +1,7 @@
-import { humanGait, humanLegs } from '../../../packages/animate/src/humanoid/legs';
-import { HORSE_TROT } from '../../../packages/animate/src/horse/legs';
+import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
-import { action } from '@pmndrs/timeline';
-import { Body, horse as horseSpecies, Legs, Pose, yawOf, type Frame, type Gait, type ReadonlyPose } from '@drawcall/animate';
-import { HORSE_WALK, horseLegs } from '../../../packages/animate/src/horse/legs';
+import { Body, horse as horseSpecies, Humanoid, idle, Pose, yawOf, type DrivenRoot, type Frame, type Gait, type Species } from '@drawcall/animate';
 import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
@@ -33,39 +30,27 @@ export function scriptedRoot(height: number, pace: number, origin = new Vector3(
   };
 }
 
-/** Scene proxy: 3 cm below standing, on the scale of walking COM excursions (2.74–4.83 cm).
- * Orendurff et al. (2004), doi:10.1682/JRRD.2003.10.0150; this fixed root is not a COM trajectory. */
-export function bipedRoot(pose: ReadonlyPose, scale: number, brake = 3, pace = 1.3) {
-  const initial = pose.position(0).y;
-  const height = initial - 0.03 * scale;
-  const route = scriptedRoot(height, pace, pose.position(0).clone().setY(0), yawOf(pose.rotation(0)), 1, brake);
-  return { speed: route.speed, at(t: number) {
-    const at = route.at(t);
-    const u = Math.min(1, t);
-    at.position.y += (initial - height) * (1 - u * u * (3 - 2 * u));
-    return at;
-  } };
+/** The legs under a route: its point on the floor, velocity and facing each sub-step, and where it will be ahead (as a player's root). */
+export function along(route: ReturnType<typeof scriptedRoot>): (f: Frame) => DrivenRoot {
+  return (f) => {
+    const at = route.at(f.time), next = route.at(f.time + f.dt), position = at.position.clone().setY(0);
+    return { position, velocity: next.position.clone().setY(0).sub(position).divideScalar(f.dt), yaw: yawOf(at.quaternion),
+      forecast: (ahead) => { const then = route.at(f.time + ahead); return { position: then.position.clone().setY(0), yaw: yawOf(then.quaternion) }; } };
+  };
 }
 
 export function legsBiped(): Scenario {
   return {
-    id: 'legs-biped', title: 'Leg engine: biped', duration: 16, actors: [{}],
-    description: 'Perry/Winter leg cycles under a scripted root: straight, curve, stop. No balance.',
+    id: 'legs-biped', title: 'Legs: a person on a scripted root', duration: 16, actors: [{}],
+    description: 'A person\'s stepper under a scripted root: straight, curve, stop. No balance.',
     stage: () => {
-      let engine: Legs | null = null;
+      let person: Humanoid | null = null;
       return {
         report: new Report(), props: () => [],
-        done: () => !!engine && engine.legs.every((l) => l.planted),
-        script: (h) => function* () {
-          const gait = humanGait(h.proportions);
-          const route = bipedRoot(h.pose, h.proportions.scale);
-          engine = new Legs(h.pose, humanLegs(h.proportions), gait);
-          yield* action<Frame>({ update: (f) => {
-            const at = route.at(f.time);
-            f.current.setRoot(at.position);
-            f.current.setLocal(0, at.quaternion);
-            engine?.update(f, { root: route.at, speed: route.speed });
-          } });
+        done: () => !!person?.stepper && person.stepper.legs.every((leg) => !leg.swing) && person.frame.time > 15,
+        script: (h) => {
+          person = h;
+          return idle(h, { root: along(scriptedRoot(0, 1.3, h.pose.position(0).clone().setY(0), yawOf(h.pose.rotation(0)), 1, 3)) });
         },
       };
     },
@@ -74,29 +59,22 @@ export function legsBiped(): Scenario {
 
 export function legsHorse(): Scenario {
   return {
-    id: 'legs-horse', title: 'Leg engine: horse walk and trot', duration: 16, actors: [], cameraDistance: 9,
-    description: 'Two horses: walk and trot along scripted roots. No balance.',
+    id: 'legs-horse', title: 'Legs: horse walk and trot on scripted roots', duration: 16, actors: [], cameraDistance: 9,
+    description: 'Two horses on their stepper: walk and trot along scripted roots. No planner.',
     stage: (dev = false) => {
-      const engines: Legs[] = [];
       const make = (gait: Gait, pace: number, x: number) => {
+        const base = horseSpecies(), species: Species = { ...base, legs: { ...base.legs!, gait, posture: (start) => horseMotion(start, gait) } };
         const pose = new Pose(HORSE);
-        // Tuned: 8 cm reach reserve for the fixed root through stance and breakover.
-        const route = scriptedRoot(1.32, pace, new Vector3(x, 0, 0));
-        pose.setRoot(route.at(0).position);
-        const engine = new Legs(pose, horseLegs(), gait);
-        engines.push(engine);
-        return new Body(horseSpecies(), () => action<Frame>({ update: (f) => {
-          const at = route.at(f.time);
-          f.current.setRoot(at.position);
-          f.current.setLocal(0, at.quaternion);
-          engine.update(f, { root: route.at, speed: route.speed });
-        } }), { pose, dev });
+        pose.setRoot(new Vector3(x, pose.position(0).y, 0));
+        const route = scriptedRoot(0, pace, new Vector3(x, 0, 0));
+        const body: Body = new Body(species, () => idle(body, { root: along(route) })(), { pose, dev });
+        return body;
       };
       const bodies = [make(HORSE_WALK, 1.6, -2), make(HORSE_TROT, 3.7, 2)];
       return {
         report: new Report(), bodies,
         props: () => bodies.flatMap((body) => skeletonProps(body.pose)),
-        done: () => engines.every((e) => e.legs.every((l) => l.planted)),
+        done: () => bodies.every((body) => !!body.stepper && body.stepper.legs.every((leg) => !leg.swing) && body.frame.time > 15),
         script: () => { throw new Error('horse scenario has no humanoids'); },
       };
     },

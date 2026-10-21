@@ -18,7 +18,7 @@ export { ChainTip, chainTo, type TipOptions } from './core/tip';
 export { TrackedPoint, TrackedRotation } from './core/track';
 export { aimAt, lookAt, withGaze, type Gazer } from './core/gaze';
 // legs for any creature, and a horse
-export { Legs, type LegChain, type LegStep } from './core/legs/legs';
+export type { LegChain } from './core/legs/legs';
 export type { JointCycle } from './core/legs/cycle';
 export type { Gait, Locomotion } from './core/legs/gait';
 export { powerGait } from './core/legs/schedule';
