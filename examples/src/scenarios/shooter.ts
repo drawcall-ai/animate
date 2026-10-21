@@ -1,7 +1,7 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid } from '@drawcall/animate';
-import { follow, followRotation, type Stepper, idle } from '@drawcall/animate/rig';
+import { INDEX, Item, aimAt, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper } from '@drawcall/animate';
+import { follow, followRotation, idle } from '@drawcall/animate/rig';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { spinOf } from '../../../packages/animate/src/core/rotation';
 import { scalar } from '../keys';
@@ -61,7 +61,7 @@ export function shooterTrack(t: number, input: Player['input']) {
  * The player's root: always facing the look yaw (≤ 50 ms smoothing), moving as the keys ask
  * relative to it at the speed the keys allow, accelerating and braking at `ACCEL` (in the air:
  * keeping its momentum, steered a little). Crouching eases in over `CROUCHING` s; a jump is the
- * legs' to make (`Stepper.jump`).
+ * legs' to make (`body.stepper.jump`).
  */
 // Recalled game-feel norms (e.g. Unreal's Character Movement defaults, CS/COD movement): ~1.4 m/s
 // walk, slower back and sideways, ~3.5 m/s sprint forward only, ADS slows, a crouch-walk ~0.8 m/s;
@@ -79,7 +79,7 @@ export class Controller {
   /** sprinting is held off (a reload under way) */
   hold = false;
 
-  step(input: Player['input'], dt: number, legs: Stepper | null) {
+  step(input: Player['input'], dt: number, legs: Jumper | null) {
     const r = this.root;
     r.yaw += wrapAngle(input.aimYaw - r.yaw) * (1 - Math.exp(-dt / FACING));
     const { x, z } = input.move, length = Math.hypot(x, z);

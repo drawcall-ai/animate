@@ -1,5 +1,4 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Stepper } from './legs/stepper';
 import { parallel, TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
 import type { Attention, Species } from './species';
@@ -44,6 +43,14 @@ export interface Frame {
   readonly dev?: Dev;
   /** Active named contributions, also recorded with dev off. */
   readonly beats: Set<string>;
+}
+
+/** What a body's stepping legs take from a story or a scene: a leap, and whether it is in the air. */
+export interface Jumper {
+  /** leap at `speed` (m/s up), on the next sub-step it stands or rises from a landing */
+  jump(speed: number): void;
+  /** off the floor: a leap's flight */
+  readonly airborne: boolean;
 }
 
 /**
@@ -107,8 +114,8 @@ export class Body<H extends string = string> {
   declare readonly locomotion: Locomotion;
   /** its neck and eyes (`Species.gaze`) */
   readonly gazer?: Gazer;
-  /** the stepper keeping its legs under a root the scene drives, if any: ask it to `jump`, read whether it is `airborne` */
-  stepper: Stepper | null = null;
+  /** its legs' stepping, if they step (a root the scene drives, or a creature's legs): ask them to `jump`, read whether it is `airborne` */
+  stepper: Jumper | null = null;
   /** whether its story has ended */
   done = false;
   declare readonly scale: number;

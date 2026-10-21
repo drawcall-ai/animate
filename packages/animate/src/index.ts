@@ -4,7 +4,7 @@
 // Any body: a skeleton whose behaviour timeline writes its pose, layer by layer.
 export { Skeleton, type BoneDef, type Limit, type SkeletonOptions } from './core/skeleton';
 export { Pose, type ReadonlyPose } from './core/pose';
-export { Body, type BodyOptions, type Frame, type IdleOptions } from './core/body';
+export { Body, type BodyOptions, type Frame, type IdleOptions, type Jumper } from './core/body';
 export { World } from './core/world';
 export type { Attention, Posture, Species } from './core/species';
 export { scaled } from './core/scaled';
@@ -12,7 +12,7 @@ export { Life, swing, type Rhythm } from './core/life';
 export { facingAt, live, onBone, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './core/goal';
 export { when } from './core/when';
 export { named, watch, type LogEntry, type Problem, type WatchFrame } from './core/dev';
-export { Item, onItem, type ItemOptions } from './core/carrier';
+export { Carrier, Item, onItem, type ItemOptions } from './core/carrier';
 export { takeOff, wear, type Dressed, type WearOptions } from './core/worn';
 export { yawOf } from './core/math';
 export { aimAt, lookAt, withGaze, type GazeOptions } from './core/gaze';
@@ -33,6 +33,7 @@ export type { Proportions } from './humanoid/proportions';
 
 // Verbs.
 export { arriving, walkTo, type WalkOptions } from './core/walk';
+export type { Stance } from './core/asks';
 export { grab, type GrabOptions, type Spot } from './humanoid/hands/grab';
 export { carry, hold, type CarryOptions, type HoldOptions } from './humanoid/hands/carry';
 export type { Holds, Way } from './core/hands';

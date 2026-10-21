@@ -15,8 +15,9 @@ import { walkTo } from './walk';
 // Hands of any body, by name (`Species.hands`): a person's arms reach as a person's do (`grab`); another body's hand (a jaw,
 // a trunk) is the tip of the skeleton's chain named for it, which reaches; what it takes stays where it was on it (`weld`).
 
-/** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. */
-export type Holds<H extends string = string> = Readonly<Partial<Record<H, readonly [Item, string]>>>;
+/** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. A body without hands
+ * (`Species<never>`, a horse's) takes hold of nothing. */
+export type Holds<H extends string = string> = [H] extends [never] ? { readonly [hand: string]: never } : Readonly<Partial<Record<H, readonly [Item, string]>>>;
 
 /** Tuned: how long (s) a creature's hand, let go, takes to be its base's again */
 const HANDING = 0.6;

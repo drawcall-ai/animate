@@ -10,7 +10,7 @@ export type { Gazer } from './core/gaze';
 // a body's base, to run yourself under `idle: false`
 export { idle, personIdle } from './humanoid/idle';
 // what tasks ask of the base's legs and balance
-export { ask, type Asks, type Go, type Stance } from './core/asks';
+export { ask, type Asks, type Go } from './core/asks';
 export { Stepper, type Stepping, type Feet } from './core/legs/stepper';
 // where a person stands to take something
 export { approach } from './humanoid/hands/grab';

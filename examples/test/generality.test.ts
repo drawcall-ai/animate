@@ -177,6 +177,14 @@ it('a hand a body does not have fails to compile', () => {
   });
   expect(person.hands).toHaveProperty('right');
 });
+it('a horse has no hands to take things with: grab fails to compile', () => {
+  const ball = ballAt(around(0, 1.5, 0.04));
+  const mare = new Body(horse(), (m) => function* () {
+    // @ts-expect-error: a horse's species names no hands
+    yield* grab(m, { jaw: [ball, 'middle'] })();
+  }, { idle: false });
+  expect(mare.hands).toEqual({});
+});
 
 // (a body asked for what it can never get to says so in the dev log, once, and stands where it is: no throw, nothing searched for it)
 for (const [what, story] of [

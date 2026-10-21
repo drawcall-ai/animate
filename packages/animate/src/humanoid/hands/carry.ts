@@ -160,9 +160,8 @@ class TrackedEnd {
  * The hands on `item`'s grips, every sub-step: endless, or until `until`. Without `to`, the hands go
  * where the item goes (another moves it, or an unsupported hold inherits body travel). With `to`,
  * the hands carry it there: they go for its grips
- * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward).
- * The arm solver bounds the wrists; carry rejects an unreachable endpoint rather than moving it
- * silently within reach. The after-hook follows the grips and fits the item to the wrists. Another body's hand
+ * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward), the arms
+ * reaching only as far as they do. Each sub-step, after the story, the item is fitted to the hands. Another body's hand
  * (`Species.hands`) goes back to rest with the item and keeps it there (`to` and `motion` are a person's).
  */
 export function hold(h: Body, item: Item, options: HoldOptions = {}): Behaviour {

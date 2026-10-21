@@ -2,7 +2,7 @@ import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../../packages/animate/s
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
 import { Body, horse as horseSpecies, type Humanoid, Pose, yawOf, type DrivenRoot, type Frame, type Gait, type Species } from '@drawcall/animate';
-import { idle } from '@drawcall/animate/rig';
+import { idle, type Stepper } from '@drawcall/animate/rig';
 import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
@@ -48,7 +48,7 @@ export function legsBiped(): Scenario {
       let person: Humanoid | null = null;
       return {
         report: new Report(), props: () => [],
-        done: () => !!person?.stepper && person.stepper.legs.every((leg) => !leg.swing) && person.frame.time > 15,
+        done: () => !!person?.stepper && (person.stepper as Stepper).legs.every((leg) => !leg.swing) && person.frame.time > 15,
         script: (h) => {
           person = h;
           return idle(h, { root: along(scriptedRoot(0, 1.3, h.pose.position(0).clone().setY(0), yawOf(h.pose.rotation(0)), 1, 3)) });
@@ -74,7 +74,7 @@ export function legsHorse(): Scenario {
       return {
         report: new Report(), bodies,
         props: () => bodies.flatMap((body) => skeletonProps(body.pose)),
-        done: () => bodies.every((body) => !!body.stepper && body.stepper.legs.every((leg) => !leg.swing) && body.frame.time > 15),
+        done: () => bodies.every((body) => !!body.stepper && (body.stepper as Stepper).legs.every((leg) => !leg.swing) && body.frame.time > 15),
         script: () => { throw new Error('horse scenario has no humanoids'); },
       };
     },

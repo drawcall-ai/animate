@@ -4,6 +4,7 @@ import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
 import { type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
 import { forwardOf, leftOf } from '../../src/core/math';
+import type { Stepper } from '../../src/rig';
 
 const dt = 1 / 60;
 
@@ -83,7 +84,7 @@ it('crouches as asked: the pelvis let down smoothly, feet wider, steps still cle
 it('crouches on a key press and stands on its release, the feet kept to the floor', () => {
   const { h } = drive(4, () => new Vector3(), () => 0, (t, root) => { root.crouch = t > 0.5 && t < 2.5 ? 1 : 0; });
   expect(h.log).toEqual([]);
-  expect(h.stepper!.crouch).toBe(0);
+  expect((h.stepper as Stepper).crouch).toBe(0);
 });
 // (crouched: turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does)
 it.each([

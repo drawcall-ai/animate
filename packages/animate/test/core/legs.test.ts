@@ -12,6 +12,7 @@ import type { Species } from '../../src/core/species';
 import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
+import type { Stepper } from '../../src/rig';
 
 it('a Cartesian swing has a bell-shaped speed peaking halfway and zero contact acceleration', () => {
   for (const T of [0.08, 0.2, 0.6]) {
@@ -60,7 +61,7 @@ it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3
   const run = (dev: boolean) => {
     let landed = -1;
     const body = writtenOver(dev, 0.95, (f, b) => {
-      if (landed < 0 && b.stepper?.legs.some((leg) => !leg.swing && leg.planted === 0 && leg.landed)) {
+      if (landed < 0 && (b.stepper as Stepper | null)?.legs.some((leg) => !leg.swing && leg.planted === 0 && leg.landed)) {
         landed = f.time;
         f.current.setRoot(f.current.position(0).clone().add(offset));
       }
@@ -175,9 +176,9 @@ function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, 
   const body: Body = new Body(species, () => (() => parallel<Frame>('all', idle(body, { attention }),
     action<Frame>({ update: () => { const at = look(); if (at) body.asks.look = at; } }),
     ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 200), speed, accel })] : []))), { idle: false, pose: new Pose(SKELETON), dev: true });
-  const planted = (i: number) => !body.stepper!.legs[i].swing;
+  const planted = (i: number) => !(body.stepper as Stepper).legs[i].swing;
   const phase = (i: number) => {
-    const stepper = body.stepper!, leg = stepper.legs[i];
+    const stepper = body.stepper as Stepper, leg = stepper.legs[i];
     return leg.swing ? (stepper.Ts + leg.swing.u * (stepper.cycle - stepper.Ts)) / stepper.cycle : (leg.planted / stepper.cycle) % 1;
   };
   return { body, planted, phase };

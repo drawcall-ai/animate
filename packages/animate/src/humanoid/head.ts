@@ -36,7 +36,7 @@ const SPOT_RATE = 10;
 const UNDER = { speed: 1.0, accel: 1.2 };
 
 export interface HeadOptions extends Partial<Motion> {
-  /** the body follows the head (a headset): it turns round, steps over, bows and squats as the head asks (`h.asks`); otherwise only the spine reaches */
+  /** the body follows the head (a headset): it turns round, steps over, bows and squats as the head asks; otherwise only the spine reaches */
   lead?: boolean;
   until?: UntilCondition<Frame>;
 }

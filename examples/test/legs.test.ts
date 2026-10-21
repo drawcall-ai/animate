@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { legsBiped, legsHorse } from '../src/scenarios/legs';
+import type { Stepper } from '@drawcall/animate/rig';
 
 // The legs on scripted roots: a person and two horses (walk, trot) carried along a straight, a bend and a stop by the scene.
 
@@ -11,7 +12,7 @@ it('two horses walk and trot along their scripted roots, every foot down again a
   const swinging = [[false, false, false, false], [false, false, false, false]];
   while (sim.t < sim.scenario.duration) {
     sim.step();
-    sim.stage.bodies!.forEach((body, b) => body.stepper!.legs.forEach((leg, i) => {
+    sim.stage.bodies!.forEach((body, b) => (body.stepper as Stepper).legs.forEach((leg, i) => {
       if (swinging[b][i] && !leg.swing) landings[b]++;
       swinging[b][i] = !!leg.swing;
     }));

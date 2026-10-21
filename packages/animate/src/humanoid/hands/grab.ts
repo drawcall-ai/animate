@@ -24,8 +24,9 @@ import { bowLever, lowering, MOST_BOW, SQUAT } from '../balance/posture';
 
 /** Where the body stands to take something: its grips' middle `ahead` of it (m) and `aside` to its left (m; negative: its right). */
 export interface Spot {
-  /** Metres before the target, or the library's full arm reach for a deep object approached around its grips. */
+  /** how far before it (m; default: in comfortable reach, or a full arm's reach for a deep object approached round its grips) */
   ahead?: number;
+  /** how far to its left (m; negative: its right) */
   aside?: number;
 }
 

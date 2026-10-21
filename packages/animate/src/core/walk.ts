@@ -65,8 +65,8 @@ export interface WalkOptions {
 }
 
 /**
- * Walking to `to` (or turning in place to `face`): it asks the base to go there every sub-step
- * (`h.asks.go`, `h.asks.face`), and ends once the body has arrived, turned and settled on its
+ * Walking to `to` (or turning in place to `face`): it asks the base to go there (and face so) every
+ * sub-step, and ends once the body has arrived, turned and settled on its
  * squared feet (`h.locomotion.settled`); given `until`, when that is met instead (a point that moves on is followed). It writes no
  * bones. With `within`, it stops short with the point that far ahead, facing `face` (default:
  * facing the point). Within 0.6 m, at a travel speed below 0.6 m/s, short side steps to a

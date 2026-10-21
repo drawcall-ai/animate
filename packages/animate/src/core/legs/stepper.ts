@@ -147,7 +147,7 @@ export class Stepper {
   readonly legs: Leg[];
   /** the pelvis' facing (rad), how far it walks and runs (0 … 1), the gait's phase (rad), the stance's and cycle's durations (s); still and squared up; off the floor (a leap's flight) */
   yaw: number; moving = 0; run = 0; phase = 0; Ts = 1; cycle = 2; settled = true; airborne = false;
-  /** how far down it is crouched (0 … 1, eased: the root's `crouch` minimum-jerk, followed no faster than legs bend and straighten, `CROUCHING`) */
+  /** how far down it is crouched (0 … 1): the root's `crouch`, eased in and out no faster than legs bend and straighten */
   crouch = 0;
   private readonly crouches = [0, 0];
   private readonly before: number[]; private readonly gap: number[]; private readonly pair: number[]; private readonly apart: number[]; private readonly yaws: number[];
