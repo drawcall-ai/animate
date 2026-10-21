@@ -8,20 +8,20 @@ import type { LegChain } from './legs/legs';
 import type { ReadonlyPose } from './pose';
 import type { Skeleton } from './skeleton';
 
-/** What kind of body it is, as data: its skeleton, how it looks about, and the bones it holds things with, by name. */
-export interface Species {
+/** What kind of body it is, as data: its skeleton, how it looks about, and the bones it holds things with, by name (`H`: their names). */
+export interface Species<H extends string = string> {
   skeleton: Skeleton;
   /** its neck and eyes, for `lookAt` and the gazes built on it */
   gaze?: Gazer;
   /** its hands (or a jaw), by name: the skeleton's chain each reaches with, the hand its tip (`grab`, `hold`) */
-  hands?: Readonly<Record<string, string>>;
+  hands?: Readonly<Record<H, string>>;
   /**
    * its legs (`idle` walks it on them), their gait, and what the gait carries over them (`carriage`: the trunk, spine, pelvis, head and
    * tail as the gait's `body` has them, and the quiet life of these) — or a posture of its own, written in their place
    */
   legs?: { chains: readonly LegChain[]; gait: Gait; carriage?: CarriedBones; posture?: (start: ReadonlyPose) => Posture };
   /** a person (`human()`): the body made for it is a person's, its verbs a person's */
-  person?: { embody(story: (body: Body) => Behaviour, options: BodyOptions): Body };
+  person?: { embody(story: (body: Body<H>) => Behaviour, options: BodyOptions): Body<H> };
 }
 
 /** What a creature heeds as it stands and walks besides what it looks at (`lookAt`): a tether it is tied by, a startle (a new point each time). */

@@ -88,7 +88,7 @@ export interface BodyOptions {
  * the history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
  * covers and carry the rest over; the body shows its last final pose.
  */
-export class Body {
+export class Body<H extends string = string> {
   /** after an update: `prev` is the final pose, `prev2` the one before, `dt` the last sub-step */
   declare readonly frame: Frame;
   /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
@@ -96,9 +96,9 @@ export class Body {
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it */
   readonly borne = new Map<Item, Bearing>();
   /** its hands' bones, by name: the tips of their chains (`Species.hands`) */
-  declare readonly hands: Readonly<Record<string, number>>;
+  declare readonly hands: Readonly<Record<H, number>>;
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
-  declare readonly holding: Record<string, { item: Item; grip: string } | null>;
+  declare readonly holding: Record<H, { item: Item; grip: string } | null>;
   /** what the tasks ask of its legs (see `Asks`) */
   readonly asks: Asks = createAsks();
   /** its walk, as the legs report it; walkTo publishes its arrival estimate there */
@@ -124,7 +124,7 @@ export class Body {
   private world: World | null = null;
   private alone: World | null = null;
 
-  constructor(readonly species: Species, story: (body: Body) => Behaviour = NOTHING, options: BodyOptions = {}) {
+  constructor(readonly species: Species<H>, story: (body: Body<H>) => Behaviour = NOTHING, options: BodyOptions = {}) {
     // (a person is made as the person it is)
     if (species.person && new.target === Body) return species.person.embody(story, options);
     const { skeleton } = species;
@@ -139,8 +139,8 @@ export class Body {
     }
     start.forward();
     this.locomotion = createLocomotion(yawOf(start.local(0)));
-    this.hands = Object.fromEntries(Object.entries(species.hands ?? {}).map(([hand, chain]) => [hand, skeleton.chain(chain).slice(-1)[0]]));
-    this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
+    this.hands = Object.fromEntries(Object.entries<string>(species.hands ?? {}).map(([hand, chain]) => [hand, skeleton.chain(chain).slice(-1)[0]])) as Record<H, number>;
+    this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null])) as Record<H, null>;
     const wearing = options.wearing;
     if (typeof wearing === 'function' && !this.proportions) throw new Error('a body other than a person wears what it is given, not what is placed for proportions');
     dress(this, start, typeof wearing === 'function' ? wearing(this.proportions!) : wearing ?? []);
@@ -170,7 +170,7 @@ export class Body {
     const tasks = function* () { yield* made(); body.done = true; };
     this.behaviour = base ? () => parallel<Frame>('all', base, tasks) : tasks;
   }
-  private declare readonly story: (body: Body) => Behaviour;
+  private declare readonly story: (body: Body<H>) => Behaviour;
   private declare readonly idling: IdleOptions | false | undefined;
 
   /** a person's measures (`human()`); none for other bodies */

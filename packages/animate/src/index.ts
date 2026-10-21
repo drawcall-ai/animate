@@ -34,12 +34,13 @@ export { Stepper, type DrivenRoot, type Stepping, type Feet } from './core/legs/
 export { ask, type Asks, type Go, type Stance } from './core/asks';
 export { arriving, walkTo, type WalkOptions } from './core/walk';
 export { approach, grab, type Spot } from './humanoid/hands/grab';
-export { carry, hold, type Way } from './humanoid/hands/carry';
+export { carry, hold } from './humanoid/hands/carry';
+export type { Way } from './core/hands';
 export { place } from './humanoid/hands/place';
 export { release } from './humanoid/hands/release';
 export { handTo, type HandOptions } from './humanoid/arms';
 export type { Holds } from './core/hands';
-export { still, type Waypoint } from './humanoid/course';
+export { still, type Waypoint } from './core/course';
 export { carried } from './humanoid/goal';
 export { lookAround } from './humanoid/look';
 export { headTo, type HeadOptions } from './humanoid/head';

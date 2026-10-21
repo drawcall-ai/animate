@@ -1,13 +1,24 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../core/body';
-import { movingPoint } from '../core/goal';
+import type { Body, Frame } from '../core/body';
+import { movingPoint, type Placement } from '../core/goal';
 import { loadFactor } from '../core/load';
 import { heldMass } from '../core/worn';
-import type { Humanoid } from './humanoid';
+import { isPerson, type Humanoid } from './humanoid';
+import type { Side } from './bones';
+import { rests } from '../core/hands';
 
 
 /** A comfortable carry in front of the hips, or beside one hip for a single hand; follows the body. */
-export function carried(h: Humanoid, side?: 'left' | 'right') {
+export function carried<H extends string>(body: Body<H>, hand?: H): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
+  // (another body's: where its hand rests)
+  if (!isPerson(body)) {
+    const rest = rests(body, hand ?? (Object.keys(body.hands)[0] as H));
+    return (f) => ({ ...rest(f), velocity: new Vector3() });
+  }
+  return personCarried(body, hand as Side | undefined);
+}
+
+function personCarried(h: Humanoid, side?: Side) {
   const at = movingPoint(h, 0, () => {
     // Recalled load law: shorten the lever arm with squared pace effort (35 → 19 cm at 8 kg).
     const effort = loadFactor(heldMass(h));

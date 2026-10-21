@@ -41,7 +41,7 @@ const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ nam
  * and more in a Malinois, and hardly yaws (0–5°) [read: Fischer et al. 2018, Sci Rep 8:16982]; the head dips with each fore stance,
  * as the withers do [recalled: the head nod lameness scores read off]; the tail swings against the pelvis's roll [recalled].
  */
-export const DOG: Species = {
+export const DOG: Species<'jaw'> = {
   skeleton,
   gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.02, 0.1), out), range: { down: 0.5, up: 0.4, side: 0.6 } },
   hands: { jaw: 'mouth' },

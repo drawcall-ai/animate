@@ -1,11 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import type { Frame } from '../../core/body';
+import type { Body, Frame } from '../../core/body';
+import { letGo } from '../../core/hands';
 import type { Behaviour, Target } from '../../core/goal';
 import { reached } from '../../core/tip';
 import { ARM_REACH, clearArm, handTo } from '../arms';
 import { INDEX, type Side } from '../bones';
-import type { Humanoid } from '../humanoid';
+import { isPerson, type Humanoid } from '../humanoid';
 import { facingAt } from '../../core/goal';
 import { heldItems } from '../../core/worn';
 
@@ -18,9 +19,15 @@ import { heldItems } from '../../core/worn';
  * reaches (never folded on itself nor stretched out; the body not bowing nor rising after it).
  * Once they are there, or `limit` s on (another task may take a hand on its way), the free arms
  * take them. What they let go of that nothing else holds or wears rests where it was put
- * (`supported`: on a shelf, a table). With `away: null`, only open: the next task owns the hands.
+ * (`supported`: on a shelf, a table). With `away: null`, only open: the next task owns the hands. Another body's hands let go and
+ * go back to where its base has them.
  */
-export function release(h: Humanoid, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number } = {}): Behaviour {
+export function release<H extends string>(body: Body<H>, hands: readonly H[], options: { away?: Partial<Record<H, Vector3>> | null; limit?: number } = {}): Behaviour {
+  if (!isPerson(body)) return letGo(body, hands);
+  return person(body, hands as readonly string[] as readonly Side[], options as { away?: Partial<Record<Side, Vector3>> | null; limit?: number });
+}
+
+function person(h: Humanoid, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number }): Behaviour {
   const { limit = LETTING_GO } = options;
   return function* () {
     const p = h.proportions;

@@ -1,7 +1,7 @@
 import { watch } from '../core/dev';
 import type { Item } from '../core/carrier';
 import type { Behaviour } from '../core/goal';
-import type { Humanoid } from './humanoid';
+import type { Body } from '../core/body';
 import { gazeOff } from '../core/gaze';
 import { heldItems } from '../core/worn';
 
@@ -9,14 +9,16 @@ import { heldItems } from '../core/worn';
  * Eyes should lead a new grip by seconds (0.4–0.6 s in Land, Mennie & Rusted 1999).
  * Compose before the story so holding still describes the previous final pose. Taking
  * one's own worn item by feel is excluded. The head's comfortable eye range allows the
- * eyes to look within the head: down further than up or aside (see Humanoid's gazer).
+ * eyes to look within the head: down further than up or aside (its gaze's range).
  */
-export function eyesOnBefore(h: Humanoid, item: Item, seconds: number): Behaviour {
+export function eyesOnBefore(h: Body, item: Item, seconds: number): Behaviour {
+  const gazer = h.gazer;
+  if (!gazer) throw new Error('eyesOnBefore: the body has no gaze');
   return function* () {
     let since: number | null = null;
     let held = false;
     yield* watch('eyesOnBefore', (f) => {
-      const on = gazeOff(h.gazer, f.prev, item.current.position) === 0;
+      const on = gazeOff(gazer, f.prev, item.current.position) === 0;
       if (on) since ??= f.time;
       else since = null;
       const holding = heldItems(h).includes(item);

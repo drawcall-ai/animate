@@ -1,9 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../core/body';
-import type { Item } from '../core/carrier';
-import { live, type Live, type Placement } from '../core/goal';
-import { exp, log } from '../core/rotation';
-import { minimumJerk } from '../core/math';
+import type { Frame } from './body';
+import type { Item } from './carrier';
+import { live, type Live, type Placement } from './goal';
+import { exp, log } from './rotation';
+import { minimumJerk } from './math';
 
 /** A waypoint's duration (s) and place in the course's frame, read every sub-step.
  * A goal may also read the fixed course start and the preceding place in that frame.

@@ -48,6 +48,8 @@ export class Carrier implements Placed {
    * sub-step (`due`) — it moves its worn items after its behaviour — carried on as it last moved
    */
   at(time: number): Placed {
+    // (not moved the sub-step before nor this one, it has stood still since it last moved: no motion carried over)
+    if (this.dueAt !== time && time - this.time > 1.5 * STEP) return { prev2: this.current, prev: this.current, current: this.current };
     if (this.dueAt !== time || this.moved(time)) return this;
     const { position, quaternion } = this.ahead;
     position.copy(this.current.position).multiplyScalar(2).sub(this.prev.position);

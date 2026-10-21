@@ -1,6 +1,7 @@
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import type { Frame } from '../core/body';
+import type { Body, Frame } from '../core/body';
+import { tipToward } from '../core/hands';
 import { Item, type Carrier } from '../core/carrier';
 import { heldItems } from '../core/worn';
 import { followRotation } from '../core/follow';
@@ -10,7 +11,7 @@ import { clampRotation } from '../core/limits';
 import { ChainTip, reached } from '../core/tip';
 import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, type Side } from './bones';
-import type { Humanoid } from './humanoid';
+import { isPerson, type Humanoid } from './humanoid';
 import { bringShoulder, twistToward } from './reach-posture';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../core/math';
 import type { Proportions } from './proportions';
@@ -131,7 +132,12 @@ export interface HandOptions extends Partial<Motion> {
  * arm reaches standing asks `balance` to bow and bend the knees for it, one above to go up on the
  * toes (`h.asks`).
  */
-export function handTo(h: Humanoid, side: Side, target: Live<Target>, options: HandOptions = {}): Behaviour {
+export function handTo<H extends string>(body: Body<H>, hand: H, target: Live<Target>, options: HandOptions = {}): Behaviour {
+  if (!isPerson(body)) return tipToward(body, hand, target, options.until);
+  return personHandTo(body, hand as string as Side, target, options);
+}
+
+function personHandTo(h: Humanoid, side: Side, target: Live<Target>, options: HandOptions): Behaviour {
   const { until, seconds, after = 0 } = options;
   return function* () {
     const arm = new ChainTip(`${side}Arm`);

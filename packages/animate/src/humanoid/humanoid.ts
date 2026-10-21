@@ -12,7 +12,7 @@ import { Pose } from '../core/pose';
 import { footRotation, type Foot } from './balance/foot';
 import { legOf } from './balance/legs';
 import { STANDING_REACH } from './balance/posture';
-import { INDEX, SIDES } from './bones';
+import { INDEX, SIDES, type Side } from './bones';
 import { forwardOf, leftOf } from '../core/math';
 import { relaxedPose } from './profile/relaxed';
 import type { Proportions } from './proportions';
@@ -26,24 +26,24 @@ import { followHeld } from './hands/hold';
  * model (default a bare one, `createSkeletonModel()`), which its body poses after every update. Its body starts standing relaxed in its
  * stance where the options put it, its hands `left` and `right`; one body per `human()`.
  */
-export function human(model: CharacterModel = createSkeletonModel()): Species {
+export function human(model: CharacterModel = createSkeletonModel()): Species<Side> {
   const rig = new Rig(model), eyes = rig.points.eyes;
-  const species: Species = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' },
+  const species: Species<Side> = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' },
     person: { embody: (story, options) => new Humanoid(species, rig, story, options) } };
   return species;
 }
 
 /** whether `body` is a person (`human()`): its body is a person's */
-export const isPerson = (body: Body): body is Humanoid => !!body.species.person;
+export const isPerson = <H extends string>(body: Body<H>): body is Body<H> & Humanoid => !!body.species.person;
 
 /** A person's body (`human()`): the rig its pose drives, its measures, and where its feet stand. */
-export class Humanoid extends Body {
+export class Humanoid extends Body<Side> {
   /** where the feet stand or, stepping, land [left, right]: `balance`'s output */
   readonly feet: [Foot, Foot];
   declare readonly gazer: Gazer;
   private readonly measured: Proportions;
 
-  constructor(species: Species, readonly rig: Rig, story: (body: Body) => Behaviour, options: BodyOptions = {}) {
+  constructor(species: Species<Side>, readonly rig: Rig, story: (body: Body<Side>) => Behaviour, options: BodyOptions = {}) {
     const p = rig.proportions, yaw = options.yaw ?? 0;
     const start = standing(p, new Pose(rig.skeleton), options.at ?? { x: 0, z: 0 }, yaw);
     const wearing = options.wearing;

@@ -55,7 +55,7 @@ export const SEGMENT_RADIUS = 0.06;
  * stands: the hands go straight to them (on them already, they close at once). Another body takes hold with the chain its
  * species names for the hand, one at a time (`Species.hands`): it walks up, the chain's tip reaches the grip, the hand closes.
  */
-export function grab(h: Body, holds: Holds, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean; walk?: boolean } = {}): Behaviour {
+export function grab<H extends string>(h: Body<H>, holds: Holds<H>, options: { face?: number; spot?: Spot; look?: boolean | Live<Vector3>; bow?: number; first?: boolean; walk?: boolean } = {}): Behaviour {
   if (!isPerson(h)) return take(h, holds, { look: options.look !== false, walk: options.walk });
   const { look = true, bow } = options;
   if (options.walk === false) return look === false ? reachFor(h, holds) : withGaze(h, look === true ? () => middleOf(holds) : look, reachFor(h, holds), { bow });

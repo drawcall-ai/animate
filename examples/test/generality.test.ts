@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, createSkeletonModel, grab, hold, horse, human, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, carried, carry, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { DOG } from '../src/scenarios/dog';
 
@@ -80,6 +80,30 @@ for (const height of [0.3, 0.5, 0.8, 1.1]) {
     }, 30)).toEqual(ok);
   });
 }
+
+// (every hand verb takes any body: a dog's jaw carries, puts down, lets go and reaches as a person's hands do)
+check('a dog takes a ball, carries it up to its rest, lets go, takes it again and puts it down 1 m off', () => {
+  const ball = ballAt(around(0, 1.5, 0.04)), down = { position: around(90, 1, 0.04), quaternion: new Quaternion() };
+  expect(run(creature(DOG), (b) => function* () {
+    yield* grab(b, { jaw: [ball, 'middle'] })();
+    yield* carry(b, ball, carried(b))();
+    yield* release(b, ['jaw'])();
+    yield* grab(b, { jaw: [ball, 'middle'] })();
+    yield* place(b, ball, down)();
+  }, 30)).toEqual(ok);
+  expect(ball.current.position.distanceTo(down.position)).toBeLessThan(0.05);
+});
+check('a dog reaches its jaw to a point without taking anything', () => {
+  expect(run(creature(DOG), (b) => handTo(b, 'jaw', { position: around(0, 0.7, 0.3) }, { until: 'reached' }), 10)).toEqual(ok);
+});
+it('a hand a body does not have fails to compile', () => {
+  const ball = ballAt(around(0, 1.5, 0.04));
+  const person = new Body(human(), (h) => function* () {
+    // @ts-expect-error: a person's hands are left and right
+    yield* grab(h, { rigth: [ball, 'middle'] })();
+  });
+  expect(person.hands).toHaveProperty('right');
+});
 
 // (a body asked for what it can never get to says so in the dev log, once, and stands where it is: no throw, nothing searched for it)
 for (const [what, story] of [

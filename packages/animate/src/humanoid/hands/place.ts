@@ -4,7 +4,9 @@ import type { Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Placement } from '../../core/goal';
 import { withGaze } from '../../core/gaze';
 import { carried } from '../goal';
-import type { Humanoid } from '../humanoid';
+import { isPerson } from '../humanoid';
+import type { Body } from '../../core/body';
+import { put } from '../../core/hands';
 import { arriving } from '../../core/walk';
 import { when } from '../../core/when';
 import { carry, hold } from './carry';
@@ -21,7 +23,10 @@ export const RAISE_LEAD = 0.9;
 const APPROACH_RISE = 2 / 3;
 /** Lift close to the body, approach, then transfer onto the destination during the last step.
  * A live destination follows translation and rotation throughout the approach and transfer. */
-export function place(h: Humanoid, item: Item, to: Live<Placement>): Behaviour {
+export function place(body: Body, item: Item, to: Live<Placement>): Behaviour {
+  // (another body walks up, takes it there in its hand and lets go)
+  if (!isPerson(body)) return put(body, item, to);
+  const h = body;
   return function* () {
     let lifting = true;
     const watched = item.current.position.clone();

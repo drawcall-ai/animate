@@ -3,18 +3,22 @@ import { action, parallel } from '@pmndrs/timeline';
 import type { Body, Frame } from './body';
 import { gripOf, type Item } from './carrier';
 import { lookAt } from './gaze';
-import { REACHED, type Behaviour, type Target, type Until } from './goal';
+import { live, REACHED, type Behaviour, type Live, type Placement, type Target, type Until } from './goal';
+import { course, type Waypoint } from './course';
+import { Pose, type ReadonlyPose } from './pose';
+import { forwardOf, minimumJerk } from './math';
 import { followRotation } from './follow';
-import { forwardOf } from './math';
-import { ChainTip, reached } from './tip';
+import { ChainTip, chainTo, reached } from './tip';
 import { walkTo } from './walk';
 
 // Hands of any body, by name (`Species.hands`): a person's arms reach as a person's do (`grab`); another body's hand (a jaw,
 // a trunk) is the tip of the skeleton's chain named for it, which reaches; what it takes stays where it was on it (`weld`).
 
 /** What each hand takes hold of, by the hand's name (a person's: `left`, `right`): an item, by which of its grips. */
-export type Holds = Readonly<Record<string, readonly [Item, string]>>;
+export type Holds<H extends string = string> = Readonly<Partial<Record<H, readonly [Item, string]>>>;
 
+/** Tuned: how long (s) a creature's hand, let go, takes to be its base's again */
+const HANDING = 0.6;
 /** Tuned: how a creature's hand goes to a grip (m/s², m/s) and back to rest (rad/s², rad/s): a calm dip of the head */
 const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };
 /** the longest a hand takes to get to its grip before it is a problem in the dev log (s) */
@@ -26,11 +30,11 @@ const AHEAD = 0.6;
 /**
  * `grab` for a body other than a person, one hand at a time: it walks up to stand with the grip in its hand's
  * reach (not with `walk: false`), its eyes on the grip on the way (if it has any; not with `look: false`), then the
- * hand's chain reaches it and the hand closes. Not there within REACHING s, it is a problem in the dev log and keeps going; a grip
+ * hand's chain reaches it, the hand closes and goes back to where the body's base has it, with what it took. Not there within REACHING s, it is a problem in the dev log and keeps going; a grip
  * out of its reach from anywhere it could stand is one too, and it stands where it is.
  */
-export function take(body: Body, holds: Holds, options: { look?: boolean; walk?: boolean } = {}): Behaviour {
-  const [hand, ...more] = Object.keys(holds), hold = holds[hand];
+export function take<H extends string>(body: Body<H>, holds: Holds<H>, options: { look?: boolean; walk?: boolean } = {}): Behaviour {
+  const [hand, ...more] = Object.keys(holds) as H[], hold = holds[hand];
   if (!hold || more.length) throw new Error('a creature takes hold with one hand at a time');
   const [item, grip] = hold, goal = gripOf(item, grip), chain = chainOf(body, hand);
   const at = () => item.toWorld(goal, _world).position.clone();
@@ -52,7 +56,120 @@ export function take(body: Body, holds: Holds, options: { look?: boolean; walk?:
     }
     yield* tipTo(body, chain, goal, item)();
     body.holding[hand] = { item, grip };
+    yield* handBack(body, [hand])();
   };
+}
+
+/** where a hand takes an item: along timed waypoints (a course) or to a placement, live */
+export type Way = readonly Waypoint[] | Live<Placement>;
+const isCourse = (way: Way): way is readonly Waypoint[] => Array.isArray(way);
+
+/** the hand holding `item`, if any */
+function handHolding<H extends string>(body: Body<H>, item: Item): H | undefined {
+  return (Object.keys(body.holding) as H[]).find((hand) => body.holding[hand]?.item === item);
+}
+
+/**
+ * `carry` for a body other than a person: the hand holding `item` takes it along `way` (a course of waypoints, or to a live
+ * placement, in the world) at a calm dip's pace and ends once it is there (`endless`: keeps it there); still short of it `REACHING` s
+ * after the course is over, that is a problem in the dev log and it keeps going.
+ */
+export function bring(body: Body, item: Item, way: Way, endless = false): Behaviour {
+  return function* () {
+    const hand = handHolding(body, item);
+    if (!hand) throw new Error(`"${item.name}" is not held`);
+    const chain = chainOf(body, hand), tip = new ChainTip(chain), bones = body.pose.skeleton.chain(chain), bone = bones[bones.length - 1];
+    // (the hand where it puts the item there, as it holds it: its tip goes there, the chain bending as it may)
+    const inHand = itemIn(body.pose, bone, item), path = isCourse(way) ? course(item, ORIGIN, way) : null;
+    const handAt = (f: Frame): Target => {
+      const at = path ? path.to(f) : live(way as Live<Placement>, f), turn = at.quaternion ?? item.current.quaternion;
+      const quaternion = _hq.copy(turn).multiply(_iq.copy(inHand.quaternion).invert());
+      return { position: inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position), quaternion: quaternion.clone() };
+    };
+    let over = NaN, late = false;
+    yield* action<Frame>({
+      update: (f) => tip.to(f, { position: handAt(f).position }, { ...DIP, turnAccel: undefined }),
+      until: (f) => {
+        if (endless || (path && !path.over(f))) return false;
+        if (Number.isNaN(over)) over = f.time;
+        if (reached(f, bone, { position: handAt(f).position })) return true;
+        if (!late && f.time - over > REACHING) {
+          late = true;
+          f.dev?.append(f.time, { check: `late carry: hand distance after ${REACHING} s (m)`, value: f.prev.position(bone).distanceTo(handAt(f).position), limit: REACHED.distance, where: `${item.name} ${chain}` });
+        }
+        return false;
+      },
+    });
+  };
+}
+
+/** `release` for a body other than a person: the hands let go, and their chains go back to where the body's base has them over `HANDING` s. */
+export function letGo<H extends string>(body: Body<H>, hands: readonly H[]): Behaviour {
+  return function* () {
+    for (const hand of hands) {
+      const held = body.holding[hand];
+      if (held) held.item.supported = true;
+      body.holding[hand] = null;
+    }
+    yield* handBack(body, hands)();
+  };
+}
+
+/** the hands' chains back to where the body's base has them, over `HANDING` s from where they are (with what they hold) */
+function handBack<H extends string>(body: Body<H>, hands: readonly H[]): Behaviour {
+  return function* () {
+    const bones = hands.flatMap((hand) => body.pose.skeleton.chain(chainOf(body, hand)));
+    const began = body.frame.time;
+    // (each joint from where it was toward the base's, at a calm dip's pace, the base taking over as it gets there)
+    yield* action<Frame>({
+      update: (f) => {
+        const share = minimumJerk((f.time - began) / HANDING);
+        for (const b of bones) f.current.setLocal(b, _q.copy(followRotation(f.prev2.local(b), f.prev.local(b), f.current.local(b), { accel: DIP.turnAccel, speed: DIP.turnSpeed }, f.dt, _q2)).slerp(f.current.local(b), share));
+      },
+      until: (f) => f.time - began >= HANDING,
+    });
+  };
+}
+
+/** `handTo` for a body other than a person: hand `hand`'s chain tip to `target`, endless or until `until` (`'reached'`: there). */
+export function tipToward(body: Body, hand: string, target: Live<Target>, until?: Until): Behaviour {
+  return chainTo(chainOf(body, hand), target, { ...DIP, turnAccel: undefined, until });
+}
+
+/** `place` for a body other than a person: it walks up to stand with `to` in its hand's reach, takes the item there and lets go. */
+export function put(body: Body, item: Item, to: Live<Placement>): Behaviour {
+  return function* () {
+    const hand = handHolding(body, item);
+    if (!hand) throw new Error(`"${item.name}" is not held`);
+    const at = () => live(to, body.frame).position.clone(), off = standOff(body, chainOf(body, hand), at());
+    if (typeof off !== 'number') {
+      let logged = false;
+      yield* action<Frame>({ update: (f) => {
+        if (!logged) f.dev?.append(f.time, { check: 'place out of reach: placement from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chainOf(body, hand)}` });
+        logged = true;
+      } });
+      return;
+    }
+    yield* walkTo(body, { to: at, within: off })();
+    yield* bring(body, item, to)();
+    yield* letGo(body, [hand])();
+  };
+}
+
+/** `carried` for a body other than a person: where its hand rests, on the body (the item, held, kept there as it is on the hand) */
+export function rests(body: Body, hand: string): (f: Frame) => Required<Placement> {
+  const bones = body.pose.skeleton.chain(chainOf(body, hand)), rest = new Pose(body.pose.skeleton), tip = bones[bones.length - 1];
+  const inRoot = { position: rest.position(tip).sub(rest.position(0)).applyQuaternion(rest.rotation(0).clone().invert()), quaternion: rest.rotation(0).clone().invert().multiply(rest.rotation(tip)) };
+  return (f) => {
+    const turn = f.prev.rotation(0);
+    return { position: inRoot.position.clone().applyQuaternion(turn).add(f.prev.position(0)), quaternion: turn.clone().multiply(inRoot.quaternion) };
+  };
+}
+
+/** `item` in bone `bone`'s frame, as `pose` has them */
+function itemIn(pose: ReadonlyPose, bone: number, item: Item): Required<Placement> {
+  const inverse = pose.rotation(bone).clone().invert();
+  return { position: item.current.position.clone().sub(pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(item.current.quaternion) };
 }
 
 /** `hold` for a body other than a person: the chain of the hand holding `item` goes back to rest (the item on it) and keeps it there, endless or until `until`. */
@@ -110,6 +227,7 @@ function tipTo(body: Body, chain: string, goal: Target, item: Item): Behaviour {
 }
 
 const REST = new Quaternion();
-const _q = new Quaternion();
+const _q = new Quaternion(), _q2 = new Quaternion(), _hq = new Quaternion(), _iq = new Quaternion();
+const ORIGIN: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const _v = new Vector3();
 const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

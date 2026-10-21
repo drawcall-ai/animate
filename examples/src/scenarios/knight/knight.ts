@@ -29,9 +29,9 @@ export const busy = (k: Knight, task: Behaviour): Behaviour => reporting(k.repor
 export const eyesOn = (k: Knight, at: Live<Vector3>, task: Behaviour, options: { first?: boolean; bow?: number } = {}): Behaviour => withGaze(k.h, reported(k.report, 'gaze', at), task, options);
 
 /** taking hold of `holds` (`grab`), the eyes on them reported */
-export function take(k: Knight, holds: Holds, options: { face?: number; spot?: Spot } = {}): Behaviour {
+export function take(k: Knight, holds: Holds<Side>, options: { face?: number; spot?: Spot } = {}): Behaviour {
   return function* () {
-    const grips = Object.values(holds).map(([item, grip]) => item.toWorld(item.grips[grip], { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position);
+    const grips = Object.values(holds).flatMap((hold) => hold ? [hold] : []).map(([item, grip]) => item.toWorld(item.grips[grip], { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position);
     const middle = grips.reduce((sum, g) => sum.add(g), new Vector3()).divideScalar(grips.length);
     yield* busy(k, grab(k.h, holds, { ...options, look: reported(k.report, 'gaze', middle), first: true }))();
   };

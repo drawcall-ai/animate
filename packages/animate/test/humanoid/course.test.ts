@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { action } from '@pmndrs/timeline';
 import { Body, Item, still, type Frame, type Waypoint } from '../../src';
-import { course } from '../../src/humanoid/course';
+import { course } from '../../src/core/course';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
