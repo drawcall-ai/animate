@@ -69,8 +69,9 @@ export interface WalkOptions {
  * sub-step, and ends once the body has arrived, turned and settled on its
  * squared feet (`h.locomotion.settled`); given `until`, when that is met instead (a point that moves on is followed). It writes no
  * bones. With `within`, it stops short with the point that far ahead, facing `face` (default:
- * facing the point). Within 0.6 m, at a travel speed below 0.6 m/s, short side steps to a
- * still goal and back steps toward a goal behind retain the requested facing.
+ * facing the point). Following a body, give its `velocity` too. Within 0.6 m, at a travel speed below 0.6 m/s, short side steps to a
+ * still goal and back steps toward a goal behind retain the requested facing. A creature goes round on an arc to a still goal behind
+ * it, steps back to one just behind it when asked a facing, and waits for one behind it that moves.
  */
 export function walkTo(h: Body, options: WalkOptions): Behaviour {
   return route(h, options);

@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters and creatures with @drawcall/animate — every body is a `new Body(species, story, options)`, a person's species `human(model)`, the shipped `horse()` or your own from data — moved by @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself — `walkTo`, `grab`/`hold`/`carry`/`place`/`release`/`offer`/`touch`/`handTo`/`wear`, `lookAt`/`withGaze`/`aimAt` — scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters and creatures with @drawcall/animate — people, the shipped horse or creatures of your own from data — by stories of @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself, scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -34,7 +34,7 @@ A body's story runs over its base. For a person, the base balances, walks where 
 
 ## Walking
 
-`walkTo` ends once the body has arrived, turned and settled. Given `until`, it ends when that is met instead, and until then it follows a live `to` however it moves, which is how one body follows another (give the goal's `velocity` too). `within` stops short with the point that far ahead, and `face` sets the facing to arrive with. Leave `speed` off unless matching another body's pace, because walks already slow for what the hands hold. A creature asked to a still goal behind it goes round on an arc; one behind it that moves, it waits for.
+`walkTo` ends once the body has arrived, turned and settled. Given `until`, it follows a live `to` however it moves until that is met, which is how one body follows another. Leave `speed` off unless matching another body's pace: walks already slow for what the hands hold.
 
 The motion conditions — `arriving(h, s)`, `h.locomotion.settled` and `moving` — describe the body now, so they are true at the start for a body standing still. `arriving` also holds when no walk is running and the body is settled. Wait on them only alongside the walk they are to observe, as in the next section.
 
@@ -110,7 +110,7 @@ Leave placement to the library: a hand-placed number usually reads worse and bre
 
 ## Gaze
 
-`lookAt(body, point)` keeps the eyes on a point, endlessly: the head turns most of the way and the eyes take the rest. `withGaze(h, point, task)` holds them there while a task runs, and with `first: true` the task waits until the eyes are there. Looking low makes the person bow. `aimAt` adds the trunk, for a player's aim. `headTo` puts the head where a headset is, and with `lead` the body follows it. A species without a neck chain, like the horse, turns its head in its posture toward what `lookAt` sets.
+`lookAt(body, point)` keeps the eyes on a point, endlessly. `withGaze(h, point, task)` holds them there while a task runs (`first: true`: on it before the task sets off). `aimAt` adds the trunk, for a player's aim; `headTo` puts the head where a headset is.
 
 ## Player control
 
@@ -134,7 +134,7 @@ A held tool that must stay steady in view, such as a first-person weapon, belong
 
 ## Life
 
-A person's quiet life is part of its base. A species gives its own as rhythms in its `carriage`: each fires every few seconds (seeded) and eases a value to a new aim, and the carriage turns `head` into a glance about, `weight` into a roll of the spine and `tail` into a swish. A species with a posture of its own reads further rhythms from a `Life`.
+A person's quiet life is part of its base. A species gives its own as rhythms in its `carriage` (`CarriedBones`: a glance about, a roll of the weight, a swish of the tail), each fired every few seconds, seeded.
 
 ## Your own creature
 
