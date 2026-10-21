@@ -13,6 +13,9 @@ import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
 import type { Stepper } from '../../src/rig';
+import type { DrivenRoot } from '../../src/core/legs/stepper';
+import { human } from '../../src/humanoid/humanoid';
+import { INDEX } from '../../src/humanoid/bones';
 
 it('a Cartesian swing has a bell-shaped speed peaking halfway and zero contact acceleration', () => {
   for (const T of [0.08, 0.2, 0.6]) {
@@ -361,4 +364,23 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: solved hooves peak
   }
   expect(checked).toBeGreaterThan(10);
   expect(body.log).toEqual([]);
+});
+
+// (a stepper keeps what it stood on for its own feet: another body stepping between its move and its feet changes nothing)
+it('plants its feet from its own pelvis, whatever another stepper did since', () => {
+  const driven = (x: number, speed: number) => {
+    const root: DrivenRoot = { position: new Vector3(x, 0, 0), velocity: new Vector3(0, 0, speed), yaw: 0 };
+    return { root, body: new Body(human(), undefined, { at: { x, z: 0 }, idle: { root } }) };
+  };
+  const [a, b] = [driven(0, 3.5), driven(3, -3.5)];
+  let most = 0;
+  for (let i = 0; i < 120; i++) {
+    for (const { root, body } of [a, b]) { root.position.addScaledVector(root.velocity, 1 / 60); body.update(1 / 60); }
+    const stepper = a.body.stepper as Stepper, legs = stepper.legs.flatMap((leg, k) => leg.swing ? [] : [k]);
+    const tops = legs.map((k) => a.body.pose.position(k ? INDEX.rightUpperLeg : INDEX.leftUpperLeg).clone());
+    const before = legs.map((k, j) => stepper.pose(k, tops[j]).ankle.clone());
+    (b.body.stepper as Stepper).move(b.body.frame, b.root);
+    legs.forEach((k, j) => { most = Math.max(most, stepper.pose(k, tops[j]).ankle.distanceTo(before[j])); });
+  }
+  expect(most).toBe(0);
 });

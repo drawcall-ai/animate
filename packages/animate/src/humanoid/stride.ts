@@ -82,9 +82,12 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     const lean = !moving && !go ? asks.lean : null;
     const leaned = still && (lean || leaning) ? within(still, lean, stepper) : null;
     leaning = !!leaned && (!!lean || root.distanceTo(leaned) > LEAN.back * s);
+    // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
+    const behind = forwardOf(stepper.yaw).multiplyScalar(OVER * s);
     const r = plan.step(f, { position: moving || go ? stop : leaned ?? root.clone(), velocity: moving ? velocity : new Vector3(), yaw: faced ? yaw : undefined },
       { accel: go?.accel ?? 1.2 * s, speed: moving ? Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity) : go ? EDGE * s : leaned ? LEAN.speed * s : 0, turnSpeed: asks.face?.rate },
-      stance, (forecast) => stepper.reachable(forecast));
+      // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
+      stance, (forecast) => stepper.reachable((t) => { const at = forecast(t); return { position: at.position.clone().sub(behind), yaw: at.yaw }; }));
     if (root.distanceTo(stop) < STOP.distance * s && r.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed) moving = false;
 
     // the hips carried off the root: swaying and turning with the stride, back from it as far as the body's mass leans ahead of them
@@ -102,8 +105,8 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
       { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression: 0 }, (height) => height);
     const offset = hips.follow(offsets[0], offsets[1], c.pelvis.clone().sub(c.root).setY(0), PELVIS, dt, new Vector3());
     [offsets[0], offsets[1]] = [offsets[1], offset];
-    // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
-    const behind = forwardOf(stepper.yaw).multiplyScalar(OVER * s), forecast = r.forecast;
+    // (the stepper given the feet's middle, `behind` the centre of mass, the hips that far ahead of it again)
+    const forecast = r.forecast;
     // (balance read off the body as it last stood, as the checks read it)
     const com = f.prev.com(new Vector3()), xcom = com.clone().addScaledVector(com.clone().sub(f.prev2.com(new Vector3())), 1 / (dt * Math.sqrt(GRAVITY / p.legLength))).setY(0);
     // (let down as asked: the stepper crouches, the feet staying put; asked below none, up on the toes)

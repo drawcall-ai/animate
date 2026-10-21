@@ -166,6 +166,8 @@ export class Stepper {
   private going = false;
   /** how fast (1/m … per rad) a gait's turn uses up its feet's stray: the hips' furthest from the root over the feet's narrowest sweep */
   private readonly sweep: number;
+  /** where the pelvis stands this sub-step, and a hip's place worked out from it: kept for `pose`, which plants feet after `move` */
+  private readonly pelvis = new Vector3(); private readonly hipScratch = new Vector3();
   private readonly heights = [0, 0]; private readonly velocity = new Vector3(); private poses: (FootPose | null)[] = [];
 
   constructor(private readonly st: Stepping, private readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number) {
@@ -194,7 +196,7 @@ export class Stepper {
     const k = clamp(follow(this.crouches[0], this.crouches[1], minimumJerk(clamp(r.crouch ?? 0, 0, 1)), CROUCHING, dt), 0, 1);
     [this.crouches[0], this.crouches[1], this.crouch] = [this.crouches[1], k, k];
     const sitting = r.hips ? 0 : st.crouch.ahead * s * k, toes = Math.max(0, r.tiptoe ?? 0);
-    const hips = this.hips.copy(r.hips ?? ZERO).setY(0), pelvis = _p.copy(r.position).add(hips);
+    const hips = this.hips.copy(r.hips ?? ZERO).setY(0), pelvis = this.pelvis.copy(r.position).add(hips), hipScratch = this.hipScratch;
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)
     leap(jump, this.asked, smoothstep(st.run[0], st.run[1], v), s, dt);
     this.asked = undefined;
@@ -259,7 +261,7 @@ export class Stepper {
     // the pelvis' height: let down walking, bobbing lowest after contact (running: mid-stance), as high as the feet reach
     const lengthOf = (leg: Leg) => feet.legs[leg.i].length ?? feet.length, homeOf = (leg: Leg) => feet.legs[leg.i].home ?? feet.legs[leg.i].ahead ?? 0;
     const astray = (leg: Leg, inward: number) => strayed(st, feet, leg, inward);
-    const hip = (leg: Leg) => _hip.copy(pelvis).addScaledVector(leftOf(yaw), leg.sign * (feet.legs[leg.i].hip ?? feet.hip)).addScaledVector(forwardOf(yaw, _o), feet.legs[leg.i].ahead ?? 0);
+    const hip = (leg: Leg) => hipScratch.copy(pelvis).addScaledVector(leftOf(yaw), leg.sign * (feet.legs[leg.i].hip ?? feet.hip)).addScaledVector(forwardOf(yaw, _o), feet.legs[leg.i].ahead ?? 0);
     const moving = smoothstep(0, 1, v);
     const standing = this.stand - st.crouch.depth * s * k + toes;
     const nominal = () => standing + rise - (lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run) + st.bob * lerp(1 - Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0)),
@@ -279,8 +281,8 @@ export class Stepper {
     // (the height a landing must hold the hip at, and how far out it may land so, as the legs stand before they move this sub-step)
     const holding = Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
     const landingReaches = legs.map((leg) => Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - feet.ankleHeight) ** 2))));
-    // (the extrapolated centre of mass `ahead` s on)
-    const xcom = (ahead: number, out: Vector3) => travel(ahead, out).addScaledVector(forwardOf(yaw, _f), sitting)
+    // (the extrapolated centre of mass `ahead` s on: over the pelvis, the root carried on, as `r.xcom` is)
+    const xcom = (ahead: number, out: Vector3) => travel(ahead, out).add(hips).addScaledVector(forwardOf(yaw, _f), sitting)
       .addScaledVector(pace(ahead, _x), Math.sqrt(feet.length / GRAVITY)).setY(0);
     // the feet: swings on, then those too far from home lift (the furthest first)
     for (const leg of legs) {
@@ -554,9 +556,9 @@ export class Stepper {
       if (airborne) {
         // (in the air the leg's length is planned, not the foot's height: hanging from the hips, tucked
         // between; landing, the foot comes down with the body, slowed a little by the knees bending)
-        const rel = w.rel!, pelvis = flying + rise, falls = rise + vy * air - GRAVITY * air * air / 2;
+        const rel = w.rel!, pelvisY = flying + rise, falls = rise + vy * air - GRAVITY * air * air / 2;
         [rel.x, rel.v, rel.a] = quintic(rel.x, rel.v, rel.a, flying + falls - land.y, (1 - TOUCH) * (vy - GRAVITY * air), w.rest, dt);
-        ankle.set(_p.x + w.x.x, pelvis - rel.x + arc, _p.z + w.x.z);
+        ankle.set(pelvis.x + w.x.x, pelvisY - rel.x + arc, pelvis.z + w.x.z);
       }
       const lowest = feet.sole(leg.i, ankle, foot, toes);
       const soft = 0.004 * Math.sin(Math.PI * u) ** 2 + Number.EPSILON;
@@ -707,6 +709,6 @@ const beyond = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2)
 /** a planted foot's roll off its strike (rad): flat after `ROLL` */
 const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 
-const ZERO = new Vector3(), _p = new Vector3();
+const ZERO = new Vector3();
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion();
-const [_v, _w, _a, _b, _c, _x, _n, _hip, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot] = Array.from({ length: 17 }, () => new Vector3());
+const [_v, _w, _a, _b, _c, _x, _n, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot] = Array.from({ length: 16 }, () => new Vector3());
