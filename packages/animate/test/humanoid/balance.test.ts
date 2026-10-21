@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
 import { type Humanoid, walkTo, type Frame } from '../../src';
 import { INDEX } from '../../src/humanoid/bones';
-import { heelOf, swingProgress } from '../../src/humanoid/balance/foot';
+import { heelOf, swingProgress } from '../../src/humanoid/posture/foot';
 import { wrapAngle, yawOf } from '../../src/core/math';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import { idle, legSystem } from '../../src/humanoid/idle';

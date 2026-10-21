@@ -5,7 +5,7 @@ import { live, type Behaviour, type Live, type Motion, type Placement } from '..
 import { clampRotation } from '../core/limits';
 import type { Pose } from '../core/pose';
 import { TrackedPoint, TrackedRotation } from '../core/track';
-import { lowering, LOWER } from './balance/posture';
+import { lowering, LOWER } from './posture/posture';
 import { INDEX } from './bones';
 import type { Humanoid } from './humanoid';
 import { forwardOf, wrapAngle, yawOf } from '../core/math';

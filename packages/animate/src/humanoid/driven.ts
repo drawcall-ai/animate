@@ -10,8 +10,8 @@ import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, pointSegmentDista
 import { Stepper, type DrivenRoot, type Feet, type Leg, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
-import { ankleFor, ballOf, footprint, footRotation, heelOf } from './balance/foot';
-import { shankTilt } from './balance/legs';
+import { ankleFor, ballOf, footprint, footRotation, heelOf } from './posture/foot';
+import { shankTilt } from './posture/leg';
 import { hullOf, outside } from '../core/legs/support';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';

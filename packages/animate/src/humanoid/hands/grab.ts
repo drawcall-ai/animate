@@ -18,7 +18,7 @@ import { gripOf } from '../../core/carrier';
 import type { Holds } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
-import { bowLever, lowering, MOST_BOW, SQUAT } from '../balance/posture';
+import { bowLever, lowering, MOST_BOW, SQUAT } from '../posture/posture';
 
 // Taking hold of things: walking up to them, the eyes and hands going ahead.
 

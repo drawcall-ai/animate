@@ -3,7 +3,7 @@ import type { Proportions } from './proportions';
 import type { Gait } from '../core/legs/gait';
 import { powerGait, stanceOf } from '../core/legs/schedule';
 import type { Stepping } from '../core/legs/stepper';
-import { STANDING_REACH } from './balance/posture';
+import { STANDING_REACH } from './posture/posture';
 import { defaultStance } from './stance';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992). */

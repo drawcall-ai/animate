@@ -11,20 +11,18 @@ import type { Humanoid } from '../humanoid';
 import { forwardOf, smoothstep, softMin, yawOf } from '../../core/math';
 import { defaultStance, OVER_ANKLES } from '../stance';
 import { seedOf } from '../../core/random';
-import { Life } from './life';
+import { Life } from '../posture/life';
 import { Carriage } from './carriage';
 import { pelvisHeight, rollFoot, plantedPose, solveLeg, swingPose, type FootPose } from './legs';
-import { LOWER, Posture, reachLimit, TIPTOE, type Trunk } from './posture';
+import { LOWER, Posture, TIPTOE, type Trunk } from '../posture/posture';
+import { cycleOf, reachLimit } from './reach';
+import { BOW, followed, PELVIS, TURN } from '../posture/pace';
 import { stepFeet } from './steps';
-import { checkFeet, checkSupport } from './checks';
+import { checkFeet } from './checks';
+import { checkSupport } from '../posture/checks';
 
 
 
-/** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
-export const BOW = { accel: 6, speed: 1.2 };
-/** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
-export const PELVIS = { accel: 30 };
-export const TURN = { accel: 60 };
 /** let down or up this far (m, default body), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /** how long both feet stand before the body has settled (s): a squaring step comes before */
@@ -92,7 +90,7 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
         life.update(dt, life.quiet(asks, h), speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
         c.offset.copy(posture.center(f));
-        posture.carry(f, c, { lower, bow, twist }, trunk, life, posture.cycle(c, dt), (standing, floor, tiptoe) => softMin(standing, reachLimit(c, floor, tiptoe), 0.015));
+        posture.carry(f, c, { lower, bow, twist }, trunk, life, cycleOf(posture, c, dt), (standing, floor, tiptoe) => softMin(standing, reachLimit(c, floor, tiptoe), 0.015));
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = follow(f.prev2.position(0).y, f.prev.position(0).y, c.pelvis.y, PELVIS, dt);
         c.pelvis.copy(at).setY(up);
@@ -136,12 +134,6 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
   };
 }
 
-/** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
-export function followed(history: number[], goal: number, motion: { accel: number; speed: number }, dt: number): number {
-  const next = follow(history[0], history[1], goal, motion, dt);
-  [history[0], history[1]] = [history[1], next];
-  return next;
-}
 
 const footPose = (): FootPose => ({ ankle: new Vector3(), foot: new Quaternion(), toes: new Quaternion() });
 const TRUNK = [INDEX.spine, INDEX.chest];

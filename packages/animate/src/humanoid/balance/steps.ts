@@ -7,11 +7,11 @@ import { INDEX, type Side } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../core/math';
 import { bodyYaw, footYaw, stanceFeet } from '../stance';
 import type { Carriage } from './carriage';
-import { ankleFor, footprint, MAX_HEEL } from './foot';
+import { ankleFor, footprint, MAX_HEEL } from '../posture/foot';
 import type { Frame } from '../../core/body';
 import { liftOff } from './legs';
 import { hullOf, outside, past } from '../../core/legs/support';
-import { REACH } from './posture';
+import { REACH } from '../posture/posture';
 import { leadTime, type Timing } from './timing';
 
 /** the extrapolated centre of mass is caught by a step once it leaves the feet by this much (m, default body) */

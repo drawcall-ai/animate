@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { ReadonlyPose } from '../core/pose';
 import { forwardOf, smoothstep, wrapAngle } from '../core/math';
-import { handLowering, MOST_BOW, SQUAT } from './balance/posture';
+import { handLowering, MOST_BOW, SQUAT } from './posture/posture';
 import { INDEX, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { NECK_PITCH } from './profile/limits';

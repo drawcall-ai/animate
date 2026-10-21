@@ -6,9 +6,10 @@ import { clamp, forwardOf, GRAVITY, headingOf, smoothstep, wrapAngle } from '../
 import type { Proportions } from '../proportions';
 import { bodyYaw, feetFacing, OVER_ANKLES } from '../stance';
 import type { Stance } from '../../core/asks';
-import { FOOT_HALF_WIDTH, type Foot } from './foot';
+import { FOOT_HALF_WIDTH, type Foot } from '../posture/foot';
 import { runAmount, stepTiming, type Timing } from './timing';
-import { walking } from './posture';
+import { walking } from '../posture/posture';
+import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, START_GLIDE, STOP } from '../posture/pace';
 
 /** how fast a root that got off its feet is brought back over them (m/s) */
 const LEASH_SPEED = 0.6;
@@ -20,16 +21,6 @@ export const PLANNED_ACCEL = 0.8;
 const ARRIVAL = 1.0;
 /** the facing asked on arrival is turned to once the body is this slow (m/s): first the stop, then the turn */
 const ARRIVAL_TURN = [0.3, 0.6] as const;
-/** how quickly the goal's own velocity is picked up (1/s) */
-export const GOAL_VELOCITY_RATE = 9;
-/** a goal moving faster than this (m/s) was re-planned, not carried: it jumped */
-export const JUMP_SPEED = 4;
-/** a walk starts when the goal is this far (m, default body), turned (rad; a facing asked: `faced`, just past where it stops) or moving (m/s) */
-export const START = { distance: 0.14, yaw: 0.45, faced: 0.12, speed: 0.25 };
-/** it stops once close, slow, the goal still and the facing reached */
-export const STOP = { distance: 0.05, speed: 0.15, goalSpeed: 0.08, yaw: 0.1 };
-/** until the first foot is off the ground the body barely glides (m/s) */
-export const START_GLIDE = 0.15;
 /** the sideways speed a shuffle of hip-wide steps carries (m/s) */
 const SHUFFLE = 0.4;
 /** how far the body may twist over its feet before turning waits for a step (rad, ~25°) */

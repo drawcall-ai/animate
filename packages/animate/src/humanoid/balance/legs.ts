@@ -11,8 +11,9 @@ import { INDEX, SIDES, type Side } from '../bones';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle } from '../../core/math';
 import type { Proportions } from '../proportions';
 import type { Carriage, Swing } from './carriage';
-import { LANDING_REACH, plantedReach } from './posture';
-import { ankleFor, ballOf, MAX_HEEL, footRotation, heelOf, swingHump, swingProgress, type Foot } from './foot';
+import { LANDING_REACH, plantedReach } from '../posture/posture';
+import { foldedReach, legOf, shankTilt } from '../posture/leg';
+import { ankleFor, ballOf, MAX_HEEL, footRotation, heelOf, swingHump, swingProgress, type Foot } from '../posture/foot';
 
 /** how fast a planted foot rolls (rad/s², rad/s), within the ankle's range */
 const ROLL = { accel: 300, speed: 8 };
@@ -58,17 +59,6 @@ const STRAIGHT = 0.999;
 /** how far to its own side of the standing foot a swinging ankle passes, at least (m, default body) */
 const SWING_PAST = 0.06;
 
-/** a leg's chain */
-export const legOf = (side: Side) => (side === 'left' ? 'leftLeg' : 'rightLeg');
-
-/** the shank's forward tilt over a foot heading `yaw` as `pose` has the leg (rad, + the knee ahead of the ankle) */
-export function shankTilt(pose: ReadonlyPose, side: Side, yaw: number): number {
-  const shin = _v.subVectors(pose.position(INDEX[`${side}LowerLeg`]), pose.position(INDEX[`${side}Foot`]));
-  return Math.atan2(shin.x * Math.sin(yaw) + shin.z * Math.cos(yaw), shin.y);
-}
-
-/** The shortest hip–ankle span permitted by the knee's flexion limit. */
-export const foldedReach = (p: Proportions, bend: number) => Math.sqrt(p.thigh ** 2 + p.shin ** 2 + 2 * p.thigh * p.shin * Math.cos(bend));
 
 /** Follow heel loading into the ankle's stance roll; the leg solve enforces its joint range. */
 export function rollFoot(f: Frame, c: Carriage, s: number): number {

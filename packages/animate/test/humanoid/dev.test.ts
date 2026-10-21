@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest';
 import { Body, type Humanoid, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, named, watch, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
 import { checkFeet } from '../../src/humanoid/balance/checks';
-import { ballOf, footRotation, heelOf } from '../../src/humanoid/balance/foot';
+import { ballOf, footRotation, heelOf } from '../../src/humanoid/posture/foot';
 import { Dev } from '../../src/core/dev';
 import { leg } from '../core/rigs';
 

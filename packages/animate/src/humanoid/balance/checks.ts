@@ -6,28 +6,9 @@ import { INDEX, SIDES } from '../bones';
 import type { Stepping } from './carriage';
 import type { Humanoid } from '../humanoid';
 import { solePoints } from '../landmarks';
-import { ballOf, footRotation, heelOf, footprint } from './foot';
+import { ballOf, footRotation, heelOf, footprint } from '../posture/foot';
 import { hullOf, outside } from '../../core/legs/support';
 
-/** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
-export function checkSupport(h: Humanoid, f: Frame, dev: Dev): void {
-  if (f.time <= f.dt) return;
-  const com = f.prev.com(new Vector3());
-  const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
-  const xcom = com.clone().addScaledVector(velocity, 1 / Math.sqrt(GRAVITY / h.proportions.legLength));
-  const support = h.feet.flatMap((foot, s) => {
-    if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
-    const side = SIDES[s];
-    return solePoints(h, f.prev, side).map((at): [number, number] => [at.x, at.z]);
-  });
-  const hull = hullOf(support);
-  if (h.locomotion.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {
-    const value = outside(hull, com);
-    if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
-  }
-  const value = outside(hull, xcom);
-  if (value > 0.1) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
-}
 
 /** Read the final planted foot, allowing its roll about the heel or ball, never the solve's goal. */
 export function checkFeet(h: Humanoid, f: Frame, dev: Dev, steps: readonly Pick<Stepping, 'plantedTime'>[]): void {

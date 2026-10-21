@@ -4,7 +4,7 @@ import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { type Humanoid, createSkeletonModel, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
-import { Life } from '../../src/humanoid/balance/life';
+import { Life } from '../../src/humanoid/posture/life';
 
 function body(task: (h: Humanoid) => Behaviour, height = 1.75) {
   return person(createSkeletonModel(height), (h) => function* () { yield* parallel<Frame>('all', idle(h), task(h)); }, { idle: false, dev: true });
