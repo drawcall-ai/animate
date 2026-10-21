@@ -262,7 +262,7 @@ check('a horse leads with its eyes before a task without a neck chain', () => {
 // (a body asked for what it can never get to says so in the dev log, once, and stands where it is: no throw, nothing searched for it)
 for (const [what, story] of [
   ['take a ball 1.5 m up, beyond its jaw', (b: Body) => grab(b, { jaw: [ballAt(around(0, 1, 1.5)), 'middle'] })],
-  ['walk to a goal that is no point', (b: Body) => walkTo(b, { to: new Vector3(NaN, 0, 1) })],
+  ['walk to a live goal that turns out no point', (b: Body) => walkTo(b, { to: () => new Vector3(NaN, 0, 1) })],
 ] as const) {
   it(`a dog asked to ${what} logs it once and stands`, () => {
     const body = creature(DOG)(story), start = body.pose.position(0).clone();
@@ -288,6 +288,22 @@ for (const [what, species, story] of [
     expect(result.log[0]).toMatch(/^stalled walk/);
   });
 }
+
+// (a walk asked for what can be no walk throws at once, for any body: misuse, not lateness)
+for (const [what, options] of [
+  ['a goal that is no point', { to: new Vector3(NaN, 0, 1) }], ['a facing that is no angle', { face: NaN }], ['no acceleration', { to: new Vector3(0, 0, 1), accel: 0 }],
+  ['a negative speed', { to: new Vector3(0, 0, 1), speed: -1 }], ['a speed that is no number', { to: new Vector3(0, 0, 1), speed: NaN }], ['a negative within', { to: new Vector3(0, 0, 1), within: -1 }],
+] as const) {
+  for (const [name, make] of [['dog', () => new Body(DOG, undefined, { idle: false })], ['person', () => new Body(human(), undefined, { idle: false })]] as const) {
+    it(`a ${name} asked to walk with ${what} throws at once`, () => expect(() => walkTo(make(), options)).toThrow(/walkTo/));
+  }
+}
+check('a person asked to walk to a live goal that turns out no point logs it once and stands', () => {
+  const body = person((b) => walkTo(b, { to: () => new Vector3(NaN, 0, 1) })), start = body.pose.position(0).clone();
+  for (let i = 0; i < 5 * 60; i++) body.update(1 / 60);
+  expect(body.log.length).toBe(1);
+  expect(body.pose.position(0).distanceTo(start)).toBeLessThan(0.05);
+});
 
 function ballAt(at: Vector3) {
   return new Item(at, new Quaternion(), { middle: { position: new Vector3() } }, { name: 'ball', mass: 0.06, bounds: new Box3(new Vector3(-0.04, -0.04, -0.04), new Vector3(0.04, 0.04, 0.04)) });

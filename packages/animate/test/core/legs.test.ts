@@ -80,6 +80,11 @@ it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3
 it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', () => {
   expect(strideAt(HORSE_WALK, -8.9e-16, 0)).toEqual(strideAt(HORSE_WALK, 0, 0));
   for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(HORSE_WALK, speed, 0)).toThrow('leg speed');
+  // (and a body whose legs read such noise off a root standing still steps on, its log empty)
+  const root = { position: new Vector3(), velocity: new Vector3(0, 0, -8.9e-16), yaw: 0 };
+  const body = new Body(horse(), undefined, { pose: new Pose(SKELETON), idle: { root }, dev: true });
+  for (let tick = 0; tick < 60; tick++) body.update(1 / 60);
+  expect(body.log).toEqual([]);
 });
 
 it('follows a moving goal with supported contacts and a root that turns toward its path', () => {
@@ -157,10 +162,13 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
 it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goals (%s, %s), then follows their next position', (x, z) => {
   let goal = new Vector3(x, 0, z);
   const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: () => goal, speed: 0.95, accel: 0.65, until: () => false }))), { idle: false, pose: new Pose(SKELETON), dev: true });
+  const start = body.pose.position(0).clone();
   for (let tick = 0; tick < 120; tick++) body.update(1 / 60);
+  // (a goal behind it turned to on the spot, the root staying put; one beside it within reach stepped toward)
+  if (z < 0) expect(body.pose.position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
   goal = new Vector3(0, 0, 3);
-  // (a goal behind it first turned to, on the spot: the next one ahead it then walks on to)
-  for (let tick = 0; tick < (z <= 0 ? 40 : 4) * 60; tick++) body.update(1 / 60);
+  // (the next one ahead it then walks on to: after a turn on the forehand back round — 4–5 hind steps, ~2 s — and 3 m)
+  for (let tick = 0; tick < (z < 0 ? 5.5 : 4) * 60; tick++) body.update(1 / 60);
   expect(body.pose.position(0).z).toBeGreaterThan(1);
   expect(body.log).toEqual([]);
 });
@@ -168,7 +176,7 @@ it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goal
 it('brakes for a moving goal that crosses behind a travelling root', () => {
   const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2), speed: 0.95, accel: 0.65, until: () => false }))), { idle: false, pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 480; tick++) body.update(1 / 60);
-  expect(body.pose.position(0).z).toBeGreaterThan(-2.5);
+  expect(body.pose.position(0).z).toBeGreaterThan(0.5);
   expect(body.pose.position(0).z).toBeLessThan(3);
   expect(body.log).toEqual([]);
 });

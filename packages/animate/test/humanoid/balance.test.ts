@@ -199,6 +199,8 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('core arrives facing %s without
   expect(Math.abs(wrapAngle(yawOf(h.pose.rotation(0)) - lastTwo[1].yaw))).toBeLessThanOrEqual(20 * Math.PI / 180);
   expect(lastTwo[1].error).toBeLessThan(lastTwo[0].error);
   h.update(dt);
-  // XCoM capture remains stage 4; contact, ROM and rate checks still apply here.
-  expect(h.log.filter((entry) => entry.check !== 'XCoM outside support (m)')).toEqual([]);
+  // (open on the core path, paused with the human switch — stage 4: arriving with a 120° turn the extrapolated centre of mass passes the
+  // feet by ~0.109 m against 0.1; a tighter capture breaks the straight and curved strides, so it is listed here, not filtered)
+  const open = face === 2 * Math.PI / 3 ? h.log.filter((entry) => entry.check === 'XCoM outside support (m)' && entry.value < 0.11) : [];
+  expect(h.log.filter((entry) => !open.includes(entry))).toEqual([]);
 }, 20000);

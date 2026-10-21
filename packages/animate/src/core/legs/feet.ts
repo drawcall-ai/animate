@@ -344,7 +344,7 @@ export class ChainLeg {
 
 /** Tuned: a planted foot's miss (m) and turn (rad) from how it is held; its contact's slide (m) from where it was put — pivoting in place
  * only, as the user decided (2026-10-20); [derived] the legs' touchdown speeds (m/s), as the old legs bounded them */
-const CONTACT = { distance: 1e-3, turn: 0.01, slide: 0.01 }, TOUCHDOWN = { down: 0.1, along: 1 };
+const CONTACT = { distance: 1e-4, turn: 1e-4, slide: 0.01 }, TOUCHDOWN = { down: 0.1, along: 1 };
 /** Tuned: a planted foot is turned from the body no further than this share of how far its leg twists, the rest pivoting on the floor */
 const TWISTING = 0.8;
 /** Tuned: a swinging leg's joints move within this share of the rig's bounds on their speed and acceleration */

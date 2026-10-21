@@ -268,6 +268,28 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   expect(item.current.position.distanceTo(destination.position)).toBeLessThan(0.01);
 });
 
+it('keeps the head clear while a wide held load rises through a downward gaze', () => {
+  const item = new Item(new Vector3(0, 0.88, 0.55), new Quaternion(), {
+    left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
+  }, { mass: 8 });
+  let samples = 0;
+  const h = standing((h) => [function* () {
+    yield* grab(h, { left: [item, 'left'], right: [item, 'right'] })();
+    yield* withGaze(h, () => item.current.position, function* () {
+      yield* carry(h, item, [[0.8, carried(h)], [1.1, { position: new Vector3(0, 1.3, 0.35) }]])();
+      yield* hold(h, item)();
+    })();
+  }]);
+  for (let i = 0; i < 600; i++) {
+    h.update(STEP);
+    if (item.supported) continue;
+    samples++;
+    const head = h.pose.point(INDEX.head, h.proportions.headCenter, new Vector3());
+    expect(head.distanceTo(item.current.position)).toBeGreaterThan(0.22 + 0.06 * h.proportions.height);
+  }
+  expect(samples).toBeGreaterThan(60);
+});
+
 it.each([0.02, 0.22])('clears a %s m load from the final neck→head segment, including above the trunk', (radius) => {
   const h = standing(() => []);
   for (let i = 0; i < 60; i++) h.update(STEP);

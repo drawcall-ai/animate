@@ -187,6 +187,8 @@ it.each([1.6, 1.75, 1.85])('prepares an 8 kg low grip with the knees before lift
   // The stronger 20–30° knee bounds, 35° pitch ceiling and 1.5 cm drop below are tuned.
   expect(knee).toBeGreaterThanOrEqual(20);
   expect(knee).toBeLessThanOrEqual(30);
+  // (with a bow too: the chest pitched forward more than 0.2 rad, as the old grip's asked bow was)
+  expect(pitch).toBeGreaterThan(0.2 * 180 / Math.PI);
   expect(pitch).toBeLessThanOrEqual(35);
   expect(drop).toBeGreaterThan(0.015 * scale);
   expect(h.log).toEqual([]);

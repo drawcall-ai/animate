@@ -74,7 +74,18 @@ export interface WalkOptions {
  * it, steps back to one just behind it when asked a facing, and waits for one behind it that moves.
  */
 export function walkTo(h: Body, options: WalkOptions): Behaviour {
+  checkWalk(options);
   return route(h, options);
+}
+
+/** a walk asked for what can be no walk is a misuse, said at once: a goal or a facing that is no number, a pace that is none (a live
+ * goal that turns out no point is the dev log's, as live input) */
+function checkWalk({ to, face, speed, accel, within }: WalkOptions): void {
+  const finite = (x: number) => Number.isFinite(x);
+  if (to !== undefined && typeof to !== 'function' && !(finite(to.x) && finite(to.z))) throw new Error('walkTo: the goal is no point on the floor');
+  if (typeof face === 'number' && !finite(face)) throw new Error('walkTo: the facing is no angle');
+  for (const [name, value] of [['speed', speed], ['accel', accel]] as const) if (value !== undefined && !(finite(value) && value > 0)) throw new Error(`walkTo: ${name} ${value} is no pace`);
+  if (within !== undefined && !(finite(within) && within >= 0)) throw new Error(`walkTo: within ${within} is no distance`);
 }
 
 /** Internal approach route: ETA includes every intermediate point. One that is to end on arriving (no `until`, or
@@ -112,7 +123,7 @@ export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>
       go.to.copy(leg < via.length ? live(via[leg], f) : end).setY(0);
       return leg < via.length ? null : yaw;
     };
-    let best = Infinity, since = 0, stalled = false;
+    let best = Infinity, since = 0, stalled = false, nowhere = false;
     yield* action<Frame>({
       init: () => () => { h.locomotion.eta = Infinity; },
       update: (f) => {
@@ -128,6 +139,12 @@ export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>
           }
         }
         go.velocity = options.velocity === undefined ? undefined : live(options.velocity, f);
+        // (a live goal that turns out no point — live input — is a problem in the dev log, once: the body stands)
+        if (![go.to.x, go.to.z, ...(go.velocity?.toArray() ?? [])].every(Number.isFinite)) {
+          if (!nowhere) f.dev?.append(f.time, { check: 'walk goal not finite', value: 1, limit: 0, where: 'goal' });
+          nowhere = true;
+          return;
+        }
         h.asks.go = go;
         if (options.stance) h.asks.stance = options.stance;
         h.locomotion.eta = etaOf(h, placeOf(h, f), go, yaw);

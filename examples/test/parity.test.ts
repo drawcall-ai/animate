@@ -51,7 +51,7 @@ function measure(sc: Scenario, legs?: 'old' | 'core') {
   }
   const log: LogEntry[] = [...sim.actors, ...sim.stage.bodies ?? []].flatMap((body) => [...body.log]);
   if (legs === 'core' && sc.id === 'knight-arming')
-    expect(log.filter((entry) => entry.time < 15 && entry.check !== 'XCoM outside support (m)' && !knownFailure(entry))).toEqual([]);
+    expect(log.filter((entry) => entry.time < 15 && !knownFailure(entry))).toEqual([]);
   if (!error && !sim.stage.done()) log.push({ time: sim.t, check: `${sc.id}: scenario unfinished`, value: 1, limit: 0, where: `actor 0: ${sc.id}` });
   return { digest: hash.digest('hex'), standing, failures: { checks: [...new Set(log.filter((e) => !knownFailure(e)).map((e) => e.check))].sort(), ...(error ? { error } : {}) } };
 }

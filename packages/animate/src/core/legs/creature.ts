@@ -38,7 +38,7 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
     const posture = kind.posture?.(body.pose), asks = createAsks();
     const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seedOf(start.x, start.z)) : null;
     const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
-    let going = false, followed: Vector3 | null = null, nowhere = false;
+    let going = false, followed: Vector3 | null = null;
     let lowering: Eased = [0, 0], bowing: Eased = [0, 0];
     // (development check: the legs across a girdle never pass through each other — their bones kept `CLEARANCE` of a leg apart)
     const across = feet.legs.flatMap((leg, i) => leg.partner !== undefined && leg.partner > i ? [[i, leg.partner]] : []);
@@ -55,10 +55,8 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
     const legs: Striding & { height: number } = { legs: phases, height: start.y, rest: (p) => p.forEach((pitch, i) => { pitches[i] = pitch; }) };
     yield* action<Frame>({ update: (f) => {
       const asked0 = takeAsks(body.asks, asks), g = body.locomotion;
-      // (a goal nowhere — not a finite point — is a problem in the dev log, once: it stands)
+      // (a goal nowhere — not a finite point — it does not go for: it stands)
       const finite = !asked0.go || [asked0.go.to.x, asked0.go.to.z, ...(asked0.go.velocity?.toArray() ?? [])].every(Number.isFinite);
-      if (!finite && !nowhere) f.dev?.append(f.time, { check: 'walk goal not finite', value: 1, limit: 0, where: 'goal' });
-      nowhere = !finite;
       const go = finite ? asked0.go : undefined;
       if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); }
       const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - planner.root.yaw), 0) / stepper.legs.length + planner.root.yaw;
