@@ -12,7 +12,7 @@ const dt = 1 / 60;
 function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
   const h = person(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: true });
-  let lag = 0, steps = 0;
+  let lag = 0, sway = 0, steps = 0;
   const phases = h.feet.map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {
     root.velocity.add(velocity(t).sub(root.velocity).clampLength(0, 10 * dt));
@@ -21,11 +21,17 @@ function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => 
     h.update(dt);
     each?.(t, root, h);
     const hips = h.pose.position(0);
-    lag = Math.max(lag, Math.hypot(hips.x - root.position.x, hips.z - root.position.z));
+    // (the root exact along the facing; the hips swaying across it only)
+    const off = new Vector3(hips.x - root.position.x, 0, hips.z - root.position.z);
+    lag = Math.max(lag, Math.abs(off.dot(forwardOf(h.locomotion.facing))));
+    sway = Math.max(sway, Math.abs(off.dot(leftOf(h.locomotion.facing))));
     h.feet.forEach((foot, s) => { if (foot.phase === 'swing' && phases[s] === 'planted') steps++; phases[s] = foot.phase; });
   }
-  return { h, lag, steps, root };
+  return { h, lag, sway, steps, root };
 }
+
+/** the hips' sway about the root at most (m): ±1.4 cm walking */
+const SWAY_BAND = 0.0141;
 
 const moving = (from: number, to: number, v: Vector3) => (t: number) => t > from && t < to ? v.clone() : new Vector3();
 
@@ -38,8 +44,9 @@ it.each([
   ['sprint start and stop', (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 5 ? (t > 1.5 && t < 4 ? 3.5 : 1.4) : 0)],
   ['strafe reversals', (t: number) => t < 1 ? new Vector3() : t < 3 ? forwardOf(0).multiplyScalar(1.4) : t < 4.5 ? leftOf(0).multiplyScalar(1.1) : t < 6 ? leftOf(0).multiplyScalar(-1.1) : new Vector3()],
 ] as const)('%s: the body is the given root; feet step without sliding, crossing or a hard touchdown', (_, velocity) => {
-  const { h, lag, steps } = drive(8, velocity);
-  expect(lag).toBe(0);
+  const { h, lag, sway, steps } = drive(8, velocity);
+  expect(lag).toBeLessThan(1e-9);
+  expect(sway).toBeLessThanOrEqual(SWAY_BAND);
   expect(steps).toBeGreaterThan(4);
   expect(h.log).toEqual([]);
   // (the balance bound is only noted for a driven body)
@@ -53,7 +60,7 @@ it.each([
   ['a half turn in place', 0.95 * Math.PI],
 ])('%s: the feet step round after the facing, the pelvis within reach of them', (_, turn) => {
   const { h, lag, steps } = drive(4, () => new Vector3(), (t) => t > 0.5 ? turn : 0);
-  expect(lag).toBe(0);
+  expect(lag).toBeLessThan(1e-9);
   expect(steps).toBeGreaterThanOrEqual(2);
   expect(h.log).toEqual([]);
   expect(Math.abs(h.locomotion.facing - turn)).toBeLessThan(0.01);
@@ -63,7 +70,7 @@ it.each([
 it('walks a curve while turning, then stops and turns back in place', () => {
   const { h, lag } = drive(7, (t) => t > 0.5 && t < 4 ? forwardOf(t > 1 ? (t - 1) * 0.4 : 0).multiplyScalar(1.4) : new Vector3(),
     (t) => t < 1 ? 0 : t < 4 ? (t - 1) * 0.4 : t < 4.8 ? 1.2 : -0.6);
-  expect(lag).toBe(0);
+  expect(lag).toBeLessThan(1e-9);
   expect(h.log).toEqual([]);
   expect(Math.abs(h.locomotion.facing + 0.6)).toBeLessThan(0.01);
 });
@@ -129,6 +136,6 @@ it.each([
   expect(landed - off).toBeGreaterThan(0.45);
   expect(landed - off).toBeLessThan(0.6);
   expect(top).toBeGreaterThan(0.25);
-  expect(lag).toBe(0);
+  expect(lag).toBeLessThan(1e-9);
   expect(h.log).toEqual([]);
 });

@@ -6,7 +6,7 @@ import { Simulation } from '../src/simulation';
 import { PlayerCamera } from '../src/stage/camera';
 import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { vary } from '../scripts/run';
-import { wrapAngle } from '../src/math';
+import { forwardOf, leftOf, wrapAngle } from '../src/math';
 
 it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean #%i', (seed) => {
   const scene = shooter();
@@ -15,7 +15,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
   let steady = 0, lastYaw = 0, lastPitch = 0, lastFire = 0, sightFrames = 0, lastAds = false;
   const camera = new PerspectiveCamera(90, 16 / 9, 0.02, 1000);
   const framing = new PlayerCamera();
-  let hipFrames = 0, flight = 0, flightTime = 0, raised = Infinity, lag = 0, facing = 0, heading = 0, moved = 0, lastMove = '';
+  let hipFrames = 0, flight = 0, flightTime = 0, raised = Infinity, lag = 0, sway = 0, facing = 0, heading = 0, moved = 0, lastMove = '';
   const flights: number[] = [], landings: { time: number; z: number }[] = [];
   let planted = true;
   while (sim.t < scene.duration) {
@@ -33,7 +33,10 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
     // The player owns the root: the body is where the controller puts it, facing where it looks.
     const root = player.root;
     if (!root) throw new Error('missing root');
-    lag = Math.max(lag, Math.hypot(h.pose.position(0).x - root.position.x, h.pose.position(0).z - root.position.z));
+    // (the root exact along the facing; the hips swaying across it, ±1.4 cm walking)
+    const off = new Vector3(h.pose.position(0).x - root.position.x, 0, h.pose.position(0).z - root.position.z);
+    lag = Math.max(lag, Math.abs(off.dot(forwardOf(h.locomotion.facing))));
+    sway = Math.max(sway, Math.abs(off.dot(leftOf(h.locomotion.facing))));
     const speed = h.locomotion.velocity.length();
     if (`${input.move.x},${input.move.z},${input.sprint},${input.ads}` !== lastMove) [moved, lastMove] = [sim.t, `${input.move.x},${input.move.z},${input.sprint},${input.ads}`];
     // (once the speed has settled after a change of keys: 10 m/s² takes at most 0.5 s)
@@ -106,7 +109,8 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
   const cadence = 120 * (landings.length - 1) / (last.time - first.time);
   console.log('shooter', seed, { grip, sight, sightLine, raised, cadence, stride, flightSeconds: [Math.min(...flights.slice(1)), Math.max(...flights.slice(1))], lag, facing, heading, low,
     xcom: Math.max(0, ...sim.actors[0].notes.map((note) => note.value)) });
-  expect(lag).toBe(0);
+  expect(lag).toBeLessThan(1e-9);
+  expect(sway).toBeLessThanOrEqual(0.0141 * sim.actors[0].proportions.scale);
   // (the facing eases toward the look over 25 ms; turning harder than the feet can follow, the trunk takes the rest)
   expect(facing).toBeLessThan(0.1);
   expect(heading).toBeLessThan(0.15);

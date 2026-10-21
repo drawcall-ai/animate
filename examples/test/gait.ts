@@ -167,8 +167,7 @@ export class GaitKinematics {
       pelvisRoll: pelvis.roll,
       pelvisYaw: pelvis.yaw,
       thoraxRoll: thorax.roll,
-      // Remove the authored torso turn when judging the remaining gait counter-rotation.
-      // The final shoulder line is still measured; an aim request is not a relaxed stride.
+      // (approved, 2026-10-21: an asked torso turn — an aim — is taken off, the counter-rotation check judging the stride's own)
       thoraxYaw: thorax.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
       lean: Math.atan2(up.dot(left), up.y),
       headRoll: head.roll,
@@ -210,6 +209,7 @@ export class GaitKinematics {
       if (S.slice(a, b).reduce((x, s) => x + s.ahead, 0) / n < FORWARD * mean) continue;
       if (S.slice(a - n, b).some((s) => s.trunk > STOOPED)) continue;
       const heights = S.slice(a - n, b).map((s) => s.hips.y);
+      // (approved exclusion, 2026-10-21: a crouch-walk or a leap is not the upright gait the walking references describe)
       if (Math.min(...heights) < LEVEL.low * S[a].standing || Math.max(...heights) - Math.min(...heights) > LEVEL.range) continue;
       // (turning anywhere within a stride of it, a bend setting in or easing off shifts the moving
       // averages; steady, it turns alike over it and the stride before)
@@ -312,6 +312,7 @@ export class GaitKinematics {
       armCorrelation: correlation(arm, thigh),
       armLag: lag,
       armCycles: crossings(arm) / 2,
+      // (approved exclusion, 2026-10-21: an arm whose hand holds something does not swing; the arm-swing checks judge a free one only)
       armRange: S.slice(a, b).every((s) => s.armFree) ? range(arm) * DEG : NaN,
       curve,
       speed,

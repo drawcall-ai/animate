@@ -6,7 +6,7 @@ import { solveChain } from '../core/chain';
 import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { clampRotation } from '../core/limits';
-import { clamp, forwardOf, GRAVITY, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle } from '../core/math';
+import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle } from '../core/math';
 import { Stepper, type DrivenRoot, type Feet, type Leg, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
@@ -29,6 +29,18 @@ const TILT = { walk: 0.06, run: 0.25, accel: 8 };
  * aside as a free one does, and more would swing the leaning chest wider than it.
  */
 const PELVIC_ROTATION = 0.035;
+/**
+ * Recalled (Orendurff et al. 2004): the pelvis sways ~3–5 cm peak to peak over the stance foot walking, a runner's less; tuned: ±1.4 cm
+ * walking, ±0.9 cm running (m, default body) — one sinusoid a stride, followed within `accel` (m/s²), the root kept exact — a player's camera and movement ride the root, not the hips
+ */
+const SWAY = { walk: 0.014, run: 0.009, accel: 1 };
+/**
+ * Recalled (CMU mocap, as the balance posture has it): the thorax counter-rotates against the pelvis and rolls with its rotation, the
+ * forward shoulder up; tuned: `turn` × the pelvis's turn back the other way, rolled `roll` × that
+ */
+/** Tuned (rad/m): the trunk leans back over the sway a little, the chest riding the pelvis no wider than it */
+const KEEP = 1;
+const COUNTER = { turn: 1.5, roll: -1 };
 /**
  * Read (Novacheck 1998): the trunk leans forward to speed up, keeping the ground's push behind the centre of mass; tuned: `share` of
  * the lean atan(a / g) that would put it through the centre of mass, at most `ahead` (rad), and back slowing down at most `back`.
@@ -65,7 +77,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
       } };
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
-    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], was = new Vector3();
+    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0], was = new Vector3();
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
       takeAsks(h.asks, asks);
@@ -83,16 +95,25 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         // (turned toward the swinging leg's side as it comes through, the thorax back the other way)
         const turn = -PELVIC_ROTATION * moving * legs.reduce((sum, leg) => sum + (leg.swing ? leg.sign * Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0);
         f.current.setLocal(0, quatYXZ(yaw + turn, tilt, 0, _q));
+        // (the pelvis swaying over the stance foot, the root staying where the player has it: only the hips move about it)
+        // (a sinusoid of the stride, over the left foot at the right's mid-swing: `phase` 0 as the left lifts, its mid-swing π (1 − stance share) on)
+        const sway = follow(sways[0], sways[1], -lerp(SWAY.walk, SWAY.run, run) * p.scale * moving * Math.cos(stepper.phase - Math.PI * (1 - Ts / stepper.cycle)), { accel: SWAY.accel }, dt);
+        [sways[0], sways[1]] = [sways[1], sway];
+        f.current.setRoot(_v.copy(f.current.position(0)).addScaledVector(leftOf(yaw, _f), sway));
         // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land; it leans into
         // speeding up and back from slowing down)
         const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
         const speeding = _v.subVectors(r.velocity, was).divideScalar(dt).dot(forwardOf(yaw, _f));
         was.copy(r.velocity);
         const lean = stepper.airborne ? 0 : clamp(SPEEDING.share * Math.atan2(speeding, GRAVITY), -SPEEDING.back, SPEEDING.ahead);
-        const twist = clamp(asks.twist - turn, -0.8, 0.8);
-        const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean - tilt + nod, 0, _bend).slerp(IDENTITY, 0.5);
+        // (the thorax turned back against the pelvis, the shoulder going forward rising with it)
+        const thorax = -COUNTER.turn * turn;
+        const twist = clamp(asks.twist + thorax - turn, -0.8, 0.8);
+        const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean - tilt + nod, KEEP * sway / p.scale, _bend).slerp(IDENTITY, 0.5);
+        const shoulders = quatYXZ(0, 0, COUNTER.roll * thorax, _roll);
         [INDEX.spine, INDEX.chest].forEach((bone, k) => {
           const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
+          if (bone === INDEX.chest) local.multiply(shoulders);
           if (limit) clampRotation(local, limit);
           const followed = trunk[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TRUNK, dt, _q);
           if (limit) clampRotation(followed, limit);
@@ -179,5 +200,5 @@ function check(h: Humanoid, f: Frame, legs: readonly Leg[]) {
   if (value > LIMIT.xcom) dev.note(time, { check: 'driven XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
 }
 
-const IDENTITY = new Quaternion(), _q = new Quaternion(), _bend = new Quaternion(), _local = new Quaternion();
+const IDENTITY = new Quaternion(), _roll = new Quaternion(), _q = new Quaternion(), _bend = new Quaternion(), _local = new Quaternion();
 const [_a, _b, _pole, _v, _f, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
