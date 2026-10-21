@@ -133,6 +133,9 @@ const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE =
 /** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
  * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
 const CROUCHING = { accel: 90, speed: 7.5 };
+/** Tuned: the least share of the narrowest stance a foot landing well ahead of or behind the other keeps from it sideways: walking, the feet
+ * pass but never cross */
+const PASSING = 0.4;
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
@@ -491,8 +494,9 @@ export class Stepper {
       const other = legs[pair[leg.i]];
       let across = 0;
       for (const axis of [side, leftOf(yaw, _m)]) {
-        // (with a foreseen root, a foot landing a foot's length or more ahead of or behind the other need not land beside it: the shanks pass apart)
-        const along = Math.abs(_v.subVectors(to, other.anchor).dot(_n.set(-axis.z, 0, axis.x))), apart = r.forecast ? 1 - smoothstep(SPAN * s, 2 * SPAN * s, along) : 1;
+        // (with a foreseen root, a foot landing a foot's length or more ahead of or behind the other need not land a full stance beside it:
+        // the shanks pass apart — but never across the line between them: `PASSING` of the stance kept)
+        const along = Math.abs(_v.subVectors(to, other.anchor).dot(_n.set(-axis.z, 0, axis.x))), apart = r.forecast ? lerp(PASSING, 1, 1 - smoothstep(SPAN * s, 2 * SPAN * s, along)) : 1;
         const gap = _v.dot(axis) * leg.sign, narrowest = st.width.narrowest * s * apart;
         if (gap < narrowest) to.addScaledVector(axis, leg.sign * (narrowest - gap));
         across = Math.max(across, narrowest - gap);
