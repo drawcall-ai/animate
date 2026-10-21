@@ -26,7 +26,8 @@ const AHEAD = 0.6;
 /**
  * `grab` for a body other than a person, one hand at a time: it walks up to stand with the grip in its hand's
  * reach (not with `walk: false`), its eyes on the grip on the way (if it has any; not with `look: false`), then the
- * hand's chain reaches it and the hand closes. Not there within REACHING s, it is a problem in the dev log and keeps going.
+ * hand's chain reaches it and the hand closes. Not there within REACHING s, it is a problem in the dev log and keeps going; a grip
+ * out of its reach from anywhere it could stand is one too, and it stands where it is.
  */
 export function take(body: Body, holds: Holds, options: { look?: boolean; walk?: boolean } = {}): Behaviour {
   const [hand, ...more] = Object.keys(holds), hold = holds[hand];
@@ -34,8 +35,19 @@ export function take(body: Body, holds: Holds, options: { look?: boolean; walk?:
   const [item, grip] = hold, goal = gripOf(item, grip), chain = chainOf(body, hand);
   const at = () => item.toWorld(goal, _world).position.clone();
   return function* () {
+    // (a grip the hand reaches from nowhere it could stand, too high or too low, is a problem in the dev log, once: the body stays
+    // standing where it is, doing nothing more for it)
+    const off = standOff(body, chain, at());
+    if (typeof off !== 'number') {
+      let logged = false;
+      yield* action<Frame>({ update: (f) => {
+        if (!logged) f.dev?.append(f.time, { check: 'grab out of reach: grip from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chain}` });
+        logged = true;
+      } });
+      return;
+    }
     if (options.walk !== false) {
-      const walk = walkTo(body, { to: at, within: standOff(body, chain, at()) });
+      const walk = walkTo(body, { to: at, within: off });
       yield* options.look === false || !body.gazer ? walk() : parallel<Frame>('race', lookAt(body, at), walk);
     }
     yield* tipTo(body, chain, goal, item)();
@@ -66,12 +78,15 @@ function chainOf(body: Body, hand: string): string {
   return chain;
 }
 
-/** how far ahead of the root (m) the body stands to take something at `point` with `chain` (its base as it stands now) */
-function standOff(body: Body, chain: string, point: Readonly<Vector3>): number {
+/**
+ * how far ahead of the root (m) the body stands to take something at `point` with `chain` (its base as it stands now); out of its
+ * reach up or down, how far it is from the base that way and how far the hand reaches (m)
+ */
+function standOff(body: Body, chain: string, point: Readonly<Vector3>): number | { value: number; limit: number } {
   const { skeleton } = body.pose, bones = skeleton.chain(chain);
   const base = body.pose.position(bones[0]), length = bones.slice(1).reduce((sum, b) => sum + skeleton.bones[b].offset.length(), 0);
   const out = OUT * length, drop = base.y - point.y;
-  if (Math.abs(drop) > out) throw new Error(`grab: ${point.y.toFixed(2)} m high is out of the reach of chain "${chain}"`);
+  if (Math.abs(drop) > out) return { value: Math.abs(drop), limit: out };
   return _v.subVectors(base, body.pose.position(0)).dot(forwardOf(body.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
 }
 

@@ -50,6 +50,12 @@ export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths?:
       return ankle.y + Math.min(_v.copy(heel).applyQuaternion(foot).y, _v.copy(toe).applyQuaternion(foot).y);
     },
     lean: () => 0,
+    turnAbout(i, anchor, from, to, pitch) {
+      // (about the end of the sole it stands on: its middle flat, its toe rolled over it, its heel rolled back onto it)
+      const { heel, toe } = chains[i], middle = (pitch < 0 ? _v.copy(toe) : pitch > 0 ? _v.copy(heel) : _v.copy(heel).add(toe).multiplyScalar(0.5)).setY(0);
+      const contact = _w.copy(middle).applyQuaternion(yawPitch(from, 0, _a)).add(anchor);
+      anchor.copy(contact).sub(middle.applyQuaternion(yawPitch(to, 0, _b)));
+    },
     print(i, anchor, yaw): Spot[] {
       const { heel, toe } = chains[i], half = 0.4 * Math.abs(toe.z - heel.z), turn = yawPitch(yaw, 0, _a);
       return [heel, toe].flatMap((end) => [-half, half].map((x): Spot => {
@@ -106,7 +112,7 @@ const DROP = 0;
 /** Tuned: a stance travels at most this share of how far its legs reach fore and aft, walking: the rest is the landing's spare */
 const SPANNING = 0.65;
 /** Tuned: a planted foot strays across at most this share of how far its leg reaches either way at its standing height */
-const STRAYING = 0.45;
+const STRAYING = 0.7;
 /** [D from recalled, as `loft`] a hoof or paw lifts early, peaking ~30% into its swing, and comes down long: u^ARC (1 − u)³ */
 const ARC = 1.3;
 /** Tuned: a swinging foot is not drawn in toward its top short of this share of its leg (its joints bound it) */
@@ -135,8 +141,9 @@ export class ChainLeg {
   /** where and how the foot was held planted last sub-step, if it was; whether it had just landed */
   private held: { position: Vector3; rotation: Quaternion } | null = null;
   private landed = false;
-  /** where its planted foot's heel, contact and toe were put down, while it stands */
+  /** where its planted foot's heel, contact and toe were last sub-step, while it stands, and how far it has slipped since it landed */
   private put: [Vector3, Vector3][] | null = null;
+  private slipped = 0;
   /** its contact with the floor, in the foot's terms: under the middle of its sole */
   private readonly contact: Vector3;
   private posed = false;
@@ -155,8 +162,13 @@ export class ChainLeg {
     const miss = f.prev.position(terminal).distanceTo(this.held.position), turn = f.prev.rotation(terminal).angleTo(this.held.rotation);
     if (miss > CONTACT.distance) dev.append(time, { check: 'leg contact (m)', value: miss, limit: CONTACT.distance, where });
     if (turn > CONTACT.turn) dev.append(time, { check: 'leg contact turn (rad)', value: turn, limit: CONTACT.turn, where });
-    // (the contact it pivots or rolls about stays put: its heel, the middle of its sole or its toe)
-    const slide = this.put ? Math.min(...this.put.map(([point, at]) => f.prev.point(terminal, point, _v).distanceTo(at))) : 0;
+    // (the contact it pivots or rolls about stays put — its heel, the middle of its sole or its toe, whichever moves least each sub-step —
+    // its slips over the stance together)
+    if (this.put) {
+      this.slipped += Math.min(...this.put.map(([point, at]) => f.prev.point(terminal, point, _v).distanceTo(at)));
+      for (const [point, at] of this.put) f.prev.point(terminal, point, at);
+    }
+    const slide = this.slipped;
     if (slide > CONTACT.slide) dev.append(time, { check: 'leg contact slide (m)', value: slide, limit: CONTACT.slide, where });
     if (!this.landed) return;
     const velocity = _v.subVectors(f.prev.position(terminal), f.prev2.position(terminal)).divideScalar(f.dt);
@@ -291,14 +303,16 @@ export class ChainLeg {
     target.swing = swing;
     target.above = this.sole;
     target.position.copy(foot.ankle);
-    // (a planted foot pivots on the floor about its contact as far as its leg does not twist to it — turned from the body by no more than
-    // the leg turns — and never slides: its contact stays where it is put)
-    const off = wrapAngle(foot.yaw - facing), kept = Math.max(-this.turn, Math.min(this.turn, off));
-    const contact = _p.copy(this.contact).applyQuaternion(foot.foot).add(foot.ankle);
+    // (a planted foot pivots on the floor about its contact as the body turns over it, heading the body's way — where its leg's reach
+    // is known — and never slides: its contact stays where it is put)
+    // (about the end of the sole it stands on: its middle flat, its toe rolled over it, its heel rolled back onto it)
+    const off = wrapAngle(foot.yaw - facing), lowest = (point: Vector3) => _v.copy(point).applyQuaternion(foot.foot).y;
+    const pivot = [this.chain.heel, this.contact, this.chain.toe].reduce((best, point) => lowest(point) < lowest(best) - 1e-6 ? point : best, this.contact);
+    const contact = _p.copy(pivot).applyQuaternion(foot.foot).add(foot.ankle);
     target.rotation.copy(foot.foot);
-    if (kept !== off) {
-      target.rotation.premultiply(_a.setFromAxisAngle(UP, kept - off));
-      target.position.copy(this.contact).applyQuaternion(target.rotation).negate().add(contact);
+    if (off !== 0) {
+      target.rotation.premultiply(_a.setFromAxisAngle(UP, -off));
+      target.position.copy(pivot).applyQuaternion(target.rotation).negate().add(contact);
     }
     // (planted, a contact missed by more than `CONTACT` is solved again from the references: the leg does not keep to a bend that cannot
     // hold it; a near miss it keeps, its joints not leaping)
@@ -308,6 +322,7 @@ export class ChainLeg {
     this.posed = true;
     this.held = swing === null ? { position: target.position.clone(), rotation: target.rotation.clone() } : null;
     this.put = swing === null ? this.put ?? [this.chain.heel, this.contact, this.chain.toe].map((point) => [point, point.clone().applyQuaternion(target.rotation).add(target.position)] as [Vector3, Vector3]) : null;
+    if (!this.put) this.slipped = 0;
     // (swinging, each joint moves on from its history within the rig's own bounds on a joint's speed and acceleration: a foot in the
     // air never snaps to a solution the joints cannot reach in time)
     if (swing !== null) {
@@ -347,8 +362,8 @@ const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), IDENTITY = new Quaternion
  * `turn` (rad) of flat
  */
 /** Tuned: a leg is held this share of its length short of what its joints reach */
-const SPARE = 0.03;
+const SPARE = 0.04;
 const DEPTH = { across: 37, along: 13, out: [-0.4, 0.5], ahead: 0.6, steps: 7, miss: 1e-3, turn: 0.02, iterations: 6 };
 /** Tuned: the depths (× its standing length) a leg's reach is first looked for at, from the furthest */
 const DOWN = [1.1, 1, 0.9, 0.75, 0.6, 0.4];
-const _e = new Euler(), _q = new Quaternion(), _a = new Quaternion(), _b = new Quaternion(), _v = new Vector3(), _p = new Vector3();
+const _e = new Euler(), _q = new Quaternion(), _a = new Quaternion(), _b = new Quaternion(), _v = new Vector3(), _p = new Vector3(), _w = new Vector3();

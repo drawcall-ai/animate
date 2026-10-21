@@ -8,8 +8,6 @@ import { DOG } from '../src/scenarios/dog';
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed in `OPEN`
 // (expected to fail: each one fixed comes off the list).
 const OPEN = new Set([
-  ...[180].flatMap((angle) => [1.5, 4].map((d) => `a horse walks to a still goal ${angle}° off its facing, ${d} body lengths away`)),
-  'a horse walks round a circle',
   'a person takes a cup 0.05 m up, 0° off its facing', 'a person takes a cup 0.05 m up, 120° off its facing',
   'a person takes a cup 0.5 m up, 0° off its facing',
   ...[0.3, 0.5, 0.75].map((h) => `a person takes a box ${h} m up in both hands`),
@@ -81,6 +79,19 @@ for (const height of [0.3, 0.5, 0.8, 1.1]) {
       yield* grab(b, { left: [box, 'left'], right: [box, 'right'] })();
       yield* place(b as Humanoid, box, { position: around(90, 1.5, height + 0.1), quaternion: new Quaternion() })();
     }, 30)).toEqual(ok);
+  });
+}
+
+// (a body asked for what it can never get to says so in the dev log, once, and stands where it is: no throw, nothing searched for it)
+for (const [what, story] of [
+  ['take a ball 1.5 m up, beyond its jaw', (b: Body) => grab(b, { jaw: [ballAt(around(0, 1, 1.5)), 'middle'] })],
+  ['walk to a goal that is no point', (b: Body) => walkTo(b, { to: new Vector3(NaN, 0, 1) })],
+] as const) {
+  it(`a dog asked to ${what} logs it once and stands`, () => {
+    const body = creature(DOG)(story), start = body.pose.position(0).clone();
+    for (let i = 0; i < 10 * 60; i++) body.update(1 / 60);
+    expect(body.log.length).toBe(1);
+    expect(body.pose.position(0).distanceTo(start)).toBeLessThan(0.05);
   });
 }
 

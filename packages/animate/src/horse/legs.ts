@@ -15,7 +15,7 @@ import type { Attention, Species } from '../core/species';
 
 /** a horse: its walk, and its posture over its legs as it heeds what it looks at, a tether and a startle */
 export const horse = (): Species => ({ skeleton: SKELETON, gaze: { eyes: (pose, out) => pose.point(HEAD, EYES, out), range: EYE_RANGE },
-  legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
+  legs: { chains: horseLegs(true), gait: HORSE_WALK, posture: (start) => horseMotion(start, HORSE_WALK) } });
 /** [D] between the eyes, about a third of the way from the poll to the muzzle (m, head bone) */
 const EYES = new Vector3(0, -0.12, 0.1);
 /** Tuned (rad): the eyes add little to where the head turns (the posture turns it) */
@@ -91,14 +91,20 @@ const HIND_COFFIN = cycle([[0, 0], [0.22, -5], [0.45, 10], [0.6, -15], [0.8, -5]
 // Tuned hoof stance pitch (°, +toe up): finish breakover before lift-off to brake downward spin.
 const BREAKOVER: LegChain['rocker'] = [[0, 0], [0.75, 0], [0.9, -25], [1, -25]];
 
-export const horseLegs = (): readonly LegChain[] => LEGS.map((leg): LegChain => ({
+/**
+ * The horse's leg chains; `sideways`: the coffin joint tilts the hoof sideways too, as the leg leans over it (its lateromedial
+ * rotation, ±10°: Chateau, Degueurce & Denoix 2004, recalled; the fetlock's own sideways range 13 ± 7° at the walk: [read] the
+ * abstract of "3D kinematics of the equine metacarpophalangeal joint at walk and trot", PubMed 17546207) — what lets a planted hoof
+ * stray across under a turning body
+ */
+export const horseLegs = (sideways = false): readonly LegChain[] => LEGS.map((leg): LegChain => ({
   joints: [
     ...(leg.fore ? [{ bone: leg.scapula ?? fail('a foreleg without a scapula'), axes: 'x', cycle: FORE.scapula }] : []),
     { bone: leg.upper, axes: 'yzx', cycle: leg.fore ? FORE.shoulder : HIND.hip },
     { bone: leg.middle, axes: 'x', cycle: leg.fore ? FORE.elbow : HIND.stifle },
     { bone: leg.cannon, axes: 'x', cycle: leg.fore ? FORE.carpus : HIND.hock },
     { bone: leg.pastern, axes: 'zx', cycle: leg.fore ? FORE_FETLOCK : HIND_FETLOCK },
-    { bone: leg.hoof, axes: 'x', cycle: leg.fore ? FORE_COFFIN : HIND_COFFIN },
+    { bone: leg.hoof, axes: sideways ? 'zx' : 'x', cycle: leg.fore ? FORE_COFFIN : HIND_COFFIN },
   ],
   heel: leg.heel.clone(),
   toe: leg.toe.clone(),

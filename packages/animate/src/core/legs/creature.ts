@@ -63,16 +63,33 @@ function stepping(body: Body, attention: Attention): Behaviour {
     const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw));
     const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
     const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius, false);
-    // (it turns no faster than a planted foot, stepping in its turn, swings from one side of where its leg reaches to the other)
-    const slowest = strideAt(gait, gait.slowest, 0), turning = TURNING * 2 * Math.min(...feet.legs.map((leg) => leg.stray ?? 0)) / (radius * slowest.duty / slowest.frequency);
+    // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)
+    const turning = Math.PI * strideAt(gait, gait.slowest, 0).frequency / HALF_TURN;
     const posture = kind.posture?.(body.pose), asks = createAsks();
     const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seedOf(start.x, start.z)) : null;
     const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
-    let going = false, followed: Vector3 | null = null;
+    let going = false, followed: Vector3 | null = null, nowhere = false;
+    // (development check: the legs across a girdle never pass through each other — their bones kept `CLEARANCE` of a leg apart)
+    const across = feet.legs.flatMap((leg, i) => leg.partner !== undefined && leg.partner > i ? [[i, leg.partner]] : []);
+    const bones = kind.chains.map((chain) => chain.joints.map(({ bone }) => bone));
+    const clear = (f: Frame) => {
+      if (!f.dev) return;
+      for (const [a, b] of across) {
+        const gap = Math.min(...bones[a].slice(1).flatMap((bone, k) => bones[b].slice(1).map((other, m) =>
+          segmentGap(f.prev.position(bones[a][k]), f.prev.position(bone), f.prev.position(bones[b][m]), f.prev.position(other)))));
+        const limit = CLEARANCE * feet.length;
+        if (gap < limit) f.dev.append(f.time - f.dt, { check: 'leg clearance (m)', value: gap, limit, where: f.prev.skeleton.bones[bones[a][bones[a].length - 1]].name });
+      }
+    };
     const legs: Striding & { height: number } = { legs: phases, height: start.y, rest: (p) => p.forEach((pitch, i) => { pitches[i] = pitch; }) };
     yield* action<Frame>({ update: (f) => {
-      const { go } = takeAsks(body.asks, asks), g = body.locomotion;
-      if (f.time > f.dt) posers.forEach((poser) => poser.check(f));
+      const asked0 = takeAsks(body.asks, asks), g = body.locomotion;
+      // (a goal nowhere — not a finite point — is a problem in the dev log, once: it stands)
+      const finite = !asked0.go || [asked0.go.to.x, asked0.go.to.z, ...(asked0.go.velocity?.toArray() ?? [])].every(Number.isFinite);
+      if (!finite && !nowhere) f.dev?.append(f.time, { check: 'walk goal not finite', value: 1, limit: 0, where: 'goal' });
+      nowhere = !finite;
+      const go = finite ? asked0.go : undefined;
+      if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); }
       const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - planner.root.yaw), 0) / stepper.legs.length + planner.root.yaw;
       // (a goal off its way it turns to first, as a person does: facing it till it is on its way; nearer than its feet stand, it is there)
       // (it sets off for a goal further than `STOP.start`, or one on the move, and stops within `STOP.distance` of a still one, slow:
@@ -84,6 +101,9 @@ function stepping(body: Body, attention: Attention): Behaviour {
       const asked = followed?.clone() ?? go?.to.clone().setY(0) ?? root.clone();
       if (!going && (asked.distanceTo(root) > STOP.start || (go?.velocity?.lengthSq() ?? 0) > 0)) going = true;
       if (going && asked.distanceTo(root) < STOP.distance && speed0 < STOP.speed && !go?.velocity) going = false;
+      // (a still goal it has come past, nearer than its feet stand, it does not turn round for: it is there)
+      const behind = _gap.copy(asked).sub(root).dot(forwardOf(planner.root.yaw, _to)) < 0;
+      if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius) going = false;
       const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
       const faced = asks.face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
       const r = planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
@@ -123,11 +143,25 @@ function stepping(body: Body, attention: Attention): Behaviour {
 const TURN = { gap: 0.3, cone: 0.35, ahead: 1, motion: { turnAccel: 2, turnSpeed: 1 } };
 /** Tuned: a walk sets off for a goal further than `start` (m) and stops within `distance` (m) of it, slower than `speed` (m/s) */
 const STOP = { start: 0.05, distance: 0.03, speed: 0.1 };
-/** the share of the turn its feet's stray lets it make */
-const TURNING = 2;
+/** [D from read] strides of its slowest walk a body takes to turn half round on the spot: a horse's turn on the forehand is 4–5 hind
+ * steps (equisearch.com, "Learn the Turn on the Forehand": "Four or five steps later, you will be facing in the opposite direction") */
+const HALF_TURN = 2.25;
+/** Tuned: the least gap between the bones of legs across a girdle, as a share of a leg's length (≈ two legs' thickness) */
+const CLEARANCE = 0.06;
 /** Tuned (1/s): how fast a followed goal on the move is drawn to where it is */
 const FOLLOWING = 3;
 /** Tuned (1/s): how fast the phase the carriage rides on is drawn to the feet's */
 const LOCKING = 6;
 const UP = new Vector3(0, 1, 0);
 const _gap = new Vector3(), _still = new Vector3(), _to = new Vector3(), _yaw = new Quaternion();
+
+/** the least distance between segments `a0`–`a1` and `b0`–`b1` (m) */
+function segmentGap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3): number {
+  const d1 = _d1.subVectors(a1, a0), d2 = _d2.subVectors(b1, b0), r = _r.subVectors(a0, b0);
+  const a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r), c = d1.dot(r), b = d1.dot(d2), den = a * e - b * b;
+  let s = den > 1e-12 ? Math.min(1, Math.max(0, (b * f - c * e) / den)) : 0;
+  let t = e > 1e-12 ? (b * s + f) / e : 0;
+  if (t < 0) { t = 0; s = a > 1e-12 ? Math.min(1, Math.max(0, -c / a)) : 0; } else if (t > 1) { t = 1; s = a > 1e-12 ? Math.min(1, Math.max(0, (b - c) / a)) : 0; }
+  return _p1.copy(a0).addScaledVector(d1, s).distanceTo(_p2.copy(b0).addScaledVector(d2, t));
+}
+const _d1 = new Vector3(), _d2 = new Vector3(), _r = new Vector3(), _p1 = new Vector3(), _p2 = new Vector3();
