@@ -10,8 +10,6 @@ import { DOG } from '../src/scenarios/dog';
 const OPEN = new Set([
   'a person takes a cup 0.05 m up, 0° off its facing', 'a person takes a cup 0.05 m up, 120° off its facing',
   'a person takes a cup 0.5 m up, 0° off its facing',
-  ...[0.3, 0.5, 0.75].map((h) => `a person takes a box ${h} m up in both hands`),
-  ...[0.3, 0.5, 0.8].map((h) => `a person puts a box down on a table ${h} m high`),
 ]);
 const check = (name: string, test: () => void) => (OPEN.has(name) ? it.fails : it)(name, test);
 

@@ -137,17 +137,19 @@ it.each([
   }
 });
 
-it('rejects unreachable stands before asking for a walk', () => {
+it('logs an unreachable stand once and stands instead of asking for a walk', () => {
   for (const [point, ahead] of [[new Vector3(0, 1.4, 2), 2], [new Vector3(0, 10, 2), 0]] as const) {
-    const far = new Humanoid(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }));
-    expect(() => far.update(STEP)).toThrow(/point .* from shoulder middle .* exceeds arm reach/);
+    const far = new Humanoid(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }), { dev: true });
+    for (let tick = 0; tick < 30; tick++) far.update(STEP);
+    expect(far.log.map((entry) => entry.check)).toEqual(["approach: placing point from the shoulders' middle, lowered and bowed (m)"]);
     expect(far.asks.go).toBeNull();
   }
 });
 
-it('rejects a vertically unreachable placing point with the default stand before walking', () => {
-  const h = new Humanoid(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)));
-  expect(() => h.update(STEP)).toThrow(/point .* from shoulder middle .* exceeds arm reach/);
+it('logs a vertically unreachable placing point with the default stand once and stands', () => {
+  const h = new Humanoid(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)), { dev: true });
+  for (let tick = 0; tick < 30; tick++) h.update(STEP);
+  expect(h.log.map((entry) => entry.check)).toEqual(["approach: placing point from the shoulders' middle, lowered and bowed (m)"]);
   expect(h.asks.go).toBeNull();
 });
 
@@ -206,7 +208,6 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
       const grips: Vector3 | Holds = kind === 'placement' ? item.current.position : kind === 'one grip'
         ? { right: [item, 'middle'] as const }
         : { left: [item, 'left'] as const, right: [item, 'right'] as const };
-      expect(() => approach(h, grips, { face: 0, spot: { ahead: 0.4, aside: 0.25 } })().next()).toThrow('explicit face has a blocked stand');
       yield* approach(h, grips, { spot: { ahead: 0.4, aside: 0.25 } })();
       done = true;
     });
@@ -216,4 +217,15 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
   expect(done).toBe(true);
   expect(Math.abs(h.locomotion.facing)).toBeGreaterThan(0.3);
   for (const foot of h.feet) expect(Math.hypot(foot.position.x + 0.25, foot.position.z - 1.6)).toBeGreaterThan(h.proportions.toeFront + SEGMENT_RADIUS);
+  // (asked to face the blocked way, it logs that, once, and stands)
+  const facing = new Humanoid(createSkeletonModel(), (h) => function* () {
+    const grips: Vector3 | Holds = kind === 'placement' ? item.current.position : kind === 'one grip'
+      ? { right: [item, 'middle'] as const }
+      : { left: [item, 'left'] as const, right: [item, 'right'] as const };
+    yield* approach(h, grips, { face: 0, spot: { ahead: 0.4, aside: 0.25 } })();
+  }, { dev: true });
+  world.add(facing);
+  for (let tick = 0; tick < 30; tick++) facing.update(STEP);
+  expect(facing.log.map((entry) => entry.check)).toEqual(['approach: explicit face has a blocked stand']);
+  expect(facing.asks.go).toBeNull();
 });

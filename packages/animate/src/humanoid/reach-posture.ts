@@ -65,7 +65,10 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // Once bow is exhausted, close its unmet reach with the knees rather than
   // requesting the same saturated back angle forever.
   const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
-  const overflow = Math.max(0, pitch + correction - MOST_BOW) * (p.shoulderHeight - p.hipHeight);
+  // (exhausted — below the hips by a quarter thigh, as far as the load lets it bow: a heavier reach that low has its knees take what its
+  // back may not; hip-high, it bows its most first)
+  const deep = hand.y < p.hipHeight - p.thigh / 4;
+  const overflow = Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * (p.shoulderHeight - p.hipHeight);
   if (low && overflow > 0) h.asks.lower = Math.max(h.asks.lower, Math.min(SQUAT * p.height, lower + overflow) * share);
   h.asks.bow = Math.max(h.asks.bow, Math.min(bowLimit, bow + correction) * share);
 }

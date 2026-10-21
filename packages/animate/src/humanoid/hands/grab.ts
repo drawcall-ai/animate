@@ -18,6 +18,7 @@ import { gripOf } from '../../core/carrier';
 import type { Holds } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
+import { bowLever, lowering, MOST_BOW, SQUAT } from '../balance/posture';
 
 // Taking hold of things: walking up to them, the eyes and hands going ahead.
 
@@ -117,6 +118,26 @@ const IN_VIEW = 1.4;
 
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
 const LOOKING = 0.6;
+/** Tuned: both hands low down, how far (× the arm's length) beyond its toes the grips' middle is as it stands to take them, or to set down what they hold */
+const LOW_AHEAD = 0.3, LOW_SETTING = 0.2;
+/** Tuned: a placing point lower than this share of the arm's reach below the shoulders, the body lowers and bows for */
+const STOOPING = 0.7;
+
+/** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */
+function stoop(p: Humanoid['proportions'], want: number): { drop: number; forward: number } {
+  const lever = bowLever(p, p.shoulderHeight), most = SQUAT * p.height + lever * (1 - Math.cos(MOST_BOW));
+  const drop = Math.min(want, most), { bow } = lowering(p, { drop, ahead: 0, height: p.shoulderHeight });
+  return { drop, forward: lever * Math.sin(bow) };
+}
+
+/** a problem in the dev log, once; the body then stands where it is, asking nothing more */
+function unreachable(check: string, value: number, limit: number, where: string): Behaviour {
+  return function* () {
+    let logged = false;
+    yield* action<Frame>({ update: (f) => { if (!logged) f.dev?.append(f.time, { check, value, limit, where }); logged = true; } });
+  };
+}
+
 /** Prepare the knees during the last landing (s before arrival). */
 const LOWERING = 0.3;
 /**
@@ -128,10 +149,11 @@ const LOWERING = 0.3;
  * final leg opens that approach when the direct path would cut through the support or across the load. It ends there, turned and come to rest (or
  * stood still on planted feet a while: a step of a few cm `balance` may not take). The first half
  * of `grab`. A placing point is measured from the middle of the shoulders, rather than either
- * hand. A point must be within ARM_REACH of that middle at the requested stand (at the
- * shoulders' standing height); an impossible stand throws before walking. Grips may recruit
+ * hand. A point must be within ARM_REACH of that middle at the requested stand, the shoulders lowered and bowed as far as
+ * a low point needs (at most a squat and the deepest bow); one out of reach even so, or no stand clear, is a problem in the dev log
+ * and the body stands where it is. Grips may recruit
  * bowing and lowering during the reach. A destination placement uses the held grips at its
- * orientation to choose the facing, so both hands can reach it; a blocked explicit `face` throws; translation and rotation are followed live.
+ * orientation to choose the facing, so both hands can reach it; a blocked explicit `face` is logged too; translation and rotation are followed live.
  */
 export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, options: { face?: number; spot?: Spot } = {}): Behaviour {
   const { aside = 0 } = options.spot ?? {};
@@ -155,19 +177,32 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
     let face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
-    const shoulders = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
+    const standing = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
     const reach = ARM_REACH * p.armLength;
-    const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) : Infinity;
+    // (a placing point low down the body lowers and bows for, as it does for a grip — as far as it must, at most squatting and bowing
+    // its most: its shoulders that much lower and, bowed, that much further on)
+    const { drop, forward } = point ? stoop(p, Math.max(0, standing - height - STOOPING * reach)) : { drop: 0, forward: 0 };
+    const shoulders = standing - drop;
+    const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) + forward : Infinity;
     // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
     const distance = !point && grips.length === 2 && height < p.hipHeight ? LOW_STAND / Math.sqrt(loadFactor(mass)) : WITHIN;
-    const ahead = options.spot?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + Math.max(0, height - p.ankleHeight));
+    // (both hands well below the hips — taking or setting down — it stands up to the load: no further beyond its toes than `LOW_AHEAD`
+    // taking and `LOW_SETTING` setting down, the load before the shins as the knees bend)
+    const low = grips.length === 2 && height < p.hipHeight - p.thigh / 2;
+    const beyond = Math.max(0, height - p.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * p.armLength) : beyond;
+    const ahead = options.spot?.ahead ?? Math.min(distance * p.armLength, available, p.toeFront + up);
     const shoulder = (side?: Side) => side
       ? h.pose.position(INDEX[`${side}UpperArm`])
       : h.pose.position(INDEX.leftUpperArm).clone().add(h.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
     const middle = grips.reduce((sum, g) => sum.add(g.at), new Vector3()).divideScalar(grips.length);
+    // (a point out of reach from anywhere it could stand, lowered and bowed its most, is a problem in the dev log, once: the body stays
+    // standing where it is)
     if (point) {
-      const distance = Math.hypot(ahead, aside, height - shoulders);
-      if (options.spot ? distance > reach : Math.hypot(aside, height - shoulders) > reach) throw new Error(`approach: point ${distance.toFixed(3)} m from shoulder middle at requested stand exceeds arm reach ${(ARM_REACH * p.armLength).toFixed(3)} m`);
+      const distance = Math.hypot(Math.max(0, ahead - forward), aside, height - shoulders);
+      if (options.spot ? distance > reach : Math.hypot(aside, height - shoulders) > reach) {
+        yield* unreachable(`approach: placing point from the shoulders' middle, lowered and bowed (m)`, distance, reach, `${grips.length} grips`)();
+        return;
+      }
     }
     const to = new Vector3(), there = new Vector3();
     const standAt = (yaw: number) => {
@@ -193,8 +228,10 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
       return undefined;
     };
     const yaw = clearFacing();
-    if (yaw === undefined) throw new Error(options.face === undefined
-      ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand');
+    if (yaw === undefined) {
+      yield* unreachable(options.face === undefined ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand', 1, 0, `${grips.length} grips`)();
+      return;
+    }
     face = yaw;
     const turned = (yaw = face) => Math.abs(wrapAngle(yaw - h.locomotion.facing)) < SQUARE;
     if (options.spot === undefined && turned() && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * p.armLength)) return;

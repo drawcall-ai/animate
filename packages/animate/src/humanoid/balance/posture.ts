@@ -243,7 +243,7 @@ function lowered(p: Proportions, lever: number, drop: number, aheadBow: number) 
   return { lower: drop < 0 ? Math.max(drop, -TIPTOE * p.scale) : lower <= Number.EPSILON * p.height ? 0 : lower, bow };
 }
 
-const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
+export const bowLever = (p: Proportions, height: number) => 0.8 * (height - p.hipHeight);
 // Tuned comfortable bow ceiling, independent of the neck joint range.
 export const MOST_BOW = 60 * Math.PI / 180;
 
