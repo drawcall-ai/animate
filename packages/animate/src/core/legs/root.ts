@@ -80,7 +80,10 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const progress = Math.max(Math.abs(goalAngle) * arrival, holding * direction * wrapAngle(stanceYaw - travelYaw), holding * direction * wrapAngle(yaw - travelYaw));
     // (and turns from the way it goes no further than `sidelong`: nobody walks off sideways or backward but for the last steps)
     const bearing = facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress, sidelong) : travelYaw;
-    const angle = wrapAngle(bearing - yaw);
+    // (asked to face about and its way about too, it turns round the side the facing lies: within `ABOUT` of a half turn either side
+    // reads alike, and it would set off one way only to come back round the other)
+    const direct = wrapAngle(bearing - yaw), toFacing = facing ? wrapAngle(yawOf(facing) - yaw) : direct;
+    const angle = Math.min(Math.abs(direct), Math.abs(toFacing)) > Math.PI - ABOUT && toFacing * direct < 0 ? direct - Math.sign(direct) * 2 * Math.PI : direct;
     const turn = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, v)) * turnShare;
     const desired = Math.sign(angle) * Math.min(turn, Math.abs(angle) / STEP);
     let angular = Math.max(from.angular - turnAccel * STEP, Math.min(from.angular + turnAccel * STEP, desired));
@@ -110,6 +113,8 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
 const ARRIVING = 0.2, ARRIVAL_TURN = [1, 2.5] as const, SIDELONG = 0.3;
 /** Inherited (the old balance's carriage): a goal this far off the facing (rad) is walked to more and more slowly, then turned to first */
 const TURN_FIRST = [0.6, 1.3] as const;
+/** Tuned: how near a half turn (rad) its way and the facing asked are each taken as about */
+const ABOUT = 0.35;
 /** Inherited (the old balance's carriage): a goal moving slower than this (m/s) is still: arrived at, it may be faced any way */
 const STILL = 0.08;
 const UP = new Vector3(0, 1, 0);
