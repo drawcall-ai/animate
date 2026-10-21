@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { forwardOf, wrapAngle } from '../math';
+import { forwardOf, leftOf, wrapAngle } from '../math';
 import { action } from '@pmndrs/timeline';
 import type { Body, Frame } from '../body';
 import { createAsks, takeAsks } from '../asks';
@@ -39,6 +39,7 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
     const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seedOf(start.x, start.z)) : null;
     const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
     let going = false, followed: Vector3 | null = null, nowhere = false;
+    let lowering: Eased = [0, 0], bowing: Eased = [0, 0];
     // (development check: the legs across a girdle never pass through each other — their bones kept `CLEARANCE` of a leg apart)
     const across = feet.legs.flatMap((leg, i) => leg.partner !== undefined && leg.partner > i ? [[i, leg.partner]] : []);
     const bones = kind.chains.map((chain) => chain.joints.map(({ bone }) => bone));
@@ -91,6 +92,19 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
       legs.height = f.current.position(0).y;
       posture?.prepare(f, legs, attention, asks.look);
       if (carried) { carried.step(f, legs); carried.write(f); }
+      // (let down and bowed as a task asks: the body lower on its legs, its front tipped down about its hind girdle — eased there and back)
+      lowering = ease(lowering, Math.max(0, Math.min(asks.lower, LOWEST * feet.length)), f.dt);
+      bowing = ease(bowing, Math.max(0, Math.min(asks.bow, asks.bowLimit, MOST_BOW)), f.dt);
+      if (lowering[0] > 1e-6 || bowing[0] > 1e-6) {
+        const behind = Math.min(...feet.legs.map((leg) => leg.ahead ?? 0)), pivot = _p.set(0, 0, 0);
+        const hinds = feet.legs.filter((leg) => (leg.ahead ?? 0) <= behind + 1e-6);
+        for (const leg of hinds) pivot.add(f.current.position(leg.top));
+        pivot.divideScalar(hinds.length);
+        const turn = _bow.setFromAxisAngle(leftOf(stepper.yaw, _left), bowing[0]);
+        const at = _at.copy(f.current.position(0)).sub(pivot).applyQuaternion(turn).add(pivot);
+        f.current.setRoot(at.setY(at.y - lowering[0]));
+        f.current.setLocal(0, _q.copy(turn).multiply(f.current.local(0)));
+      }
       const speed = Math.hypot(r.velocity.x, r.velocity.z), walking = Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest));
       stepper.legs.forEach((leg, i) => {
         // (each leg through its own stride by the cycle, as the gait's cycles are read: a stance cut short swings on from where it is)
@@ -122,6 +136,18 @@ const FOLLOWING = 3;
 /** Tuned (1/s): how fast the phase the carriage rides on is drawn to the feet's */
 const LOCKING = 6;
 const UP = new Vector3(0, 1, 0);
+/** Tuned: the most a creature lets its body down (× its legs' length) and bows its front (rad), as a task asks */
+export const STOOPING = { lowest: 0.3, bow: 0.5 };
+const LOWEST = STOOPING.lowest, MOST_BOW = STOOPING.bow;
+/** Tuned (1/s): how quickly it lets itself down or bows and comes back up: critically damped */
+const EASING = 6;
+type Eased = [value: number, rate: number];
+/** `[value, rate]` a step on toward `goal`, critically damped */
+function ease([x, v]: Eased, goal: number, dt: number): Eased {
+  v += (EASING ** 2 * (goal - x) - 2 * EASING * v) * dt;
+  return [x + v * dt, v];
+}
+const _p = new Vector3(), _at = new Vector3(), _left = new Vector3(), _bow = new Quaternion(), _q = new Quaternion();
 const _gap = new Vector3(), _to = new Vector3(), _yaw = new Quaternion();
 
 /** the least distance between segments `a0`–`a1` and `b0`–`b1` (m) */

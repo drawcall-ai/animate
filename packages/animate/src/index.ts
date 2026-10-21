@@ -38,6 +38,7 @@ export { carry, hold } from './humanoid/hands/carry';
 export type { Way } from './core/hands';
 export { place } from './humanoid/hands/place';
 export { release } from './humanoid/hands/release';
+export { touch } from './humanoid/hands/touch';
 export { handTo, type HandOptions } from './humanoid/arms';
 export type { Holds } from './core/hands';
 export { still, type Waypoint } from './core/course';

@@ -6,6 +6,7 @@ import { lookAt } from './gaze';
 import { live, REACHED, type Behaviour, type Live, type Placement, type Target, type Until } from './goal';
 import { course, type Waypoint } from './course';
 import { Pose, type ReadonlyPose } from './pose';
+import { STOOPING } from './legs/creature';
 import { forwardOf, minimumJerk } from './math';
 import { followRotation } from './follow';
 import { ChainTip, chainTo, reached } from './tip';
@@ -26,6 +27,8 @@ const REACHING = 3;
 /** Tuned: standing to take something, the share of the hand's chain it reaches out to, and the share of that reach along the floor the grip is ahead of the chain's base */
 const OUT = 0.9;
 const AHEAD = 0.6;
+/** Tuned (m/s): how fast a creature lets itself further down while it falls short of what it reaches for low down */
+const PRESSING = 0.1;
 
 /**
  * `grab` for a body other than a person, one hand at a time: it walks up to stand with the grip in its hand's
@@ -136,6 +139,70 @@ export function tipToward(body: Body, hand: string, target: Live<Target>, until?
   return chainTo(chainOf(body, hand), target, { ...DIP, turnAccel: undefined, until });
 }
 
+/**
+ * `touch` for a body other than a person: it walks up to stand with `target` in its hand's reach — lowered and bowed if it must,
+ * as far as its legs let it — its eyes on it (if it has any), the hand's chain reaches it and goes back; out of its reach even so,
+ * that is a problem in the dev log, once, and it stands.
+ */
+export function nuzzle(body: Body, hand: string, target: Live<Vector3>): Behaviour {
+  return function* () {
+    const chain = chainOf(body, hand), bones = body.pose.skeleton.chain(chain), bone = bones[bones.length - 1], at = () => live(target, body.frame).clone();
+    // (as low as its legs let it down and its front bows about its hind girdle)
+    const legs = body.species.legs?.chains ?? [];
+    const lowest = legs.length ? STOOPING.lowest * Math.min(...legs.map((leg) => chainLength(body, leg.joints.map(({ bone }) => bone)))) : 0;
+    const lever = (f: { prev: ReadonlyPose }) => {
+      const forward = forwardOf(body.yaw), root = f.prev.position(0), tops = legs.map((leg) => f.prev.position(leg.joints[0].bone).sub(root).dot(forward));
+      return Math.max(1e-3, _v.subVectors(f.prev.position(bones[0]), root).dot(forward) - (tops.length ? Math.min(...tops) : 0));
+    };
+    const off = standOff(body, chain, at(), lowest + (legs.length ? lever(body.frame) * Math.sin(STOOPING.bow) : 0));
+    if (typeof off !== 'number') {
+      yield* unreachableHere(body, 'touch out of reach: target from the hand\'s base, up or down, lowered (m)', off, chain)();
+      return;
+    }
+    const walk = walkTo(body, { to: at, within: off });
+    yield* !body.gazer ? walk() : parallel<Frame>('race', lookAt(body, at), walk);
+    // (how far short it falls standing as it sets out: let down and bowed for that, not for what is left once it is lower)
+    const tip = new ChainTip(chain), length = chainLength(body, bones), began = body.frame.time, standing = body.pose.position(bones[0]).y;
+    let late = false, pressing = 0;
+    yield* action<Frame>({
+      update: (f) => {
+        // (as low as the target needs: the base of the chain let down, then its front bowed for the rest — and lower still while its
+        // tip stays above what it reaches for: worked out from standing, it falls a little short)
+        const goal = live(target, f), short = standing - goal.y - OUT * length, most = lowest + lever(f) * Math.sin(STOOPING.bow);
+        pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(bone).y - goal.y - REACHED.distance) * PRESSING * f.dt));
+        const drop = Math.min(most, Math.max(0, short) + pressing);
+        if (drop > 0) {
+          body.asks.lower = Math.max(body.asks.lower, Math.min(drop, lowest));
+          body.asks.bow = Math.max(body.asks.bow, Math.asin(Math.min(1, Math.max(0, drop - lowest) / lever(f))));
+        }
+        tip.to(f, { position: goal }, { ...DIP, turnAccel: undefined });
+      },
+      until: (f) => {
+        if (reached(f, bone, { position: live(target, f) })) return true;
+        if (!late && f.time - began > REACHING) {
+          late = true;
+          f.dev?.append(f.time, { check: `late touch: distance after ${REACHING} s (m)`, value: f.prev.position(bone).distanceTo(live(target, f)), limit: REACHED.distance, where: chain });
+        }
+        return false;
+      },
+    });
+    yield* handBack(body, [hand])();
+  };
+}
+
+/** a problem in the dev log, once: the body stands where it is, doing nothing more for it */
+function unreachableHere(_body: Body, check: string, off: { value: number; limit: number }, where: string): Behaviour {
+  return function* () {
+    let logged = false;
+    yield* action<Frame>({ update: (f) => { if (!logged) f.dev?.append(f.time, { check, ...off, where }); logged = true; } });
+  };
+}
+
+/** the chain of `bones` laid out end to end (m) */
+function chainLength(body: Body, bones: readonly number[]): number {
+  return bones.slice(1).reduce((sum, b) => sum + body.pose.skeleton.bones[b].offset.length(), 0);
+}
+
 /** `place` for a body other than a person: it walks up to stand with `to` in its hand's reach, takes the item there and lets go. */
 export function put(body: Body, item: Item, to: Live<Placement>): Behaviour {
   return function* () {
@@ -199,11 +266,11 @@ function chainOf(body: Body, hand: string): string {
  * how far ahead of the root (m) the body stands to take something at `point` with `chain` (its base as it stands now); out of its
  * reach up or down, how far it is from the base that way and how far the hand reaches (m)
  */
-function standOff(body: Body, chain: string, point: Readonly<Vector3>): number | { value: number; limit: number } {
+function standOff(body: Body, chain: string, point: Readonly<Vector3>, lowered = 0): number | { value: number; limit: number } {
   const { skeleton } = body.pose, bones = skeleton.chain(chain);
   const base = body.pose.position(bones[0]), length = bones.slice(1).reduce((sum, b) => sum + skeleton.bones[b].offset.length(), 0);
-  const out = OUT * length, drop = base.y - point.y;
-  if (Math.abs(drop) > out) return { value: Math.abs(drop), limit: out };
+  const out = OUT * length, drop = Math.max(-out, base.y - lowered - point.y);
+  if (drop > out || base.y - point.y < -out) return { value: Math.abs(base.y - point.y), limit: out + lowered };
   return _v.subVectors(base, body.pose.position(0)).dot(forwardOf(body.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
 }
 

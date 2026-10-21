@@ -1,9 +1,9 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, carried, carry, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, carried, carry, touch, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
-import { DOG } from '../src/scenarios/dog';
+import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, items high and low. Every run must
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed in `OPEN`
@@ -95,6 +95,23 @@ check('a dog takes a ball, carries it up to its rest, lets go, takes it again an
 });
 check('a dog reaches its jaw to a point without taking anything', () => {
   expect(run(creature(DOG), (b) => handTo(b, 'jaw', { position: around(0, 0.7, 0.3) }, { until: 'reached' }), 10)).toEqual(ok);
+});
+// (a touch reaches without taking: a short-necked creature lets itself down and bows to a bowl on the floor, as a cat drinks)
+check('a short-necked creature touches a bowl on the floor, letting itself down and bowing', () => {
+  let lowest = Infinity;
+  const body = creature(SHORT_NECKED)((b) => touch(b, 'jaw', around(10, 1.2, 0.03)));
+  for (let i = 0; i < 10 * 60 && !body.done; i++) { body.update(1 / 60); lowest = Math.min(lowest, body.pose.position(0).y); }
+  expect(body.done).toBe(true);
+  expect(body.log).toEqual([]);
+  expect(lowest).toBeLessThan(0.4);
+});
+for (const height of [0.1, 0.4, 1.2]) {
+  check(`a person touches a point ${height} m up, 1.5 m away`, () => {
+    expect(run(person, (b) => touch(b, 'right', around(10, 1.5, height)), 20)).toEqual(ok);
+  });
+}
+check('a dog touches a point on the floor 1.5 m away', () => {
+  expect(run(creature(DOG), (b) => touch(b, 'jaw', around(10, 1.5, 0.01)), 20)).toEqual(ok);
 });
 it('a hand a body does not have fails to compile', () => {
   const ball = ballAt(around(0, 1.5, 0.04));

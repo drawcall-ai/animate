@@ -1,6 +1,6 @@
 ---
 name: animate
-description: Animate three.js characters and creatures with @drawcall/animate — every body is a `new Body(species, story, options)`, a person's species `human(model)`, the shipped `horse()` or your own from data — moved by @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself — `walkTo`, `grab`/`hold`/`carry`/`place`/`release`/`handTo`/`wear`, `lookAt`/`withGaze`/`aimAt` — scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters and creatures with @drawcall/animate — every body is a `new Body(species, story, options)`, a person's species `human(model)`, the shipped `horse()` or your own from data — moved by @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself — `walkTo`, `grab`/`hold`/`carry`/`place`/`release`/`touch`/`handTo`/`wear`, `lookAt`/`withGaze`/`aimAt` — scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
@@ -64,9 +64,10 @@ There is one verb per intent, for any body with hands: a person's `left` and `ri
 - `carry` moves an item along waypoints or to a placement and ends there. It takes several items at once as `[[a, wayA], [b, wayB]]`.
 - `place` lifts, walks up and puts down.
 - `release` lets go.
+- `touch` reaches to a point without taking anything: it walks up, looks, and ends once the hand is there.
 - `wear` and `takeOff` attach an item to any body's bone and detach it.
 
-What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go.
+What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl)`); any task can ask the same with `ask(body, { lower, bow })`.
 
 ```ts
 const across = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
