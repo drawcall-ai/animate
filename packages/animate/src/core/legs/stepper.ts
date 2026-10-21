@@ -129,6 +129,9 @@ const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE =
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
  * `down` s, as deep as `depth` × the fall's speed × `down` (half that running), rising over `up` s.
  */
+/** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
+ * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
+const CROUCHING = { accel: 90, speed: 7.5 };
 const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3 };
 
 /**
@@ -144,6 +147,9 @@ export class Stepper {
   readonly legs: Leg[];
   /** the pelvis' facing (rad), how far it walks and runs (0 … 1), the gait's phase (rad), the stance's and cycle's durations (s); still and squared up; off the floor (a leap's flight) */
   yaw: number; moving = 0; run = 0; phase = 0; Ts = 1; cycle = 2; settled = true; airborne = false;
+  /** how far down it is crouched (0 … 1, eased: the root's `crouch` minimum-jerk, followed no faster than legs bend and straighten, `CROUCHING`) */
+  crouch = 0;
+  private readonly crouches = [0, 0];
   private readonly before: number[]; private readonly gap: number[]; private readonly pair: number[]; private readonly apart: number[]; private readonly yaws: number[];
   private asked: number | undefined; private stand = NaN; private last: number; private rootYaw: number;
   private readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
@@ -185,7 +191,9 @@ export class Stepper {
     if (Number.isNaN(this.stand)) this.stand = heights[0] = heights[1] = f.prev.position(0).y;
     const v = Math.hypot(r.velocity.x, r.velocity.z);
     // (crouched: lower, the feet wider and a little ahead of the hips — the hips sit back — shorter, lower steps)
-    const k = minimumJerk(clamp(r.crouch ?? 0, 0, 1)), sitting = r.hips ? 0 : st.crouch.ahead * s * k, toes = Math.max(0, r.tiptoe ?? 0);
+    const k = clamp(follow(this.crouches[0], this.crouches[1], minimumJerk(clamp(r.crouch ?? 0, 0, 1)), CROUCHING, dt), 0, 1);
+    [this.crouches[0], this.crouches[1], this.crouch] = [this.crouches[1], k, k];
+    const sitting = r.hips ? 0 : st.crouch.ahead * s * k, toes = Math.max(0, r.tiptoe ?? 0);
     const hips = this.hips.copy(r.hips ?? ZERO).setY(0), pelvis = _p.copy(r.position).add(hips);
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)
     leap(jump, this.asked, smoothstep(st.run[0], st.run[1], v), s, dt);
@@ -533,7 +541,8 @@ export class Stepper {
       const lean = feet.lean(leg.i, f.prev, yawNow);
       // (walking, pushed off: the ankle plantarflexed most just after the toes leave the floor, in line again by mid-swing)
       if (st.push && !airborne) leg.pitch = Math.min(leg.pitch, lerp(leg.pitch, Math.max(st.pitch.ball, -st.push - lean), moving * Math.sin(Math.PI * Math.min(1, u / PUSHED)) ** 2));
-      leg.pitch -= beyond(lean + leg.pitch - st.dorsiflexion);
+      // (its own shank's lean bends the ankle early in the swing; landing, the strike already stands as it will)
+      leg.pitch -= beyond(lean + leg.pitch - st.dorsiflexion) * (1 - minimumJerk((u - 0.6) / 0.4));
       const foot = feet.rotation(yawNow, leg.pitch, new Quaternion());
       // (the toes relax off the floor into line, and landing toes first come down flat)
       const toes = foot.clone().multiply(_q.copy(w.toes).slerp(IDENTITY, minimumJerk(u / 0.3)))

@@ -69,8 +69,9 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
       takeAsks(h.asks, asks);
-      const dt = f.dt, r = rootOf(f, asks, stepper), k = minimumJerk(clamp(r.crouch ?? 0, 0, 1));
+      const dt = f.dt, r = rootOf(f, asks, stepper);
       stepper.move(f, r);
+      const k = stepper.crouch;
       const { yaw, moving, run, Ts, legs } = stepper;
       // (a body carrying itself otherwise — a walker's posture — places the pelvis and trunk itself, its thorax turned so far)
       const thoraxYaw = carry?.(f, asks, stepper) ?? 0;
@@ -108,16 +109,24 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
         const pole = _pole.copy(thigh).add(pose.ankle).multiplyScalar(0.5).addScaledVector(forwardOf(yawed), 0.5);
         // (planted, the leg turns as the foot needs; swinging, the knee bends toward the pole and the foot turns within the ankle's range, so the knee never swivels to suit it)
-        solveChain(f, `${side}Leg`, { tip: { position: pose.ankle, quaternion: leg.swing ? undefined : pose.foot }, pole });
-        const ankle = _local.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(pose.foot);
-        const ankleRange = f.current.skeleton.limits[INDEX[`${side}Foot`]];
-        if (ankleRange) clampRotation(ankle, ankleRange);
-        f.current.setLocal(INDEX[`${side}Foot`], ankle);
-        // (planted, the toes lie on the floor; swinging, they keep their own bend whatever the ankle's range left of the foot's turn)
-        const toes = _local.copy(leg.swing ? pose.foot : f.current.rotation(INDEX[`${side}Foot`])).invert().multiply(pose.toes);
-        const range = f.current.skeleton.limits[INDEX[`${side}Toes`]];
-        if (range) clampRotation(toes, range);
-        f.current.setLocal(INDEX[`${side}Toes`], toes);
+        const place = (at: Vector3) => {
+          solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole });
+          const ankle = _local.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(pose.foot);
+          const ankleRange = f.current.skeleton.limits[INDEX[`${side}Foot`]];
+          if (ankleRange) clampRotation(ankle, ankleRange);
+          f.current.setLocal(INDEX[`${side}Foot`], ankle);
+          // (planted, the toes lie on the floor; swinging, they keep their own bend whatever the ankle's range left of the foot's turn)
+          const toes = _local.copy(leg.swing ? pose.foot : f.current.rotation(INDEX[`${side}Foot`])).invert().multiply(pose.toes);
+          const range = f.current.skeleton.limits[INDEX[`${side}Toes`]];
+          if (range) clampRotation(toes, range);
+          f.current.setLocal(INDEX[`${side}Toes`], toes);
+        };
+        place(pose.ankle);
+        // (a swinging foot the ankle's range turned off its plan — toes down past it, behind a crouch — lifted as far as that put it into the floor)
+        if (leg.swing) {
+          const sunk = -feet.sole(i, f.current.position(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
+          if (sunk > 0) place(_lift.copy(pose.ankle).setY(pose.ankle.y + sunk));
+        }
         h.feet[i].position.copy(leg.anchor);
         h.feet[i].yaw = leg.yaw;
         h.feet[i].phase = leg.swing ? 'swing' : 'planted';
@@ -171,4 +180,4 @@ function check(h: Humanoid, f: Frame, legs: readonly Leg[]) {
 }
 
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _bend = new Quaternion(), _local = new Quaternion();
-const [_a, _b, _pole, _v, _f] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+const [_a, _b, _pole, _v, _f, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];

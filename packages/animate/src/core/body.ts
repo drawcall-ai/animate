@@ -70,8 +70,10 @@ export interface BodyOptions {
   idle?: IdleOptions | false;
   /** its size against the body its distances were tuned for (default the species', `Species.scale`): placements in its bones' frames scale with it */
   scale?: number;
-  /** Checks final poses and records problems; default off. */
-  dev?: boolean;
+  /** Checks final poses and records problems in `log`; default off. `{ notes: true }` also records `notes`: measurements a body only
+   * reports, never failures — a player-driven body's extrapolated centre of mass outside its feet (the player, not its balance, decides
+   * where it goes) */
+  dev?: boolean | { notes?: boolean };
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;
   /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone (a person's may be placed for its proportions) */
@@ -148,7 +150,7 @@ export class Body<H extends string = string> {
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const body = this;
     this.frame = {
-      dev: options.dev ? new Dev() : undefined,
+      dev: options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined,
       beats: new Set(),
       dt: STEP,
       time: 0,
@@ -184,7 +186,7 @@ export class Body<H extends string = string> {
   /** Development problems; empty when dev is off. */
   get log(): readonly LogEntry[] { return this.frame.dev?.log ?? EMPTY_LOG; }
 
-  /** Development measurements that are reported, not failures; empty when dev is off. */
+  /** Development measurements that are reported, not failures (`BodyOptions.dev`); empty unless asked for. */
   get notes(): readonly LogEntry[] { return this.frame.dev?.notes ?? EMPTY_LOG; }
 
   /** the last final pose */

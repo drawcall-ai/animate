@@ -79,6 +79,38 @@ it('crouches as asked: the pelvis let down smoothly, feet wider, steps still cle
   expect(h.log).toEqual([]);
 });
 
+// (a player's crouch key is a step in the root's crouch: the legs take it at their own pace, the feet on the floor going down and coming up)
+it('crouches on a key press and stands on its release, the feet kept to the floor', () => {
+  const { h } = drive(4, () => new Vector3(), () => 0, (t, root) => { root.crouch = t > 0.5 && t < 2.5 ? 1 : 0; });
+  expect(h.log).toEqual([]);
+  expect(h.stepper!.crouch).toBe(0);
+});
+// (crouched: turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does)
+it.each([
+  ['a quarter turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? Math.PI / 2 : 0],
+  ['a half turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? 0.95 * Math.PI : 0],
+  ['a walk back', moving(1, 4, forwardOf(0).multiplyScalar(-0.8)), () => 0],
+  ['a strafe', moving(1, 4, leftOf(0).multiplyScalar(0.8)), () => 0],
+] as const)('crouched, %s: clean', (_, velocity, yaw) => {
+  const { h } = drive(6, velocity, yaw, (t, root) => { root.crouch = Math.min(1, Math.max(0, (t - 0.3) / 0.25), Math.max(0, (5 - t) / 0.25)); });
+  expect(h.log).toEqual([]);
+});
+// (a driven body's balance is its player's: its XCoM past its feet is a note, recorded only when asked for)
+it('notes a driven XCoM only when asked', () => {
+  // (a sprint stopped dead: the root halts at once, the body's momentum carries its centre of mass on past its feet)
+  const sprint = (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 3 ? 3.5 : 0);
+  expect(drive(4, sprint).h.notes).toEqual([]);
+  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const h = person(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: { notes: true } });
+  for (let t = dt; t <= 4; t += dt) {
+    root.velocity.copy(sprint(t));
+    root.position.addScaledVector(root.velocity, dt);
+    h.update(dt);
+  }
+  expect(h.notes.length).toBeGreaterThan(0);
+  expect(h.notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
+});
+
 it.each([
   ['standing', 0],
   ['from a walk', 1.4],

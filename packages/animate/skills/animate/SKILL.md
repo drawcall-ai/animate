@@ -114,7 +114,21 @@ Leave placement to the library: a hand-placed number usually reads worse and bre
 
 ## Player control
 
-For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that your controller moves every frame. The body stands exactly on it and faces its `yaw`, and the legs step to keep up. Ask for a leap with `h.stepper?.jump(speed)`, and read `h.stepper?.airborne` to know when it is in the air.
+For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that your controller moves every frame before the update. The body stands exactly on it and faces its `yaw`, and the legs step to keep up. Set `crouch` straight to 0 or 1 from the key; the legs ease into and out of it themselves. Ask for a leap with `h.stepper?.jump(speed)`, and read `h.stepper?.airborne` to know when it is in the air.
+
+```ts
+const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
+const player = new Body(human(model), (p) => aimAt(p, () => aim), { idle: { root } });
+// every frame, before world.update(delta): move, strafe and look as the input asks, the walk relative to the look
+const pace = input.crouch ? 0.8 : 1.4, wish = new Vector3(input.x, 0, input.z).clampLength(0, 1).multiplyScalar(pace).applyAxisAngle(UP, input.yaw);
+root.velocity.lerp(wish, Math.min(1, 10 * delta));
+root.position.addScaledVector(root.velocity, delta);
+root.yaw = input.yaw;
+root.crouch = input.crouch ? 1 : 0;
+if (input.jump) player.stepper?.jump(2.5);
+```
+
+Crouched, keep to a crouch-walk's pace (about 0.8 m/s) and turn on the spot in steps rather than steadily: a steady turn on the spot while crouched crosses the legs, and crouched steps, walking back most of all, still log a few touchdowns a little faster than the 0.1 m/s bound.
 
 A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation` from `@drawcall/animate/rig`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach.
 
@@ -182,7 +196,7 @@ For another size, take `scaled(dog, 0.55)` (a cat): its gait stays dynamically s
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished.
+Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. `dev: { notes: true }` also fills `body.notes` with what a body only reports, never failures: a player-driven body's centre of mass carried outside its feet, where the player, not its balance, takes it.
 
 A late entry means the goal is out of reach from where the body stands. Change where it stands (approach its destination placement) or change the course; a longer `limit` only reports it later. Name every `Item`, so entries say which one.
 
