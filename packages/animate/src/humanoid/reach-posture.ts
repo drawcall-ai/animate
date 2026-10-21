@@ -44,7 +44,10 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.
   const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
-  const deficit = shoulder.distanceTo(hand) - p.armLength - allowance;
+  // (judged from the shoulder as it stands upright, not as low as the reach has already let it down: a reach that lowers the body for
+  // what it falls short of keeps asking while it is short standing, rather than letting go as soon as the lowering brings it in)
+  // (the old balance, until it goes: from the shoulder as it is)
+  const deficit = (h.stepper ? _upright.copy(shoulder).setY(p.shoulderHeight) : shoulder).distanceTo(hand) - p.armLength - allowance;
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
   // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
   const short = shoulder.distanceTo(hand) - ARM_REACH * p.armLength;
@@ -92,7 +95,7 @@ export function gazeAsks(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector
   const bow = Math.max(0, Math.min(needed, MOST_BOW));
   request(h.asks, { bow });
 }
-const _station = new Vector3();
+const _station = new Vector3(), _upright = new Vector3();
 const _v = new Vector3();
 const _forward = new Vector3();
 const _left = new Vector3();
