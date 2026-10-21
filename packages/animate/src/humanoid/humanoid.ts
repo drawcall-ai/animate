@@ -20,6 +20,7 @@ import { gazeAsks } from './reach-posture';
 import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { followHeld } from './hands/hold';
+import type { Carrier, Item } from '../core/carrier';
 
 /**
  * A person, as a species (`new Body(human(model), story, options)`): its skeleton and measures read off a @pmndrs/viverse character
@@ -28,8 +29,14 @@ import { followHeld } from './hands/hold';
  */
 export function human(model: CharacterModel = createSkeletonModel()): Species<Side> {
   const rig = new Rig(model), eyes = rig.points.eyes;
+  let embodied = false;
   const species: Species<Side> = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' },
-    person: { embody: (story, options) => new Humanoid(species, rig, story, options) } };
+    person: { embody: (story, options) => {
+      // (its model is posed by its one body: a second would pose the same model)
+      if (embodied) throw new Error('one body per human(): make a human() for each person');
+      embodied = true;
+      return new Humanoid(species, rig, story, options);
+    } } };
   return species;
 }
 
@@ -41,6 +48,8 @@ export class Humanoid extends Body<Side> {
   /** where the feet stand or, stepping, land [left, right]: the base's */
   readonly feet: [Foot, Foot];
   declare readonly gazer: Gazer;
+  /** what its hands carry this sub-step and along which aim (`hold` with `to`, `carry`): the hands fit each to its aim after the story */
+  readonly carrying = new Map<Item, Carrier>();
   private readonly measured: Proportions;
 
   constructor(species: Species<Side>, readonly rig: Rig, story: (body: Body<Side>) => Behaviour, options: BodyOptions = {}) {

@@ -15,6 +15,11 @@ export class World {
   /** the time of its last sub-step (s): its bodies' own, those that joined it new */
   time = 0;
 
+  /** the final poses of its members other than `body`, as of the last sub-step's start */
+  others(body: Body): ReadonlyPose[] {
+    return this.members.flatMap(([member, seen]) => member === body ? [] : [seen]);
+  }
+
   /** `bodies` join: their behaviours read this world (`Frame.world`) and `update` steps them, in the order added */
   add(...bodies: Body[]): this {
     for (const body of bodies) {

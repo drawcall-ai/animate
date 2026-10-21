@@ -9,6 +9,7 @@ import { live, type Behaviour, type Live, type Motion } from './goal';
 import { clampRotation } from './limits';
 import { spinOf } from './rotation';
 import type { ReadonlyPose } from './pose';
+import { request } from './asks';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {
@@ -206,7 +207,7 @@ export function withGaze(h: Body, at: Live<Vector3>, task: Behaviour, options: G
         yield* task();
       },
       lookAt(h, at, SHIFT),
-      action<Frame>({ update: () => { h.asks.bow = Math.max(h.asks.bow, bow); } }),
+      action<Frame>({ update: () => request(h.asks, { bow }) }),
     );
   };
 }
@@ -220,7 +221,8 @@ export function gazeLead(h: Body, at: Live<Vector3>, seconds = NaN): Behaviour {
     yield* when((f, _, time) => {
       const point = live(at, f);
       if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
-      return gazeOff(gazer, f.prev, point) < ARRIVED || time > LONGEST;
+      // (a gaze without a neck chain — its posture turns the head — gives the time it takes a head to turn)
+      return time > LONGEST || (gazer.neck !== undefined && gazeOff(gazer, f.prev, point) < ARRIVED);
     });
     yield* when(timePassed(lead, 'seconds'));
   };
@@ -246,8 +248,7 @@ export function aimAt(h: Body, at: Live<Vector3>): Behaviour {
       const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.locomotion.facing);
       const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
       // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation.
-      h.asks.twist = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw));
-      h.asks.bow = 0.25 * pitch;
+      request(h.asks, { twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), bow: 0.25 * pitch });
     } }));
   };
 }

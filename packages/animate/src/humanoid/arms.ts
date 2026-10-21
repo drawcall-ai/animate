@@ -1,7 +1,7 @@
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Body, Frame } from '../core/body';
-import { tipToward } from '../core/hands';
+import { personOnly, tipToward } from '../core/hands';
 import { Item, type Carrier } from '../core/carrier';
 import { heldItems } from '../core/worn';
 import { followRotation } from '../core/follow';
@@ -133,7 +133,10 @@ export interface HandOptions extends Partial<Motion> {
  * toes. Another body's hand is its chain's tip, moved there until `until`.
  */
 export function handTo<H extends string>(body: Body<H>, hand: H, target: Live<Target>, options: HandOptions = {}): Behaviour {
-  if (!isPerson(body)) return tipToward(body, hand, target, options.until);
+  if (!isPerson(body)) {
+    personOnly('handTo', options, ['pole', 'lead', 'seconds', 'after']);
+    return tipToward(body, hand, target, { on: options.on, accel: options.accel, speed: options.speed, until: options.until });
+  }
   return personHandTo(body, hand as string as Side, target, options);
 }
 

@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Body, Frame } from '../../core/body';
-import { letGo } from '../../core/hands';
+import { letGo, personOnly } from '../../core/hands';
 import type { Behaviour, Target } from '../../core/goal';
 import { reached } from '../../core/tip';
 import { ARM_REACH, clearArm, handTo } from '../arms';
@@ -31,7 +31,10 @@ export interface ReleaseOptions<H extends string = string> {
  * go back to where its base has them.
  */
 export function release<H extends string>(body: Body<H>, hands: readonly H[], options: ReleaseOptions<H> = {}): Behaviour {
-  if (!isPerson(body)) return letGo(body, hands);
+  if (!isPerson(body)) {
+    personOnly('release', options, ['away', 'limit']);
+    return letGo(body, hands);
+  }
   return person(body, hands as readonly string[] as readonly Side[], options as ReleaseOptions<Side>);
 }
 

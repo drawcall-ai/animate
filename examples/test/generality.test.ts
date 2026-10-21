@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, withGaze, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 
@@ -218,6 +218,45 @@ it('a horse has no hands to take things with: grab fails to compile', () => {
     yield* grab(m, { jaw: [ball, 'middle'] })();
   }, { idle: false });
   expect(mare.hands).toEqual({});
+});
+
+// (a creature takes a verb's options as far as its hand can, and says at once which are a person's)
+check('a dog holds a ball up to a point until told, bearing its weight', () => {
+  const ball = ballAt(around(0, 1.5, 0.04));
+  let carried = false;
+  expect(run(creature(DOG), (b) => function* () {
+    yield* grab(b, { jaw: [ball, 'middle'] })();
+    yield* hold(b, ball, { to: { position: around(0, 0.6, 0.35) }, until: timePassed(2, 'seconds') })();
+    carried = !ball.supported;
+  }, 20)).toEqual(ok);
+  expect(carried).toBe(true);
+});
+check('a dog follows a point on a moving cart with its jaw', () => {
+  const cart = new Item(new Vector3(0, 0.47, 0.68), new Quaternion(), {}, { name: 'cart' });
+  const body = creature(DOG)((b) => handTo(b, 'jaw', { position: new Vector3(0, 0.05, 0) }, { on: cart, until: timePassed(3, 'seconds') }));
+  for (let i = 0; i < 4 * 60 && !body.done; i++) {
+    cart.move(body.frame.time + 1 / 60, new Vector3(0, 0.47, 0.68).add(new Vector3(0.1 * Math.sin(Math.min(i, 120) / 30), 0, 0)));
+    body.update(1 / 60);
+  }
+  expect(body.done).toBe(true);
+  expect(body.pose.position(body.hands.jaw).distanceTo(cart.toWorld({ position: new Vector3(0, 0.05, 0) }, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)).toBeLessThan(0.05);
+});
+for (const [what, story] of [
+  ['grab facing a way', (b: Body, ball: Item) => grab(b, { jaw: [ball, 'middle'] }, { face: 0 })],
+  ['release with an away', (b: Body) => release(b, ['jaw'], { away: { jaw: new Vector3() } })],
+  ['hand to a point with a pole', (b: Body) => handTo(b, 'jaw', { position: new Vector3() }, { pole: new Vector3() })],
+] as const) {
+  it(`a dog asked to ${what} — a person's option — throws at once`, () => {
+    expect(() => story(new Body(DOG, undefined, { idle: false }), ballAt(around(0, 1, 0.04)))).toThrow(/a person's/);
+  });
+}
+it('one human() makes one body', () => {
+  const species = human();
+  new Body(species, undefined, { idle: false });
+  expect(() => new Body(species, undefined, { idle: false })).toThrow(/one body per human/);
+});
+check('a horse leads with its eyes before a task without a neck chain', () => {
+  expect(run(creature(horse()), (b) => withGaze(b, around(60, 3, 1), () => when(timePassed(0.5, 'seconds')), { first: true }), 10)).toEqual(ok);
 });
 
 // (a body asked for what it can never get to says so in the dev log, once, and stands where it is: no throw, nothing searched for it)

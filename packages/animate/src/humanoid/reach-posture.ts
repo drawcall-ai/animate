@@ -9,6 +9,7 @@ import { NECK_PITCH } from './profile/limits';
 import { ARM_REACH } from './arms';
 import { heldMass } from '../core/worn';
 import { loadFactor } from '../core/load';
+import { request } from '../core/asks';
 
 /** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches
  * within lumbar rotation and leaves the neck to finish an over-shoulder look. Requests
@@ -21,7 +22,7 @@ export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vec
   share *= smoothstep(h.proportions.shoulderHalfWidth, h.proportions.armLength, distance);
   const turn = Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start));
   const twist = Math.sign(bearing) * turn * share;
-  if (Math.abs(twist) > Math.abs(h.asks.twist)) h.asks.twist = twist;
+  request(h.asks, { twist });
 }
 
 /** Standing reach requests, closed against the solved shoulder and chest. */
@@ -31,12 +32,12 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   const low = hand.y < p.hipHeight;
   // Tuned load strategy, not an empirical dose-response: heavier low reaches trade bow for knees.
   const bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
-  if (low) h.asks.bowLimit = Math.min(h.asks.bowLimit, bowLimit);
+  if (low) request(h.asks, { bowLimit });
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
   if (low && factor > 1 && h.locomotion.moving) return;
   // research-contact §4 rule 3 [C]: ≥10–15° knees under load. Tuned 30° ceiling
   // on each leg segment (knee flexion is their sum), scaled by the same load law.
-  if (low) h.asks.lower = Math.max(h.asks.lower, p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share);
+  if (low) request(h.asks, { lower: p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.
   const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
@@ -46,7 +47,7 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   const short = shoulder.distanceTo(hand) - ARM_REACH * p.armLength;
   if (!h.locomotion.moving && !low && short > 0) {
     const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
-    if (toward.lengthSq() > 1e-12 && toward.setLength(short * share).length() > (h.asks.lean?.length() ?? 0)) h.asks.lean = toward;
+    if (toward.lengthSq() > 1e-12) request(h.asks, { lean: toward.setLength(short * share) });
   }
   if (h.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back. Every reach is planned from the support station,
@@ -58,8 +59,7 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // overestimates the reach available when the pelvis tucks in a deep squat.
   const reach = 0.98 * ARM_REACH * p.armLength;
   const { lower, bow } = handLowering(p, { ahead, lateral, height: hand.y, reach, bowLimit });
-  if (lower > 0) h.asks.lower = Math.max(h.asks.lower, lower * share);
-  else if (lower < 0 && share > 0 && h.asks.lower <= 0) h.asks.lower = Math.min(h.asks.lower, lower * share);
+  if (share > 0) request(h.asks, { lower: lower * share });
   // The standing lever leaves a residual on hip-high grips (hands.test.ts).
   const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (p.shoulderHeight - p.hipHeight) : 0;
   // Once bow is exhausted, close its unmet reach with the knees rather than
@@ -69,8 +69,8 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // back may not; hip-high, it bows its most first)
   const deep = hand.y < p.hipHeight - p.thigh / 4;
   const overflow = Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * (p.shoulderHeight - p.hipHeight);
-  if (low && overflow > 0) h.asks.lower = Math.max(h.asks.lower, Math.min(SQUAT * p.height, lower + overflow) * share);
-  h.asks.bow = Math.max(h.asks.bow, Math.min(bowLimit, bow + correction) * share);
+  if (low && overflow > 0) request(h.asks, { lower: Math.min(SQUAT * p.height, lower + overflow) * share });
+  request(h.asks, { bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
 }
 
 /** Downward gaze recruits the same bow solver once neck and eye declination run out. */
@@ -87,7 +87,7 @@ export function gazeAsks(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector
   const eyeAhead = p.offsets.head.y * Math.sin(neck / 2) + p.eyes.y * Math.sin(neck) + p.eyes.z * Math.cos(neck);
   const needed = Math.max(0, Math.atan2(eyeUp - (point.y - hips.y), distance - eyeAhead) - neck - h.gazer.range.down);
   const bow = Math.max(0, Math.min(needed, MOST_BOW));
-  h.asks.bow = Math.max(h.asks.bow, bow);
+  request(h.asks, { bow });
 }
 const _station = new Vector3();
 const _v = new Vector3();

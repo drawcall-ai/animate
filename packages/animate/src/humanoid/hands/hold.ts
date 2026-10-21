@@ -9,14 +9,6 @@ import type { Humanoid } from '../humanoid';
 import { grip, gripsOf, type Grips } from './grips';
 import { heldItems } from '../../core/worn';
 
-const aims = new WeakMap<object, Map<Item, Carrier>>();
-
-export function carryAims(h: object): Map<Item, Carrier> {
-  let items = aims.get(h);
-  if (!items) aims.set(h, items = new Map());
-  return items;
-}
-
 const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
 /**
@@ -42,7 +34,7 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
       return [{ side, item, name, at: item.toWorld(gripOf(item, name), _taken).position.clone() }];
     }) : [];
     for (const item of heldItems(h)) {
-      const aim = carryAims(h).get(item);
+      const aim = h.carrying.get(item);
       // (what another moves — a scene, another body — the hands keep to, the body not coming along for it)
       const moved = item.moved(f.time);
       if (!aim && !item.supported && !item.wornBy && !moved) {
@@ -71,7 +63,7 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
       const value = f.current.position(h.hands[side]).distanceTo(at);
       if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${item.name} ${side} ${name}` });
     }
-    carryAims(h).clear();
+    h.carrying.clear();
   };
 }
 

@@ -28,9 +28,11 @@ export interface Stance {
 }
 
 /**
- * What the tasks ask of the base, which alone moves the root, the legs and the trunk's posture.
- * Every field is last-writer-wins: a task rewrites what it needs every sub-step it runs; the base
- * reads them at the start of its update and clears them (so it acts on them a sub-step later).
+ * What the tasks ask of the base, which alone moves the root, the legs and the trunk's posture. A task asks what it needs every
+ * sub-step it runs (`request`), and asks of several tasks combine, one rule a field: the deepest `lower` and `bow` (rising onto the
+ * toes or leaning back only while none asks down), the least `bowLimit`, the larger `twist` and `lean`; `go`, `face`, `look` and
+ * `stance` have one owner each, the last to ask. The base reads them at the start of its update and clears them (so it acts on them
+ * a sub-step later).
  */
 export interface Asks {
   /** walk there */
@@ -56,6 +58,20 @@ export interface Asks {
 /** nothing asked */
 export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, look: null, stance: null, lean: null });
 
+/** `more` asked of the base on top of what `asks` holds already, each field combined by its rule (`Asks`) */
+export function request(asks: Asks, more: Partial<Asks>): void {
+  const { lower, bow, bowLimit, twist, lean, ...owned } = more;
+  if (lower !== undefined) asks.lower = deeper(asks.lower, lower);
+  if (bow !== undefined) asks.bow = deeper(asks.bow, bow);
+  if (bowLimit !== undefined) asks.bowLimit = Math.min(asks.bowLimit, bowLimit);
+  if (twist !== undefined && Math.abs(twist) > Math.abs(asks.twist)) asks.twist = twist;
+  if (lean && lean.length() > (asks.lean?.length() ?? 0)) asks.lean = lean;
+  for (const [field, value] of Object.entries(owned)) if (value !== undefined) (asks as unknown as Record<string, unknown>)[field] = value;
+}
+
+/** down (+) wins, the deepest; up (−) only while none asks down, the highest */
+const deeper = (was: number, asked: number) => asked > 0 ? Math.max(was, asked) : was <= 0 ? Math.min(was, asked) : was;
+
 /** what `asks` holds, copied into `into`, and `asks` cleared */
 export function takeAsks(asks: Asks, into: Asks): Asks {
   Object.assign(into, asks);
@@ -64,14 +80,14 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
 }
 
 /**
- * Asks the base for what `asks` gives (the fields it has; the rest as other tasks ask), every
+ * Asks the base for what `asks` gives (the fields it has, combined with what other tasks ask: `request`), every
  * sub-step, endless or until `until`: a task of its own for what no other task asks (shift weight, turn to a facing while the hands work).
  */
 export function ask(h: Body, asks: Live<Partial<Asks>>, until?: UntilCondition<Frame>): Behaviour {
   return function* () {
     yield* action<Frame>({
       update: (f) => {
-        Object.assign(h.asks, live(asks, f));
+        request(h.asks, live(asks, f));
       },
       until,
     });

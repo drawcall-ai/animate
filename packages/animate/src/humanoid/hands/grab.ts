@@ -8,7 +8,7 @@ import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
 import { isPerson, type Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
-import { take } from '../../core/hands';
+import { personOnly, take } from '../../core/hands';
 import { pathAhead } from '../look';
 import { gazeLead, withGaze } from '../../core/gaze';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../core/math';
@@ -74,7 +74,10 @@ export const SEGMENT_RADIUS = 0.06;
  * species names for the hand, one at a time (`Species.hands`): it walks up, the chain's tip reaches the grip, the hand closes.
  */
 export function grab<H extends string>(h: Body<H>, holds: Holds<H>, options: GrabOptions = {}): Behaviour {
-  if (!isPerson(h)) return take(h, holds, { look: options.look !== false, walk: options.walk });
+  if (!isPerson(h)) {
+    personOnly('grab', options, ['face', 'spot', 'bow', 'first']);
+    return take(h, holds, { look: options.look, walk: options.walk });
+  }
   const { look = true, bow } = options;
   if (options.walk === false) return look === false ? reachFor(h, holds) : withGaze(h, look === true ? () => middleOf(holds) : look, reachFor(h, holds), { bow });
   return function* () {
@@ -227,8 +230,7 @@ export function approach(h: Humanoid, holds: Holds | Vector3 | Live<Placement>, 
       to.copy(middle).addScaledVector(leftOf(yaw), -aside);
       there.copy(to).addScaledVector(forwardOf(yaw), -ahead);
     };
-    const clear = () => h.frame.world.bodies.every((body) => {
-      if (body.skeleton === h.pose.skeleton) return true;
+    const clear = () => h.frame.world.others(h).every((body) => {
       return body.skeleton.bones.every((bone, b) => {
         if (!b) return true;
         const a = body.position(bone.parent), end = body.position(b);

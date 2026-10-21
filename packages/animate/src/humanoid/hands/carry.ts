@@ -9,12 +9,12 @@ import { SIDES } from '../bones';
 import { course, type Course, type Waypoint } from '../../core/course';
 import { isPerson, type Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
-import { bring, keep, type Way } from '../../core/hands';
+import { bring, keep, personOnly, type Way } from '../../core/hands';
 import { grip, gripsOf } from './grips';
 import { following, LEADING } from './reach';
 import { clearBody } from './clearance';
-import { carryAims } from './hold';
 import { bringShoulder } from '../reach-posture';
+import { request } from '../../core/asks';
 
 // Holding and carrying: the hands on an item's grips, carrying it where it goes.
 
@@ -62,7 +62,7 @@ export function carry(h: Body, what: Item | readonly (readonly [Item, Way])[], w
   // (another body's hand takes one item at a time, along its way in the world)
   if (!isPerson(h)) {
     if (!(what instanceof Item) || !isWay(way)) throw new Error('carry: a creature carries one item at a time, along its way');
-    return bring(h, what, way);
+    return bring(h, what, way, options);
   }
   if (what instanceof Item) {
     if (!isWay(way)) throw new Error(`carry: no way for "${what.name}"`);
@@ -166,7 +166,8 @@ class TrackedEnd {
  */
 export function hold(h: Body, item: Item, options: HoldOptions = {}): Behaviour {
   if (!isPerson(h)) {
-    if (options.to) return bring(h, item, options.to, true);
+    if (options.to) return bring(h, item, options.to, { motion: options.motion, hold: { until: options.until } });
+    personOnly('hold', options, ['motion']);
     return keep(h, item, options.until);
   }
   return () => holding(h, item, new CarryAim(h, item, options.motion ?? CARRYING), options)();
@@ -233,18 +234,18 @@ function holding(h: Humanoid, item: Item, path: CarryAim, options: { to?: Live<P
     if (item.supported && item.mass > 2 && (item.current.position.y >= h.proportions.hipHeight || h.proportions.hipHeight - h.pose.position(0).y < 0.005 * h.scale)) {
       // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
       yield* action<Frame>({ update: () => {
-        h.asks.lower = Math.max(h.asks.lower, 0.005 * h.scale);
+        request(h.asks, { lower: 0.005 * h.scale });
       }, until: timePassed(0.1, 'seconds') });
     }
     // (carried off whatever it rested on)
     item.supported = false;
     yield* action<Frame>({
       update: (f) => {
-        if (carryAims(h).has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
+        if (h.carrying.has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
         const aim = path.read(f, to);
         if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side,
           _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(path.goal.position));
-        carryAims(h).set(item, aim);
+        h.carrying.set(item, aim);
       },
       until: options.until,
     });

@@ -9,6 +9,7 @@ import { lowering, LOWER } from './balance/posture';
 import { INDEX } from './bones';
 import type { Humanoid } from './humanoid';
 import { forwardOf, wrapAngle, yawOf } from '../core/math';
+import { request } from '../core/asks';
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
 const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
@@ -124,7 +125,7 @@ class Under {
     const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
     if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
     go.to.copy(spot);
-    Object.assign(h.asks, { lower, bow, go, face });
+    request(h.asks, { lower, bow, go, face });
   }
 }
 
