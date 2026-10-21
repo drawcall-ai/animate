@@ -9,7 +9,7 @@ description: Animate three.js characters and creatures with @drawcall/animate �
 
 A body runs one behaviour, a [@pmndrs/timeline](https://github.com/pmndrs/timeline) timeline it steps in fixed 1/60 s sub-steps as it is updated. Nothing is keyframed: every sub-step each running behaviour writes goals for the bones it owns and moves toward them from the pose history at its own pace. So any task can end at any moment, and whatever writes those bones next takes them over from where and how fast they were going. Behaviours run in parallel layers, and on a bone two of them write, the later one wins.
 
-The calling convention, for every verb in the package: it returns a `Behaviour`, a function that makes a fresh timeline. Inside a generator, run one to its end with `yield* walkTo(h, { to })()`. To run several at once, pass them uncalled to `parallel<Frame>('all' | 'race', a, b)` and `yield*` that, without calling it. Wait with conditions (`when`, `until`, `timePassed`), never with Promises or wall-clock time.
+The calling convention, for every verb in the package: it returns a `Behaviour`, a function that makes a fresh timeline. Inside a generator, run one to its end with `yield* walkTo(h, { to })()`. To run several at once, pass them uncalled to `parallel<Frame>('all' | 'race', a, b)` and `yield*` that, without calling it. Wait with conditions — `yield* when(condition)`, `timePassed`, or a verb's `until` option — never with Promises or wall-clock time.
 
 Units are metres, seconds and radians; +Y is up, the floor is y = 0, and yaw 0 faces +Z, with +X then the body's left. Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
 
@@ -36,7 +36,7 @@ A body's story runs over its base. For a person, the base balances, walks where 
 
 `walkTo` ends once the body has arrived, turned and settled. Given `until`, it follows a live `to` however it moves until that is met, which is how one body follows another. Leave `speed` off unless matching another body's pace: walks already slow for what the hands hold.
 
-The motion conditions — `arriving(h, s)`, `h.locomotion.settled` and `moving` — describe the body now, so they are true at the start for a body standing still. `arriving` also holds when no walk is running and the body is settled. Wait on them only alongside the walk they are to observe, as in the next section.
+The motion conditions — `arriving(h, s)`, `h.locomotion.settled` and `h.locomotion.moving` — describe the body now, so they are true at the start for a body standing still. `arriving` also holds when no walk is running and the body is settled. Wait on them only alongside the walk they are to observe, as in the next section.
 
 ## Anticipation: start the next thing before this one ends
 
@@ -67,7 +67,7 @@ There is one verb per intent, for any body with hands: a person's `left` and `ri
 - `touch` reaches to a point without taking anything: it walks up, looks, and ends once the hand is there.
 - `wear` and `takeOff` attach an item to any body's bone and detach it.
 
-What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
+What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl.current.position)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
 
 ```ts
 const across = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
@@ -196,7 +196,7 @@ For another size, take `scaled(dog, 0.55)` (a cat): its gait stays dynamically s
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. `dev: { notes: true }` also fills `body.notes` with what a body only reports, never failures: a player-driven body's centre of mass carried outside its feet, where the player, not its balance, takes it, and a held goal carried clear of the head (a cup held to the mouth stops in front of the face).
+Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going, and a goal no stand brings within reach (`grab`, `place`, `touch`) adds one and the body stands where it is. With dev off none of this is reported anywhere, so test with dev on. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. `dev: { notes: true }` also fills `body.notes` with what a body only reports, never failures: a player-driven body's centre of mass carried outside its feet, where the player, not its balance, takes it, and a held goal carried clear of the head (a cup held to the mouth stops in front of the face).
 
 A late entry means the goal is out of reach from where the body stands. Change where it stands (approach its destination placement) or change the course; a longer `limit` only reports it later. Name every `Item`, so entries say which one.
 
