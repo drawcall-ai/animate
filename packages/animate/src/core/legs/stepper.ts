@@ -449,6 +449,12 @@ export class Stepper {
       const on = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
       const to = (chord && on ? new Vector3().copy(r.position).add(chord).addScaledVector(forwardOf(turned, _f), Math.max(0, on.dot(forwardOf(turned, _f)))) : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead))
         .addScaledVector(side, leg.sign * widthAt(speed)).addScaledVector(forwardOf(turned, _f), sitting + homeOf(leg)).setY(feet.ankleHeight);
+      // (still, a step evening out a staggered stance lands beside the other foot, not ahead or behind it again: a squat, a reach, a lift
+      // stand on feet side by side)
+      if (r.still && !other.swing) {
+        const behind = _v.subVectors(other.anchor, to).dot(forwardOf(turned, _f));
+        if (Math.abs(behind) > STAGGERED * s) to.addScaledVector(_f, behind);
+      }
       // (rounding a bend the body leans in: the feet land out from its way as far as the extrapolated centre of mass runs out from it — its
       // speed × turn rate (the sideways acceleration) × l/g, halved: Hof's √(l/g) ahead along the tangent, off the arc by its square over twice the radius)
       if (then) {
@@ -507,10 +513,11 @@ export class Stepper {
     if (!airborne) legs.forEach((leg, i) => { y = softMin(y, reach(leg, this.poses[i]?.ankle) + (leg.swing ? LOWEST * s * (1 - minimumJerk((leg.swing.u - 0.5) / 0.3)) : 0), 0.004 * s); });
     // (let down at once as the feet need, up again no faster than `RISE`: a foot let go of does not pop the pelvis up)
     // (the root's own rise and fall are followed at once)
-    // (and, crouching too, no lower than a planted leg folds, as it stood last: its knee bent its most, the foot would slide)
+    // (and, crouching too, no lower than a leg folds, as it stood last: its knee bent its most, a planted foot would slide, a swinging
+    // one would be held into the floor — deep in a crouch a step lifts the hips as it lifts the foot)
     const folded = Math.sqrt(feet.thigh ** 2 + feet.shin ** 2 + 2 * feet.thigh * feet.shin * Math.cos(feet.fold));
-    const fold = Math.max(-Infinity, ...legs.filter((leg) => !leg.swing).map((leg) => {
-      const ankle = feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), at = hip(leg);
+    const fold = Math.max(-Infinity, ...legs.map((leg, i) => {
+      const ankle = this.poses[i]?.ankle ?? feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), at = hip(leg);
       return ankle.y + Math.sqrt(Math.max(0, folded ** 2 - (ankle.x - at.x) ** 2 - (ankle.z - at.z) ** 2));
     }));
     const base = airborne ? flying : Math.max(Math.min(Math.max(y - rise, standing - LOWEST * s), lifted), fold - rise);

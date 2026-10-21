@@ -20,6 +20,7 @@ import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
 import { bowLever, lowering, MOST_BOW, SQUAT } from '../posture/posture';
 import { problemOnce } from '../../core/dev';
+import { defaultStance } from '../stance';
 
 // Taking hold of things: walking up to them, the eyes and hands going ahead.
 
@@ -224,12 +225,14 @@ export function approach(h: Humanoid, holds: Grips | Vector3 | Live<Placement>, 
       to.copy(middle).addScaledVector(leftOf(yaw), -aside);
       there.copy(to).addScaledVector(forwardOf(yaw), -ahead);
     };
+    // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
+    const feetOut = Math.max(p.hipHalfWidth, defaultStance(p).width);
     const clear = () => h.frame.world.others(h).every((body) => {
       return body.skeleton.bones.every((bone, b) => {
         if (!b) return true;
         const a = body.position(bone.parent), end = body.position(b);
         // Low segments, including any crouched trunk, bound the space occupied near the feet.
-        return Math.min(a.y, end.y) > p.hipHeight || pointSegmentDistance(there, a, end) >= p.hipHalfWidth + p.toeFront + SEGMENT_RADIUS;
+        return Math.min(a.y, end.y) > p.hipHeight || pointSegmentDistance(there, a, end) >= feetOut + p.toeFront + SEGMENT_RADIUS;
       });
     });
     // Check the actual stand, including aside, before searching the nearest other facing (π/16).

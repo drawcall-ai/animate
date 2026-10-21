@@ -25,6 +25,9 @@ export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vec
   request(h.asks, { twist });
 }
 
+/** Tuned: a back bowed this share of what the load lets it is bowed its most */
+const BOWED = 0.95;
+
 /** Standing reach requests, closed against the solved shoulder and chest. */
 export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0) {
   const p = h.proportions;
@@ -42,10 +45,11 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.
   const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
   const deficit = shoulder.distanceTo(hand) - p.armLength - allowance;
-  // (standing, a hand short of what is at or above the hips — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
-  // as far as the feet let it: before a step)
+  // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
+  // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
   const short = shoulder.distanceTo(hand) - ARM_REACH * p.armLength;
-  if (!h.locomotion.moving && !low && short > 0) {
+  const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
+  if (!h.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
     const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
     if (toward.lengthSq() > 1e-12) request(h.asks, { lean: toward.setLength(short * share) });
   }
@@ -64,7 +68,6 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (p.shoulderHeight - p.hipHeight) : 0;
   // Once bow is exhausted, close its unmet reach with the knees rather than
   // requesting the same saturated back angle forever.
-  const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
   // (exhausted — below the hips by a quarter thigh, as far as the load lets it bow: a heavier reach that low has its knees take what its
   // back may not; hip-high, it bows its most first)
   const deep = hand.y < p.hipHeight - p.thigh / 4;
