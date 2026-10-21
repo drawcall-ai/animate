@@ -7,6 +7,7 @@ import { angleAt, type JointCycle } from './cycle';
 import { offsetAt, strideAt, type Gait } from './gait';
 import type { LegChain } from './legs';
 import { Solver, type LegTarget } from './solve';
+import { SINGULAR } from './cholesky';
 import { minimumJerk, wrapAngle } from '../math';
 import { followRotation } from '../follow';
 import { clampRotation } from '../limits';
@@ -113,7 +114,7 @@ const DROP = 0;
 const SPANNING = 0.65;
 /** Tuned: a planted foot strays across at most this share of how far its leg reaches either way at its standing height */
 const STRAYING = 0.6;
-/** [D from recalled, as `loft`] a hoof or paw lifts early, peaking ~30% into its swing, and comes down long: u^ARC (1 − u)³ */
+/** [D from recalled] a hoof or paw lifts early, peaking ~30% into its swing, and comes down long: u^ARC (1 − u)³ */
 const ARC = 1.3;
 /** Tuned: a swinging foot is not drawn in toward its top short of this share of its leg (its joints bound it) */
 const SWING_REACH = 1.2;
@@ -267,7 +268,11 @@ export class ChainLeg {
       if (Math.hypot(out, down, ahead) > most) return false;
       target.position.set(sign * out, -down, ahead);
       // (a leg pulled straight is singular: there it reaches no further)
-      try { return solver.reach(IDENTITY, ZERO, target, q, undefined, DEPTH.iterations) < DEPTH.miss && solver.rotationError < DEPTH.turn; } catch { solver.q.set(kept); return false; }
+      try { return solver.reach(IDENTITY, ZERO, target, q, undefined, DEPTH.iterations) < DEPTH.miss && solver.rotationError < DEPTH.turn; } catch (cause) {
+        if (!(cause instanceof Error && cause.message === SINGULAR)) throw cause;
+        solver.q.set(kept);
+        return false;
+      }
     };
     const at = (i: number, k: number): number => {
       const index = i * DEPTH.along + k;
@@ -353,7 +358,8 @@ const DEG = Math.PI / 180;
 /** Tuned: how far through its swing the braked joints start handing over to the solution, by its landing */
 const BRAKING = 0.6;
 type Table = { across: number[]; along: number[]; at(i: number, k: number): number };
-/** each skeleton's legs' reach tables, by chain, pitch and standing */
+/** a pure cache: each skeleton's legs' reach tables, by chain, pitch and standing — worked out once from its rest pose and ranges, never
+ * changed, shared by every body of that skeleton */
 const TABLES = new WeakMap<object, Map<string, Table>>();
 const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), IDENTITY = new Quaternion();
 /**

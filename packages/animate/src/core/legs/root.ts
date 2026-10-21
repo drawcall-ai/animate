@@ -12,25 +12,24 @@ export interface RootState {
   angular: number;
 }
 
-/** Predict the same bounded pursuit used for this tick, including acceleration until touchdown. */
-/** a planned root: its speed (m/s) and where it is (`RootState`) at a time (s), and the bearing of its way while it travels (rad) */
-export interface RootPlan { speed(time: number): number; root(time: number): RootState; heading?(time: number): number | undefined }
+/** a planned root: where it is (`RootState`) at a time (s) */
+export interface RootPlan { root(time: number): RootState }
 
 export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion), travelFirst = false): RootPlan {
   if (share === 0 && !facing) {
     const position = previous.position.clone();
     const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));
-    return { root: () => ({ position, quaternion, velocity: new Vector3(), angular: 0 }), speed: () => 0 };
+    return { root: () => ({ position, quaternion, velocity: new Vector3(), angular: 0 }) };
   }
   const accel = motion.accel * (facing ? 1 : share);
-  const speed = share === 0 ? 0 : (motion.speed ?? Infinity) * speedShare;
+  const speed = share === 0 || speedShare === 0 ? 0 : (motion.speed ?? Infinity) * speedShare;
   const cruise = Math.max(gait.slowest, Number.isFinite(motion.speed ?? Infinity) ? motion.speed ?? Infinity : previous.velocity.length());
   const braking = cruise ** 2 / (2 * motion.accel);
   const stride = strideAt(gait, cruise, 0);
   const midstance = cruise * stride.duty / (2 * stride.frequency);
   const targets = [goal.clone()];
-  const states: (RootState & { speed: number })[] = [];
-  const advance = (from: RootState, ahead: number): RootState & { speed: number } => {
+  const states: RootState[] = [];
+  const advance = (from: RootState, ahead: number): RootState => {
     const goalSpeed = velocity.length();
     const accelerating = acceleration === 0 ? ahead : Math.min(ahead, Math.max(0,
       acceleration > 0 ? ((motion.speed ?? Infinity) - goalSpeed) / acceleration : -goalSpeed / acceleration));
@@ -92,18 +91,15 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     return {
       position: from.position.clone().addScaledVector(next, STEP).setY(from.position.y),
       quaternion: new Quaternion().setFromAxisAngle(UP, yaw + angular * STEP),
-      velocity: next, angular, speed: Math.max(v, radius * Math.abs(angular)),
+      velocity: next, angular,
     };
   };
-  const at = (time: number): RootState & { speed: number } => {
+  const at = (time: number): RootState => {
     const tick = Math.max(0, Math.round((time - f.time) / STEP));
     while (states.length <= tick) states.push(advance(states[states.length - 1] ?? previous, states.length * STEP));
     return states[tick];
   };
-  return { speed: (time) => at(time).speed, root: (time) => at(time), heading: facing ? (time) => {
-    const velocity = at(time).velocity;
-    return velocity.lengthSq() > 1e-18 ? Math.atan2(velocity.x, velocity.z) : undefined;
-  } : undefined };
+  return { root: (time) => at(time) };
 }
 
 /**

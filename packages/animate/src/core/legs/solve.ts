@@ -54,8 +54,6 @@ export class Solver {
   readonly q: Float64Array;
   /** the soft targets (set before `solve`) */
   readonly ref: Float64Array;
-  /** Heading residual from the last reach forecast (rad). */
-  headingError = 0;
   rotationError = 0;
   private readonly offsets: Vector3[];
   /** the chain's base: its top bone's parent's world turn and the top joint's position */
@@ -173,22 +171,10 @@ export class Solver {
       if (Math.max(next, turn) < Math.max(miss, angle)) { miss = next; angle = turn; rotation = target.rotation.angleTo(this.rotations[this.bones.length - 1]); q.set(this.q); }
     }
     this.q.set(was);
-    this.headingError = angle;
     this.rotationError = rotation;
     return miss;
   }
 
-  /** Ankle height at the target's horizontal position that retains the reference reach. */
-  referenceFloor(pose: Pose, at: Vector3): number {
-    const kept = this.q.slice();
-    this.q.set(this.ref);
-    this.baseTurn.copy(pose.rotation(pose.skeleton.bones[this.bones[0]].parent));
-    this.basePosition.copy(pose.position(this.bones[0]));
-    this.forward();
-    const reach = this.positions[this.bones.length - 1].distanceToSquared(this.basePosition);
-    this.q.set(kept);
-    return this.basePosition.y - Math.sqrt(Math.max(0, reach - (at.x - this.basePosition.x) ** 2 - (at.z - this.basePosition.z) ** 2));
-  }
 
   /** Bounded damped Gauss-Newton (straight knees are singular): terminal miss in m. */
   private iterate(target: LegTarget, steps = STEPS): number {

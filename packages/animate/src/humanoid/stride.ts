@@ -1,13 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Behaviour } from '../core/goal';
 import { Planner } from '../core/legs/planner';
-import { clamp, forwardOf, GRAVITY, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
+import { clamp, forwardOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
 import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import type { Stance } from '../core/asks';
 import { clampRotation } from '../core/limits';
 import type { Stepper, Stepping } from '../core/legs/stepper';
-import { hullOf, past } from '../core/legs/support';
+import { hullOf, past, xcomOfPoses } from '../core/legs/support';
 import { footprint } from './posture/foot';
 import { BOW, PELVIS, TURN, followed } from './posture/pace';
 import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './posture/pace';
@@ -108,7 +108,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     // (the stepper given the feet's middle, `behind` the centre of mass, the hips that far ahead of it again)
     const forecast = r.forecast;
     // (balance read off the body as it last stood, as the checks read it)
-    const com = f.prev.com(new Vector3()), xcom = com.clone().addScaledVector(com.clone().sub(f.prev2.com(new Vector3())), 1 / (dt * Math.sqrt(GRAVITY / p.legLength))).setY(0);
+    const xcom = xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3());
     // (let down as asked: the stepper crouches, the feet staying put; asked below none, up on the toes)
     return { ...r, xcom, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
       hips: offset.clone().add(behind), crouch: Math.min(crouchFor(requested.lower / (stepping.crouch.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed))), tiptoe: Math.max(0, -requested.lower),

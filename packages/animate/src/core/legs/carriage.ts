@@ -110,7 +110,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       const sway = Math.cos(hind - Math.PI * strideAt(gait, speed, 2).duty);
       // (on legs that hold the root's height, the withers rise to it at most: they only ever let it down)
       const withers = b.withers * Math.cos(theta) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
-      const pitch = Math.asin((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span) * m;
+      const pitch = Math.asin(clamp((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span, -1, 1)) * m;
       // (on legs that hold the root's height, the croup no higher than it stood either: pitched, the root lets down what it would lift it —
       // `HOLD` of its most over the stride all along, so the croup keeps nearly its whole rise and fall, the rest as it comes)
       const held = base === undefined ? 0 : HOLD * riseOver(b, m, span), croupRise = base === undefined ? 0 : held + Math.max(0, withers + span * Math.sin(pitch) - held);
@@ -151,7 +151,7 @@ function riseOver(b: Carriage, m: number, span: number): number {
   let most = 0;
   for (let k = 0; k < RISE_SAMPLES; k++) {
     const theta = 2 * Math.PI * k / RISE_SAMPLES, withers = b.withers * Math.cos(theta) * m - Math.abs(b.withers) * m;
-    const pitch = Math.asin((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span) * m;
+    const pitch = Math.asin(clamp((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span, -1, 1)) * m;
     most = Math.max(most, withers + span * Math.sin(pitch));
   }
   return most;

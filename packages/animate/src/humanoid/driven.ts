@@ -12,7 +12,7 @@ import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
 import { ankleFor, ballOf, footprint, footRotation, heelOf } from './posture/foot';
 import { shankTilt } from './posture/leg';
-import { hullOf, outside } from '../core/legs/support';
+import { hullOf, outside, xcomOfPoses } from '../core/legs/support';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { solePoints } from './landmarks';
@@ -77,7 +77,8 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
       } };
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
-    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0], was = new Vector3();
+    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0];
+    let was: Vector3 | null = null;
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
       takeAsks(h.asks, asks);
@@ -103,6 +104,8 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land; it leans into
         // speeding up and back from slowing down)
         const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
+        // (spawned on the move, it starts at that pace: no jolt of the trunk)
+        was ??= r.velocity.clone();
         const speeding = _v.subVectors(r.velocity, was).divideScalar(dt).dot(forwardOf(yaw, _f));
         was.copy(r.velocity);
         const lean = stepper.airborne ? 0 : clamp(SPEEDING.share * Math.atan2(speeding, GRAVITY), -SPEEDING.back, SPEEDING.ahead);
@@ -194,8 +197,7 @@ function check(h: Humanoid, f: Frame, legs: readonly Leg[]) {
   // Noted only: a driven body follows its input, not its balance.
   const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(h, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
   if (!support.length) return;
-  const com = f.prev.com(new Vector3()), velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
-  const xcom = com.addScaledVector(velocity, Math.sqrt(p.legLength / GRAVITY));
+  const xcom = xcomOfPoses(f.prev, f.prev2, f.dt, p.legLength, new Vector3());
   const value = outside(hullOf(support), xcom);
   if (value > LIMIT.xcom) dev.note(time, { check: 'driven XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
 }

@@ -22,15 +22,20 @@ export function scaled<H extends string>(species: Species<H>, size: number): Spe
     ...species,
     skeleton: new Skeleton(bones, { limits, chains }),
     scale: (species.scale ?? 1) * size,
-    gaze: gaze && { ...gaze, eyes: (pose, out) => gaze.eyes(stretched(pose, size), out) },
+    gaze: gaze && { ...gaze, eyes: stretchedEyes(gaze.eyes, size) },
     legs: legs && { ...legs, chains: legs.chains.map((chain) => feet(chain, size)), gait: gait(legs.gait, size) },
   };
 }
 
-/** the pose as `eyes` reads it: points given in a bone's frame `size` times as far from it */
-function stretched(pose: ReadonlyPose, size: number): ReadonlyPose {
-  const at = new Vector3();
-  return Object.create(pose, { point: { value: (bone: number, local: Vector3, out: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), out) } });
+/** `eyes` reading each pose with points given in a bone's frame `size` times as far from it (a view made once a pose: a body's poses last) */
+function stretchedEyes(eyes: (pose: ReadonlyPose, out: Vector3) => Vector3, size: number): (pose: ReadonlyPose, out: Vector3) => Vector3 {
+  const at = new Vector3(), views = new WeakMap<ReadonlyPose, ReadonlyPose>();
+  const view = (pose: ReadonlyPose): ReadonlyPose => {
+    let seen = views.get(pose);
+    if (!seen) views.set(pose, seen = Object.create(pose, { point: { value: (bone: number, local: Vector3, out: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), out) } }) as ReadonlyPose);
+    return seen;
+  };
+  return (pose, out) => eyes(view(pose), out);
 }
 
 function feet(chain: LegChain, size: number): LegChain {

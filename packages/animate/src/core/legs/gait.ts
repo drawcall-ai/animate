@@ -5,7 +5,7 @@ import type { Carriage } from './carriage';
 /** A contact table, in leg order. All functions read speed (m/s) and Froude v²/(g·height). */
 export interface Gait {
   frequency(speed: number, froude: number): number;
-  readonly contacts: readonly { offset: number | ((speed: number, froude: number) => number); duty(speed: number, froude: number): number; stanceCenter?: number }[];
+  readonly contacts: readonly { offset: number | ((speed: number, froude: number) => number); duty(speed: number, froude: number): number }[];
   /** Below this speed the cycle keeps its cadence but shortens its motion. */
   readonly slowest: number;
   /** Speed at which the reference joint excursions were sampled; slow travel scales them down. */
@@ -21,15 +21,7 @@ export interface Gait {
 export interface Stride {
   frequency: number;
   duty: number;
-  stepping: number;
   referenceBlend?: number;
-  /** Stride phase when the standing anchor passes beneath the root; defaults to half stance. */
-  stanceCenter?: number;
-}
-
-export function checkGait(gait: Gait, count: number): void {
-  if (gait.referenceBlend !== undefined && !(gait.referenceBlend >= 0 && gait.referenceBlend <= 1)) throw new Error('reference blend must be in [0, 1]');
-  if (!(gait.height > 0 && Number.isFinite(gait.height) && gait.slowest > 0 && Number.isFinite(gait.slowest)) || (gait.referenceSpeed !== undefined && !(gait.referenceSpeed > 0 && Number.isFinite(gait.referenceSpeed))) || gait.contacts.length !== count || gait.clearance.length !== count) throw new Error('gait and chains do not match');
 }
 
 export function strideAt(gait: Gait, speed: number, leg: number): Stride {
@@ -40,9 +32,7 @@ export function strideAt(gait: Gait, speed: number, leg: number): Stride {
   const frequency = gait.frequency(v, froude);
   const duty = gait.contacts[leg].duty(v, froude);
   if (!(frequency > 0 && Number.isFinite(frequency) && duty > 0 && duty < 1)) throw new Error('a gait needs finite positive cadence and duty between 0 and 1');
-  const stanceCenter = gait.contacts[leg].stanceCenter;
-  if (stanceCenter !== undefined && !(stanceCenter >= 0 && stanceCenter < duty)) throw new Error('stance center must lie within stance');
-  return { frequency, duty, stanceCenter, referenceBlend: gait.referenceBlend, stepping: Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest)) };
+  return { frequency, duty, referenceBlend: gait.referenceBlend };
 }
 
 export function offsetAt(gait: Gait, speed: number, leg: number): number {

@@ -20,7 +20,7 @@ import { strideAt } from './gait';
  * down to its foot. Asked nothing, it stands. It keeps `locomotion` for `walkTo` and `arriving`.
  */
 export function creature(body: Body, attention: Attention = {}, root?: Live<DrivenRoot>): Behaviour {
-  if (!body.species.legs) throw new Error('idle: the species has no legs');
+  if (!body.species.legs) throw new Error('creature: the species has no legs');
   return stepping(body, attention, root);
 }
 
@@ -35,7 +35,7 @@ function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): 
     const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius, false);
     // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)
     const turning = Math.PI * strideAt(gait, gait.slowest, 0).frequency / HALF_TURN;
-    const posture = kind.posture?.(body.pose), asks = createAsks();
+    const posture = kind.posture?.(body.pose, gait), asks = createAsks();
     const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seedOf(start.x, start.z)) : null;
     const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
     let going = false, followed: Vector3 | null = null;

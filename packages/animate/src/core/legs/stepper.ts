@@ -3,12 +3,12 @@
 // foot placement): each foot has a home under its hip; it steps when it falls too far from it,
 // landing where the home will be.
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../body';
+import { STEP as SUB_STEP, type Frame } from '../body';
 import type { ReadonlyPose } from '../pose';
 import { follow } from '../follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle } from '../math';
 import { quintic } from './swing';
-import { hullOf, outside, type Spot } from './support';
+import { hullOf, outside, xcomOf, type Spot } from './support';
 import { strideAt, type Gait } from './gait';
 
 /** The root a scene drives: its point on the floor, its velocity over it (m/s), its facing (rad about +Y), how far it crouches (0 standing … 1 a deep crouch). */
@@ -93,6 +93,10 @@ interface Swing { capture: boolean; u: number; age: number; rest: number; T: num
 export interface Leg { i: number; leapt?: boolean; sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean; planted: number; lifted: number; strike: number; landed: boolean; swing: Swing | null }
 type Leap = { phase: 'ground' | 'launch' | 'air' | 'landed' | 'down' | 'up'; since: number; speed: number; land: number; bottom: number; rise: number; vy: number; a: number };
 
+/** Tuned: how far ahead (s) a gait's cadence takes the speed it will be going */
+const PACING = 0.4;
+/** Tuned: a root foreseen to move less than this (m) by a landing is all but standing */
+const SETTLED_ROOT = 0.05;
 /**
  * Tuned: moving, a foot lifts whatever the others do once it has stood `DUE` stances or is `DUE` stances' travel off its home. It steps once it
  * is due (its gait share of a cycle after the leg before it lifted; standing, after `square` s) and is `distance` (m; standing still and
@@ -106,10 +110,6 @@ type Leap = { phase: 'ground' | 'launch' | 'air' | 'landed' | 'down' | 'up'; sin
  * turning steps as quick as walking `TURNING` m/s per rad/s turned or rad behind. A walker's pelvis never turns back past its root
  * against the way the root turns `SENSING` s on, nor for `PAUSE` s after it stops turning; slower than `SHUFFLING` (m/s), its feet alternate.
  */
-/** Tuned: how far ahead (s) a gait's cadence takes the speed it will be going */
-const PACING = 0.4;
-/** Tuned: a root foreseen to move less than this (m) by a landing is all but standing */
-const SETTLED_ROOT = 0.05;
 const SLOT = 0.25, STANDING = 2, SETTLING = 0.1, BEHIND = 0.5, DUE = 1.5, SENSING = 0.3, PAUSE = 0.5, SHUFFLING = 0.6, BLOCKED = 0.05, SPAN = 0.25, SIDE = 0.5, BACKSTEP = 0.1, STAGGERED = 0.08, PELVIS_TURN = (50 * Math.PI) / 180, SPIN = 1.5, TURNING = 0.5, TURN = { accel: 80, speed: 8 };
 const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
 /**
@@ -124,14 +124,14 @@ const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared:
  * steps): a walker's slow step lands at most `WIDE.stances` standing stances aside of the other foot, as balance lets it.
  */
 const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE = { accel: 20 }, LANDING = { drop: 0.06, least: 0.15 }, PACE = 1, SETTLE = 0.8, AIMED = 0.55, TOUCH = 0.85, PUSHED = 0.5, BEND_SPAN = 0.1, WIDE = { stances: 1.4, within: 0.03 };
+/** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
+ * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
+const CROUCHING = { accel: 90, speed: 7.5 };
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
  * `down` s, as deep as `depth` × the fall's speed × `down` (half that running), rising over `up` s.
  */
-/** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
- * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
-const CROUCHING = { accel: 90, speed: 7.5 };
 const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3 };
 
 /**
@@ -190,7 +190,8 @@ export class Stepper {
   /** Step for this sub-step under `r` and set the root's position; the swinging feet's poses are planned now, the planted ones by `pose` once the hips are placed. */
   move(f: Frame, r: DrivenRoot) {
     const { st, feet, legs, jumping: jump, yaws, heights, velocity, before, pair } = this, s = st.scale, toeOut = st.toeOut, dt = f.dt, pelvisTurn = st.twist ?? PELVIS_TURN, clocked = !!st.gait;
-    if (Number.isNaN(this.stand)) this.stand = heights[0] = heights[1] = f.prev.position(0).y;
+    // (first moved: standing where it is, moving as the root already does — a body spawned on the move gets no jolt)
+    if (Number.isNaN(this.stand)) { this.stand = heights[0] = heights[1] = f.prev.position(0).y; velocity.copy(r.velocity); }
     const v = Math.hypot(r.velocity.x, r.velocity.z);
     // (crouched: lower, the feet wider and a little ahead of the hips — the hips sit back — shorter, lower steps)
     const k = clamp(follow(this.crouches[0], this.crouches[1], minimumJerk(clamp(r.crouch ?? 0, 0, 1)), CROUCHING, dt), 0, 1);
@@ -282,8 +283,7 @@ export class Stepper {
     const holding = Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
     const landingReaches = legs.map((leg) => Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - feet.ankleHeight) ** 2))));
     // (the extrapolated centre of mass `ahead` s on: over the pelvis, the root carried on, as `r.xcom` is)
-    const xcom = (ahead: number, out: Vector3) => travel(ahead, out).add(hips).addScaledVector(forwardOf(yaw, _f), sitting)
-      .addScaledVector(pace(ahead, _x), Math.sqrt(feet.length / GRAVITY)).setY(0);
+    const xcom = (ahead: number, out: Vector3) => xcomOf(travel(ahead, out).add(hips).addScaledVector(forwardOf(yaw, _f), sitting), pace(ahead, _x), feet.length, out);
     // the feet: swings on, then those too far from home lift (the furthest first)
     for (const leg of legs) {
       leg.landed = false;
@@ -634,8 +634,8 @@ export class Stepper {
     };
     // (balance first: a walker's extrapolated centre of mass kept within the feet as they stand and land — no further past them than it is)
     if (st.capture !== undefined && legs.some((leg) => leg.swing)) {
-      const support = hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw))), omega = Math.sqrt(feet.length / GRAVITY), dt = 1 / 60;
-      const xcom = (t: number) => { const at = forecast(t).position, next = forecast(t + dt).position; return _x.copy(at).addScaledVector(_c.subVectors(next, at), omega / dt).setY(0); };
+      const support = hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw)));
+      const xcom = (t: number) => { const at = forecast(t).position; return xcomOf(at, _c.subVectors(forecast(t + SUB_STEP).position, at).divideScalar(SUB_STEP), feet.length, _x); };
       const allowed = Math.max(st.capture * st.scale, outside(support, xcom(0))), rest = Math.max(...legs.map((leg) => leg.swing ? (1 - leg.swing.u) * leg.swing.T : 0));
       for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (outside(support, xcom(t)) > allowed + 1e-6) return false;
     }

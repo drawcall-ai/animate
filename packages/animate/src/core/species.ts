@@ -17,9 +17,10 @@ export interface Species<H extends string = string> {
   hands?: Readonly<Record<H, string>>;
   /**
    * its legs (`idle` walks it on them), their gait, and what the gait carries over them (`carriage`: the trunk, spine, pelvis, head and
-   * tail as the gait's `body` has them, and the quiet life of these) — or a posture of its own, written in their place
+   * tail as the gait's `body` has them, and the quiet life of these) — or a posture of its own, written in their place, made
+   * for the body's gait (`scaled` scales it with the legs)
    */
-  legs?: { chains: readonly LegChain[]; gait: Gait; carriage?: CarriedBones; posture?: (start: ReadonlyPose) => Posture };
+  legs?: { chains: readonly LegChain[]; gait: Gait; carriage?: CarriedBones; posture?: (start: ReadonlyPose, gait: Gait) => Posture };
   /** its size against the body its distances were tuned for (`scaled`; default 1): a body made of it takes it as its `scale` */
   scale?: number;
   /** a person (`human()`): the body made for it is a person's, its verbs a person's */

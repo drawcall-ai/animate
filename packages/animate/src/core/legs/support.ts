@@ -1,4 +1,21 @@
-import type { Vector3 } from 'three';
+import { Vector3 } from 'three';
+import { GRAVITY } from '../math';
+import type { ReadonlyPose } from '../pose';
+
+/**
+ * The extrapolated centre of mass (recalled: Hof et al. 2005, x + v / ω₀ with ω₀ = √(g / l)) of a body whose centre of mass is at
+ * `com`, moving at `velocity`, over legs `length` long: on the floor, into `out` — the one reading of balance the legs and the checks share
+ */
+export function xcomOf(com: Readonly<Vector3>, velocity: Readonly<Vector3>, length: number, out: Vector3): Vector3 {
+  return out.copy(com).addScaledVector(velocity, Math.sqrt(length / GRAVITY)).setY(0);
+}
+
+/** `xcomOf` read off a body's last two final poses, `dt` (s) apart */
+export function xcomOfPoses(prev: ReadonlyPose, prev2: ReadonlyPose, dt: number, length: number, out: Vector3): Vector3 {
+  const com = prev.com(_com);
+  return xcomOf(com, prev2.com(_velocity).sub(com).multiplyScalar(-1 / dt), length, out);
+}
+const _com = new Vector3(), _velocity = new Vector3();
 
 /** a point on the floor: (x, z) */
 export type Spot = [number, number];

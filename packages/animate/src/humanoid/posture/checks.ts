@@ -2,19 +2,18 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { Dev } from '../../core/dev';
-import { GRAVITY } from '../../core/math';
 import { SIDES } from '../bones';
 import type { Humanoid } from '../humanoid';
 import { solePoints } from '../landmarks';
 import { footprint } from './foot';
-import { hullOf, outside } from '../../core/legs/support';
+import { hullOf, outside, xcomOf } from '../../core/legs/support';
 
 /** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
 export function checkSupport(h: Humanoid, f: Frame, dev: Dev): void {
   if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
-  const xcom = com.clone().addScaledVector(velocity, 1 / Math.sqrt(GRAVITY / h.proportions.legLength));
+  const xcom = xcomOf(com, velocity, h.proportions.legLength, new Vector3());
   const support = h.feet.flatMap((foot, s) => {
     if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
     const side = SIDES[s];

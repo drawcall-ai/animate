@@ -1,20 +1,3 @@
-import type { Quaternion } from 'three';
-import { minimumJerk } from '../math';
-
-/** The world horizontal path and sole height (m, m/s, m/s²), plus its joint references. */
-export interface Swing {
-  /** the plan's state: lift-off to landing, minimum jerk, re-planned each tick toward the landing as it is seen then */
-  x: Float64Array;
-  v: Float64Array;
-  a: Float64Array;
-  /** lift-off and landing joint coordinates (rad) */
-  land: Float64Array;
-  from: Float64Array;
-  fold: Float64Array;
-  turn: { foot: Quaternion; yaw: number };
-  toes: Quaternion;
-}
-
 /** the minimum-jerk quintic from `x` (`v`, `a`) to `x1` at rate `v1` and zero acceleration in `T` s, `t` s on: its value, rate and acceleration (at or past its end: its end) */
 export function quintic(x: number, v: number, a: number, x1: number, v1: number, T: number, t: number): [number, number, number] {
   if (T <= t) return [x1, v1, 0];
@@ -26,6 +9,3 @@ export function quintic(x: number, v: number, a: number, x1: number, v1: number,
     2 * c[2] + t * (6 * c[3] + t * (12 * c[4] + t * 20 * c[5])),
   ];
 }
-
-/** Derived C² lift; peak 0.3 from research-contact §2 rule 3 (25–35%, recalled), longer terminal descent. */
-export const loft = (s: number) => s < 0.3 ? minimumJerk(s / 0.3) : 1 - minimumJerk((s - 0.3) / 0.7);
