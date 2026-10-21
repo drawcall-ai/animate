@@ -83,6 +83,11 @@ export class Skeleton {
     return i;
   }
 
+  /** the names of its chains */
+  chainNames(): string[] {
+    return [...this.chains.keys()];
+  }
+
   /** the bones of the chain named `name`, from its first joint to its tip; throws when there is none */
   chain(name: string): readonly number[] {
     const c = this.chains.get(name);

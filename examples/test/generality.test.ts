@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, carried, carry, holds, offer, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, scaled, carried, carry, holds, offer, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 
@@ -34,7 +34,9 @@ const around = (degrees: number, distance: number, y = 0) => new Vector3(Math.si
 const ok = { done: true, error: '', log: [] };
 
 // (a body `size` times the dog's takes √size as long: dynamically similar gaits, at equal Froude numbers, last ∝ √length)
-for (const [name, species, size] of [['dog', DOG, 1], ['horse', horse(), 2.5]] as const) {
+// (a cat: the dog at 0.55 its size, its gait scaled with it as dynamically similar gaits are)
+const CAT = scaled(DOG, 0.55);
+for (const [name, species, size] of [['dog', DOG, 1], ['cat', CAT, 0.55], ['horse', horse(), 2.5]] as const) {
   for (const angle of [0, 45, 90, 135, 180]) for (const distance of [1.5, 4]) {
     check(`a ${name} walks to a still goal ${angle}° off its facing, ${distance} body lengths away`, () =>
       expect(run(creature(species), (b) => walkTo(b, { to: around(angle, distance * size) }), 25 * Math.sqrt(size))).toEqual(ok));

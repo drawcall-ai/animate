@@ -161,7 +161,7 @@ const dog: Species<'jaw'> = {
     chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
       heel: v(0, -0.03, -0.02), toe: v(0, -0.03, 0.04), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
     gait: {
-      ...powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.33, clearance: [0.03, 0.03, 0.03, 0.03] }),
+      ...powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.93, clearance: [0.03, 0.03, 0.03, 0.03] }),
       body: { withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
     },
     carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
@@ -177,6 +177,8 @@ const rex = new Body(dog, (rex) => function* () {
 ```
 
 A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range; a leg needs them, for how far each leg reaches — and so how far it strides and strays as it turns — is read from its joints' ranges. The gait's offsets place each leg's footfall in the cycle in the order of the chains (fore-left, fore-right, hind-left, hind-right); diagonal pairs together make a trot. Each leg needs some bend standing, a reserve for the trunk's bounce.
+
+For another size, take `scaled(dog, 0.55)` (a cat): its gait stays dynamically similar. Scaling by hand instead, multiply every length and `powerGait`'s `height` and `clearance` by the size, masses by its cube and `slowest` by its square root; `stride` and `stance` are dimensionless and stay.
 
 ## Checking
 

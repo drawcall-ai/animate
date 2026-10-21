@@ -10,7 +10,7 @@ import type { Frame } from '../core/body';
 import type { LegChain } from '../core/legs/legs';
 import type { JointCycle } from '../core/legs/cycle';
 import { EARS, HALTER, HEAD, LEGS, NECK, SKELETON } from './skeleton';
-import { powerGait } from '../core/legs/schedule';
+import { powerGait, stanceOf } from '../core/legs/schedule';
 import type { Attention, Species } from '../core/species';
 
 /** a horse: its walk, and its posture over its legs as it heeds what it looks at, a tether and a startle */
@@ -26,7 +26,7 @@ const NECK_BASE = SKELETON.bones[NECK].offset, POLL = SKELETON.bones[HEAD].offse
 // [C] Spike: 1.2 m hip, .8 m/s slow walk; Hildebrand walk/Clayton-Hobbs trot offsets;
 // Alexander/Jayes stride coefficients, Hodson stance at 1.6/3.7 m/s.
 // [D] 5 cm proxy-hoof clearance in both gaits keeps the early sole-height peak above the passive fold.
-const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5], stride: 2.3, stance: 0.68 * Math.pow(1.6, 0.7), clearance: [0.05, 0.05, 0.05, 0.05] });
+const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5], stride: 2.3, stance: stanceOf(0.68, 1.6, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] });
 export const HORSE_WALK: Gait = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
   // research-contact.md §5: [R via summary] Dunbar ranges; [D] landmark/hip phase after solving.
@@ -40,7 +40,7 @@ export const HORSE_WALK: Gait = {
   })),
 };
 export const HORSE_TROT: Gait = {
-  ...powerGait({ height: 1.2, slowest: 0.8, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.3 * Math.pow(3.7, 0.7), clearance: [0.05, 0.05, 0.05, 0.05] }),
+  ...powerGait({ height: 1.2, slowest: 0.8, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: stanceOf(0.3, 3.7, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] }),
   // [R via summary] Dunbar: 1° trunk ROM is the low end of 2±1°; [R/R-s] back 4–6°, roll 9.5°. [D] The croup with the withers
   // but for 0.5° of trunk pitch over the 1.14 m between withers and croup.
   body: { withers: -0.045, croup: [-0.035, 0], spine: 3, spinePhase: 0, roll: 4.75, yaw: 2.5, headPitch: 2.5, headRise: 0, headWithers: 1 },

@@ -1,14 +1,14 @@
 // [C] Recalled: Perry (1992) / Winter (2009) normal walking curves, ported from the legged spike.
 import type { Proportions } from './proportions';
 import type { Gait } from '../core/legs/gait';
-import { powerGait } from '../core/legs/schedule';
+import { powerGait, stanceOf } from '../core/legs/schedule';
 import type { Stepping } from '../core/legs/stepper';
 import { STANDING_REACH } from './balance/posture';
 import { defaultStance } from './stance';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992). */
 // Tuned in the spike: below 0.5 m/s shorten the stride instead of slowing its cadence.
-export const humanGait = (p: Proportions): Gait => powerGait({ height: p.hipHeight, slowest: 0.5, offsets: [0, 0.5], stride: 2.49, stance: 0.79, clearance: [0.013, 0.013] });
+export const humanGait = (p: Proportions): Gait => powerGait({ height: p.hipHeight, slowest: 0.5, offsets: [0, 0.5], stride: 2.49, stance: stanceOf(0.79, 1, p.hipHeight), clearance: [0.013, 0.013] });
 
 /**
  * A person's driven stepping (m: the default body's). Recalled (Perry 1992; Novacheck 1998): walking duty 0.62, 1.4 m/s at ~110–120 steps/min;

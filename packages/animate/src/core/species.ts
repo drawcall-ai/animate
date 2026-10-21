@@ -20,6 +20,8 @@ export interface Species<H extends string = string> {
    * tail as the gait's `body` has them, and the quiet life of these) — or a posture of its own, written in their place
    */
   legs?: { chains: readonly LegChain[]; gait: Gait; carriage?: CarriedBones; posture?: (start: ReadonlyPose) => Posture };
+  /** its size against the body its distances were tuned for (`scaled`; default 1): a body made of it takes it as its `scale` */
+  scale?: number;
   /** a person (`human()`): the body made for it is a person's, its verbs a person's */
   person?: { embody(story: (body: Body<H>) => Behaviour, options: BodyOptions): Body<H> };
 }

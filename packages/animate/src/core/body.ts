@@ -68,7 +68,7 @@ export interface BodyOptions {
   yaw?: number;
   /** its base under the story, tuned (`IdleOptions`); `false`: none, the story poses it all */
   idle?: IdleOptions | false;
-  /** Scale applied only to placements in bone frames. */
+  /** its size against the body its distances were tuned for (default the species', `Species.scale`): placements in its bones' frames scale with it */
   scale?: number;
   /** Checks final poses and records problems; default off. */
   dev?: boolean;
@@ -128,7 +128,7 @@ export class Body<H extends string = string> {
     // (a person is made as the person it is)
     if (species.person && new.target === Body) return species.person.embody(story, options);
     const { skeleton } = species;
-    this.scale = options.scale ?? 1;
+    this.scale = options.scale ?? species.scale ?? 1;
     this.gazer = species.gaze;
     const start = new Pose(skeleton);
     if (options.pose) start.copy(options.pose);
