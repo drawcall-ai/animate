@@ -1,4 +1,4 @@
-import { action } from '@pmndrs/timeline';
+import { action, type NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from './body';
 import type { Behaviour } from './goal';
 
@@ -40,14 +40,15 @@ export class Dev {
   }
 }
 
-/** Labels a behaviour's contributions to each final pose (parallel labels are joined). */
-export function named(label: string, behaviour: Behaviour): Behaviour {
+/** Labels a behaviour's contributions to each final pose (parallel labels are joined): a behaviour, or a timeline already made
+ * (`parallel(…)`, which then runs once). */
+export function named(label: string, behaviour: Behaviour | NonReuseableTimeline<Frame>): Behaviour {
   return function* () {
     const context: { frame?: Frame } = {};
     // Receive the frame before starting the generator: even an immediate throw has a beat.
     yield (f) => { context.frame = f; return 'skipped'; };
     try {
-      for (const step of behaviour()) {
+      for (const step of typeof behaviour === 'function' ? behaviour() : behaviour) {
         yield (f, clock) => {
           f.beats.add(label);
           const status = step(f, clock);

@@ -26,7 +26,7 @@ const world = new World().add(groom, mare);
 world.update(delta);
 ```
 
-A body alone can be updated by itself. Bodies that share a scene go into one `World`, updated instead of them: each reads the others' last poses, and a walk up to something stands clear of the other bodies' low parts. Scenery is not an obstacle. No body knows of walls, tables or props, except the items it handles (by their `bounds`), so route walks round scenery yourself.
+A body alone can be updated by itself. Bodies that share a scene go into one `World`, updated instead of them: each reads the others' last poses, and a walk up to something stands clear of the other bodies' low parts. Scenery is not an obstacle. No body knows of walls, tables or props, except the items it handles (by their `bounds`), so route walks round scenery yourself. What the scene moves itself (a cart, a target) it moves in `world.moving((time) => item.move(time, position))`, run before every sub-step at its time, however long your frames.
 
 ## The base under every story
 
@@ -90,7 +90,7 @@ const story = (h: Body<Side>): Behaviour => function* () {
 };
 ```
 
-A hand-over is two stories meeting on a condition, never on time: one body `offer`s what it holds (it holds it out toward the other and lets go once the other has it in a hand), the other comes for it once it is held out (`holds(body, item)`) and takes it by another grip:
+A hand-over is two stories meeting on a condition, never on time: one body `offer`s what it holds (it holds it out toward the other and lets go once the other has it in a hand), the other comes for it once it is `offered(giver, item)` and takes it by another grip (`holds(body, item)` tells who has it):
 
 ```ts
 const giver = new Body(human(), (h) => function* () {
@@ -98,7 +98,7 @@ const giver = new Body(human(), (h) => function* () {
   yield* offer(h, rope, taker)();
 });
 const taker: Body<Side> = new Body(human(), (h) => function* () {
-  yield* when(() => holds(giver, rope));
+  yield* when(() => offered(giver, rope));
   yield* grab(h, { left: [rope, 'loop'] })();
   yield* hold(h, rope, { to: carried(h, 'left') })();
 }, { at: { x: 0, z: 3 }, yaw: Math.PI });
@@ -196,7 +196,7 @@ For another size, take `scaled(dog, 0.55)` (a cat): its gait stays dynamically s
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. `dev: { notes: true }` also fills `body.notes` with what a body only reports, never failures: a player-driven body's centre of mass carried outside its feet, where the player, not its balance, takes it.
+Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. `dev: { notes: true }` also fills `body.notes` with what a body only reports, never failures: a player-driven body's centre of mass carried outside its feet, where the player, not its balance, takes it, and a held goal carried clear of the head (a cup held to the mouth stops in front of the face).
 
 A late entry means the goal is out of reach from where the body stands. Change where it stands (approach its destination placement) or change the course; a longer `limit` only reports it later. Name every `Item`, so entries say which one.
 

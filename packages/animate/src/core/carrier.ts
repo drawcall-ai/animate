@@ -113,6 +113,8 @@ export class Item extends Carrier {
   readonly name: string;
   /** which body wears it; null while unattached */
   wornBy: Body | null = null;
+  /** which body holds it out to another (`offer`); null while none does */
+  offeredBy: Body | null = null;
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
   readonly bounds: Box3;

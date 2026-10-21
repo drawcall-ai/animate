@@ -79,7 +79,7 @@ export interface BodyOptions {
   scale?: number;
   /** Checks final poses and records problems in `log`; default off. `{ notes: true }` also records `notes`: measurements a body only
    * reports, never failures — a player-driven body's extrapolated centre of mass outside its feet (the player, not its balance, decides
-   * where it goes) */
+   * where it goes), a held goal carried clear of the head */
   dev?: boolean | { notes?: boolean };
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;

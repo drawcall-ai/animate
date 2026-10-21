@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, scaled, carried, carry, holds, offer, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 
@@ -152,12 +152,16 @@ check('a dog touches a point on the floor 1.5 m away', () => {
 check('a person hands a bottle to another, who takes it and carries it off', () => {
   const bottle = new Item(around(0, 1.2, 0.9), new Quaternion(), { bottom: { position: new Vector3(0, -0.08, 0) }, top: { position: new Vector3(0, 0.08, 0) } },
     { name: 'bottle', mass: 0.5, bounds: new Box3(new Vector3(-0.04, -0.12, -0.04), new Vector3(0.04, 0.12, 0.04)) });
+  let offering = NaN, coming = NaN;
   const giver = new Body(human(), (h) => function* () {
     yield* grab(h, { right: [bottle, 'bottom'] })();
+    yield* when(timePassed(1, 'seconds')); // it looks at it a while before it holds it out
+    offering = h.frame.time;
     yield* offer(h, bottle, taker)();
   }, { dev: true });
   const taker: Body<Side> = new Body(human(), (h) => function* () {
-    yield* when(() => holds(giver, bottle)); // it comes for it once it is held out
+    yield* when(() => offered(giver, bottle)); // it comes for it once it is held out
+    coming = h.frame.time;
     yield* grab(h, { right: [bottle, 'top'] })();
     yield* hold(h, bottle, { to: carried(h, 'right') })();
   }, { at: { x: 0, z: 3 }, yaw: Math.PI, dev: true });
@@ -167,7 +171,37 @@ check('a person hands a bottle to another, who takes it and carries it off', () 
   expect(error).toBe('');
   expect(giver.done).toBe(true);
   expect(holds(taker, bottle)).toBe(true);
+  expect(coming).toBeGreaterThanOrEqual(offering);
+  expect(offered(giver, bottle)).toBe(false);
   expect([...giver.log, ...taker.log]).toEqual([]);
+});
+// (the scene moves its own things before each sub-step, whatever frames the world is updated by: a person takes a ball off a sliding tray)
+check('a person takes a ball off a tray the scene slides along, the world updated by uneven frames', () => {
+  const at = (time: number) => new Vector3(0.3 * Math.sin(time * 0.8), 0.9, 1.2);
+  const ball = ballAt(at(0));
+  const body = new Body(human(), (h) => function* () {
+    yield* grab(h, { right: [ball, 'middle'] })();
+    yield* hold(h, ball, { to: carried(h, 'right') })();
+  }, { dev: true });
+  let taken = false;
+  const world = new World().add(body).moving((time) => { if (!holds(body, ball)) ball.move(time, at(time)); else taken = true; });
+  let error = '';
+  try { for (let i = 0; i < 600 && !taken; i++) world.update([1 / 30, 1 / 45, 1 / 120, 1 / 60][i % 4]); } catch (cause) { error = String(cause); }
+  expect(error).toBe('');
+  expect(taken).toBe(true);
+  expect(body.log).toEqual([]);
+});
+// (a goal in the head is held clear in front of it: noted, never silent)
+it('a cup held to the mouth stops in front of the face, and the notes say so', () => {
+  const cup = new Item(around(0, 0.6, 0.9), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'cup', mass: 0.3 });
+  const body = new Body(human(), (h) => function* () {
+    yield* grab(h, { right: [cup, 'handle'] })();
+    yield* hold(h, cup, { to: (f) => ({ position: f.prev.point(INDEX.head, new Vector3(0, -0.06, 0.08), new Vector3()) }), until: timePassed(2, 'seconds') })();
+  }, { dev: { notes: true } });
+  for (let i = 0; i < 15 * 60 && !body.done; i++) body.update(1 / 60);
+  expect(body.done).toBe(true);
+  expect(body.log).toEqual([]);
+  expect(body.notes.map((note) => note.check)).toEqual(['held goal moved clear of the head (m)']);
 });
 it('a hand a body does not have fails to compile', () => {
   const ball = ballAt(around(0, 1.5, 0.04));

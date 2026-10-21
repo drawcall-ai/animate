@@ -182,6 +182,8 @@ class CarryAim {
   private readonly at = new Vector3();
   private readonly turned = new Quaternion();
   private time = NaN;
+  /** whether a goal moved clear of the head has been noted */
+  private cleared = false;
 
   constructor(private readonly h: Humanoid, private readonly item: Item, private readonly motion: Motion) {
     this.nominal = new Carrier(item.current.position, item.current.quaternion);
@@ -200,7 +202,12 @@ class CarryAim {
     // Continue the intended motion, rather than feeding wrist-fitting lag back into it.
     const turned = this.rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion,
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned);
-    clearBody(h, f, item, goal.position, turned);
+    // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front: noted once, so it is no silent change)
+    const moved = clearBody(h, f, item, goal.position, turned);
+    if (moved > CLEARED * h.scale && !this.cleared && f.dev) {
+      this.cleared = true;
+      f.dev.note(f.time, { check: 'held goal moved clear of the head (m)', value: moved, limit: CLEARED * h.scale, where: item.name });
+    }
     this.position.follow(aim.prev.position, aim.current.position, goal.position, motion, f.dt, this.at);
     // Constraint correction is not velocity to feed back into the intended path.
     aim.move(f.time, this.at, turned);
@@ -209,6 +216,9 @@ class CarryAim {
     return this.carrier;
   }
 }
+
+/** Tuned: a held goal moved further than this (m, × the body's scale) to clear the neck and head is noted */
+const CLEARED = 0.02;
 
 function holding(h: Humanoid, item: Item, path: CarryAim, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
   const { to } = options;

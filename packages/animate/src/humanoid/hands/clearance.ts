@@ -11,9 +11,9 @@ const BODY_RADIUS = 0.06;
 // Inherited 4 cm reserve, verified against mesh clearance; no empirical calibration recorded.
 export const LOAD_RESERVE = 0.04;
 
-/** Clear a load position against the trunk and neck→head chain; returns the same vector. */
-export function clearBody(h: Humanoid, f: Frame, item: Item, at: Vector3, rotation: Quaternion): Vector3 {
-  if (item.wornBy) return at;
+/** Clear a load position against the trunk and neck→head chain, in place; returns how far the neck and head moved it (m). */
+export function clearBody(h: Humanoid, f: Frame, item: Item, at: Vector3, rotation: Quaternion): number {
+  if (item.wornBy) return 0;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
   const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);
   let back = Infinity, bottom = Infinity, top = -Infinity, near = Infinity, far = -Infinity;
@@ -35,6 +35,7 @@ export function clearBody(h: Humanoid, f: Frame, item: Item, at: Vector3, rotati
   const head = f.prev.point(INDEX.head, h.proportions.headCenter, _head).sub(f.prev.position(INDEX.neck))
     .applyQuaternion(_inverse.copy(f.prev.rotation(INDEX.chest)).invert().premultiply(pose.rotation(INDEX.chest))).add(neck);
   const radius = BODY_RADIUS * h.proportions.height;
+  let face = 0;
   for (let i = 0; i < 2; i++) {
     const start = i === 0 ? hips : neck, end = i === 0 ? neck : head;
     if (at.y + bottom > Math.max(start.y, end.y) + radius || at.y + top < Math.min(start.y, end.y) - radius) continue;
@@ -46,9 +47,11 @@ export function clearBody(h: Humanoid, f: Frame, item: Item, at: Vector3, rotati
     const high = span === 0 ? 1 : Math.max(0, Math.min(1, (at.y + top + radius - start.y) / span));
     const from = start.dot(forward), along = end.dot(forward) - from;
     const front = Math.max(from + along * low, from + along * high);
-    at.addScaledVector(forward, Math.max(0, front + padding - at.dot(forward) - back));
+    const push = Math.max(0, front + padding - at.dot(forward) - back);
+    at.addScaledVector(forward, push);
+    if (i === 1) face = push;
   }
-  return at;
+  return face;
 }
 
 function extent(half: Vector3, axis: Vector3): number {

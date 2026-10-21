@@ -41,7 +41,7 @@ export { still, type Waypoint } from './core/course';
 export { place } from './humanoid/hands/place';
 export { release, type ReleaseOptions } from './humanoid/hands/release';
 export { touch } from './humanoid/hands/touch';
-export { holds, offer } from './humanoid/hands/offer';
+export { holds, offer, offered } from './humanoid/hands/offer';
 export { handTo, type HandOptions } from './humanoid/arms';
 export { carried } from './humanoid/goal';
 export { lookAround, type LookAroundOptions } from './humanoid/look';

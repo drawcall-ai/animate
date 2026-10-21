@@ -41,6 +41,17 @@ it('attributes a watcher to the beat that made the previous final pose, even on 
   ]);
 });
 
+it('labels a timeline already made, as parallel makes it', () => {
+  const beats: string[][] = [];
+  const body = new Body({ skeleton: leg() }, () => named('both', parallel<Frame>('all',
+    action<Frame>({ update: (f) => { beats.push([...f.beats]); }, until: timePassed(2 * STEP, 'seconds') }),
+    action<Frame>({ update: (f) => f.current.setRoot(new Vector3(1, 0, 0)), until: timePassed(2 * STEP, 'seconds') }),
+  )), { idle: false });
+  body.update(3 * STEP);
+  expect(beats[0]).toEqual(['both']);
+  expect(body.done).toBe(true);
+});
+
 it.each([false, true])('checks and reads watchers only with dev on (%s)', (dev) => {
   const read = vi.fn(() => ({ check: 'bad', value: 1, limit: 0, where: 'root' }));
   const h = person(createSkeletonModel(), () => function* () {
