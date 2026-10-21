@@ -59,13 +59,10 @@ The opening must leave the bones that are finishing alone, because a later write
 An `Item` is a rigid thing with named grips (targets in its frame), a `mass` and a `name`. Give it its mass rather than slowing anything yourself: walks, holds and lifts slow down and prepare for the load. Give a solid item `bounds` from its mesh, so hands approach outside it before closing. Hanging straps are grips, not part of the rigid shell.
 
 There is one verb per intent, for any body with hands: a person's `left` and `right`, a dog's `jaw`. The hands' names are the species' (`Species<'jaw'>`), so a misspelt hand does not compile.
-- `grab` takes hold: it walks up, looks and reaches (`walk: false` takes from where the body stands).
-- `hold` keeps hold. Without `to`, the hands stay with the item wherever it is, so an item resting on something stays there; to walk off with it, hold it `to` a carry pose such as `carried(h)`.
-- `carry` moves an item along waypoints or to a placement and ends there. It takes several items at once as `[[a, wayA], [b, wayB]]`.
-- `place` lifts, walks up and puts down.
-- `release` lets go.
-- `touch` reaches to a point without taking anything: it walks up, looks, and ends once the hand is there.
-- `wear` and `takeOff` attach an item to any body's bone and detach it.
+- take hold: `grab`; keep hold: `hold` (to walk off with it, hold it `to` a carry pose such as `carried(h)`: without `to` the hands stay with the item, so one resting on something stays there);
+- move what is held along a way and end there: `carry`; put it down somewhere: `place`; let go: `release`; give it to another: `offer`;
+- reach to a point without taking anything: `touch`; move a free hand: `handTo`;
+- attach to a body and detach: `wear`, `takeOff`.
 
 What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl.current.position)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
 
@@ -110,11 +107,11 @@ Leave placement to the library: a hand-placed number usually reads worse and bre
 
 ## Gaze
 
-`lookAt(body, point)` keeps the eyes on a point, endlessly. `withGaze(h, point, task)` holds them there while a task runs (`first: true`: on it before the task sets off). `aimAt` adds the trunk, for a player's aim; `headTo` puts the head where a headset is.
+Keep the eyes on something with `lookAt` (endless, a layer of its own), or on what a task works on for as long as it runs with `withGaze`. A player's aim is `aimAt`, which brings the trunk along; a headset's is `headTo`.
 
 ## Player control
 
-For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that your controller moves every frame before the update. The body stands exactly on it and faces its `yaw`, and the legs step to keep up. Set `crouch` straight to 0 or 1 from the key; the legs ease into and out of it themselves. Ask for a leap with `h.stepper?.jump(speed)`, and read `h.stepper?.airborne` to know when it is in the air.
+For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that your controller moves every frame before the update. The body stands exactly on it and faces its `yaw`, and the legs step to keep up. Set `crouch` straight to 0 or 1 from the key; the legs ease into and out of it themselves. A leap is `h.stepper?.jump(speed)`.
 
 ```ts
 const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
@@ -128,7 +125,7 @@ root.crouch = input.crouch ? 1 : 0;
 if (input.jump) player.stepper?.jump(2.5);
 ```
 
-Crouched, keep to a crouch-walk's pace (about 0.8 m/s) and turn on the spot in steps rather than steadily: a steady turn on the spot while crouched crosses the legs, and crouched steps, walking back most of all, still log a few touchdowns a little faster than the 0.1 m/s bound.
+Crouched, keep to a crouch-walk's pace (about 0.8 m/s) and turn on the spot in steps rather than steadily: a steady turn on the spot while crouched crosses the legs, and crouched steps, walking back most of all, still log a few touchdowns a little too fast.
 
 A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation` from `@drawcall/animate/rig`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach.
 
@@ -196,7 +193,7 @@ For another size, take `scaled(dog, 0.55)` (a cat): its gait stays dynamically s
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going, and a goal no stand brings within reach (`grab`, `place`, `touch`) adds one and the body stands where it is. With dev off none of this is reported anywhere, so test with dev on. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for 6 s logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. `dev: { notes: true }` also fills `body.notes` with what a body only reports, never failures: a player-driven body's centre of mass carried outside its feet, where the player, not its balance, takes it, and a held goal carried clear of the head (a cup held to the mouth stops in front of the face).
+Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going, and a goal no stand brings within reach (`grab`, `place`, `touch`) adds one and the body stands where it is. With dev off none of this is reported anywhere, so test with dev on. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for a while logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. What a body only reports, never as a failure — a cup held to the mouth stopping in front of the face, a player's body off balance where the player takes it — is in `body.notes` with `dev: { notes: true }`.
 
 A late entry means the goal is out of reach from where the body stands. Change where it stands (approach its destination placement) or change the course; a longer `limit` only reports it later. Name every `Item`, so entries say which one.
 
@@ -216,7 +213,7 @@ const watchedGroom = new Body(human(), watched, { dev: true });
 
 ## Any rig
 
-A skeleton with named chains is enough for a body: build its behaviours from the parts in `@drawcall/animate/rig` — `chainTo` / `ChainTip` / `solveChain` and `follow` / `followRotation` / `TrackedPoint` / `TrackedRotation`. Each of these moves from the pose history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it. The rig also holds what the verbs are made of: `ask` (what a task asks of the base's legs and balance), `approach` (walking up to take something without taking it) and `idle` (the base, to run yourself under `idle: false`).
+A skeleton with named chains is enough for a body: build its behaviours from the parts in `@drawcall/animate/rig` — `chainTo` / `ChainTip` / `solveChain` and `follow` / `followRotation` / `TrackedPoint` / `TrackedRotation`. Each of these moves from the pose history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it. The rig also holds what the verbs are made of: asking the base for a stance, a bow or a step, walking up to something without taking it, and the base itself, to run under `idle: false`.
 
 ```ts
 const arm = new Skeleton(bones, { chains: { arm: ['shoulder', 'elbow', 'hand'] } });
