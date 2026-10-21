@@ -151,8 +151,13 @@ export class Body<H extends string = string> {
     this.hands = Object.fromEntries(Object.entries<string>(species.hands ?? {}).map(([hand, chain]) => [hand, skeleton.chain(chain).slice(-1)[0]])) as Record<H, number>;
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null])) as Record<H, null>;
     const wearing = options.wearing;
-    if (typeof wearing === 'function' && !this.proportions) throw new Error('a body other than a person wears what it is given, not what is placed for proportions');
-    dress(this, start, typeof wearing === 'function' ? wearing(this.proportions!) : wearing ?? []);
+    const proportions = this.proportions;
+    let dressed: readonly Dressed[] = [];
+    if (typeof wearing === 'function') {
+      if (!proportions) throw new Error('a body other than a person wears what it is given, not what is placed for proportions');
+      dressed = wearing(proportions);
+    } else if (wearing) dressed = wearing;
+    dress(this, start, dressed);
     this.hold = (options.hold ?? weld)(this);
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const body = this;

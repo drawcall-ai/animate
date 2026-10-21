@@ -50,6 +50,7 @@ function feet(chain: LegChain, size: number): LegChain {
 /** the gait dynamically similar at `size`: read at the speed of the same Froude number */
 function gait(g: Gait, size: number): Gait {
   const k = Math.sqrt(size), at = (v: number) => v / k;
+  const offsetAt = (offset: Gait['contacts'][number]['offset']) => typeof offset === 'number' ? offset : (v: number, fr: number) => offset(at(v), fr);
   return {
     ...g,
     height: g.height * size,
@@ -59,7 +60,7 @@ function gait(g: Gait, size: number): Gait {
     frequency: (v, fr) => g.frequency(at(v), fr) / k,
     contacts: g.contacts.map((c) => ({
       ...c,
-      offset: typeof c.offset === 'number' ? c.offset : (v: number, fr: number) => (c.offset as (v: number, fr: number) => number)(at(v), fr),
+      offset: offsetAt(c.offset),
       duty: (v: number, fr: number) => c.duty(at(v), fr),
     })),
     body: g.body && { ...g.body, withers: g.body.withers * size, croup: [g.body.croup[0] * size, g.body.croup[1]], headRise: g.body.headRise * size },

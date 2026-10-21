@@ -2,6 +2,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
+import type { Dev } from '../core/dev';
 import { solveChain } from '../core/chain';
 import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
@@ -80,7 +81,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0];
     let was: Vector3 | null = null;
     yield* action<Frame>({ update: (f) => {
-      if (f.dev && f.time > f.dt) check(h, f, stepper.legs);
+      if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
       const dt = f.dt, r = rootOf(f, asks, stepper);
       stepper.move(f, r);
@@ -166,8 +167,8 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
 }
 
 /** Final-pose checks of the last sub-step, against the legs as they were posed then. */
-function check(h: Humanoid, f: Frame, legs: readonly Leg[]) {
-  const dev = f.dev!, p = h.proportions, time = f.time - f.dt;
+function check(h: Humanoid, f: Frame, dev: Dev, legs: readonly Leg[]) {
+  const p = h.proportions, time = f.time - f.dt;
   legs.forEach((leg, i) => {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];
     if (leg.swing) {

@@ -4,7 +4,7 @@ import { action } from '@pmndrs/timeline';
 import type { Body, Frame } from '../body';
 import { createAsks, takeAsks } from '../asks';
 import { Pose } from '../pose';
-import type { Attention } from '../species';
+import type { Attention, Species } from '../species';
 import { carriage, type Striding } from './carriage';
 import { seedOf } from '../random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
@@ -20,12 +20,13 @@ import { strideAt } from './gait';
  * down to its foot. Asked nothing, it stands. It keeps `locomotion` for `walkTo` and `arriving`.
  */
 export function creature(body: Body, attention: Attention = {}, root?: Live<DrivenRoot>): Behaviour {
-  if (!body.species.legs) throw new Error('creature: the species has no legs');
-  return stepping(body, attention, root);
+  const legs = body.species.legs;
+  if (!legs) throw new Error('creature: the species has no legs');
+  return stepping(body, legs, attention, root);
 }
 
-function stepping(body: Body, attention: Attention, driven?: Live<DrivenRoot>): Behaviour {
-  const kind = body.species.legs!, gait = kind.gait;
+function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Attention, driven?: Live<DrivenRoot>): Behaviour {
+  const gait = kind.gait;
   return function* () {
     const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest));
     const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth)), record = steppingOf(gait, feet, Math.min(...posers.map((poser) => poser.turn)), Math.max(...posers.map((poser) => poser.ball)));

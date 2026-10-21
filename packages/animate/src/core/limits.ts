@@ -64,13 +64,14 @@ export const coordinates = (): Coordinates => ({ value: [0, 0, 0], range: [[0, 0
 /** Clamps `q`, a bone's rotation in its parent's frame, into `limit` (see `coordinatesOf`); returns whether it moved `q`. */
 export function clampRotation(q: Quaternion, limit: Limit): boolean {
   const { value, range } = coordinatesOf(q, limit, _c);
-  let t1 = clamp(value[0], ...range[0]);
-  let t2 = clamp(value[1], ...range[1]);
+  let t1 = clamp(value[0], range[0][0], range[0][1]);
+  let t2 = clamp(value[1], range[1][0], range[1][1]);
   // (a swing of more than half a turn is the other way round: its coordinates would not come back)
   const swing = Math.hypot(t1, t2);
   if (swing > Math.PI) [t1, t2] = [(t1 * Math.PI) / swing, (t2 * Math.PI) / swing];
   // the twist's range as the clamped swing has it
-  const tt = clamp(value[2], ...twistRange(limit, Math.min(swing, Math.PI)));
+  const open = smoothstep(TWIST_FADE, Math.PI, Math.min(swing, Math.PI)), [lo, hi] = limit.twist;
+  const tt = clamp(value[2], lo - (Math.PI + lo) * open, hi + (Math.PI - hi) * open);
   if (t1 === value[0] && t2 === value[1] && tt === value[2]) return false;
   // swing · twist, from the swing's rotation vector and the twist's angle
   const i = limit.axis;
@@ -83,7 +84,7 @@ export function clampRotation(q: Quaternion, limit: Limit): boolean {
   const gw = Math.cos(p / 2);
   const al = Math.sin(tt / 2);
   const be = Math.cos(tt / 2);
-  const c = [0, 0, 0];
+  const c = _abc;
   c[i] = gw * al;
   c[j] = be * gj + al * gk;
   c[k] = be * gk - al * gj;
@@ -94,7 +95,7 @@ export function clampRotation(q: Quaternion, limit: Limit): boolean {
 
 /** how far (rad) `q` is beyond `limit`: the angle to its clamp (0 within it) */
 export function beyond(q: Quaternion, limit: Limit): number {
-  const r = q.clone();
+  const r = _beyond.copy(q);
   if (!clampRotation(r, limit)) return 0;
   const d = r.invert().multiply(q);
   return 2 * Math.atan2(Math.hypot(d.x, d.y, d.z), Math.abs(d.w));
@@ -103,7 +104,7 @@ export function beyond(q: Quaternion, limit: Limit): number {
 /** the swing (rad) from which the twist's range opens up, to all of it at the opposite turn */
 const TWIST_FADE = 0.75 * Math.PI;
 
-const _c = coordinates();
+const _c = coordinates(), _abc = [0, 0, 0], _beyond = new Quaternion();
 
 /** Range checks read the completed pose, including writes after a solve. Half a degree allows numerical settling. */
 export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {

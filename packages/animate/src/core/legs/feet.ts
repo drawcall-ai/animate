@@ -95,7 +95,7 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
  */
 export function steppingOf(gait: Gait, feet: Feet, twist = TWIST, ball = 0): Stepping {
   const scale = 1, width = feet.hip, length = feet.length, clearance = Math.max(...gait.clearance);
-  const spans = feet.legs.map((leg) => leg.span), travel = spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans as number[]) : TRAVEL * length;
+  const spans = feet.legs.map((leg) => leg.span), travel = spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans.map((span) => span ?? Infinity)) : TRAVEL * length;
   return {
     scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: { base: 1, perSpeed: 0 }, duty: { walk: 0.6, side: 0.6, run: 0.6 },
     run: [NEVER, 2 * NEVER], travel: { forward: travel, run: travel, back: travel / 2, side: travel / 3 },
@@ -321,8 +321,8 @@ export class ChainLeg {
     }
     // (planted, a contact missed by more than `CONTACT` is solved again from the references: the leg does not keep to a bend that cannot
     // hold it; a near miss it keeps, its joints not leaping)
-    const missed = solver.solve(f.current as Pose, target, solver.q, false);
-    if (missed > CONTACT.distance && swing === null) solver.solve(f.current as Pose, target, solver.q, true);
+    const missed = solver.solve(f.current, target, solver.q, false);
+    if (missed > CONTACT.distance && swing === null) solver.solve(f.current, target, solver.q, true);
     this.landed = this.held === null && swing === null && this.posed;
     this.posed = true;
     this.held = swing === null ? { position: target.position.clone(), rotation: target.rotation.clone() } : null;
