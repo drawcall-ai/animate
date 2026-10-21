@@ -138,7 +138,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
  */
 const walkerStepping = (p: Proportions): Stepping => {
   const player = humanStepping(p);
-  return { ...player, reach: 0.997, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: SQUAT * p.height / p.scale, wider: 0 }, capture: CAPTURE, push: PUSH };
+  return { ...player, reach: 0.997, cadence: { ...player.cadence, side: SIDE_CADENCE }, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: SQUAT * p.height / p.scale, wider: 0 }, capture: CAPTURE, push: PUSH };
 };
 
 /** the crouch (0 … 1) that lets the pelvis down `share` of the stepper's depth (its `minimumJerk` easing undone) */
@@ -149,6 +149,9 @@ function crouchFor(share: number): number {
   return (lo + hi) / 2;
 }
 
+/** Tuned: a walker side-stepping at speed steps at this cadence's base (cycles 2 / (base + perSpeed v)): short quick open-and-close steps,
+ * its feet a stance or so apart, rather than straddles of a whole cycle's travel */
+const SIDE_CADENCE = 2.7;
 /** Tuned: a walker catches its extrapolated centre of mass this far past its feet (m; the checks allow 0.1) */
 const CAPTURE = 0.07;
 /** Recalled (Perry 1992; Winter 1991): the ankle plantarflexes ~20° just after toe-off, at any walking speed (rad) */

@@ -47,7 +47,7 @@ export interface RootGoal extends DrivenRoot {
  * (`dorsiflexion`); the `crouch`; the leg's `reach` (× length, a swinging leg's easing off from `swingReach`); the sole's `clearance`.
  */
 export interface Stepping {
-  scale: number; offsets: readonly number[]; toeOut: number; cadence: { base: number; perSpeed: number };
+  scale: number; offsets: readonly number[]; toeOut: number; cadence: { base: number; perSpeed: number; side?: number };
   duty: { walk: number; side: number; run: number }; run: readonly [number, number]; travel: { forward: number; run: number; back: number; side: number };
   lead: { share: number; side: number; most: number; run: number }; width: { stand: number; walk: number; run: number; narrowest: number };
   bob: number; drop: { walk: number; side: number; run: number }; lift: { walk: number; run: number; jump: number }; arc: number;
@@ -133,6 +133,8 @@ const ROLL = 0.1, BEND = 0.15, PIVOT = 0.03, RISING = 0.5, LOWEST = 0.12, RISE =
 /** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
  * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
 const CROUCHING = { accel: 90, speed: 7.5 };
+/** Tuned (m/s): stepping sideways this fast, a body steps at its side-stepping cadence (slower, toward it) */
+const SIDE_SPEED = 0.3;
 /** Tuned: the least share of the narrowest stance a foot landing well ahead of or behind the other keeps from it sideways: walking, the feet
  * pass but never cross */
 const PASSING = 0.4;
@@ -232,8 +234,9 @@ export class Stepper {
     // (a gait's cadence as fast as it will be going by mid-stance: setting off, it steps as quickly as it is about to go, not as it stood)
     const coming = clocked && r.forecast ? Math.max(v, pace(PACING, _x).length()) : v;
     const pacing = Math.max(coming, TURNING * s * (Math.abs(pressed) + Math.abs(wanted - yaws[1]))), stride = st.gait && strideAt(st.gait, pacing, 0);
-    let C = stride ? 1 / stride.frequency : 2 / (st.cadence.base + st.cadence.perSpeed * pacing);
     const along = v > 1e-6 ? r.velocity.dot(forward) / v : 1, across = v > 1e-6 ? r.velocity.dot(left) / v : 0;
+    // (side-stepping, quicker: short open-and-close steps rather than long straddles)
+    let C = stride ? 1 / stride.frequency : 2 / (lerp(st.cadence.base, st.cadence.side ?? st.cadence.base, Math.abs(across) * smoothstep(0, SIDE_SPEED * s, v)) + st.cadence.perSpeed * pacing);
     const duty = stride ? stride.duty : lerp(lerp(st.duty.walk, st.duty.side, Math.abs(across)), st.duty.run, run);
     const most = (1 - st.crouch.travel * k) * s / Math.hypot(along / (along > 0 ? lerp(st.travel.forward, st.travel.run, run) : st.travel.back), across / st.travel.side);
     // (a stance travelling further than it may is cut short: a gait's swing keeps its time, a person's whole stride quickens)
