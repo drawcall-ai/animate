@@ -8,8 +8,8 @@ import { Targets } from './targets';
 
 export interface MetricsOptions {
   strides?: { straight: number; curve: number };
+  /** the most a hand is off the grip of what it holds (m) */
   wrist?: number;
-  head?: number;
   startStop: number | null;
   clearance?: number;
 }
@@ -73,12 +73,9 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   add('slow step width (share of its bound)', m.landings.wide.value, 'max', 1, m.landings.wide.at);
   add('leg-crossing frames', m.feet.crossings, 'max', 0);
   // (what is held or tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
-  if (limit.wrist !== undefined) add('wrist off its grip or target (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
-
-  if (limit.head !== undefined) {
-    add('eyes off the tracked head (m)', m.targets.head, 'max', limit.head, m.targets.headAt);
-    add('tracked head: frames judged', m.targets.tracked.head, 'min', 1);
-  }
+  if (limit.wrist !== undefined) add('wrist off the grip it holds (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
+  // (a tracked target is judged by its course — held, moving, within reach — not one margin over the old engine's misses: `Targets.judge`)
+  if (m.targets.tracked.judged || m.targets.tracked.head) add(`tracked target past its course's bound (m): ${m.targets.over.what}`, m.targets.over.value, 'max', 0, m.targets.over.at);
   add('tracked wrists: frames judged (share of those asked)', m.targets.tracked.asked ? m.targets.tracked.judged / m.targets.tracked.asked : 1, 'min', TRACKED);
   add("gaze target beyond the eyes' comfortable turn (°)", m.targets.gaze, 'max', GAZE, m.targets.gazeAt);
   // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
@@ -104,7 +101,10 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
     gait('chest sway beyond the stride frequency', g.chestResidual, 'max', 0.4);
     // the steps alike: left and right as long, on a curve too
     gait('step length asymmetry', g.stepAsymmetry, 'max', curve ? ASYMMETRY.curve : ASYMMETRY.straight);
-    gait('chest lateral jerk (m/s³)', g.chestJerk, 'max', 50);
+    // (jerk over its own sway's — RMS jerk ÷ that of one sinusoid with the stride's peak to peak and period — not a fixed 50 m/s³: jerk
+    // grows with the cadence cubed, so a fixed bound fails a quicker or tighter walk of the same shape; tuned 20, above both engines'
+    // steady strides (old ≤ 17.4, core ≤ 15.0, measured), no motion-capture value read yet; 2026-10-22, test-changes.md)
+    gait('chest lateral jerk (× its sway\'s)', g.chestJerkShare, 'max', 20);
     gait('pelvis over the stance foot at mid-stance', g.phase, 'min', 0.7);
     // the whole body moves as in motion capture (CMU walks at 1.0–1.4 m/s, runs at 3.2–3.6):
     // the thorax rolls with its rotation, the forward shoulder up (corr ~0.95); the head goes
@@ -149,7 +149,10 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
     stance("feet's midpoint off the CoM sideways (m)", Math.abs(rest.aside), 'max', 0.02);
     stance("pelvis off the feet's midpoint sideways (m)", Math.abs(rest.pelvis), 'max', 0.02);
     stance("feet's midpoint ahead of the CoM (m)", rest.ahead, 'min', 0);
-    stance("feet's midpoint ahead of the CoM (m)", rest.ahead, 'max', 0.065);
+    // (fore-aft against the ankle joints, where quiet stance's gravity line is read — ≈ 4–6 cm ahead of them: Winter 1995, Gait Posture
+    // 3:193, recalled — not the fitted 0.065 m from the feet's midpoint: never behind them, at most 8 cm ahead; 2026-10-22, test-changes.md)
+    stance('CoM ahead of the ankles (m)', rest.overAnkles, 'min', 0);
+    stance('CoM ahead of the ankles (m)', rest.overAnkles, 'max', 0.08);
     for (const a of rest.toeOut) {
       stance('toe-out (°)', a, 'min', 0);
       stance('toe-out (°)', a, 'max', 12);

@@ -14,6 +14,9 @@ import { reachFor } from '../../src/humanoid/hands/reach';
 import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
+/** a body within this of where it comes to stand (m) has arrived: the steps after only settle it (tuned) */
+const ARRIVED = 0.1;
+
 it('keeps an unsupported grip through the next task’s gaze opening, then releases to rest', () => {
   const item = new Item(new Vector3(-0.15, 1.1, 0.35), new Quaternion(), { handle: { position: new Vector3() } });
   let gap = false;
@@ -194,10 +197,10 @@ it('takes up a heavy lift slowly, dips at arrival and recovers before finishing'
   };
   const light = lift(0), heavy = lift(8);
   expect(heavy.heights[24]).toBeLessThan(light.heights[24] - 0.02);
-  // The nominal 8 kg path ends near 1.23 s; its arrival dip must be visible afterwards.
-  const arrival = heavy.heights.slice(70, 90);
-  const settle = heavy.heights.slice(90, 115);
-  expect(Math.max(...arrival) - Math.min(...settle)).toBeGreaterThan(0.015);
+  // Its arrival dip is visible afterwards: found by event — the load first up at its highest, then its lowest after — not by frame
+  // windows keyed to the old course's nominal 1.23 s end (2026-10-22, test-changes.md).
+  const top = Math.max(...heavy.heights), arrived = heavy.heights.findIndex((y) => y >= top - 0.002);
+  expect(top - Math.min(...heavy.heights.slice(arrived))).toBeGreaterThan(0.015);
   expect(heavy.end).toBeGreaterThan(light.end + 0.5);
   expect(Number.isFinite(heavy.end)).toBe(true);
   expect(heavy.heights.at(-1)).toBeCloseTo(1.25, 2);
@@ -221,18 +224,20 @@ it('follows destination translation and rotation during the lift and approach', 
     yield* place(h, item, destination)();
     done = true;
   }, action<Frame>({ update: (f) => {
+    if (done) error = item.current.position.distanceTo(destination(f).position);
     if (h.locomotion.moving) {
       walking++;
       advanced = Math.max(advanced, destination(f).position.z - 2);
+      // (the standoff and facing are judged while a walk goal is asked: a step after arriving — the core legs' locomotion moves while a
+      // foot swings — is no walk without one, as the old legs had it; 2026-10-22, test-changes.md)
       const go = h.asks.go;
-      if (!go) throw new Error('moving without a walk goal');
+      if (!go) return;
       const distance = destination(f).position.clone().sub(go.to).setY(0).length();
       stand ??= distance;
       expect(distance).toBeCloseTo(stand, 5);
       expect(h.asks.face?.yaw).toBeCloseTo(turn(f), 5);
       expect(go.to.z).toBeCloseTo(destination(f).position.z - stand * Math.cos(turn(f)), 5);
     }
-    if (done) error = item.current.position.distanceTo(destination(f).position);
   } })]);
   for (let i = 0; i < 900 && !done; i++) h.update(STEP);
   expect(done).toBe(true);
@@ -247,23 +252,27 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   }, { mass: 8 });
   const destination = { position: new Vector3(0, 1.5, 3) };
   let done = false;
-  let walking = 0;
-  let raisingOnStep = 0;
   const h = standing((h) => [function* () {
     yield* grab(h, { left: [item, 'left'], right: [item, 'right'] }, { walk: false, look: false })();
     yield* place(h, item, destination)();
     done = true;
   }]);
+  // (judged in hindsight against when the travel ended — the body first within `ARRIVED` of where it comes to stand — not the walk's
+  // `eta`, which a step after arriving leaves at Infinity: the load stays below the shoulder while walking until the last `RAISE_LEAD`
+  // s of the approach, and rises on the way in; 2026-10-22, test-changes.md)
+  const frames: { t: number; at: Vector3; speed: number; y: number; carried: number }[] = [];
   for (let i = 0; i < 1200 && !done; i++) {
     h.update(STEP);
-    if (h.locomotion.velocity.length() > 0.15 && h.locomotion.eta <= RAISE_LEAD && item.current.position.y > carried(h)(h.frame).position.y + 0.01) raisingOnStep++;
-    if (h.locomotion.moving && h.locomotion.eta > RAISE_LEAD) {
-      walking++;
-      expect(item.current.position.y).toBeLessThan(h.proportions.shoulderHeight);
-    }
+    frames.push({ t: i * STEP, at: h.pose.position(0).clone().setY(0), speed: h.locomotion.velocity.length(), y: item.current.position.y, carried: carried(h)(h.frame).position.y });
   }
-  expect(walking).toBeGreaterThan(0);
-  expect(raisingOnStep).toBeGreaterThan(0);
+  const last = frames[frames.length - 1].at;
+  let away = -1;
+  frames.forEach((f, i) => { if (f.at.distanceTo(last) > ARRIVED) away = i; });
+  const end = frames[away + 1].t;
+  const walked = frames.filter((f) => f.speed > 0.15 && f.t < end - RAISE_LEAD);
+  expect(walked.length).toBeGreaterThan(0);
+  for (const f of walked) expect(f.y).toBeLessThan(h.proportions.shoulderHeight);
+  expect(frames.filter((f) => f.speed > 0.15 && f.t >= end - RAISE_LEAD && f.t <= end && f.y > f.carried + 0.01).length).toBeGreaterThan(0);
   expect(done).toBe(true);
   expect(item.current.position.distanceTo(destination.position)).toBeLessThan(0.01);
 });

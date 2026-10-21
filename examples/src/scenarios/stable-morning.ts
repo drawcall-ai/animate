@@ -25,8 +25,9 @@ const APPENDAGES = [
   { bone: HORSE_SKELETON.index('tail'), tip: new Vector3(0, -0.6, -0.25), radius: 0.025 },
 ];
 const HANDS = ['leftHand', 'rightHand'];
-// Four Life seeds settle at 22.95–23.13 s; retain 1.27–1.45 s of idle.
-const DURATION = 24.4;
+// A story budget, not one engine's timing (2026-10-22, test-changes.md): the old legs' four Life seeds settled at 22.95–23.13 s
+// (read-code, that engine's measure); about 1.2× that natural time, the idle after `done` kept for the idle checks (tuned).
+const DURATION = 28;
 const INSPECT = 0.85;
 // Tuned matched walk through braking, checked against solved hip excursion (m/s).
 const LEADING = { speed: 0.9 };

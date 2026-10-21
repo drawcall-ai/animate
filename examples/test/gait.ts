@@ -93,6 +93,8 @@ export interface Stride {
   counter: number;
   /** RMS lateral jerk of the chest (m/s³) */
   chestJerk: number;
+  /** that over the RMS jerk of one sinusoid with the stride's sway (1: a pure sway; more: jerkier than its own sway) */
+  chestJerkShare: number;
   /** lateral motion not explained by one sinusoid at the stride frequency, relative to it (RMS ratio) */
   pelvisResidual: number;
   chestResidual: number;
@@ -330,6 +332,9 @@ export class GaitKinematics {
       headYaw: amp((s) => s.headYaw),
       counter: correlation(pr, tr),
       chestJerk: Math.sqrt(jerk / Math.max(1, cl.length - 3)),
+      // (over the RMS jerk of the stride's own sway as one sinusoid — half its peak to peak at one cycle per stride: A ω³ / √2 — so a
+      // quicker or wider sway of the same shape is judged alike: jerk alone grows with the cadence cubed)
+      chestJerkShare: Math.sqrt(jerk / Math.max(1, cl.length - 3)) / ((range(cl) / 2) * ((2 * Math.PI) / (S[b].t - S[a].t)) ** 3 / Math.SQRT2),
       pelvisResidual: residual(pl),
       chestResidual: residual(cl),
       phase: phases ? phase / phases : 0,
@@ -393,7 +398,7 @@ export class GaitKinematics {
       lines.push(
         `gait ${curve ? 'curve   ' : 'straight'} ${run ? 'run ' : 'walk'} (${n} strides, ${s.speed.toFixed(2)} m/s): lateral p2p pelvis ${cm(s.pelvisLat)} chest ${cm(s.chestLat)} head ${cm(s.headLat)} cm, pelvis vertical ${cm(s.pelvisUp)} cm, step asymmetry ≤ ${(s.stepAsymmetry * 100).toFixed(0)}%; ` +
           `± pelvis obliquity ${s.obliquity.toFixed(1)}° rotation ${s.rotation.toFixed(1)}°, thorax−pelvis roll ${s.thoraxToPelvisRoll.toFixed(1)}° yaw ${s.thoraxToPelvisYaw.toFixed(1)}° (corr ${s.counter.toFixed(2)}), trunk lean ${s.lean.toFixed(1)}°, head roll ${s.headRoll.toFixed(1)}° yaw ${s.headYaw.toFixed(1)}°; ` +
-          `chest jerk ${s.chestJerk.toFixed(1)} m/s³, off-stride residual pelvis ${s.pelvisResidual.toFixed(2)} chest ${s.chestResidual.toFixed(2)}; phase: sway ${s.phase.toFixed(2)} bob ${s.bobPhase.toFixed(2)}; ` +
+          `chest jerk ${s.chestJerk.toFixed(1)} m/s³ (×${s.chestJerkShare.toFixed(1)} its sway's), off-stride residual pelvis ${s.pelvisResidual.toFixed(2)} chest ${s.chestResidual.toFixed(2)}; phase: sway ${s.phase.toFixed(2)} bob ${s.bobPhase.toFixed(2)}; ` +
           `arm vs other thigh: corr ${s.armCorrelation.toFixed(2)} lag ${(s.armLag * 100).toFixed(0)}% cycles ${s.armCycles.toFixed(1)} range ${s.armRange.toFixed(0)}°; ` +
           `arm fit R² ${s.armFit.toFixed(3)} turns ${s.armTurns} peak acceleration ×${s.armAcceleration.toFixed(1)} of the sinusoid's; ` +
           `thorax roll with its rotation ${s.rollWithYaw.toFixed(2)}, head carries ${(s.headCarry * 100).toFixed(0)}% of it, trunk nod ±${s.nod.toFixed(1)}°, push-off ${s.pushOff.toFixed(0)}°, knee at 3/4 swing ${s.lateKnee.toFixed(0)}°`,

@@ -31,12 +31,10 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   const options: MetricsOptions = { startStop: null, strides };
   // Gait coverage and start/stop blending are run-level regressions.
   if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = 1.25; }
-  // Keep the known tracking misses below and item clearance; neither has a built-in check.
+  // Hands on what they hold and item clearance; neither has a built-in check. (Tracked targets are judged by their course in
+  // `Targets`, not by margins over the old engine's misses — reach 0.17, vr 0.165, look-around's head 0.075 — 2026-10-22, test-changes.md.)
   if (sc.id === 'stable-morning') options.clearance = 0;
   if (sc.id === 'pickup-shelf') options.wrist = 0.04;
-  if (sc.id === 'reach') options.wrist = 0.17;
-  if (sc.id === 'look-around') options.head = 0.075;
-  if (sc.id === 'vr') { options.wrist = 0.165; options.head = 0.165; }
   if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
   expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
   const fails = checks(m, options).filter(failed).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
@@ -88,6 +86,8 @@ const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
   ['look-around, the headset 20% slower', lookAround({ pace: 0.8 })],
   ['look-around, looking down 10 cm nearer', lookAround({ shift: { x: 0, z: 0.1 } })],
   ['look-around, looking down 10 cm lower', lookAround({ rise: -0.1 })],
+  // (off the known list since the head is judged by its course, 2026-10-22: it lags a moving target, holds within 5 cm)
+  ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
   ['look-around, turned 0.3 rad left', lookAround({ turn: 0.3 })],
   ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
   ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
@@ -124,9 +124,8 @@ const KNOWN: [string, Scenario][] = [
   // a head bent down off the line the body faces, or a little further than it bows to, is reached by
   // the spine alone: `balance` carries the centre of mass toward it only by walking, and walks only
   // to a goal 14 cm off (asks.lean, being built, is the way: the weight shifted within the feet).
-  // Further off and higher the eyes miss (8 cm); further left the spine bends sideways and carries
+  // Higher the eyes miss (8 cm); further left the spine bends sideways and carries
   // the shoulder 5 cm in over the squatting thigh: a hand hanging clear of it is out 17° (free arms: ≤ 12°)
-  ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
   ['look-around, looking down 10 cm higher', lookAround({ rise: 0.1 })],
   ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
   // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),

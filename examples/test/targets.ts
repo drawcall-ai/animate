@@ -14,6 +14,12 @@ export class Targets {
   private readonly headPeak = new Peak();
   private readonly gazePeak = new Peak();
   private readonly headOffPeak = new Peak();
+  /** the largest error of a tracked wrist target (m), judged only by its course (`over`), not a fixed bound */
+  private readonly trackedPeak = new Peak();
+  /** how far a tracked target's error goes past the bound its course sets (m; see `judge`), and on which target and course */
+  readonly over = { value: -Infinity, at: 0, what: '' };
+  private readonly wrists = { left: new Course(), right: new Course() };
+  private readonly heads = new Course();
   /** frames a gaze was asked, and frames it was judged in */
   asked = 0;
   judged = 0;
@@ -24,8 +30,12 @@ export class Targets {
   }
   /** the gaze target asked (as it was last step), and since when (s) */
   private goal: { target: Vector3; since: number } | null = null;
+  /** the largest error of a hand off the grip of what it holds (m) */
   get wrist() {
     return this.wristPeak.value;
+  }
+  get trackedWrist() {
+    return this.trackedPeak;
   }
   get wristAt() {
     return this.wristPeak.at;
@@ -69,15 +79,23 @@ export class Targets {
     const head = positionOf(asked.get('head'));
     if (head) {
       this.tracked.head++;
-      this.headPeak.see(eyesOf(h).distanceTo(head), t);
-    }
+      const error = eyesOf(h).distanceTo(head);
+      this.headPeak.see(error, t);
+      this.judge(this.heads, head, error, false, t, 'head');
+    } else this.heads.reset();
     for (const s of ['left', 'right'] as const) {
       const target = positionOf(asked.get(`${s}Wrist`));
-      if (!target) continue;
+      const course = this.wrists[s];
+      if (!target) { course.reset(); continue; }
       this.tracked.asked++;
-      if (jointOf(h, `${s}UpperArm`).distanceTo(target) >= h.proportions.armLength + 0.35) continue;
+      const shoulder = jointOf(h, `${s}UpperArm`).distanceTo(target), arm = h.proportions.armLength;
+      if (shoulder >= arm + 0.35) { course.reset(); continue; }
       this.tracked.judged++;
-      this.wristPeak.see(jointOf(h, `${s}Hand`, _v).distanceTo(target), t);
+      const error = jointOf(h, `${s}Hand`, _v).distanceTo(target);
+      this.trackedPeak.see(error, t);
+      // (judged on as much of it as a hand reaches standing: no lower than the floor lets the wrist, no higher than the arm raised flat-footed)
+      const p = h.proportions, reached = _r.copy(target).setY(Math.min(Math.max(target.y, FLOOR * p.scale), p.shoulderHeight + p.armLength));
+      this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm));
     }
     for (const s of ['left', 'right'] as const) {
       const held = h.holding[s];
@@ -90,9 +108,36 @@ export class Targets {
     }
   }
 
+  /**
+   * A tracked target judged by its course, not by one fixed bound: at a hold (still for `HOLD.after` s) within `HOLD.within`; moving or
+   * just stopped, behind it at most as far as it goes in `LAG.time` plus `LAG.within` (the hand or head lags a moving target, more so
+   * while the body steps after it); within `REACHABLE` of the arm's length of its shoulder — a wrist's, reached without a step —
+   * within `LAG.within` too once it has been there `LAG.settle` s; held out of that reach, as near as the arm goes plus `LAG.within`.
+   * A tracked head is placed by the whole body, bowing and turning: held, within `HOLD.head`.
+   */
+  private judge(course: Course, target: Vector3, error: number, reachable: boolean, t: number, what: string, beyond = 0) {
+    const held = what === 'head' ? HOLD.head : reachable ? HOLD.within : undefined;
+    // (one that appears or jumps is a new one: reached for afresh, judged once a reach's time is up)
+    if (!course.at || course.at.distanceTo(target) > JUMP) [course.fresh, course.still, course.reachable] = [t, t, NaN];
+    const speed = course.at ? course.at.distanceTo(target) / Math.max(1e-6, t - course.t) : 0;
+    course.at ??= new Vector3();
+    course.at.copy(target);
+    course.t = t;
+    if (t - course.fresh < MOVE) return;
+    if (speed > STILL) course.still = NaN;
+    else if (Number.isNaN(course.still)) course.still = t;
+    if (!reachable) course.reachable = NaN;
+    else if (Number.isNaN(course.reachable)) course.reachable = t;
+    let bound = speed * LAG.time + LAG.within, kind = 'lag';
+    if (t - course.reachable >= LAG.settle) [bound, kind] = [LAG.within, 'reachable'];
+    // (held still out of reach without a step, it is reached for as far as the arm goes while the body comes)
+    if (t - course.still >= HOLD.after) [bound, kind] = held === undefined ? [beyond + LAG.within, 'held out of reach'] : [held, 'hold'];
+    if (error - bound > this.over.value) Object.assign(this.over, { value: error - bound, at: t, what: `${what} ${kind}` });
+  }
+
   toString() {
     const { asked, judged, head } = this.tracked;
-    return `max wrist err (held grips and tracked targets within arm+0.35m) ${this.wristPeak} (tracked: judged ${judged} of ${asked} frames asked), head (eyes) err ${this.headPeak} (${head} frames), gaze beyond the eyes' comfortable turn ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s, the head off its target ${this.headOffPeak.value.toFixed(1)}° @${this.headOffPeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
+    return `max wrist err off held grips ${this.wristPeak}, off tracked targets within arm+0.35m ${this.trackedPeak} (judged ${judged} of ${asked} frames asked), head (eyes) err ${this.headPeak} (${head} frames), tracked past its course's bound ${this.over.value.toFixed(3)} m @${this.over.at.toFixed(2)}s (${this.over.what}), gaze beyond the eyes' comfortable turn ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s, the head off its target ${this.headOffPeak.value.toFixed(1)}° @${this.headOffPeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
   }
 }
 
@@ -103,7 +148,31 @@ function positionOf(goal: unknown): Vector3 | null {
   return null;
 }
 
-const _v = new Vector3();
+const _v = new Vector3(), _r = new Vector3();
+/** the lowest a wrist comes to the floor, the hand flat on it (m, at scale 1) */
+const FLOOR = 0.05;
+
+/** a tracked target's course as last seen: where and when, since when it has stood still and been within reach without a step (NaN: not) */
+class Course {
+  at: Vector3 | null = null;
+  t = 0;
+  fresh = NaN;
+  still = NaN;
+  reachable = NaN;
+  reset() { [this.at, this.still, this.reachable] = [null, NaN, NaN]; }
+}
+
+/**
+ * How closely a tracked target is followed (see `Targets.judge`), replacing fixed margins over the old engine's misses
+ * (2026-10-22, test-changes.md): a target moving at v is followed at most v × `LAG.time` + `LAG.within` behind — `LAG.time` the reach
+ * scene's own glance lead, about a visuomotor delay plus a step (recalled: gait initiation ~0.5 s, visuomotor ~0.15–0.25 s);
+ * within `REACHABLE` × the arm's length of the shoulder (reached without a step) within `LAG.within` once `LAG.settle` s there; a held
+ * target (slower than `STILL` m/s) within `HOLD.within` once `HOLD.after` s still (a reach's homing phase ends ~0.5 s after the
+ * target stops: recalled, minimum-jerk corrective submovements). Tuned values, not read from a source.
+ */
+const LAG = { time: 0.35, within: 0.05, settle: 0.3 }, HOLD = { within: 0.03, head: 0.05, after: 0.6 }, REACHABLE = 0.9, STILL = 0.02;
+/** how long a reach for a target that appears or jumps takes before it is judged (s): a calm reach's own (the scenes ask 1 s) */
+const MOVE = 1;
 /**
  * How far the eyes turn in the head comfortably (°): down to the preferred declination of the line
  * of sight below the head's (29° sitting upright, 34° over all postures: Hill & Kroemer 1986, Human

@@ -99,7 +99,9 @@ export class Landings {
       const turned = Math.abs(wrapAngle(h.locomotion.facing - track[0].facing)) > TURNED || Math.abs(wrapAngle(f.yaw - other.yaw)) > TURNED + 0.24;
       const v = h.locomotion.velocity, sideways = Math.hypot(v.x, v.z) > 0.05 && Math.abs(v.dot(leftOf(h.locomotion.facing))) > ACROSS * Math.hypot(v.x, v.z);
       const lifting = Object.values(h.holding).some((held) => held && held.item.mass > 0);
-      const bound = turned ? SLOW_WIDTH.turning : sideways || lifting ? SLOW_WIDTH.wide : SLOW_WIDTH.straight;
+      // (a step of several kinds gets the largest bound among them: a turning side-step is a side-step too — not the turn's first, as it
+      // was; 2026-10-22, test-changes.md)
+      const bound = Math.max(SLOW_WIDTH.straight, turned ? SLOW_WIDTH.turning : 0, sideways || lifting ? SLOW_WIDTH.wide : 0);
       this.wide.see(across / (bound * h.proportions.height), t);
     });
   }
@@ -120,6 +122,8 @@ export interface Rest {
   ahead: number;
   /** the pelvis off the feet's midpoint, sideways (m) */
   pelvis: number;
+  /** the centre of mass's ground point ahead of the ankle joints' midpoint (m) */
+  overAnkles: number;
   /** each foot's toe-out (°) */
   toeOut: [number, number];
 }
@@ -153,6 +157,7 @@ export class FinalStance {
       aside: -com.clone().sub(h.locomotion.quiet).dot(left),
       ahead: -com.clone().sub(h.locomotion.quiet).dot(fwd),
       pelvis: j('hips').sub(mid).sub(h.locomotion.quiet).dot(left),
+      overAnkles: comOf(h).sub(j('leftFoot').add(j('rightFoot')).multiplyScalar(0.5)).sub(h.locomotion.quiet).dot(fwd),
       toeOut,
     };
   }
@@ -161,6 +166,6 @@ export class FinalStance {
     const r = this.rest;
     if (!r) return 'rest: never stood still';
     const cm = (m: number) => (m * 100).toFixed(1);
-    return `rest${this.endsStanding ? ' (at the end)' : ''}: heels ${r.heels.toFixed(3)} H apart, feet's midpoint off the CoM ${cm(r.aside)} cm aside ${cm(r.ahead)} cm ahead, pelvis ${cm(r.pelvis)} cm aside, toe-out ${r.toeOut.map((a) => a.toFixed(0)).join('/')}°`;
+    return `rest${this.endsStanding ? ' (at the end)' : ''}: heels ${r.heels.toFixed(3)} H apart, feet's midpoint off the CoM ${cm(r.aside)} cm aside ${cm(r.ahead)} cm ahead, pelvis ${cm(r.pelvis)} cm aside, CoM ${cm(r.overAnkles)} cm ahead of the ankles, toe-out ${r.toeOut.map((a) => a.toFixed(0)).join('/')}°`;
   }
 }

@@ -20,7 +20,9 @@ it('checks a planted foot in the final pose after a later writer moved it', () =
   h.update(STEP);
   expect(h.log).toEqual([]);
   h.update(STEP);
-  expect(h.log).toContainEqual(expect.objectContaining({ check: 'planted foot slide (m)', where: 'leftFoot', time: STEP, beat: 'bad layer', limit: 0.01 }));
+  // (caught and blamed on its beat, whichever legs check it — the old legs' 'planted foot slide (m)' at 1 cm, the core's 'driven planted
+  // slide (m)' at 1 mm — not the old one's name and limit; 2026-10-22, test-changes.md)
+  expect(h.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/planted .*slide/), where: 'leftFoot', time: STEP, beat: 'bad layer', value: expect.closeTo(0.04, 3) }));
 });
 
 it('attributes a watcher to the beat that made the previous final pose, even on handover', () => {
