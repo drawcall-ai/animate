@@ -33,8 +33,8 @@ it('a swing ends on the stance rate rather than at rest', () => {
 
 /** a horse standing, or walking straight on at `speed`, its root and pose then written over by `later` (a later writer) */
 function writtenOver(dev: boolean, speed: number, later: (f: Frame, body: Body) => void) {
-  const body: Body = new Body(horse(), () => parallel<Frame>('all', idle(body), ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 20), speed, accel: 0.65 })] : []),
-    action<Frame>({ update: (f) => later(f, body) })), { pose: new Pose(SKELETON), dev });
+  const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 20), speed, accel: 0.65 })] : []),
+    action<Frame>({ update: (f) => later(f, body) }))), { idle: false, pose: new Pose(SKELETON), dev });
   return body;
 }
 
@@ -81,8 +81,8 @@ it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', (
 it('follows a moving goal with supported contacts and a root that turns toward its path', () => {
   const base = horse();
   let turned = 0;
-  const body: Body = new Body(base, () => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => new Vector3(0.05, 0, 2 + 0.75 * f.time), velocity: () => new Vector3(0, 0, 0.75), speed: 0.95, accel: 0.65, until: () => false }),
-    action<Frame>({ update: (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); } })), { pose: new Pose(SKELETON), dev: true });
+  const body: Body = new Body(base, () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => new Vector3(0.05, 0, 2 + 0.75 * f.time), velocity: () => new Vector3(0, 0, 0.75), speed: 0.95, accel: 0.65, until: () => false }),
+    action<Frame>({ update: (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); } }))), { idle: false, pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 8 * 60; tick++) body.update(1 / 60);
   expect(body.pose.position(0).z).toBeGreaterThan(4);
   expect(turned).toBeGreaterThan(0.01);
@@ -152,7 +152,7 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
 
 it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goals (%s, %s), then follows their next position', (x, z) => {
   let goal = new Vector3(x, 0, z);
-  const body: Body = new Body(horse(), () => parallel<Frame>('all', idle(body), walkTo(body, { to: () => goal, speed: 0.95, accel: 0.65, until: () => false })), { pose: new Pose(SKELETON), dev: true });
+  const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: () => goal, speed: 0.95, accel: 0.65, until: () => false }))), { idle: false, pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 120; tick++) body.update(1 / 60);
   goal = new Vector3(0, 0, 3);
   // (a goal behind it first turned to, on the spot: the next one ahead it then walks on to)
@@ -162,7 +162,7 @@ it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goal
 });
 
 it('brakes for a moving goal that crosses behind a travelling root', () => {
-  const body: Body = new Body(horse(), () => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2), speed: 0.95, accel: 0.65, until: () => false })), { pose: new Pose(SKELETON), dev: true });
+  const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2), speed: 0.95, accel: 0.65, until: () => false }))), { idle: false, pose: new Pose(SKELETON), dev: true });
   for (let tick = 0; tick < 480; tick++) body.update(1 / 60);
   expect(body.pose.position(0).z).toBeGreaterThan(-2.5);
   expect(body.pose.position(0).z).toBeLessThan(3);
@@ -172,9 +172,9 @@ it('brakes for a moving goal that crosses behind a travelling root', () => {
 
 function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
   const base = horse(), species: Species = { ...base, legs: { ...base.legs!, gait, posture: (start) => horseMotion(start, gait, seed) } };
-  const body: Body = new Body(species, () => parallel<Frame>('all', idle(body, { attention }),
+  const body: Body = new Body(species, () => (() => parallel<Frame>('all', idle(body, { attention }),
     action<Frame>({ update: () => { const at = look(); if (at) body.asks.look = at; } }),
-    ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 200), speed, accel })] : [])), { pose: new Pose(SKELETON), dev: true });
+    ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 200), speed, accel })] : []))), { idle: false, pose: new Pose(SKELETON), dev: true });
   const planted = (i: number) => !body.stepper!.legs[i].swing;
   const phase = (i: number) => {
     const stepper = body.stepper!, leg = stepper.legs[i];
@@ -295,10 +295,10 @@ it.each([false, true])('checks the final tied pose after later writers, dev=%s',
   // (standing legs, as the posture reads them)
   const legs = { legs: LEGS.map(() => ({ phase: 0 })), rest: () => {} };
   const tether = { position: new Vector3(0.7, 1.12, 0.8), length: 0.9 };
-  const body = new Body({ skeleton: SKELETON }, () => action<Frame>({ update: f => {
+  const body = new Body({ skeleton: SKELETON }, () => (() => action<Frame>({ update: f => {
     motion.prepare(f, legs, { tether: f.time < 0.02 ? tether : undefined });
     if (f.time < 0.02) f.current.setLocal(NECK, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -0.5));
-  } }), { pose, dev });
+  } })), { idle: false, pose, dev });
   body.update(1 / 30);
   const checks = body.log.filter(entry => entry.check === 'horse tether (m)');
   expect(checks.length).toBe(dev ? 1 : 0);

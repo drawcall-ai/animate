@@ -1,6 +1,7 @@
 import { MathUtils, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { idle, walkTo, type Frame, type Humanoid } from '@drawcall/animate';
+import { walkTo, type Frame, type Humanoid } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import type { Scenario } from '../scenario';
 import { Report, reported } from '../report';
 

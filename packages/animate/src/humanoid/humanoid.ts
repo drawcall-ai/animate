@@ -1,12 +1,14 @@
 import { Quaternion, Vector3 } from 'three';
 import { NECK_PITCH } from './profile/limits';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Body, type BodyOptions } from '../core/body';
+import { Body, type BodyOptions, type IdleOptions } from '../core/body';
+import type { Species } from '../core/species';
+import { createSkeletonModel } from './model';
+import { personIdle } from './idle';
 import { solveChain } from '../core/chain';
 import type { Gazer } from '../core/gaze';
 import type { Behaviour } from '../core/goal';
 import { Pose } from '../core/pose';
-import type { Dressed } from '../core/worn';
 import { footRotation, type Foot } from './balance/foot';
 import { legOf } from './balance/legs';
 import { STANDING_REACH } from './balance/posture';
@@ -19,54 +21,51 @@ import { Rig } from './rig';
 import { defaultStance, footYaw, stanceFeet } from './stance';
 import { followHeld } from './hands/hold';
 
-export interface HumanoidOptions extends Pick<BodyOptions, 'dev'> {
-  /** where the body stands (on the floor, y = 0) */
-  position?: { x: number; z: number };
-  /** its facing about +Y (0 faces +Z) */
-  yaw?: number;
-  /** what it wears from the start, placed for its proportions (`BodyOptions.wearing`) */
-  wearing?: (p: Proportions) => readonly Dressed[];
+/**
+ * A person, as a species (`new Body(human(model), story, options)`): its skeleton and measures read off a @pmndrs/viverse character
+ * model (default a bare one, `createSkeletonModel()`), which its body poses after every update. Its body starts standing relaxed in its
+ * stance where the options put it, its hands `left` and `right`; one body per `human()`.
+ */
+export function human(model: CharacterModel = createSkeletonModel()): Species {
+  const rig = new Rig(model), eyes = rig.points.eyes;
+  const species: Species = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' },
+    person: { embody: (story, options) => new Humanoid(species, rig, story, options) } };
+  return species;
 }
 
-/**
- * A @pmndrs/viverse character model as a body stepping `behaviour` (made for this humanoid: it
- * may read the rig and the proportions), the model posed after every update. The body starts
- * standing relaxed in its stance where `options` puts it, its hands `left` and `right`. One
- * Humanoid per model.
- */
+/** whether `body` is a person (`human()`): its body is a person's */
+export const isPerson = (body: Body): body is Humanoid => !!body.species.person;
+
+/** A person's body (`human()`): the rig its pose drives, its measures, and where its feet stand. */
 export class Humanoid extends Body {
-  readonly rig: Rig;
-  /** measured from the model's rest pose */
-  readonly proportions: Proportions;
   /** where the feet stand or, stepping, land [left, right]: `balance`'s output */
   readonly feet: [Foot, Foot];
   declare readonly gazer: Gazer;
+  private readonly measured: Proportions;
 
-  constructor(
-    readonly model: CharacterModel,
-    behaviour: (h: Humanoid) => Behaviour,
-    options: HumanoidOptions = {},
-  ) {
-    const rig = new Rig(model);
+  constructor(species: Species, readonly rig: Rig, story: (body: Body) => Behaviour, options: BodyOptions = {}) {
     const p = rig.proportions, yaw = options.yaw ?? 0;
-    const start = standing(p, new Pose(rig.skeleton), options.position ?? { x: 0, z: 0 }, yaw);
-    const eyes = rig.points.eyes;
-    let made: Behaviour | null = null;
-    super({ skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' } }, function* () {
-      if (!made) throw new Error('the humanoid is not made yet');
-      yield* made();
-    }, {
-      dev: options.dev, pose: start.pose, scale: p.scale, wearing: options.wearing?.(p),
+    const start = standing(p, new Pose(rig.skeleton), options.at ?? { x: 0, z: 0 }, yaw);
+    const wearing = options.wearing;
+    super(species, story, {
+      ...options, pose: start.pose, scale: p.scale, wearing: typeof wearing === 'function' ? wearing(p) : wearing,
       hold: (body) => followHeld(humanoid(body)),
     });
     // (facing as given, not as read back off the pose)
     this.locomotion.facing = yaw;
-    this.rig = rig;
-    this.proportions = p;
+    this.measured = p;
     this.feet = start.feet;
-    made = behaviour(this);
     rig.write(this.pose, 0);
+    this.begin();
   }
+
+  /** measured from the model's rest pose */
+  get proportions(): Proportions { return this.measured; }
+
+  /** the character model it poses */
+  get model(): CharacterModel { return this.rig.model; }
+
+  protected base(options: IdleOptions): Behaviour { return personIdle(this, options); }
 
   /** Advances the body by `dt` seconds and poses the model; a VRM is updated by `dt` too. */
   update(dt: number) {
@@ -79,9 +78,9 @@ export class Humanoid extends Body {
 const humanGaze = (eyes: Rig['points']['eyes']): Gazer => ({ neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),
   range: EYES, pitch: NECK_PITCH * Math.PI / 180, lead: (body, pose, point) => gazeAsks(humanoid(body), pose, point) });
 
-/** `body` as the humanoid it is */
+/** `body` as the person it is */
 function humanoid(body: Body): Humanoid {
-  if (!(body instanceof Humanoid)) throw new Error('not a humanoid');
+  if (!isPerson(body)) throw new Error('not a person');
   return body;
 }
 

@@ -1,12 +1,13 @@
 import { Vector3 } from 'three';
+import { person } from '../person';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { Humanoid, idle, walkTo, type Frame } from '../../src';
+import { type Humanoid, walkTo, type Frame } from '../../src';
 import { INDEX } from '../../src/humanoid/bones';
 import { heelOf, swingProgress } from '../../src/humanoid/balance/foot';
 import { wrapAngle, yawOf } from '../../src/core/math';
 import { createSkeletonModel } from '../../src/humanoid/model';
-import { legSystem } from '../../src/humanoid/idle';
+import { idle, legSystem } from '../../src/humanoid/idle';
 
 /** `idle` on the old or the core legs (the migration's switch, read as `idle` is called) */
 function idleOn(h: Humanoid, legs: 'old' | 'core') {
@@ -26,15 +27,14 @@ it('ends swing progression with zero speed and acceleration', () => {
 describe('balance', () => {
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
     const asked: number[] = [];
-    const h = new Humanoid(createSkeletonModel(), (h) =>
+    const h = person(createSkeletonModel(), (h) =>
       function* () {
         yield* parallel<Frame>(
           'all',
           idle(h),
           action<Frame>({ update: () => void (asked.push(h.asks.lower), (h.asks.lower = 0.01)) }),
         );
-      },
-    );
+      }, { idle: false });
     const start = h.feet.map((f) => f.position.clone());
     for (let k = 0; k < 120; k++) h.update(dt);
     expect(h.feet.every((f, s) => f.phase === 'planted' && f.position.equals(start[s]))).toBe(true);
@@ -46,14 +46,13 @@ describe('balance', () => {
   it.each(['old', 'core'] as const)('%s walks to a point and settles there on squared feet; walkTo ends then', (legs) => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = -1;
-    const h = new Humanoid(createSkeletonModel(), (h) =>
+    const h = person(createSkeletonModel(), (h) =>
       function* () {
         yield* parallel<Frame>('all', idleOn(h, legs), function* () {
           yield* walkTo(h, { to, face: 0.5 })();
           arrived = h.locomotion.moving ? -2 : 1;
         });
-      },
-    );
+      }, { idle: false });
     for (let k = 0; k < 8 * 60 && arrived < 0; k++) h.update(dt);
     expect(arrived).toBe(1);
     expect(h.pose.com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
@@ -64,12 +63,12 @@ describe('balance', () => {
   it('core walks to a point without a facing and settles there', () => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = false;
-    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    const h = person(createSkeletonModel(), (h) => function* () {
       yield* parallel<Frame>('all', idleOn(h, 'core'), function* () {
         yield* walkTo(h, { to })();
         arrived = true;
       });
-    }, { dev: true });
+    }, { idle: false, dev: true });
     for (let k = 0; k < 8 * 60 && !arrived; k++) h.update(dt);
     expect(arrived).toBe(true);
     expect(h.locomotion.moving).toBe(false);
@@ -80,9 +79,9 @@ describe('balance', () => {
   }, 20000);
 
   it.each(['old', 'core'] as const)('%s bounds pelvis excursion and contact ringing in each steady stride and after stopping', (legs) => {
-    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    const h = person(createSkeletonModel(), (h) => function* () {
       yield* parallel<Frame>('all', idleOn(h, legs), walkTo(h, { to: new Vector3(0, 0, 12) }));
-    });
+    }, { idle: false });
     const samples: { y: number; speed: number }[] = [];
     const contacts: number[] = [];
     const phases = ['planted', 'planted'];
@@ -167,12 +166,12 @@ describe('balance', () => {
 it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('core arrives facing %s without deferring its turn until after travel', (face) => {
   const to = new Vector3(0, 0, 4);
   let arrived = false;
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+  const h = person(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idleOn(h, 'core'), function* () {
       yield* walkTo(h, { to, face })();
       arrived = true;
     });
-  }, { dev: true });
+  }, { idle: false, dev: true });
   const phases = h.feet.map((foot) => foot.phase);
   const landings: { yaw: number; error: number; t: number }[] = [];
   let distance = 0, last = h.pose.com(new Vector3()).setY(0), facing = h.locomotion.facing, sign = 0, reversed = 0;

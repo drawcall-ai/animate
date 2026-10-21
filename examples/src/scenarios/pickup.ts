@@ -1,6 +1,7 @@
 import { Box3, MathUtils, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { approach, arriving, carried, eyesOnBefore, carry, grab, hold, idle, Item, lookAt, when, release, type Behaviour, type Frame, type Humanoid, type Waypoint, type Placement, type Target } from '@drawcall/animate';
+import { approach, arriving, carried, eyesOnBefore, carry, grab, hold, Item, lookAt, when, release, type Behaviour, type Frame, type Humanoid, type Waypoint, type Placement, type Target } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import type { Prop, Scenario } from '../scenario';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';

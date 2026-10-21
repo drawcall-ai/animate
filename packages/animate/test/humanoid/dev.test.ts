@@ -1,8 +1,10 @@
 import { World } from '../../src/core/world';
+import { person } from '../person';
+import { idle } from '../../src/humanoid/idle';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
-import { Body, Humanoid, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, idle, named, watch, type Frame } from '../../src';
+import { Body, type Humanoid, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, named, watch, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
 import { checkFeet } from '../../src/humanoid/balance/checks';
 import { ballOf, footRotation, heelOf } from '../../src/humanoid/balance/foot';
@@ -10,11 +12,11 @@ import { Dev } from '../../src/core/dev';
 import { leg } from '../core/rigs';
 
 it('checks a planted foot in the final pose after a later writer moved it', () => {
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+  const h = person(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), named('bad layer', function* () {
       yield* action<Frame>({ update: (f) => f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.04, 0, 0))) });
     }));
-  }, { dev: true });
+  }, { idle: false, dev: true });
   h.update(STEP);
   expect(h.log).toEqual([]);
   h.update(STEP);
@@ -22,7 +24,7 @@ it('checks a planted foot in the final pose after a later writer moved it', () =
 });
 
 it('attributes a watcher to the beat that made the previous final pose, even on handover', () => {
-  const body = new Body({ skeleton: leg() }, function* () {
+  const body = new Body({ skeleton: leg() }, () => (function* () {
     yield* parallel<Frame>('all', watch('scene', (f) => ({ check: 'too far', value: f.prev.position(0).x, limit: 1, where: 'root' })), function* () {
       yield* named('first', function* () {
         yield* action<Frame>({ update: (f) => f.current.setRoot(new Vector3(2, 0, 0)), until: timePassed(STEP, 'seconds') });
@@ -31,7 +33,7 @@ it('attributes a watcher to the beat that made the previous final pose, even on 
         yield* action<Frame>({ update: (f) => f.current.setRoot(new Vector3(3, 0, 0)) });
       })();
     });
-  }, { dev: true });
+  }), { idle: false, dev: true });
   body.update(3 * STEP);
   expect(body.log.filter((e) => e.check === 'scene: too far')).toEqual([
     { time: expect.closeTo(STEP, 10), check: 'scene: too far', value: 2, limit: 1, where: 'root', beat: 'first' },
@@ -41,11 +43,11 @@ it('attributes a watcher to the beat that made the previous final pose, even on 
 
 it.each([false, true])('checks and reads watchers only with dev on (%s)', (dev) => {
   const read = vi.fn(() => ({ check: 'bad', value: 1, limit: 0, where: 'root' }));
-  const h = new Humanoid(createSkeletonModel(), () => function* () {
+  const h = person(createSkeletonModel(), () => function* () {
     yield* parallel<Frame>('all', watch('scene', read), function* () {
       yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time > STEP ? 2 : 0)) });
     });
-  }, { dev });
+  }, { idle: false, dev });
   h.update(3 * STEP);
   if (dev) {
     expect(read).toHaveBeenCalled();
@@ -59,11 +61,11 @@ it.each([false, true])('checks and reads watchers only with dev on (%s)', (dev) 
 });
 
 it('catches a later joint writer and a snap from final rotations', () => {
-  const h = new Humanoid(createSkeletonModel(), () => function* () {
+  const h = person(createSkeletonModel(), () => function* () {
     yield* named('snap', function* () {
       yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time > STEP ? 2 : 0)) });
     })();
-  }, { dev: true });
+  }, { idle: false, dev: true });
   h.update(3 * STEP);
   expect(h.log).toContainEqual(expect.objectContaining({ check: 'joint range (°)', where: 'head', beat: 'snap' }));
   expect(h.log).toContainEqual(expect.objectContaining({ check: 'joint acceleration (°/s²)', where: 'head', beat: 'snap' }));
@@ -72,11 +74,11 @@ it('catches a later joint writer and a snap from final rotations', () => {
 it('a gaze watcher distinguishes a look that leads a grip from one that arrives with it', () => {
   const run = (wait: number) => {
     const item = new Item(new Vector3(0, 1.6, 1), new Quaternion(), { grip: { position: new Vector3() } });
-    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+    const h = person(createSkeletonModel(), (h) => function* () {
       yield* parallel<Frame>('all', eyesOnBefore(h, item, 0.4), named('take', function* () {
         yield* action<Frame>({ update: (f) => { if (f.time >= wait) h.holding.right = { item, grip: 'grip' }; } });
       }));
-    }, { dev: true });
+    }, { idle: false, dev: true });
     h.update(0.6);
     return h.log.filter((e) => e.check.startsWith('eyesOnBefore'));
   };
@@ -85,9 +87,9 @@ it('a gaze watcher distinguishes a look that leads a grip from one that arrives 
 });
 
 it('checks sustained joint speed even when acceleration is below its ceiling', () => {
-  const h = new Humanoid(createSkeletonModel(), () => function* () {
+  const h = person(createSkeletonModel(), () => function* () {
     yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 15 * f.time)) });
-  }, { dev: true });
+  }, { idle: false, dev: true });
   h.update(4 * STEP);
   const log = h.log.filter((entry) => entry.time > STEP);
   expect(log).toContainEqual(expect.objectContaining({ check: 'joint speed (°/s)', limit: 700 }));
@@ -95,7 +97,7 @@ it('checks sustained joint speed even when acceleration is below its ceiling', (
 });
 
 it('checks standing CoM against the soles once the final pose is still', () => {
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+  const h = person(createSkeletonModel(), (h) => function* () {
     const pose = new Pose(h.rig.skeleton).copy(h.pose);
     // Shift the segment's mass without moving the standing pose or its soles.
     h.rig.skeleton.bones[INDEX.hips].com.x = 3;
@@ -106,13 +108,13 @@ it('checks standing CoM against the soles once the final pose is still', () => {
         for (const foot of h.feet) foot.phase = 'planted';
       } });
     });
-  }, { dev: true });
+  }, { idle: false, dev: true });
   h.update(3 * STEP);
   expect(h.log).toContainEqual(expect.objectContaining({ check: 'standing CoM outside the feet (m)', limit: 0.001 }));
 });
 
 it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as const)('rejects a flat foot swivelling about its %s (pitch %s)', (pivot, pitch) => {
-  const h = new Humanoid(createSkeletonModel(), () => function* () {});
+  const h = person(createSkeletonModel(), () => function* () {}, { idle: false });
   const pose = new Pose(h.rig.skeleton).copy(h.pose);
   const contact = pivot === 'heel' ? heelOf(h.proportions) : ballOf(h.proportions, 'left');
   const anchor = pose.point(INDEX.leftFoot, contact, new Vector3());
@@ -127,9 +129,9 @@ it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as co
 });
 
 it('clears the development beat when nothing is running', () => {
-  const body = new Body({ skeleton: leg() }, named('one step', function* () {
+  const body = new Body({ skeleton: leg() }, () => (named('one step', function* () {
     yield () => 'finished';
-  }), { dev: true });
+  })), { idle: false, dev: true });
   body.update(STEP);
   expect(body.frame.dev?.beat).toBe('one step');
   body.update(STEP);
@@ -137,7 +139,7 @@ it('clears the development beat when nothing is running', () => {
 });
 
 it('measures touchdown from the final poses, independently of the next pose', () => {
-  const h = new Humanoid(createSkeletonModel(), () => function* () {});
+  const h = person(createSkeletonModel(), () => function* () {}, { idle: false });
   const pose = new Pose(h.rig.skeleton).copy(h.pose);
   pose.setRoot(pose.position(0).clone().add(new Vector3(0, 0.01, 0)));
   pose.setRotation(INDEX.leftFoot, footRotation(h.feet[0].yaw, 0.1));

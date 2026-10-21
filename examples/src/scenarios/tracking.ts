@@ -1,6 +1,7 @@
 import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { ask, handTo, headTo, idle, lookAt, release, type Asks, type Frame, type Humanoid, type Placement, type Target, yawOf } from '@drawcall/animate';
+import { ask, handTo, headTo, lookAt, release, type Asks, type Frame, type Humanoid, type Placement, type Target, yawOf } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { CALM } from '../../../packages/animate/src/humanoid/arms';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { SHIFT } from '../../../packages/animate/src/core/gaze';

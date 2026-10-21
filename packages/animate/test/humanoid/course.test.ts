@@ -13,9 +13,9 @@ function sampled(waypoints: Waypoint[], seconds: number) {
   const item = new Item(new Vector3(), new Quaternion(), {});
   const c = course(item, WORLD, waypoints);
   const path: { t: number; position: Vector3; quaternion: Quaternion; over: boolean }[] = [];
-  const body = new Body({ skeleton: leg() }, function* () {
+  const body = new Body({ skeleton: leg() }, () => (function* () {
     yield* action<Frame>({ update: (f) => void path.push({ t: f.time - STEP, ...c.to(f), over: c.over(f) }) });
-  });
+  }), { idle: false });
   for (let k = 0; k < seconds / STEP; k++) body.update(STEP);
   const speeds = path.slice(1).map((p, i) => p.position.distanceTo(path[i].position) / STEP);
   return { path, speeds };
@@ -66,10 +66,10 @@ it('reads a live course endpoint throughout travel and after arrival', () => {
   const item = new Item(new Vector3(), new Quaternion(), {});
   let reads = 0;
   const c = course(item, WORLD, [[1, (f) => { reads++; return { position: new Vector3(f.time, 0, 0) }; }]]);
-  const body = new Body({ skeleton: leg() }, () => action<Frame>({ update: (f) => {
+  const body = new Body({ skeleton: leg() }, () => (() => action<Frame>({ update: (f) => {
     const at = c.to(f);
     if (f.time > 1.1) expect(at.position.x).toBeCloseTo(f.time, 8);
-  } }));
+  } })), { idle: false });
   for (let tick = 0; tick < 120; tick++) body.update(STEP);
   expect(reads).toBe(120);
   expect(c.over(body.frame)).toBe(true);

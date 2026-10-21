@@ -1,6 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { Body, grab, hold, idle, Item, powerGait, Skeleton, swing, walkTo, type Frame, type Species } from '@drawcall/animate';
+import { Body, grab, hold, Item, powerGait, Skeleton, swing, walkTo, type Frame, type Species } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { Report } from '../report';
 import type { Scenario } from '../scenario';
 import { skeletonProps } from '../stage/props';
@@ -64,11 +65,11 @@ export function dogFetch(): Scenario {
       const ball = new Item(v(1, 0.04, 4), new Quaternion(), { middle: { position: new Vector3() } },
         { name: 'ball', mass: 0.06, bounds: new Box3(v(-0.04, -0.04, -0.04), v(0.04, 0.04, 0.04)) });
       let back = false;
-      const dog: Body = new Body(DOG, () => parallel<Frame>('all', idle(dog), function* () {
+      const dog = new Body(DOG, (dog) => function* () {
         yield* grab(dog, { jaw: [ball, 'middle'] })();
         yield* parallel<Frame>('race', hold(dog, ball), walkTo(dog, { to: v(0, 0, 0.5) }));
         back = true;
-      }), { dev });
+      }, { dev });
       return {
         report: new Report(), bodies: [dog],
         props: () => [...skeletonProps(dog.pose, 0.014), { kind: 'ball', position: ball.current.position.clone(), radius: 0.04 }],

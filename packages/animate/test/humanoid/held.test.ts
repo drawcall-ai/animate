@@ -1,11 +1,13 @@
 import { clearBody } from '../../src/humanoid/hands/clearance';
+import { person } from '../person';
+import { idle } from '../../src/humanoid/idle';
 import { pointSegmentDistance } from '../../src/core/math';
 import { RAISE_LEAD } from '../../src/humanoid/hands/place';
 import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Humanoid, createSkeletonModel, grab, idle, INDEX, Item, place, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, type Humanoid, createSkeletonModel, grab, INDEX, Item, place, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { Carrier } from '../../src/core/carrier';
 import { closeHand } from '../../src/humanoid/hands/grips';
 import { reachFor } from '../../src/humanoid/hands/reach';
@@ -62,11 +64,11 @@ it.each([1.6, 1.85])('carries world and item distances in metres on a %s m body'
 it('wears on a generic body, follows its bone from another frame, and takes off without another mover', () => {
   const item = new Item(new Vector3(0.2, 1, 0), new Quaternion(), { grip: { position: new Vector3() } });
   const local = { position: new Vector3(0.1, 0.2, 0) };
-  const body: Body = new Body({ skeleton: leg() }, function* () {
+  const body: Body = new Body({ skeleton: leg() }, () => (function* () {
     yield* wear(body, item, 0, { to: local })();
     yield* action<Frame>({ update: (f) => f.current.setRoot(new Vector3(f.time, 1, 0)) });
-  }, { scale: 2 });
-  const other = new Body({ skeleton: leg() }, () => when(() => false));
+  }), { idle: false, scale: 2 });
+  const other = new Body({ skeleton: leg() }, () => (() => when(() => false)), { idle: false });
   const goal = onBone(body, 0, local);
   for (let i = 0; i < 180; i++) body.update(STEP);
   expect(item.current.position.distanceTo(body.pose.position(0).clone().add(new Vector3(0.2, 0.4, 0)))).toBeLessThan(0.001);
@@ -76,7 +78,7 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
   other.update(STEP);
   body.update(STEP);
   expect(goal(other.frame).velocity.x).toBeCloseTo(1);
-  const off = new Body({ skeleton: leg() }, takeOff(body, item));
+  const off = new Body({ skeleton: leg() }, () => (takeOff(body, item)), { idle: false });
   off.update(STEP);
   const at = item.current.position.clone();
   body.update(STEP);
@@ -86,14 +88,14 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
 
 it('never throws on a late reach — its beat, item, grip and distance go to the dev log — while errors carry time and beat', () => {
   const item = new Item(new Vector3(0, 1, 4), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'saddle' });
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+  const h = person(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 })));
-  }, { dev: true });
+  }, { idle: false, dev: true });
   h.update(1);
   expect(h.log.map(({ check, where, beat }) => ({ check, where, beat }))).toEqual([{ check: 'late reach: grip distance after 0.1 s (m)', where: 'saddle right handle', beat: 'fetch saddle' }]);
   expect(h.log[0].value).toBeGreaterThan(1);
   const cause = new Error('attachment failed');
-  const instant = new Body({ skeleton: leg() }, named('attach saddle', function* () { throw cause; }));
+  const instant = new Body({ skeleton: leg() }, () => (named('attach saddle', function* () { throw cause; })), { idle: false });
   expect(() => instant.update(STEP)).toThrow('0.017 s, "attach saddle": attachment failed');
 });
 
@@ -128,7 +130,7 @@ it('an unsupported hold travels with the body between carries, and an explicit m
 
 it('follows a grip worn by another body without asking the humanoid to lower for it', () => {
   const item = new Item(new Vector3(0.15, 0.9, 0.3), new Quaternion(), { grip: { position: new Vector3() } }, { mass: 8 });
-  const wearer: Body = new Body({ skeleton: leg() }, wearFromStart);
+  const wearer: Body = new Body({ skeleton: leg() }, () => (wearFromStart), { idle: false });
   function* wearFromStart() { yield* wear(wearer, item, 0)(); }
   wearer.update(STEP);
   let done = false;
@@ -150,7 +152,7 @@ it('keeps both carry grips until the slower course ends', () => {
   let done = false;
   let samples = 0;
   let off = 0;
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+  const h = person(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', action<Frame>({ update: (f) => {
       const at = f.current.position(INDEX.hips).clone();
       at.x = 0.04 * Math.sin(3 * f.time);
@@ -164,7 +166,7 @@ it('keeps both carry grips until the slower course ends', () => {
       samples++;
       off = Math.max(off, f.current.position(INDEX.leftHand).distanceTo(a.current.position));
     } }));
-  });
+  }, { idle: false });
   for (let i = 0; i < 300; i++) h.update(STEP);
   expect(done).toBe(true);
   expect(samples).toBeGreaterThan(10);
@@ -284,7 +286,7 @@ it.each([0.02, 0.22])('clears a %s m load from the final neck→head segment, in
 });
 
 it.each([false, true])('checks grip activation against the final wrist before fitting (late contact %s)', (contact) => {
-  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
+  const h = person(createSkeletonModel(), (h) => function* () {
     const item = new Item(h.pose.position(INDEX.leftHand).clone().add(new Vector3(contact ? 0.1 : 0, 0, 0)), new Quaternion(), {
       end: { position: new Vector3() },
     }, { name: 'loose rope' });
@@ -296,7 +298,7 @@ it.each([false, true])('checks grip activation against the final wrist before fi
         f.current.setLocal(INDEX.leftHand, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.01));
       } }),
     );
-  }, { dev: true });
+  }, { idle: false, dev: true });
   h.update(STEP);
   const problems = h.log.filter((entry) => entry.check === 'grip activation distance (m)');
   if (contact) expect(problems).toEqual([]);

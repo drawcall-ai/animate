@@ -1,11 +1,13 @@
 import { Euler, Quaternion, Vector3 } from 'three';
+import { person } from '../person';
+import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Humanoid, createSkeletonModel, idle, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
+import { type Humanoid, createSkeletonModel, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
 import { Life } from '../../src/humanoid/balance/life';
 
 function body(task: (h: Humanoid) => Behaviour, height = 1.75) {
-  return new Humanoid(createSkeletonModel(height), (h) => function* () { yield* parallel<Frame>('all', idle(h), task(h)); }, { dev: true });
+  return person(createSkeletonModel(height), (h) => function* () { yield* parallel<Frame>('all', idle(h), task(h)); }, { idle: false, dev: true });
 }
 const step = (h: Humanoid, seconds: number) => { for (let i = 0; i < seconds * 60; i++) h.update(1 / 60); };
 

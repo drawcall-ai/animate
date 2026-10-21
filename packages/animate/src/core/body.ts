@@ -1,8 +1,13 @@
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import type { Stepper } from './legs/stepper';
-import { TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
+import { parallel, TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
-import type { Species } from './species';
+import type { Attention, Species } from './species';
+import type { Stance } from './asks';
+import type { DrivenRoot } from './legs/stepper';
+import type { Behaviour, Live } from './goal';
+import type { Proportions } from '../humanoid/proportions';
+import { creature } from './legs/creature';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
 import { SnapChecks } from './rotation';
@@ -41,71 +46,104 @@ export interface Frame {
   readonly beats: Set<string>;
 }
 
+/**
+ * How a body stands and moves when its story asks nothing of it (its base: a person's balance, arms and glances; a creature's legs and
+ * carriage): its stance and the seed of its idle variation (a person's), what it heeds (a creature's), or a `root` the scene drives.
+ */
+export interface IdleOptions {
+  /** a person's stance */
+  stance?: Partial<Stance>;
+  /** fixes a person's idle variation (sway, breathing, weight shifts, glances) */
+  seed?: number;
+  /** a creature's tether and startles */
+  attention?: Attention;
+  /** the scene owns the root (a player's): the legs keep up with it */
+  root?: Live<DrivenRoot>;
+}
+
 export interface BodyOptions {
+  /** where it stands (on the floor, y = 0; default the origin) */
+  at?: { x: number; z: number };
+  /** its facing about +Y (0 faces +Z) */
+  yaw?: number;
+  /** its base under the story, tuned (`IdleOptions`); `false`: none, the story poses it all */
+  idle?: IdleOptions | false;
   /** Scale applied only to placements in bone frames. */
   scale?: number;
   /** Checks final poses and records problems; default off. */
   dev?: boolean;
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;
-  /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone */
-  wearing?: readonly Dressed[];
+  /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone (a person's may be placed for its proportions) */
+  wearing?: readonly Dressed[] | ((proportions: Proportions) => readonly Dressed[]);
   /** how its hands keep to what they hold, every sub-step after the worn items move (default: each item stays where it was on its hand when taken) */
   hold?: (body: Body) => (f: Frame) => void;
 }
 
 /**
- * An articulated body moved by one behaviour timeline. Each sub-step of `STEP` the timeline
- * writes `current`; then the items it wears move with it, its hands keep to what they hold, the
+ * A body of a species, moved by its story (`story(body)`, run once it is made; none: it only idles) over its base (`IdleOptions`: it stands and walks, looks
+ * about, keeps its arms as the species does), standing `at` facing `yaw`; `done` once the story has ended (the base goes on). A person
+ * (`human()`) is a body like any other. Each sub-step of `STEP` the base and the story write `current`; then the items it wears move with it, its hands keep to what they hold, the
  * weight it bears loads its bones, and its world transforms are brought up to date and it becomes
  * the history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
  * covers and carry the rest over; the body shows its last final pose.
  */
 export class Body {
   /** after an update: `prev` is the final pose, `prev2` the one before, `dt` the last sub-step */
-  readonly frame: Frame;
+  declare readonly frame: Frame;
   /** what it wears, each item and what it is worn on (`wear`, `takeOff`: change it through them) */
   readonly worn = new Map<Item, Wearing>();
   /** how much of each item's weight it bears, held off its support or worn (taken up and given up over a moment), as its centre of mass counts it */
   readonly borne = new Map<Item, Bearing>();
   /** its hands' bones, by name: the tips of their chains (`Species.hands`) */
-  readonly hands: Readonly<Record<string, number>>;
+  declare readonly hands: Readonly<Record<string, number>>;
   /** what each hand holds, by which grip (`closeHand`, `openHand`) */
-  readonly holding: Record<string, { item: Item; grip: string } | null>;
+  declare readonly holding: Record<string, { item: Item; grip: string } | null>;
   /** what the tasks ask of its legs (see `Asks`) */
   readonly asks: Asks = createAsks();
   /** its walk, as the legs report it; walkTo publishes its arrival estimate there */
-  readonly locomotion: Locomotion;
+  declare readonly locomotion: Locomotion;
   /** its neck and eyes (`Species.gaze`) */
   readonly gazer?: Gazer;
   /** the stepper keeping its legs under a root the scene drives, if any: ask it to `jump`, read whether it is `airborne` */
   stepper: Stepper | null = null;
-  readonly scale: number;
+  /** whether its story has ended */
+  done = false;
+  declare readonly scale: number;
   /** the poses `frame` shows, as [prev2, prev, current] */
-  private poses: [Pose, Pose, Pose];
-  private readonly behaviour: ReusableTimeline<Frame>;
+  private declare poses: [Pose, Pose, Pose];
+  private declare behaviour: ReusableTimeline<Frame>;
   /** made on the first update: a behaviour may read the body (its pose) as it sets out */
   private runner: TimelineRunner<Frame> | null = null;
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
   /** the time updates have brought that no sub-step has taken yet (s) */
   private pending = 0;
   private readonly snaps = new SnapChecks();
-  private readonly hold: (f: Frame) => void;
+  private declare readonly hold: (f: Frame) => void;
   /** the world it joined; until then one of its own, empty */
   private world: World | null = null;
   private alone: World | null = null;
 
-  constructor(readonly species: Species, behaviour: ReusableTimeline<Frame>, options: BodyOptions = {}) {
+  constructor(readonly species: Species, story: (body: Body) => Behaviour = NOTHING, options: BodyOptions = {}) {
+    // (a person is made as the person it is)
+    if (species.person && new.target === Body) return species.person.embody(story, options);
     const { skeleton } = species;
     this.scale = options.scale ?? 1;
     this.gazer = species.gaze;
     const start = new Pose(skeleton);
     if (options.pose) start.copy(options.pose);
+    else if (options.at || options.yaw !== undefined) {
+      const root = start.position(0);
+      start.setRoot(new Vector3(options.at?.x ?? root.x, root.y, options.at?.z ?? root.z));
+      start.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), options.yaw ?? 0).multiply(start.local(0)));
+    }
     start.forward();
     this.locomotion = createLocomotion(yawOf(start.local(0)));
     this.hands = Object.fromEntries(Object.entries(species.hands ?? {}).map(([hand, chain]) => [hand, skeleton.chain(chain).slice(-1)[0]]));
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
-    dress(this, start, options.wearing ?? []);
+    const wearing = options.wearing;
+    if (typeof wearing === 'function' && !this.proportions) throw new Error('a body other than a person wears what it is given, not what is placed for proportions');
+    dress(this, start, typeof wearing === 'function' ? wearing(this.proportions!) : wearing ?? []);
     this.hold = (options.hold ?? weld)(this);
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const body = this;
@@ -121,7 +159,26 @@ export class Body {
       prev: this.poses[1],
       current: this.poses[2],
     };
-    this.behaviour = behaviour;
+    this.story = story;
+    this.idling = options.idle;
+    if (new.target === Body) this.begin();
+  }
+
+  /** its story and its base, made once the body is (a subclass calls it last in its constructor) */
+  protected begin(): void {
+    const body = this, idling = this.idling, made = this.story(this), base = idling === false ? null : this.base(idling ?? {});
+    const tasks = function* () { yield* made(); body.done = true; };
+    this.behaviour = base ? () => parallel<Frame>('all', base, tasks) : tasks;
+  }
+  private declare readonly story: (body: Body) => Behaviour;
+  private declare readonly idling: IdleOptions | false | undefined;
+
+  /** a person's measures (`human()`); none for other bodies */
+  get proportions(): Proportions | undefined { return undefined; }
+
+  /** its base under the story: a creature's legs and carriage (or where `root` drives it); a body without legs has none */
+  protected base(options: IdleOptions): Behaviour | null {
+    return this.species.legs ? creature(this, options.attention, options.root) : null;
   }
 
   /** Development problems; empty when dev is off. */
@@ -195,3 +252,5 @@ export class Body {
 }
 
 const EMPTY_LOG: readonly LogEntry[] = Object.freeze([]);
+/** a story of nothing: the body only stands and walks as its base has it */
+const NOTHING = (): Behaviour => function* () {};

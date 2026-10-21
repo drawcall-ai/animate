@@ -1,7 +1,8 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, createSkeletonModel, grab, hold, horse, Humanoid, idle, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, createSkeletonModel, grab, hold, horse, human, type Humanoid, Item, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { DOG } from '../src/scenarios/dog';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, items high and low. Every run must
@@ -26,10 +27,9 @@ function run(make: (story: (body: Body) => Behaviour) => Body, story: (body: Bod
 
 const creature = (species: Species) => (story: (body: Body) => Behaviour) => {
   const start = new Pose(species.skeleton);
-  const body: Body = new Body(species, () => parallel<Frame>('all', idle(body), story(body)), { pose: start, dev: true });
-  return body;
+  return new Body(species, story, { pose: start, dev: true });
 };
-const person = (story: (body: Body) => Behaviour) => new Humanoid(createSkeletonModel(), (h) => () => parallel<Frame>('all', idle(h), story(h)), { dev: true });
+const person = (story: (body: Body) => Behaviour) => new Body(human(), story, { dev: true });
 const around = (degrees: number, distance: number, y = 0) => new Vector3(Math.sin(degrees * DEG) * distance, y, Math.cos(degrees * DEG) * distance);
 const ok = { done: true, error: '', log: [] };
 

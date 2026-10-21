@@ -1,6 +1,7 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, follow, followRotation, grab, handTo, hold, idle, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid } from '@drawcall/animate';
+import { INDEX, Item, aimAt, follow, followRotation, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Stepper, type Placement, type Frame, type Humanoid } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { spinOf } from '../../../packages/animate/src/core/rotation';
 import { scalar } from '../keys';

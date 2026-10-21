@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     ".": { "source": "./src/index.ts", "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./rig": { "source": "./src/rig.ts", "types": "./dist/rig.d.ts", "default": "./dist/rig.js" },
     "./package.json": "./package.json"
   },
   "files": ["dist", "skills"],

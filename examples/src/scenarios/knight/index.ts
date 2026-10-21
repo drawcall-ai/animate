@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { idle, INDEX, when, wear, type Frame, type Humanoid, type Item, type Placement } from '@drawcall/animate';
+import { INDEX, when, wear, type Frame, type Humanoid, type Item, type Placement } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { forwardOf, leftOf } from '../../math';
 import { Report } from '../../report';
 import type { Prop, Scenario } from '../../scenario';

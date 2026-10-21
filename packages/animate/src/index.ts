@@ -1,7 +1,7 @@
 // Any body: a skeleton whose behaviour timeline writes its pose, layer by layer.
 export { Skeleton, type BoneDef, type Limit, type SkeletonOptions } from './core/skeleton';
 export { Pose, type ReadonlyPose } from './core/pose';
-export { Body, type BodyOptions, type Frame } from './core/body';
+export { Body, type BodyOptions, type Frame, type IdleOptions } from './core/body';
 export { World } from './core/world';
 export type { Attention, Posture, Species } from './core/species';
 export { Life, swing, type Rhythm } from './core/life';
@@ -26,11 +26,10 @@ export type { Carriage, CarriedBones } from './core/legs/carriage';
 export { horse, horseLeadPoint } from './horse/legs';
 
 // A humanoid: a viverse character model as a body.
-export { Humanoid, type HumanoidOptions } from './humanoid/humanoid';
+export { human, isPerson, type Humanoid } from './humanoid/humanoid';
 export { createSkeletonModel } from './humanoid/model';
 export { INDEX, SIDES, type BoneName, type Side } from './humanoid/bones';
 export type { Proportions } from './humanoid/proportions';
-export { idle } from './humanoid/idle';
 export { Stepper, type DrivenRoot, type Stepping, type Feet } from './core/legs/stepper';
 export { ask, type Asks, type Go, type Stance } from './core/asks';
 export { arriving, walkTo, type WalkOptions } from './core/walk';

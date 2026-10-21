@@ -1,6 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseLeadPoint, idle, lookAt, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
+import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseLeadPoint, lookAt, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { Rope } from '../../../packages/animate/src/core/rope';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
@@ -107,11 +108,12 @@ export function stableMorning(): Scenario {
         return { position: target, velocity };
       };
       let startle: Vector3 | undefined;
-      const horse: Body = new Body(horseSpecies(), () => parallel<Frame>('all',
+      // (its glance before its legs and its lead: the base run by hand)
+      const horse: Body = new Body(horseSpecies(), () => () => parallel<Frame>('all',
         lookAt(horse, () => handler!.pose.position(handler!.pose.skeleton.index('head'))),
         idle(horse, { attention: { tether: () => rope.supported ? { position: KNOT, length: 1.2 } : undefined, startle: () => startle } }),
         walkTo(horse, { to: () => led().position, velocity: () => led().velocity, speed: HORSE_PACE.speed, accel: HORSE_PACE.accel, until: () => false }),
-      ), { pose, dev });
+      ), { pose, dev, idle: false });
       const halterAt = () => horse.pose.point(HEAD, HALTER, new Vector3());
       const lead = new Rope(halterAt(), KNOT.clone().lerp(halterAt(), -1 / KNOT_AT + 1), LEAD_ROPE);
       let gathering = false;

@@ -1,5 +1,5 @@
 import type { CharacterModel } from '@pmndrs/viverse';
-import { Humanoid, World } from '@drawcall/animate';
+import { Body, human, World, type Humanoid } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
 import { FIXED_DT, type Prop, type Role, type Scenario, type Stage } from './scenario';
 
@@ -20,8 +20,9 @@ export class Simulation {
     this.stage = scenario.stage(dev);
     const cast = this.actors;
     scenario.actors.forEach((role, i) => {
-      cast.push(new Humanoid(model(role), (h) => this.stage.script(h, i, cast),
-        { dev, position: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [] }));
+      // (each script runs its own base: `idle` from the rig)
+      cast.push(new Body(human(model(role)), (h) => this.stage.script(h as Humanoid, i, cast),
+        { dev, at: role.position, yaw: role.yaw, wearing: (p) => this.stage.wearing?.(i, p) ?? [], idle: false }) as Humanoid);
     });
     this.world.add(...cast, ...this.stage.bodies ?? []);
   }

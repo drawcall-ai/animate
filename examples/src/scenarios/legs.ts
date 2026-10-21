@@ -1,7 +1,8 @@
 import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
-import { Body, horse as horseSpecies, Humanoid, idle, Pose, yawOf, type DrivenRoot, type Frame, type Gait, type Species } from '@drawcall/animate';
+import { Body, horse as horseSpecies, type Humanoid, Pose, yawOf, type DrivenRoot, type Frame, type Gait, type Species } from '@drawcall/animate';
+import { idle } from '@drawcall/animate/rig';
 import { minimumJerk } from '../../../packages/animate/src/core/math';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
@@ -67,8 +68,7 @@ export function legsHorse(): Scenario {
         const pose = new Pose(HORSE);
         pose.setRoot(new Vector3(x, pose.position(0).y, 0));
         const route = scriptedRoot(0, pace, new Vector3(x, 0, 0));
-        const body: Body = new Body(species, () => idle(body, { root: along(route) })(), { pose, dev });
-        return body;
+        return new Body(species, undefined, { pose, dev, idle: { root: along(route) } });
       };
       const bodies = [make(HORSE_WALK, 1.6, -2), make(HORSE_TROT, 3.7, 2)];
       return {

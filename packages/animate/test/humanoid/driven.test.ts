@@ -1,6 +1,8 @@
 import { Vector3 } from 'three';
+import { person } from '../person';
+import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
-import { Humanoid, createSkeletonModel, idle, type DrivenRoot } from '../../src';
+import { type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
 import { forwardOf, leftOf } from '../../src/core/math';
 
 const dt = 1 / 60;
@@ -8,7 +10,7 @@ const dt = 1 / 60;
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
 function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { dev: true });
+  const h = person(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: true });
   let lag = 0, steps = 0;
   const phases = h.feet.map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {

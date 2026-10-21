@@ -7,7 +7,7 @@ import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
 import { course, type Course, type Waypoint } from '../course';
-import { Humanoid } from '../humanoid';
+import { isPerson, type Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
 import { keep } from '../../core/hands';
 import { grip, gripsOf } from './grips';
@@ -148,7 +148,7 @@ class TrackedEnd {
  * (`Species.hands`) goes back to rest with the item and keeps it there (`to` and `motion` are a person's).
  */
 export function hold(h: Body, item: Item, options: { to?: Live<Placement>; motion?: Motion; until?: Exclude<Until, 'reached'> } = {}): Behaviour {
-  if (!(h instanceof Humanoid)) {
+  if (!isPerson(h)) {
     if (options.to || options.motion) throw new Error('hold: only a person carries an item somewhere');
     return keep(h, item, options.until);
   }
