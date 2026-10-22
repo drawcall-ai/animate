@@ -13,7 +13,6 @@ const OPEN = new Set<string>([
   'pickup-shelf on the soldier: final-pose dev checks',
   'reach on the soldier: final-pose dev checks',
   'knight-arming on the soldier: final-pose dev checks',
-  'legs-biped on the soldier: final-pose dev checks',
   'lift-heavy on the soldier: final-pose dev checks',
   'shooter on the outlier: final-pose dev checks',
   'stable-morning on the outlier: final-pose dev checks',
