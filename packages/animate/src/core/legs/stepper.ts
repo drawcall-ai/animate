@@ -57,6 +57,8 @@ export interface Stepping {
   capture?: number;
   /** how far the ankle plantarflexes just after the toes leave the floor (rad); none: it follows the foot */
   push?: number;
+  /** the most the ankle points away from its shank (rad); none: no pointing limit */
+  plantarflexion?: number;
   /** a gait whose cadence and duty the steps keep (a four-legged one's), in place of `cadence` and `duty` */
   gait?: Gait;
   /** the most the body turns from a planted foot (rad; default a person's): a leg that hardly twists steps sooner turning */
@@ -567,6 +569,7 @@ export class Stepper {
       if (st.push && !airborne) leg.pitch = Math.min(leg.pitch, lerp(leg.pitch, Math.max(st.pitch.ball, -st.push - lean), moving * Math.sin(Math.PI * Math.min(1, u / PUSHED)) ** 2));
       // (its own shank's lean bends the ankle early in the swing; landing, the strike already stands as it will)
       leg.pitch -= beyond(lean + leg.pitch - st.dorsiflexion) * (1 - minimumJerk((u - 0.6) / 0.4));
+      if (st.plantarflexion !== undefined) leg.pitch = Math.max(leg.pitch, -st.plantarflexion - lean);
       const foot = feet.rotation(yawNow, leg.pitch, new Quaternion());
       // (the toes relax off the floor into line, and landing toes first come down flat)
       const toes = foot.clone().multiply(_q.copy(w.toes).slerp(IDENTITY, minimumJerk(u / 0.3)))
@@ -607,6 +610,7 @@ export class Stepper {
       leg.pitch = hi;
       // (the heel lifts once the shank leans further over the foot than the ankle bends: deep in a crouch)
       leg.pitch -= beyond(shankLean(at, feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), leg.yaw) + leg.pitch - st.dorsiflexion);
+      leg.pitch = pointed(leg, leg.pitch, at);
       const ankle = feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, new Vector3());
       return { ankle, foot: feet.rotation(leg.yaw, leg.pitch, new Quaternion()), toes: feet.rotation(leg.yaw, Math.max(0, leg.pitch), new Quaternion()), yaw: leg.yaw };
     }
@@ -615,7 +619,12 @@ export class Stepper {
       // (it changes ends only while it needs no roll past its strike's: changed mid-roll, the roll would jump)
       if (leg.free) leg.heel = toes === 0 && aheadOf(leg) < 0;
       // (just landed, it first rolls off its strike: the pivot is given over as the roll ends)
-      return lerp(rollOf(leg), leg.heel ? st.pitch.heel : st.pitch.ball, minimumJerk(leg.planted / ROLL));
+      return pointed(leg, lerp(rollOf(leg), leg.heel ? st.pitch.heel : st.pitch.ball, minimumJerk(leg.planted / ROLL)));
+    }
+    function pointed(leg: Leg, pitch: number, at?: Vector3): number {
+      if (st.plantarflexion === undefined) return pitch;
+      const lean = at ? shankLean(at, feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a), leg.yaw) : feet.lean(leg.i, f.prev, leg.yaw);
+      return Math.max(pitch, -st.plantarflexion - lean);
     }
     function aheadOf(leg: Leg): number {
       return _v.subVectors(hip(leg), leg.anchor).dot(forwardOf(leg.yaw));
