@@ -20,7 +20,7 @@ export { aimAt, lookAt, withGaze, type GazeOptions } from './core/gaze';
 export type { LegChain } from './core/legs/legs';
 export type { JointCycle } from './core/legs/cycle';
 export type { Gait, Locomotion } from './core/legs/gait';
-export { powerGait } from './core/legs/schedule';
+export { carriages, footfalls, powerGait } from './core/legs/schedule';
 export type { Carriage, CarriedBones } from './core/legs/carriage';
 export type { DrivenRoot } from './core/legs/stepper';
 export { horse, horseLeadPoint } from './horse/legs';

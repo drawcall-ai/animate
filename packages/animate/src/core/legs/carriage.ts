@@ -1,18 +1,20 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../body';
 import { Life, type Rhythm } from '../life';
-import { clamp, yawOf } from '../math';
+import { clamp, GRAVITY, yawOf } from '../math';
 import { Pose, type ReadonlyPose } from '../pose';
 import { irregular } from '../random';
 import { strideAt, type Gait } from './gait';
 import type { LegChain } from './legs';
 
 /**
- * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with θ = 2 · the fore leg's phase − 2π · its duty, twice a
- * stride, the withers rise `withers · cos θ` (m) and the croup `croup[0] · cos(θ − croup[1])`, the trunk pitching between them; the
- * spine flexes `spine` (°) at `spinePhase` (rad); the head pitches `headPitch` (°) and rises `headRise` (m) with `cos 2·phase`, and
- * rises with the withers by `headWithers` (share). Once a stride, with the hind legs' stance, the pelvis rolls `roll` (°) and yaws
- * `yaw` (°), and the tail swings after it.
+ * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
+ * and the wave w(c) = (1 − once) · cos(2x − c) + once · cos(x − c) — twice a stride (a walk's, a trot's: a bounce on each diagonal) or
+ * once (a gallop's: `once` 1) — the withers rise `withers · w(0)` (m) and the croup `croup[0] · w(croup[1])`, the trunk pitching between
+ * them; the spine pitches `spine · w(spinePhase)` (°, + its hind end up: extending); the head pitches `headPitch` (°) and rises
+ * `headRise` (m) with the wave from the fore-left's landing, and rises with the withers by `headWithers` (share: 0 holds it level, as a
+ * running cat's). The tail's root pitches against the croup's pitch by `tail` (share). Once a stride, with the hind legs' stance, the
+ * pelvis rolls `roll` (°) and yaws `yaw` (°), and the tail swings after it.
  */
 export interface Carriage {
   withers: number;
@@ -24,6 +26,8 @@ export interface Carriage {
   headPitch: number;
   headRise: number;
   headWithers: number;
+  once?: number;
+  tail?: number;
 }
 
 /**
@@ -86,7 +90,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
   const neckBase = neck === undefined ? null : s.bones[neck].offset, poll = head === undefined ? null : s.bones[head].offset;
   const swing = { angle: 0, rate: 0 };
   let moving = 0, speed = 0, phase = 0, hind = 0, swish = Infinity, base: number | undefined;
-  const body = (): Carriage => gait.body ?? STILL;
+  const body = (): Carriage => typeof gait.body === 'function' ? gait.body(speed, speed * speed / (GRAVITY * gait.height)) : gait.body ?? STILL;
   return {
     get moving() { return moving; },
     get speed() { return speed; },
@@ -103,14 +107,14 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       if (names.has('tail') && life.fired('tail')) swish = 0;
     },
     write(f, extras = {}) {
-      const m = moving, t = f.time, b = body(), wave = Math.cos(2 * phase);
+      const m = moving, t = f.time, b = body(), once = b.once ?? 0, x = phase - Math.PI * strideAt(gait, speed, 0).duty;
+      const w = (c: number) => wave(once, x, c), nod = wave(once, phase, 0);
       // Tuned: inherited drift frequencies .79/1.37/2.11 rad/s, not measured physiology.
       const drift = irregular(t, life.phase, 0.79, 1.37, 2.11) * (1 - m);
-      const theta = 2 * phase - 2 * Math.PI * strideAt(gait, speed, 0).duty;
       const sway = Math.cos(hind - Math.PI * strideAt(gait, speed, 2).duty);
       // (on legs that hold the root's height, the withers rise to it at most: they only ever let it down)
-      const withers = b.withers * Math.cos(theta) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
-      const pitch = Math.asin(clamp((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span, -1, 1)) * m;
+      const withers = b.withers * w(0) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
+      const pitch = Math.asin(clamp((b.croup[0] * w(b.croup[1]) - b.withers * w(0)) / span, -1, 1)) * m;
       // (on legs that hold the root's height, the croup no higher than it stood either: pitched, the root lets down what it would lift it —
       // `HOLD` of its most over the stride all along, so the croup keeps nearly its whole rise and fall, the rest as it comes)
       const held = base === undefined ? 0 : HOLD * riseOver(b, m, span), croupRise = base === undefined ? 0 : held + Math.max(0, withers + span * Math.sin(pitch) - held);
@@ -118,7 +122,8 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       f.current.setRoot(_v.copy(f.current.position(0)).setY(rootHeight));
       f.current.setLocal(0, turn(pitch, yawOf(f.current.rotation(0))));
       const glance = names.has('head') ? life.value('head') : 0, weight = names.has('weight') ? life.value('weight') : 0;
-      if (spine !== undefined) f.current.setLocal(spine, turn(b.spine * DEG * Math.cos(theta - b.spinePhase) * m, 0, weightRoll * weight * (1 - m) * (extras.weight ?? 1)));
+      const flex = b.spine * DEG * w(b.spinePhase) * m;
+      if (spine !== undefined) f.current.setLocal(spine, turn(flex, 0, weightRoll * weight * (1 - m) * (extras.weight ?? 1)));
       if (pelvis !== undefined) f.current.setLocal(pelvis, turn(0, b.yaw * DEG * sway * m, b.roll * DEG * sway * m + (extras.pelvisRoll ?? 0)));
       if (neck !== undefined && head !== undefined && neckBase && poll) {
         const previous = _e.setFromQuaternion(f.prev.local(neck), 'YXZ').y;
@@ -127,10 +132,10 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
         const yaw = previous + (clamp(wanted, -0.55, 0.55) - previous) * (1 - Math.exp(-4 * f.dt));
         const base = f.current.position(neck).y;
         // (the poll kept at its standing height, rising with the withers and the stride as the gait has it)
-        const at = standing + neckBase.y + poll.y + b.headWithers * withers + b.headRise * wave * m;
-        const nod = Math.atan2(poll.y, poll.z) - Math.asin(clamp((at - base) / Math.hypot(poll.y, poll.z), -0.9, 0.9)) - pitch;
-        f.current.setLocal(neck, turn(nod + 0.025 * drift, yaw));
-        f.current.setLocal(head, turn(b.headPitch * DEG * wave * m - pitch - nod, extras.headYaw ?? 0));
+        const at = standing + neckBase.y + poll.y + b.headWithers * withers + b.headRise * nod * m;
+        const bend = Math.atan2(poll.y, poll.z) - Math.asin(clamp((at - base) / Math.hypot(poll.y, poll.z), -0.9, 0.9)) - pitch;
+        f.current.setLocal(neck, turn(bend + 0.025 * drift, yaw));
+        f.current.setLocal(head, turn(b.headPitch * DEG * nod * m - pitch - bend, extras.headYaw ?? 0));
       }
       if (tail !== undefined) {
         // [C] Critically damped follower, ~0.15 s lag, swinging against the pelvis's roll; seeded swishes standing.
@@ -139,7 +144,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
         const goal = -2 * roll + (sw ? sw.amplitude * Math.sin(2 * Math.PI * Math.min(sw.cycles, swish / sw.period)) * Math.sign(life.aim('tail')) * (1 - m) : 0) + 0.03 * drift + (extras.tail ?? 0);
         swing.rate += (100 * (goal - swing.angle) - 20 * swing.rate) * f.dt;
         swing.angle += swing.rate * f.dt;
-        f.current.setLocal(tail, turn(0.05 * m * Math.sin(2 * phase - 1), swing.angle));
+        f.current.setLocal(tail, turn(0.05 * m * Math.sin(2 * phase - 1) - (b.tail ?? 0) * (pitch + flex), swing.angle));
       }
     },
   };
@@ -150,12 +155,14 @@ const DEG = Math.PI / 180;
 function riseOver(b: Carriage, m: number, span: number): number {
   let most = 0;
   for (let k = 0; k < RISE_SAMPLES; k++) {
-    const theta = 2 * Math.PI * k / RISE_SAMPLES, withers = b.withers * Math.cos(theta) * m - Math.abs(b.withers) * m;
-    const pitch = Math.asin(clamp((b.croup[0] * Math.cos(theta - b.croup[1]) - b.withers * Math.cos(theta)) / span, -1, 1)) * m;
+    const x = 2 * Math.PI * k / RISE_SAMPLES, w = (c: number) => wave(b.once ?? 0, x, c), withers = b.withers * w(0) * m - Math.abs(b.withers) * m;
+    const pitch = Math.asin(clamp((b.croup[0] * w(b.croup[1]) - b.withers * w(0)) / span, -1, 1)) * m;
     most = Math.max(most, withers + span * Math.sin(pitch));
   }
   return most;
 }
+/** the carriage's wave at `x` (rad) shifted by `c` (rad): twice a stride, or `once` (share) once */
+const wave = (once: number, x: number, c: number) => (1 - once) * Math.cos(2 * x - c) + once * Math.cos(x - c);
 /** Tuned: the share of the croup's most rise over a stride the root is let down by all along */
 const HOLD = 0.6;
 /** how finely a stride is looked over for the croup's highest */
