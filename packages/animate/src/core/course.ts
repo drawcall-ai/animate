@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './body';
 import type { Item } from './carrier';
-import { live, type Live, type Placement } from './goal';
+import { live, type Live, type Placement, type Target } from './goal';
 import { exp, log } from './rotation';
 import { minimumJerk } from './math';
 
@@ -13,7 +13,7 @@ export type Waypoint = [seconds: number, to: Placement | ((f: Frame, start: Requ
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
 export interface Course {
-  to: (f: Frame) => Required<Placement>;
+  to: (f: Frame) => Required<Placement> & Pick<Target, 'carriedBy'>;
   over: (f: Frame) => boolean;
 }
 
@@ -33,8 +33,8 @@ export function course(item: Item, frame: Live<Placement>, waypoints: readonly W
   let from: Required<Placement> | undefined;
   const moving = waypoints.some(([, to]) => typeof to === 'function');
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  const to = (f: Frame): Required<Placement> => {
-    const place = live(frame, f);
+  const to = (f: Frame): Required<Placement> & Pick<Target, 'carriedBy'> => {
+    const place: Target = live(frame, f);
     const at = { position: place.position, quaternion: place.quaternion ?? IDENTITY };
     if (from === undefined) {
       start = f.time;
@@ -58,6 +58,7 @@ export function course(item: Item, frame: Live<Placement>, waypoints: readonly W
     return {
       position: position.multiplyScalar(scale).applyQuaternion(at.quaternion).add(at.position).clone(),
       quaternion: at.quaternion.clone().multiply(quaternion),
+      carriedBy: place.carriedBy,
     };
   };
   return { to, over: (f) => !Number.isNaN(start) && f.time - start >= delay + total };

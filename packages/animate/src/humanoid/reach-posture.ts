@@ -28,8 +28,8 @@ export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vec
 /** Tuned: a back bowed this share of what the load lets it is bowed its most */
 const BOWED = 0.95;
 
-/** Standing reach requests, closed against the solved shoulder and chest. */
-export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0) {
+/** Standing reach requests, closed against the solved shoulder and chest; `carried`: the hand's goal rides on the body itself. */
+export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
   const p = h.proportions;
   const factor = loadFactor(Math.max(mass, heldMass(h)));
   const low = hand.y < p.hipHeight;
@@ -46,8 +46,9 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
   // (judged from the shoulder as it stands upright, not as low as the reach has already let it down: a reach that lowers the body for
   // what it falls short of keeps asking while it is short standing, rather than letting go as soon as the lowering brings it in)
+  // A body-attached goal falls with the shoulder, so lowering cannot close a standing-height deficit.
   // (the old balance, until it goes: from the shoulder as it is)
-  const deficit = (h.stepper ? _upright.copy(shoulder).setY(p.shoulderHeight) : shoulder).distanceTo(hand) - p.armLength - allowance;
+  const deficit = (h.stepper && !carried ? _upright.copy(shoulder).setY(p.shoulderHeight) : shoulder).distanceTo(hand) - p.armLength - allowance;
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
   // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
   const short = shoulder.distanceTo(hand) - ARM_REACH * p.armLength;

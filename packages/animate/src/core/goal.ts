@@ -27,6 +27,8 @@ export interface Placement {
 export interface Target extends Placement {
   velocity?: Vector3;
   spin?: Vector3;
+  /** the body whose bone carries it (`movingPoint`): that body letting itself down or bowing carries it down too */
+  carriedBy?: object;
   /** the tip may roll freely about this line (a hand round a bar, a palm on a face; in the frame the target is in): of the rotations so, the one nearest it is */
   axis?: Vector3;
 }
@@ -79,7 +81,7 @@ export function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: nu
     if (last && Math.abs(f.time - f.dt - last.time) < 1e-9) velocity.subVectors(position, last.position).divideScalar(f.dt);
     else if (!last || last.time !== f.time) velocity.set(0, 0, 0);
     if (!last || last.time !== f.time) last = { time: f.time, position: position.clone() };
-    return { position, quaternion, velocity: velocity.clone() };
+    return { position, quaternion, velocity: velocity.clone(), carriedBy: h };
   };
 }
 

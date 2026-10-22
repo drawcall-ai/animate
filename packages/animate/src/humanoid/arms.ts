@@ -211,7 +211,7 @@ export function handStep(h: Humanoid, f: Frame, side: Side, target: Target, opti
   arm.to(f, target, { ...CALM, ...options, pole, contact: options.on instanceof Item && options.on === h.holding[side]?.item, letOut: toward !== undefined });
   // The body joins a glide with the hand, rather than moving for its starting hang.
   if (options.lead ?? true) {
-    bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1, options.on instanceof Item ? options.on.mass : 0);
+    bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1, options.on instanceof Item ? options.on.mass : 0, target.carriedBy === h || options.on?.carriedBy === h);
     const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
     twistToward(h, f.current, goal, toward?.share ?? 1);
   }

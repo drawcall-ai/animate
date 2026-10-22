@@ -23,6 +23,8 @@ export class Carrier implements Placed {
   readonly current: Required<Placement>;
   /** the time it was last moved to (s) */
   private time = -Infinity;
+  /** the body whose own bone carries its goal (`Target.carriedBy`), if one does: that body letting itself down carries it down too */
+  carriedBy?: object;
 
   /** Whether a mover has already written this sub-step. */
   moved(time: number): boolean { return this.time >= time - 1e-9; }

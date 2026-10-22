@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Frame } from '../../core/body';
 import { Carrier, gripOf, Item } from '../../core/carrier';
-import { live, type Behaviour, type Live, type Motion, type Placement, type Until } from '../../core/goal';
+import { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from '../../core/goal';
 import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
@@ -130,8 +130,8 @@ const isWay = (x: Way | CarryOptions | undefined): x is Way => x !== undefined &
 function toward(item: Item, to: Live<Placement>): Course {
   return {
     to: (f) => {
-      const at = live(to, f);
-      return { position: at.position.clone(), quaternion: (at.quaternion ?? item.current.quaternion).clone() };
+      const at: Target = live(to, f);
+      return { ...at, position: at.position.clone(), quaternion: (at.quaternion ?? item.current.quaternion).clone() };
     },
     over: () => true,
   };
@@ -197,7 +197,8 @@ class CarryAim {
     if (this.time === f.time) return this.carrier;
     this.time = f.time;
     const { nominal: aim, goal, h, item, motion } = this;
-    const target = live(to, f);
+    const target: Target = live(to, f);
+    this.carrier.carriedBy = target.carriedBy;
     goal.position.copy(target.position);
     goal.quaternion.copy(target.quaternion ?? item.current.quaternion);
     // Continue the intended motion, rather than feeding wrist-fitting lag back into it.
@@ -246,7 +247,7 @@ function holding(h: Humanoid, item: Item, path: CarryAim, options: { to?: Live<P
         if (h.carrying.has(item)) throw new Error(`"${item.name}" has two carry aims in one sub-step`);
         const aim = path.read(f, to);
         if (!item.wornBy) for (const side of sides) bringShoulder(h, f, side,
-          _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(path.goal.position));
+          _g1.copy(gripOf(item, grip(grips, side)).position).applyQuaternion(aim.current.quaternion).add(path.goal.position), 1, 0, aim.carriedBy === h);
         h.carrying.set(item, aim);
       },
       until: options.until,
