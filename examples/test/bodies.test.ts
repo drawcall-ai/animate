@@ -9,7 +9,6 @@ import { SKELETONS, skeletonModel } from './skeletons';
 const OPEN = new Set<string>([
   'shooter on the soldier: final-pose dev checks',
   'stable-morning on the soldier: final-pose dev checks',
-  'stroll on the soldier: final-pose dev checks',
   'pickup-shelf on the soldier: final-pose dev checks',
   'reach on the soldier: final-pose dev checks',
   'knight-arming on the soldier: final-pose dev checks',

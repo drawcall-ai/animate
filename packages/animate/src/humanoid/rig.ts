@@ -3,7 +3,7 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import type { ReadonlyPose } from '../core/pose';
 import { Skeleton } from '../core/skeleton';
-import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName } from './bones';
+import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName, type ChildBone } from './bones';
 import { landmarksOf, pointsOf, type BonePoint, type PointName } from './landmarks';
 import { ranges } from './profile/limits';
 import { derive, type Proportions } from './proportions';
@@ -68,14 +68,15 @@ export class Rig {
     const bones = bonesOf(model);
     this.vrm = isVRM(model) ? model : null;
     const v0 = this.vrm?.meta.metaVersion === '0';
-    this.proportions = measure(model, bones, v0);
+    const { proportions, turns } = measure(model, bones, v0);
+    this.proportions = proportions;
     this.skeleton = new Skeleton(skeletonOf(this.proportions), { limits: ranges(), chains: CHAINS });
     this.points = pointsOf(this.proportions);
     this.hips = need(bones.hips, 'hips').node;
     // the rest hips' scale (glTF): positions in the bones are divided by it (bones below the hips are unscaled)
     let scale = 1;
     if (this.vrm) {
-      this.bones = driven(bones, () => (v0 ? [TURN.clone(), TURN.clone().invert()] : [new Quaternion(), new Quaternion()]));
+      this.bones = driven(bones, turns, () => (v0 ? [TURN.clone(), TURN.clone().invert()] : [new Quaternion(), new Quaternion()]));
       this.turned = v0;
     } else {
       // viverse measures P with the rest root (the hips' parent) detached: relative to its parent
@@ -83,7 +84,7 @@ export class Rig {
       const frame = need(hipsRest.parent?.parent, 'rest root parent');
       frame.updateWorldMatrix(true, true);
       const inv = frame.getWorldQuaternion(new Quaternion()).invert();
-      this.bones = driven(bones, (name, rest) => {
+      this.bones = driven(bones, turns, (name, rest) => {
         const P = inv.clone().multiply(need(rest.parent, `rest_${name} parent`).getWorldQuaternion(new Quaternion()));
         const left = P.clone().invert();
         if (name === 'hips') left.premultiply(TURN);
@@ -149,11 +150,17 @@ const _q = new Quaternion();
 const _root = new Quaternion();
 const _hips = new Quaternion();
 
-function driven(bones: Bones, frames: (name: BoneName, rest: Object3D) => [left: Quaternion, right: Quaternion]): Driven[] {
+/**
+ * Each driven bone with its `left` and `right` (`frames`), through the `turns` that take the skeleton's straight limbs onto the
+ * model's rest: a bone's world rotation is its pose's after its own turn and its parent's turn undone (`left · turnₚ · q · turn⁻¹ · right`).
+ */
+function driven(bones: Bones, turns: Turns, frames: (name: BoneName, rest: Object3D) => [left: Quaternion, right: Quaternion]): Driven[] {
   return BONES.flatMap((name, index) => {
     const b = bones[name];
     if (!b) return [];
     const [left, right] = frames(name, b.rest);
+    if (name !== 'hips') left.multiply(turns[PARENT[name]]);
+    right.premultiply(turns[name].clone().invert());
     return [{ index, node: b.node, left, right }];
   });
 }
@@ -179,8 +186,21 @@ function need<T>(v: T | null | undefined, what: string): T {
   return v;
 }
 
-/** The model's proportions, measured from its rest pose (a VRM 0 faces −Z). */
-function measure(model: CharacterModel, bones: Bones, v0: boolean): Proportions {
+/** for each bone, the turn (normalized axes) from its straight limb segment to the model's at rest: identity but on the limbs */
+type Turns = Record<BoneName, Quaternion>;
+
+/**
+ * The limb segments the skeleton takes straight, each with its T-pose axis: a model's rest bends them a little (knees and elbows a
+ * few degrees bent, legs splayed out), but the skeleton's joint ranges and the solvers' T-pose are straight. Each is measured for
+ * its length only; the bone above it turns the model's segment onto the straight one (`Turns`).
+ */
+const STRAIGHT: Partial<Record<ChildBone, Vector3>> = {
+  leftLowerLeg: new Vector3(0, -1, 0), leftFoot: new Vector3(0, -1, 0), rightLowerLeg: new Vector3(0, -1, 0), rightFoot: new Vector3(0, -1, 0),
+  leftLowerArm: new Vector3(1, 0, 0), leftHand: new Vector3(1, 0, 0), rightLowerArm: new Vector3(-1, 0, 0), rightHand: new Vector3(-1, 0, 0),
+};
+
+/** The model's proportions, measured from its rest pose (a VRM 0 faces −Z), its limbs straight; and the turns onto its own rest. */
+function measure(model: CharacterModel, bones: Bones, v0: boolean): { proportions: Proportions; turns: Turns } {
   const at = perBone((b) => {
     const rest = bones[b]?.rest;
     if (!rest) return null;
@@ -189,9 +209,16 @@ function measure(model: CharacterModel, bones: Bones, v0: boolean): Proportions 
   });
   const rest = createRest();
   rest.hips.copy(need(at.hips, 'hips'));
+  const turns = perBone(() => new Quaternion());
   for (const b of CHILD_BONES) {
-    const p = at[b];
-    if (p) rest.offsets[b].subVectors(p, need(at[PARENT[b]], PARENT[b]));
+    const p = at[b], offset = rest.offsets[b];
+    if (!p) continue;
+    offset.subVectors(p, need(at[PARENT[b]], PARENT[b]));
+    const axis = STRAIGHT[b];
+    if (!axis) continue;
+    turns[PARENT[b]].setFromUnitVectors(axis, offset.clone().normalize());
+    const length = offset.length();
+    offset.copy(axis).multiplyScalar(length);
   }
-  return derive(rest, model.height);
+  return { proportions: derive(rest, model.height), turns };
 }
