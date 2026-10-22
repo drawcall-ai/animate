@@ -9,7 +9,7 @@ import { follow } from '../follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle, yawOf } from '../math';
 import { quintic } from './swing';
 import { hullOf, outside, xcomOf, type Spot } from './support';
-import { strideAt, type Gait } from './gait';
+import { offsetAt, strideAt, type Gait } from './gait';
 
 /** The root a scene drives: its point on the floor, its velocity over it (m/s), its facing (rad about +Y), how far it crouches (0 standing … 1 a deep crouch). */
 export interface DrivenRoot {
@@ -81,8 +81,8 @@ export interface Feet {
     depth?: (out: number, ahead: number, pitch?: number) => number;
     /** how far a planted foot may stray across from where it stands under its hip (m; none: a person's, inward only) */
     stray?: number;
-    /** how far fore and aft together a planted foot reaches from under its hip, standing (m) */
-    span?: number }[];
+    /** how far fore and aft together a planted foot reaches from under its hip, standing, its hip let down `drop` (m) */
+    span?: (drop: number) => number }[];
   hip: number; length: number; thigh: number; shin: number; ankleHeight: number;
   /** the knee's most bend (rad) */
   fold: number;
@@ -120,6 +120,8 @@ const SETTLED_ROOT = 0.05;
  */
 const SLOT = 0.25, STANDING = 2, SETTLING = 0.1, BEHIND = 0.5, DUE = 1.5, SENSING = 0.3, PAUSE = 0.5, SHUFFLING = 0.6, BLOCKED = 0.05, SPAN = 0.25, SIDE = 0.5, BACKSTEP = 0.1, STAGGERED = 0.08, PELVIS_TURN = (50 * Math.PI) / 180, SPIN = 1.5, TURNING = 0.5, TURN = { accel: 80, speed: 8 };
 const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
+/** Tuned: a gait's footfalls shift toward another gait's at most this share of a cycle a cycle: a change of gait over a stride or two */
+const SHIFT = 0.5;
 /**
  * Tuned: a strike rolls flat in `ROLL` s; the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend; within `PIVOT` (m) of
  * being over a planted foot the hip lets it settle flat to change the end it rolls on. A root rising (getting up from a landing) asks
@@ -178,6 +180,8 @@ export class Stepper {
   private scheduled: number[] = [];
   /** where in the gait's cycle each foot lifts */
   private lifts: number[] = [];
+  /** each foot's footfall in the gait's cycle (0 … 1), as it shifts toward the gait's at its pace */
+  private footfalls: number[];
   /** whether each gait's foot let its turn pass held down, and steps as soon as it may */
   private owed: boolean[] = [];
   /** whether a gait's cycle is under way */
@@ -197,6 +201,7 @@ export class Stepper {
     this.apart = st.offsets.map((o, i) => mod(o - st.offsets[this.pair[i]]));
     this.yaw = this.last = this.rootYaw = yaw;
     this.yaws = [yaw, yaw];
+    this.footfalls = [...st.offsets];
     const strays = feet.legs.map((leg) => leg.stray);
     this.sweep = st.gait && strays.every((stray) => stray !== undefined && stray > 0)
       ? Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0))) / (2 * Math.min(...strays.map((stray) => stray ?? Infinity))) : Infinity;
@@ -364,7 +369,15 @@ export class Stepper {
     // (a gait's feet keep its order by its clock, walking or turning: each lifts within `SLOT` of a cycle after its offset comes round)
     /** how many of the other feet the gait has down as `leg` lifts: each in the air for its swing's share after its own turn comes round */
     // (each lifts its own stance after it lands: a leg whose gait has it stand shorter lifts sooner — a horse's hinds at a walk)
-    if (st.gait) { const gait = st.gait; this.lifts = legs.map((leg) => st.offsets[leg.i] + (strideAt(gait, pacing, leg.i).duty - duty) * Ts / (duty * C)); }
+    // (its footfalls shifting toward the gait's at the pace it keeps — a walk's, a trot's, a gallop's — no faster than `SHIFT` of a cycle a cycle)
+    if (st.gait) {
+      const gait = st.gait;
+      this.footfalls = legs.map((leg) => {
+        const at = this.footfalls[leg.i], to = offsetAt(gait, pacing, leg.i), off = to - at - Math.round(to - at);
+        return (((at + clamp(off, -SHIFT * dt / C, SHIFT * dt / C)) % 1) + 1) % 1;
+      });
+      this.lifts = legs.map((leg) => this.footfalls[leg.i] + (strideAt(gait, pacing, leg.i).duty - duty) * Ts / (duty * C));
+    }
     const scheduled = (leg: Leg) => legs.filter((other) => other !== leg && (((this.lifts[leg.i] - this.lifts[other.i]) % 1) + 1) % 1 >= Tsw / C - 1e-9).length;
     if (clocked) this.scheduled = legs.map(scheduled);
     const due = (leg: Leg) => clocked ? (((this.clock - this.lifts[leg.i]) % 1) + 1) % 1 < SLOT || this.owed[leg.i] || leg.planted >= C * DUE
@@ -377,7 +390,9 @@ export class Stepper {
     const turnedOff = (leg: Leg) => Math.abs(wrapAngle(leg.yaw - yaw - leg.sign * toeOut)) > turn && Math.abs(wrapAngle(leg.yaw - turningTo - leg.sign * toeOut)) > turn;
     // (a gait's foot steps only in its turn, having stood a while: off its home, turned off it, or overdue; out of turn, only fallen
     // `BEHIND` of a stance's travel further behind than its stance takes it from where it lands)
-    const wants = (leg: Leg) => (!r.still || staggered(leg)) && (clocked ? leg.planted >= SLOT * C && ((due(leg) && (held || off(leg, lead) > (v > 0 || spin !== 0 ? STEP.distance : STEP.still) * s || turnedOff(leg))) || off(leg, lead) > (1 + BEHIND) * most)
+    // (having stood `SLOT` of a cycle, or half the gait's stance if that is shorter: a gallop's)
+    const stood = (leg: Leg) => leg.planted >= Math.min(SLOT, duty / 2) * C;
+    const wants = (leg: Leg) => (!r.still || staggered(leg)) && (clocked ? stood(leg) && ((due(leg) && (held || off(leg, lead) > (v > 0 || spin !== 0 ? STEP.distance : STEP.still) * s || turnedOff(leg))) || off(leg, lead) > (1 + BEHIND) * most)
       : (off(leg, lead) > (v > 0 || spin !== 0 || k > 0 ? STEP.distance : STEP.still) * s && due(leg)) || off(leg, lead) > Math.max(STEP.distance * s, DUE * v * Ts) || turnedOff(leg));
     // (the clock runs while the feet step or would: walking, turning, squaring up)
     // (setting off from standing, the gait's cycle starts with the foot furthest behind where it would land: it steps first)
@@ -389,7 +404,7 @@ export class Stepper {
       const was = this.clock;
       this.clock = (this.clock + dt / C) % 1;
       const phase = (clock: number, leg: Leg) => (((clock - this.lifts[leg.i]) % 1) + 1) % 1;
-      legs.forEach((leg) => { if (!leg.swing && phase(was, leg) < SLOT && phase(this.clock, leg) >= SLOT && leg.planted >= SLOT * C && moving > 0) this.owed[leg.i] = true; });
+      legs.forEach((leg) => { if (!leg.swing && phase(was, leg) < SLOT && phase(this.clock, leg) >= SLOT && stood(leg) && moving > 0) this.owed[leg.i] = true; });
     }
     for (const leg of [...legs].sort((a, b) => off(b, lead) - off(a, lead))) {
       const other = legs[pair[leg.i]];
@@ -559,7 +574,8 @@ export class Stepper {
     [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, moving, run, Ts, C];
     this.settled = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > 0.4) && legs.every((leg) => !wants(leg));
     this.plant = (leg, at) => plantedPose(leg, at);
-    [this.low, this.most] = [standing - (st.bob + STEP.short) * s, most];
+    // (a gait's body as low as its running lets it down)
+    [this.low, this.most] = [standing - ((clocked ? lerp(st.drop.walk, st.drop.run, run) : 0) + st.bob + STEP.short) * s, most];
 
     /** a swinging foot: minimum jerk toward its landing (heel strike), the lift arc over it, clear of the floor */
     function swingPose(leg: Leg, w: Swing): FootPose {

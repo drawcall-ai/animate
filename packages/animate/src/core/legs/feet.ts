@@ -8,7 +8,7 @@ import { offsetAt, strideAt, type Gait } from './gait';
 import type { LegChain } from './legs';
 import { Solver, type LegTarget } from './solve';
 import { SINGULAR } from './cholesky';
-import { minimumJerk, wrapAngle } from '../math';
+import { GRAVITY, minimumJerk, wrapAngle } from '../math';
 import { followRotation } from '../follow';
 import { clampRotation } from '../limits';
 import type { Feet, FootPose, Stepping } from './stepper';
@@ -36,7 +36,7 @@ export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths?:
   const ankleHeight = -Math.min(chains[0].heel.y, chains[0].toe.y);
   const length = Math.min(...legs.map((leg) => leg.length));
   return {
-    legs: partnered.map((leg, i) => ({ ...leg, partner: leg.partner < 0 ? undefined : leg.partner, depth: depths?.[i], stray: depths && strayOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand), span: depths && spanOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand - DROP * length, Math.min(0, ...chains[i].rocker.map(([, pitch]) => pitch)) * Math.PI / 180) })),
+    legs: partnered.map((leg, i) => ({ ...leg, partner: leg.partner < 0 ? undefined : leg.partner, depth: depths?.[i], stray: depths && strayOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand), span: depths && ((drop: number) => spanOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand - DROP * length - drop, Math.min(0, ...chains[i].rocker.map(([, pitch]) => pitch)) * Math.PI / 180)) })),
     hip: Math.max(...legs.map((leg) => leg.hip)), length, thigh: length / 2, shin: length / 2, ankleHeight,
     // (a hoof or paw has no knee of its own to fold under it, nor a shank to lean past an ankle's bend)
     fold: Math.PI,
@@ -87,7 +87,8 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
 
 /**
  * A four-legged species' stepping, from its gait and feet: the gait's offsets, cadence and duty; a stance travelling at most
- * `SPANNING` of how far its legs reach fore and aft standing (else `TRAVEL` of the leg's length); feet landing a little ahead (`LEAD` of the stance), as wide apart as they stand; a swing lifting
+ * `SPANNING` of how far its legs reach fore and aft standing (else `TRAVEL` of the leg's length) — running (the gait's `run`), let down
+ * on them as it has it and reaching as far as they reach so; feet landing a little ahead (`LEAD` of the stance), as wide apart as they stand; a swing lifting
  * `LIFT` × the gait's clearance at its height; the legs reaching `REACH` of their length; a foot landing turned from the body no
  * further than `twist` (rad: as far as its legs stand turned, `ChainLeg.turn`, else `TWIST`), the body turning on over a planted one
  * as its foot pivots; behind, rolling over its toe as far as `ball` (rad, − toes down: its rocker's breakover) as the leg needs. No heel
@@ -95,12 +96,14 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
  */
 export function steppingOf(gait: Gait, feet: Feet, twist = TWIST, ball = 0): Stepping {
   const scale = 1, width = feet.hip, length = feet.length, clearance = Math.max(...gait.clearance);
-  const spans = feet.legs.map((leg) => leg.span), travel = spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans.map((span) => span ?? Infinity)) : TRAVEL * length;
+  const run = gait.run, drop = (run?.drop ?? 0) * length, speedAt = (froude: number) => Math.sqrt(froude * GRAVITY * gait.height);
+  const spans = feet.legs.map((leg) => leg.span), travelAt = (drop: number) => spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans.map((span) => span?.(drop) ?? Infinity)) : TRAVEL * length;
+  const travel = travelAt(0);
   return {
     scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: { base: 1, perSpeed: 0 }, duty: { walk: 0.6, side: 0.6, run: 0.6 },
-    run: [NEVER, 2 * NEVER], travel: { forward: travel, run: travel, back: travel / 2, side: travel / 3 },
+    run: run ? [speedAt(run.froude[0]), speedAt(run.froude[1])] : [NEVER, 2 * NEVER], travel: { forward: travel, run: run ? travelAt(drop) : travel, back: travel / 2, side: travel / 3 },
     lead: { share: LEAD, side: LEAD, most: length, run: length }, width: { stand: width, walk: width, run: width, narrowest: width },
-    bob: 0, drop: { walk: DROP * length, side: DROP * length, run: DROP * length }, lift: { walk: LIFT * clearance, run: LIFT * clearance, jump: LIFT * clearance }, arc: ARC,
+    bob: 0, drop: { walk: DROP * length, side: DROP * length, run: DROP * length + drop }, lift: { walk: LIFT * clearance, run: LIFT * clearance, jump: LIFT * clearance }, arc: ARC,
     strike: { walk: 0, run: 0, ahead: 1 }, pitch: { heel: 0, ball }, dorsiflexion: Math.PI,
     crouch: { depth: 0, wider: 0, ahead: 0, travel: 0, lift: 0 }, reach: REACH, swingReach: SWING_REACH, clearance, gait, twist,
   };

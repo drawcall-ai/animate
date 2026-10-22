@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import type { Gait } from './legs/gait';
+import type { Carriage } from './legs/carriage';
 import type { LegChain } from './legs/legs';
 import type { ReadonlyPose } from './pose';
 import { Skeleton } from './skeleton';
@@ -63,6 +64,9 @@ function gait(g: Gait, size: number): Gait {
       offset: offsetAt(c.offset),
       duty: (v: number, fr: number) => c.duty(at(v), fr),
     })),
-    body: g.body && { ...g.body, withers: g.body.withers * size, croup: [g.body.croup[0] * size, g.body.croup[1]], headRise: g.body.headRise * size },
+    body: typeof g.body === 'function' ? ((body) => (v: number, fr: number) => carriage(body(at(v), fr), size))(g.body) : g.body && carriage(g.body, size),
   };
 }
+
+/** a carriage at `size`: its rises and falls as long, its angles as they are */
+const carriage = (b: Carriage, size: number): Carriage => ({ ...b, withers: b.withers * size, croup: [b.croup[0] * size, b.croup[1]], headRise: b.headRise * size });

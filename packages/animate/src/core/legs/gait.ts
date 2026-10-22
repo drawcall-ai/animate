@@ -14,8 +14,11 @@ export interface Gait {
   readonly referenceBlend?: number;
   readonly height: number;
   readonly clearance: readonly number[];
-  /** how the gait carries a four-legged body (`Carriage`), if it does */
-  readonly body?: Carriage;
+  /** running (a gallop), the body let down on its legs by `drop` of their length — eased in from Froude number `froude[0]` to `froude[1]` —
+   * its stances reaching as far fore and aft as the legs reach so */
+  readonly run?: { froude: readonly [number, number]; drop: number };
+  /** how the gait carries a four-legged body (`Carriage`), if it does: as it is, or as it changes with the pace (`carriages`) */
+  readonly body?: Carriage | ((speed: number, froude: number) => Carriage);
 }
 
 export interface Stride {
