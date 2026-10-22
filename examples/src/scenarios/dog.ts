@@ -34,12 +34,13 @@ function fourLegged(neck: { head: Vector3; jaw: Vector3 }): Species<'jaw'> {
     skeleton,
     gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.02, 0.1), out), range: { down: 0.5, up: 0.4, side: 0.6 } },
     hands: { jaw: 'mouth' },
+    inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 1.15, damping: 0.65 },
     legs: {
       chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
         heel: v(0, -0.03, -0.02), toe: v(0, -0.03, 0.04), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
       gait: {
         ...powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.93, clearance: [0.03, 0.03, 0.03, 0.03] }),
-        body: { withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
+        body: { bend: 0.6, withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
       },
       carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
         life: [['tail', { every: [2, 5], rate: 1, pick: swing }]] },
@@ -59,6 +60,13 @@ const deg = Math.PI / 180;
  * al. 2010, PMC2817108 Table 1: ±1.4 cm as a sinusoid; ±1.2 cm here at a slower trot); the pelvis rolls under 3° each way in a Whippet
  * and more in a Malinois, and hardly yaws (0–5°) [read: Fischer et al. 2018, Sci Rep 8:16982]; the head dips with each fore stance,
  * as the withers do [recalled: the head nod lameness scores read off]; the tail swings against the pelvis's roll [recalled].
+ * Setting off it pitches head-end down into the acceleration: −14° at the first hind stance against +3–14° galloping, at 14.3 m/s²
+ * (read: Walter & Carrier 2009, J Exp Biol 212:1930) — ~0.3–0.5 of atan(a / g) = 56°; braking, a low posture rather than a pitch
+ * (read: Wilson et al. 2013, Nature 498:185, cheetahs: "prevents pitching"): less. Round a bend it leans in about as far as atan(v² / r g)
+ * (read via summary: Brocklehurst et al. 2014, horses 12.0° at 13.1°). Its spine bends into the turn: a horse's 4–6° thoracolumbar
+ * and ~5° more of neck on a 5 m circle (read: Byström et al. 2021, Sci Rep 11:12734; Egenvall et al. 2023) is ~0.4 of the arc its
+ * 1.1 m back walks; a dog's back is suppler (tuned: 0.6). The trunk's response a person's (0.8 Hz at 0.9 m hips) made dynamically
+ * similar on its 0.44 m legs: × √(0.9 / 0.44).
  */
 export const DOG: Species<'jaw'> = fourLegged({ head: v(0, 0.62, 0.45), jaw: v(0, 0.54, 0.67) });
 
@@ -70,7 +78,7 @@ export function dogFetch(): Scenario {
     id: 'dog-fetch', title: 'A dog fetches a ball', duration: 20, actors: [], cameraDistance: 3, cameraAngles: { side: Math.PI / 2 },
     description: 'A dog made of data only (skeleton, legs and gait, gaze, a jaw, a tail wag) trots to a ball, takes it in its jaw and carries it back.',
     stage: (dev = false) => {
-      const ball = new Item(v(1, 0.04, 4), new Quaternion(), { middle: { position: new Vector3() } },
+      const ball = new Item(v(4, 0.04, 4), new Quaternion(), { middle: { position: new Vector3() } },
         { name: 'ball', mass: 0.06, bounds: new Box3(v(-0.04, -0.04, -0.04), v(0.04, 0.04, 0.04)) });
       let back = false;
       const dog = new Body(DOG, (dog) => function* () {

@@ -11,6 +11,7 @@ import type { Side } from '../bones';
 import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
 import { strideTurn, type Turn } from './turn';
+import { Inertia, type Inertial } from '../../core/inertia';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
 const LIST = 0.05;
 const SWAY = 0.0085;
@@ -63,6 +64,8 @@ export interface Trunk {
 export interface Upright {
   p: Proportions;
   root: Vector3;
+  /** the root's ground velocity (m/s) */
+  velocity: Vector3;
   offset: Vector3;
   yaw: number;
   walk: number;
@@ -86,7 +89,8 @@ export interface Cycle {
 /**
  * The walking body over its feet, posed each sub-step: the pelvis carried over the root (bobbing,
  * swaying over the stance foot, rotating with the legs, as high as the legs reach, as low as
- * asked), the thorax counter-rotating and rolling with it, the trunk nodding and bowing.
+ * asked), the thorax counter-rotating and rolling with it, the trunk nodding and bowing, and leaning into the root's acceleration as
+ * the body's `inertia` has it.
  */
 export class Posture {
   /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
@@ -97,6 +101,11 @@ export class Posture {
   private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
   private readonly turn: Turn = { pelvis: 0, thorax: 0, roll: 0 };
+  private readonly inertia: Inertia | null;
+
+  constructor(inertia?: Inertial) {
+    this.inertia = inertia ? new Inertia(inertia) : null;
+  }
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
   carry(f: Pick<Frame, 'prev' | 'dt'>, c: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
@@ -142,8 +151,11 @@ export class Posture {
     const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
     pelvis.y = height(standing, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower));
 
-    // the trunk: the thorax counter-rotating and rolling, leaning, nodding and bowing
-    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + life.breath, thoraxRoll, out.chest);
+    // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
+    // nodding and bowing
+    this.inertia?.step(c.velocity, c.yaw, dt);
+    const lean = this.inertia ?? { pitch: 0, roll: 0 };
+    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + life.breath + lean.pitch, thoraxRoll + lean.roll, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }
@@ -155,13 +167,6 @@ export class Posture {
     return (this.offset ??= offset.clone()).lerp(offset, 0.95);
   }
 
-  /** A prediction owns its filter state; planning must not advance the live posture. */
-  forecast(): Posture {
-    const copy = new Posture();
-    copy.comp = this.comp;
-    copy.weight.copy(this.weight);
-    return copy;
-  }
 }
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */

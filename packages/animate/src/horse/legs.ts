@@ -15,7 +15,14 @@ import type { Attention, Species } from '../core/species';
 
 /** a horse: its walk, and its posture over its legs as it heeds what it looks at, a tether and a startle */
 export const horse = (): Species<never> => ({ skeleton: SKELETON, gaze: { eyes: (pose, out) => pose.point(HEAD, EYES, out), range: EYE_RANGE },
-  legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start, gait) => horseMotion(start, gait) } });
+  legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start, gait) => horseMotion(start, gait) }, inertia: INERTIA });
+/**
+ * How the horse's trunk takes its acceleration: pitched as a dog's but less (read: Walter & Carrier 2009 for a dog setting off, 0.3–0.5
+ * of atan(a / g); no horse's measure found; tuned: below that, its forelegs straight in stance taking no more of its withers let down);
+ * rolled into a bend ~1° short of atan(v² / r g) (read via summary: Brocklehurst et al. 2014: 12.0° at 13.1°, 19.0° at 19.8°); its
+ * response a person's (0.8 Hz at 0.9 m hips) made dynamically similar on its 1.2 m legs: × √(0.9 / 1.2)
+ */
+const INERTIA = { ahead: 0.25, back: 0.2, roll: 0.9, most: 0.3, frequency: 0.7, damping: 0.65 };
 /** [D] between the eyes, about a third of the way from the poll to the muzzle (m, head bone) */
 const EYES = new Vector3(0, -0.12, 0.1);
 /** Tuned (rad): the eyes add little to where the head turns (the posture turns it) */

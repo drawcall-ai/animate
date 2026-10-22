@@ -137,7 +137,7 @@ A person's quiet life is part of its base. A species gives its own as rhythms in
 
 ## Your own creature
 
-A species is data: a skeleton (bones parents first, bone 0 the root, rest rotations identity, standing square), chains for the neck and for each hand, leg chains with their foot geometry, a gait with how it carries the body (`body`: the trunk's bounce, pitch and roll, the head's nod), and which bones that carriage moves. This dog trots, its whole body riding on the trot, looks about, takes things in its jaw and wags its tail:
+A species is data: a skeleton (bones parents first, bone 0 the root, rest rotations identity, standing square), chains for the neck and for each hand, leg chains with their foot geometry, a gait with how it carries the body (`body`: the trunk's bounce, pitch and roll, the head's nod, how far its spine `bend`s into a turn), which bones that carriage moves, and how its trunk leans into speeding up, slowing down and turning (`inertia`). Its head leads every turn by itself. This dog trots, its whole body riding on the trot, looks about, takes things in its jaw and wags its tail:
 
 ```ts
 const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
@@ -170,12 +170,14 @@ const dog: Species<'jaw'> = {
   skeleton,
   gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.02, 0.1), out), range: { down: 0.5, up: 0.4, side: 0.6 } },
   hands: { jaw: 'mouth' },
+  // (head-end down into setting off by 0.4 of atan(a / g), up from stopping by 0.3, rolled into a bend by 0.9, settling at 1.15 Hz)
+  inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 1.15, damping: 0.65 },
   legs: {
     chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
       heel: v(0, -0.03, -0.02), toe: v(0, -0.03, 0.04), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
     gait: {
       ...powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.93, clearance: [0.03, 0.03, 0.03, 0.03] }),
-      body: { withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
+      body: { bend: 0.6, withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
     },
     carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
       life: [['tail', { every: [2, 5], rate: 1, pick: swing }]] },

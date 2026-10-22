@@ -30,7 +30,7 @@ import type { Carrier, Item } from '../core/carrier';
 export function human(model: CharacterModel = createSkeletonModel()): Species<Side> {
   const rig = new Rig(model), eyes = rig.points.eyes;
   let embodied = false;
-  const species: Species<Side> = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' },
+  const species: Species<Side> = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' }, inertia: INERTIA,
     person: { embody: (story, options) => {
       // (its model is posed by its one body: a second would pose the same model)
       if (embodied) throw new Error('one body per human(): make a human() for each person');
@@ -82,6 +82,19 @@ export class Humanoid extends Body<Side> {
     this.rig.write(this.pose, dt);
   }
 }
+
+/**
+ * How a person's trunk takes the root's acceleration (`Inertial`). Setting off it leans into it about as far as atan(a / g): ~7° over a
+ * walk's first step at ~1 m/s² (read: Leteneur et al. 2013, PLoS ONE 8:e55256: "all subjects lean forward, around 7° on average", the
+ * centre of mass at 1.0 m/s by heel strike 0.96 s on — ~1 m/s², atan 6°), a sprinter's 47–51° from vertical at 9.1 m/s² (read: Walker,
+ * Bissas et al. 2021, J Biomech 124:110554; atan 43°). Braking, the body leans back but the trunk is held nearly upright (read: Harper
+ * et al. 2022, Sports Med 52:2321: a "more upright and posterior trunk" brakes harder, yet a forward trunk lowers the centre of
+ * mass): a third of it. Round a bend the body leans in by atan(v² / r g) (read: Churchill et al. 2015, bend sprinting: 12.8° at 13.4°),
+ * the trunk taking most of it (tuned: 0.6, a side-step's stop no jolt). The response: felt over about a step, below a low back's ~1 Hz
+ * (snippet: van Drunen et al. 2013; tuned: 0.8 Hz, a player's stop no jolt), damped as the head on the trunk is, ζ ≈ 0.5–0.7 (read:
+ * Peng, Hain & Peterson 1996, Biol Cybern 75:309: ζ 0.52 at 2.0 Hz with reflexes) — a little overshoot, settled within a second.
+ */
+const INERTIA = { ahead: 0.9, back: 0.3, roll: 0.6, most: 0.35, frequency: 0.8, damping: 0.7 };
 
 /** a person's gaze: the neck chain turns the head, the eyes the rest; looking low, the body bows */
 const humanGaze = (eyes: Rig['points']['eyes']): Gazer => ({ neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),

@@ -10,7 +10,8 @@ export interface MetricsOptions {
   strides?: { straight: number; curve: number };
   /** the most a hand is off the grip of what it holds (m) */
   wrist?: number;
-  startStop: number | null;
+  /** setting off and stopping, the most the trunk and the pelvis pitch, against walking's own peak pitch rate (×) */
+  startStop: { trunk: number; pelvis: number } | null;
   clearance?: number;
 }
 const TRACKED = 0.8;
@@ -135,12 +136,13 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
       gait('arm lag (share of the stride)', Math.abs(g.armLag), 'max', 0.08);
     }
   }
-  // setting off and stopping blend in and out of the walk: no pitch faster than walking's own
-  const rates = m.gait.rates();
-  if (limit.startStop !== null && rates) {
+  // setting off and stopping blend in and out of the walk: no pitch much faster than walking's own (the trunk's lean into the start or
+  // the stop on top of it)
+  const rates = m.gait.rates(), most = limit.startStop;
+  if (most !== null && rates) {
     for (const k of ['trunk', 'pelvis'] as const) {
-      add(`setting off: ${k} pitch rate (°/s)`, rates.start[k], 'max', limit.startStop * rates.steady[k]);
-      add(`stopping: ${k} pitch rate (°/s)`, rates.stop[k], 'max', limit.startStop * rates.steady[k]);
+      add(`setting off: ${k} pitch rate (°/s)`, rates.start[k], 'max', most[k] * rates.steady[k]);
+      add(`stopping: ${k} pitch rate (°/s)`, rates.stop[k], 'max', most[k] * rates.steady[k]);
     }
   }
   // coming to rest in a relaxed stance: feet about hip-width apart (heels 0.10–0.15 H), turned

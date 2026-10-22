@@ -1,6 +1,7 @@
 import type { Vector3 } from 'three';
 import type { Body, BodyOptions, Frame } from './body';
 import type { Gazer } from './gaze';
+import type { Inertial } from './inertia';
 import type { Behaviour, Live } from './goal';
 import type { Gait } from './legs/gait';
 import type { CarriedBones, Striding } from './legs/carriage';
@@ -21,6 +22,8 @@ export interface Species<H extends string = string> {
    * for the body's gait (`scaled` scales it with the legs)
    */
   legs?: { chains: readonly LegChain[]; gait: Gait; carriage?: CarriedBones; posture?: (start: ReadonlyPose, gait: Gait) => Posture };
+  /** how its trunk takes its root's acceleration: leaning into speeding up, slowing down and turning (`Inertial`; none: it does not) */
+  inertia?: Inertial;
   /** its size against the body its distances were tuned for (`scaled`; default 1): a body made of it takes it as its `scale` */
   scale?: number;
   /** a person (`human()`): the body made for it is a person's, its verbs a person's */

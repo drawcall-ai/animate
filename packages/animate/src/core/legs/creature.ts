@@ -9,9 +9,10 @@ import { carriage, type Striding } from './carriage';
 import { seedOf } from '../random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
 import { Planner } from './planner';
-import { Stepper, type DrivenRoot } from './stepper';
+import { Stepper, type DrivenRoot, type RootGoal } from './stepper';
 import { live, type Behaviour, type Live } from '../goal';
 import { strideAt } from './gait';
+import { Inertia } from '../inertia';
 
 /**
  * A creature's base, endless: its species' legs carry it where a walk asks (`asks.go`) — the planner takes its root there as a
@@ -53,7 +54,9 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
         if (gap < limit) f.dev.append(f.time - f.dt, { check: 'leg clearance (m)', value: gap, limit, where: f.prev.skeleton.bones[bones[a][bones[a].length - 1]].name });
       }
     };
-    const legs: Striding & { height: number } = { legs: phases, height: start.y, rest: (p) => p.forEach((pitch, i) => { pitches[i] = pitch; }) };
+    const inertia = body.species.inertia && new Inertia(body.species.inertia);
+    const legs = { legs: phases, height: start.y, turn: { rate: 0, ahead: 0 }, lean: inertia, rest: (p: readonly number[]) => p.forEach((pitch, i) => { pitches[i] = pitch; }) } satisfies Striding;
+    let facing = body.yaw;
     yield* action<Frame>({ update: (f) => {
       const asked0 = takeAsks(body.asks, asks), g = body.locomotion;
       // (a goal nowhere — not a finite point — it does not go for: it stands)
@@ -78,10 +81,15 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
       const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
       const faced = asks.face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
       // (or where the scene drives it)
-      const r = driven ? live(driven, f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
+      const r: RootGoal = driven ? live(driven, f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
         { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(asks.face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));
       stepper.move(f, r);
       f.current.setLocal(0, _yaw.setFromAxisAngle(UP, stepper.yaw));
+      // (the root's turn, and how much further round it will face `LOOKING` s on: what its head leads into; its lean into its acceleration)
+      legs.turn.rate = wrapAngle(stepper.yaw - facing) / f.dt;
+      legs.turn.ahead = r.forecast ? wrapAngle(r.forecast(LOOKING).yaw - stepper.yaw) : legs.turn.rate * LOOKING;
+      facing = stepper.yaw;
+      inertia?.step(r.velocity, stepper.yaw, f.dt);
       // (each leg's phase through its stride, 0 as it lands: its stance, then its swing — run on at the cadence and drawn toward where the
       // foot is, `LOCKING` /s, so a change of cadence does not jolt what rides on it)
       stepper.legs.forEach((leg, i) => {
@@ -125,6 +133,13 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
   };
 }
 
+/**
+ * How far ahead (s) the head leads into the turn the root makes: a person's eyes set off ~0.4 s before the step that turns, the head
+ * 50–130 ms after them, the trunk and pelvis later (read: Lamontagne et al. 2020, Front Neurol, PMC7739666, 90° walking turns); the head
+ * leads the body's yaw by ~0.2 s (snippet: a review of walking-turn prediction); with the neck's ~0.25 s follow (`carriage`), its aim this
+ * far ahead leaves it ~0.2 s before the body
+ */
+const LOOKING = 0.45;
 /** Tuned: a walk sets off for a goal further than `start` (m) and stops within `distance` (m) of it, slower than `speed` (m/s) */
 const STOP = { start: 0.05, distance: 0.03, speed: 0.1 };
 /** [D from read] strides of its slowest walk a body takes to turn half round on the spot: a horse's turn on the forehand is 4–5 hind

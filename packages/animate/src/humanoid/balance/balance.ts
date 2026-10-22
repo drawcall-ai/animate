@@ -43,7 +43,7 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
     const p = h.proportions;
     const base: Stance = { ...defaultStance(p), ...options.stance };
     const c = new Carriage(p, base, h.feet);
-    const posture = new Posture();
+    const posture = new Posture(h.species.inertia);
     const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
     const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };

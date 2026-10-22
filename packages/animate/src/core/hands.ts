@@ -248,7 +248,10 @@ function itemIn(pose: ReadonlyPose, bone: number, item: Item): Required<Placemen
   return { position: item.current.position.clone().sub(pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(item.current.quaternion) };
 }
 
-/** `hold` for a body other than a person: the chain of the hand holding `item` goes back to rest (the item on it) and keeps it there, endless or until `until`. */
+/**
+ * `hold` for a body other than a person: the chain of the hand holding `item` goes back to how the base carries it — its tip to rest —
+ * the item on it, and keeps to it there, endless or until `until` (a dog's neck carrying a ball nods, turns and leads as it walks).
+ */
 export function keep(body: Body, item: Item, until?: Exclude<Until, 'reached'>): Behaviour {
   return function* () {
     const hand = handHolding(body, item);
@@ -257,7 +260,10 @@ export function keep(body: Body, item: Item, until?: Exclude<Until, 'reached'>):
     const bones = body.pose.skeleton.chain(chainOf(body, hand));
     yield* action<Frame>({
       update: (f) => {
-        for (const b of bones) f.current.setLocal(b, followRotation(f.prev2.local(b), f.prev.local(b), REST, { accel: DIP.turnAccel, speed: DIP.turnSpeed }, f.dt, _q));
+        for (const b of bones) {
+          const goal = b === bones[bones.length - 1] ? REST : f.current.local(b);
+          f.current.setLocal(b, followRotation(f.prev2.local(b), f.prev.local(b), goal, { accel: DIP.turnAccel, speed: DIP.turnSpeed }, f.dt, _q));
+        }
       },
       until,
     });
