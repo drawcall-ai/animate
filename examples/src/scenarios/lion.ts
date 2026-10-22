@@ -72,7 +72,7 @@ const PREY = { lead: 22, pace: 9, escape: 16 };
 
 export function lionRun(): Scenario {
   return {
-    id: 'lion-run', title: 'A lion runs down its prey', duration: 34, actors: [], cameraDistance: 7, cameraAngles: { side: Math.PI / 2 },
+    id: 'lion-run', title: 'A lion runs down its prey', duration: 34, actors: [], cameraDistance: 4.5, cameraAngles: { side: Math.PI / 2 },
     description: 'A lion made of data only walks, trots and breaks into a full rotary gallop after its prey down a long field, then gives up the chase as it breaks away, slows and stops.',
     stage: (dev = false) => {
       // (the prey: off at its pace as the chase starts, breaking away once the lion is near; where it is at a time)
