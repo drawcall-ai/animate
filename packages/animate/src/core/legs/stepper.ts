@@ -319,7 +319,7 @@ export class Stepper {
         if (!w.capture && !airborne && st.capture !== undefined && w.u < settling) w.capture = outside(hullOf(legs.flatMap((other) => other === leg || !other.swing ? feet.print(other.i, other.anchor, other.yaw) : [])), xcom((1 - w.u) * w.T, _c)) > st.capture * s;
         // (re-aimed through the first half of the swing in time, frozen after: but for a hard stop, pulling it back into reach till late; a catch
         // as long as it may still move)
-        if (airborne || w.age < (1 - w.u) * w.T || (w.capture && w.u < settling)) [leg.anchor, leg.yaw] = landing(leg, (1 - w.u) * w.T);
+        if (airborne || (w.u < settling && (w.age < (1 - w.u) * w.T || w.capture))) [leg.anchor, leg.yaw] = landing(leg, (1 - w.u) * w.T);
         if (w.u < settling && !airborne) settle(leg, w, w.age < (1 - w.u) * w.T);
         if (w.u >= 1 - 1e-9) [leg.swing, leg.planted, leg.landed, leg.strike, leg.leapt] = [null, 0, true, w.strike, !!w.rel];
       } else {
