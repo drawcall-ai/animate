@@ -71,6 +71,7 @@ export function headTo(h: Humanoid, eyes: Live<Placement>, options: HeadOptions 
         // (the eyes and the head's turn where they were, moved on)
         at.follow(f.prev2.point(INDEX.head, p.eyes, _a), f.prev.point(INDEX.head, p.eyes, _b), goal.position, pace, f.dt, head.position);
         turned.follow(f.prev2.rotation(INDEX.head), f.prev.rotation(INDEX.head), level, { accel: pace.turnAccel, speed: pace.turnSpeed }, f.dt, head.quaternion);
+        under?.ask(f, goal.position, yawOf(head.quaternion));
         place(pose, p.eyes, head.position, head.quaternion);
         SPINE.forEach((bone, k) => {
           const q = joints[k].follow(f.prev2.local(bone), f.prev.local(bone), pose.local(bone), JOINTS, f.dt, _q);
@@ -78,7 +79,6 @@ export function headTo(h: Humanoid, eyes: Live<Placement>, options: HeadOptions 
           if (limit) clampRotation(q, limit);
           pose.setLocal(bone, q);
         });
-        under?.ask(f, goal.position, yawOf(head.quaternion));
       },
       until,
     });
@@ -122,7 +122,10 @@ class Under {
     const { lower, bow } = lowering(p, { height: p.eyeHeight, ahead: ((eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z - EYES_AHEAD * p.scale) / BOW_AHEAD, drop });
     // (standing where that bow puts the eyes: where it stands now, unless they are further ahead or
     // behind than it takes them; and how fast that moves: a head going off is stepped after as it goes)
-    const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
+    // The planner follows the carried posture's actual eye offset; the retiring balance keeps its standing estimate.
+    const spot = h.stepper
+      ? _spot.copy(eyes).sub(f.current.point(INDEX.head, p.eyes, _v)).add(f.current.com(_c)).setY(0)
+      : _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
     if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
     go.to.copy(spot);
     request(h.asks, { lower, bow, go, face });
