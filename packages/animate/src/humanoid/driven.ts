@@ -7,7 +7,7 @@ import { solveChain } from '../core/chain';
 import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { clampRotation } from '../core/limits';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle } from '../core/math';
+import { clamp, forwardOf, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, smoothstep, wrapAngle } from '../core/math';
 import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { Inertia } from '../core/inertia';
@@ -24,8 +24,12 @@ import { humanStepping } from './legs';
 import { KNEE_FLEXION } from './profile/limits';
 import { armsHeld, strideTurn, type Turn } from './posture/turn';
 
-/** Tuned: the trunk leaning forward crouched and into a run (rad), following within `TRUNK` (rad/s²); recalled (CMU mocap, as the balance posture has it): it nods ~±1.2° walking, ~±3° running (rad, peak). */
-const CROUCH_LEAN = 0.3, RUN_LEAN = 0.12, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
+/**
+ * Tuned: the trunk leaning forward crouched (rad), following within `TRUNK` (rad/s²); recalled (CMU mocap, as the balance posture has it): it
+ * nods ~±1.2° walking, ~±3° running (rad, peak). Read (Thorstensson et al. 1984, Acta Physiol Scand 121:9, abstract): the trunk leans
+ * forward ~6° walking, up to ~13° the faster it runs; tuned: `LEAN` (rad) on the nod's own forward mean, its hips → neck ~6° at 1.3 m/s.
+ */
+const CROUCH_LEAN = 0.3, LEAN = { walk: 0.11, run: 0.12 }, LEANING = { accel: 3 }, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
 /** Recalled: anterior pelvic tilt grows with speed (~5° walking, ~15° running; Novacheck 1998); tuned: changing within `accel` (rad/s²). */
 const TILT = { walk: 0.06, run: 0.25, accel: 8 };
 /**
@@ -85,7 +89,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
       } };
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
-    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
+    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], leans = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
     const inertia = h.species.inertia && new Inertia(h.species.inertia);
     const life = new Life(seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z)), shifts = [0, 0];
     yield* action<Frame>({ update: (f) => {
@@ -112,6 +116,10 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
         const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
         [tilts[0], tilts[1]] = [tilts[1], tilt];
+        // (and the trunk leaning forward with the pace it goes forward — not side-stepping nor backing — taken up and given up gently)
+        const onward = smoothstep(0, 1, Math.max(0, r.velocity.dot(forwardOf(yaw, _f))));
+        const forward = follow(leans[0], leans[1], lerp(LEAN.walk * onward, LEAN.run, run), LEANING, dt);
+        [leans[0], leans[1]] = [leans[1], forward];
         f.current.setLocal(0, quatYXZ(yaw + turn.pelvis, tilt, 0, _q));
         // (its quiet life: standing settled, nothing else asked of the legs or the trunk, it may shift its weight — let go as it walks off)
         // (motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
@@ -132,7 +140,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const lean = inertia ?? { pitch: 0, roll: 0 };
         // (the thorax turned off the pelvis, the shoulder going forward rising with it)
         const twist = clamp(asks.twist + turn.thorax - turn.pelvis, -0.8, 0.8);
-        const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean.pitch - tilt + nod + life.drift.z / QUIET.pendulum,
+        const bend = quatYXZ(twist, asks.bow + forward + CROUCH_LEAN * k + lean.pitch - tilt + nod + life.drift.z / QUIET.pendulum,
           KEEP * sway / p.scale + lean.roll - life.drift.x / QUIET.pendulum, _bend).slerp(IDENTITY, 0.5);
         // (the shoulders' own roll with the stride, and the chest's breath)
         const shoulders = quatYXZ(0, life.breath, turn.roll, _roll);
