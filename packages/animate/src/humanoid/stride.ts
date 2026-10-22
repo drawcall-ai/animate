@@ -99,7 +99,9 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     [c.walk, c.moving, c.yaw] = [walking(c.walk, speed, dt), moving, stepper.yaw];
     c.root.copy(root);
     c.offset.copy(posture.center(f));
-    life.update(dt, life.quiet(asks, h), speed);
+    const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
+      f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
+    life.update(dt, life.quiet(asks, h), activity);
     const requested = { lower: followed(asked.lower, asks.lower, LOWER, dt), bow: followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt), twist: followed(asked.twist, asks.twist, BOW, dt) };
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;
     // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts)
