@@ -68,10 +68,11 @@ export interface Locomotion {
   there: boolean;
   /** seconds standing on planted feet since the current walk started; the base resets it on a new walk */
   planted: number;
-  /** the thorax's rotation with the stride (rad, + to the left) */
+  /** the pelvis's and the thorax's turn with the stride (rad, + to the left) */
+  pelvisYaw: number;
   thoraxYaw: number;
   /** the requested quiet stance displacement from the centred stance (m, world) */
   quiet: Vector3;
 }
 
-export const createLocomotion = (facing: number): Locomotion => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0, thoraxYaw: 0, quiet: new Vector3() });
+export const createLocomotion = (facing: number): Locomotion => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0, pelvisYaw: 0, thoraxYaw: 0, quiet: new Vector3() });

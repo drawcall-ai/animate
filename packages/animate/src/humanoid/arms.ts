@@ -48,7 +48,9 @@ export function hangArms(h: Humanoid): Behaviour {
         phase += clamp(wrapAngle(g.phase - phase), 0, 4 * Math.PI * f.dt);
         const lead = lerp(LEAD.walk, LEAD.run, g.run);
         const p = h.proportions;
-        const yaw = yawOf(_h.copy(f.current.local(0)));
+        // (running, the arms hang and swing from the shoulders as the stride turns the thorax off the pelvis — not as an asked twist or
+        // a turn's lead turns the chest; walking, that turn is small and the arms keep to the pelvis's facing)
+        const yaw = yawOf(_h.copy(f.current.local(0))) + g.run * (g.thoraxYaw - g.pelvisYaw);
         const hips = f.current.position(0);
         const left = leftOf(yaw, _left);
         SIDES.forEach((side, s) => {
@@ -61,13 +63,13 @@ export function hangArms(h: Humanoid): Behaviour {
           const flex = lerp(0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * g.walk, 1.5 + 0.3 * swing(lead + LEAD.forearm), g.run) * (1 - smoothstep(0.6, 1.6, a));
           // the arm hanging plumb from the shoulder (as it was last, whoever placed the chest after),
           // out from the T-pose as far as keeps the hand clear of the thigh beside it (the hip's or
-          // the knee's, as the legs stand now; the pelvis' frame) — however the trunk bows, leans
-          // or twists — swung forward about the pelvis' left; the forearm forward
+          // the knee's, as the legs stand now; the arm's frame) — however the trunk bows, leans
+          // or twists — swung forward about that frame's left; the forearm forward
           set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
           const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
           const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
           const rest = _w.copy(hips).addScaledVector(left, sign * (thigh + CLEAR * p.height)).setY(f.current.position(INDEX[`${side}UpperArm`]).y - p.armLength);
-          clearArm(h, f, side, rest);
+          clearArm(h, f, side, rest, yaw);
           const clear = (outward(rest) - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / p.armLength;
           const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1)));
           const hang = _q.setFromAxisAngle(Y, yaw).multiply(_h.setFromAxisAngle(X, -a)).multiply(_p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out)));
@@ -80,10 +82,9 @@ export function hangArms(h: Humanoid): Behaviour {
   };
 }
 
-/** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh. */
-export function clearArm(h: Humanoid, f: Frame, side: Side, at: Vector3): Vector3 {
+/** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh, judged facing `yaw` (default: the pelvis's). */
+export function clearArm(h: Humanoid, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0))): Vector3 {
   const sign = side === 'left' ? 1 : -1, hips = f.current.position(0);
-  const yaw = yawOf(f.current.local(0));
   const inverse = _r.setFromAxisAngle(Y, -yaw);
   const local = _rest.subVectors(at, hips).applyQuaternion(inverse);
   const pad = CLEAR * h.proportions.height;

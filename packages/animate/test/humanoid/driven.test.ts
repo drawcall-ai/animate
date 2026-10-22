@@ -2,8 +2,8 @@ import { Vector3 } from 'three';
 import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
-import { type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
-import { forwardOf, leftOf } from '../../src/core/math';
+import { INDEX, type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
+import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/core/math';
 import type { Stepper } from '../../src/core/legs/stepper';
 
 const dt = 1 / 60;
@@ -137,5 +137,40 @@ it.each([
   expect(landed - off).toBeLessThan(0.6);
   expect(top).toBeGreaterThan(0.25);
   expect(lag).toBeLessThan(1e-9);
+  expect(h.log).toEqual([]);
+});
+
+/** Each yaw's first stride harmonic against the stride's phase: peak to peak (rad) and phase (rad) of `y ≈ A cos(phase − at)`. */
+function harmonic(samples: { phase: number; y: number }[]) {
+  const c = samples.reduce((sum, s) => sum + s.y * Math.cos(s.phase), 0) * 2 / samples.length;
+  const s = samples.reduce((sum, x) => sum + x.y * Math.sin(x.phase), 0) * 2 / samples.length;
+  return { range: 2 * Math.hypot(c, s), at: Math.atan2(s, c) };
+}
+
+// (the references, peak to peak: the pelvis 8–10° walking (recalled), 14–17° running 2.8–3.9 m/s (Kovše et al. 2026) and 10–16° at
+// 2.4–3.3 m/s (Perpiñá-Martínez et al. 2023); the shoulders 8.1° walking 1.5 m/s and 23.75° running 3 m/s (Pontzer et al. 2009), the
+// thorax below them less; the two 149° apart walking and 94 ± 61° running (Pontzer), the pelvis turning the other way running
+// (MacWilliams et al. 2014))
+it.each([
+  ['walking', 1.4, { pelvis: [6, 12], thorax: [5, 12], apart: [120, 180] }],
+  ['running', 3.5, { pelvis: [10, 18], thorax: [15, 26], apart: [0, 90] }],
+] as const)('%s: the pelvis and the thorax turn with the stride as people\'s do', (_, speed, band) => {
+  const pelvis: { phase: number; y: number }[] = [], thorax: { phase: number; y: number }[] = [];
+  const { h } = drive(6, moving(0.3, 6, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h) => {
+    if (t < 3) return;
+    const phase = h.locomotion.phase;
+    pelvis.push({ phase, y: yawOf(h.pose.rotation(0)) });
+    thorax.push({ phase, y: yawOf(h.pose.rotation(INDEX.chest)) });
+  });
+  const p = harmonic(pelvis), c = harmonic(thorax), deg = 180 / Math.PI, apart = Math.abs(wrapAngle(c.at - p.at)) * deg;
+  console.log(_, { pelvis: p.range * deg, thorax: c.range * deg, apart });
+  expect(p.range * deg).toBeGreaterThanOrEqual(band.pelvis[0]);
+  expect(p.range * deg).toBeLessThanOrEqual(band.pelvis[1]);
+  expect(c.range * deg).toBeGreaterThanOrEqual(band.thorax[0]);
+  expect(c.range * deg).toBeLessThanOrEqual(band.thorax[1]);
+  expect(apart).toBeGreaterThanOrEqual(band.apart[0]);
+  expect(apart).toBeLessThanOrEqual(band.apart[1]);
+  // (the turn the body's own: the look and the free arms read it)
+  expect(h.locomotion.thoraxYaw).not.toBe(0);
   expect(h.log).toEqual([]);
 });

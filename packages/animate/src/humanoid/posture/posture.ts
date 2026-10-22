@@ -10,16 +10,13 @@ import type { Proportions } from '../proportions';
 import type { Side } from '../bones';
 import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
+import { strideTurn, type Turn } from './turn';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
 const LIST = 0.05;
 const SWAY = 0.0085;
 const RUN_SWAY = 0.008;
 /** the walking pelvis's dip in double support below mid-stance (× height; Orendurff 2004) */
 const BOB = 0.016;
-/** the thorax against the pelvis's rotation: walking it counter-rotates (2.1× the pelvis), running it turns further with it (CMU mocap) */
-const COUNTER = { walk: 2.1, run: -1.3 };
-/** the thorax rolls with its rotation, the forward shoulder up (rad per rad: CMU mocap) */
-const THORAX_ROLL = { walk: 0.55, run: 0.14 };
 /** the trunk pitches forward at each double support and back over mid-stance (rad; CMU mocap); running, forward as the stance leg compresses */
 const NOD = { walk: 0.02, run: 0.06 };
 /** how far the pelvis shifts back as the trunk nods forward (× height per rad): the body's centre of mass stays */
@@ -55,9 +52,10 @@ export const walking = (walk: number, speed: number, dt: number) => walk + (smoo
 /** The inherited foot-clock entrainment, shared by both public phase conversions. */
 export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
 
-/** The trunk's posture for a sub-step: the chest's world rotation, the thorax's gait swing. */
+/** The trunk's posture for a sub-step: the chest's world rotation, the pelvis's and the thorax's turn with the stride. */
 export interface Trunk {
   chest: Quaternion;
+  pelvisYaw: number;
   thoraxYaw: number;
 }
 
@@ -74,6 +72,8 @@ export interface Upright {
   feet: readonly Foot[];
   pelvis: Vector3;
   pelvisRotation: Quaternion;
+  /** neither arm free to swing: both hands hold something */
+  held: boolean;
 }
 
 export interface Cycle {
@@ -96,6 +96,7 @@ export class Posture {
   private readonly weight = new Vector3();
   private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
+  private readonly turn: Turn = { pelvis: 0, thorax: 0, roll: 0 };
 
   /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
   carry(f: Pick<Frame, 'prev' | 'dt'>, c: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
@@ -109,12 +110,9 @@ export class Posture {
     const fwd = forwardOf(c.yaw, _f);
     const left = leftOf(c.yaw, _l);
 
-    // pelvic rotation: walking, the swinging leg's hip travels forward with it; running, the other way
+    // the pelvis and the thorax turned with the stride, the thorax rolling with its turn
     const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
-    const pelvisYaw = -0.09 * Math.tanh(1.2 * ahead) * walk * lerp(1, -1, run);
-    const chestYaw = lerp(COUNTER.walk, COUNTER.run, run) * pelvisYaw;
-    const thoraxYaw = pelvisYaw - chestYaw;
-    const thoraxRoll = -lerp(THORAX_ROLL.walk, THORAX_ROLL.run, run) * thoraxYaw;
+    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, p.scale, walk, run, c.held, this.turn);
     const { bob, nod: nodPhase, compression: comp } = cycle;
     const stride = this.phase = cycle.phase;
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
@@ -147,7 +145,7 @@ export class Posture {
     // the trunk: the thorax counter-rotating and rolling, leaning, nodding and bowing
     quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + life.breath, thoraxRoll, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
-    out.thoraxYaw = thoraxYaw;
+    [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }
 
   /** The old controller follows the CoM; its pelvis offset is measured from the completed pose. */

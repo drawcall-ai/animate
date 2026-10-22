@@ -198,6 +198,37 @@ it('keeps the rifle on the aim through fast turns: standing and walking, at the 
   expect(h.log.filter((entry) => /Arm|Hand|Shoulder/.test(entry.where))).toEqual([]);
 });
 
+// (a sprint with the rifle in both hands: no arm swings, so the trunk turns further with the stride than a free runner's — read, Arellano
+// & Kram 2014: arms held across the chest the pelvis turns 102% further, the shoulders 44%; Pontzer et al. 2009: arms folded, the shoulders
+// 50% further; snippet, Seay et al. 2011: soldiers running with a rifle turn the trunk further — from a free runner's ~14° pelvis and
+// ~20° thorax peak to peak; the grips held throughout)
+it('sprints with the rifle, the trunk turning with the stride, both hands on their grips', () => {
+  const sim = new Simulation(shooter(), undefined, true);
+  const pelvis: number[] = [], shoulders: number[] = [];
+  let grip = 0;
+  while (sim.t < 23) {
+    sim.step();
+    const h = sim.actors[0];
+    if (sim.t < 20.5) continue;
+    const across = (l: Vector3, r: Vector3) => {
+      const d = l.sub(r);
+      return Math.atan2(d.dot(forwardOf(h.locomotion.facing)), d.dot(leftOf(h.locomotion.facing))) * 180 / Math.PI;
+    };
+    pelvis.push(across(h.pose.position(INDEX.leftUpperLeg).clone(), h.pose.position(INDEX.rightUpperLeg).clone()));
+    shoulders.push(across(h.pose.position(INDEX.leftUpperArm).clone(), h.pose.position(INDEX.rightUpperArm).clone()));
+    grip = Math.max(grip, gripError(h));
+  }
+  const range = (a: number[]) => Math.max(...a) - Math.min(...a);
+  console.log('rifle sprint', { pelvis: range(pelvis), shoulders: range(shoulders), grip, run: sim.actors[0].locomotion.run });
+  expect(sim.actors[0].locomotion.run).toBe(1);
+  expect(range(pelvis)).toBeGreaterThanOrEqual(18);
+  expect(range(pelvis)).toBeLessThanOrEqual(30);
+  expect(range(shoulders)).toBeGreaterThanOrEqual(20);
+  expect(range(shoulders)).toBeLessThanOrEqual(32);
+  expect(grip).toBeLessThanOrEqual(0.01);
+  expect(sim.actors[0].log).toEqual([]);
+});
+
 it('takes the foregrip while the player keeps turning, and never throws on a late reach', () => {
   const sim = new Simulation(shooter(), undefined, true);
   sim.advanceTo(0.5);

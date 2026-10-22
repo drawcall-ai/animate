@@ -19,29 +19,21 @@ import type { Humanoid } from './humanoid';
 import { solePoints } from './landmarks';
 import { humanStepping } from './legs';
 import { KNEE_FLEXION } from './profile/limits';
+import { armsHeld, strideTurn, type Turn } from './posture/turn';
 
 /** Tuned: the trunk leaning forward crouched and into a run (rad), following within `TRUNK` (rad/s²); recalled (CMU mocap, as the balance posture has it): it nods ~±1.2° walking, ~±3° running (rad, peak). */
 const CROUCH_LEAN = 0.3, RUN_LEAN = 0.12, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
 /** Recalled: anterior pelvic tilt grows with speed (~5° walking, ~15° running; Novacheck 1998); tuned: changing within `accel` (rad/s²). */
 const TILT = { walk: 0.06, run: 0.25, accel: 8 };
 /**
- * Read (Novacheck 1998): the pelvis turns forward on the side of the leg in midswing, the shoulders counter-rotating about it; here
- * the thorax keeps square to the facing. Tuned: ±2° (rad, peak) — recalled, the pelvis turns ±4–6°, but this pelvis does not sway
- * aside as a free one does, and more would swing the leaning chest wider than it.
- */
-const PELVIC_ROTATION = 0.035;
-/**
  * Recalled (Orendurff et al. 2004): the pelvis sways ~3–5 cm peak to peak over the stance foot walking, a runner's less; tuned: ±1.4 cm
  * walking, ±0.9 cm running (m, default body) — one sinusoid a stride, followed within `accel` (m/s²), the root kept exact — a player's camera and movement ride the root, not the hips
  */
 const SWAY = { walk: 0.014, run: 0.009, accel: 1 };
-/**
- * Recalled (CMU mocap, as the balance posture has it): the thorax counter-rotates against the pelvis and rolls with its rotation, the
- * forward shoulder up; tuned: `turn` × the pelvis's turn back the other way, rolled `roll` × that
- */
+/** Tuned (rad/s²): the pelvis's turn with the stride changes within this — ~4× a running pelvis's own swing (±0.2 rad at 1.4 strides/s peaks at ~16 rad/s², arms held ×1.6): only a walk eased into a run, or back, is smoothed */
+const TURN = { accel: 120 };
 /** Tuned (rad/m): the trunk leans back over the sway a little, the chest riding the pelvis no wider than it */
 const KEEP = 1;
-const COUNTER = { turn: 1.5, roll: -1 };
 /**
  * Read (Novacheck 1998): the trunk leans forward to speed up, keeping the ground's push behind the centre of mass; tuned: `share` of
  * the lean atan(a / g) that would put it through the centre of mass, at most `ahead` (rad), and back slowing down at most `back`.
@@ -64,7 +56,7 @@ export function driven(h: Humanoid, root: Live<DrivenRoot>): Behaviour {
 
 /** `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`). */
 export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal,
-  carry?: (f: Frame, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour {
+  carry?: (f: Frame, asks: Asks, stepper: Stepper) => [pelvis: number, thorax: number], record: Stepping = humanStepping(h.proportions)): Behaviour {
   return function* () {
     const p = h.proportions;
     const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: p.ankleHeight, rotation: footRotation,
@@ -78,25 +70,33 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
       } };
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
-    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0];
+    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
     let was: Vector3 | null = null;
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
       const dt = f.dt, r = rootOf(f, asks, stepper);
+      if (!carry) {
+        // (the pelvis and the thorax turned with the stride as the feet last stood — the pelvis's turn followed within `TURN`, a run
+        // setting in within a step not snapping it round — the legs told of it before they reach from its hips; its arms held, the trunk
+        // turns further)
+        const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(forwardOf(stepper.yaw, _f));
+        strideTurn(ahead, p.scale, stepper.moving, stepper.run, armsHeld(h), turn);
+        turn.pelvis = follow(turns[0], turns[1], turn.pelvis, TURN, dt);
+        [turns[0], turns[1]] = [turns[1], turn.pelvis];
+        stepper.turn = turn.pelvis;
+      }
       stepper.move(f, r);
       const k = stepper.crouch;
       const { yaw, moving, run, Ts, legs } = stepper;
       // (a body carrying itself otherwise — a walker's posture — places the pelvis and trunk itself, its thorax turned so far)
-      const thoraxYaw = carry?.(f, asks, stepper) ?? 0;
+      if (carry) [turn.pelvis, turn.thorax] = carry(f, asks, stepper);
       if (!carry) {
         // the pelvis tipped forward with the stride (room for the hip to extend behind), the trunk leaning on it as asked
         // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
         const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
         [tilts[0], tilts[1]] = [tilts[1], tilt];
-        // (turned toward the swinging leg's side as it comes through, the thorax back the other way)
-        const turn = -PELVIC_ROTATION * moving * legs.reduce((sum, leg) => sum + (leg.swing ? leg.sign * Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0);
-        f.current.setLocal(0, quatYXZ(yaw + turn, tilt, 0, _q));
+        f.current.setLocal(0, quatYXZ(yaw + turn.pelvis, tilt, 0, _q));
         // (the pelvis swaying over the stance foot, the root staying where the player has it: only the hips move about it)
         // (a sinusoid of the stride, over the left foot at the right's mid-swing: `phase` 0 as the left lifts, its mid-swing π (1 − stance share) on)
         const sway = follow(sways[0], sways[1], -lerp(SWAY.walk, SWAY.run, run) * p.scale * moving * Math.cos(stepper.phase - Math.PI * (1 - Ts / stepper.cycle)), { accel: SWAY.accel }, dt);
@@ -110,11 +110,10 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const speeding = _v.subVectors(r.velocity, was).divideScalar(dt).dot(forwardOf(yaw, _f));
         was.copy(r.velocity);
         const lean = stepper.airborne ? 0 : clamp(SPEEDING.share * Math.atan2(speeding, GRAVITY), -SPEEDING.back, SPEEDING.ahead);
-        // (the thorax turned back against the pelvis, the shoulder going forward rising with it)
-        const thorax = -COUNTER.turn * turn;
-        const twist = clamp(asks.twist + thorax - turn, -0.8, 0.8);
+        // (the thorax turned off the pelvis, the shoulder going forward rising with it)
+        const twist = clamp(asks.twist + turn.thorax - turn.pelvis, -0.8, 0.8);
         const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean - tilt + nod, KEEP * sway / p.scale, _bend).slerp(IDENTITY, 0.5);
-        const shoulders = quatYXZ(0, 0, COUNTER.roll * thorax, _roll);
+        const shoulders = quatYXZ(0, 0, turn.roll, _roll);
         [INDEX.spine, INDEX.chest].forEach((bone, k) => {
           const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
           if (bone === INDEX.chest) local.multiply(shoulders);
@@ -157,7 +156,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         h.feet[i].phase = leg.swing ? 'swing' : 'planted';
       });
       const g = h.locomotion, stepping = legs.some((leg) => leg.swing);
-      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, thoraxYaw];
+      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.pelvisYaw, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, turn.pelvis, turn.thorax];
       g.velocity.copy(r.velocity).setY(0);
       g.planted = g.moving ? 0 : g.planted + dt;
       g.settled = stepper.settled;
