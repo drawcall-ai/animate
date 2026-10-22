@@ -47,19 +47,19 @@ const POUCHES = [new Vector3(0.17, -0.04, 0.05), new Vector3(0.17, -0.04, -0.03)
 const EASE = { drift: 0.004, turn: 0.012, lift: 0.025, roll: 0.12, wander: 0.025, glance: 0.15 };
 const SHOULDER: Rhythm = { first: [4, 8], every: [6, 12], hold: [0.6, 1.2], rate: 4, quiet: 2, pick: swing };
 const GLANCE: Rhythm = { first: [3, 6], every: [4, 9], hold: [0.8, 1.6], rate: 5, quiet: 1.5, pick: swing };
-export const SHOOTER_DURATION = 53;
-// Tuned mouse turns (minimum jerk): a turn while walking, then a quick turn standing.
-const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6]]);
+export const SHOOTER_DURATION = 62;
+// Tuned mouse turns (minimum jerk): a turn while walking, then a quick turn standing, then quick turns aiming.
+const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6], [56.8, -0.6], [57.4, 0.4], [58.2, 0.4], [58.8, -0.6]]);
 
 /** Deterministic input, shared by headless runs and unattended playback. */
 export function shooterTrack(t: number, input: Player['input']) {
   // Demo: walk forward, strafe left and right, back-pedal, ADS standing and walking, sprint,
   // walk while turning, stop and turn in place, ADS and fire; crouch-walk; jump from a walk and
-  // from a sprint; reload while walking.
+  // from a sprint; reload while walking; stand at ease; quick turns aiming.
   const between = (from: number, to: number) => t >= from && t < to;
   input.move.z = between(3, 6) || between(15.5, 17) || between(18, 28) || between(36.5, 39.5) || between(41, 47.5) || between(48.5, 51.8) ? 1 : between(10, 12) ? -1 : 0;
   input.move.x = between(6, 8) ? 1 : between(8, 10) ? -1 : 0;
-  input.ads = between(13, 17) || between(32, 35);
+  input.ads = between(13, 17) || between(32, 35) || between(56, 60);
   input.sprint = between(18.5, 23.5) || between(44, 47);
   input.crouch = between(35.5, 40.3);
   input.jump = between(42.5, 42.6) || between(45.7, 45.8);
