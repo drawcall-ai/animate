@@ -138,12 +138,21 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const along = stepper.yaw + leg.sign * record.toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
         const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
         const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(p.thigh).add(thigh);
-        // (planted, the leg turns as the foot needs; swinging, the knee bends toward the pole and the foot turns within the ankle's range, so the knee never swivels to suit it)
+        // The pole guides the free swing; the chain progressively takes the foot orientation needed for contact.
         const place = (at: Vector3) => {
           solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole });
           const ankle = _local.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(pose.foot);
           const ankleRange = f.current.skeleton.limits[INDEX[`${side}Foot`]];
+          const unrestricted = leg.swing ? ankle.clone() : null;
           if (ankleRange) clampRotation(ankle, ankleRange);
+          // Prepare the planted orientation during terminal swing instead of changing the chain's constraints at contact.
+          if (leg.swing && leg.swing.u > 0.5 && unrestricted && ankle.angleTo(unrestricted) > 1e-6) {
+            const landing = f.current.rotation(INDEX[`${side}LowerLeg`]).clone().multiply(ankle)
+              .slerp(pose.foot, minimumJerk((leg.swing.u - 0.5) / 0.5));
+            solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: landing }, pole, twist: 0 });
+            ankle.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(landing);
+            if (ankleRange) clampRotation(ankle, ankleRange);
+          }
           f.current.setLocal(INDEX[`${side}Foot`], ankle);
           // (planted, the toes lie on the floor; swinging, they keep their own bend whatever the ankle's range left of the foot's turn)
           const toes = _local.copy(leg.swing ? pose.foot : f.current.rotation(INDEX[`${side}Foot`])).invert().multiply(pose.toes);
