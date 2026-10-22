@@ -6,7 +6,7 @@ import { Quaternion, Vector3 } from 'three';
 import { STEP as SUB_STEP, type Frame } from '../body';
 import type { ReadonlyPose } from '../pose';
 import { follow } from '../follow';
-import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle } from '../math';
+import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle, yawOf } from '../math';
 import { quintic } from './swing';
 import { hullOf, outside, xcomOf, type Spot } from './support';
 import { strideAt, type Gait } from './gait';
@@ -97,7 +97,7 @@ export interface Feet {
 }
 
 export interface FootPose { ankle: Vector3; foot: Quaternion; toes: Quaternion; yaw: number }
-interface Swing { capture: boolean; u: number; age: number; rest: number; T: number; x: Vector3; v: Vector3; a: Vector3; fromYaw: number; fromPitch: number; toes: Quaternion; strike: number; lift: number; run: number; rel: { x: number; v: number; a: number } | null }
+interface Swing { capture: boolean; u: number; age: number; rest: number; T: number; x: Vector3; v: Vector3; a: Vector3; turn: { x: number; v: number; a: number }; fromPitch: number; toes: Quaternion; strike: number; lift: number; run: number; rel: { x: number; v: number; a: number } | null }
 export interface Leg { i: number; leapt?: boolean; sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean; planted: number; lifted: number; strike: number; landed: boolean; swing: Swing | null }
 type Leap = { phase: 'ground' | 'launch' | 'air' | 'landed' | 'down' | 'up'; since: number; speed: number; land: number; bottom: number; rise: number; vy: number; a: number };
 
@@ -254,7 +254,7 @@ export class Stepper {
     let low = -Infinity, high = Infinity;
     for (const leg of legs) {
       // (with a foreseen root, a swinging foot as it is turned now: its landing foresees the whole turn, the hips do not yet)
-      const now = leg.swing && r.forecast ? leg.swing.fromYaw + wrapAngle(leg.yaw - leg.swing.fromYaw) * minimumJerk(leg.swing.u) : leg.yaw;
+      const now = leg.swing && r.forecast ? leg.swing.turn.x : leg.yaw;
       const body = yaws[1] + wrapAngle(now - leg.sign * toeOut - yaws[1]);
       [low, high] = [Math.max(low, body - pelvisTurn), Math.min(high, body + pelvisTurn)];
     }
@@ -407,7 +407,7 @@ export class Stepper {
       const toesBone = feet.legs[leg.i].toes, toes = toesBone === undefined ? new Quaternion() : f.prev.local(toesBone).clone();
       const T = airborne ? air + dt : Tsw;
       this.owed[leg.i] = false;
-      leg.swing = { capture: leg === catcher, u: dt / T, age: dt, rest: T, T, x, v: velocity, a: new Vector3(), fromYaw: leg.yaw, fromPitch: leg.pitch, toes, strike: 0,
+      leg.swing = { capture: leg === catcher, u: dt / T, age: dt, rest: T, T, x, v: velocity, a: new Vector3(), turn: { x: leg.yaw, v: wrapAngle(yawOf(f.prev.rotation(bone)) - yawOf(f.prev2.rotation(bone))) / dt, a: 0 }, fromPitch: leg.pitch, toes, strike: 0,
         lift: (airborne ? st.lift.jump : lerp(st.lift.walk, st.lift.run, run) * (1 - st.crouch.lift * k)) * s, run, rel: null };
       [leg.anchor, leg.yaw] = landing(leg, T - dt);
       settle(leg, leg.swing);
@@ -552,7 +552,7 @@ export class Stepper {
         w.x.set(at.x - hips.x, at.y, at.z - hips.z);
         w.v.set(at.x - was.x - hips.x + hipsWas.x, at.y - was.y, at.z - was.z - hips.z + hipsWas.z).divideScalar(dt);
         w.a.set(0, 0, 0);
-        [w.fromYaw, w.fromPitch, w.u, w.T, w.age, w.lift, w.run] = [w.fromYaw + wrapAngle(leg.yaw - w.fromYaw) * minimumJerk(w.u), leg.pitch, dt / w.rest, w.rest, dt, st.lift.jump * s, 0];
+        [w.fromPitch, w.u, w.T, w.age, w.lift, w.run] = [leg.pitch, dt / w.rest, w.rest, dt, st.lift.jump * s, 0];
         if (toesBone !== undefined) w.toes.copy(f.prev.local(toesBone));
       }
       const u = w.u;
@@ -562,7 +562,9 @@ export class Stepper {
       const land = feet.ankle(leg.i, leg.anchor, leg.yaw, strike, new Vector3());
       if (airborne) for (const axis of ['x', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis] - pelvis[axis] - r.velocity[axis] * air, -r.velocity[axis], w.rest, dt);
       else for (const axis of ['x', 'y', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], land[axis], 0, w.rest, dt);
-      const yawNow = w.fromYaw + wrapAngle(leg.yaw - w.fromYaw) * minimumJerk(u);
+      // Retarget the turn with its current velocity and acceleration, just like the ankle's position.
+      [w.turn.x, w.turn.v, w.turn.a] = quintic(w.turn.x, w.turn.v, w.turn.a, w.turn.x + wrapAngle(leg.yaw - w.turn.x), 0, w.rest, dt);
+      const yawNow = w.turn.x;
       leg.pitch = w.fromPitch * (1 - minimumJerk(u / 0.45)) + strike * minimumJerk((u - 0.6) / 0.4);
       const lean = feet.lean(leg.i, f.prev, yawNow);
       // (walking, pushed off: the ankle plantarflexed most just after the toes leave the floor, in line again by mid-swing)
@@ -676,7 +678,7 @@ export class Stepper {
       const w = leg.swing;
       if (w) {
         // (turned no further from a swinging foot, as it turns on to its landing, than the pelvis may: nor further than it is already)
-        const turned = (t: number) => Math.abs(wrapAngle(forecast(t).yaw - (w.fromYaw + wrapAngle(leg.yaw - w.fromYaw) * minimumJerk(w.u + t / w.T)) + leg.sign * st.toeOut));
+        const turned = (t: number) => Math.abs(wrapAngle(forecast(t).yaw - quintic(w.turn.x, w.turn.v, w.turn.a, w.turn.x + wrapAngle(leg.yaw - w.turn.x), 0, (1 - w.u) * w.T, t)[0] + leg.sign * st.toeOut));
         const allowed = Math.max(st.twist ?? PELVIS_TURN, turned(0)), rest = (1 - w.u) * w.T;
         for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (turned(t) > allowed + 1e-6) return false;
         // (a gait's landing, frozen once aimed, is kept within reach from then on: its body's forecast may turn out slower)
