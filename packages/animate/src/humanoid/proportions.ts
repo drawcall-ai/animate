@@ -13,8 +13,12 @@ export const DEFAULT_HEIGHT = 1.75;
 export interface Proportions extends Rest {
   /** floor to the top of the head, standing */
   readonly height: number;
-  /** `height` over the default body's: scales distances tuned for the default body */
+  /** `height` over the default body's: scales distances tuned for the default body that its whole height sets */
   readonly scale: number;
+  /** `legLength` over the default body's: scales the distances its legs set (steps, stance, clearance, how low it goes) */
+  readonly legs: number;
+  /** `armLength` over the default body's: scales the distances its arms set (reach, where it holds things, how near it stands) */
+  readonly arms: number;
   /** in the head bone's frame */
   readonly head: { eye: Vector3; ear: Vector3; nose: Vector3; top: Vector3 };
   /** the heel in the foot bone's frame, the toe tips in the toes bone's frame */
@@ -113,6 +117,8 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Pro
     ...rest,
     height: H,
     scale: H / DEFAULT_HEIGHT,
+    legs: (thigh + shin) / DEFAULT_LEG,
+    arms: (upperArm + forearm) / DEFAULT_ARM,
     head,
     sole,
     hipHeight: rest.hips.y,
@@ -133,6 +139,10 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Pro
     eyeHeight: headHeight(rest) + head.eye.y,
   };
 }
+
+/** the default body's hip joint to ankle and upper-arm joint to wrist (m): its thigh and shank, its upper arm and forearm */
+const DEFAULT_LEG = (0.245 + 0.246) * DEFAULT_HEIGHT;
+const DEFAULT_ARM = (0.186 + 0.146) * DEFAULT_HEIGHT;
 
 /** head bone origin above the floor, T-pose */
 const headHeight = (r: Rest) => r.hips.y + r.offsets.spine.y + r.offsets.chest.y + r.offsets.neck.y + r.offsets.head.y;

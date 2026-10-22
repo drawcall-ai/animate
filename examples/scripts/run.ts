@@ -1,11 +1,12 @@
 import { type LogEntry } from '@drawcall/animate';
+import type { CharacterModel } from '@pmndrs/viverse';
 import { DEFAULT_HEIGHT } from '../../packages/animate/src/humanoid/proportions';
-import type { Scenario } from '../src/scenario';
+import type { Role, Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 
-/** Run with in-code checks; one extra step lets observers read the last final pose. */
-export function run(sc: Scenario): LogEntry[] {
-  const sim = new Simulation(sc, undefined, true);
+/** Run with in-code checks (the actors `model`'s, default the default body); one extra step lets observers read the last final pose. */
+export function run(sc: Scenario, model?: (role: Role) => CharacterModel): LogEntry[] {
+  const sim = new Simulation(sc, model, true);
   while (sim.t < sc.duration) sim.step();
   sim.step();
   const extra = sim.stage.bodies?.flatMap((b, i) => b.log.map((entry) => ({ ...entry, where: `body ${i}: ${entry.where}` }))) ?? [];
