@@ -257,7 +257,7 @@ function pickWhileMoving(c: Carriage, t: Timing, lead: number, xcom: Readonly<Ve
   const { steps, feet } = c;
   let last = c.lastLanded;
   // setting off: the foot on the side of the goal leads (no stepping across)
-  if (steps[0].plantedTime > 0.3 && steps[1].plantedTime > 0.3) {
+  if (c.starting || (steps[0].plantedTime > 0.3 && steps[1].plantedTime > 0.3)) {
     const gx = c.goal.x - c.root.x;
     const gz = c.goal.z - c.root.z;
     const gl = Math.hypot(gx, gz);

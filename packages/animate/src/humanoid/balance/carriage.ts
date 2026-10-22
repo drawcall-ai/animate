@@ -114,10 +114,12 @@ export class Carriage {
   private goalTurn = 0;
   /** how long the extrapolated centre of mass has been out of the feet (s) */
   falling = 0;
-  /** it has walked (and come to rest since, or not); a walk is under way; it was just started and no foot has lifted yet */
+  /** it has walked (and come to rest since, or not); a walk is under way; it was just started and no foot has lifted for it yet (a step lifted before it, squaring the stance, is not its first) */
   walked = false;
   moving = false;
   starting = false;
+  /** when the walk under way started (the step clock's s) */
+  private startedAt = -Infinity;
   /** the goal is so far off the facing that the body turns where it stands before it goes */
   private turningFirst = false;
   /** 0 standing … 1 walking (smoothed) */
@@ -244,8 +246,9 @@ export class Carriage {
       this.moving = this.walked = true;
       // gait initiation: the first step goes at once, the body falls into it
       this.starting = true;
+      this.startedAt = this.clock;
     }
-    if (this.starting && this.steps.some((s) => s.swing)) this.starting = false;
+    if (this.starting && this.lastLiftAt >= this.startedAt) this.starting = false;
     const vx = v.x;
     const vz = v.z;
     if (this.moving) {
