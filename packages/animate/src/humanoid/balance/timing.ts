@@ -1,5 +1,5 @@
 // From the old core (a801be4:packages/core/src/gait/timing.ts).
-import { DEFAULT_HEIGHT, type Proportions } from '../proportions';
+import type { Proportions } from '../proportions';
 import { clamp, lerp, smoothstep } from '../../core/math';
 
 /** A step's timing at some speed (s). */
@@ -13,20 +13,20 @@ export interface Timing {
   run: number;
 }
 
-/** 0 walking … 1 running, by speed (m/s): people switch at ~2 m/s (Froude number ≈ 0.5) */
-export const runAmount = (p: Proportions, speed: number) => smoothstep(1.7, 2.1, speed * Math.sqrt(DEFAULT_HEIGHT / p.height));
+/** 0 walking … 1 running, by speed (m/s): people switch at ~2 m/s (Froude number v²/gL ≈ 0.5, L the leg's length) */
+export const runAmount = (p: Proportions, speed: number) => smoothstep(1.7, 2.1, speed / Math.sqrt(p.legs));
 
 /**
  * Step timing at ground speed `speed` (m/s), `along` of it along the facing (−1 … 1) and
- * `lateral` of it across (0 … 1): the walk ratio (step length / cadence) 0.0056 m·min/step for a
- * DEFAULT_HEIGHT adult (Sekiya); sideways and backward steps are short, a quicker rhythm; running,
- * short contacts and a flight phase.
+ * `lateral` of it across (0 … 1): the walk ratio (step length / cadence) 0.0056 m·min/step for an
+ * adult of the default body (Sekiya), steps as long as the legs; sideways and backward steps are short, a quicker rhythm; running,
+ * short contacts and a flight phase, its cadence as quick as a leg of its length swings (Froude).
  */
 export function stepTiming(p: Proportions, speed: number, along: number, lateral: number): Timing {
-  const walkRatio = 0.0056 * p.scale;
+  const walkRatio = 0.0056 * p.legs;
   let cadence = Math.max(1.15, Math.sqrt((60 * speed) / walkRatio) / 60);
   if (speed > 0.05) {
-    const stepMax = (along > 0 ? lerp(0.32, 0.75, along) : lerp(0.32, 0.4, -along)) * p.scale;
+    const stepMax = (along > 0 ? lerp(0.32, 0.75, along) : lerp(0.32, 0.4, -along)) * p.legs;
     cadence = Math.max(cadence, speed / stepMax);
   }
   cadence = Math.min(cadence, 2.6);
@@ -35,7 +35,7 @@ export function stepTiming(p: Proportions, speed: number, along: number, lateral
   const doubleSupport = clamp(0.2 * step, 0.06, 0.14) * (1 - 0.6 * smoothstep(0.5, 0.9, lateral));
   const run = runAmount(p, speed);
   if (run <= 0) return { step, swing, doubleSupport, stance: step + doubleSupport, run };
-  const runCadence = clamp(2.6 + 0.15 * (speed - 2.5), 2.5, 3.2) * Math.sqrt(DEFAULT_HEIGHT / p.height);
+  const runCadence = clamp(2.6 + 0.15 * (speed - 2.5), 2.5, 3.2) / Math.sqrt(p.legs);
   const runStep = 1 / runCadence;
   const runStance = clamp(0.75 / speed + 0.02, 0.18, 0.32);
   return { step: lerp(step, runStep, run), swing: lerp(swing, 2 * runStep - runStance, run), doubleSupport, stance: lerp(step + doubleSupport, runStance, run), run };

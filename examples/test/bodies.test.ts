@@ -17,11 +17,8 @@ const OPEN = new Set<string>([
   'lift-heavy on the soldier: final-pose dev checks',
   'shooter on the outlier: final-pose dev checks',
   'stable-morning on the outlier: final-pose dev checks',
-  'stroll on the outlier: final-pose dev checks',
-  'pickup-shelf on the outlier: final-pose dev checks',
   'vr on the outlier: final-pose dev checks',
   'knight-arming on the outlier: final-pose dev checks',
-  'legs-biped on the outlier: final-pose dev checks',
 ]);
 
 for (const [name, { joints, height }] of Object.entries(SKELETONS)) {
