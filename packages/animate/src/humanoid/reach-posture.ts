@@ -62,7 +62,7 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // so that counter-shift cannot make a shoulder ask for still more bow.
   const from = _v.copy(hand).sub(f.prev.com(_station));
   const ahead = from.dot(forwardOf(h.locomotion.facing, _forward));
-  const lateral = from.dot(_left.set(Math.cos(h.locomotion.facing), 0, -Math.sin(h.locomotion.facing))) - (side === 'left' ? 1 : -1) * p.shoulderHalfWidth;
+  const lateral = _v.subVectors(hand, shoulder).dot(_left.set(Math.cos(h.locomotion.facing), 0, -Math.sin(h.locomotion.facing)));
   // Tuned 2% reserve for the articulated shoulder arc: its single lever slightly
   // overestimates the reach available when the pelvis tucks in a deep squat.
   const reach = 0.98 * ARM_REACH * p.armLength;
