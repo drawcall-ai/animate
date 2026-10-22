@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { eyesOf, jointOf } from '../src/joints';
 import { Peak, type Frame } from './frame';
+import { aroundTheTrunk } from './clearance';
 
 /**
  * How closely the eyes are on what the script asks them to look at, and the hands stay on what
@@ -104,7 +105,7 @@ export class Targets {
       this.trackedPeak.see(error, t);
       // (judged on as much of it as a hand reaches standing: no lower than the floor lets the wrist, no higher than the arm raised flat-footed)
       const p = h.proportions, reached = _r.copy(target).setY(Math.min(Math.max(target.y, FLOOR * p.scale), p.shoulderHeight + p.armLength));
-      this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm));
+      this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm), aroundTheTrunk(h, s, reached));
     }
     for (const s of ['left', 'right'] as const) {
       const held = h.holding[s];
@@ -120,11 +121,12 @@ export class Targets {
   /**
    * A tracked target judged by its course, not by one fixed bound: at a hold (still for `HOLD.after` s) within `HOLD.within`; moving or
    * just stopped, behind it at most as far as it goes in `LAG.time` plus `LAG.within` (the hand or head lags a moving target, more so
-   * while the body steps after it); within `REACHABLE` of the arm's length of its shoulder — a wrist's, reached without a step —
+   * while the body steps after it) plus, for a wrist whose straight reach would cut its own trunk, how much longer its way round the
+   * front is (`around`: the hand goes round, not through); within `REACHABLE` of the arm's length of its shoulder — a wrist's, reached without a step —
    * within `LAG.within` too once it has been there `LAG.settle` s; held out of that reach, as near as the arm goes plus `LAG.within`.
    * A tracked head is placed by the whole body, bowing and turning: held, within `HOLD.head`.
    */
-  private judge(course: Course, target: Vector3, error: number, reachable: boolean, t: number, what: string, beyond = 0) {
+  private judge(course: Course, target: Vector3, error: number, reachable: boolean, t: number, what: string, beyond = 0, around = 0) {
     const held = what === 'head' ? HOLD.head : reachable ? HOLD.within : undefined;
     // (one that appears or jumps is a new one: reached for afresh, judged once a reach's time is up)
     if (!course.at || course.at.distanceTo(target) > JUMP) [course.fresh, course.still, course.reachable] = [t, t, NaN];
@@ -137,7 +139,7 @@ export class Targets {
     else if (Number.isNaN(course.still)) course.still = t;
     if (!reachable) course.reachable = NaN;
     else if (Number.isNaN(course.reachable)) course.reachable = t;
-    let bound = speed * LAG.time + LAG.within, kind = 'lag';
+    let bound = speed * LAG.time + LAG.within + around, kind = 'lag';
     if (t - course.reachable >= LAG.settle) [bound, kind] = [LAG.within, 'reachable'];
     // (held still out of reach without a step, it is reached for as far as the arm goes while the body comes)
     if (t - course.still >= HOLD.after) [bound, kind] = held === undefined ? [beyond + LAG.within, 'held out of reach'] : [held, 'hold'];

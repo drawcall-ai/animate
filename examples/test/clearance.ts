@@ -64,7 +64,7 @@ export class Clearance {
   }
 }
 
-/** the least distance between segments `a`–`b` and `c`–`d` */
+/** the least distance between segments `a`–`b` and `c`–`d` (their closest points left in `_p`, `_q`) */
 export function segmentDistance(a: Vector3, b: Vector3, c: Vector3, d: Vector3): number {
   const u = _u.subVectors(b, a);
   const v = _v.subVectors(d, c);
@@ -89,6 +89,30 @@ const _v = new Vector3();
 const _w = new Vector3();
 const _p = new Vector3();
 const _q = new Vector3();
+
+/**
+ * How much further than straight arm `side` reaches for `target` (world) going round the front of its own trunk (m): 0 while the
+ * straight line from its shoulder to the target keeps a forearm's radius off the trunk's capsules; else that line bent forward round
+ * the capsule it cuts deepest — from the shoulder to the point a forearm's radius in front of the trunk's axis there (the hips'
+ * facing), on to the target — less the straight line. The longest such way round of the two capsules.
+ */
+export function aroundTheTrunk(h: Frame['h'], side: 'left' | 'right', target: Vector3): number {
+  const H = h.proportions.height;
+  const hips = h.model.scene.getObjectByName('hips');
+  if (!hips) throw new Error('no hips');
+  const front = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0).normalize();
+  const shoulder = jointOf(h, `${side}UpperArm`), straight = shoulder.distanceTo(target);
+  const forearm = LIMBS.find(([n]) => n === `${side}LowerArm`)?.[3] ?? 0;
+  let most = 0;
+  for (const [, from, to, r] of LIMBS.filter(([n]) => n === 'trunk' || n === 'thorax')) {
+    const clear = (r + forearm) * H;
+    if (segmentDistance(shoulder, target, jointOf(h, from), jointOf(h, to)) >= clear) continue;
+    // (`segmentDistance` leaves the closest point on the trunk's axis in `_q`)
+    const by = _q.clone().addScaledVector(front, clear);
+    most = Math.max(most, shoulder.distanceTo(by) + by.distanceTo(target) - straight);
+  }
+  return most;
+}
 
 /** how far arm `side`'s upper arm, forearm and hand reach into the trunk (its pelvis-to-chest and chest-to-neck capsules; m) */
 export function armInTrunk(h: Frame['h'], side: 'left' | 'right'): number {
