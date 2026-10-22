@@ -61,7 +61,7 @@ export function legsBiped(): Scenario {
 
 export function legsHorse(): Scenario {
   return {
-    id: 'legs-horse', title: 'Legs: horse walk and trot on scripted roots', duration: 16, actors: [], cameraDistance: 9,
+    id: 'legs-horse', title: 'Legs: horse walk and trot on scripted roots', duration: 16, actors: [], cameraDistance: 9, skins: ['models/horse.glb', 'models/horse.glb'],
     description: 'Two horses on their stepper: walk and trot along scripted roots. No planner.',
     stage: (dev = false) => {
       const make = (gait: Gait, pace: number, x: number) => {
