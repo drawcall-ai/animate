@@ -1,4 +1,4 @@
-import type { Player } from '../scenario';
+import type { Look } from '../scenario';
 import { Vector3, type Box3, type PerspectiveCamera } from 'three';
 import { forwardOf, leftOf, Spring } from '../math';
 
@@ -77,12 +77,11 @@ export class PlayerCamera {
   private readonly eye = new Spring();
   private ads = 0;
 
-  apply(camera: PerspectiveCamera, player: Player, view: 'first' | 'third', dt: number) {
-    const { aimYaw: yaw, aimPitch: pitch } = player.input;
+  /** shows `look` — the one the simulation placed the aim in, as shown (not the input's newest: the rifle would trail it) */
+  apply(camera: PerspectiveCamera, { eye: actual, yaw, pitch }: Look, ads: boolean, view: 'first' | 'third', dt: number) {
     const direction = new Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
-    const actual = player.eyes();
     // Tuned 250 ms ADS blend: near sights need the body's eye, not a lagging camera origin.
-    this.ads += Math.max(-dt / 0.25, Math.min(dt / 0.25, Number(player.input.ads) - this.ads));
+    this.ads += Math.max(-dt / 0.25, Math.min(dt / 0.25, Number(ads) - this.ads));
     const eye = this.eye.step(actual, 24, dt).clone();
     if (view === 'first') eye.lerp(actual, this.ads * this.ads * (3 - 2 * this.ads));
     camera.position.copy(eye);

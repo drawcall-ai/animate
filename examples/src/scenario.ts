@@ -22,7 +22,15 @@ export interface Player {
   root?: { position: Vector3; velocity: Vector3; yaw: number; crouch?: number };
   /** what the player is doing beyond moving (a reload under way, its steps so far, the items it moves) */
   status?: () => { reloading: boolean; steps: readonly string[]; magazines: readonly Item[] };
-  eyes(): Vector3;
+  /** the look the last step placed the aim in — what the player's camera shows, blended between steps as the bodies are */
+  look(): Look;
+}
+
+/** Where a player looks from (the eye, as the body stood when the step set out) and which way (rad). */
+export interface Look {
+  eye: Vector3;
+  yaw: number;
+  pitch: number;
 }
 
 export interface Stage {
@@ -31,7 +39,8 @@ export interface Stage {
   bodies?: readonly Body[];
   /** what the script asked of the first actor, for the metrics */
   report: Report;
-  /** the scenery drawn at time `t` (s) */
+  /** the scenery drawn at time `t` (s): the lasting props in the same order every step, any that come and go after them (each is shown
+   * blended with the one at its place the step before) */
   props(t: number): Prop[];
   /** whether the run did what the scenario is for (asked at its end) */
   done(): boolean;

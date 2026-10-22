@@ -7,7 +7,7 @@ import { spinOf } from '../../../packages/animate/src/core/rotation';
 import { scalar } from '../keys';
 import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
-import type { Player, Prop, Scenario } from '../scenario';
+import type { Look, Player, Prop, Scenario } from '../scenario';
 
 const DEG = Math.PI / 180;
 // Recalled: Epic Games, Unreal Engine “Skeletal Mesh Sockets”, “Aim Offset”, and “Two Bone IK”.
@@ -138,17 +138,19 @@ export function shooter(): Scenario {
         live: false,
         root: controller.root,
         status: () => ({ reloading, steps, magazines }),
-        // (the eye the aim is placed from: as the body stood when the sub-step being posed set out — where the camera looks from,
-        // as a game's camera, a sub-step behind the body)
-        eyes: () => {
+        // (the aim's frame, taken once a step as it sets out: the eye as the body stood then — a sub-step behind the body, as a
+        // game's camera — and the look the input had then; the rifle is placed in it and the camera shows it, so the two never part)
+        look: () => {
           if (!actor) throw new Error('player camera needs its actor');
           const eye = actor.rig.points.rightEye;
-          return now > 0 ? aimedFrom.clone() : actor.pose.point(eye.bone, eye.at, new Vector3());
+          if (now === 0) return { eye: actor.pose.point(eye.bone, eye.at, new Vector3()), yaw: player.input.aimYaw, pitch: player.input.aimPitch };
+          return { ...look, eye: look.eye.clone() };
         },
       };
+      const look: Look = { eye: new Vector3(), yaw: 0, pitch: 0 };
       const direction = () => new Vector3(0, 0, 1).applyQuaternion(rotation());
-      const rotation = () => new Quaternion().setFromEuler(new Euler(-player.input.aimPitch - 0.012 * recoil(), player.input.aimYaw, 0, 'YXZ'));
-      const ahead = () => player.eyes().addScaledVector(direction(), 20);
+      const rotation = () => new Quaternion().setFromEuler(new Euler(-look.pitch - 0.012 * recoil(), look.yaw, 0, 'YXZ'));
+      const ahead = () => look.eye.clone().addScaledVector(direction(), 20);
       const recoil = () => {
         const u = (now - lastShot) / 0.2; // Tuned: requested 200 ms recovery, zero velocity at each end.
         return u >= 0 && u < 1 ? Math.sin(Math.PI * u) ** 2 : 0;
@@ -159,12 +161,12 @@ export function shooter(): Scenario {
       // Tuned carry offsets (m) and muzzle rotations (rad), +X screen-left along +Z: the hip muzzle converges inward; sprint
       // lowers it diagonally across the chest; the reload cant raises the muzzle a little and draws the rifle in toward the body
       // and the left hand — the well within the eyes' downward reach. Derived: aiming puts the sight below the dominant eye.
-      const aimedFrom = new Vector3(), looked = new Quaternion();
+      const looked = new Quaternion();
       let aimed = false;
       // (its place in the frame now, the sub-step before, the one before that)
       const local = [0, 1, 2].map(() => ({ position: new Vector3(), quaternion: new Quaternion() }));
       const aimRifle = (t: number, dt: number) => {
-        const view = rotation(), eye = aimedFrom;
+        const view = rotation(), eye = look.eye;
         if (!aimed) {
           aimed = true;
           looked.copy(view);
@@ -201,7 +203,8 @@ export function shooter(): Scenario {
           now = t;
           if (!player.live) shooterTrack(t, player.input);
           const point = actor.rig.points.rightEye;
-          actor.pose.point(point.bone, point.at, aimedFrom);
+          actor.pose.point(point.bone, point.at, look.eye);
+          [look.yaw, look.pitch] = [player.input.aimYaw, player.input.aimPitch];
           // (aiming waits for a reload; sprinting cancels one before the magazine is out, then waits)
           const input = { ...player.input, ads: player.input.ads && !reloading };
           controller.hold = reloading && pulled;
@@ -228,9 +231,10 @@ export function shooter(): Scenario {
           part(new Vector3(0, -0.055, 0), new Vector3(0.055, 0.14, 0.06)),
           part(SIGHT, new Vector3(0.02, 0.025, 0.12)),
           ...magazines.map((m): Prop => ({ kind: 'box', position: m.current.position.clone(), size: MAGAZINE.clone(), quaternion: m.current.quaternion.clone() })),
-          ...(now - lastShot < 0.06 ? [{ kind: 'ball' as const, position: new Vector3(0, 0.06, 0.68).applyQuaternion(rifle.current.quaternion).add(rifle.current.position), radius: 0.045 }] : []),
           ...[-3, 3].map((x): Prop => ({ kind: 'box', position: new Vector3(x, 0.4, 4), size: new Vector3(1.4, 0.8, 1) })),
           ...[-4, 0, 4].map((x): Prop => ({ kind: 'box', position: new Vector3(x, 1.3, 13), size: new Vector3(0.6, 1, 0.1) })),
+          // (the muzzle flash last: it comes and goes, the others keep their places — the playback blends each with the one at its place)
+          ...(now - lastShot < 0.06 ? [{ kind: 'ball' as const, position: new Vector3(0, 0.06, 0.68).applyQuaternion(rifle.current.quaternion).add(rifle.current.position), radius: 0.045 }] : []),
         ],
         script: (h) => {
           actor = h;
@@ -306,7 +310,7 @@ export function shooter(): Scenario {
                 if (ads < 1) return null;
                 const angle = new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(direction());
                 if (angle > 2 * DEG) return { check: 'sight angle (rad)', value: angle, limit: 2 * DEG, where: 'rifle' };
-                const sight = SIGHT.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(player.eyes());
+                const sight = SIGHT.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(look.eye);
                 const value = sight.addScaledVector(direction(), -sight.dot(direction())).length();
                 return value > 0.01 ? { check: 'sight line offset (m)', value, limit: 0.01, where: 'rifle' } : null;
               }),
