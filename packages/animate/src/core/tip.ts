@@ -112,9 +112,11 @@ export class ChainTip {
       }
     }
     // Joint damping must not separate an acquired contact: re-solved to it (and to its rotation, if it has one) from the damped
-    // bend. A grip without a rotation leaves the damped wrist free: pinned, a folded arm would swivel round to keep it.
+    // bend. A grip without a rotation leaves the damped wrist free: pinned, a folded arm would swivel round to keep it. The bend
+    // kept as the brakes left it, the limits clamped there: a grip the wrist turns just past its range would otherwise swivel the
+    // elbow round in one sub-step (thousands of °/s), the brakes' work undone; the brakes carry it round toward the solve instead.
     const off = f.current.position(tip).distanceTo(position) > 1e-6 || (quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > 1e-6);
-    if (options.contact && off) solveChain(f, chain, { tip: { position, quaternion }, pole: f.current.position(bones[1]).clone() });
+    if (options.contact && off) solveChain(f, chain, { tip: { position, quaternion }, pole: f.current.position(bones[1]).clone(), swivel: false });
     this.nudged.steps.clear();
     if (options.clear && turnAccel !== undefined) {
       const braked = bones.map((b) => f.current.local(b).clone());

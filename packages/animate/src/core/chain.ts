@@ -16,6 +16,9 @@ export interface ChainGoal {
   pole?: Vector3;
   /** preferred middle-joint twist about its distal segment (rad); default: half the tip's twist */
   twist?: number;
+  /** whether a limb whose limits the pole's side does not fit may swivel off it, or bend the other way, as far as they need (default
+   * true); false: it keeps to the pole's side, clamped within them (a re-solve that keeps an elbow where its brakes left it) */
+  swivel?: boolean;
 }
 
 /** the generic solver's sweeps at most; it stops sooner once a sweep brings the tip no closer than this (m) */
@@ -56,7 +59,7 @@ export function solveChain(frame: { current: Pose }, chain: string, goal: ChainG
   const c: Solving = { skeleton, bones, base: parent >= 0 ? _base.copy(pose.rotation(parent)) : _base.identity(), start: _start.copy(pose.position(bones[0])), local: _local };
   bones.forEach((b, k) => _local[k].copy(pose.local(b)));
   const { position, quaternion } = goal.tip;
-  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist);
+  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true);
   else {
     if (goal.twist !== undefined) throw new Error(`chain "${chain}": a preferred twist applies only to a two-segment chain`);
     if (goal.pole) throw new Error(`chain "${chain}" has ${bones.length - 1} segments: a pole bends only a two-segment chain`);
@@ -80,7 +83,7 @@ interface Solving {
 }
 
 /** a limb: its middle joint as a hinge (bent to the distance), its first bone onto the goal and toward the pole, the middle joint aimed again */
-function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined) {
+function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean) {
   const { skeleton, bones, local, start } = c;
   const o1 = skeleton.bones[bones[1]].offset;
   const o2 = skeleton.bones[bones[2]].offset;
@@ -140,7 +143,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     // as the pole has it, unless a swivel searched with the preferred twist fits better
     let swivel = 0;
     let left = strain(0);
-    if (left >= FITS) {
+    if (left >= FITS && swivels) {
       const [searched, there] = least(first, tip, -Math.PI, Math.PI, 0);
       if (there < left) [swivel, left] = [searched, there];
     }
@@ -150,7 +153,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   // (a limb nearly straight can bend either way within its range: the way that fits its limits better)
   const left = place(bend);
   const other = candidates[0] === bend ? candidates[1] : candidates[0];
-  if (left >= FITS && other !== bend && clampBend(other, hinge) === other) {
+  if (left >= FITS && swivels && other !== bend && clampBend(other, hinge) === other) {
     _kept.copy(local[0]);
     if (place(other) < left) bend = other;
     else local[0].copy(_kept);
