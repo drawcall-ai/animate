@@ -1,4 +1,7 @@
-import { Group, Vector3 } from 'three';
+import { Group, Vector3, type Object3D } from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { Skin } from './stage/skin';
 import { flattenCharacterModelOptions, loadCharacterModel, type CharacterModel } from '@pmndrs/viverse';
 import { Bodies, instance } from './stage/bodies';
 import { Framing, placeCamera, PlayerCamera, VIEWS } from './stage/camera';
@@ -27,19 +30,24 @@ const stage = new Stage(byId('c', HTMLCanvasElement), byId('overlay', HTMLCanvas
 const props = new Group();
 stage.scene.add(props);
 const bodies = new Bodies(stage.scene);
+/** the soldier the people wear unless a scenario or body=openpose|mannequin says otherwise (rigged from a generated model) */
+const SOLDIER = { url: 'models/soldier.glb' };
 /** the scenario's body, or the one body=openpose|mannequin asks for */
 function bodyOf(s: Scenario): NonNullable<Scenario['body']> {
   const asked = params.get('body');
   if (asked === 'openpose') return 'openpose';
   if (asked === 'mannequin') return {};
-  return s.body ?? 'openpose';
+  return s.body ?? SOLDIER;
 }
 // the viverse characters the scenarios wear, loaded up front (by url; no url = viverse's mannequin;
 // Draco decoding for compressed files such as Drawcall Market characters)
 const characters = new Map<string | undefined, CharacterModel>();
+// the skins the scenarios' other bodies wear (none drawn as skeletons: body=openpose)
+const skins = new Map<string, Object3D>();
 for (const s of SCENARIOS) {
   const body = bodyOf(s);
   if (body !== 'openpose' && !characters.has(body.url)) characters.set(body.url, await loadCharacterModel(...flattenCharacterModelOptions({ url: body.url, useDraco: true })));
+  if (body !== 'openpose') for (const url of s.skins ?? []) if (url && !skins.has(url)) skins.set(url, (await new GLTFLoader().loadAsync(url)).scene);
 }
 const caption = byId('caption', HTMLElement);
 const zoom = Number(params.get('zoom') ?? 1);
@@ -83,7 +91,7 @@ function start(s: Scenario) {
   if (body === 'openpose') return new Playback(new Simulation(s));
   const character = characters.get(body.url);
   if (!character) throw new Error(`character ${body.url ?? 'mannequin'} was not loaded`);
-  return new Playback(new Simulation(s, () => instance(character)));
+  return new Playback(new Simulation(s, () => instance(character, body.url === undefined), false, (url, b) => new Skin(clone(skins.get(url)!), b.pose.skeleton)));
 }
 
 /** sets the stage for the playback just started */
@@ -91,7 +99,7 @@ function show() {
   playerCamera = new PlayerCamera();
   bodies.hideHead(false);
   const { scenario: s, actors } = playback.sim;
-  bodies.cast(actors);
+  bodies.cast(actors, playback.sim.skins);
   stage.setEnvironment(s);
   bodies.castShadows(!!stage.env);
   framing.set(playback.blend(1).root, facing());
@@ -127,7 +135,9 @@ function sync(alpha = 1, dt = 1 / 60) {
   const s = sim.scenario;
   const between = playback.blend(alpha);
   shownLook = between.look;
-  drawProps(props, between.props);
+  // (a body wearing its skin is not drawn as a skeleton too)
+  const skinned = sim.skins.some((s) => s);
+  drawProps(props, skinned ? between.props.filter((p) => p.kind === 'ball' || !p.bone) : between.props);
   stage.env?.update(sim.t);
   const still = capture && !video;
   if (still) framing.set(between.root, facing());

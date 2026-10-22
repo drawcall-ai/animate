@@ -75,7 +75,7 @@ export const SHORT_NECKED: Species<'jaw'> = fourLegged({ head: v(0, 0.52, 0.36),
 
 export function dogFetch(): Scenario {
   return {
-    id: 'dog-fetch', title: 'A dog fetches a ball', duration: 20, actors: [], cameraDistance: 3, cameraAngles: { side: Math.PI / 2 },
+    id: 'dog-fetch', title: 'A dog fetches a ball', duration: 20, actors: [], skins: ['models/dog.glb'], cameraDistance: 3, cameraAngles: { side: Math.PI / 2 },
     description: 'A dog made of data only (skeleton, legs and gait, gaze, a jaw, a tail wag) trots to a ball, takes it in its jaw and carries it back.',
     stage: (dev = false) => {
       const ball = new Item(v(4, 0.04, 4), new Quaternion(), { middle: { position: new Vector3() } },

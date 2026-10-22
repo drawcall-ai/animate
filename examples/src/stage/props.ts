@@ -34,12 +34,12 @@ export function drawProps(group: Group, props: Prop[]) {
   }
 }
 
-export function line(a: Vector3, b: Vector3, radius: number, color: number): Prop {
+export function line(a: Vector3, b: Vector3, radius: number, color: number): Extract<Prop, { kind: 'cylinder' }> {
   const delta = b.clone().sub(a);
   return { kind: 'cylinder', position: a.clone().lerp(b, 0.5), radius, length: delta.length(), quaternion: new Quaternion().setFromUnitVectors(UP, delta.normalize()), color };
 }
 
 export function skeletonProps(pose: ReadonlyPose, radius = 0.035): Prop[] {
-  return pose.skeleton.bones.flatMap((bone, i) => bone.parent < 0 ? [] : [line(pose.position(bone.parent), pose.position(i), radius, 0xdba66b)]);
+  return pose.skeleton.bones.flatMap((bone, i) => bone.parent < 0 ? [] : [{ ...line(pose.position(bone.parent), pose.position(i), radius, 0xdba66b), bone: true as const }]);
 }
 const UP = new Vector3(0, 1, 0);

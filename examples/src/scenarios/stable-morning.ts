@@ -75,7 +75,7 @@ const yaw = (a: number) => new Quaternion().setFromAxisAngle(UP, a);
 /** A morning's small job: notice, fetch, saddle, untie, and go out together. */
 export function stableMorning(): Scenario {
   return {
-    id: 'stable-morning', title: 'Cold morning in the stable yard',
+    id: 'stable-morning', title: 'Cold morning in the stable yard', skins: ['models/horse.glb'],
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
     duration: DURATION, actors: [{ position: { x: 1.5, z: 0 }, yaw: -0.1 }],
     cameraDistance: 4.8,
@@ -215,13 +215,13 @@ export function stableMorning(): Scenario {
           const muzzle = horse.pose.point(HEAD, new Vector3(0, -0.42, 0.33), new Vector3());
           const poll = horse.pose.position(HEAD);
           const props: Prop[] = [...yard(), ...skeletonProps(horse.pose),
-            line(horse.pose.position(NECK), poll, 0.1, 0x9b744c),
-            line(poll, muzzle, 0.1, 0x9b744c),
-            box(horse.pose.point(0, new Vector3(0, -0.13, -0.04), new Vector3()), 0.48, 0.48, BARREL_LENGTH, horse.pose.rotation(0).clone()),
+            { ...line(horse.pose.position(NECK), poll, 0.1, 0x9b744c), bone: true },
+            { ...line(poll, muzzle, 0.1, 0x9b744c), bone: true },
+            { ...box(horse.pose.point(0, new Vector3(0, -0.13, -0.04), new Vector3()), 0.48, 0.48, BARREL_LENGTH, horse.pose.rotation(0).clone()), bone: true },
             box(saddle.current.position.clone(), SEAT.x, SEAT.y, SEAT.z, saddle.current.quaternion.clone()),
           ];
           for (const { bone, tip, radius } of APPENDAGES) {
-            props.push(line(horse.pose.position(bone), horse.pose.point(bone, tip, new Vector3()), radius, 0x9b744c));
+            props.push({ ...line(horse.pose.position(bone), horse.pose.point(bone, tip, new Vector3()), radius, 0x9b744c), bone: true });
           }
           // Two skirts make the simple saddle read above the horse's barrel.
           for (const side of [-1, 1]) props.push(box(new Vector3(0, -SKIRT_DROP, side * SKIRT_ASIDE).applyQuaternion(saddle.current.quaternion).add(saddle.current.position), SKIRT.x, SKIRT.y, SKIRT.z, saddle.current.quaternion.clone()));
@@ -279,7 +279,7 @@ export function stableMorning(): Scenario {
   };
 }
 
-function box(position: Vector3, x: number, y: number, z: number, quaternion?: Quaternion): Prop {
+function box(position: Vector3, x: number, y: number, z: number, quaternion?: Quaternion): Extract<Prop, { kind: 'box' }> {
   return { kind: 'box', position, size: new Vector3(x, y, z), quaternion };
 }
 function yard(): Prop[] {

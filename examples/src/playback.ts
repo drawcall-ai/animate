@@ -14,7 +14,7 @@ const FOCUS_HEIGHT = 0.54;
  * state the last one left, so the simulation is the same however it is shown.
  */
 export class Playback {
-  /** what the humanoids pose: each model's scene and bones (not viverse's hidden rest copy; glTF-style models, not VRMs) */
+  /** what the humanoids pose: each model's scene and bones (not viverse's hidden rest copy; glTF-style models, not VRMs); the skins' bones */
   private readonly nodes: Object3D[] = [];
   /** the nodes' positions and quaternions (7 numbers each) after the previous and the current step */
   private readonly prev: Float64Array;
@@ -34,6 +34,9 @@ export class Playback {
         if (o instanceof Bone && !o.name.startsWith('rest_')) this.nodes.push(o);
       });
     }
+    for (const skin of this.sim.skins) skin?.scene.traverse((o) => {
+      if (o instanceof Bone) this.nodes.push(o);
+    });
     this.prev = new Float64Array(7 * this.nodes.length);
     this.current = new Float64Array(7 * this.nodes.length);
     this.record();

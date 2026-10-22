@@ -71,6 +71,8 @@ export interface Scenario {
   cameraAngles?: Partial<Record<'front' | 'side', number>>;
   /** the actors' character model: OpenPose skeletons (default), or a viverse character — a model file, or viverse's mannequin without `url` */
   body?: 'openpose' | { url?: string };
+  /** the rigged models the stage's bodies wear, in order (their bones named after the bodies'): shown instead of their skeletons */
+  skins?: readonly (string | undefined)[];
   /** false: no plain grid (the scenario draws its own ground, a slope) */
   grid?: false;
   /** surroundings drawn instead of the plain grid; `center` = where the ring is centred */
@@ -79,8 +81,8 @@ export interface Scenario {
 
 /** scenery a scenario shows (drawn only: the humanoids know of it only through their world and its carriers); a cylinder's axis is its local +Y */
 export type Prop =
-  | { kind: 'box'; position: Vector3; size: Vector3; quaternion?: Quaternion }
-  | { kind: 'cylinder'; color?: number; position: Vector3; radius: number; length: number; quaternion?: Quaternion }
+  | { kind: 'box'; position: Vector3; size: Vector3; quaternion?: Quaternion; /** a body's part: not drawn where the body wears its skin */ bone?: true }
+  | { kind: 'cylinder'; color?: number; position: Vector3; radius: number; length: number; quaternion?: Quaternion; /** a body's part: not drawn where the body wears its skin */ bone?: true }
   | { kind: 'ball'; position: Vector3; radius: number };
 
 /** a segment `a`–`b` (world) thickened by `radius` that keeps out of a body but its parts `touches` (those that wear or bear it) and the hands holding its item */
