@@ -183,11 +183,16 @@ function tipped(upper: Quaternion, middle: Quaternion, axis: Vector3, twist: num
 /** The best joint fit and cost of leaving the preferred twist, used by both twist and swivel searches. */
 function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], twist: number | undefined): number {
   // (the tip's limit first: it rules out more twists alone)
+  // (the tip's rotation at a twist t is R(axis, −t) · (upper · middle)⁻¹ · quaternion: the part that does not turn with t taken once,
+  // and the middle bone turned only where its limit is read — these run thousands of times in a limb's swivel search)
+  const fixed = _fixed.copy(upper).multiply(middle).invert().multiply(quaternion);
+  let at = 0;
   const tipOf = (twist: number) => {
-    tipped(upper, middle, axis, twist, quaternion);
+    at = twist;
+    _tip.setFromAxisAngle(axis, -twist).multiply(fixed);
     return excess(_tip, limits[2]);
   };
-  const middleOf = () => excess(_twisted, limits[1]);
+  const middleOf = () => excess(_twisted.copy(middle).multiply(_q2.setFromAxisAngle(axis, at)), limits[1]);
   // Both joints' limits are evaluated together, from the preferred twist or an even split.
   const whole = twistAbout(tipped(upper, middle, axis, 0, quaternion), axis);
   const [lo, hi] = limits[1]?.twist ?? [-Math.PI, Math.PI];
@@ -249,13 +254,17 @@ function least(part: (x: number) => number, rest: () => number, lo: number, hi: 
     if (e < low) [low, best, value] = [e, x, f];
   };
   for (let k = 0; k <= 24; k++) see(lo + ((hi - lo) * k) / 24);
-  for (let step = (hi - lo) / 48; step > 1e-6; step /= 2) {
+  for (let step = (hi - lo) / 48; step > SETTLED; step /= 2) {
     const at = best;
     see(at - step);
     see(at + step);
   }
   return [best, value];
 }
+
+/** how finely `least` settles (rad): 0.03 mm at the end of a forearm — far below what shows, and a limb's nested swivel and twist
+ * searches take half the evaluations they would to settle to a micro-radian */
+const SETTLED = 1e-4;
 
 /** how much `least` holds each radian away from its start against what it minimises: next to nothing (ties broken toward the start) */
 const NEAREST = 1e-3;
@@ -334,4 +343,4 @@ const _start = new Vector3();
 const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s] = Array.from({ length: 12 }, () => new Vector3());
 const _pole = new Vector3();
 const _axis = new Vector3();
-const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept] = Array.from({ length: 11 }, () => new Quaternion());
+const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept, _fixed] = Array.from({ length: 12 }, () => new Quaternion());
