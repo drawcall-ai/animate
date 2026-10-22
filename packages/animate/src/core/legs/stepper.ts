@@ -258,6 +258,18 @@ export class Stepper {
       const body = yaws[1] + wrapAngle(now - leg.sign * toeOut - yaws[1]);
       [low, high] = [Math.max(low, body - pelvisTurn), Math.min(high, body + pelvisTurn)];
     }
+    // A biped cannot turn its pelvis through the line between its feet while the trailing foot is still leaving the floor.
+    if (!clocked) for (const leg of legs) {
+      const other = legs[pair[leg.i]];
+      if (leg.sign < 0 || other.sign > 0) continue;
+      const span = new Vector3().subVectors(f.prev.position(feet.legs[leg.i].foot), f.prev.position(feet.legs[other.i].foot)).setY(0);
+      const length = span.length();
+      if (length < 1e-9) continue;
+      const facing = yaws[1] + wrapAngle(Math.atan2(-span.z, span.x) - yaws[1]);
+      const room = Math.acos(Math.min(1, PASSING * st.width.narrowest * s / length));
+      low = Math.max(low, Math.min(yaws[1], facing - room));
+      high = Math.min(high, Math.max(yaws[1], facing + room));
+    }
     const goal = low <= high ? clamp(wanted, low, high) : (low + high) / 2;
     const rate = Math.abs(goal - this.last) / dt < 2 * TURN.speed ? (goal - this.last) / dt : 0;
     this.last = goal;
