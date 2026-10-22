@@ -1,9 +1,10 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper } from '@drawcall/animate';
-import { follow, followRotation, idle } from '@drawcall/animate/rig';
+import { INDEX, Item, aimAt, swing, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper, type Rhythm } from '@drawcall/animate';
+import { Life, ask, follow, followRotation, idle } from '@drawcall/animate/rig';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { spinOf } from '../../../packages/animate/src/core/rotation';
+import { irregular } from '../../../packages/animate/src/core/random';
 import { scalar } from '../keys';
 import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
@@ -34,6 +35,18 @@ const SWAY = { accel: 24, turnAccel: 120 };
 const FLICK = 600;
 // Tuned pouches on the left hip, in the hips' frame (+x left, +z ahead): beside the trunk, clear of it.
 const POUCHES = [new Vector3(0.17, -0.04, 0.05), new Vector3(0.17, -0.04, -0.03)];
+/**
+ * Standing at ease — not aiming, moving or turning — the rifle and the eyes keep a little life, gone as the sights come up (the body's own breathing and sway fade
+ * by `steady`, the rifle held still in the aim). Recalled (game convention: first-person weapon idle sway, e.g. Call of Duty, Battlefield,
+ * Unreal's Lyra — a slow Lissajous of a few mm and a fraction of a degree, near none aiming down sights; Winter 1995: quiet stance sways
+ * below 0.5 Hz): tuned, the rifle drifts `drift` (m) and `turn` (rad), breathing at 0.25 Hz (12–20 breaths/min); every 6–12 s standing
+ * at ease it is shouldered anew — lifted `lift` (m) and rolled `roll` (rad) for 0.6–1.2 s, eased at 4/s (recalled: idle fidgets of game
+ * animation sets); the eyes wander `wander` (rad) about the aim and every 4–9 s glance up to `glance` (rad) aside for 0.8–1.6 s (recalled,
+ * Land & Tatler 2009: the gaze rests on a point a fraction of a second to seconds, the head joining the larger shifts; tuned intervals).
+ */
+const EASE = { drift: 0.004, turn: 0.012, lift: 0.025, roll: 0.12, wander: 0.025, glance: 0.15 };
+const SHOULDER: Rhythm = { first: [4, 8], every: [6, 12], hold: [0.6, 1.2], rate: 4, quiet: 2, pick: swing };
+const GLANCE: Rhythm = { first: [3, 6], every: [4, 9], hold: [0.8, 1.6], rate: 5, quiet: 1.5, pick: swing };
 export const SHOOTER_DURATION = 53;
 // Tuned mouse turns (minimum jerk): a turn while walking, then a quick turn standing.
 const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6]]);
@@ -150,7 +163,17 @@ export function shooter(): Scenario {
       const look: Look = { eye: new Vector3(), yaw: 0, pitch: 0 };
       const direction = () => new Vector3(0, 0, 1).applyQuaternion(rotation());
       const rotation = () => new Quaternion().setFromEuler(new Euler(-look.pitch - 0.012 * recoil(), look.yaw, 0, 'YXZ'));
-      const ahead = () => look.eye.clone().addScaledVector(direction(), 20);
+      // (at ease: how far from aiming, eased; how calm — standing at ease, eased in and out over ~0.3 s; its shouldering and glances, seeded)
+      const atEase = () => 1 - ads * ads * (3 - 2 * ads);
+      const ease = new Life(SHOOTER_DURATION, [['shoulder', SHOULDER], ['glance', GLANCE]]);
+      let calm = 0;
+      // (the eyes on the aim, at ease wandering about it and glancing aside now and then)
+      const ahead = () => {
+        const k = atEase() * calm, phase = ease.phase;
+        const yaw = k * (EASE.wander * irregular(now, phase, 0.61, 1.13, 1.97) + EASE.glance * ease.value('glance'));
+        const pitch = k * 0.6 * EASE.wander * irregular(now, phase + 1, 0.71, 1.29, 2.33);
+        return look.eye.clone().addScaledVector(direction().applyEuler(new Euler(-pitch, yaw, 0, 'YXZ')), 20);
+      };
       const recoil = () => {
         const u = (now - lastShot) / 0.2; // Tuned: requested 200 ms recovery, zero velocity at each end.
         return u >= 0 && u < 1 ? Math.sin(Math.PI * u) ** 2 : 0;
@@ -177,9 +200,14 @@ export function shooter(): Scenario {
         }
         [local[0], local[1], local[2]] = [local[2], local[0], local[1]];
         const [now, was, before] = local;
-        const blend = ads * ads * (3 - 2 * ads), run = sprint * sprint * (3 - 2 * sprint), turn = reload * reload * (3 - 2 * reload);
-        const to = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn, -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn, 0.22 - 0.1 * run - 0.012 * recoil() - 0.04 * turn);
-        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn, 0.12 * (1 - blend) + 0.2 * run, 0));
+        const blend = 1 - atEase(), run = sprint * sprint * (3 - 2 * sprint), turn = reload * reload * (3 - 2 * reload);
+        // (at ease it breathes and drifts, and is shouldered anew now and then: lifted and rolled a little)
+        const k = atEase() * calm, breath = Math.sin(2 * Math.PI * 0.25 * t + ease.phase), shoulder = ease.value('shoulder');
+        const drift = (a: number, b: number, c: number) => k * irregular(t, ease.phase, a, b, c);
+        const to = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn + EASE.drift * drift(0.79, 1.37, 2.11),
+          -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn + k * (EASE.drift * breath + EASE.lift * Math.abs(shoulder)), 0.22 - 0.1 * run - 0.012 * recoil() - 0.04 * turn);
+        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn + 0.5 * EASE.turn * k * breath,
+          0.12 * (1 - blend) + 0.2 * run + EASE.turn * drift(0.93, 1.61, 2.47), k * EASE.roll * shoulder));
         follow(before.position, was.position, to, SWAY, dt, now.position);
         followRotation(before.quaternion, was.quaternion, tilt, { accel: SWAY.turnAccel }, dt, now.quaternion);
         const spin = spinOf(looked, view, dt, new Vector3());
@@ -215,6 +243,11 @@ export function shooter(): Scenario {
           ads = approach(ads, Number(input.ads));
           reload = approach(reload, Number(canted));
           sprint = approach(sprint, input.ads ? 0 : Math.max(actor?.locomotion.run ?? 0, Number(controller.sprinting(input))));
+          // (standing at ease: not aiming, still, the look turning slower than 0.5 rad/s, no reload, no shot for a second)
+          const turning = Math.hypot(wrapAngle(input.aimYaw - previousYaw), input.aimPitch - previousPitch) / dt;
+          const quiet = !input.ads && ads === 0 && controller.root.velocity.length() < 0.05 && turning < 0.5 && !reloading && now - lastShot > 1;
+          ease.update(t, dt, quiet);
+          calm += (Number(quiet) - calm) * (1 - Math.exp(-dt / 0.3));
           // (the rifle where the aim has it, once off the hand it starts in)
           if (!rifle.wornBy) aimRifle(t, dt);
           if (player.input.aimYaw !== previousYaw || player.input.aimPitch !== previousPitch || player.input.ads !== previousAds) steadySince = t;
@@ -315,6 +348,8 @@ export function shooter(): Scenario {
                 return value > 0.01 ? { check: 'sight line offset (m)', value, limit: 0.01, where: 'rifle' } : null;
               }),
               idle(h, { root: controller.root }),
+              // (aiming, the body holds still: its breathing and sway fade)
+              ask(h, () => ({ steady: 1 - atEase() })),
               aimAt(h, ahead),
               reporting(report, ['leftHand', 'rightHand', 'gaze'], function* () {
                 yield* parallel<Frame>('all',

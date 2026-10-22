@@ -5,6 +5,7 @@ import { expect, it } from 'vitest';
 import { INDEX, type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/core/math';
 import type { Stepper } from '../../src/core/legs/stepper';
+import { request } from '../../src/core/asks';
 
 const dt = 1 / 60;
 
@@ -78,6 +79,37 @@ it.each([
   }
   expect(trunk).toBeLessThan(10);
   expect(arrival).toBeLessThan(20.5);
+});
+
+// (a player standing at ease: it breathes, sways and now and then shifts its weight over a foot — not frozen; holding still to aim, its
+// breathing and sway keep 30%; the root stays exact all the while)
+it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
+  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const h = person(createSkeletonModel(), (h) => idle(h, { root, seed: 3 }), { idle: false, dev: true });
+  let lowest = Infinity, highest = -Infinity, left = 0, right = 0, lag = 0;
+  for (let t = dt; t <= 40; t += dt) {
+    request(h.asks, { steady });
+    h.update(dt);
+    if (t < 2) continue;
+    const chest = h.pose.local(INDEX.chest);
+    const pitch = 2 * Math.asin(chest.x);
+    [lowest, highest] = [Math.min(lowest, pitch), Math.max(highest, pitch)];
+    const off = h.pose.position(0).clone().sub(root.position);
+    lag = Math.max(lag, Math.abs(off.z));
+    [left, right] = [Math.max(left, off.x), Math.min(right, off.x)];
+  }
+  const breath = (highest - lowest) * 180 / Math.PI;
+  expect(lag).toBeLessThan(1e-9);
+  expect(h.log).toEqual([]);
+  if (steady) {
+    // (~30% of the 2–3° at ease, no weight shift)
+    expect(breath).toBeLessThan(1.2);
+    expect(Math.max(left, -right)).toBeLessThan(0.002);
+  } else {
+    expect(breath).toBeGreaterThan(1.5);
+    expect(Math.max(left, -right)).toBeGreaterThan(0.008);
+    expect(Math.max(left, -right)).toBeLessThanOrEqual(SWAY_BAND);
+  }
 });
 
 it.each([

@@ -1,7 +1,7 @@
 import type { Asks } from '../../core/asks';
 import type { Humanoid } from '../humanoid';
 import { Vector3 } from 'three';
-import { smoothstep } from '../../core/math';
+import { lerp, smoothstep } from '../../core/math';
 import { irregular } from '../../core/random';
 import { Life as Rhythms, type Rhythm } from '../../core/life';
 import type { Side } from '../bones';
@@ -12,6 +12,12 @@ import type { Side } from '../bones';
  * each time; tuned: ten quiet seconds after activity before the next.
  */
 const WEIGHT: Rhythm = { first: [10, 20], every: [10, 30], hold: [20, 40], quiet: 10, pick: (last, rand) => last === 0 ? (rand() < 0.5 ? 1 : -1) : -last };
+
+/**
+ * Recalled (Era et al. 1996, Mononen et al. 2007: marksmen's sway as they aim is a fraction of their quiet stance's; they breathe shallow
+ * and fire in its pause); tuned: holding fully still (`steady` 1), breathing and sway keep this share.
+ */
+const STEADY = 0.3;
 
 /** Quiet stance goals, owned by balance rather than added to a finished pose. */
 export class Life {
@@ -32,14 +38,15 @@ export class Life {
   }
 
   quiet(asks: Asks, h: Humanoid): boolean {
-    return !asks.go && !h.locomotion.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0;
+    return !asks.go && !h.locomotion.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0 && asks.steady === 0;
   }
 
-  update(dt: number, quiet: boolean, speed: number) {
+  /** `steady`: how still it holds itself (0 … 1: aiming) */
+  update(dt: number, quiet: boolean, speed: number, steady: number) {
     this.time += dt;
     this.quietTime = quiet ? this.quietTime + dt : 0;
     // Tuned: half quiet motion at 0.1 m/s, recovered with a 0.5 s time constant.
-    const amount = 1 / (1 + speed / 0.1);
+    const amount = lerp(1, STEADY, steady) / (1 + speed / 0.1);
     this.amount += (amount - this.amount) * (1 - Math.exp(-2 * dt));
     this.rhythms.update(this.time, dt, quiet);
     const t = this.time, phase = this.rhythms.phase;

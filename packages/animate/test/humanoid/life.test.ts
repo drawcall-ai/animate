@@ -157,7 +157,7 @@ it('seeds the first weight-shift side and alternates later shifts, including aft
     const shifts: Side[] = [];
     let previous: Side | null = null;
     for (let step = 0; step < 6000; step++) {
-      life.update(0.1, step < 2000 || step >= 2100, 0);
+      life.update(0.1, step < 2000 || step >= 2100, 0, 0);
       if (life.onto && life.onto !== previous) shifts.push(life.onto);
       previous = life.onto;
     }

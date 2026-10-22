@@ -260,6 +260,41 @@ it('shows a shot without a jump: the view and every prop continuous', () => {
   expect(turn).toBeLessThan(0.005);
 });
 
+// (standing at ease the rifle breathes, drifts and is shouldered anew now and then, the eyes wander and glance; the sights up, the rifle
+// is held still in the aim and the body's breathing fades to 30%)
+it('stands alive at ease and holds still aiming', () => {
+  const sim = new Simulation(shooter());
+  sim.advanceTo(2.5);
+  const player = sim.stage.player!, h = sim.actors[0];
+  player.live = true;
+  Object.assign(player.input, { move: { x: 0, z: 0 }, aimYaw: 0, aimPitch: 0, ads: false, sprint: false, fire: false, crouch: false, jump: false, reload: false });
+  const range = () => ({ lo: new Vector3(Infinity, Infinity, Infinity), hi: new Vector3(-Infinity, -Infinity, -Infinity), roll: [Infinity, -Infinity], breath: [Infinity, -Infinity] });
+  const [easy, aimed] = [range(), range()];
+  while (sim.t < 22) {
+    player.input.ads = sim.t > 16;
+    sim.step();
+    const r = sim.t > 4 && sim.t < 16 ? easy : sim.t > 17 ? aimed : null;
+    if (!r) continue;
+    const { eye, yaw, pitch } = player.look(), frame = new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ')).invert();
+    const rifle = h.holding.right!.item.current, at = rifle.position.clone().sub(eye).applyQuaternion(frame);
+    r.lo.min(at);
+    r.hi.max(at);
+    const roll = new Euler().setFromQuaternion(frame.multiply(rifle.quaternion), 'YXZ').z;
+    r.roll = [Math.min(r.roll[0], roll), Math.max(r.roll[1], roll)];
+    const breath = 2 * Math.asin(h.pose.local(INDEX.chest).x);
+    r.breath = [Math.min(r.breath[0], breath), Math.max(r.breath[1], breath)];
+  }
+  const spread = (r: ReturnType<typeof range>) => ({ moved: r.hi.clone().sub(r.lo).length(), roll: r.roll[1] - r.roll[0], breath: r.breath[1] - r.breath[0] });
+  const [atEase, aiming] = [spread(easy), spread(aimed)];
+  console.log('standing', { atEase, aiming });
+  expect(atEase.moved).toBeGreaterThan(0.01);
+  expect(atEase.roll).toBeGreaterThan(0.03);
+  expect(aiming.moved).toBeLessThan(1e-4);
+  expect(aiming.roll).toBeLessThan(1e-4);
+  expect(aiming.breath).toBeLessThan(0.5 * atEase.breath);
+  expect(h.log).toEqual([]);
+});
+
 // (a sprint with the rifle in both hands: no arm swings, so the trunk turns further with the stride than a free runner's — read, Arellano
 // & Kram 2014: arms held across the chest the pelvis turns 102% further, the shoulders 44%; Pontzer et al. 2009: arms folded, the shoulders
 // 50% further; snippet, Seay et al. 2011: soldiers running with a rifle turn the trunk further — from a free runner's ~14° pelvis and
