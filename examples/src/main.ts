@@ -5,7 +5,7 @@ import { Framing, placeCamera, PlayerCamera, VIEWS } from './stage/camera';
 import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
-import { FIXED_DT, type Scenario } from './scenario';
+import { FIXED_DT, type Look, type Scenario } from './scenario';
 import { SCENARIOS } from './scenarios';
 import { stroll, walkThere } from './scenarios/stroll';
 import { legSystem } from '../../packages/animate/src/humanoid/idle';
@@ -47,6 +47,8 @@ const zoom = Number(params.get('zoom') ?? 1);
 const turn = Number(params.get('turn') ?? 0);
 const framing = new Framing();
 let playerCamera = new PlayerCamera();
+/** the player's look as last shown (`sync`): the camera's, the one the shown rifle is placed in */
+let shownLook: Look | null = null;
 const settings: Settings = {
   view: VIEWS.find((v) => v === params.get('view')) ?? 'orbit',
   flat: params.get('mode') === '2d',
@@ -124,6 +126,7 @@ function sync(alpha = 1, dt = 1 / 60) {
   const { sim } = playback;
   const s = sim.scenario;
   const between = playback.blend(alpha);
+  shownLook = between.look;
   drawProps(props, between.props);
   stage.env?.update(sim.t);
   const still = capture && !video;
@@ -146,7 +149,8 @@ function aim(dt = FIXED_DT) {
   stage.controls.enabled = !usePlayer;
   bodies.hideHead(!!usePlayer && playerView === 'first');
   if (usePlayer && playerView) {
-    playerCamera.apply(stage.camera, player, playerView, dt);
+    if (!shownLook) throw new Error('a player camera needs the look sync showed');
+    playerCamera.apply(stage.camera, shownLook, player.input.ads, playerView, dt);
     return;
   }
   stage.camera.fov = FOV;

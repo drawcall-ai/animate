@@ -30,7 +30,7 @@ export interface Stance {
 /**
  * What the tasks ask of the base, which alone moves the root, the legs and the trunk's posture. A task asks what it needs every
  * sub-step it runs (`request`), and asks of several tasks combine, one rule a field: the deepest `lower` and `bow` (rising onto the
- * toes or leaning back only while none asks down), the least `bowLimit`, the larger `twist` and `lean`; `go`, `face`, `look` and
+ * toes or leaning back only while none asks down), the least `bowLimit`, the larger `twist`, `lean` and `steady`; `go`, `face`, `look` and
  * `stance` have one owner each, the last to ask. The base reads them at the start of its update and clears them (so it acts on them
  * a sub-step later).
  */
@@ -53,19 +53,22 @@ export interface Asks {
   stance: Partial<Stance> | null;
   /** standing, shift the weight this far (m, on the floor) within the feet: toward what a hand falls short of */
   lean: Vector3 | null;
+  /** hold still (0 at ease … 1 aiming): the base's quiet life — breathing, sway, weight shifts — fades by it */
+  steady: number;
 }
 
 /** nothing asked */
-export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, look: null, stance: null, lean: null });
+export const createAsks = (): Asks => ({ go: null, face: null, lower: 0, bow: 0, bowLimit: Infinity, twist: 0, look: null, stance: null, lean: null, steady: 0 });
 
 /** `more` asked of the base on top of what `asks` holds already, each field combined by its rule (`Asks`) */
 export function request(asks: Asks, more: Partial<Asks>): void {
-  const { lower, bow, bowLimit, twist, lean, ...owned } = more;
+  const { lower, bow, bowLimit, twist, lean, steady, ...owned } = more;
   if (lower !== undefined) asks.lower = deeper(asks.lower, lower);
   if (bow !== undefined) asks.bow = deeper(asks.bow, bow);
   if (bowLimit !== undefined) asks.bowLimit = Math.min(asks.bowLimit, bowLimit);
   if (twist !== undefined && Math.abs(twist) > Math.abs(asks.twist)) asks.twist = twist;
   if (lean && lean.length() > (asks.lean?.length() ?? 0)) asks.lean = lean;
+  if (steady !== undefined) asks.steady = Math.max(asks.steady, steady);
   for (const [field, value] of Object.entries(owned)) if (value !== undefined) (asks as unknown as Record<string, unknown>)[field] = value;
 }
 

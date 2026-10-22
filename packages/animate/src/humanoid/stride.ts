@@ -102,7 +102,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     c.offset.copy(posture.center(f));
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
       f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
-    life.update(dt, life.quiet(asks, h), activity);
+    life.update(dt, life.quiet(asks, h), activity, asks.steady);
     const requested = { lower: followed(asked.lower, asks.lower, LOWER, dt), bow: followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt), twist: followed(asked.twist, asks.twist, BOW, dt) };
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;
     // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts)
@@ -120,7 +120,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
       // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass.
       hips: offset.clone().add(behind), com: offset.clone().sub(c.offset).add(behind), crouch: Math.min(crouchFor(requested.lower / (stepping.crouch.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed))), tiptoe: Math.max(0, -requested.lower),
       still: !moving && Math.abs(requested.lower) > LOWERED * s };
-  }, (f, _asks, stepper) => {
+  }, { carry: (f, _asks, stepper) => {
     // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest
     const tilt = rotation.follow(tilts[0], tilts[1], new Quaternion().setFromAxisAngle(UP, -c.yaw).multiply(c.pelvisRotation), TURN, f.dt, new Quaternion());
     [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
@@ -134,7 +134,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     });
     h.locomotion.quiet.copy(posture.quiet);
     return [trunk.pelvisYaw, trunk.thoraxYaw];
-  }, stepping);
+  }, record: stepping });
 }
 
 /**

@@ -88,7 +88,7 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
         // Motion blends quiet stance out; a stationary load retains breathing and sway.
         const speed = Math.max(c.speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
           f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
-        life.update(dt, life.quiet(asks, h), speed);
+        life.update(dt, life.quiet(asks, h), speed, asks.steady);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
         c.offset.copy(posture.center(f));
         c.held = armsHeld(h);

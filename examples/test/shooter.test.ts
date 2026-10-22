@@ -3,6 +3,8 @@ import { expect, it } from 'vitest';
 import { INDEX } from '@drawcall/animate';
 import { shooter } from '../src/scenarios/shooter';
 import { Simulation } from '../src/simulation';
+import { Playback } from '../src/playback';
+import { FIXED_DT } from '../src/scenario';
 import { PlayerCamera } from '../src/stage/camera';
 import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { vary } from '../scripts/run';
@@ -62,16 +64,16 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
       const wanted = new Vector3(Math.sin(input.aimYaw) * Math.cos(input.aimPitch), Math.sin(input.aimPitch), Math.cos(input.aimYaw) * Math.cos(input.aimPitch));
       sight = Math.max(sight, new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(wanted));
       if (h.locomotion.walk < 0.01) {
-        const eye = player.eyes();
+        const eye = player.look().eye;
         const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(eye);
         sightLine = Math.max(sightLine, at.addScaledVector(wanted, -at.dot(wanted)).length());
       }
       sightFrames++;
     }
-    framing.apply(camera, player, 'first', 1 / 60);
+    framing.apply(camera, player.look(), input.ads, 'first', 1 / 60);
     camera.updateMatrixWorld();
     if (input.ads && sim.t > 13 && sim.t < 14) {
-      const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(player.eyes());
+      const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(player.look().eye);
       if (Math.hypot(at.x, at.y) <= 0.01 && new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(new Vector3(0, 0, 1)) < 2 * Math.PI / 180) raised = Math.min(raised, sim.t - 13);
     }
     if (input.ads && sim.t - steady > 0.5 && sim.t - lastFire > 0.5 && h.locomotion.walk < 0.01) {
@@ -93,7 +95,7 @@ it.each([0, 1, 2])('keeps both grips, steady sights and final-pose checks clean 
       if (airborne) { flight++; flightTime += 1 / 60; }
       else if (flightTime) { flights.push(flightTime); flightTime = 0; }
       if (contacts[0] && !planted) landings.push({ time: sim.t, z: h.pose.position(INDEX.leftFoot).z });
-      expect(player.eyes().y - rifle.current.position.y).toBeGreaterThan(0.2);
+      expect(player.look().eye.y - rifle.current.position.y).toBeGreaterThan(0.2);
     }
     planted = contacts[0];
     if (h.locomotion.velocity.length() > 0.5 && h.locomotion.velocity.length() < 1.5 && sim.t < 16) {
@@ -198,6 +200,101 @@ it('keeps the rifle on the aim through fast turns: standing and walking, at the 
   expect(h.log.filter((entry) => /Arm|Hand|Shoulder/.test(entry.where))).toEqual([]);
 });
 
+/** `playback` shown at a 144 Hz display from its time for `seconds`, as the live app does: `input` before each frame's steps, then the blend and the first-person camera. */
+function display(playback: Playback, seconds: number, input: (t: number) => void, shown: (camera: PerspectiveCamera, props: ReturnType<Playback['blend']>['props'], t: number) => void) {
+  const player = playback.sim.stage.player!, camera = new PerspectiveCamera(90, 16 / 9, 0.02, 1000), view = new PlayerCamera(), dt = 1 / 144;
+  let acc = 0;
+  for (let t = 0; t < seconds; t += dt) {
+    input(t);
+    for (acc += dt; acc >= FIXED_DT; acc -= FIXED_DT) playback.step();
+    const { props, look } = playback.blend(acc / FIXED_DT);
+    view.apply(camera, look!, player.input.ads, 'first', dt);
+    camera.updateMatrixWorld();
+    shown(camera, props, t);
+  }
+}
+
+// (the mouse moves the look between steps, at the display's rate: the camera shows the look the rifle was placed in, blended as the
+// rifle is — the rifle never trails the view; before, the camera took the newest input and the rifle trailed it by a step, 2.6° at 3 rad/s)
+it.each([['standing', 0], ['walking', 1]] as const)('shows the rifle steady in the first-person view through fast turns aiming, %s', (_, walk) => {
+  const playback = new Playback(new Simulation(shooter()));
+  playback.advanceTo(2.5);
+  const player = playback.sim.stage.player!;
+  player.live = true;
+  Object.assign(player.input, { move: { x: 0, z: walk }, aimYaw: 0, aimPitch: 0, ads: true, sprint: false, fire: false, crouch: false, jump: false, reload: false });
+  let steady: Quaternion | null = null, angle = 0, sight = 0;
+  // (3 rad/s sweeps, reversing every 0.6 s, after 1.5 s aiming)
+  display(playback, 3, (t) => { if (t > 1.5) player.input.aimYaw += 3 / 144 * Math.sign(Math.sin((t - 1.5) * Math.PI / 0.6)); }, (camera, props, t) => {
+    const rifle = props[0];
+    if (rifle.kind !== 'box' || !rifle.quaternion) throw new Error('the rifle is the first prop');
+    const relative = camera.quaternion.clone().invert().multiply(rifle.quaternion);
+    if (t < 1.5) { steady = relative; return; }
+    angle = Math.max(angle, relative.angleTo(steady!));
+    const at = props[5].position.clone().project(camera);
+    sight = Math.max(sight, Math.hypot(at.x, at.y));
+  });
+  console.log('rifle in the view', walk, { angle: angle * 180 / Math.PI, sight });
+  expect(angle).toBeLessThan(0.05 * Math.PI / 180);
+  expect(sight).toBeLessThan(0.002);
+});
+
+// (a muzzle flash comes and goes: the props the playback blends by their places keep them — before, the flash came amid the scenery, and
+// for a step each prop after it was shown blended with its neighbour's place, a cover box swept 4.8 m across the view)
+it('shows a shot without a jump: the view and every prop continuous', () => {
+  const playback = new Playback(new Simulation(shooter()));
+  playback.advanceTo(14);
+  let prop = 0, move = 0, turn = 0, last: { props: ReturnType<Playback['blend']>['props']; position: Vector3; direction: Vector3 } | null = null;
+  display(playback, 1.5, () => {}, (camera, props) => {
+    const direction = camera.getWorldDirection(new Vector3());
+    if (last) {
+      move = Math.max(move, camera.position.distanceTo(last.position));
+      turn = Math.max(turn, direction.angleTo(last.direction));
+      props.forEach((p, i) => { if (last!.props[i]?.kind === p.kind) prop = Math.max(prop, p.position.distanceTo(last!.props[i].position)); });
+    }
+    last = { props, position: camera.position.clone(), direction };
+  });
+  console.log('through a shot', { prop, move, turn });
+  expect(playback.sim.stage.props(playback.sim.t).length).toBeGreaterThan(0);
+  expect(prop).toBeLessThan(0.02);
+  expect(move).toBeLessThan(0.005);
+  expect(turn).toBeLessThan(0.005);
+});
+
+// (standing at ease the rifle breathes, drifts and is shouldered anew now and then, the eyes wander and glance; the sights up, the rifle
+// is held still in the aim and the body's breathing fades to 30%)
+it('stands alive at ease and holds still aiming', () => {
+  const sim = new Simulation(shooter());
+  sim.advanceTo(2.5);
+  const player = sim.stage.player!, h = sim.actors[0];
+  player.live = true;
+  Object.assign(player.input, { move: { x: 0, z: 0 }, aimYaw: 0, aimPitch: 0, ads: false, sprint: false, fire: false, crouch: false, jump: false, reload: false });
+  const range = () => ({ lo: new Vector3(Infinity, Infinity, Infinity), hi: new Vector3(-Infinity, -Infinity, -Infinity), roll: [Infinity, -Infinity], breath: [Infinity, -Infinity] });
+  const [easy, aimed] = [range(), range()];
+  while (sim.t < 22) {
+    player.input.ads = sim.t > 16;
+    sim.step();
+    const r = sim.t > 4 && sim.t < 16 ? easy : sim.t > 17 ? aimed : null;
+    if (!r) continue;
+    const { eye, yaw, pitch } = player.look(), frame = new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ')).invert();
+    const rifle = h.holding.right!.item.current, at = rifle.position.clone().sub(eye).applyQuaternion(frame);
+    r.lo.min(at);
+    r.hi.max(at);
+    const roll = new Euler().setFromQuaternion(frame.multiply(rifle.quaternion), 'YXZ').z;
+    r.roll = [Math.min(r.roll[0], roll), Math.max(r.roll[1], roll)];
+    const breath = 2 * Math.asin(h.pose.local(INDEX.chest).x);
+    r.breath = [Math.min(r.breath[0], breath), Math.max(r.breath[1], breath)];
+  }
+  const spread = (r: ReturnType<typeof range>) => ({ moved: r.hi.clone().sub(r.lo).length(), roll: r.roll[1] - r.roll[0], breath: r.breath[1] - r.breath[0] });
+  const [atEase, aiming] = [spread(easy), spread(aimed)];
+  console.log('standing', { atEase, aiming });
+  expect(atEase.moved).toBeGreaterThan(0.01);
+  expect(atEase.roll).toBeGreaterThan(0.03);
+  expect(aiming.moved).toBeLessThan(1e-4);
+  expect(aiming.roll).toBeLessThan(1e-4);
+  expect(aiming.breath).toBeLessThan(0.5 * atEase.breath);
+  expect(h.log).toEqual([]);
+});
+
 // (a sprint with the rifle in both hands: no arm swings, so the trunk turns further with the stride than a free runner's — read, Arellano
 // & Kram 2014: arms held across the chest the pelvis turns 102% further, the shoulders 44%; Pontzer et al. 2009: arms folded, the shoulders
 // 50% further; snippet, Seay et al. 2011: soldiers running with a rifle turn the trunk further — from a free runner's ~14° pelvis and
@@ -261,7 +358,7 @@ it('ADS overrides held sprint and keeps both grips during the raise', () => {
     const h = sim.actors[0];
     const rifle = h.holding.right?.item;
     if (!rifle) throw new Error('missing rifle');
-    framing.apply(camera, player, 'first', 1 / 60);
+    framing.apply(camera, player.look(), player.input.ads, 'first', 1 / 60);
     camera.updateMatrixWorld();
     if (sim.t > 23) {
       const at = new Vector3(0, 0.12, 0).applyQuaternion(rifle.current.quaternion).add(rifle.current.position).project(camera);

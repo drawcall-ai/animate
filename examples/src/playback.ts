@@ -1,6 +1,6 @@
 import { type Humanoid, yawOf, type Body, isPerson } from '@drawcall/animate';
 import { Bone, Box3, Quaternion, Vector3, type Object3D } from 'three';
-import type { Prop } from './scenario';
+import type { Look, Prop } from './scenario';
 import type { Simulation } from './simulation';
 
 /** the height the camera looks at over the body's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
@@ -23,6 +23,9 @@ export class Playback {
   private prevProps: Prop[] = [];
   private currentProps: Prop[] = [];
   private readonly prevRoot = new Vector3();
+  /** the player's look after the previous and the current step, if there is a player */
+  private prevLook: Look | null = null;
+  private currentLook: Look | null = null;
 
   constructor(readonly sim: Simulation) {
     for (const { model } of this.sim.actors) {
@@ -55,9 +58,9 @@ export class Playback {
 
   /**
    * Shows the models `alpha` (0..1) of the way from the previous step to the current one and
-   * returns the props and the first actor's travel point in between.
+   * returns the props, the first actor's travel point and the player's look in between.
    */
-  blend(alpha: number): { props: Prop[]; root: Vector3 } {
+  blend(alpha: number): { props: Prop[]; root: Vector3; look: Look | null } {
     const { prev: a, current: b } = this;
     this.nodes.forEach((n, i) => {
       const k = 7 * i;
@@ -72,7 +75,10 @@ export class Playback {
       return { ...p, position, quaternion: q.quaternion.clone().slerp(p.quaternion, alpha) };
     });
     const root = this.prevRoot.clone().lerp(this.root(), alpha);
-    return { props, root };
+    const [a0, b0] = [this.prevLook, this.currentLook];
+    // (the look blended as the rifle placed in it is: the camera and the rifle shown at the same instant)
+    const look = a0 && b0 && { eye: a0.eye.clone().lerp(b0.eye, alpha), yaw: a0.yaw + (b0.yaw - a0.yaw) * alpha, pitch: a0.pitch + (b0.pitch - a0.pitch) * alpha };
+    return { props, root, look };
   }
 
   /** the models as the last step left them */
@@ -90,6 +96,7 @@ export class Playback {
       n.quaternion.toArray(this.current, 7 * i + 3);
     });
     // (copied: the scenarios move their props' vectors in place)
+    this.currentLook = this.sim.stage.player?.look() ?? null;
     this.currentProps = this.sim.props().map((p) => (p.kind === 'ball' || !p.quaternion ? { ...p, position: p.position.clone() } : { ...p, position: p.position.clone(), quaternion: p.quaternion.clone() }));
   }
 
@@ -97,6 +104,7 @@ export class Playback {
   private remember() {
     this.prev.set(this.current);
     this.prevProps = this.currentProps;
+    this.prevLook = this.currentLook;
     this.prevRoot.copy(this.root());
   }
 

@@ -1,13 +1,14 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper } from '@drawcall/animate';
-import { follow, followRotation, idle } from '@drawcall/animate/rig';
+import { INDEX, Item, aimAt, swing, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper, type Rhythm } from '@drawcall/animate';
+import { Life, ask, follow, followRotation, idle } from '@drawcall/animate/rig';
 import { reached } from '../../../packages/animate/src/core/tip';
 import { spinOf } from '../../../packages/animate/src/core/rotation';
+import { irregular } from '../../../packages/animate/src/core/random';
 import { scalar } from '../keys';
 import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
-import type { Player, Prop, Scenario } from '../scenario';
+import type { Look, Player, Prop, Scenario } from '../scenario';
 
 const DEG = Math.PI / 180;
 // Recalled: Epic Games, Unreal Engine “Skeletal Mesh Sockets”, “Aim Offset”, and “Two Bone IK”.
@@ -34,19 +35,31 @@ const SWAY = { accel: 24, turnAccel: 120 };
 const FLICK = 600;
 // Tuned pouches on the left hip, in the hips' frame (+x left, +z ahead): beside the trunk, clear of it.
 const POUCHES = [new Vector3(0.17, -0.04, 0.05), new Vector3(0.17, -0.04, -0.03)];
-export const SHOOTER_DURATION = 53;
-// Tuned mouse turns (minimum jerk): a turn while walking, then a quick turn standing.
-const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6]]);
+/**
+ * Standing at ease — not aiming, moving or turning — the rifle and the eyes keep a little life, gone as the sights come up (the body's own breathing and sway fade
+ * by `steady`, the rifle held still in the aim). Recalled (game convention: first-person weapon idle sway, e.g. Call of Duty, Battlefield,
+ * Unreal's Lyra — a slow Lissajous of a few mm and a fraction of a degree, near none aiming down sights; Winter 1995: quiet stance sways
+ * below 0.5 Hz): tuned, the rifle drifts `drift` (m) and `turn` (rad), breathing at 0.25 Hz (12–20 breaths/min); every 6–12 s standing
+ * at ease it is shouldered anew — lifted `lift` (m) and rolled `roll` (rad) for 0.6–1.2 s, eased at 4/s (recalled: idle fidgets of game
+ * animation sets); the eyes wander `wander` (rad) about the aim and every 4–9 s glance up to `glance` (rad) aside for 0.8–1.6 s (recalled,
+ * Land & Tatler 2009: the gaze rests on a point a fraction of a second to seconds, the head joining the larger shifts; tuned intervals).
+ */
+const EASE = { drift: 0.004, turn: 0.012, lift: 0.025, roll: 0.12, wander: 0.025, glance: 0.15 };
+const SHOULDER: Rhythm = { first: [4, 8], every: [6, 12], hold: [0.6, 1.2], rate: 4, quiet: 2, pick: swing };
+const GLANCE: Rhythm = { first: [3, 6], every: [4, 9], hold: [0.8, 1.6], rate: 5, quiet: 1.5, pick: swing };
+export const SHOOTER_DURATION = 62;
+// Tuned mouse turns (minimum jerk): a turn while walking, then a quick turn standing, then quick turns aiming.
+const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6], [56.8, -0.6], [57.4, 0.4], [58.2, 0.4], [58.8, -0.6]]);
 
 /** Deterministic input, shared by headless runs and unattended playback. */
 export function shooterTrack(t: number, input: Player['input']) {
   // Demo: walk forward, strafe left and right, back-pedal, ADS standing and walking, sprint,
   // walk while turning, stop and turn in place, ADS and fire; crouch-walk; jump from a walk and
-  // from a sprint; reload while walking.
+  // from a sprint; reload while walking; stand at ease; quick turns aiming.
   const between = (from: number, to: number) => t >= from && t < to;
   input.move.z = between(3, 6) || between(15.5, 17) || between(18, 28) || between(36.5, 39.5) || between(41, 47.5) || between(48.5, 51.8) ? 1 : between(10, 12) ? -1 : 0;
   input.move.x = between(6, 8) ? 1 : between(8, 10) ? -1 : 0;
-  input.ads = between(13, 17) || between(32, 35);
+  input.ads = between(13, 17) || between(32, 35) || between(56, 60);
   input.sprint = between(18.5, 23.5) || between(44, 47);
   input.crouch = between(35.5, 40.3);
   input.jump = between(42.5, 42.6) || between(45.7, 45.8);
@@ -138,17 +151,29 @@ export function shooter(): Scenario {
         live: false,
         root: controller.root,
         status: () => ({ reloading, steps, magazines }),
-        // (the eye the aim is placed from: as the body stood when the sub-step being posed set out — where the camera looks from,
-        // as a game's camera, a sub-step behind the body)
-        eyes: () => {
+        // (the aim's frame, taken once a step as it sets out: the eye as the body stood then — a sub-step behind the body, as a
+        // game's camera — and the look the input had then; the rifle is placed in it and the camera shows it, so the two never part)
+        look: () => {
           if (!actor) throw new Error('player camera needs its actor');
           const eye = actor.rig.points.rightEye;
-          return now > 0 ? aimedFrom.clone() : actor.pose.point(eye.bone, eye.at, new Vector3());
+          if (now === 0) return { eye: actor.pose.point(eye.bone, eye.at, new Vector3()), yaw: player.input.aimYaw, pitch: player.input.aimPitch };
+          return { ...look, eye: look.eye.clone() };
         },
       };
+      const look: Look = { eye: new Vector3(), yaw: 0, pitch: 0 };
       const direction = () => new Vector3(0, 0, 1).applyQuaternion(rotation());
-      const rotation = () => new Quaternion().setFromEuler(new Euler(-player.input.aimPitch - 0.012 * recoil(), player.input.aimYaw, 0, 'YXZ'));
-      const ahead = () => player.eyes().addScaledVector(direction(), 20);
+      const rotation = () => new Quaternion().setFromEuler(new Euler(-look.pitch - 0.012 * recoil(), look.yaw, 0, 'YXZ'));
+      // (at ease: how far from aiming, eased; how calm — standing at ease, eased in and out over ~0.3 s; its shouldering and glances, seeded)
+      const atEase = () => 1 - ads * ads * (3 - 2 * ads);
+      const ease = new Life(SHOOTER_DURATION, [['shoulder', SHOULDER], ['glance', GLANCE]]);
+      let calm = 0;
+      // (the eyes on the aim, at ease wandering about it and glancing aside now and then)
+      const ahead = () => {
+        const k = atEase() * calm, phase = ease.phase;
+        const yaw = k * (EASE.wander * irregular(now, phase, 0.61, 1.13, 1.97) + EASE.glance * ease.value('glance'));
+        const pitch = k * 0.6 * EASE.wander * irregular(now, phase + 1, 0.71, 1.29, 2.33);
+        return look.eye.clone().addScaledVector(direction().applyEuler(new Euler(-pitch, yaw, 0, 'YXZ')), 20);
+      };
       const recoil = () => {
         const u = (now - lastShot) / 0.2; // Tuned: requested 200 ms recovery, zero velocity at each end.
         return u >= 0 && u < 1 ? Math.sin(Math.PI * u) ** 2 : 0;
@@ -159,12 +184,12 @@ export function shooter(): Scenario {
       // Tuned carry offsets (m) and muzzle rotations (rad), +X screen-left along +Z: the hip muzzle converges inward; sprint
       // lowers it diagonally across the chest; the reload cant raises the muzzle a little and draws the rifle in toward the body
       // and the left hand — the well within the eyes' downward reach. Derived: aiming puts the sight below the dominant eye.
-      const aimedFrom = new Vector3(), looked = new Quaternion();
+      const looked = new Quaternion();
       let aimed = false;
       // (its place in the frame now, the sub-step before, the one before that)
       const local = [0, 1, 2].map(() => ({ position: new Vector3(), quaternion: new Quaternion() }));
       const aimRifle = (t: number, dt: number) => {
-        const view = rotation(), eye = aimedFrom;
+        const view = rotation(), eye = look.eye;
         if (!aimed) {
           aimed = true;
           looked.copy(view);
@@ -175,9 +200,14 @@ export function shooter(): Scenario {
         }
         [local[0], local[1], local[2]] = [local[2], local[0], local[1]];
         const [now, was, before] = local;
-        const blend = ads * ads * (3 - 2 * ads), run = sprint * sprint * (3 - 2 * sprint), turn = reload * reload * (3 - 2 * reload);
-        const to = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn, -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn, 0.22 - 0.1 * run - 0.012 * recoil() - 0.04 * turn);
-        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn, 0.12 * (1 - blend) + 0.2 * run, 0));
+        const blend = 1 - atEase(), run = sprint * sprint * (3 - 2 * sprint), turn = reload * reload * (3 - 2 * reload);
+        // (at ease it breathes and drifts, and is shouldered anew now and then: lifted and rolled a little)
+        const k = atEase() * calm, breath = Math.sin(2 * Math.PI * 0.25 * t + ease.phase), shoulder = ease.value('shoulder');
+        const drift = (a: number, b: number, c: number) => k * irregular(t, ease.phase, a, b, c);
+        const to = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn + EASE.drift * drift(0.79, 1.37, 2.11),
+          -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn + k * (EASE.drift * breath + EASE.lift * Math.abs(shoulder)), 0.22 - 0.1 * run - 0.012 * recoil() - 0.04 * turn);
+        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn + 0.5 * EASE.turn * k * breath,
+          0.12 * (1 - blend) + 0.2 * run + EASE.turn * drift(0.93, 1.61, 2.47), k * EASE.roll * shoulder));
         follow(before.position, was.position, to, SWAY, dt, now.position);
         followRotation(before.quaternion, was.quaternion, tilt, { accel: SWAY.turnAccel }, dt, now.quaternion);
         const spin = spinOf(looked, view, dt, new Vector3());
@@ -201,7 +231,8 @@ export function shooter(): Scenario {
           now = t;
           if (!player.live) shooterTrack(t, player.input);
           const point = actor.rig.points.rightEye;
-          actor.pose.point(point.bone, point.at, aimedFrom);
+          actor.pose.point(point.bone, point.at, look.eye);
+          [look.yaw, look.pitch] = [player.input.aimYaw, player.input.aimPitch];
           // (aiming waits for a reload; sprinting cancels one before the magazine is out, then waits)
           const input = { ...player.input, ads: player.input.ads && !reloading };
           controller.hold = reloading && pulled;
@@ -212,6 +243,11 @@ export function shooter(): Scenario {
           ads = approach(ads, Number(input.ads));
           reload = approach(reload, Number(canted));
           sprint = approach(sprint, input.ads ? 0 : Math.max(actor?.locomotion.run ?? 0, Number(controller.sprinting(input))));
+          // (standing at ease: not aiming, still, the look turning slower than 0.5 rad/s, no reload, no shot for a second)
+          const turning = Math.hypot(wrapAngle(input.aimYaw - previousYaw), input.aimPitch - previousPitch) / dt;
+          const quiet = !input.ads && ads === 0 && controller.root.velocity.length() < 0.05 && turning < 0.5 && !reloading && now - lastShot > 1;
+          ease.update(t, dt, quiet);
+          calm += (Number(quiet) - calm) * (1 - Math.exp(-dt / 0.3));
           // (the rifle where the aim has it, once off the hand it starts in)
           if (!rifle.wornBy) aimRifle(t, dt);
           if (player.input.aimYaw !== previousYaw || player.input.aimPitch !== previousPitch || player.input.ads !== previousAds) steadySince = t;
@@ -228,9 +264,10 @@ export function shooter(): Scenario {
           part(new Vector3(0, -0.055, 0), new Vector3(0.055, 0.14, 0.06)),
           part(SIGHT, new Vector3(0.02, 0.025, 0.12)),
           ...magazines.map((m): Prop => ({ kind: 'box', position: m.current.position.clone(), size: MAGAZINE.clone(), quaternion: m.current.quaternion.clone() })),
-          ...(now - lastShot < 0.06 ? [{ kind: 'ball' as const, position: new Vector3(0, 0.06, 0.68).applyQuaternion(rifle.current.quaternion).add(rifle.current.position), radius: 0.045 }] : []),
           ...[-3, 3].map((x): Prop => ({ kind: 'box', position: new Vector3(x, 0.4, 4), size: new Vector3(1.4, 0.8, 1) })),
           ...[-4, 0, 4].map((x): Prop => ({ kind: 'box', position: new Vector3(x, 1.3, 13), size: new Vector3(0.6, 1, 0.1) })),
+          // (the muzzle flash last: it comes and goes, the others keep their places — the playback blends each with the one at its place)
+          ...(now - lastShot < 0.06 ? [{ kind: 'ball' as const, position: new Vector3(0, 0.06, 0.68).applyQuaternion(rifle.current.quaternion).add(rifle.current.position), radius: 0.045 }] : []),
         ],
         script: (h) => {
           actor = h;
@@ -306,11 +343,13 @@ export function shooter(): Scenario {
                 if (ads < 1) return null;
                 const angle = new Vector3(0, 0, 1).applyQuaternion(rifle.current.quaternion).angleTo(direction());
                 if (angle > 2 * DEG) return { check: 'sight angle (rad)', value: angle, limit: 2 * DEG, where: 'rifle' };
-                const sight = SIGHT.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(player.eyes());
+                const sight = SIGHT.clone().applyQuaternion(rifle.current.quaternion).add(rifle.current.position).sub(look.eye);
                 const value = sight.addScaledVector(direction(), -sight.dot(direction())).length();
                 return value > 0.01 ? { check: 'sight line offset (m)', value, limit: 0.01, where: 'rifle' } : null;
               }),
               idle(h, { root: controller.root }),
+              // (aiming, the body holds still: its breathing and sway fade)
+              ask(h, () => ({ steady: 1 - atEase() })),
               aimAt(h, ahead),
               reporting(report, ['leftHand', 'rightHand', 'gaze'], function* () {
                 yield* parallel<Frame>('all',

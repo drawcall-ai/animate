@@ -125,9 +125,11 @@ root.crouch = input.crouch ? 1 : 0;
 if (input.jump) player.stepper?.jump(2.5);
 ```
 
+Standing, the player's body breathes, sways and shifts its weight like any person's (seeded by `idle: { root, seed }`). While the player aims, ask it to hold still with `ask(p, () => ({ steady: aiming }))` (from `@drawcall/animate/rig`, 0 at ease to 1 aiming): its breathing and sway fade to about a third and it shifts no weight.
+
 Crouched, keep to a crouch-walk's pace (about 0.8 m/s) and turn on the spot in steps rather than steadily: a steady turn on the spot while crouched crosses the legs, and crouched steps, walking back most of all, still log a few touchdowns a little too fast.
 
-A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation` from `@drawcall/animate/rig`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach.
+A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation` from `@drawcall/animate/rig`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach. Show the camera from the same look the tool was placed in on that step, blended between steps as you blend the bodies, not from the newest mouse input: otherwise the tool trails the view by a step whenever the player turns.
 
 ## Life
 

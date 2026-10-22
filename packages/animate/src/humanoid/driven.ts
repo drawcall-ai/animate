@@ -11,6 +11,8 @@ import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, pointSegmentDista
 import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
+import { seedOf } from '../core/random';
+import { Life } from './posture/life';
 import { ankleFor, ballOf, footRotation, heelOf } from './posture/foot';
 import { kneePole, shankTilt } from './posture/leg';
 import { hullOf, outside, xcomOfPoses } from '../core/legs/support';
@@ -30,6 +32,14 @@ const TILT = { walk: 0.06, run: 0.25, accel: 8 };
  * walking, ±0.9 cm running (m, default body) — one sinusoid a stride, followed within `accel` (m/s²), the root kept exact — a player's camera and movement ride the root, not the hips
  */
 const SWAY = { walk: 0.014, run: 0.009, accel: 1 };
+/**
+ * Standing, its quiet life (`Life`: breathing, a seeded sway, weight shifts every 10–30 s — fading as it moves, and as it holds still to
+ * aim, `asks.steady`). Recalled (Winter 1995; Prieto et al. 1996): quiet stance sways as an inverted pendulum about the ankles, the centre
+ * of mass ~5–10 mm, mostly below 0.5 Hz: here the trunk leans by that sway over `pendulum` (m, ~the default body's centre of mass height),
+ * the root kept exact. Tuned: a weight shift moves the pelvis `shift` (m, default body) over a foot — within the walking sway's band —
+ * followed within `accel` (m/s²), ~1 s.
+ */
+const QUIET = { pendulum: 1, shift: 0.012, accel: 0.05 };
 /** Tuned (rad/s²): the pelvis's turn with the stride changes within this — ~4× a running pelvis's own swing (±0.2 rad at 1.4 strides/s peaks at ~16 rad/s², arms held ×1.6): only a walk eased into a run, or back, is smoothed */
 const TURN = { accel: 120 };
 /** Tuned (rad/m): the trunk leans back over the sway a little, the chest riding the pelvis no wider than it */
@@ -39,6 +49,12 @@ const KEEP = 1;
  * the lean atan(a / g) that would put it through the centre of mass, at most `ahead` (rad), and back slowing down at most `back`.
  */
 const SPEEDING = { share: 0.4, ahead: 0.35, back: 0.15 };
+/**
+ * Tuned (1/s): the speeding up and slowing down the trunk leans to is the root's velocity as a critically damped follower of it at this
+ * rate feels it — a game's near-instant stop (10 m/s² for 0.1 s) taken over ~a step, as a body's own (recalled: a walk is started
+ * and stopped within one to two steps; Jian et al. 1993, gait initiation and termination), never a lurch of the trunk after a box of it
+ */
+const FELT = 5;
 /** Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing (with its toe-out); tuned: eased in over this share of the swing */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
@@ -48,15 +64,19 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
  * Legs under a root the scene drives (`root`, read every sub-step; see `Stepper`): `h.stepper` takes a `jump` and says when
  * it is `airborne`. The pelvis tips forward with the stride; the trunk takes `h.asks.bow` and `twist`, nods as each foot takes
  * the weight; the pelvis' height is the legs' own (`crouch`, a leap): `lower` is not taken.
+ * Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`), less as it holds still (`asks.steady`).
  * Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
-export function driven(h: Humanoid, root: Live<DrivenRoot>): Behaviour {
-  return drivenBy(h, (f) => live(root, f));
+export function driven(h: Humanoid, root: Live<DrivenRoot>, seed?: number): Behaviour {
+  return drivenBy(h, (f) => live(root, f), { seed });
 }
 
-/** `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`). */
-export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal,
-  carry?: (f: Frame, asks: Asks, stepper: Stepper) => [pelvis: number, thorax: number], record: Stepping = humanStepping(h.proportions)): Behaviour {
+/**
+ * `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`); a body carrying
+ * itself otherwise (`carry`: a walker's posture) places the pelvis and trunk itself, its quiet life its own.
+ */
+export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal, { carry, record = humanStepping(h.proportions), seed }: {
+  carry?: (f: Frame, asks: Asks, stepper: Stepper) => [pelvis: number, thorax: number]; record?: Stepping; seed?: number } = {}): Behaviour {
   return function* () {
     const p = h.proportions;
     const soles = SIDES.map((side, i) => [heelOf(p), ...[p.sole.bigToe, p.sole.smallToe]
@@ -76,7 +96,8 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
-    let was: Vector3 | null = null;
+    let felt: { velocity: Vector3; accel: Vector3 } | null = null;
+    const life = new Life(seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z)), shifts = [0, 0];
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
@@ -102,23 +123,33 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
         [tilts[0], tilts[1]] = [tilts[1], tilt];
         f.current.setLocal(0, quatYXZ(yaw + turn.pelvis, tilt, 0, _q));
+        // (its quiet life: standing settled, nothing else asked of the legs or the trunk, it may shift its weight — let go as it walks off)
+        // (motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
+        const speed = Math.hypot(r.velocity.x, r.velocity.z), activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
+          f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
+        life.update(dt, !asks.go && stepper.settled && speed < 0.05 && asks.lower === 0 && asks.bow === 0 && asks.steady === 0, activity, asks.steady);
+        const shift = follow(shifts[0], shifts[1], QUIET.shift * p.scale * (life.onto === 'left' ? 1 : life.onto === 'right' ? -1 : 0), { accel: QUIET.accel }, dt);
+        [shifts[0], shifts[1]] = [shifts[1], shift];
         // (the pelvis swaying over the stance foot, the root staying where the player has it: only the hips move about it)
         // (a sinusoid of the stride, over the left foot at the right's mid-swing: `phase` 0 as the left lifts, its mid-swing π (1 − stance share) on)
-        const sway = follow(sways[0], sways[1], -lerp(SWAY.walk, SWAY.run, run) * p.scale * moving * Math.cos(stepper.phase - Math.PI * (1 - Ts / stepper.cycle)), { accel: SWAY.accel }, dt);
+        const sway = follow(sways[0], sways[1], shift * (1 - moving) - lerp(SWAY.walk, SWAY.run, run) * p.scale * moving * Math.cos(stepper.phase - Math.PI * (1 - Ts / stepper.cycle)), { accel: SWAY.accel }, dt);
         [sways[0], sways[1]] = [sways[1], sway];
         f.current.setRoot(_v.copy(f.current.position(0)).addScaledVector(leftOf(yaw, _f), sway));
         // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land; it leans into
         // speeding up and back from slowing down)
         const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
         // (spawned on the move, it starts at that pace: no jolt of the trunk)
-        was ??= r.velocity.clone();
-        const speeding = _v.subVectors(r.velocity, was).divideScalar(dt).dot(forwardOf(yaw, _f));
-        was.copy(r.velocity);
+        felt ??= { velocity: r.velocity.clone(), accel: new Vector3() };
+        felt.accel.addScaledVector(_v.subVectors(r.velocity, felt.velocity).multiplyScalar(FELT ** 2).addScaledVector(felt.accel, -2 * FELT), dt);
+        felt.velocity.addScaledVector(felt.accel, dt);
+        const speeding = felt.accel.dot(forwardOf(yaw, _f));
         const lean = stepper.airborne ? 0 : clamp(SPEEDING.share * Math.atan2(speeding, GRAVITY), -SPEEDING.back, SPEEDING.ahead);
         // (the thorax turned off the pelvis, the shoulder going forward rising with it)
         const twist = clamp(asks.twist + turn.thorax - turn.pelvis, -0.8, 0.8);
-        const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean - tilt + nod, KEEP * sway / p.scale, _bend).slerp(IDENTITY, 0.5);
-        const shoulders = quatYXZ(0, 0, turn.roll, _roll);
+        const bend = quatYXZ(twist, asks.bow + RUN_LEAN * run + CROUCH_LEAN * k + lean - tilt + nod + life.drift.z / QUIET.pendulum,
+          KEEP * sway / p.scale - life.drift.x / QUIET.pendulum, _bend).slerp(IDENTITY, 0.5);
+        // (the shoulders' own roll with the stride, and the chest's breath)
+        const shoulders = quatYXZ(0, life.breath, turn.roll, _roll);
         [INDEX.spine, INDEX.chest].forEach((bone, k) => {
           const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
           if (bone === INDEX.chest) local.multiply(shoulders);

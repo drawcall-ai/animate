@@ -21,7 +21,7 @@ export const legSystem: { path: 'old' | 'core' } = { path: 'old' };
 export function personIdle(h: Humanoid, options: IdleOptions = {}): Behaviour {
   const { root } = options, path = legSystem.path;
   return function* () {
-    const legs = root ? driven(h, root) : path === 'core' ? stride(h, options) : balance(h, options);
+    const legs = root ? driven(h, root, options.seed) : path === 'core' ? stride(h, options) : balance(h, options);
     yield* parallel<Frame>('all', legs, hangArms(h), lookAround(h, { seed: options.seed }));
   };
 }

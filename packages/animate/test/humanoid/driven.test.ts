@@ -5,6 +5,7 @@ import { expect, it } from 'vitest';
 import { INDEX, type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/core/math';
 import type { Stepper } from '../../src/core/legs/stepper';
+import { request } from '../../src/core/asks';
 
 const dt = 1 / 60;
 
@@ -53,6 +54,62 @@ it.each([
   expect(h.notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
   expect(h.feet.every((foot) => foot.phase === 'planted')).toBe(true);
   expect(h.locomotion.settled).toBe(true);
+});
+
+// (a player's stop: the root brakes at 10 m/s², 0.1 s for a walk — the trunk leans to it as its own legs would feel it, over a step, not
+// a lurch after it, and the pelvis rising to its standing height arrives braked — before, the head was thrown 8.5° forward and back in
+// 0.25 s stopping a back-pedal, 45 m/s² off the hips, and the pelvis came to its height with a 52 m/s² jolt)
+it.each([
+  ['back-pedalling', forwardOf(0).multiplyScalar(-1.1)],
+  ['walking', forwardOf(0).multiplyScalar(1.4)],
+  ['side-stepping', leftOf(0).multiplyScalar(1.1)],
+] as const)('stops %s without a jolt: the head moves with the hips, the pelvis rises braked', (_, velocity) => {
+  const heads: Vector3[] = [], hips: Vector3[] = [];
+  drive(4.5, moving(0.5, 3, velocity), () => 0, (t, root, h) => {
+    if (t < 3 - dt / 2) return;
+    heads.push(h.pose.position(INDEX.head).clone());
+    hips.push(h.pose.position(INDEX.hips).clone());
+  });
+  const accel = (p: Vector3[], i: number) => p[i + 1].clone().sub(p[i].clone().multiplyScalar(2)).add(p[i - 1]).divideScalar(dt * dt);
+  let trunk = 0, arrival = 0;
+  for (let i = 1; i < heads.length - 1; i++) {
+    trunk = Math.max(trunk, accel(heads, i).sub(accel(hips, i)).length());
+    // (slowing as it rises to a stop: braked within the stepper's 20 m/s²)
+    if (hips[i].y > hips[i - 1].y && hips[i + 1].y >= hips[i].y - 1e-9) arrival = Math.max(arrival, -accel(hips, i).y);
+  }
+  expect(trunk).toBeLessThan(10);
+  expect(arrival).toBeLessThan(20.5);
+});
+
+// (a player standing at ease: it breathes, sways and now and then shifts its weight over a foot — not frozen; holding still to aim, its
+// breathing and sway keep 30%; the root stays exact all the while)
+it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
+  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const h = person(createSkeletonModel(), (h) => idle(h, { root, seed: 3 }), { idle: false, dev: true });
+  let lowest = Infinity, highest = -Infinity, left = 0, right = 0, lag = 0;
+  for (let t = dt; t <= 40; t += dt) {
+    request(h.asks, { steady });
+    h.update(dt);
+    if (t < 2) continue;
+    const chest = h.pose.local(INDEX.chest);
+    const pitch = 2 * Math.asin(chest.x);
+    [lowest, highest] = [Math.min(lowest, pitch), Math.max(highest, pitch)];
+    const off = h.pose.position(0).clone().sub(root.position);
+    lag = Math.max(lag, Math.abs(off.z));
+    [left, right] = [Math.max(left, off.x), Math.min(right, off.x)];
+  }
+  const breath = (highest - lowest) * 180 / Math.PI;
+  expect(lag).toBeLessThan(1e-9);
+  expect(h.log).toEqual([]);
+  if (steady) {
+    // (~30% of the 2–3° at ease, no weight shift)
+    expect(breath).toBeLessThan(1.2);
+    expect(Math.max(left, -right)).toBeLessThan(0.002);
+  } else {
+    expect(breath).toBeGreaterThan(1.5);
+    expect(Math.max(left, -right)).toBeGreaterThan(0.008);
+    expect(Math.max(left, -right)).toBeLessThanOrEqual(SWAY_BAND);
+  }
 });
 
 it.each([
