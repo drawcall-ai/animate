@@ -297,7 +297,10 @@ export class Stepper {
     };
     // the furthest from under its hip a foot lands (m)
     // (the height a landing must hold the hip at, and how far out it may land so, as the legs stand before they move this sub-step)
-    const holding = Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
+    // A planned root can slow for a landing at its contact height; an externally driven one may need extra drop.
+    const holding = r.forecast
+      ? standing - (lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run) + st.bob) * s * moving
+      : Math.max(nominal() - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
     const landingReaches = legs.map((leg) => Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - feet.ankleHeight) ** 2))));
     // (the extrapolated centre of mass `ahead` s on: the root carried on, the centre of mass where it is over it — as `r.xcom` is)
     const over = _over.copy(r.com ?? hips).setY(0);

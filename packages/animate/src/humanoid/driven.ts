@@ -11,8 +11,8 @@ import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, pointSegmentDista
 import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal, type Stepping } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
-import { ankleFor, ballOf, footprint, footRotation, heelOf } from './posture/foot';
-import { shankTilt } from './posture/leg';
+import { ankleFor, ballOf, footRotation, heelOf } from './posture/foot';
+import { kneePole, shankTilt } from './posture/leg';
 import { hullOf, outside, xcomOfPoses } from '../core/legs/support';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
@@ -67,11 +67,16 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
   carry?: (f: Frame, asks: Asks, stepper: Stepper) => number, record: Stepping = humanStepping(h.proportions)): Behaviour {
   return function* () {
     const p = h.proportions;
+    const soles = SIDES.map((side, i) => [heelOf(p), ...[p.sole.bigToe, p.sole.smallToe]
+      .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(p, side)))]);
     const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: p.ankleHeight, rotation: footRotation,
       legs: SIDES.map((side, i) => ({ sign: i === 0 ? 1 : -1, foot: INDEX[`${side}Foot`], toes: INDEX[`${side}Toes`], top: INDEX[`${side}UpperLeg`] })),
       ankle: (i, anchor, yaw, pitch, out) => ankleFor(p, SIDES[i], anchor, yaw, pitch, out),
       lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
-      print: (_, anchor, yaw) => footprint(p, anchor, yaw),
+      print: (i, anchor, yaw) => soles[i].map((point): [number, number] => {
+        const at = point.clone().applyQuaternion(footRotation(yaw, 0)).add(anchor);
+        return [at.x, at.z];
+      }),
       sole: (i, ankle, foot, toes) => {
         const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle), sign = i === 0 ? 1 : -1;
         return Math.min(heelOf(p, _a).applyQuaternion(foot).y + ankle.y, ...[p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y));
@@ -132,7 +137,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         // out leaves no knee swung out with it — eased in over the swing's first `KNEE_EASE`, not snapped round as it lifts)
         const along = stepper.yaw + leg.sign * record.toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
         const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
-        const pole = _pole.copy(thigh).add(pose.ankle).multiplyScalar(0.5).addScaledVector(forwardOf(yawed), 0.5);
+        const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(p.thigh).add(thigh);
         // (planted, the leg turns as the foot needs; swinging, the knee bends toward the pole and the foot turns within the ankle's range, so the knee never swivels to suit it)
         const place = (at: Vector3) => {
           solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole });

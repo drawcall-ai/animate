@@ -12,7 +12,7 @@ import { forwardOf, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wr
 import type { Proportions } from '../proportions';
 import type { Carriage, Swing } from './carriage';
 import { LANDING_REACH, plantedReach } from '../posture/posture';
-import { foldedReach, legOf, shankTilt } from '../posture/leg';
+import { foldedReach, kneePole, legOf, shankTilt } from '../posture/leg';
 import { ankleFor, ballOf, MAX_HEEL, footRotation, heelOf, swingHump, swingProgress, type Foot } from '../posture/foot';
 
 /** how fast a planted foot rolls (rad/s², rad/s), within the ankle's range */
@@ -228,21 +228,6 @@ export function solveLeg(f: Frame, c: Carriage, side: Side, pose: FootPose) {
   f.current.setLocal(toes, local);
 }
 
-/**
- * Where a leg's knee bends (a direction, into `out`): over the toes (the foot's heading `yaw`
- * blended with the body's `facing`); a leg raised forward bends with the knee up, one raised out
- * sideways carries it along. (From the old core's kneePole.)
- */
-function kneePole(side: Side, yaw: number, facing: number, hip: Vector3, ankle: Vector3, out: Vector3): Vector3 {
-  // (halfway round from the facing to the foot's heading: a sum of the two would vanish for a foot turned far round)
-  forwardOf(facing + 0.5 * wrapAngle(yaw - facing), out);
-  const leg = _leg.subVectors(ankle, hip).normalize();
-  const outward = _out.crossVectors(UP, out).multiplyScalar(side === 'left' ? 1 : -1);
-  const abducted = Math.max(0, leg.dot(outward));
-  out.y = 0.15 + 2.5 * Math.max(0, leg.dot(out) + 0.2);
-  return out.applyQuaternion(_arc.setFromUnitVectors(DOWN, _v.set(0, -Math.sqrt(1 - abducted * abducted), 0).addScaledVector(outward, abducted))).normalize();
-}
-
 /** `ankle` drawn into the leg's reach (`reach` m) from the hip joint `hip`, softly from `soft` of it on */
 function withinReach(hip: Readonly<Vector3>, ankle: Vector3, reach: number, soft: number): Vector3 {
   const d = _d.subVectors(ankle, hip);
@@ -253,8 +238,6 @@ function withinReach(hip: Readonly<Vector3>, ankle: Vector3, reach: number, soft
   return ankle.copy(hip).addScaledVector(d, (from + span * Math.tanh((l - from) / span)) / l);
 }
 
-const UP = new Vector3(0, 1, 0);
-const DOWN = new Vector3(0, -1, 0);
 const _v = new Vector3();
 const _a = new Vector3();
 const _b = new Vector3();
@@ -263,11 +246,8 @@ const _d = new Vector3();
 const _hip = new Vector3();
 const _land = new Vector3();
 const _pole = new Vector3();
-const _leg = new Vector3();
-const _out = new Vector3();
 const _q = new Quaternion();
 const _spin = new Quaternion();
-const _arc = new Quaternion();
 
 /** Authoritative reach bound from applied hips and final foot goals; posture.reachLimit only plans the carriage. */
 export function pelvisHeight(f: Frame, c: Carriage, feet: readonly FootPose[]): number {
