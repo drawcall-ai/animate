@@ -5,6 +5,7 @@ import type { Carrier, Placed } from './carrier';
 import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { clampRotation } from './limits';
+import { exp, log } from './rotation';
 import { live, REACHED, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
@@ -39,6 +40,9 @@ export interface TipOptions extends Motion {
  */
 export class ChainTip {
   private readonly joints = new Map<number, TrackedRotation>();
+  /** each joint `clear` moved after its brakes last sub-step, and its step then as the brakes are to read it (a rotation vector, its
+   * parent's frame), and when */
+  private readonly nudged = { steps: new Map<number, Vector3>(), time: NaN };
   /** where it moved the tip the last two sub-steps (world) and when last; on a carrier, where it took the carrier to be then */
   private readonly moved = { before: new Vector3(), last: new Vector3(), placed: new Vector3(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
   /** how far out from the chain's base it let the tip go last (m) */
@@ -92,11 +96,15 @@ export class ChainTip {
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : live(options.pole, f) });
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
+      const nudged = own && Math.abs(f.time - f.dt - this.nudged.time) < 1e-9 ? this.nudged.steps : null;
       for (const b of bones) {
         const pace = { accel: turnAccel, speed: turnSpeed };
+        // (a joint nudged last sub-step moved on as `clear` left its step, from where it was put)
+        const step = nudged?.get(b);
+        const before = step ? exp(-step.x, -step.y, -step.z, _before).multiply(f.prev.local(b)) : f.prev2.local(b);
         const q = options.contact
-          ? followRotation(f.prev2.local(b), f.prev.local(b), f.current.local(b), pace, f.dt, _joint)
-          : this.joint(b).follow(f.prev2.local(b), f.prev.local(b), f.current.local(b), pace, f.dt, _joint);
+          ? followRotation(before, f.prev.local(b), f.current.local(b), pace, f.dt, _joint)
+          : this.joint(b).follow(before, f.prev.local(b), f.current.local(b), pace, f.dt, _joint);
         // (carried on by its motion, a joint stops at the end of its range)
         const limit = skeleton.limits[b];
         if (limit) clampRotation(q, limit);
@@ -107,7 +115,18 @@ export class ChainTip {
     // bend. A grip without a rotation leaves the damped wrist free: pinned, a folded arm would swivel round to keep it.
     const off = f.current.position(tip).distanceTo(position) > 1e-6 || (quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > 1e-6);
     if (options.contact && off) solveChain(f, chain, { tip: { position, quaternion }, pole: f.current.position(bones[1]).clone() });
-    if (options.clear && turnAccel !== undefined) options.clear(f, { position: _braked.copy(f.current.position(tip)), quaternion: _turned.copy(f.current.rotation(tip)) }, true);
+    this.nudged.steps.clear();
+    if (options.clear && turnAccel !== undefined) {
+      const braked = bones.map((b) => f.current.local(b).clone());
+      options.clear(f, { position: _braked.copy(f.current.position(tip)), quaternion: _turned.copy(f.current.rotation(tip)) }, true);
+      // (a joint nudged was put there, not swung: the brakes read it as going on as they had it go — the nudge read as its motion,
+      // they would carry it on at the nudge's speed, far beyond what they stop soon, flinging the limb on)
+      bones.forEach((b, k) => {
+        if (f.current.local(b).angleTo(braked[k]) < 1e-9) return;
+        this.nudged.steps.set(b, log(braked[k].multiply(_r.copy(f.prev.local(b)).invert()), new Vector3()));
+      });
+      this.nudged.time = f.time;
+    }
     moved.placed.copy(f.current.position(tip));
   }
 
@@ -179,6 +198,7 @@ const ZERO = new Vector3();
 const _position = new Vector3();
 const _braked = new Vector3();
 const _turned = new Quaternion();
+const _before = new Quaternion();
 const _quaternion = new Quaternion();
 const _joint = new Quaternion();
 const _r = new Quaternion();

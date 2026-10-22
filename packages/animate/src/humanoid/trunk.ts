@@ -24,6 +24,9 @@ const BACK = 0.5;
 const WAIT = 0.4;
 /** Tuned: how far round toward the other side of the body a goal ahead of the shoulder may lie and be reached for at once (rad) */
 const SECTOR = Math.PI / 3;
+/** Tuned: how far a nudge may move a braked joint in a sub-step, as a share of what its dev-checked acceleration moves it from rest
+ * (half: a step that takes no more than half of that check) */
+const NUDGE = 0.5;
 /** the share of the arm's length a wrist goal is judged at, out of reach (as `ChainTip` lets a tip out) */
 const REACH = 0.98;
 /** the elbow's swivels tried about the shoulder–wrist line, each way (`SWIVEL.steps` of `SWIVEL.step` rad) */
@@ -39,13 +42,18 @@ export interface Keeping {
   push: number;
   /** whether a hand across the midline is kept ahead of its shoulder as `BACK` asks */
   back: boolean;
+  /** the joints going only as far from where they were toward that re-solve as clears the arm, and no further in a sub-step than
+   * this share of each one's dev-checked acceleration moves it from rest: a nudge on braked joints (a re-solve from scratch would
+   * reset the forearm's roll and the elbow the brakes had carried — a jerk); none: the re-solve as it is */
+  nudge?: number;
 }
 
 /** a reach as it is solved: clear by `AIR`, round the front, as far forward as it takes */
 export const SOLVED = (p: Proportions): Keeping => ({ depth: -AIR * p.height, swivel: SWIVEL.steps, push: PUSH, back: true });
 /** once its joints are braked to that, or a free arm as it swings: only nudged back within half the dev check's depth — a short
- * swivel or push, so the brakes' work is not undone in one sub-step (a bigger correction would be a jerk of the joints) */
-export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: false };
+ * swivel or push, the joints turned toward it as little as clears the arm and within `NUDGE` — so the brakes' work is not undone in
+ * one sub-step (a bigger correction would be a jerk of the joints); the rest of the way, the braked solve goes on clear of it */
+export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: false, nudge: NUDGE };
 
 /**
  * Arm `side` as posed this sub-step, its wrist going to `tip` (world), kept out of its own trunk as `keeping` asks: left as it is if
@@ -86,6 +94,29 @@ export function keepArmOut(f: Frame, p: Proportions, side: Side, tip: { position
     else lo = mid;
   }
   fits(hi);
+  const nudge = keeping.nudge;
+  if (nudge !== undefined) {
+    // (the joints turned from where they were toward the re-solve, each its share of the way: the least share that clears, halved in
+    // on; no joint further than `nudge` of its checked acceleration takes it in a sub-step)
+    let most = 1;
+    bones.forEach((bone, k) => {
+      _fit[k].copy(pose.local(bone));
+      const accel = pose.skeleton.bones[bone].snap?.accel;
+      if (accel !== undefined) most = Math.min(most, (nudge * accel * DEGREE * f.dt * f.dt) / Math.max(_fit[k].angleTo(_was[k]), 1e-9));
+    });
+    const toward = (share: number) => bones.forEach((bone, k) => pose.setLocal(bone, _blend.copy(_was[k]).slerp(_fit[k], share)));
+    let out = 0, inn = most;
+    toward(most);
+    if (armDepth(pose, p, side, upper, clear) <= clear) {
+      for (let k = 0; k < 10; k++) {
+        const mid = (out + inn) / 2;
+        toward(mid);
+        if (armDepth(pose, p, side, upper, clear) <= clear) inn = mid;
+        else out = mid;
+      }
+    }
+    toward(inn);
+  }
   return hi;
 }
 
@@ -233,9 +264,10 @@ function segmentDistance(a: Readonly<Vector3>, b: Readonly<Vector3>, c: Readonly
   return _sp.copy(a).addScaledVector(u, s).distanceTo(_sq.copy(c).addScaledVector(v, r));
 }
 
+const DEGREE = Math.PI / 180;
 const unit = (x: number) => Math.min(1, Math.max(0, x));
 const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), _d = new Vector3(), _tip = new Vector3();
-const _was = [new Quaternion(), new Quaternion(), new Quaternion()];
+const _was = [new Quaternion(), new Quaternion(), new Quaternion()], _fit = [new Quaternion(), new Quaternion(), new Quaternion()], _blend = new Quaternion();
 const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3();
 const _front = new Vector3(), _goal = new Vector3(), _swivel = new Vector3(), _elbow = new Vector3(), _hand = new Vector3(), _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3(), _pole = new Vector3();
 const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3(), _sp = new Vector3(), _sq = new Vector3();
