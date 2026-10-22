@@ -163,6 +163,8 @@ export class Stepper {
   yaw: number; moving = 0; run = 0; phase = 0; Ts = 1; cycle = 2; settled = true; airborne = false;
   /** how far down it is crouched (0 … 1): the root's `crouch`, eased in and out no faster than legs bend and straighten */
   crouch = 0;
+  /** the pelvis turned off its facing (rad, + to the left) as the body has it with the stride: the hips the legs reach from turned with it */
+  turn = 0;
   private readonly crouches = [0, 0];
   /** the pelvis' turn motion, its velocity the root's turn rate this sub-step */
   private readonly turning = { ...TURN, velocity: 0 };
@@ -291,7 +293,7 @@ export class Stepper {
     // the pelvis' height: let down walking, bobbing lowest after contact (running: mid-stance), as high as the feet reach
     const lengthOf = (leg: Leg) => feet.legs[leg.i].length ?? feet.length, homeOf = (leg: Leg) => feet.legs[leg.i].home ?? feet.legs[leg.i].ahead ?? 0;
     const astray = (leg: Leg, inward: number) => strayed(st, feet, leg, inward);
-    const hip = (leg: Leg) => hipScratch.copy(pelvis).addScaledVector(leftOf(yaw), leg.sign * (feet.legs[leg.i].hip ?? feet.hip)).addScaledVector(forwardOf(yaw, _o), feet.legs[leg.i].ahead ?? 0);
+    const hip = (leg: Leg) => hipScratch.copy(pelvis).addScaledVector(leftOf(yaw + this.turn), leg.sign * (feet.legs[leg.i].hip ?? feet.hip)).addScaledVector(forwardOf(yaw + this.turn, _o), feet.legs[leg.i].ahead ?? 0);
     const moving = smoothstep(0, 1, v);
     const standing = this.stand - st.crouch.depth * s * k + toes;
     const nominal = () => standing + rise - (lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run) + st.bob * lerp(1 - Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0)),
@@ -454,7 +456,10 @@ export class Stepper {
       } else if (out.length() > landingReaches[leg.i]) uncross(leg, leg.anchor.copy(at).add(out.setLength(landingReaches[leg.i])).setY(feet.ankleHeight), leftOf(leg.yaw - leg.sign * toeOut, _l));
       // (a walker's — a foreseen root's — foot landing just behind its hip, squaring up, lands flat: toes first only stepping back)
       const ahead = out.dot(forwardOf(leg.yaw)), aim = r.forecast && ahead < 0 ? Math.min(0, ahead + BACKSTEP * s) : ahead;
-      if (aiming) w.strike = lerp(st.strike.walk, st.strike.run, run) * clamp(aim / (st.strike.ahead * s), -1, 1);
+      if (!aiming) return;
+      w.strike = lerp(st.strike.walk, st.strike.run, run) * clamp(aim / (st.strike.ahead * s), -1, 1);
+      // (re-aimed to the gait as it goes now — a run eased to a walk — it swings as that gait's: no higher, its arc's peak no later)
+      if (w.run > run) [w.lift, w.run] = [w.lift * lerp(st.lift.walk, st.lift.run, run) / lerp(st.lift.walk, st.lift.run, w.run), run];
     }
     function landing(leg: Leg, remaining: number): [Vector3, number, number] {
       // turned toward the root's facing, as far as the other foot lets the pelvis

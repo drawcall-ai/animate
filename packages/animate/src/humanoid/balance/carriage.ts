@@ -122,6 +122,8 @@ export class Carriage {
   private turningFirst = false;
   /** 0 standing … 1 walking (smoothed) */
   walk = 0;
+  /** neither arm free to swing: both hands hold something */
+  held = false;
   /** how far the knees have given for walking (0 standing tall … 1 ready) */
   bent = 0;
   /** the step clock (s), the foot that lifted last and when, the one that landed last */

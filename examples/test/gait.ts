@@ -32,9 +32,10 @@ interface Sample {
   hips: Vector3;
   /** the hips' standing height (m) */
   standing: number;
+  /** the chest, its offset from the hips turned back with the thorax (see `see`) */
   chest: Vector3;
   head: Vector3;
-  /** pelvic obliquity (+ = left hip up), rotation (+ = left hip forward), thorax roll and yaw, trunk lean (hips → neck, + = to the left), head roll and yaw (rad) */
+  /** pelvic obliquity (+ = left hip up), rotation (+ = left hip forward), thorax roll and yaw, trunk lean (hips → neck in the thorax's frontal plane, + = to the left), head roll and yaw (rad) */
   pelvisRoll: number;
   pelvisYaw: number;
   thoraxRoll: number;
@@ -153,6 +154,12 @@ export class GaitKinematics {
     // Eye-line inclination is independent of yaw, including a look behind the body.
     head.roll = Math.atan2(eyes.y, Math.hypot(eyes.x, eyes.z));
     const up = j('neck').sub(j('hips'));
+    // (the trunk's lean and the chest over the hips judged in the thorax's own frontal plane: a forward-leaning trunk turned about
+    // the vertical — a runner's thorax swinging with the stride — swings its chest across the heading, which is no sway nor bend)
+    const across = j('leftUpperArm').sub(j('rightUpperArm')).setY(0).normalize();
+    const ahead = new Vector3(-across.z, 0, across.x);
+    const trunk = j('chest').sub(j('hips'));
+    const chest = j('hips').addScaledVector(left, trunk.dot(across)).addScaledVector(fwd, trunk.dot(ahead)).setY(j('chest').y);
     const tilt = j('spine').sub(j('hips'));
     const knee = j('leftLowerLeg');
     const ankle = j('leftFoot');
@@ -164,14 +171,14 @@ export class GaitKinematics {
       ahead: h.locomotion.velocity.x * fwd.x + h.locomotion.velocity.z * fwd.z,
       hips: j('hips'),
       standing: h.proportions.hipHeight,
-      chest: j('chest'),
+      chest,
       head: eyesOf(h),
       pelvisRoll: pelvis.roll,
       pelvisYaw: pelvis.yaw,
       thoraxRoll: thorax.roll,
       // (approved, 2026-10-21: an asked torso turn — an aim — is taken off, the counter-rotation check judging the stride's own)
       thoraxYaw: thorax.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
-      lean: Math.atan2(up.dot(left), up.y),
+      lean: Math.atan2(up.dot(across), up.y),
       headRoll: head.roll,
       headYaw: head.yaw,
       planted: [h.feet[0].phase === 'planted', h.feet[1].phase === 'planted'],

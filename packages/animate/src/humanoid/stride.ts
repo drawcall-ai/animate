@@ -17,6 +17,7 @@ import { LOWER, Posture, SQUAT, entrain, walking, type Trunk, type Upright } fro
 import { INDEX } from './bones';
 import { drivenBy } from './driven';
 import type { Humanoid } from './humanoid';
+import { armsHeld } from './posture/turn';
 import { humanGait, humanStepping } from './legs';
 import type { Proportions } from './proportions';
 import { defaultStance } from './stance';
@@ -34,9 +35,9 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
   const p = h.proportions, s = p.scale, toeOut = defaultStance(p).toeOut, base = { ...defaultStance(p), ...options.stance };
   const stepping = walkerStepping(p), stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, moving = false, starting = false, seen = false, phase = 0, still: Vector3 | null = null, leaning = false;
-  const c: Upright = { p, root: new Vector3(), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false, stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion() };
+  const c: Upright = { p, root: new Vector3(), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false, stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false };
   const posture = new Posture(), life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
-  const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 }, asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
+  const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 }, asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
   const offsets = [new Vector3(), new Vector3()], tilts = [new Quaternion(), new Quaternion()];
   // (`from` shifted by `lean` as far as the planted feet hold it, `LEAN.inside` within their edge)
@@ -96,7 +97,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     // the hips carried off the root: swaying and turning with the stride, back from it as far as the body's mass leans ahead of them
     const speed = r.velocity.length();
     c.stance = asks.stance ? { ...base, ...asks.stance } : base;
-    [c.walk, c.moving, c.yaw] = [walking(c.walk, speed, dt), moving, stepper.yaw];
+    [c.walk, c.moving, c.yaw, c.held] = [walking(c.walk, speed, dt), moving, stepper.yaw, armsHeld(h)];
     c.root.copy(root);
     c.offset.copy(posture.center(f));
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
@@ -132,7 +133,7 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
       f.current.setLocal(bone, back[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TURN, f.dt, new Quaternion()));
     });
     h.locomotion.quiet.copy(posture.quiet);
-    return trunk.thoraxYaw;
+    return [trunk.pelvisYaw, trunk.thoraxYaw];
   }, stepping);
 }
 

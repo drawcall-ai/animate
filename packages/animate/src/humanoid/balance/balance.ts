@@ -8,6 +8,7 @@ import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { createAsks, takeAsks, type Asks, type Stance } from '../../core/asks';
 import { INDEX, SIDES } from '../bones';
 import type { Humanoid } from '../humanoid';
+import { armsHeld } from '../posture/turn';
 import { forwardOf, smoothstep, softMin, yawOf } from '../../core/math';
 import { defaultStance, OVER_ANKLES } from '../stance';
 import { seedOf } from '../../core/random';
@@ -45,7 +46,7 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
     const posture = new Posture();
     const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
     const asks = createAsks();
-    const trunk: Trunk = { chest: new Quaternion(), thoraxYaw: 0 };
+    const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
     const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     // (the pelvis followed along the floor and up apart: the legs' reach moving it up and down does not hold back its sway)
     const pelvis = { along: new TrackedPoint(), rotation: new TrackedRotation(), trunk: [new TrackedRotation(), new TrackedRotation()] };
@@ -90,6 +91,7 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
         life.update(dt, life.quiet(asks, h), speed);
         const twist = followed(asked.twist, asks.twist, BOW, dt);
         c.offset.copy(posture.center(f));
+        c.held = armsHeld(h);
         posture.carry(f, c, { lower, bow, twist }, trunk, life, cycleOf(posture, c, dt), (standing, floor, tiptoe) => softMin(standing, reachLimit(c, floor, tiptoe), 0.015));
         const at = pelvis.along.follow(_a.copy(f.prev2.position(0)).setY(0), _b.copy(f.prev.position(0)).setY(0), _g.copy(c.pelvis).setY(0), PELVIS, dt, _at);
         const up = follow(f.prev2.position(0).y, f.prev.position(0).y, c.pelvis.y, PELVIS, dt);
@@ -123,7 +125,7 @@ export function balance(h: Humanoid, options: { stance?: Partial<Stance>; seed?:
         SIDES.forEach((side, s) => solveLeg(f, c, side, feet[s]));
 
         const g = h.locomotion;
-        [g.phase, g.walk, g.run, g.facing, g.moving, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.thoraxYaw];
+        [g.phase, g.walk, g.run, g.facing, g.moving, g.pelvisYaw, g.thoraxYaw] = [posture.phase, c.walk, c.run, c.yaw, c.moving, trunk.pelvisYaw, trunk.thoraxYaw];
         g.planted = go === lastGo && !c.moving && c.steps.every((st) => !st.swing) ? g.planted + f.dt : 0;
         lastGo = go;
         g.settled = !c.moving && !stepped && c.steps.every((st) => !st.swing && st.plantedTime > SETTLED);
