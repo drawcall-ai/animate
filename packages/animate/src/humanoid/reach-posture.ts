@@ -16,9 +16,9 @@ import { request } from '../core/asks';
  * combine by magnitude, so task order cannot cancel a stronger turn. */
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9 };
 export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1) {
-  const hips = pose.position(0);
-  const bearing = wrapAngle(Math.atan2(point.x - hips.x, point.z - hips.z) - h.locomotion.facing);
-  const distance = Math.hypot(point.x - hips.x, point.z - hips.z);
+  const station = pose.com(_station);
+  const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - h.locomotion.facing);
+  const distance = Math.hypot(point.x - station.x, point.z - station.z);
   share *= smoothstep(h.proportions.shoulderHalfWidth, h.proportions.armLength, distance);
   const turn = Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start));
   const twist = Math.sign(bearing) * turn * share;
