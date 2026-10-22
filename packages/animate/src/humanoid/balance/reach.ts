@@ -3,12 +3,13 @@ import { Vector3 } from 'three';
 import { clamp, forwardOf, lerp, minimumJerk, smoothstep } from '../../core/math';
 import type { Side } from '../bones';
 import type { Carriage, Stepping } from './carriage';
+import { DEFAULT_HEIGHT } from '../proportions';
 import { ankleFor, MAX_HEEL } from '../posture/foot';
 import { entrain, plantedReach, type Cycle, type Posture, type Upright } from '../posture/posture';
 
 /**
  * a landing foot holds the pelvis down from this far through its swing on, fully by this far, and
- * by this much less before (× height); a foot just lifted still holds it, less and less, this far through its swing
+ * by this much less before (× height, of the default body's: × its legs); a foot just lifted still holds it, less and less, this far through its swing
  */
 const LANDING = { from: 0.1, to: 0.75, relax: 0.025 };
 const LIFTED = 0.25;
@@ -74,11 +75,11 @@ export function reachLimit(c: Supported, floor: number, tiptoe: number): number 
       return;
     }
     // (a foot just lifted lets the pelvis go gradually; a runner's at once)
-    if (w.progress < LIFTED * (1 - c.run)) limit = Math.min(limit, planted(w.from, w.fromYaw, Infinity, st.landPitch) + LANDING.relax * p.height * smoothstep(0, LIFTED, w.progress));
+    if (w.progress < LIFTED * (1 - c.run)) limit = Math.min(limit, planted(w.from, w.fromYaw, Infinity, st.landPitch) + LANDING.relax * DEFAULT_HEIGHT * p.legs * smoothstep(0, LIFTED, w.progress));
     if (w.progress < LANDING.from) return;
     // (as it will hold the pelvis once landed: against the hip as it will be then)
     hip.addScaledVector(c.velocity, (1 - w.progress) * w.duration);
-    limit = Math.min(limit, planted(foot.position, foot.yaw, 0, w.strike) + LANDING.relax * p.height * (1 - smoothstep(LANDING.from, LANDING.to, w.progress)));
+    limit = Math.min(limit, planted(foot.position, foot.yaw, 0, w.strike) + LANDING.relax * DEFAULT_HEIGHT * p.legs * (1 - smoothstep(LANDING.from, LANDING.to, w.progress)));
   });
   return limit;
 }

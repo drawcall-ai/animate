@@ -6,7 +6,7 @@ import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, minimumJerk, quatYXZ, smoothstep, wrapAngle } from '../../core/math';
-import type { Proportions } from '../proportions';
+import { DEFAULT_HEIGHT, type Proportions } from '../proportions';
 import type { Side } from '../bones';
 import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
@@ -16,7 +16,7 @@ import { Inertia, type Inertial } from '../../core/inertia';
 const LIST = 0.05;
 const SWAY = 0.0085;
 const RUN_SWAY = 0.008;
-/** the walking pelvis's dip in double support below mid-stance (× height; Orendurff 2004) */
+/** the walking pelvis's dip in double support below mid-stance (× height, of the default body's: × its legs; Orendurff 2004) */
 const BOB = 0.016;
 /** the trunk pitches forward at each double support and back over mid-stance (rad; CMU mocap); running, forward as the stance leg compresses */
 const NOD = { walk: 0.02, run: 0.06 };
@@ -26,7 +26,7 @@ const NOD_SHIFT = 0.1;
 const ENTRAIN = 4;
 /** how far the pelvis goes up for a body asked onto its toes, at most (m, default body) */
 export const TIPTOE = 0.07;
-/** the most a trailing foot's reach lowers the pelvis (× height): one left behind further is lifted instead */
+/** the most a trailing foot's reach lowers the pelvis (× height, of the default body's: × its legs): one left behind further is lifted instead */
 const MOST_DROP = 0.035;
 /** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; how far the knees let the pelvis down at most (× height): a squat */
 const HINGE = 0.6;
@@ -112,7 +112,8 @@ export class Posture {
     const { lower, bow, twist } = asks;
     const { onto } = life;
     const { p } = c;
-    const H = p.height;
+    // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
+    const H = p.height, L = DEFAULT_HEIGHT * p.legs;
     const dt = f.dt;
     const walk = c.walk;
     const run = c.run;
@@ -127,9 +128,9 @@ export class Posture {
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
     const side = -lerp(SWAY, RUN_SWAY, run) * H * Math.sin(stride) * walk;
     // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
-    const walkLift = -(0.001 + BOB * (1 - bob)) * H * walk;
+    const walkLift = -(0.001 + BOB * (1 - bob)) * L * walk;
     this.comp += (comp - this.comp) * Math.min(1, 40 * dt);
-    const lift = lerp(walkLift, -(0.025 + 0.03 * this.comp) * H, run);
+    const lift = lerp(walkLift, -(0.025 + 0.03 * this.comp) * L, run);
     const nod = lerp(NOD.walk * (nodPhase - 0.2), NOD.run * (this.comp * this.comp - 0.35), run) * walk;
     const shift = -NOD_SHIFT * nod * H;
 
@@ -149,7 +150,7 @@ export class Posture {
     roll += SHIFT.roll * shifted;
     quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
     const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
-    pelvis.y = height(standing, standing - MOST_DROP * H, smoothstep(0, TIPTOE * p.scale, -lower));
+    pelvis.y = height(standing, standing - MOST_DROP * L, smoothstep(0, TIPTOE * p.scale, -lower));
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
     // nodding and bowing
