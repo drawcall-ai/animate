@@ -533,13 +533,14 @@ export class Stepper {
     // (in the air the pelvis' own height eases back up to the gait's, the root's rise on it)
     // (heights kept as if standing up: the crouch's own smooth lowering and raising is followed at once)
     const crouched = st.crouch.depth * s * k;
-    const lifted = heights[1] - crouched + (Math.max(0, heights[1] - heights[0]) / dt + RISE.accel * dt) * dt;
-    const flying = Math.min(nominal() - rise, lifted);
+    // (followed up toward `to` within `RISE`, braking as it comes: it arrives without a jolt, and a fall is turned back up within it too)
+    const lifted = (to: number) => follow(heights[0], heights[1], to + crouched, RISE, dt) - crouched;
+    const flying = lifted(nominal() - rise);
     this.poses = legs.map((leg) => leg.swing ? swingPose(leg, leg.swing) : null);
     let y = airborne ? flying + rise : nominal();
     // (a swinging foot holds the pelvis down only late in its swing: before, its leg just swings straighter)
     if (!airborne) legs.forEach((leg, i) => { y = softMin(y, reach(leg, this.poses[i]?.ankle) + (leg.swing ? LOWEST * s * (1 - minimumJerk((leg.swing.u - 0.5) / 0.3)) : 0), 0.004 * s); });
-    // (let down at once as the feet need, up again no faster than `RISE`: a foot let go of does not pop the pelvis up)
+    // (let down at once as the feet need, up again within `RISE`: a foot let go of does not pop the pelvis up)
     // (the root's own rise and fall are followed at once)
     // (and, crouching too, no lower than a leg folds, as it stood last: its knee bent its most, a planted foot would slide, a swinging
     // one would be held into the floor — deep in a crouch a step lifts the hips as it lifts the foot)
@@ -548,7 +549,8 @@ export class Stepper {
       const ankle = this.poses[i]?.ankle ?? feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), at = hip(leg);
       return ankle.y + Math.sqrt(Math.max(0, folded ** 2 - (ankle.x - at.x) ** 2 - (ankle.z - at.z) ** 2));
     }));
-    const base = airborne ? flying : Math.max(Math.min(Math.max(y - rise, standing - LOWEST * s), lifted), fold - rise);
+    const want = Math.max(y - rise, standing - LOWEST * s);
+    const base = airborne ? flying : Math.max(Math.min(want, lifted(want)), fold - rise);
     [heights[0], heights[1]] = [heights[1], base + crouched];
     y = base + rise;
     f.current.setRoot(_v.copy(pelvis).setY(y));

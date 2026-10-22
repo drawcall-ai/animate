@@ -55,6 +55,31 @@ it.each([
   expect(h.locomotion.settled).toBe(true);
 });
 
+// (a player's stop: the root brakes at 10 m/s², 0.1 s for a walk — the trunk leans to it as its own legs would feel it, over a step, not
+// a lurch after it, and the pelvis rising to its standing height arrives braked — before, the head was thrown 8.5° forward and back in
+// 0.25 s stopping a back-pedal, 45 m/s² off the hips, and the pelvis came to its height with a 52 m/s² jolt)
+it.each([
+  ['back-pedalling', forwardOf(0).multiplyScalar(-1.1)],
+  ['walking', forwardOf(0).multiplyScalar(1.4)],
+  ['side-stepping', leftOf(0).multiplyScalar(1.1)],
+] as const)('stops %s without a jolt: the head moves with the hips, the pelvis rises braked', (_, velocity) => {
+  const heads: Vector3[] = [], hips: Vector3[] = [];
+  drive(4.5, moving(0.5, 3, velocity), () => 0, (t, root, h) => {
+    if (t < 3 - dt / 2) return;
+    heads.push(h.pose.position(INDEX.head).clone());
+    hips.push(h.pose.position(INDEX.hips).clone());
+  });
+  const accel = (p: Vector3[], i: number) => p[i + 1].clone().sub(p[i].clone().multiplyScalar(2)).add(p[i - 1]).divideScalar(dt * dt);
+  let trunk = 0, arrival = 0;
+  for (let i = 1; i < heads.length - 1; i++) {
+    trunk = Math.max(trunk, accel(heads, i).sub(accel(hips, i)).length());
+    // (slowing as it rises to a stop: braked within the stepper's 20 m/s²)
+    if (hips[i].y > hips[i - 1].y && hips[i + 1].y >= hips[i].y - 1e-9) arrival = Math.max(arrival, -accel(hips, i).y);
+  }
+  expect(trunk).toBeLessThan(10);
+  expect(arrival).toBeLessThan(20.5);
+});
+
 it.each([
   ['a quarter turn in place', Math.PI / 2],
   ['a half turn in place', 0.95 * Math.PI],

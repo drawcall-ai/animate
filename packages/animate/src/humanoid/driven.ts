@@ -39,6 +39,12 @@ const KEEP = 1;
  * the lean atan(a / g) that would put it through the centre of mass, at most `ahead` (rad), and back slowing down at most `back`.
  */
 const SPEEDING = { share: 0.4, ahead: 0.35, back: 0.15 };
+/**
+ * Tuned (1/s): the speeding up and slowing down the trunk leans to is the root's velocity as a critically damped follower of it at this
+ * rate feels it — a game's near-instant stop (10 m/s² for 0.1 s) taken over ~a step, as a body's own (recalled: a walk is started
+ * and stopped within one to two steps; Jian et al. 1993, gait initiation and termination), never a lurch of the trunk after a box of it
+ */
+const FELT = 5;
 /** Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing (with its toe-out); tuned: eased in over this share of the swing */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
@@ -76,7 +82,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
     const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
     const asks = createAsks();
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
-    let was: Vector3 | null = null;
+    let felt: { velocity: Vector3; accel: Vector3 } | null = null;
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
@@ -111,9 +117,10 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         // speeding up and back from slowing down)
         const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
         // (spawned on the move, it starts at that pace: no jolt of the trunk)
-        was ??= r.velocity.clone();
-        const speeding = _v.subVectors(r.velocity, was).divideScalar(dt).dot(forwardOf(yaw, _f));
-        was.copy(r.velocity);
+        felt ??= { velocity: r.velocity.clone(), accel: new Vector3() };
+        felt.accel.addScaledVector(_v.subVectors(r.velocity, felt.velocity).multiplyScalar(FELT ** 2).addScaledVector(felt.accel, -2 * FELT), dt);
+        felt.velocity.addScaledVector(felt.accel, dt);
+        const speeding = felt.accel.dot(forwardOf(yaw, _f));
         const lean = stepper.airborne ? 0 : clamp(SPEEDING.share * Math.atan2(speeding, GRAVITY), -SPEEDING.back, SPEEDING.ahead);
         // (the thorax turned off the pelvis, the shoulder going forward rising with it)
         const twist = clamp(asks.twist + turn.thorax - turn.pelvis, -0.8, 0.8);
