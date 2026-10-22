@@ -121,10 +121,11 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
       still: !moving && Math.abs(requested.lower) > LOWERED * s };
   }, (f, _asks, stepper) => {
     // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest
-    const tilt = rotation.follow(tilts[0], tilts[1], new Quaternion().setFromAxisAngle(UP, -stepper.yaw).multiply(c.pelvisRotation), TURN, f.dt, new Quaternion());
+    const tilt = rotation.follow(tilts[0], tilts[1], new Quaternion().setFromAxisAngle(UP, -c.yaw).multiply(c.pelvisRotation), TURN, f.dt, new Quaternion());
     [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
     f.current.setLocal(0, tilt.premultiply(new Quaternion().setFromAxisAngle(UP, stepper.yaw)));
-    const half = f.current.local(0).clone().invert().multiply(trunk.chest).slerp(new Quaternion(), 0.5);
+    const chest = new Quaternion().setFromAxisAngle(UP, stepper.yaw - c.yaw).multiply(trunk.chest);
+    const half = f.current.local(0).clone().invert().multiply(chest).slerp(new Quaternion(), 0.5);
     [INDEX.spine, INDEX.chest].forEach((bone, k) => {
       const local = half.clone(), limit = f.current.skeleton.limits[bone];
       if (limit) clampRotation(local, limit);
