@@ -3,7 +3,7 @@ import { ArmTurns, FreeArms } from './arms';
 import { Clearance } from './clearance';
 import { Feet, FinalStance, Landings } from './body';
 import type { Frame } from './frame';
-import { GaitKinematics, RUNNING } from './gait';
+import { GaitKinematics, RUNNING, type Stride } from './gait';
 import { Targets } from './targets';
 
 export interface MetricsOptions {
@@ -60,6 +60,43 @@ interface Check {
   where?: string;
 }
 export const failed = (c: Check) => !(c.bound === 'max' ? c.value <= c.limit : c.bound === 'min' ? c.value >= c.limit : c.value === c.limit);
+
+/**
+ * A walk's form over its steady strides (`g`, their medians; `run`: running strides, judged by none of these yet), any body's: as
+ * measured of people walking at ~1.0–1.6 m/s.
+ * - The stance takes ~60–62% of the stride, toe-off at ~60% (read: musculoskeletalkey.com, "Gait Evaluation and Management", stance
+ *   ~61%, double support ~10% at each end; Wikipedia, "Bipedal gait cycle", 60%), less as the pace quickens (read: Hebenstreit et al.
+ *   2015, Hum Mov Sci 43:118, abstract: −0.3% of the cycle per 0.1 m/s over 0.6–1.7 m/s): 0.57–0.65 here.
+ * - The trunk leans forward ~6° walking, more the faster (read: Thorstensson et al. 1984, Acta Physiol Scand 121:9, abstract: the
+ *   trunk's mean forward inclination grows from 6° to ~13° with speed, walking 1.0–2.5 m/s and running to 6 m/s): 4–9° here.
+ * - The elbow never straightens: ~33° flexed on average, 132–167° inside (13–48° flexed) at the extremes, swinging 21 ± 8° (read:
+ *   De Blasiis et al. 2022, J Funct Morphol Kinesiol 7:57, Table 3, at 1.06 m/s; recalled: Murray et al. 1967, 15–30° of swing): 10–50°
+ *   flexed, swinging 10–35°.
+ * - The pelvis rises and falls 2.7–4.8 cm as the pace goes 0.7–1.6 m/s (read: Orendurff et al. 2004, J Rehabil Res Dev 41:829,
+ *   abstract, the centre of mass's; a sacral marker's more, Gard et al. 2004, Hum Mov Sci 22:597, abstract): 2–6 cm here, × the legs'
+ *   length (a dynamically similar walk's, at the same Froude number), highest at mid-stance and lowest in double support (recalled).
+ */
+export function walkingForm(g: Stride, run: boolean): Check[] {
+  if (run) return [];
+  const out: Check[] = [];
+  const add = (what: string, value: number, bound: Check['bound'], limit: number) => void out.push({ what, value, bound, limit });
+  add('stance share of the stride', g.duty, 'min', 0.57);
+  add('stance share of the stride', g.duty, 'max', 0.65);
+  add('trunk forward lean (°)', g.trunkLean, 'min', 4);
+  add('trunk forward lean (°)', g.trunkLean, 'max', 9);
+  if (!Number.isNaN(g.elbowMin)) {
+    add('elbow flexion (°)', g.elbowMin, 'min', 10);
+    add('elbow flexion (°)', g.elbowMax, 'max', 50);
+    add('elbow swing (°)', g.elbowMax - g.elbowMin, 'min', 10);
+    add('elbow swing (°)', g.elbowMax - g.elbowMin, 'max', 35);
+  }
+  add('pelvis vertical p2p (m, × the legs)', g.pelvisUp / g.legs, 'min', 0.02);
+  add('pelvis vertical p2p (m, × the legs)', g.pelvisUp / g.legs, 'max', 0.06);
+  // (in phase with the stance, above its mean at mid-stance: the balance legs' lowest comes late in the swing, just before the heel
+  // strike, its straight leading leg vaulting the pelvis up after — ~0.4 of the way to its peak at mid-stance on the default body)
+  add('pelvis height at mid-stance (+1: its highest)', g.bobPhase, 'min', 0);
+  return out;
+}
 
 /** Regression assertions shared by scenario tests. */
 export function checks(m: Measured, limit: MetricsOptions): Check[] {

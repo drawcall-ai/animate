@@ -59,6 +59,10 @@ interface Sample {
   /** the left knee's flexion, and the left ankle's angle between shank and foot (rad; larger = plantarflexed) */
   knee: number;
   ankle: number;
+  /** the left elbow's flexion (rad) */
+  elbow: number;
+  /** the body's legs over the default body's */
+  legs: number;
 }
 
 /** how fast the trunk and pelvis pitch (peak, °/s) */
@@ -80,8 +84,16 @@ export interface Stride {
   pelvisLat: number;
   chestLat: number;
   headLat: number;
-  /** pelvis vertical peak to peak (m) */
+  /** pelvis vertical peak to peak (m), and the legs' length over the default body's it rides on */
   pelvisUp: number;
+  legs: number;
+  /** the left foot's stance: its share of the stride (duty factor) */
+  duty: number;
+  /** the trunk's (hips → neck) mean forward lean over the stride (°) */
+  trunkLean: number;
+  /** the left elbow's least and most flexion over the stride (°; NaN: the hand held something) */
+  elbowMin: number;
+  elbowMax: number;
   /** angle amplitudes (half peak to peak, °) */
   obliquity: number;
   rotation: number;
@@ -191,6 +203,8 @@ export class GaitKinematics {
       pelvis: Math.atan2(tilt.dot(fwd), tilt.y),
       knee: Math.PI - j('leftUpperLeg').sub(knee).angleTo(ankle.clone().sub(knee)),
       ankle: shank.angleTo(j('leftToes').sub(ankle)),
+      elbow: Math.PI - j('leftUpperArm').sub(j('leftLowerArm')).angleTo(j('leftHand').sub(j('leftLowerArm'))),
+      legs: h.proportions.legs,
     });
     this.cached = null;
   }
@@ -300,6 +314,7 @@ export class GaitKinematics {
     while (lift < b && S[lift].planted[0]) lift++;
     const near = S.slice(a, b).filter((s) => Math.abs(s.t - S[lift].t) < 0.1);
     const thoraxYaw = S.slice(a, b).map((s) => s.thoraxYaw);
+    const free = S.slice(a, b).every((s) => s.armFree), elbows = S.slice(a, b).map((s) => s.elbow * DEG);
     const fit = sineFit(arm);
     const dt2 = ((S[b].t - S[a].t) / n) ** 2;
     let acc = 0;
@@ -330,6 +345,11 @@ export class GaitKinematics {
       chestLat: range(cl),
       headLat: range(hl),
       pelvisUp: range(ys),
+      legs: S[a].legs,
+      duty: (lift - a) / n,
+      trunkLean: (S.slice(a, b).reduce((x, s) => x + s.trunk, 0) / n) * DEG,
+      elbowMin: free ? Math.min(...elbows) : NaN,
+      elbowMax: free ? Math.max(...elbows) : NaN,
       obliquity: amp((s) => s.pelvisRoll),
       rotation: amp((s) => s.pelvisYaw),
       thoraxToPelvisRoll: amp((s) => s.thoraxRoll - s.pelvisRoll),
@@ -403,10 +423,10 @@ export class GaitKinematics {
       if (!s) continue;
       const cm = (m: number) => (m * 100).toFixed(1);
       lines.push(
-        `gait ${curve ? 'curve   ' : 'straight'} ${run ? 'run ' : 'walk'} (${n} strides, ${s.speed.toFixed(2)} m/s): lateral p2p pelvis ${cm(s.pelvisLat)} chest ${cm(s.chestLat)} head ${cm(s.headLat)} cm, pelvis vertical ${cm(s.pelvisUp)} cm, step asymmetry ≤ ${(s.stepAsymmetry * 100).toFixed(0)}%; ` +
-          `± pelvis obliquity ${s.obliquity.toFixed(1)}° rotation ${s.rotation.toFixed(1)}°, thorax−pelvis roll ${s.thoraxToPelvisRoll.toFixed(1)}° yaw ${s.thoraxToPelvisYaw.toFixed(1)}° (corr ${s.counter.toFixed(2)}), trunk lean ${s.lean.toFixed(1)}°, head roll ${s.headRoll.toFixed(1)}° yaw ${s.headYaw.toFixed(1)}°; ` +
+        `gait ${curve ? 'curve   ' : 'straight'} ${run ? 'run ' : 'walk'} (${n} strides, ${s.speed.toFixed(2)} m/s): lateral p2p pelvis ${cm(s.pelvisLat)} chest ${cm(s.chestLat)} head ${cm(s.headLat)} cm, pelvis vertical ${cm(s.pelvisUp)} cm, step asymmetry ≤ ${(s.stepAsymmetry * 100).toFixed(0)}%, stance ${(s.duty * 100).toFixed(0)}% of the stride; ` +
+          `± pelvis obliquity ${s.obliquity.toFixed(1)}° rotation ${s.rotation.toFixed(1)}°, thorax−pelvis roll ${s.thoraxToPelvisRoll.toFixed(1)}° yaw ${s.thoraxToPelvisYaw.toFixed(1)}° (corr ${s.counter.toFixed(2)}), trunk lean ${s.lean.toFixed(1)}° sideways ${s.trunkLean.toFixed(1)}° forward, head roll ${s.headRoll.toFixed(1)}° yaw ${s.headYaw.toFixed(1)}°; ` +
           `chest jerk ${s.chestJerk.toFixed(1)} m/s³ (×${s.chestJerkShare.toFixed(1)} its sway's), off-stride residual pelvis ${s.pelvisResidual.toFixed(2)} chest ${s.chestResidual.toFixed(2)}; phase: sway ${s.phase.toFixed(2)} bob ${s.bobPhase.toFixed(2)}; ` +
-          `arm vs other thigh: corr ${s.armCorrelation.toFixed(2)} lag ${(s.armLag * 100).toFixed(0)}% cycles ${s.armCycles.toFixed(1)} range ${s.armRange.toFixed(0)}°; ` +
+          `arm vs other thigh: corr ${s.armCorrelation.toFixed(2)} lag ${(s.armLag * 100).toFixed(0)}% cycles ${s.armCycles.toFixed(1)} range ${s.armRange.toFixed(0)}°, elbow ${s.elbowMin.toFixed(0)}–${s.elbowMax.toFixed(0)}°; ` +
           `arm fit R² ${s.armFit.toFixed(3)} turns ${s.armTurns} peak acceleration ×${s.armAcceleration.toFixed(1)} of the sinusoid's; ` +
           `thorax roll with its rotation ${s.rollWithYaw.toFixed(2)}, head carries ${(s.headCarry * 100).toFixed(0)}% of it, trunk nod ±${s.nod.toFixed(1)}°, push-off ${s.pushOff.toFixed(0)}°, knee at 3/4 swing ${s.lateKnee.toFixed(0)}°`,
       );
