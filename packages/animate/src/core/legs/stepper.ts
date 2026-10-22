@@ -380,10 +380,7 @@ export class Stepper {
       const otherLands = other.swing ? (1 - other.swing.u) * other.swing.T : -other.planted;
       // (a foot about to be out of reach, or under the body, steps at once, the other in the air or not)
       // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
-      // (a walker's foot out of reach as it touches down stands first, the other closing in: the root it was aimed at is on its way)
-      // (but for being out of reach, not in the sub-step it touches down: there it stands first; with a foreseen root, a walker's, nor
-      // while the other is in the air: it walks, never leaving the floor)
-      const urgent = airborne ? !leg.swing && air > 0 : (reach(leg) < nominal() + Math.max(0, vy) * RISING - STEP.short * s && !(r.forecast && leg.landed && !other.swing))
+      const urgent = airborne ? !leg.swing && air > 0 : reach(leg) < nominal() + Math.max(0, vy) * RISING - STEP.short * s
         || (!leg.landed && (!other.swing || !r.forecast || clocked) && (leg === catcher || astray(leg, _v.subVectors(hip(leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(leg) > most));
       if (airborne && !urgent) continue;
       // (a gait's body never leaves fewer than `STANDING` feet on the floor — nor than its gait has down as this one lifts: a trot quicker
@@ -392,8 +389,8 @@ export class Stepper {
       if (clocked && !airborne && legs.filter((other) => other !== leg && (!other.swing || other.swing.age <= dt)).length < Math.min(STANDING, scheduled(leg))) continue;
       // (nor lifts a foot it has only just put down: a step lands and bears weight before the next)
       if (clocked && !leg.swing && leg.planted < SETTLING * C) continue;
-      // (a foot lands before it lifts again, unless it would be out of reach: not in the sub-step it touches down)
-      if (leg.swing || !(urgent || (!leg.landed && wants(leg) && (clocked || otherLands + Ts - C * this.apart[leg.i] <= 1e-9)))) continue;
+      // With a planned root, touchdown bears weight before another swing; the planner can hold the root back.
+      if (leg.swing || (!airborne && r.forecast && leg.landed) || !(urgent || (!leg.landed && wants(leg) && (clocked || otherLands + Ts - C * this.apart[leg.i] <= 1e-9)))) continue;
       // (a foot that would have to cross the other, or will be nearer its home than the other a swing on, lets the other step first)
       // (a walker's — a foreseen root's — closes beside the other instead: left waiting, it would trail out of reach)
       // (a walker side-stepping opens with the foot on the side it goes, the other closing after it: first it does not step away from its way)
