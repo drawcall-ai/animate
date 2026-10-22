@@ -3,6 +3,7 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseLeadPoint, lookAt, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { Rope } from '../../../packages/animate/src/core/rope';
+import { minimumJerk } from '../../../packages/animate/src/core/math';
 import { forwardOf } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
@@ -42,13 +43,17 @@ const HALTER = new Vector3(0, -0.3, 0.05);
 const NEAR_HAND = new Vector3(-0.4, 0.04, 0.3);
 const SLACK_HAND = new Vector3(0.22, -0.08, 0.16);
 // A 2.4 m lead rope: 1.2 m from the halter to the knot (the tie's reach), the slack beyond it; the
-// second hand takes the slack where it meets it, offered 60 cm past the knot hand (about the
-// hands' span, so it hangs between them) (m, and shares of its length).
+// second hand takes the slack on its own side, beside its hip: the near hand passes it across the
+// front into it, 90 cm past the knot hand (more than the hands' span, so it hangs between
+// them) — a handler never reaches across the body for it (m, and shares of its length). Tuned: how
+// long it takes to come across (s).
 export const LEAD_ROPE = 2.4;
 const KNOT_AT = 1.2 / LEAD_ROPE;
-const GATHER_AT = 1.8 / LEAD_ROPE;
-// Tuned: a reaching hand closes on swinging rope within a palm's width of it (m).
-const CATCH = 0.05;
+const GATHER_AT = 2.1 / LEAD_ROPE;
+const OFFER = 0.75;
+// Tuned: where the left hand takes the slack, in front of its hip (the hips' frame, m).
+const OFFERED = new Vector3(0.2, 0, 0.3);
+const offeredAt = (h: Humanoid) => facingAt(h, 0, { position: OFFERED });
 // Tuned: the rope between the hands is a fifth longer than their span, so it hangs in a shallow loop.
 const SLIDE = 1.2;
 // Requested scene acceptance bound for the gathering elbow behind its shoulder (m).
@@ -117,7 +122,8 @@ export function stableMorning(): Scenario {
       ), { pose, dev, idle: false });
       const halterAt = () => horse.pose.point(HEAD, HALTER, new Vector3());
       const lead = new Rope(halterAt(), KNOT.clone().lerp(halterAt(), -1 / KNOT_AT + 1), LEAD_ROPE);
-      let gathering = false;
+      // (the left hand gathering the slack; the slack passed to it)
+      let gathering = false, passed = false;
 
       const saddlePlace = onBone(horse, 0, { position: SADDLED, quaternion: yaw(-Math.PI / 2) });
       const gate = new Vector3(-0.2, 0, 8.2);
@@ -173,6 +179,8 @@ export function stableMorning(): Scenario {
               yield* hold(h, rope, { to: near })();
             },
             function* () {
+              // (the near hand passes the slack into the left hand, waiting in front of its hip; the left hand closes on it)
+              yield* parallel<Frame>('race', when(() => passed), handTo(h, 'left', offeredAt(h), { lead: false }));
               gathering = true;
               yield* grab(h, { left: [loose, 'end'] }, { walk: false, look: false })();
               yield* hold(h, loose, { to: slack })();
@@ -182,9 +190,10 @@ export function stableMorning(): Scenario {
               yield* named('halt beyond the gate', () => when(timePassed(1, 'seconds')))();
             },
             function* () {
-              // Look back as they set off, then attend to the short walk through the gate.
+              // Look back at the horse as they set off — over the near shoulder, the lead hand's side: turned the other way the
+              // trunk would carry that hand off the halter — then attend to the short walk through the gate.
               yield* when(() => h.feet.some((foot) => foot.phase === 'swing'));
-              yield* withGaze(h, reported(report, 'gaze', new Vector3(3, 1.75, -0.65)),
+              yield* withGaze(h, reported(report, 'gaze', () => horse.pose.position(HEAD).clone()),
                 () => when(timePassed(1.5, 'seconds')), { first: true })();
               lookedBack = true;
               yield* withGaze(h, reported(report, 'gaze', (f) => f.prev.position(0).clone().add(new Vector3(0, 0.5, 4))),
@@ -227,26 +236,33 @@ export function stableMorning(): Scenario {
             // gathering point moves with the rope.
             const gathered = () => h.holding.left?.item === loose;
             const leftHand = h.pose.skeleton.index('leftHand');
-            let caught = false;
             let gatherAt = GATHER_AT;
+            // (passed across into the left hand in front of its hip, from where it hung as they set off)
+            let offered: { from: Vector3; time: number } | null = null;
+            const slackAt = offeredAt(h);
             const swing = action<Frame>({
               update: (f) => {
                 const hand = f.current.position(leftHand);
-                if (gathering && !caught) gatherAt = lead.nearest(hand, KNOT_AT + 0.1, 1);
-                caught ||= gathering && hand.distanceTo(lead.at(gatherAt)) < CATCH;
+                if (h.holding.right?.item === rope && h.feet.some((foot) => foot.phase === 'swing')) offered ??= { from: lead.at(gatherAt).clone(), time: f.time };
+                const share = offered ? minimumJerk((f.time - offered.time) / OFFER) : 0;
+                passed = share >= 1;
+                // (where the slack is: passed across, then in the gathering hand)
+                const at = gathered() || passed ? hand : offered ? offered.from.clone().lerp(slackAt(f).position, share) : null;
                 // The rope slides through the gathering hand as the hands part: it keeps more rope between them than their span.
-                if (caught) gatherAt = Math.min(1, Math.max(gatherAt, KNOT_AT + SLIDE * hand.distanceTo(rope.current.position) / LEAD_ROPE));
+                if (at) gatherAt = Math.min(1, Math.max(gatherAt, KNOT_AT + SLIDE * at.distanceTo(rope.current.position) / LEAD_ROPE));
                 const pinned: [number, Vector3][] = [[0, halterAt()], [KNOT_AT, rope.current.position]];
-                if (caught) pinned.push([gatherAt, loose.current.position]);
+                if (gathered()) pinned.push([gatherAt, loose.current.position]);
+                else if (at) pinned.push([gatherAt, at.clone()]);
                 lead.step(f.dt, pinned);
-                // Caught, the rope point goes with the closing hand until the hold carries it.
-                if (!gathered() && !loose.moved(f.time)) loose.move(f.time, caught ? hand : lead.at(gatherAt));
+                // (passed, it is in the left hand, going with it till the hand closes on it)
+                if (!gathered() && !loose.moved(f.time)) loose.move(f.time, passed ? hand : lead.at(gatherAt));
               },
             });
             yield* parallel<Frame>('all',
               eyesOnBefore(h, saddle, 0.4), eyesOnBefore(h, rope, 0.4),
               watch('gather the loose end', (f) => {
-                if (h.holding.right?.item !== rope || h.holding.left?.item === loose) return null;
+                // (once the left hand takes it: hanging free before, while the slack is passed to it, it swings as it will)
+                if (!gathering || h.holding.right?.item !== rope || h.holding.left?.item === loose) return null;
                 const p = f.prev, bone = (name: string) => p.skeleton.index(name);
                 const elbow = p.position(bone('leftLowerArm')).clone().sub(p.position(bone('leftUpperArm')))
                   .applyQuaternion(p.rotation(bone('chest')).clone().invert());

@@ -9,7 +9,7 @@ import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed in `OPEN`
 // (expected to fail: each one fixed comes off the list).
 const OPEN = new Set([
-  'a person takes a cup 0.05 m up, 0° off its facing', 'a person takes a cup 0.05 m up, 120° off its facing',
+  'a person takes a cup 0.05 m up, 120° off its facing',
   'a person takes a cup 0.5 m up, 0° off its facing',
 ]);
 const check = (name: string, test: () => void) => (OPEN.has(name) ? it.fails : it)(name, test);

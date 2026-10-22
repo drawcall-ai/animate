@@ -89,3 +89,14 @@ const _v = new Vector3();
 const _w = new Vector3();
 const _p = new Vector3();
 const _q = new Vector3();
+
+/** how far arm `side`'s upper arm, forearm and hand reach into the trunk (its pelvis-to-chest and chest-to-neck capsules; m) */
+export function armInTrunk(h: Frame['h'], side: 'left' | 'right'): number {
+  const H = h.proportions.height;
+  const limb = (name: string) => LIMBS.find(([n]) => n === name) ?? [name, '', '', 0];
+  const capsule = ([, from, to, r]: (typeof LIMBS)[number]) => ({ a: jointOf(h, from), b: jointOf(h, to), r: r * H });
+  const wrist = jointOf(h, `${side}Hand`);
+  const arm = [capsule(limb(`${side}UpperArm`)), capsule(limb(`${side}LowerArm`)), { a: wrist, b: wrist.clone().sub(jointOf(h, `${side}LowerArm`)).setLength(HAND.length * H).add(wrist), r: HAND.radius * H }];
+  const trunk = [capsule(limb('trunk')), capsule(limb('thorax'))];
+  return Math.max(...arm.flatMap((p) => trunk.map((t) => p.r + t.r - segmentDistance(p.a, p.b, t.a, t.b))));
+}
