@@ -439,7 +439,10 @@ export class Stepper {
       } else if (out.length() > landingReaches[leg.i]) uncross(leg, leg.anchor.copy(at).add(out.setLength(landingReaches[leg.i])).setY(feet.ankleHeight), leftOf(leg.yaw - leg.sign * toeOut, _l));
       // (a walker's — a foreseen root's — foot landing just behind its hip, squaring up, lands flat: toes first only stepping back)
       const ahead = out.dot(forwardOf(leg.yaw)), aim = r.forecast && ahead < 0 ? Math.min(0, ahead + BACKSTEP * s) : ahead;
-      if (aiming) w.strike = lerp(st.strike.walk, st.strike.run, run) * clamp(aim / (st.strike.ahead * s), -1, 1);
+      if (!aiming) return;
+      w.strike = lerp(st.strike.walk, st.strike.run, run) * clamp(aim / (st.strike.ahead * s), -1, 1);
+      // (re-aimed to the gait as it goes now — a run eased to a walk — it swings as that gait's: no higher, its arc's peak no later)
+      if (w.run > run) [w.lift, w.run] = [w.lift * lerp(st.lift.walk, st.lift.run, run) / lerp(st.lift.walk, st.lift.run, w.run), run];
     }
     function landing(leg: Leg, remaining: number): [Vector3, number, number] {
       // turned toward the root's facing, as far as the other foot lets the pelvis
