@@ -22,6 +22,9 @@ export interface TipOptions extends Motion {
   letOut?: boolean;
   /** Follow a contact from the actual pose, without extrapolating the IK goals back into its carrier. */
   contact?: boolean;
+  /** after each solve, and again once its joints are braked (`braked`: where they have left the tip): puts the chain out of what it
+   * may not pass through (its own body), the tip going to `tip` (world), re-solving it as it must; the intended path goes on as it was */
+  clear?: (f: Frame, tip: { position: Vector3; quaternion?: Quaternion }, braked: boolean) => void;
 }
 
 /**
@@ -87,6 +90,7 @@ export class ChainTip {
     const out = position.distanceTo(base);
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : live(options.pole, f) });
+    options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       for (const b of bones) {
         const pace = { accel: turnAccel, speed: turnSpeed };
@@ -103,6 +107,7 @@ export class ChainTip {
     // bend. A grip without a rotation leaves the damped wrist free: pinned, a folded arm would swivel round to keep it.
     const off = f.current.position(tip).distanceTo(position) > 1e-6 || (quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > 1e-6);
     if (options.contact && off) solveChain(f, chain, { tip: { position, quaternion }, pole: f.current.position(bones[1]).clone() });
+    if (options.clear && turnAccel !== undefined) options.clear(f, { position: _braked.copy(f.current.position(tip)), quaternion: _turned.copy(f.current.rotation(tip)) }, true);
     moved.placed.copy(f.current.position(tip));
   }
 
@@ -172,6 +177,8 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
 const REACH = 0.98;
 const ZERO = new Vector3();
 const _position = new Vector3();
+const _braked = new Vector3();
+const _turned = new Quaternion();
 const _quaternion = new Quaternion();
 const _joint = new Quaternion();
 const _r = new Quaternion();

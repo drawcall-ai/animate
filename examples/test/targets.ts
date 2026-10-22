@@ -68,10 +68,7 @@ export class Targets {
       // (judged unless truly behind the body: behind the frontal plane through the hips — a bowed body's
       // own buckle, below and behind its eyes, is judged)
       const toward = gaze.clone().sub(eyesOf(h));
-      const hips = h.model.scene.getObjectByName('hips');
-      if (!hips) throw new Error('no hips');
-      const facing = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0);
-      const seen = gaze.clone().sub(hips.getWorldPosition(new Vector3())).dot(facing) > 0;
+      const seen = ahead(h, gaze);
       this.asked++;
       if (seen && t - this.goal.since > SETTLE) {
         this.judged++;
@@ -96,7 +93,9 @@ export class Targets {
     for (const s of ['left', 'right'] as const) {
       const target = positionOf(asked.get(`${s}Wrist`));
       const course = this.wrists[s];
-      if (!target) { course.reset(); continue; }
+      // (one behind the frontal plane through the hips is not yet asked of the hand, as the gaze above: the hand goes round the front
+      // of the trunk as the body turns to it, not straight for it through or round the back)
+      if (!target || !ahead(h, target)) { course.reset(); continue; }
       this.tracked.asked++;
       const shoulder = jointOf(h, `${s}UpperArm`).distanceTo(target), arm = h.proportions.armLength;
       if (shoulder >= arm + 0.35) { course.reset(); continue; }
@@ -149,6 +148,14 @@ export class Targets {
     const { asked, judged, head } = this.tracked;
     return `max wrist err off held grips ${this.wristPeak}, off tracked targets within arm+0.35m ${this.trackedPeak} (judged ${judged} of ${asked} frames asked), head (eyes) err ${this.headPeak} (${head} frames), tracked past its course's bound ${this.over.value.toFixed(3)} m @${this.over.at.toFixed(2)}s (${this.over.what}), gaze beyond the eyes' comfortable turn ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s, the head off its target ${this.headOffPeak.value.toFixed(1)}° @${this.headOffPeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
   }
+}
+
+/** whether `point` is in front of the frontal plane through the hips */
+function ahead(h: Frame['h'], point: Vector3): boolean {
+  const hips = h.model.scene.getObjectByName('hips');
+  if (!hips) throw new Error('no hips');
+  const facing = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0);
+  return point.clone().sub(hips.getWorldPosition(new Vector3())).dot(facing) > 0;
 }
 
 /** where a goal asked is: a point, or a placement's */

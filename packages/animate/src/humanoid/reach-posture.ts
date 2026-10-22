@@ -13,14 +13,16 @@ import { request } from '../core/asks';
 
 /** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches
  * within lumbar rotation and leaves the neck to finish an over-shoulder look. Requests
- * combine by magnitude, so task order cannot cancel a stronger turn. */
-const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9 };
-export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1) {
+ * combine by magnitude, so task order cannot cancel a stronger turn. A hand the trunk holds
+ * `held` m off its goal (reaching across it) turns it as far as brings the shoulder that far
+ * forward, up to the thoracolumbar spine's active rotation (45°, AAOS; recalled). */
+const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9, held: Math.PI / 4 };
+export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0) {
   const station = pose.com(_station);
   const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - h.locomotion.facing);
   const distance = Math.hypot(point.x - station.x, point.z - station.z);
   share *= smoothstep(h.proportions.shoulderHalfWidth, h.proportions.armLength, distance);
-  const turn = Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start));
+  const turn = Math.max(Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start)), Math.min(TWIST.held, held / h.proportions.shoulderHalfWidth));
   const twist = Math.sign(bearing) * turn * share;
   request(h.asks, { twist });
 }
