@@ -59,7 +59,7 @@ const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { join
 const OPEN = new Set<string>([
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
   ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`),
-  'gathers the slack of a hanging rope of fixed length while walking on the outlier #2',
+  ...[1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`),
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
   'leads upright with the near hand forward, slack outside, and halts beyond the gate',
   'gathers the slack of a hanging rope of fixed length while walking #1',

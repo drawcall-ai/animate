@@ -89,9 +89,11 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     // (at rest on planted feet it settles over their rear half, `OVER_ANKLES` ahead of the ankles, as a person stands — read: Winter 1995,
     // Gait Posture 3:193, the quiet gravity line ~4–6 cm ahead of the ankles — wherever it stopped; edging onto a goal still asked, its
     // weight goes no further than `EDGING` from there: further, it steps)
-    const rest = !moving && stepper.legs.every((leg) => !leg.swing)
+    // (within `LEAN.back` of it, it is there: held, not chased to and fro by a sub-step's acceleration)
+    const over = !moving && stepper.legs.every((leg) => !leg.swing)
       ? stepper.legs.reduce((sum, leg) => sum.add(leg.anchor), new Vector3()).divideScalar(stepper.legs.length).setY(0).addScaledVector(forwardOf(stance), OVER_ANKLES * s) : null;
-    const edged = go && rest ? stop.clone().sub(rest).clampLength(0, EDGING * s).add(rest) : stop;
+    const rest = over && root.distanceTo(over) > LEAN.back * s ? over : null;
+    const edged = go && over ? stop.clone().sub(over).clampLength(0, EDGING * s).add(over) : stop;
     // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
     const behind = forwardOf(stepper.yaw).multiplyScalar(OVER * s);
     const r = plan.step(f, { position: moving ? stop : go ? edged : leaned ?? rest ?? root.clone(), velocity: moving ? velocity : new Vector3(), yaw: faced ? yaw : undefined },
