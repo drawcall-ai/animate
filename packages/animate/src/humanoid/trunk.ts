@@ -142,7 +142,8 @@ export function clearWrist(pose: ReadonlyPose, p: Proportions, side: Side, wrist
     const at = _pushed.copy(wrist).addScaledVector(forward, push);
     return swivels(p, shoulder, at, near, SWIVEL.steps, (elbow, end) => {
       const hand = _hand.subVectors(end, elbow).setLength(ARM.length * p.height).add(end);
-      if (inTrunk(pose, p, shoulder, elbow, ARM.upper) > upper || inTrunk(pose, p, elbow, end, ARM.fore) > clear || inTrunk(pose, p, end, hand, ARM.hand) > clear) return false;
+      if (inTrunk(pose, p, shoulder, elbow, ARM.upper) > upper) return false;
+      if (inTrunk(pose, p, elbow, end, ARM.fore) > clear || inTrunk(pose, p, end, hand, ARM.hand) > clear) return false;
       pole.copy(elbow);
       return true;
     });
@@ -168,7 +169,14 @@ export function clearWrist(pose: ReadonlyPose, p: Proportions, side: Side, wrist
  * The elbows an arm from `shoulder` reaching toward `wrist` (as far as it reaches, to `end`) may have, swivelled about the line
  * between them from `near` out each way in turn (`steps` of `SWIVEL.step` each way), given to `take` until it takes one: whether it did.
  */
-function swivels(p: Proportions, shoulder: Readonly<Vector3>, wrist: Readonly<Vector3>, near: Readonly<Vector3>, steps: number, take: (elbow: Vector3, end: Vector3) => boolean): boolean {
+function swivels(
+  p: Proportions,
+  shoulder: Readonly<Vector3>,
+  wrist: Readonly<Vector3>,
+  near: Readonly<Vector3>,
+  steps: number,
+  take: (elbow: Vector3, end: Vector3) => boolean,
+): boolean {
   const axis = _axis.subVectors(wrist, shoulder);
   const length = Math.min(axis.length(), 0.999 * (p.upperArm + p.forearm));
   axis.normalize();
@@ -182,7 +190,8 @@ function swivels(p: Proportions, shoulder: Readonly<Vector3>, wrist: Readonly<Ve
   const v = _v.crossVectors(axis, u);
   for (let k = 0; k <= (radius < 1e-6 ? 0 : steps); k++) {
     for (const turn of k === 0 ? [0] : [k * SWIVEL.step, -k * SWIVEL.step]) {
-      if (take(_swivel.copy(center).addScaledVector(u, radius * Math.cos(turn)).addScaledVector(v, radius * Math.sin(turn)), end)) return true;
+      const elbow = _swivel.copy(center).addScaledVector(u, radius * Math.cos(turn)).addScaledVector(v, radius * Math.sin(turn));
+      if (take(elbow, end)) return true;
     }
   }
   return false;
@@ -191,17 +200,27 @@ function swivels(p: Proportions, shoulder: Readonly<Vector3>, wrist: Readonly<Ve
 /**
  * Where arm `side`'s hand, at `hand` (world), waits on its way to `goal` (world), into `out`; none (null) once it may set off straight
  * for it. A goal toward the other side behind the shoulder's front plane, out of reach further round than `SECTOR`, or across the
- * midline less far ahead than `BACK` asks waits for the body to turn: the hand waits in front, the goal brought forward (the chest's) to `WAIT` of the
- * arm's length ahead of that plane, within reach. A goal toward the other side with the hand still behind that plane (a free arm on
+ * midline less far ahead than `BACK` asks waits for the body to turn: the hand waits in front, the goal brought forward (the chest's) to
+ * `WAIT` of the arm's length ahead of that plane, within reach. A goal toward the other side with the hand still behind that plane (a free arm on
  * its backswing) waits for the hand to come forward on its own side, `WAIT` ahead of the plane. Either clear of the trunk, the elbow
  * near `near`: people turn first, the hand coming round in front.
  */
-export function waitingFor(pose: ReadonlyPose, p: Proportions, side: Side, hand: Readonly<Vector3>, goal: Readonly<Vector3>, near: Readonly<Vector3>, out: Vector3): Vector3 | null {
+export function waitingFor(
+  pose: ReadonlyPose,
+  p: Proportions,
+  side: Side,
+  hand: Readonly<Vector3>,
+  goal: Readonly<Vector3>,
+  near: Readonly<Vector3>,
+  out: Vector3,
+): Vector3 | null {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), turn = pose.rotation(INDEX.chest);
   const front = _wFront.set(0, 0, 1).applyQuaternion(turn), inside = _wIn.set(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(turn);
-  const before = _d.subVectors(goal, shoulder).dot(front), inward = _d.subVectors(goal, shoulder).dot(inside), across = ahead(pose, p, side, goal);
+  const before = _d.subVectors(goal, shoulder).dot(front), inward = _d.subVectors(goal, shoulder).dot(inside);
+  const across = ahead(pose, p, side, goal);
   // (the hand behind on the floor's plane, as the chest faces: bowed, a hand low in front is not behind)
-  const back = _d.subVectors(hand, shoulder).setY(0).dot(_wFlat.copy(front).setY(0).normalize()), most = REACH * (p.upperArm + p.forearm);
+  const back = _d.subVectors(hand, shoulder).setY(0).dot(_wFlat.copy(front).setY(0).normalize());
+  const most = REACH * (p.upperArm + p.forearm);
   if ((before > 0 || inward <= 0) && across === 0 && (Math.atan2(inward, before) <= SECTOR || goal.distanceTo(shoulder) <= most)) {
     if (inward <= 0 || back >= 0) return null;
     out.copy(hand).addScaledVector(front, WAIT * p.armLength - back);
@@ -224,14 +243,23 @@ function ahead(pose: ReadonlyPose, p: Proportions, side: Side, wrist: Readonly<V
   return Math.max(0, least - _d.subVectors(wrist, shoulder).dot(_front.set(0, 0, 1).applyQuaternion(turn)));
 }
 
-/** how far arm `side`'s upper arm, forearm and hand are in the trunk as `pose` holds them, at their deepest (m; negative: clear by so much), the upper arm's measured against `upper` as the others' against `clear` */
+/**
+ * how far arm `side`'s upper arm, forearm and hand are in the trunk as `pose` holds them, at their deepest (m; negative: clear by so
+ * much), the upper arm's measured against `upper` as the others' against `clear`
+ */
 function armDepth(pose: ReadonlyPose, p: Proportions, side: Side, upper: number, clear: number): number {
-  const shoulder = pose.position(INDEX[`${side}UpperArm`]), elbow = pose.position(INDEX[`${side}LowerArm`]), wrist = pose.position(INDEX[`${side}Hand`]);
+  const shoulder = pose.position(INDEX[`${side}UpperArm`]);
+  const elbow = pose.position(INDEX[`${side}LowerArm`]);
+  const wrist = pose.position(INDEX[`${side}Hand`]);
   const hand = _hand.subVectors(wrist, elbow).setLength(ARM.length * p.height).add(wrist);
-  return Math.max(inTrunk(pose, p, shoulder, elbow, ARM.upper) - upper + clear, inTrunk(pose, p, elbow, wrist, ARM.fore), inTrunk(pose, p, wrist, hand, ARM.hand));
+  const upperArm = inTrunk(pose, p, shoulder, elbow, ARM.upper) - upper + clear;
+  return Math.max(upperArm, inTrunk(pose, p, elbow, wrist, ARM.fore), inTrunk(pose, p, wrist, hand, ARM.hand));
 }
 
-/** how far (m) an arm part from `a` to `b`, `radius` round (× height), is in the trunk as `pose` holds it, at its deepest (negative: clear of it by so much), and in which capsule */
+/**
+ * how far (m) an arm part from `a` to `b`, `radius` round (× height), is in the trunk as `pose` holds it, at its deepest (negative: clear
+ * of it by so much), and in which capsule
+ */
 function inTrunk(pose: ReadonlyPose, p: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): number {
   return deepest(pose, p, a, b, radius).depth;
 }
@@ -276,5 +304,6 @@ const unit = (x: number) => Math.min(1, Math.max(0, x));
 const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), _d = new Vector3(), _tip = new Vector3();
 const _was = [new Quaternion(), new Quaternion(), new Quaternion()], _fit = [new Quaternion(), new Quaternion(), new Quaternion()], _blend = new Quaternion();
 const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3();
-const _front = new Vector3(), _goal = new Vector3(), _swivel = new Vector3(), _elbow = new Vector3(), _hand = new Vector3(), _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
+const _front = new Vector3(), _goal = new Vector3(), _swivel = new Vector3(), _elbow = new Vector3(), _hand = new Vector3();
+const _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
 const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3(), _sp = new Vector3(), _sq = new Vector3();

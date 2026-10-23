@@ -40,7 +40,10 @@ const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
 /** how far the knees let the pelvis down at most (m): a squat, the hip joints over the ankles, the knees folded as far as the default
  * body's let its pelvis down 0.38 of its height (tuned; 154°, a degree short of their range) — `FOLD`, the cosine between thigh and shin */
 export const squatOf = (p: Proportions) => p.legLength - Math.sqrt(p.thigh ** 2 + p.shin ** 2 - 2 * p.thigh * p.shin * FOLD);
-const FOLD = (({ thigh, shin, legLength }) => (thigh ** 2 + shin ** 2 - (legLength - 0.38 * DEFAULT_HEIGHT) ** 2) / (2 * thigh * shin))(proportionsFor(DEFAULT_HEIGHT));
+const FOLD = (({ thigh, shin, legLength }) => {
+  const squatted = legLength - 0.38 * DEFAULT_HEIGHT;
+  return (thigh ** 2 + shin ** 2 - squatted ** 2) / (2 * thigh * shin);
+})(proportionsFor(DEFAULT_HEIGHT));
 /** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
 export const LOWER = { accel: 3, speed: 0.6 };
 /** Walking planted reach (× leg length): a soft knee under load. */
@@ -51,8 +54,9 @@ export const STANDING_REACH = 0.995;
 /**
  * The trunk leans forward with the pace it goes forward at (rad, the chest's; × the speed ahead up to 1 m/s), a run more: read (Thorstensson
  * et al. 1984, Acta Physiol Scand 121:9, abstract), the trunk's mean forward inclination grows from 6° walking to ~13° running fast. Tuned:
- * its hips → neck ~4.5–5° at 1.3 m/s (the chest ~9°); eased in and out within `LEANING` (rad/s², rad/s), no quicker than the stride's own nod as it sets off
- * or stops; and given up as the trunk bows or the knees bend for a reach (`BOWED`, rad; `LOWERED`, × height): the bow leans it instead.
+ * its hips → neck ~4.5–5° at 1.3 m/s (the chest ~9°); eased in and out within `LEANING` (rad/s², rad/s), no quicker than the stride's
+ * own nod as it sets off or stops; and given up as the trunk bows or the knees bend for a reach (`BOWED`, rad; `LOWERED`, × height): the
+ * bow leans it instead.
  */
 const LEAN = { walk: 0.14, run: 0.15 }, LEANING = { accel: 1, speed: 0.1 }, BOWED = 0.15, LOWERED = 0.05;
 
@@ -119,22 +123,30 @@ export class Posture {
     this.inertia = inertia ? new Inertia(inertia) : null;
   }
 
-  /** the pelvis's goal into `c.pelvis` / `c.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Pick<Frame, 'prev' | 'dt'>, c: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Life, 'drift' | 'breath' | 'onto'>, cycle: Cycle, height: (standing: number, floor: number, tiptoe: number) => number) {
+  /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
+  carry(
+    f: Pick<Frame, 'prev' | 'dt'>,
+    upright: Upright,
+    asks: { lower: number; bow: number; twist: number },
+    out: Trunk,
+    life: Pick<Life, 'drift' | 'breath' | 'onto'>,
+    cycle: Cycle,
+    height: (standing: number, floor: number, tiptoe: number) => number,
+  ) {
     const { lower, bow, twist } = asks;
     const { onto } = life;
-    const { p } = c;
+    const { p } = upright;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = p.height, L = DEFAULT_HEIGHT * p.legs;
     const dt = f.dt;
-    const walk = c.walk;
-    const run = c.run;
-    const fwd = forwardOf(c.yaw, _f);
-    const left = leftOf(c.yaw, _l);
+    const walk = upright.walk;
+    const run = upright.run;
+    const fwd = forwardOf(upright.yaw, _f);
+    const left = leftOf(upright.yaw, _l);
 
     // the pelvis and the thorax turned with the stride, the thorax rolling with its turn
     const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
-    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, p.legs, walk, run, c.held, this.turn);
+    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, p.legs, walk, run, upright.held, this.turn);
     const { bob, nod: nodPhase, compression: comp } = cycle;
     const stride = this.phase = cycle.phase;
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
@@ -150,32 +162,34 @@ export class Posture {
 
     // the pelvis where it puts the centre of mass over the root (its ground point, swayed, shifted
     // back under a nod), as high as the legs reach, and as low as asked
-    const pelvis = c.pelvis.copy(c.root).add(c.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
+    const pelvis = upright.pelvis.copy(upright.root).add(upright.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
     this.quiet.copy(left).multiplyScalar(life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
     const weight = _v.set(0, 0, 0);
-    if (onto && !c.moving) {
-      weight.addVectors(c.feet[0].position, c.feet[1].position).multiplyScalar(0.5);
-      weight.subVectors(c.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(SHIFT.share);
+    if (onto && !upright.moving) {
+      weight.addVectors(upright.feet[0].position, upright.feet[1].position).multiplyScalar(0.5);
+      weight.subVectors(upright.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(SHIFT.share);
     }
     this.weight.lerp(weight, 1 - Math.exp(-dt));
     pelvis.add(this.quiet.add(this.weight));
     // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
     const shifted = this.weight.dot(left) / Math.max(p.hipHalfWidth, 1e-6);
     roll += SHIFT.roll * shifted;
-    const onward = smoothstep(0, 1, Math.max(0, c.velocity.dot(fwd)));
+    const onward = smoothstep(0, 1, Math.max(0, upright.velocity.dot(fwd)));
     const pace = follow(this.leans[0], this.leans[1], lerp(LEAN.walk * walk, LEAN.run, run) * onward, LEANING, dt);
     [this.leans[0], this.leans[1]] = [this.leans[1], pace];
     // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
     const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
-    quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow + TILT * run, roll, c.pelvisRotation);
-    const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
+    const tilt = 0.5 * nod + hingeOf(p, lower) * bow + TILT * run;
+    quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade, tilt, roll, upright.pelvisRotation);
+    const standing = p.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
     pelvis.y = height(standing, standing - MOST_DROP * L, smoothstep(0, TIPTOE * p.scale, -lower));
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
     // nodding and bowing
-    this.inertia?.step(c.velocity, c.yaw, dt);
+    this.inertia?.step(upright.velocity, upright.yaw, dt);
     const lean = this.inertia ?? { pitch: 0, roll: 0 };
-    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, forward + nod + bow - loadLean(f.prev, p, fwd) + life.breath + lean.pitch, thoraxRoll + lean.roll, out.chest);
+    const pitch = forward + nod + bow - loadLean(f.prev, p, fwd) + life.breath + lean.pitch;
+    quatYXZ(upright.yaw + thoraxYaw + upright.stance.blade, pitch, thoraxRoll + lean.roll, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }
@@ -193,7 +207,10 @@ export class Posture {
 const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, squatOf(p), lower));
 
 /** Posture needed to bring a shoulder within hand reach. */
-export function handLowering(p: Proportions, request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number }): { lower: number; bow: number } {
+export function handLowering(
+  p: Proportions,
+  request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number },
+): { lower: number; bow: number } {
   const { ahead, lateral, height, reach, bowLimit } = request;
   const lever = bowLever(p, p.shoulderHeight);
   const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));
@@ -208,7 +225,9 @@ export function handLowering(p: Proportions, request: { ahead: number; lateral: 
   // A sideways approach is closed by steps and trunk turns, rather than a squat.
   const across = Math.min(Math.hypot(ahead - lever * Math.sin(bow), lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - height));
   const below = Math.sqrt(Math.max(0, reach ** 2 - across ** 2));
-  const drop = height > p.shoulderHeight ? Math.min(0, p.shoulderHeight + below - height) : Math.max(lever * (1 - Math.cos(bow)), p.shoulderHeight - height - below);
+  const drop = height > p.shoulderHeight
+    ? Math.min(0, p.shoulderHeight + below - height)
+    : Math.max(lever * (1 - Math.cos(bow)), p.shoulderHeight - height - below);
   return lowered(p, lever, drop, bow);
 }
 

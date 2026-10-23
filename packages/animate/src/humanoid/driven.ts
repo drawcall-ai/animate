@@ -45,11 +45,17 @@ const OVER = 0.021;
  * back over them — upright, a full crouch leaves the centre of mass ~1 cm behind the heels
  */
 const CROUCH_LEAN = 0.3;
-/** Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low: ~0.26 m); a deeper ask waits for it to slow */
+/**
+ * Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low:
+ * ~0.26 m); a deeper ask waits for it to slow
+ */
 const WALKING_CROUCH = 0.5;
 /** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
-/** Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing (with its toe-out); tuned: eased in over this share of the swing */
+/**
+ * Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing
+ * (with its toe-out); tuned: eased in over this share of the swing
+ */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1 };
@@ -81,13 +87,30 @@ export interface PersonRoot extends RootGoal {
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
  * less as it holds still (`asks.steady`).
  */
-export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => PersonRoot, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
+export function drivenBy(
+  h: Humanoid,
+  rootOf: (f: Frame, asks: Asks, stepper: Stepper) => PersonRoot,
+  options: { stance?: Partial<Stance>; seed?: number } = {},
+): Behaviour {
   return function* () {
     const p = h.proportions, s = p.scale;
     const soles = SIDES.map((side, i) => [heelOf(p), ...[p.sole.bigToe, p.sole.smallToe]
       .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(p, side)))]);
-    const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: p.ankleHeight, rotation: footRotation,
-      legs: SIDES.map((side, i) => ({ sign: i === 0 ? 1 : -1, foot: INDEX[`${side}Foot`], toes: INDEX[`${side}Toes`], top: INDEX[`${side}UpperLeg`], up: p.offsets[`${side}UpperLeg`].y })),
+    const feet: Feet = {
+      hip: p.hipHalfWidth,
+      length: p.legLength,
+      thigh: p.thigh,
+      shin: p.shin,
+      fold: KNEE_FLEXION * Math.PI / 180,
+      ankleHeight: p.ankleHeight,
+      rotation: footRotation,
+      legs: SIDES.map((side, i) => ({
+        sign: i === 0 ? 1 : -1,
+        foot: INDEX[`${side}Foot`],
+        toes: INDEX[`${side}Toes`],
+        top: INDEX[`${side}UpperLeg`],
+        up: p.offsets[`${side}UpperLeg`].y,
+      })),
       ankle: (i, anchor, yaw, pitch, out) => ankleFor(p, SIDES[i], anchor, yaw, pitch, out),
       lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
       print: (i, anchor, yaw) => soles[i].map((point): [number, number] => {
@@ -95,84 +118,135 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         return [at.x, at.z];
       }),
       sole: (i, ankle, foot, toes) => {
-        const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle), sign = i === 0 ? 1 : -1;
-        return Math.min(heelOf(p, _a).applyQuaternion(foot).y + ankle.y, ...[p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y));
-      } };
+        const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle);
+        const sign = i === 0 ? 1 : -1;
+        const heel = heelOf(p, _a).applyQuaternion(foot).y + ankle.y;
+        const tips = [p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y);
+        return Math.min(heel, ...tips);
+      },
+    };
     // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
     const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, h.feet, h.yaw));
-    let stepper = stepperFor(true), told = false;
+    let stepper = stepperFor(true), first = true;
     const { toeOut, crouch: crouching } = humanStepping(p);
-    const asks = createAsks(), base = { ...defaultStance(p), ...options.stance };
-    const c: Upright = { p, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false, stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false };
-    const posture = new Posture(h.species.inertia), life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
-    const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 }, asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
+    const asks = createAsks();
+    const base = { ...defaultStance(p), ...options.stance };
+    const upright: Upright = {
+      p,
+      root: new Vector3(),
+      velocity: new Vector3(),
+      offset: new Vector3(),
+      yaw: h.yaw,
+      walk: 0,
+      run: 0,
+      moving: false,
+      stance: base,
+      feet: h.feet,
+      pelvis: new Vector3(),
+      pelvisRotation: new Quaternion(),
+      held: false,
+    };
+    const posture = new Posture(h.species.inertia);
+    const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
+    const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
+    const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
     const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
     const tilts = [new Quaternion(), new Quaternion()];
     let offsets: Vector3[] | null = null, pace: Vector3 | null = null, phase = 0;
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
-      const dt = f.dt, r = rootOf(f, asks, stepper);
-      if (!told && !r.forecast) stepper = stepperFor(false);
-      told = true;
+      const dt = f.dt, root = rootOf(f, asks, stepper);
+      if (first && !root.forecast) stepper = stepperFor(false);
+      first = false;
       // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
       if (!offsets) {
-        const from = r.centre ? f.prev.com(new Vector3()).setY(0) : r.position;
+        const from = root.centre ? f.prev.com(new Vector3()).setY(0) : root.position;
         offsets = [f.prev2.position(0).clone().sub(from).setY(0), f.prev.position(0).clone().sub(from).setY(0)];
       }
       // the hips carried off the root: swaying and turning with the stride, off a centre of mass's as far as the mass leans ahead of them
-      const speed = r.velocity.length();
-      c.stance = asks.stance ? { ...base, ...asks.stance } : base;
-      [c.walk, c.moving, c.yaw, c.held] = [walking(c.walk, speed, dt), r.underway ?? h.locomotion.moving, stepper.yaw, armsHeld(h)];
-      c.root.copy(r.position);
+      const speed = root.velocity.length();
+      upright.stance = asks.stance ? { ...base, ...asks.stance } : base;
+      upright.walk = walking(upright.walk, speed, dt);
+      upright.moving = root.underway ?? h.locomotion.moving;
+      upright.yaw = stepper.yaw;
+      upright.held = armsHeld(h);
+      upright.root.copy(root.position);
       // (the trunk carries itself — leaning, running — at the pace its legs could have taken it to, within `PACE`: a player's quicker root
       // does not throw it; spawned on the move, at that pace)
-      pace ??= new Vector3(r.velocity.x, 0, r.velocity.z);
-      const change = _v.set(r.velocity.x, 0, r.velocity.z).sub(pace), most = (change.dot(pace) < 0 ? PACE.brake : PACE.push) * dt;
-      if (change.length() <= most) pace.set(r.velocity.x, 0, r.velocity.z);
+      pace ??= new Vector3(root.velocity.x, 0, root.velocity.z);
+      const change = _v.set(root.velocity.x, 0, root.velocity.z).sub(pace);
+      const most = (change.dot(pace) < 0 ? PACE.brake : PACE.push) * dt;
+      if (change.length() <= most) pace.set(root.velocity.x, 0, root.velocity.z);
       else pace.addScaledVector(change, most / change.length());
-      c.velocity.copy(pace);
-      c.run = stepper.run;
-      if (r.centre) c.offset.copy(posture.center(f));
+      upright.velocity.copy(pace);
+      upright.run = stepper.run;
+      if (root.centre) upright.offset.copy(posture.center(f));
       // (its quiet life: motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
       const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
         f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
       life.update(dt, life.quiet(asks, h), activity, asks.steady);
       // (let down, bowed and twisted at a squat's pace — or twisted at the rate asked, the trunk's joints pacing it within `TURN`: an aim
       // tracks a turning look)
-      const twisting = asks.twistRate * dt, twist = twisting > 0 ? asked.twist[1] + clamp(asks.twist - asked.twist[1], -twisting, twisting) : follow(asked.twist[0], asked.twist[1], asks.twist, BOW, dt);
+      const twisting = asks.twistRate * dt;
+      const twist = twisting > 0
+        ? asked.twist[1] + clamp(asks.twist - asked.twist[1], -twisting, twisting)
+        : follow(asked.twist[0], asked.twist[1], asks.twist, BOW, dt);
       [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
-      const requested = { lower: followed(asked.lower, asks.lower, LOWER, dt), bow: followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt), twist };
+      const requested = {
+        lower: followed(asked.lower, asks.lower, LOWER, dt),
+        bow: followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt),
+        twist,
+      };
       const swing = stepper.legs.find((leg) => leg.swing)?.swing;
       // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts; running, the stance leg compresses toward
       // mid-stance, as the stepper lets the pelvis down)
       phase = entrain(phase, stepper.phase, 2 * Math.PI / stepper.cycle, dt);
-      const compression = Math.min(1, stepper.legs.reduce((sum, leg) => sum + (leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / stepper.Ts)) ** 2), 0));
+      const compressed = (leg: Leg) => leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / stepper.Ts)) ** 2;
+      const compression = Math.min(1, stepper.legs.reduce((sum, leg) => sum + compressed(leg), 0));
       // (crouched over a root at its hips — sitting back behind the feet, the mass not held over the root — the trunk bows over them by
       // `CROUCH_LEAN`, as the legs take the crouch)
-      const stoop = r.centre ? 0 : CROUCH_LEAN * stepper.crouch;
-      posture.carry(f, c, { ...requested, bow: requested.bow + stoop }, trunk, life,
-        { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle }, (height) => height);
-      const offset = hips.follow(offsets[0], offsets[1], c.pelvis.clone().sub(c.root).setY(0), PELVIS, dt, new Vector3());
+      const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch;
+      const cycle = {
+        phase,
+        bob: swing ? Math.sin(Math.PI * swing.u) : 0,
+        nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1,
+        compression,
+        stance: stepper.Ts / stepper.cycle,
+      };
+      posture.carry(f, upright, { ...requested, bow: requested.bow + stoop }, trunk, life, cycle, (height) => height);
+      const offset = hips.follow(offsets[0], offsets[1], upright.pelvis.clone().sub(upright.root).setY(0), PELVIS, dt, new Vector3());
       [offsets[0], offsets[1]] = [offsets[1], offset];
       // (the pelvis's turn with the stride followed off the facing; running, the legs are told of it before they reach from its hips —
       // reversed, it swings the stance hip back off its foot; walking, they reach from a pelvis square to its facing, as a walker's do)
-      const tilt = rotation.follow(tilts[0], tilts[1], new Quaternion().setFromAxisAngle(UP, -c.yaw).multiply(c.pelvisRotation), TURN, dt, new Quaternion());
+      const square = new Quaternion().setFromAxisAngle(UP, -upright.yaw).multiply(upright.pelvisRotation);
+      const tilt = rotation.follow(tilts[0], tilts[1], square, TURN, dt, new Quaternion());
       [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
-      stepper.turn = yawOf(tilt) * c.run;
+      stepper.turn = yawOf(tilt) * upright.run;
       // (the stepper given the feet's middle — a centre of mass's `behind` it, the hips that far ahead of it again; let down as asked or
       // as the root crouches it, the feet staying put; balance read off the body as it last stood, as the checks read it)
-      const behind = r.centre ? feetBehind(stepper, s) : ZERO, forecast = r.forecast;
-      stepper.move(f, { ...r, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
+      const behind = root.centre ? feetBehind(stepper, s) : ZERO, forecast = root.forecast;
+      const lowered = crouchFor(requested.lower / (crouching.depth * s));
+      const walkingMost = lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed));
+      stepper.move(f, {
+        ...root,
+        position: root.position.clone().sub(behind),
+        forecast: forecast && ((t) => {
+          const at = forecast(t);
+          return { position: at.position.sub(behind), yaw: at.yaw };
+        }),
         // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass.
-        hips: offset.clone().add(behind), com: r.centre ? offset.clone().sub(c.offset).add(behind) : undefined,
-        crouch: Math.max(r.crouch ?? 0, Math.min(crouchFor(requested.lower / (crouching.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed)))),
-        tiptoe: Math.max(0, -requested.lower), still: !c.moving && Math.abs(requested.lower) > LOWERED * s,
-        xcom: xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3()) });
+        hips: offset.clone().add(behind),
+        com: root.centre ? offset.clone().sub(upright.offset).add(behind) : undefined,
+        crouch: Math.max(root.crouch ?? 0, Math.min(lowered, walkingMost)),
+        tiptoe: Math.max(0, -requested.lower),
+        still: !upright.moving && Math.abs(requested.lower) > LOWERED * s,
+        xcom: xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3()),
+      });
       const { yaw, moving, run, legs } = stepper;
       // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest
       f.current.setLocal(0, tilt.premultiply(new Quaternion().setFromAxisAngle(UP, yaw)));
-      const chest = new Quaternion().setFromAxisAngle(UP, yaw - c.yaw).multiply(trunk.chest);
+      const chest = new Quaternion().setFromAxisAngle(UP, yaw - upright.yaw).multiply(trunk.chest);
       const half = f.current.local(0).clone().invert().multiply(chest).slerp(new Quaternion(), 0.5);
       [INDEX.spine, INDEX.chest].forEach((bone, k) => {
         const local = half.clone(), limit = f.current.skeleton.limits[bone];
@@ -213,19 +287,27 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         place(pose.ankle);
         // (a swinging foot the ankle's range turned off its plan — toes down past it, behind a crouch — lifted as far as that put it into the floor)
         if (leg.swing) {
-          const sunk = -feet.sole(i, f.current.position(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
+          const ankle = f.current.position(INDEX[`${side}Foot`]);
+          const sunk = -feet.sole(i, ankle, f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
           if (sunk > 0) place(_lift.copy(pose.ankle).setY(pose.ankle.y + sunk));
         }
         h.feet[i].position.copy(leg.anchor);
         h.feet[i].yaw = leg.yaw;
         h.feet[i].phase = leg.swing ? 'swing' : 'planted';
       });
-      const g = h.locomotion, stepping = legs.some((leg) => leg.swing);
-      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.pelvisYaw, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, trunk.pelvisYaw, trunk.thoraxYaw];
-      g.velocity.copy(r.velocity).setY(0);
-      g.planted = g.moving ? 0 : g.planted + dt;
-      g.settled = stepper.settled;
-      g.quiet.copy(posture.quiet);
+      const locomotion = h.locomotion, stepping = legs.some((leg) => leg.swing);
+      locomotion.phase = stepper.phase;
+      locomotion.walk = moving;
+      locomotion.run = run;
+      locomotion.facing = wrapAngle(yaw);
+      locomotion.facingAhead = wrapAngle(yaw);
+      locomotion.moving = Math.hypot(root.velocity.x, root.velocity.z) > 0.05 || stepping;
+      locomotion.pelvisYaw = trunk.pelvisYaw;
+      locomotion.thoraxYaw = trunk.thoraxYaw;
+      locomotion.velocity.copy(root.velocity).setY(0);
+      locomotion.planted = locomotion.moving ? 0 : locomotion.planted + dt;
+      locomotion.settled = stepper.settled;
+      locomotion.quiet.copy(posture.quiet);
     } });
   };
 }
@@ -249,16 +331,24 @@ function check(h: Humanoid, f: Frame, dev: Dev, legs: readonly Leg[]) {
       const was = f.prev2.point(bone, pivot, new Vector3());
       const vertical = Math.abs(at.y - was.y) / f.dt, horizontal = Math.hypot(at.x - was.x, at.z - was.z) / f.dt;
       // (landing a leap the foot comes down with the body, the knees taking up the fall after: only its horizontal speed is bounded)
-      if (vertical > LIMIT.vertical && !leg.leapt) dev.append(time, { check: 'driven touchdown vertical speed (m/s)', value: vertical, limit: LIMIT.vertical, where: `${side}Foot` });
-      if (horizontal > LIMIT.horizontal) dev.append(time, { check: 'driven touchdown horizontal speed (m/s)', value: horizontal, limit: LIMIT.horizontal, where: `${side}Foot` });
+      if (vertical > LIMIT.vertical && !leg.leapt) {
+        dev.append(time, { check: 'driven touchdown vertical speed (m/s)', value: vertical, limit: LIMIT.vertical, where: `${side}Foot` });
+      }
+      if (horizontal > LIMIT.horizontal) {
+        dev.append(time, { check: 'driven touchdown horizontal speed (m/s)', value: horizontal, limit: LIMIT.horizontal, where: `${side}Foot` });
+      }
     }
   });
   // (the shanks never closer than their thickness: legs that cross pass through each other)
   const shank = (side: Side) => [f.prev.position(INDEX[`${side}LowerLeg`]), f.prev.position(INDEX[`${side}Foot`])];
-  const [l, r] = [shank('left'), shank('right')];
+  const [left, right] = [shank('left'), shank('right')];
   const gap = Math.min(...[0, 0.25, 0.5, 0.75, 1].flatMap((k) => [
-    pointSegmentDistance(new Vector3().lerpVectors(l[0], l[1], k), r[0], r[1]), pointSegmentDistance(new Vector3().lerpVectors(r[0], r[1], k), l[0], l[1])]));
-  if (gap < LIMIT.across * p.scale) dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * p.scale - gap, limit: 0, where: 'legs' });
+    pointSegmentDistance(new Vector3().lerpVectors(left[0], left[1], k), right[0], right[1]),
+    pointSegmentDistance(new Vector3().lerpVectors(right[0], right[1], k), left[0], left[1]),
+  ]));
+  if (gap < LIMIT.across * p.scale) {
+    dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * p.scale - gap, limit: 0, where: 'legs' });
+  }
   // Noted only: a driven body follows its input, not its balance.
   const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(h, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
   if (!support.length) return;
