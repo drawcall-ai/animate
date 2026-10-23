@@ -195,6 +195,8 @@ function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, 
   return { body, planted, phase };
 }
 const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samples);
+/** the croup read where the research measured it: over the lumbosacral joint, 9 cm ahead of the pelvis bone's origin (in its frame) */
+const CROUP = new Vector3(0, 0.03, 0.09);
 const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'YXZ').x;
 
 it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
@@ -206,12 +208,12 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
     body.update(1 / 60);
     if (tick < 600) continue;
     const p = body.pose;
-    poll.push(p.position(HEAD).y); withers.push(p.position(LEGS[0].scapula ?? 0).y); croup.push(p.position(PELVIS).y);
+    poll.push(p.position(HEAD).y); withers.push(p.position(LEGS[0].scapula ?? 0).y); croup.push(p.point(PELVIS, CROUP, new Vector3()).y);
     trunk.push(pitchOf(p.rotation(0))); head.push(pitchOf(p.rotation(HEAD))); back.push(pitchOf(p.local(SPINE)));
     roll.push(new Euler().setFromQuaternion(p.rotation(PELVIS), 'YXZ').z);
     pelvis.push(pitchOf(p.rotation(PELVIS))); tail.push(new Euler().setFromQuaternion(p.local(TAIL), 'YXZ').y);
     relative.push(p.position(HEAD).y - p.position(LEGS[0].scapula ?? 0).y);
-    relativeCroup.push(p.position(HEAD).y - p.position(PELVIS).y);
+    relativeCroup.push(p.position(HEAD).y - p.point(PELVIS, CROUP, new Vector3()).y);
     lead.push(horseLeadPoint(p, new Vector3()).sub(p.position(0)).z);
     const phase = phaseOf(0) % 0.5;
     if (phase < 0.03 || phase > 0.47) high.push(p.position(HEAD).y);

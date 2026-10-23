@@ -37,7 +37,7 @@ const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5
 export const HORSE_WALK: Gait = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
   // research-contact.md §5: [R via summary] Dunbar ranges; [D] landmark/hip phase after solving.
-  body: { withers: 0.035, croup: [0.05, 1.52], spine: 2.5, spinePhase: 0.3, roll: 4, yaw: 2.5, headPitch: 4.5, headRise: 0.0675, headWithers: 0 },
+  body: { withers: 0.035, croup: [0.055, 1.52], spine: 2.5, spinePhase: 0.3, roll: 4, yaw: 2.5, headPitch: 4.5, headRise: 0.0675, headWithers: 0 },
   // Tuned from the read 28% fore-cannon crossing, allowing for the coffin's forward offset.
   contacts: walk.contacts.map((contact, i) => ({
     ...contact,
@@ -119,7 +119,7 @@ const turn = (x = 0, y = 0, z = 0, out = _q) => out.setFromEuler(_e.set(x, y, z,
  * What the horse's gait carries, and its quiet life [C]: ears flick every 2–6 s, the tail swishes every 5–20 s, the head turns every
  * 10–30 s and the weight shifts every 20–60 s (tuned: the first at 2–6 s); each goal crosses neutral so every change shows [D].
  */
-const HORSE_CARRIAGE: CarriedBones = { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.7, period: 1.2, cycles: 1 }, life: [
+const HORSE_CARRIAGE: CarriedBones = { spine: 'back', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.7, period: 1.2, cycles: 1 }, life: [
   ['leftEar', { every: [2, 6], rate: 8, pick: swing }], ['rightEar', { every: [2, 6], rate: 8, pick: swing }],
   ['tail', { every: [5, 20], rate: 1, pick: swing }], ['head', { every: [10, 30], rate: 1, pick: swing }],
   ['weight', { every: [20, 60], first: [2, 6], rate: 1, pick: swing }],

@@ -74,13 +74,18 @@ const MASS = {
  */
 // Read: Hannoveraner breeding programme (2021), conformation: plumb cannons, pasterns 50–55°.
 // https://hanoverian.org.au/wp-content/uploads/2023/11/Breeding_Programme_of_the_Hannoveraner_breed_3.11.2021_01.pdf
-// Tuned carriage: poll 13 cm above the scapular top, muzzle 52° below horizontal.
+// Its back, neck and head carried as the rigged horse it is shown as (examples/public/models/horse.glb, its joints measured on it):
+// the neck rising ~40° from its base at the withers' front to the poll, 30 cm above the scapula's top, the face ~51° below horizontal
+// (a horse's nasal plane held ~72° at rest by hand, ~51° extended: read, Go, Barton & Ohnesorge 2014, BMC Vet Res 10:118; walking, the
+// head ~66° below horizontal: read, Dunbar et al. 2008, J Exp Biol 211:3889); the pelvis where the mesh has it, its back's line
+// level from under the saddle to the croup — the back dipping between withers and croup is the mesh's own shape, ~8% of the withers'
+// height (read: Icelandic horses, withers 138, back 127, croup 136 cm, Acta Vet Scand 2025, PMC12180175).
 const AT = {
   trunk: v(0, 1.4, 0),
-  pelvis: v(0, 1.42, -0.48),
-  neck: v(0, 1.39, 0.67),
-  poll: v(0, 1.57, 1.30),
-  muzzle: v(0, 1.15, 1.63),
+  pelvis: v(0, 1.39, -0.57),
+  neck: v(0, 1.34, 0.72),
+  poll: v(0, 1.75, 1.2),
+  muzzle: v(0, 1.38, 1.5),
   scapula: v(0.12, 1.44, 0.657),
   shoulder: v(0.17, 1.1, 0.857),
   elbow: v(0.17, 0.889, 0.63),
@@ -96,7 +101,7 @@ const AT = {
   hindSole: v(0.15, 0, -0.64),
 };
 
-/** the bones, parents first: the trunk (root), spine, pelvis, neck, head, then each leg's */
+/** the bones, parents first: the trunk (root), back, pelvis, neck, head, then each leg's */
 function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
   const bones: BoneDef[] = [];
   const at: Vector3[] = [];
@@ -107,8 +112,9 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
     return bones.length - 1;
   };
   const trunk = add('trunk', -1, AT.trunk, MASS.trunk, v(0, 1.12, 0.3), 1);
-  // [D] Pitch about the hip axis; a croup pivot was translating the leg attachments.
-  const spine = add('spine', trunk, AT.hip.clone().setX(0), 0, AT.pelvis, 0);
+  // [D] The back's flexion, pitching the pelvis about the hip axis: a croup pivot was translating the leg attachments. A joint of no
+  // segment of its own (named `back`, not `spine`: a rigged horse's lumbar `spine` bone rides its trunk, not this pivot 25 cm below it).
+  const spine = add('back', trunk, AT.hip.clone().setX(0), 0, AT.pelvis, 0);
   const pelvis = add('pelvis', spine, AT.pelvis, MASS.pelvis, v(0, 1.27, -0.68), 1);
   const neck = add('neck', trunk, AT.neck, MASS.neck, AT.poll, 0.45);
   const head = add('head', neck, AT.poll, MASS.head, AT.muzzle, 0.4);
@@ -139,8 +145,8 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
     }
   }
   // [C] Minimum attention/follower joints; mass remains included in head/pelvis.
-  for (const side of [1, -1]) add(`${side === 1 ? 'left' : 'right'}Ear`, head, AT.poll.clone().add(v(side * 0.1, 0.06, 0)), 0, AT.poll, 0);
-  add('tail', pelvis, v(0, 1.39, -0.9), 0, AT.pelvis, 0);
+  for (const side of [1, -1]) add(`${side === 1 ? 'left' : 'right'}Ear`, head, AT.poll.clone().add(v(side * 0.06, 0.07, 0.05)), 0, AT.poll, 0);
+  add('tail', pelvis, v(0, 1.43, -0.79), 0, AT.pelvis, 0);
   return { bones, legs: ['leftFore', 'rightFore', 'leftHind', 'rightHind'].map((n) => legs.find((l) => l.name === n) ?? fail(n)) };
 }
 
@@ -177,7 +183,7 @@ const range = (z: [number, number], x: [number, number], twist: [number, number]
 const RANGES: Record<string, Range> = {
   Ear: range([-45, 45], [-60, 60], [-120, 120]),
   tail: range([-60, 60], [-60, 60], [-70, 70]),
-  spine: range([-8, 8], [-15, 15], [-10, 10]),
+  back: range([-8, 8], [-15, 15], [-10, 10]),
   pelvis: range([-8, 8], [-15, 15], [-10, 10]),
   neck: range([-20, 20], [-40, 60], [-35, 35]),
   head: range([-20, 20], [-40, 45], [-30, 30]),
@@ -218,14 +224,14 @@ const names = (k: number) => built.bones[k].name;
 
 /** The horse's skeleton: its limits, a chain per leg (named as the leg) and the neck's.
  * Warmblood landmarks: root bone `trunk` (index 0) on the spine under the saddle, `neck` at its base,
- * `head` at the poll; muzzle offset from head is (0, -0.42, 0.33) m. */
+ * `head` at the poll; muzzle offset from head is (0, -0.37, 0.3) m. */
 export const SKELETON = new Skeleton(built.bones, {
   limits,
   chains: Object.fromEntries([...built.legs.map((l) => [l.name, [l.upper, l.middle, l.cannon].map(names)]), ['neck', ['neck', 'head']]]),
 });
 /** the legs, in fore-left, fore-right, hind-left, hind-right order */
 export const LEGS: readonly HorseLeg[] = built.legs;
-export const SPINE = SKELETON.index('spine');
+export const SPINE = SKELETON.index('back');
 export const PELVIS = SKELETON.index('pelvis');
 export const NECK = SKELETON.index('neck');
 export const HEAD = SKELETON.index('head');
