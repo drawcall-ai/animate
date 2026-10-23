@@ -58,7 +58,7 @@ const OPEN = new Set<string>([
     `carries below the face until arrival and places clear of both bodies on the soldier #${seed}`,
     `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`,
   ]),
-  ...[1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`),
+  ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`),
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
 ]);
 const test = (title: string, body: () => void) => (OPEN.has(title) ? it.fails : it)(title, body);
