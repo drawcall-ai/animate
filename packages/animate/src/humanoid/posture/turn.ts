@@ -4,7 +4,7 @@ import type { Humanoid } from '../humanoid';
 
 /**
  * How far each turns per metre the left foot leads the right along the facing (rad/m, walking ~1.3 m/s and running ~3.5 m/s; × its
- * height over the default body's). Snippet (Saunders, Schache et al. 2005, Clin Biomech): the lumbo-pelvic turn grows with the
+ * legs over the default body's: the stride's length is the legs'). Snippet (Saunders, Schache et al. 2005, Clin Biomech): the lumbo-pelvic turn grows with the
  * stride's length, walking and running alike. Read (Kovše et al. 2026, table): the pelvis 14.2° peak to peak at 2.8 m/s, 15.8° at 3.3, 17.0° at
  * 3.9 (female runners); read (Perpiñá-Martínez et al. 2023): men 10–14°, women 13–16° at 2.4–3.3 m/s; recalled: 8–10° walking. Read
  * (Pontzer et al. 2009, the shoulder line): 8.1° walking 1.5 m/s, 23.75° running 3.0 m/s; the thorax below the shoulder girdle turns less
@@ -35,7 +35,8 @@ export interface Turn {
 }
 
 /**
- * The trunk's turn with the stride as the left foot leads the right by `ahead` (m along the facing, × `scale` of the default body;
+ * The trunk's turn with the stride as the left foot leads the right by `ahead` (m along the facing, × `legs` — its legs over the default
+ * body's;
  * − behind), `walk` (0 standing … 1 walking), `run` (0 walking … 1 running); `held`: neither arm free to swing.
  * Walking, the pelvis turns forward on the side of the leading foot, furthest as it lands, the thorax against it — its left forward as the
  * right foot leads, with the arm swinging forward on that side (read, Pontzer 2009: 149° apart at 1.5 m/s). Running, the pelvis turns the
@@ -44,8 +45,8 @@ export interface Turn {
  * opposite the leading foot, so the two turn together (read, Pontzer 2009: 94 ± 61° apart at 3 m/s, 33° with the arms folded; here in
  * phase).
  */
-export function strideTurn(ahead: number, scale: number, walk: number, run: number, held: boolean, out: Turn): Turn {
-  const lead = MOST * Math.tanh(ahead / scale / MOST) * walk;
+export function strideTurn(ahead: number, legs: number, walk: number, run: number, held: boolean, out: Turn): Turn {
+  const lead = MOST * Math.tanh(ahead / legs / MOST) * walk;
   out.pelvis = -lerp(GAIN.pelvis.walk, -GAIN.pelvis.run * (held ? HELD.pelvis : 1), run) * lead;
   out.thorax = lerp(GAIN.thorax.walk, GAIN.thorax.run * (held ? HELD.thorax : 1), run) * lead;
   out.roll = -lerp(ROLL.walk, ROLL.run, run) * out.thorax;

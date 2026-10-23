@@ -97,7 +97,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         // setting in within a step not snapping it round — the legs told of it before they reach from its hips; its arms held, the trunk
         // turns further)
         const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(forwardOf(stepper.yaw, _f));
-        strideTurn(ahead, p.scale, stepper.moving, stepper.run, armsHeld(h), turn);
+        strideTurn(ahead, p.legs, stepper.moving, stepper.run, armsHeld(h), turn);
         turn.pelvis = follow(turns[0], turns[1], turn.pelvis, TURN, dt);
         [turns[0], turns[1]] = [turns[1], turn.pelvis];
         stepper.turn = turn.pelvis;
