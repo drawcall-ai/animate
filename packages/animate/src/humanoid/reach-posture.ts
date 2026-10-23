@@ -6,7 +6,7 @@ import { handLowering, MOST_BOW, squatOf } from './posture/posture';
 import { INDEX, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { NECK_PITCH } from './profile/limits';
-import { ARM_REACH } from './arms';
+import { ARM_REACH, PROTRACTION } from './arms';
 import { heldMass } from '../core/worn';
 import { loadFactor } from '../core/load';
 import { request } from '../core/asks';
@@ -44,8 +44,8 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // on each leg segment (knee flexion is their sum), scaled by the same load law.
   if (low) request(h.asks, { lower: p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
-  // Tuned 6 cm gait allowance: clavicle motion absorbs small stride deficits.
-  const allowance = h.locomotion.moving ? 0.06 * p.scale : 0;
+  // (walking, the clavicle drawn toward the hand, `PROTRACTION`, takes up a small stride's deficit)
+  const allowance = h.locomotion.moving ? PROTRACTION * p.height : 0;
   // (judged from the shoulder as it stands upright, not as low as the reach has already let it down: a reach that lowers the body for
   // what it falls short of keeps asking while it is short standing, rather than letting go as soon as the lowering brings it in)
   // A body-attached goal falls with the shoulder, so lowering cannot close a standing-height deficit.
