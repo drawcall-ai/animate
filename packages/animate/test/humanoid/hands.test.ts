@@ -82,7 +82,7 @@ describe('grab', () => {
       if (walking && !h.locomotion.moving) stood = time;
     }
     expect(stood).toBeGreaterThan(touchdown);
-    // research-contact §3: derived acceptance bounds, not measured human thresholds.
+    // Derived acceptance bounds, not measured human thresholds.
     expect(touchdown - looking).toBeGreaterThanOrEqual(1);
     expect(h.log).toEqual([]);
   });

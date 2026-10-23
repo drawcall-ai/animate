@@ -182,8 +182,8 @@ class Course {
 }
 
 /**
- * How closely a tracked target is followed (see `Targets.judge`), replacing fixed margins over the old engine's misses
- * (2026-10-22, test-changes.md): a target moving at v is followed at most v × `LAG.time` + `LAG.within` behind — `LAG.time` the reach
+ * How closely a tracked target is followed (see `Targets.judge`): a target moving at v is followed at most
+ * v × `LAG.time` + `LAG.within` behind — `LAG.time` the reach
  * scene's own glance lead, about a visuomotor delay plus a step (recalled: gait initiation ~0.5 s, visuomotor ~0.15–0.25 s);
  * within `REACHABLE` × the arm's length of the shoulder (reached without a step) within `LAG.within` once `LAG.settle` s there; a held
  * target (slower than `STILL` m/s) within `HOLD.within` once `HOLD.after` s still (a reach's homing phase ends ~0.5 s after the

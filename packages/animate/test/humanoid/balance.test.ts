@@ -149,7 +149,7 @@ describe('balance', () => {
   });
 });
 
-// research-contact §3: arrival-turn claims [R-s], numerical details [C]; 20° here is the requested gate.
+// Arrival-turn claims read via summary, numerical details recalled; 20° here is the requested gate.
 it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without deferring its turn until after travel', (face) => {
   const to = new Vector3(0, 0, 4);
   let arrived = false;

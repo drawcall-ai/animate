@@ -7,8 +7,7 @@ import { frames, type Frame } from './frame';
 import { Simulation } from '../src/simulation';
 import { knownFailure, run } from '../scripts/run';
 
-// A straight stroll's strides as people walk them, and strolls round bends and turns with an empty dev log (kept from the old-and-core
-// parity tests when the old legs went, 2026-10-23: the bounds are the walk's own, not the old legs').
+// A straight stroll's strides as people walk them, and strolls round bends and turns with an empty dev log.
 it('strolls straight on: knees near straight at mid-stance, soft touchdowns, a 3.5–5 cm bob lowest just after contact', () => {
   const sim = new Simulation(stroll({ radius: Infinity }), undefined, true);
   const previous = ['planted', 'planted'];
@@ -38,7 +37,7 @@ it('strolls straight on: knees near straight at mid-stance, soft touchdowns, a 3
   expect(checks(metrics, { strides: { straight: 3, curve: 0 }, startStop: null }).filter(failed)).toEqual([]);
   expect(sim.actors.flatMap((h) => [...h.log])).toEqual([]);
   const strides = metrics.gait.strides;
-  // [C] Perry/Winter: mid-stance knee 0–5° (here ≤ 10°), over the steady left heel-strike cycles' 25–50%
+  // Perry/Winter, recalled: mid-stance knee 0–5° (here ≤ 10°), over the steady left heel-strike cycles' 25–50%
   for (const { from, to } of strides) {
     const phase = (t: number) => (t - from) / (to - from);
     const mid = heights.filter((s) => s.t >= from - 1e-9 && s.t <= to + 1e-9 && phase(s.t) >= 0.25 && phase(s.t) <= 0.5);

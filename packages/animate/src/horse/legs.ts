@@ -23,20 +23,20 @@ export const horse = (gait: 'walk' | 'trot' = 'walk'): Species<never> => ({ skel
  * response a person's (0.8 Hz at 0.9 m hips) made dynamically similar on its 1.2 m legs: × √(0.9 / 1.2)
  */
 const INERTIA = { ahead: 0.25, back: 0.2, roll: 0.9, most: 0.3, frequency: 0.7, damping: 0.65 };
-/** [D] between the eyes, about a third of the way from the poll to the muzzle (m, head bone) */
+/** Derived: between the eyes, about a third of the way from the poll to the muzzle (m, head bone) */
 const EYES = new Vector3(0, -0.12, 0.1);
 /** Tuned (rad): the eyes add little to where the head turns (the posture turns it) */
 const EYE_RANGE = { down: 0.2, up: 0.2, side: 0.3 };
 
 const NECK_BASE = SKELETON.bones[NECK].offset, POLL = SKELETON.bones[HEAD].offset;
 
-// [C] Spike: 1.2 m hip, .8 m/s slow walk; Hildebrand walk/Clayton-Hobbs trot offsets;
+// Recalled: 1.2 m hip, .8 m/s slow walk; Hildebrand walk/Clayton-Hobbs trot offsets;
 // Alexander/Jayes stride coefficients, Hodson stance at 1.6/3.7 m/s.
-// [D] 5 cm proxy-hoof clearance in both gaits keeps the early sole-height peak above the passive fold.
+// Derived: 5 cm proxy-hoof clearance in both gaits keeps the early sole-height peak above the passive fold.
 const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5], stride: 2.3, stance: stanceOf(0.68, 1.6, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] });
 export const HORSE_WALK: Gait = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
-  // research-contact.md §5: [R via summary] Dunbar ranges; [D] landmark/hip phase after solving. [D] The croup's rise × 1.1 since the pelvis
+  // Dunbar ranges read via summary; landmark/hip phase derived after solving. Derived: the croup's rise × 1.1 since the pelvis
   // moved 9 cm back: the trunk pitching ~6° over a back that much longer (read: Dunbar et al. 2008, withers 7 ± 1 cm, head 12–15 cm, its
   // pitch ~9°; Faber et al. 2000, the back flexing ~7° twice a stride at 1.6 m/s — the test's bounds).
   body: { withers: 0.035, croup: [0.055, 1.52], spine: 2.5, spinePhase: 0.3, roll: 4, yaw: 2.5, headPitch: 4.5, headRise: 0.0675, headWithers: 0 },
@@ -49,7 +49,7 @@ export const HORSE_WALK: Gait = {
 };
 export const HORSE_TROT: Gait = {
   ...powerGait({ height: 1.2, slowest: 0.8, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: stanceOf(0.3, 3.7, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] }),
-  // [R via summary] Dunbar: 1° trunk ROM is the low end of 2±1°; [R/R-s] back 4–6°, roll 9.5°. [D] The croup with the withers
+  // Read via summary: Dunbar's 1° trunk ROM is the low end of 2±1°; read or read via summary: back 4–6°, roll 9.5°. Derived: the croup with the withers
   // but for 0.5° of trunk pitch over the 1.14 m between withers and croup.
   body: { withers: -0.045, croup: [-0.035, 0], spine: 3, spinePhase: 0, roll: 4.75, yaw: 2.5, headPitch: 2.5, headRise: 0, headWithers: 1 },
 };
@@ -118,8 +118,8 @@ function fail(what: string): never { throw new Error(what); }
 
 const turn = (x = 0, y = 0, z = 0, out = _q) => out.setFromEuler(_e.set(x, y, z, 'YXZ'));
 /**
- * What the horse's gait carries, and its quiet life [C]: ears flick every 2–6 s, the tail swishes every 5–20 s, the head turns every
- * 10–30 s and the weight shifts every 20–60 s (tuned: the first at 2–6 s); each goal crosses neutral so every change shows [D].
+ * What the horse's gait carries, and its quiet life (recalled): ears flick every 2–6 s, the tail swishes every 5–20 s, the head turns every
+ * 10–30 s and the weight shifts every 20–60 s (tuned: the first at 2–6 s); each goal crosses neutral so every change shows (derived).
  */
 const HORSE_CARRIAGE: CarriedBones = { spine: 'back', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.7, period: 1.2, cycles: 1 }, life: [
   ['leftEar', { every: [2, 6], rate: 8, pick: swing }], ['rightEar', { every: [2, 6], rate: 8, pick: swing }],
@@ -133,8 +133,8 @@ export const horseLeadPoint = (pose: ReadonlyPose, out: Vector3): Vector3 =>
     .applyQuaternion(turn(0, yawOf(pose.local(NECK)))).add(NECK_BASE)
     .applyQuaternion(turn(0, yawOf(pose.rotation(0)))).add(pose.position(0));
 
-/** Posture before contact solving; research-contact.md §§5–6: [R-s] contact phase, [C] idle/tail timing.
- * Gait ranges retain the file's [R via summary]/[R/R-s] provenance, not fresh paper readings. */
+/** Posture before contact solving: contact phase read via summary, idle/tail timing recalled.
+ * Gait ranges keep the provenance given with them above, not fresh paper readings. */
 export function horseMotion(start: ReadonlyPose, gait: Gait, seed = seedOf(start.position(0).x, start.position(0).z)) {
   const carried = carriage(start, horseLegs(), HORSE_CARRIAGE, gait, seed), idle = carried.life, rand = idle.rand;
   const rest = { quiet: 0, value: 0, side: 0, at: 60 + 120 * rand(), pitches: [0, 0, 0, 0] };
@@ -169,8 +169,8 @@ export function horseMotion(start: ReadonlyPose, gait: Gait, seed = seedOf(start
       const distance = look ? look.distanceTo(f.prev.position(HEAD)) : Infinity;
       // Retained avoidance: 0.8 m / 0.3 m transition, 0.5 rad, 0.25 s response.
       const away = look ? -Math.sign(_look.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3)) : 0;
-      // Tuned gains (rad): neck .35/head .2 sum to 31.5° look-back [D]; ears −.3, pelvis .025, tail .2.
-      // [D] Hip-axis roll within the skeleton's range shifts the croup up to 2.5 cm; rests take over.
+      // Tuned gains (rad): neck .35/head .2 sum to 31.5° look-back (derived); ears −.3, pelvis .025, tail .2.
+      // Derived: hip-axis roll within the skeleton's range shifts the croup up to 2.5 cm; rests take over.
       carried.write(f, {
         lift: -0.04 * Math.abs(rest.value), weight: 1 - Math.abs(rest.value),
         pelvisRoll: (-0.12 * rest.value + 0.025 * toward * response) * (1 - m),

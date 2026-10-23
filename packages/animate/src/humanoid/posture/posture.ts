@@ -1,5 +1,4 @@
-// The body over its feet: the gait's oscillations from the old core
-// (a801be4:packages/core/src/gait/overlay.ts; as adapted in 738b439:packages/animate/src/humanoid/gait/posture.ts).
+// The body over its feet: the gait's oscillations.
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';

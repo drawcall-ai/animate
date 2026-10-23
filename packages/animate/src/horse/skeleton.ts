@@ -112,7 +112,7 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
     return bones.length - 1;
   };
   const trunk = add('trunk', -1, AT.trunk, MASS.trunk, v(0, 1.12, 0.3), 1);
-  // [D] The back's flexion, pitching the pelvis about the hip axis: a croup pivot was translating the leg attachments. A joint of no
+  // Derived: the back's flexion, pitching the pelvis about the hip axis: a croup pivot was translating the leg attachments. A joint of no
   // segment of its own (named `back`, not `spine`: a rigged horse's lumbar `spine` bone rides its trunk, not this pivot 25 cm below it).
   const spine = add('back', trunk, AT.hip.clone().setX(0), 0, AT.pelvis, 0);
   const pelvis = add('pelvis', spine, AT.pelvis, MASS.pelvis, v(0, 1.27, -0.68), 1);
@@ -144,7 +144,7 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
       legs.push({ name: `${name}${end}`, fore, side, scapula, upper, middle, cannon, pastern, hoof, sole: m(sole).sub(m(coffin)), toe: m(sole).sub(m(coffin)).add(TOE), heel: m(sole).sub(m(coffin)).add(HEEL) });
     }
   }
-  // [C] Minimum attention/follower joints; mass remains included in head/pelvis.
+  // Recalled: minimum attention/follower joints; mass remains included in head/pelvis.
   for (const side of [1, -1]) add(`${side === 1 ? 'left' : 'right'}Ear`, head, AT.poll.clone().add(v(side * 0.06, 0.07, 0.05)), 0, AT.poll, 0);
   add('tail', pelvis, v(0, 1.43, -0.79), 0, AT.pelvis, 0);
   return { bones, legs: ['leftFore', 'rightFore', 'leftHind', 'rightHind'].map((n) => legs.find((l) => l.name === n) ?? fail(n)) };

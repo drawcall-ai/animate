@@ -1,4 +1,3 @@
-// From the old core (a801be4:packages/core/src/stance.ts).
 import type { Vector3 } from 'three';
 import type { Proportions } from './proportions';
 import type { Stance } from '../core/asks';

@@ -24,7 +24,7 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   // Leteneur et al. 2013, PLoS ONE 8:e55256 — on top of the stride's own nod; tuned: its pitch up to 1.75× walking's peak, the pelvis's 1.25×)
   if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = { trunk: 1.75, pelvis: 1.25 }; }
   // Hands on what they hold and item clearance; neither has a built-in check. (Tracked targets are judged by their course in
-  // `Targets`, not by margins over the old engine's misses — reach 0.17, vr 0.165, look-around's head 0.075 — 2026-10-22, test-changes.md.)
+  // `Targets`, not by one fixed margin per scene.)
   if (sc.id === 'stable-morning') options.clearance = 0;
   if (sc.id === 'pickup-shelf') options.wrist = 0.04;
   if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }

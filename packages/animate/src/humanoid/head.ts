@@ -15,7 +15,7 @@ import { request } from '../core/asks';
 const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
 /** how fast the spine's joints may change their motion (rad/s²): braked only where the solve kinks */
 const JOINTS = { accel: 200 };
-/** of the head's turn and bend from the pelvis, the share each joint takes first, lumbar to skull (old core: the trunk 0.3, the neck 0.35 more, the head the rest) */
+/** of the head's turn and bend from the pelvis, the share each joint takes first, lumbar to skull (tuned: the trunk 0.3, the neck 0.35 more, the head the rest) */
 const SHARE = [0.15, 0.15, 0.35, 0.35];
 /** Tuned: eight passes converge low tracked targets within the head-position gate; four left a residual.
  * The spine's solve: how many times the trunk swings the head over and the neck turns it again */

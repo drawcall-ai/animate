@@ -59,8 +59,8 @@ const horseOn = (gait: Gait, pace: number, brake = 2, radius = 15) => {
   const base = horse(), species = { ...base, legs: { ...base.legs!, gait, posture: (start: ReadonlyPose) => horseMotion(start, gait, 1) } };
   return new Body(species, undefined, { pose: new Pose(base.skeleton), idle: { root: along(scriptedRoot(0, pace, new Vector3(), 0, 0, brake, radius)) }, dev: true });
 };
-/** Open: a person's joints at 1.3 m/s reach a p99 of ~690 °/s at the knee and ~610 °/s at the ankle against the old legs' 500 (its swing
- * is 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise */
+/** Open: a person's joints at 1.3 m/s reach a p99 of ~690 °/s at the knee and ~610 °/s at the ankle against a ceiling of 500 (the gait's
+ * swing is 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise */
 const OPEN = new Set(['a person walking', 'a person stopping hard']);
 for (const [name, make] of [['a person walking', () => person(3)], ['a person stopping hard', () => person(0.5)], ['a horse walking', () => horseOn(HORSE_WALK, 1.6)],
   ['a horse trotting, braking in 2 s', () => horseOn(HORSE_TROT, 3.7)], ['a horse trotting, braking in 3 s', () => horseOn(HORSE_TROT, 3.7, 3)], ['a horse walking a 3 m turn', () => horseOn(HORSE_WALK, 1.6, 2, 3)]] as const) {

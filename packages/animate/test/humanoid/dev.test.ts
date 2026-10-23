@@ -16,8 +16,8 @@ it('checks a planted foot in the final pose after a later writer moved it', () =
   h.update(STEP);
   expect(h.log).toEqual([]);
   h.update(STEP);
-  // (caught and blamed on its beat, whichever legs check it — the old legs' 'planted foot slide (m)' at 1 cm, the core's 'driven planted
-  // slide (m)' at 1 mm — not the old one's name and limit; 2026-10-22, test-changes.md)
+  // (caught and blamed on its beat, matched by what it measures — a planted foot's slide, here 4 cm — not by the check's exact name
+  // or limit, which are the legs' own)
   expect(h.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/planted .*slide/), where: 'leftFoot', time: STEP, beat: 'bad layer', value: expect.closeTo(0.04, 3) }));
 });
 

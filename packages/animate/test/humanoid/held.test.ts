@@ -198,7 +198,7 @@ it('takes up a heavy lift slowly, dips at arrival and recovers before finishing'
   const light = lift(0), heavy = lift(8);
   expect(heavy.heights[24]).toBeLessThan(light.heights[24] - 0.02);
   // Its arrival dip is visible afterwards: found by event — the load first up at its highest, then its lowest after — not by frame
-  // windows keyed to the old course's nominal 1.23 s end (2026-10-22, test-changes.md).
+  // windows, which shift with the course's timing.
   const top = Math.max(...heavy.heights), arrived = heavy.heights.findIndex((y) => y >= top - 0.002);
   expect(top - Math.min(...heavy.heights.slice(arrived))).toBeGreaterThan(0.015);
   expect(heavy.end).toBeGreaterThan(light.end + 0.5);
@@ -228,8 +228,8 @@ it('follows destination translation and rotation during the lift and approach', 
     if (h.locomotion.moving) {
       walking++;
       advanced = Math.max(advanced, destination(f).position.z - 2);
-      // (the standoff and facing are judged while a walk goal is asked: a step after arriving — the core legs' locomotion moves while a
-      // foot swings — is no walk without one, as the old legs had it; 2026-10-22, test-changes.md)
+      // (the standoff and facing are judged while a walk goal is asked: a step after arriving — locomotion moves while a foot
+      // swings — is no walk without one)
       const go = h.asks.go;
       if (!go) return;
       const distance = destination(f).position.clone().sub(go.to).setY(0).length();
@@ -259,7 +259,7 @@ it('lifts a heavy item before raising toward an out-of-reach placement', () => {
   }]);
   // (judged in hindsight against when the travel ended — the body first within `ARRIVED` of where it comes to stand — not the walk's
   // `eta`, which a step after arriving leaves at Infinity: the load stays below the shoulder while walking until the last `RAISE_LEAD`
-  // s of the approach, and rises on the way in; 2026-10-22, test-changes.md)
+  // s of the approach, and rises on the way in)
   const frames: { t: number; at: Vector3; speed: number; y: number; carried: number }[] = [];
   for (let i = 0; i < 1200 && !done; i++) {
     h.update(STEP);

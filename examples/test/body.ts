@@ -67,7 +67,6 @@ export const SLOW_WIDTH = {
   /**
    * side-stepping: read (Fujimoto et al. 2021, Front Sports Act Living 3:670649, Methods, following Tateuchi et al. 2011): a lateral
    * step of 10–20% of body height from a stance of 10% inter-malleolar — the feet 0.20–0.30 H apart as it lands; the top of that
-   * (2026-10-22, test-changes.md)
    */
   sideways: 0.3,
 } as const;
@@ -105,8 +104,7 @@ export class Landings {
       const turned = Math.abs(wrapAngle(h.locomotion.facing - track[0].facing)) > TURNED || Math.abs(wrapAngle(f.yaw - other.yaw)) > TURNED + 0.24;
       const v = h.locomotion.velocity, sideways = Math.hypot(v.x, v.z) > 0.05 && Math.abs(v.dot(leftOf(h.locomotion.facing))) > ACROSS * Math.hypot(v.x, v.z);
       const lifting = Object.values(h.holding).some((held) => held && held.item.mass > 0);
-      // (a step of several kinds gets the largest bound among them: a turning side-step is a side-step too — not the turn's first, as it
-      // was; 2026-10-22, test-changes.md)
+      // (a step of several kinds gets the largest bound among them: a turning side-step is a side-step too)
       const bound = Math.max(SLOW_WIDTH.straight, turned ? SLOW_WIDTH.turning : 0, lifting ? SLOW_WIDTH.wide : 0, sideways ? SLOW_WIDTH.sideways : 0);
       this.wide.see(across / (bound * h.proportions.height), t);
     });

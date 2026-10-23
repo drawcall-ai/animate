@@ -40,7 +40,7 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   if (low) request(h.asks, { bowLimit });
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
   if (low && factor > 1 && h.locomotion.moving) return;
-  // research-contact §4 rule 3 [C]: ≥10–15° knees under load. Tuned 30° ceiling
+  // Recalled: ≥10–15° knees under load. Tuned 30° ceiling
   // on each leg segment (knee flexion is their sum), scaled by the same load law.
   if (low) request(h.asks, { lower: p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);

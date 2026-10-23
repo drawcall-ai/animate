@@ -189,7 +189,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
         f.current.setLocal(head, turn(b.headPitch * DEG * nod * m - pitch - tip - neckPitch, headYaw));
       }
       if (tail !== undefined) {
-        // [C] Critically damped follower, ~0.15 s lag, swinging against the pelvis's roll; seeded swishes standing.
+        // Recalled: a critically damped follower, ~0.15 s lag, swinging against the pelvis's roll; seeded swishes standing.
         const sw = bones.swish;
         const roll = pelvis === undefined ? 0 : _e.setFromQuaternion(f.current.local(pelvis), 'YXZ').z;
         const goal = -2 * roll + (sw ? sw.amplitude * Math.sin(2 * Math.PI * Math.min(sw.cycles, swish / sw.period)) * Math.sign(life.aim('tail')) * (1 - m) : 0) + 0.03 * drift + (extras.tail ?? 0);

@@ -182,7 +182,7 @@ it.each([1.6, 1.75, 1.85])('prepares an 8 kg low grip with the knees before lift
   step(h, 6);
   expect(h.holding.left?.item).toBe(item);
   expect(h.holding.right?.item).toBe(item);
-  // research-contact.md §4 rule 3 [C]: ≥10–15° knee flexion under load; geometry [D]:
+  // Recalled: ≥10–15° knee flexion under load; derived from geometry:
   // ~15–25° trunk flexion at a typical waist-height target, not a measured universal limit.
   // The stronger 20–30° knee bounds, 35° pitch ceiling and 1.5 cm drop below are tuned.
   expect(knee).toBeGreaterThanOrEqual(20);

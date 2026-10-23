@@ -1,4 +1,4 @@
-// Leaf helpers (from the old core, a801be4:packages/core/src/math.ts).
+// Leaf helpers.
 import { Euler, Quaternion, Vector3 } from 'three';
 
 /** standard gravity (m/s²) */

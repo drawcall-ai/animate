@@ -289,7 +289,7 @@ export function reach(v: Variation = {}): Scenario {
   const pace = v.pace ?? 1;
   /** how far ahead of the hand the eyes go (s) */
   const GLANCE = 0.35;
-  // (the old core's targets — the first where the hand hangs — each reached at a pace a calm hand
+  // (the targets — the first where the hand hangs — each reached at a pace a calm hand
   // keeps up with (a minimum-jerk move of L m peaks at 1.875 L / T m/s), down to the floor no faster
   // than the body squats, and swung round the body to behind it and back out)
   const ways: Way[] = [

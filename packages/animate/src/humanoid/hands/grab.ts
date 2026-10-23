@@ -104,7 +104,7 @@ export function grab<H extends string>(h: Body<H>, holds: Grips<H>, options: Gra
     const ahead = new Vector3();
     let noticed = NaN;
     let returning = false;
-    // Two-step gaze horizon (research-contact §3 [R-s]); default-body distance proxy: 1.6 m [D].
+    // Two-step gaze horizon (read via summary); default-body distance proxy: 1.6 m (derived).
     const close = (f: Frame) => flat(f.prev.com(com), middleOf(holds)) < 1.6 * h.scale;
     const seen = (f: Frame) => {
       const at = middleOf(holds);

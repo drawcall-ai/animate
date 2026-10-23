@@ -21,8 +21,7 @@ const LEG_RADIUS = 0.038;
 // Read from the horse leg proxy meshes, metres.
 const HORSE_LEG_RADIUS = 0.06;
 // Led from beside the neck: the handler's pelvis ahead of the horse's shoulder girdle by more than this (m), clear of its foreleg
-// swing, and not past its poll — the leading position (horsemanship convention, recalled), not the scene's tuned 0.5 ± 0.15 m station
-// (2026-10-22, test-changes.md; tuned).
+// swing, and not past its poll — the leading position (horsemanship convention, recalled; the margin tuned).
 const SHOULDER_CLEAR = 0.2;
 const HUMAN_LEGS = [['UpperLeg', 'LowerLeg'], ['LowerLeg', 'Foot']];
 const HORSE_LEGS = [
@@ -186,7 +185,7 @@ test(`leads upright with the near hand forward, slack outside, and halts beyond 
     const p = h.pose;
     const at = (name: string) => p.position(p.skeleton.index(name));
     expect(h.holding.left?.item.name).toBe('rope slack');
-    // (no `asks.bow === 0`: an internal ask, not an outcome — the chest pitch bound below judges uprightness; 2026-10-22, test-changes.md)
+    // (no `asks.bow === 0`: an internal ask, not an outcome — the chest pitch bound below judges uprightness)
     chest.push(new Euler().setFromQuaternion(p.rotation(p.skeleton.index('chest')), 'YXZ').x);
     const right = at('rightHand').clone().sub(at('chest'));
     expect(right.z).toBeGreaterThan(0.25);
@@ -215,9 +214,8 @@ test(`leads upright with the near hand forward, slack outside, and halts beyond 
   expect(settingOff).toBeLessThan(0.3);
   expect(gazeAt).toBeLessThan(settingOff);
   expect(liftAt - gripAt).toBeLessThanOrEqual(0.3);
-  // (the saddle rests on its rack at 0.88 m, about knuckle height: taken up with the knees neither locked nor squatting and the trunk
-  // bowed no more than 35° — not the old lift's 20–30° knee and 1.5 cm pelvis drop, its own choreography; the best lifting origin is
-  // near knuckle height, NIOSH: Waters 1993, recalled; 2026-10-22, test-changes.md)
+  // (the saddle rests on its rack at 0.88 m, about knuckle height, the best lifting origin (NIOSH: Waters 1993, recalled): taken up
+  // with the knees neither locked nor squatting and the trunk bowed no more than 35°)
   expect(contactKnee).toBeGreaterThanOrEqual(0);
   expect(contactKnee).toBeLessThanOrEqual(35);
   expect(contactPitch).toBeLessThanOrEqual(35);
@@ -242,8 +240,8 @@ test(`leads upright with the near hand forward, slack outside, and halts beyond 
   expect(leading).toBeGreaterThan(60);
   expect(settled).toBeGreaterThan(30);
   expect((Math.max(...roll) - Math.min(...roll)) * degrees).toBeGreaterThan(5.5);
-  // (the led horse walks, its hips swinging: a femur excursion of at least 10° — not the 17–21° band tuned to the scene's lead speed,
-  // a horse's controller criterion rather than the handler's; tuned, no equine source read; 2026-10-22, test-changes.md)
+  // (the led horse walks, its hips swinging: a femur excursion of at least 10° — a floor, not a band tuned to the
+  // scene's lead speed, which would judge the horse's controller rather than the handler; tuned, no equine source read)
   for (const angles of hip) expect((Math.max(...angles) - Math.min(...angles)) * degrees).toBeGreaterThan(10);
   expect(sim.actors[0].log).toEqual([]);
   expect(sim.stage.bodies?.[0].log).toEqual([]);

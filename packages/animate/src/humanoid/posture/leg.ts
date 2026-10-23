@@ -16,7 +16,7 @@ export function shankTilt(pose: ReadonlyPose, side: Side, yaw: number): number {
 /**
  * Where a leg's knee bends (a direction, into `out`): over the toes (the foot's heading `yaw`
  * blended with the body's `facing`); a leg raised forward bends with the knee up, one raised out
- * sideways carries it along. (From the old core's kneePole.)
+ * sideways carries it along.
  */
 export function kneePole(side: Side, yaw: number, facing: number, hip: Vector3, ankle: Vector3, out: Vector3): Vector3 {
   // (halfway round from the facing to the foot's heading: a sum of the two would vanish for a foot turned far round)

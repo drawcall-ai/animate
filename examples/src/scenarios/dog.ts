@@ -89,7 +89,7 @@ const TROTTING = { bend: 0.45, withers: -0.012, croup: [-0.012, 0], spine: 0, sp
 /**
  * The dog: it trots (diagonal pairs), its whole body riding on the trot; it looks about with its neck, takes things in its jaw and
  * wags its tail in bursts standing. The trot's carriage: a trotting dog bounces twice a stride, once per diagonal pair, its withers
- * and croup together ([D] from the read step frequency 4.31 Hz and peak upward acceleration 10.44 m/s² of a 17.6 kg dog, Cavagna et
+ * and croup together (derived from the read step frequency 4.31 Hz and peak upward acceleration 10.44 m/s² of a 17.6 kg dog, Cavagna et
  * al. 2010, PMC2817108 Table 1: ±1.4 cm as a sinusoid; ±1.2 cm here at a slower trot); the pelvis rolls under 3° each way in a Whippet
  * and more in a Malinois, and hardly yaws (0–5°) [read: Fischer et al. 2018, Sci Rep 8:16982]; the head dips with each fore stance,
  * as the withers do [recalled: the head nod lameness scores read off]; the tail swings against the pelvis's roll [recalled].

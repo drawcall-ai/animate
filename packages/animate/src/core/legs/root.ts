@@ -50,19 +50,19 @@ export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, m
     const delta = target.sub(from.position).setY(0);
     const distance = delta.length();
     const heading = distance > 1e-9 ? Math.atan2(delta.x, delta.z) : yawOf(from.quaternion);
-    // [D] Start within the distance needed to brake translation and complete the goal turn.
+    // Start within the distance needed to brake translation and complete the goal turn (derived).
     const turnAngle = facing ? Math.abs(wrapAngle(yawOf(facing) - heading)) : 0;
     const duration = turnAngle === 0 ? 0 : Math.max(2 * Math.sqrt(turnAngle / (motion.turnAccel ?? motion.accel / radius)), turnAngle / (motion.turnSpeed ?? Infinity), 1 / stride.frequency);
     const arrival = facing ? clamp(1 - distance / (Math.max(braking, cruise * duration) + midstance), 0, 1) : 0;
     // (`travelFirst`: never held still to turn first, but slowed by `first` below)
     const forward = travelFirst || (arrival > 0 && (turnAngle > 1e-9 || from.velocity.lengthSq() > 1e-8)) || Math.abs(wrapAngle(heading - yawOf(from.quaternion))) < Math.PI / 4;
     // Follow in the goal's moving frame: braking closes the gap in addition to its velocity.
-    // [D] Brake closing speed with root deceleration minus the target's deceleration.
+    // Brake closing speed with root deceleration minus the target's deceleration (derived).
     const turnAccel = (motion.turnAccel ?? motion.accel / radius) * (facing ? 1 : share);
     const remaining = facing ? Math.abs(wrapAngle(yawOf(facing) - yawOf(from.quaternion))) : 0;
     const turning = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, from.velocity.length())) * turnShare;
     const untilFacing = remaining === 0 ? 0 : Math.max(2 * Math.sqrt(remaining / turnAccel), remaining / turning);
-    // [D] Keep translating until the remaining turn can finish, rather than exhaust the approach first.
+    // Keep translating until the remaining turn can finish, rather than exhaust the approach first (derived).
     // (`travelFirst`: a goal far off the facing — further than it may face off its way, `sidelong`: near a still goal, any way — is
     // walked to more and more slowly, then turned to first, as the old balance's carriage did)
     const sidelong = travelFirst ? lerp(Math.PI, SIDELONG, Math.max(smoothstep(ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance, distance), smoothstep(STILL, 2 * STILL, goalSpeed))) : Math.PI;

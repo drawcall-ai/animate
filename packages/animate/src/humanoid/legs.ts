@@ -1,4 +1,4 @@
-// [C] Recalled: Perry (1992) / Winter (2009) normal walking curves, ported from the legged spike.
+// Recalled: Perry (1992) / Winter (2009) normal walking curves.
 import type { Proportions } from './proportions';
 import type { Gait } from '../core/legs/gait';
 import { powerGait, stanceOf } from '../core/legs/schedule';

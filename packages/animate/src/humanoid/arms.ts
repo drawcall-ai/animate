@@ -258,7 +258,7 @@ export function handStep(h: Humanoid, f: Frame, side: Side, target: Target, opti
 
 /**
  * the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward
- * toward one far out (the old core's, a801be4:packages/core/src/limbs/arms.ts)
+ * toward one far out
  */
 function shrug(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
   const pose = f.current;
@@ -289,7 +289,7 @@ function shrug(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>, fr
 
 /**
  * where the elbow bends toward (into `out`, world): a blend of where it goes for a hand hanging,
- * forward, up, out and across, in the chest's frame (the old core's; up, the elbow out to the side:
+ * forward, up, out and across, in the chest's frame (up, the elbow out to the side:
  * forward, the arm near straight overhead would swivel to and fro)
  */
 function elbowPole(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
