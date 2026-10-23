@@ -55,7 +55,8 @@ export function carriages(stops: Stops<Carriage>): (speed: number, froude: numbe
     const [a, b, t] = between(stops, froude), mix = (p: number, q: number) => p + (q - p) * t;
     return { bend: mix(a.bend ?? 0, b.bend ?? 0), withers: mix(a.withers, b.withers), croup: [mix(a.croup[0], b.croup[0]), mix(a.croup[1], b.croup[1])], spine: mix(a.spine, b.spine),
       spinePhase: mix(a.spinePhase, b.spinePhase), roll: mix(a.roll, b.roll), yaw: mix(a.yaw, b.yaw), headPitch: mix(a.headPitch, b.headPitch),
-      headRise: mix(a.headRise, b.headRise), headWithers: mix(a.headWithers, b.headWithers), once: mix(a.once ?? 0, b.once ?? 0), tail: mix(a.tail ?? 0, b.tail ?? 0) };
+      headRise: mix(a.headRise, b.headRise), headWithers: mix(a.headWithers, b.headWithers), once: mix(a.once ?? 0, b.once ?? 0), tail: mix(a.tail ?? 0, b.tail ?? 0),
+      bounce: mix(a.bounce ?? 0, b.bounce ?? 0) };
   };
 }
 

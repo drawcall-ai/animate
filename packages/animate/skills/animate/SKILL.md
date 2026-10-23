@@ -193,17 +193,18 @@ const rex = new Body(dog, (rex) => function* () {
 
 A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range; a leg needs them, for how far each leg reaches — and so how far it strides and strays as it turns — is read from its joints' ranges. The gait's offsets place each leg's footfall in the cycle in the order of the chains (fore-left, fore-right, hind-left, hind-right); diagonal pairs together make a trot. Each leg needs some bend standing, a reserve for the trunk's bounce.
 
-A gait can change with the pace, as the Froude number v²/(g·height) rises: `footfalls` shifts the offsets from a walk's to a trot's to a gallop's (the legs take a stride or two to change over), `carriages` the carriage with them, and `run` lets the body down on its legs galloping so they reach further fore and aft. A gallop's carriage rides `once` a stride rather than twice, its spine flexing and extending (`spine`, ° + extending, at `spinePhase`), its head held level (`headWithers` near 0) and its tail swinging against the croup (`tail`). The lion example (`examples/src/scenarios/lion.ts`) runs so:
+A gait can change with the pace, as the Froude number v²/(g·height) rises: `footfalls` shifts the offsets from a walk's to a trot's to a gallop's (the legs take a stride or two to change over), `carriages` the carriage with them, and `run` lets the body down on its legs galloping so they reach further fore and aft. A gallop's carriage rides `once` a stride rather than twice, its spine flexing and extending (`spine`, ° + extending, at `spinePhase`), its head held level (`headWithers` near 0) and its tail swinging against the croup (`tail`). Running, `bounce: 1` lets the trunk ride its legs' push instead of a set wave: its centre of mass falls as in flight between stances and rises with each push, and it pitches as the fores and hinds push in turn, all from the gait's footfalls and the skeleton's masses. The lion example (`examples/src/scenarios/lion.ts`) runs so:
 
 ```ts
 // a walk, a trot, a rotary gallop leading with the left fore (offsets fore-left, fore-right, hind-left, hind-right)
 const WALK = [0.25, 0.75, 0, 0.5], TROT = [0.5, 0, 0, 0.5], GALLOP = [0.65, 0.55, 0, 0.1];
-const trotting = { withers: -0.02, croup: [-0.02, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 1, headRise: 0, headWithers: 0.5 } as const;
-const galloping = { ...trotting, withers: -0.03, croup: [-0.03, Math.PI], spine: 12, spinePhase: 4.1, roll: 1, headPitch: 0, headWithers: 0.2, once: 1, tail: 0.8 } as const;
+const walking = { withers: -0.01, croup: [-0.01, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 1, headRise: 0, headWithers: 0.5 } as const;
+const trotting = { ...walking, withers: 0, croup: [0, 0], bounce: 1 } as const; // riding its legs' push
+const galloping = { ...trotting, spine: 12, spinePhase: 4.1, roll: 1, headPitch: 0, headWithers: 0.1, once: 1, tail: 0.8 } as const;
 const gait = {
   ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT], [2, TROT], [3, GALLOP]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
   run: { froude: [1, 3], drop: 0.15 } as const, // let down by 15% of its legs' length from Froude number 1 to 3
-  body: carriages([[2, trotting], [3, galloping]]),
+  body: carriages([[0.3, walking], [0.6, trotting], [2, trotting], [3, galloping]]),
 };
 ```
 

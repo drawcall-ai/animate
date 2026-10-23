@@ -163,6 +163,8 @@ export class Stepper {
   readonly legs: Leg[];
   /** the pelvis' facing (rad), how far it walks and runs (0 … 1), the gait's phase (rad), the stance's and cycle's durations (s); still and squared up; off the floor (a leap's flight) */
   yaw: number; moving = 0; run = 0; phase = 0; Ts = 1; cycle = 2; settled = true; airborne = false;
+  /** the pelvis' height its planted feet alone hold it at (m): its swinging ones not holding it down — what a running body's ride is let down from */
+  held = 0;
   /** how far down it is crouched (0 … 1): the root's `crouch`, eased in and out no faster than legs bend and straighten */
   crouch = 0;
   /** the pelvis turned off its facing (rad, + to the left) as the body has it with the stride: the hips the legs reach from turned with it */
@@ -555,7 +557,12 @@ export class Stepper {
     this.poses = legs.map((leg) => leg.swing ? swingPose(leg, leg.swing) : null);
     let y = airborne ? flying + rise : nominal();
     // (a swinging foot holds the pelvis down only late in its swing: before, its leg just swings straighter)
-    if (!airborne) legs.forEach((leg, i) => { y = softMin(y, reach(leg, this.poses[i]?.ankle) + (leg.swing ? LOWEST * s * (1 - minimumJerk((leg.swing.u - 0.5) / 0.3)) : 0), 0.004 * s); });
+    this.held = y;
+    if (!airborne) legs.forEach((leg, i) => {
+      const most = reach(leg, this.poses[i]?.ankle);
+      y = softMin(y, most + (leg.swing ? LOWEST * s * (1 - minimumJerk((leg.swing.u - 0.5) / 0.3)) : 0), 0.004 * s);
+      if (!leg.swing) this.held = softMin(this.held, most, 0.004 * s);
+    });
     // (let down at once as the feet need, up again within `RISE`: a foot let go of does not pop the pelvis up)
     // (the root's own rise and fall are followed at once)
     // (and, crouching too, no lower than a leg folds, as it stood last: its knee bent its most, a planted foot would slide, a swinging
