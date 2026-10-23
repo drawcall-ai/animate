@@ -30,6 +30,15 @@ import { armsHeld, strideTurn, type Turn } from './posture/turn';
  * forward ~6° walking, up to ~13° the faster it runs; tuned: `LEAN` (rad) on the nod's own forward mean, its hips → neck ~6° at 1.3 m/s.
  */
 const CROUCH_LEAN = 0.3, LEAN = { walk: 0.11, run: 0.12 }, LEANING = { accel: 3 }, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
+/**
+ * How quickly a person's legs take it up to a pace and down from it (m/s²), which the trunk carries itself at — its lean into the
+ * acceleration (`Inertia`), its walking lean and nod — however quick the scene's root: read (Leteneur et al. 2013, PLoS ONE 8:e55256),
+ * setting off the centre of mass is at 1.0 m/s by the first heel strike 0.96 s on, ~1 m/s², the trunk leaning ~7° over that step;
+ * read (Crenna, Cuong & Brenière 2001, J Physiol, PMC2279001), stopping from a fast walk takes one stride in 98% of trials (30% from a
+ * natural one); recalled, people brake about twice as hard as they speed up (the planner's `BRAKE_FACTOR` 2.2). Tuned: 1.5 and 3.3 — a
+ * player's 10 m/s² set-off no longer throws the trunk 3° → 15° at ~100°/s, nor a stop back at ~45°/s: both now ≤ ~35°/s.
+ */
+const PACE = { push: 1.5, brake: 3.3 };
 /** Recalled: anterior pelvic tilt grows with speed (~5° walking, ~15° running; Novacheck 1998); tuned: changing within `accel` (rad/s²). */
 const TILT = { walk: 0.06, run: 0.25, accel: 8 };
 /**
@@ -91,6 +100,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
     const asks = createAsks();
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], leans = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
     const inertia = h.species.inertia && new Inertia(h.species.inertia);
+    let pace: Vector3 | null = null;
     const life = new Life(seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z)), shifts = [0, 0];
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
@@ -112,13 +122,19 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
       // (a body carrying itself otherwise — a walker's posture — places the pelvis and trunk itself, its thorax turned so far)
       if (carry) [turn.pelvis, turn.thorax] = carry(f, asks, stepper);
       if (!carry) {
+        // (the trunk carries itself at the pace its legs could have taken it to, within `PACE`: a player's quicker root does not throw
+        // it; spawned on the move, at that pace)
+        pace ??= new Vector3(r.velocity.x, 0, r.velocity.z);
+        const change = _v.set(r.velocity.x, 0, r.velocity.z).sub(pace);
+        pace.add(change.clampLength(0, (change.dot(pace) < 0 ? PACE.brake : PACE.push) * dt));
+        const paced = smoothstep(0, 1, pace.length()), running = smoothstep(record.run[0], record.run[1], pace.length());
         // the pelvis tipped forward with the stride (room for the hip to extend behind), the trunk leaning on it as asked
         // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
         const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
         [tilts[0], tilts[1]] = [tilts[1], tilt];
         // (and the trunk leaning forward with the pace it goes forward — not side-stepping nor backing — taken up and given up gently)
-        const onward = smoothstep(0, 1, Math.max(0, r.velocity.dot(forwardOf(yaw, _f))));
-        const forward = follow(leans[0], leans[1], lerp(LEAN.walk * onward, LEAN.run, run), LEANING, dt);
+        const onward = smoothstep(0, 1, Math.max(0, pace.dot(forwardOf(yaw, _f))));
+        const forward = follow(leans[0], leans[1], lerp(LEAN.walk * onward, LEAN.run, running), LEANING, dt);
         [leans[0], leans[1]] = [leans[1], forward];
         f.current.setLocal(0, quatYXZ(yaw + turn.pelvis, tilt, 0, _q));
         // (its quiet life: standing settled, nothing else asked of the legs or the trunk, it may shift its weight — let go as it walks off)
@@ -133,10 +149,10 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const sway = follow(sways[0], sways[1], shift * (1 - moving) - lerp(SWAY.walk, SWAY.run, run) * p.scale * moving * Math.cos(stepper.phase - Math.PI * (1 - Ts / stepper.cycle)), { accel: SWAY.accel }, dt);
         [sways[0], sways[1]] = [sways[1], sway];
         f.current.setRoot(_v.copy(f.current.position(0)).addScaledVector(leftOf(yaw, _f), sway));
-        // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land; it leans into
-        // speeding up, back from slowing down and into a turn, as the body's `inertia` has it)
-        const nod = lerp(NOD.walk, NOD.run, run) * moving * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
-        inertia?.step(r.velocity, yaw, dt);
+        // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land, taken up with the
+        // pace; it leans into speeding up, back from slowing down and into a turn, as the body's `inertia` has it at that pace)
+        const nod = lerp(NOD.walk, NOD.run, running) * Math.min(moving, paced) * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
+        inertia?.step(pace, yaw, dt);
         const lean = inertia ?? { pitch: 0, roll: 0 };
         // (the thorax turned off the pelvis, the shoulder going forward rising with it)
         const twist = clamp(asks.twist + turn.thorax - turn.pelvis, -0.8, 0.8);
