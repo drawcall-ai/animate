@@ -189,9 +189,9 @@ export function shooter(): Scenario {
       // before the body poses, and the hands hold it where it is. Turning, at any rate, never leaves it behind (within `FLICK`); only
       // its place in that frame — carry, aim, sprint, reload — is followed, so changes of pose sway in at `SWAY`'s pace.
       // Tuned carry offsets (m) and muzzle rotations (rad), +X screen-left along +Z: the hip muzzle converges inward; sprint
-      // lowers it diagonally across the chest; reloading brings it down and in under the eyes, the muzzle a little down and the rifle
-      // rolled `RELOAD_CANT` so the well faces the left hand (recalled: a tactical magazine change "in the workspace", the rifle held
-      // close at chest height, eyes on the well). Derived: aiming puts the sight below the dominant eye.
+      // lowers it diagonally across the chest; reloading brings it in to the middle under the chin, the muzzle a little up and the rifle
+      // rolled `RELOAD_CANT` so the well faces the left hand (recalled: a magazine change "in the workspace", the rifle held close
+      // under the eyes, as FPS reloads show it — in view, not below it). Derived: aiming puts the sight below the dominant eye.
       // Where it is held from the eye off the aim — out to the side, down at the hip and ahead — and where the support hand takes
       // the handguard are the default body's arms' (as a soldier sets an adjustable stock's length of pull and grips the handguard
       // within reach, recalled): × the body's `arms`; the hands reach it as the default's do, and the view shows it alike.
@@ -215,9 +215,9 @@ export function shooter(): Scenario {
         // (at ease it breathes and drifts, and is shouldered anew now and then: lifted and rolled a little)
         const k = atEase() * calm, breath = Math.sin(2 * Math.PI * 0.25 * t + ease.phase), shoulder = ease.value('shoulder');
         const drift = (a: number, b: number, c: number) => k * irregular(t, ease.phase, a, b, c);
-        const to = new Vector3((-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn) * arms + EASE.drift * drift(0.79, 1.37, 2.11),
-          -SIGHT.y + (-0.14 * (1 - blend) - 0.08 * turn) * arms + k * (EASE.drift * breath + EASE.lift * Math.abs(shoulder)), (0.22 - 0.1 * run - 0.06 * turn) * arms - 0.012 * recoil());
-        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run + 0.12 * turn + 0.5 * EASE.turn * k * breath,
+        const to = new Vector3((-0.13 * (1 - blend) + 0.1 * run + 0.12 * turn) * arms + EASE.drift * drift(0.79, 1.37, 2.11),
+          -SIGHT.y + (-0.14 * (1 - blend) + 0.02 * turn) * arms + k * (EASE.drift * breath + EASE.lift * Math.abs(shoulder)), (0.22 - 0.1 * run - 0.06 * turn) * arms - 0.012 * recoil());
+        const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.05 * turn + 0.5 * EASE.turn * k * breath,
           0.12 * (1 - blend) + 0.2 * run + EASE.turn * drift(0.93, 1.61, 2.47), k * EASE.roll * shoulder + RELOAD_CANT * turn));
         follow(before.position, was.position, to, SWAY, dt, now.position);
         followRotation(before.quaternion, was.quaternion, tilt, { accel: SWAY.turnAccel }, dt, now.quaternion);
