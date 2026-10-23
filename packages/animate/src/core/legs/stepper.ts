@@ -360,9 +360,10 @@ export class Stepper {
     // standing and landing by `capture`, the foot furthest from it steps at once, to under it)
     const centre = r.xcom ? _centre.copy(r.xcom).setY(0) : xcom(0, _centre);
     const falling = !airborne && st.capture !== undefined && outside(hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw))), centre) > st.capture * s;
-    // (of the feet that may, the one that catches it without crossing the other, else the one furthest from it)
+    // (of the feet that may, the one that catches it without crossing the other, else the one furthest from it; only one the others can
+    // stand for through its swing: a leading foot stepped on again, the trailing one would be left a stance's most travel behind its hip)
     const crossing = (leg: Leg) => Number(landing(leg, Tsw - dt)[2] > BLOCKED * s);
-    const catcher = falling ? legs.filter((leg) => !leg.swing).sort((a, b) => crossing(a) - crossing(b) || b.anchor.distanceToSquared(centre) - a.anchor.distanceToSquared(centre))[0] : undefined;
+    const catcher = falling ? legs.filter((leg) => !leg.swing && legs.every((other) => other === leg || other.swing || aheadOf(other) + v * Tsw <= most)).sort((a, b) => crossing(a) - crossing(b) || b.anchor.distanceToSquared(centre) - a.anchor.distanceToSquared(centre))[0] : undefined;
     // (still and no longer turned, the feet square up closer to the facing)
     const turning = lerp(STEP.squared, STEP.turn, smoothstep(0, 0.3, v + Math.abs(spin))), turn = st.twist === undefined ? turning : Math.min(turning, st.twist / 2);
     // (moving, a foot lifts its share of a cycle after the leg before it did: the steps stay even; standing, after a moment)

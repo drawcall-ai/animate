@@ -15,14 +15,10 @@ const OPEN = new Set<string>([
   'lift-heavy on the soldier: final-pose dev checks',
   'shooter on the outlier: final-pose dev checks',
   'knight-arming on the outlier: final-pose dev checks',
-  // (one knee acceleration as it walks back, on the old legs)
-  'proportions on the soldier: final-pose dev checks',
   // (the core legs, the people's only legs since 2026-10-23: the outlier's planted foot slides 1–1.5 mm a frame as it turns on it
-  // (stroll, look-around) and its arm grazes its long trunk; walking back from the ball both feet leave the floor at once on a
-  // turning arrival (proportions); the soldier's short arm reaches round its trunk through it)
+  // (stroll, look-around) and its arm grazes its long trunk; the soldier's short arm reaches round its trunk through it)
   'stroll on the outlier: final-pose dev checks',
   'look-around on the outlier: final-pose dev checks',
-  'proportions on the outlier: final-pose dev checks',
   'reach-around on the soldier: final-pose dev checks',
 ]);
 
