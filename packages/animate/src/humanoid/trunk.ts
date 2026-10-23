@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import { solveChain } from '../core/chain';
 import type { Dev } from '../core/dev';
+import { clampRotation } from '../core/limits';
 import type { ReadonlyPose } from '../core/pose';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Proportions } from './proportions';
@@ -104,7 +105,13 @@ export function keepArmOut(f: Frame, p: Proportions, side: Side, tip: { position
       const accel = pose.skeleton.bones[bone].snap?.accel;
       if (accel !== undefined) most = Math.min(most, (nudge * accel * DEGREE * f.dt * f.dt) / Math.max(_fit[k].angleTo(_was[k]), 1e-9));
     });
-    const toward = (share: number) => bones.forEach((bone, k) => pose.setLocal(bone, _blend.copy(_was[k]).slerp(_fit[k], share)));
+    // (each kept within its range: a joint at the edge of it at both ends is not on the way between them — a wrist turned into a
+    // corner of its range bulges out of it, the way between)
+    const toward = (share: number) => bones.forEach((bone, k) => {
+      const limit = pose.skeleton.limits[bone], q = _blend.copy(_was[k]).slerp(_fit[k], share);
+      if (limit) clampRotation(q, limit);
+      pose.setLocal(bone, q);
+    });
     let out = 0, inn = most;
     toward(most);
     if (armDepth(pose, p, side, upper, clear) <= clear) {

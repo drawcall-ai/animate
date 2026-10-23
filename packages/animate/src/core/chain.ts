@@ -40,7 +40,8 @@ const LONGEST = 16;
  * first bone turns the limb onto the goal and toward the pole, then the middle joint aims again
  * from where the first bone's limit left it; the tip's turn about the middle bone is shared
  * between the two. The limb swivels about the line to the goal from the pole's side only as far
- * as the limits need (with a tip rotation, the middle joint's and the tip's too). As the middle
+ * as the limits need (with a tip rotation, the middle joint's and the tip's too), and far round
+ * only for as much of their excess as it is worth (`SWIVEL`). As the middle
  * joint bends as a pure hinge, goals at the corners of its range — its small side play and its
  * twist at once — can be missed by centimetres. Other chains are solved by cyclic coordinate
  * descent.
@@ -140,12 +141,12 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     };
     const tip = () => quaternion ? shared(_upper, bent, a, quaternion, limits, twist) : 0;
     const strain = (angle: number) => first(angle) + tip();
-    // as the pole has it, unless a swivel searched with the preferred twist fits better
+    // as the pole has it, unless a swivel searched with the preferred twist fits better, by more than the swivel costs (`SWIVEL`)
     let swivel = 0;
     let left = strain(0);
     if (left >= FITS && swivels) {
       const [searched, there] = least(first, tip, -Math.PI, Math.PI, 0);
-      if (there < left) [swivel, left] = [searched, there];
+      if (left - there > SWIVEL * searched * searched) [swivel, left] = [searched, there];
     }
     swivelled(swivel);
     return left;
@@ -271,6 +272,15 @@ const SETTLED = 1e-4;
 
 /** how much `least` holds each radian away from its start against what it minimises: next to nothing (ties broken toward the start) */
 const NEAREST = 1e-3;
+
+/**
+ * Tuned: what a limb's swivel off the pole's side costs against the joints' excess it saves, × its square (rad): a small one, as a goal
+ * moves on, next to nothing; one far round only for what it is worth — a radian's swivel for 0.05 rad (3°) of a wrist's excess saved,
+ * half a turn for half a radian. Free, a swivel far round was taken for the last fraction of a degree a wrist is passed by (a rifle's
+ * grip turning it just past its range swivelled the elbow 86° for 0.5°) and given back as the goal moved on: braked toward each in
+ * turn, the arm trembled.
+ */
+const SWIVEL = 0.05;
 
 const clampBend = (x: number, { range: [lo, hi] }: Hinge) => Math.min(hi, Math.max(lo, x));
 

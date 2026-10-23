@@ -34,8 +34,10 @@ const SWAY = { accel: 24, turnAccel: 120 };
 // Tuned: the most the rifle's turn speeds up or slows (rad/s²): a 6 rad/s mouse sweep reversed within 0.1 s (~230 rad/s² at most)
 // is followed exactly; the hands turning with it stay within the development check's 100,000°/s² for a joint.
 const FLICK = 600;
-// Tuned pouches on the left hip, in the hips' frame (+x left, +z ahead): beside the trunk, clear of it.
-const POUCHES = [new Vector3(0.17, -0.04, 0.05), new Vector3(0.17, -0.04, -0.03)];
+// Tuned pouches on the left hip, in the hips' frame (+x left, +z ahead): beside the trunk as far out as the shoulder, clear of it, on
+// the belt `reach` of the arm's length below the shoulder — where the default body's are, the hand reaching down to them (a body with
+// short arms wears them higher, as it must to reach them) — one `ahead` (× height) of the other.
+const POUCH = { reach: 0.9, ahead: [0.05, -0.03] };
 /**
  * Standing at ease — not aiming, moving or turning — the rifle and the eyes keep a little life, gone as the sights come up (the body's own breathing and sway fade
  * by `steady`, the rifle held still in the aim). Recalled (game convention: first-person weapon idle sway, e.g. Call of Duty, Battlefield,
@@ -146,8 +148,8 @@ export function shooter(): Scenario {
       let previousYaw = 0, previousPitch = 0, previousAds = false;
       let now = 0;
       let ads = 0, sprint = 0;
-      // (the body's arms over the default's: `Proportions.arms`, known once it is dressed)
-      let arms = 1;
+      // (the body's arms over the default's: `Proportions.arms`, and its pouches (m, the hips' frame), known once it is dressed)
+      let arms = 1, pouches: Vector3[] = [];
       const controller = new Controller();
       const player: Player = {
         input: { move: { x: 0, z: 0 }, aimYaw: 0, aimPitch: 0, fire: false, ads: false, sprint: false, crouch: false, jump: false, reload: false, view: 'third' },
@@ -187,8 +189,9 @@ export function shooter(): Scenario {
       // Tuned carry offsets (m) and muzzle rotations (rad), +X screen-left along +Z: the hip muzzle converges inward; sprint
       // lowers it diagonally across the chest; the reload cant raises the muzzle a little and draws the rifle in toward the body
       // and the left hand — the well within the eyes' downward reach. Derived: aiming puts the sight below the dominant eye.
-      // How far ahead of the eye it is held, and where the support hand takes the handguard, are the default body's arms' (as a
-      // soldier sets an adjustable stock's length of pull and grips the handguard within reach, recalled): × the body's `arms`.
+      // Where it is held from the eye off the aim — out to the side, down at the hip and ahead — and where the support hand takes
+      // the handguard are the default body's arms' (as a soldier sets an adjustable stock's length of pull and grips the handguard
+      // within reach, recalled): × the body's `arms`; the hands reach it as the default's do, and the view shows it alike.
       const looked = new Quaternion();
       let aimed = false;
       // (its place in the frame now, the sub-step before, the one before that)
@@ -209,8 +212,8 @@ export function shooter(): Scenario {
         // (at ease it breathes and drifts, and is shouldered anew now and then: lifted and rolled a little)
         const k = atEase() * calm, breath = Math.sin(2 * Math.PI * 0.25 * t + ease.phase), shoulder = ease.value('shoulder');
         const drift = (a: number, b: number, c: number) => k * irregular(t, ease.phase, a, b, c);
-        const to = new Vector3(-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn + EASE.drift * drift(0.79, 1.37, 2.11),
-          -SIGHT.y - 0.14 * (1 - blend) + 0.06 * turn + k * (EASE.drift * breath + EASE.lift * Math.abs(shoulder)), (0.22 - 0.1 * run - 0.04 * turn) * arms - 0.012 * recoil());
+        const to = new Vector3((-0.13 * (1 - blend) + 0.1 * run + 0.05 * turn) * arms + EASE.drift * drift(0.79, 1.37, 2.11),
+          -SIGHT.y + (-0.14 * (1 - blend) + 0.06 * turn) * arms + k * (EASE.drift * breath + EASE.lift * Math.abs(shoulder)), (0.22 - 0.1 * run - 0.04 * turn) * arms - 0.012 * recoil());
         const tilt = new Quaternion().setFromEuler(new Euler(0.18 * (1 - blend) + 0.22 * run - 0.3 * turn + 0.5 * EASE.turn * k * breath,
           0.12 * (1 - blend) + 0.2 * run + EASE.turn * drift(0.93, 1.61, 2.47), k * EASE.roll * shoulder));
         follow(before.position, was.position, to, SWAY, dt, now.position);
@@ -229,8 +232,9 @@ export function shooter(): Scenario {
         wearing: (_, p) => {
           arms = p.arms;
           rifle.grips.foregrip.position.z = FOREGRIP.z * arms;
+          pouches = POUCH.ahead.map((z) => new Vector3(p.shoulderHalfWidth, p.shoulderHeight - p.hipHeight - POUCH.reach * p.armLength, z * p.height));
           return [{ item: rifle, on: INDEX.rightHand, at: { position: new Vector3(), quaternion: HAND.clone().invert() } },
-            { item: spare, on: INDEX.hips, at: { position: POUCHES[0].clone() } }];
+            { item: spare, on: INDEX.hips, at: { position: pouches[0].clone() } }];
         },
         move: (t) => {
           if (!actor) throw new Error('the player drives its actor');
@@ -323,7 +327,8 @@ export function shooter(): Scenario {
             yield* takeOff(h, spent)();
             yield* bring(spent, onItem(rifle, OUT))();
             steps.push('stow');
-            const pouch = { position: POUCHES[slot] };
+            // (a placement on a bone scales with the body: the pouch's own metres, unscaled)
+            const pouch = { position: pouches[slot].clone().divideScalar(h.scale) };
             yield* bring(spent, onBone(h, INDEX.hips, pouch))();
             yield* wear(h, spent, INDEX.hips, { to: pouch, motion: TAKE.seat })();
             yield* withGaze(h, well, function* () {

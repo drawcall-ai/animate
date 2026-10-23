@@ -122,7 +122,7 @@ export class Posture {
 
     // the pelvis and the thorax turned with the stride, the thorax rolling with its turn
     const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
-    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, p.scale, walk, run, c.held, this.turn);
+    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, p.legs, walk, run, c.held, this.turn);
     const { bob, nod: nodPhase, compression: comp } = cycle;
     const stride = this.phase = cycle.phase;
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;

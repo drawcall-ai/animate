@@ -242,7 +242,10 @@ export function handStep(h: Humanoid, f: Frame, side: Side, target: Target, opti
     const shift = _cleared.sub(at);
     target = { ...target, position: options.on ? shift.applyQuaternion(_frame.copy(options.on.current.quaternion).invert()).add(target.position) : shift.add(at) };
   }
-  arm.to(f, target, { ...CALM, ...options, pole, contact: options.on instanceof Item && options.on === h.holding[side]?.item, letOut: toward !== undefined, clear: (g, tip, braked) => { held = Math.max(held, keepArmOut(g, p, side, tip, braked ? NUDGED : SOLVED(p))); } });
+  // (a grip held, as a reach setting off, is let out as far as the arm hangs: a hand holding something by an arm all but straight —
+  // a rifle taken up from a hanging hand — is not drawn off its grip)
+  const contact = options.on instanceof Item && options.on === h.holding[side]?.item;
+  arm.to(f, target, { ...CALM, ...options, pole, contact, letOut: toward !== undefined || contact, clear: (g, tip, braked) => { held = Math.max(held, keepArmOut(g, p, side, tip, braked ? NUDGED : SOLVED(p))); } });
   // The body joins a glide with the hand, rather than moving for its starting hang.
   if (options.lead ?? true) {
     bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1, options.on instanceof Item ? options.on.mass : 0, target.carriedBy === h || options.on?.carriedBy === h);
