@@ -192,8 +192,9 @@ export function handLowering(p: Proportions, request: { ahead: number; lateral: 
   const distance = Math.hypot(ahead, up);
   const angle = distance > 0 ? Math.acos(clamp((distance ** 2 + lever ** 2 - plane ** 2) / (2 * distance * lever), -1, 1)) : Math.PI;
   // A reachable high forward target also recruits the shoulder. Beyond that arc, rise first;
-  // bowing toward an unreachable overhead target lowers the shoulder and chases the deficit.
-  const bow = height < p.shoulderHeight || distance < lever + plane
+  // bowing toward an unreachable overhead target lowers the shoulder and chases the deficit,
+  // and toward one out of reach to the side brings it no nearer: the turn and the step do.
+  const bow = plane > 0 && (height < p.shoulderHeight || distance < lever + plane)
     ? clamp(Math.atan2(ahead, up) - angle, 0, bowLimit) : 0;
   // A sideways approach is closed by steps and trunk turns, rather than a squat.
   const across = Math.min(Math.hypot(ahead - lever * Math.sin(bow), lateral), Math.max(0.5 * p.armLength, p.shoulderHeight - height));

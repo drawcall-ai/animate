@@ -16,10 +16,9 @@ const OPEN = new Set<string>([
   'shooter on the outlier: final-pose dev checks',
   // (on Node 24 only: the knife edge another way on 22)
   // (the core legs, the people's only legs since 2026-10-23: the outlier's planted foot slides 1–1.5 mm a frame as it turns on it
-  // (stroll, look-around) and its arm grazes its long trunk; the soldier's short arm reaches round its trunk through it)
+  // (stroll, look-around) and its arm grazes its long trunk)
   'stroll on the outlier: final-pose dev checks',
   'look-around on the outlier: final-pose dev checks',
-  'reach-around on the soldier: final-pose dev checks',
 ]);
 
 for (const [name, { joints, height }] of Object.entries(SKELETONS)) {
