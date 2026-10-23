@@ -1,13 +1,14 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { dogFetch } from '../src/scenarios/dog';
+import { Body, Pose, walkTo } from '@drawcall/animate';
+import { DOG, dogFetch } from '../src/scenarios/dog';
 
 it('a dog made of data only trots to a ball, takes it in its jaw and carries it back, its whole body riding on the trot', () => {
   const scenario = dogFetch(), stage = scenario.stage(true);
   const [dog] = stage.bodies ?? [];
   const s = dog.pose.skeleton, jaw = s.index('jaw'), withersAt = s.index('leftFore0'), pelvis = s.index('pelvis');
   const paws = dog.species.legs!.chains.map((leg) => leg.joints[3].bone);
-  let off = 0, taken = NaN, up = paws.map(() => false), cruising = 0;
+  let off = 0, taken = NaN, up = paws.map(() => false), cruising = 0, pace = 0;
   const landed: [time: number, trotting: boolean][][] = paws.map(() => []), withers: number[] = [], steady: number[] = [], croup: number[] = [], roll: number[] = [], yaw: number[] = [];
   for (let i = 0; i < scenario.duration * 60; i++) {
     dog.update(1 / 60);
@@ -16,11 +17,13 @@ it('a dog made of data only trots to a ball, takes it in its jaw and carries it 
       if (Number.isNaN(taken)) taken = dog.frame.time;
       off = Math.max(off, dog.pose.position(jaw).distanceTo(ball.current.position));
     }
-    const speed = dog.locomotion.velocity.length(), trotting = speed > 1.2, now = paws.map((paw) => dog.pose.position(paw).y > 0.033);
+    const speed = dog.locomotion.velocity.length(), trotting = speed > 1.2, now = paws.map((paw) => dog.pose.position(paw).y > 0.038);
     now.forEach((lifted, leg) => { if (up[leg] && !lifted) landed[leg].push([dog.frame.time, trotting]); });
     up = now;
-    // (the bounce read trotting on at its pace: its lean into speeding up or slowing down settled)
-    cruising = speed > 1.25 ? cruising + 1 / 60 : 0;
+    // (the bounce read trotting on at its pace — not speeding up or slowing down, by less than 0.3 m/s² — its lean into a change of pace
+    // settled)
+    cruising = speed > 1.25 && Math.abs(speed - pace) * 60 < 0.3 ? cruising + 1 / 60 : 0;
+    pace = speed;
     if (cruising < 0.6) continue;
     steady.push(dog.frame.time);
     withers.push(dog.pose.position(withersAt).y); croup.push(dog.pose.position(pelvis).y);
@@ -100,4 +103,46 @@ it('leads a turn with its head, bends into it and leans into its speeding up and
     expect(lean / Math.atan2(a, 9.81)).toBeGreaterThan(0.2);
     expect(lean / Math.atan2(a, 9.81)).toBeLessThan(0.6);
   }
+});
+
+// (trotting on at 2 m/s, a Labrador's pace, it strides as one: ~2.2 strides a second of ~1 m, each paw down ~0.42 of it (read: Charles et
+// al. 2025, Labradors; Fischer et al. 2018), its carpus folding ~90° in the swing and its hock ~55° (read: Miao et al. 2026); standing, its
+// stifle and hock bent as a Labrador's — the references at `DOG`)
+it('trots as a Labrador does: its stride, its duty and its carpus and hock folding', () => {
+  const dog = new Body(DOG, (b) => walkTo(b, { to: new Vector3(0, 0, 40), speed: 2, accel: 2 }), { pose: new Pose(DOG.skeleton), dev: true });
+  const P = (n: string) => dog.pose.position(dog.pose.skeleton.index(n));
+  // (a segment's lean forward from plumb, and a joint's flexion as the lean between its segments, ° in the sagittal plane)
+  const lean = (a: string, b: string) => Math.atan2(P(b).z - P(a).z, P(a).y - P(b).y) / DEG;
+  const angle = (a: string, b: string, c: string) => P(a).clone().sub(P(b)).angleTo(P(c).clone().sub(P(b))) / DEG;
+  dog.update(dt);
+  expect(angle('leftHind0', 'leftHind1', 'leftHind2')).toBeGreaterThan(115);
+  expect(angle('leftHind0', 'leftHind1', 'leftHind2')).toBeLessThan(140);
+  expect(angle('leftHind1', 'leftHind2', 'leftHind3')).toBeGreaterThan(120);
+  expect(angle('leftHind1', 'leftHind2', 'leftHind3')).toBeLessThan(145);
+  const lands: number[] = [], carpus: number[] = [], hock: number[] = [];
+  let up = false, planted = 0, n = 0;
+  for (let i = 0; i < 14 * 60; i++) {
+    dog.update(dt);
+    const lifted = P('leftFore3').y > 0.038;
+    if (dog.frame.time > 6) {
+      if (up && !lifted) lands.push(dog.frame.time);
+      n++;
+      if (!lifted) planted++;
+      carpus.push(lean('leftFore1', 'leftFore2') - lean('leftFore2', 'leftFore3'));
+      hock.push(lean('leftHind2', 'leftHind3') - lean('leftHind1', 'leftHind2'));
+    }
+    up = lifted;
+  }
+  expect(dog.log).toEqual([]);
+  const stride = (lands[lands.length - 1] - lands[0]) / (lands.length - 1), range = (a: number[]) => Math.max(...a) - Math.min(...a);
+  expect(1 / stride).toBeGreaterThan(1.9);
+  expect(1 / stride).toBeLessThan(2.6);
+  expect(2 * stride).toBeGreaterThan(0.75);
+  expect(2 * stride).toBeLessThan(1.2);
+  expect(planted / n).toBeGreaterThan(0.35);
+  expect(planted / n).toBeLessThan(0.5);
+  expect(range(carpus)).toBeGreaterThan(70);
+  expect(range(carpus)).toBeLessThan(110);
+  expect(range(hock)).toBeGreaterThan(45);
+  expect(range(hock)).toBeLessThan(75);
 });

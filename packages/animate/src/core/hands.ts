@@ -10,7 +10,7 @@ import { Pose, type ReadonlyPose } from './pose';
 import { STOOPING } from './legs/creature';
 import { forwardOf, minimumJerk } from './math';
 import { followRotation } from './follow';
-import { ChainTip, chainTo, reached } from './tip';
+import { ChainTip, reached } from './tip';
 import { walkTo } from './walk';
 import { request } from './asks';
 
@@ -33,7 +33,7 @@ const PRESSING = 0.1;
 
 /**
  * `grab` for a body other than a person, one hand at a time: it walks up to stand with the grip in its hand's
- * reach (not with `walk: false`), its eyes on the grip on the way (if it has any; not with `look: false`), then the
+ * reach — bowed and lowered if it must, as far as its legs let it (`stooping`) — (not with `walk: false`), its eyes on the grip on the way (if it has any; not with `look: false`), then the
  * hand's chain reaches it, the hand closes and goes back to where the body's base has it, with what it took. Not there within REACHING s, it is a problem in the dev log and keeps going; a grip
  * out of its reach from anywhere it could stand is one too, and it stands where it is.
  */
@@ -45,7 +45,7 @@ export function take<H extends string>(body: Body<H>, holds: Grips<H>, options: 
   return function* () {
     // (a grip the hand reaches from nowhere it could stand, too high or too low, is a problem in the dev log, once: the body stays
     // standing where it is, doing nothing more for it)
-    const off = standOff(body, chain, at());
+    const stoop = stooping(body, body.pose.skeleton.chain(chain)), off = standOff(body, chain, at(), stoop.most(body.frame));
     if (typeof off !== 'number') {
       yield* problemOnce({ check: 'grab out of reach: grip from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chain}` })();
       return;
@@ -55,7 +55,7 @@ export function take<H extends string>(body: Body<H>, holds: Grips<H>, options: 
       const look = options.look ?? true;
       yield* look === false || !body.gazer ? walk() : parallel<Frame>('race', lookAt(body, look === true ? at : look), walk);
     }
-    yield* tipTo(body, chain, goal, item)();
+    yield* tipTo(body, chain, goal, item, stoop)();
     body.holding[hand] = { item, grip };
     yield* handBack(body, [hand])();
   };
@@ -95,7 +95,7 @@ export function bring(body: Body, item: Item, way: Way, options: Bringing = {}):
     const hand = handHolding(body, item);
     if (!hand) throw new Error(`"${item.name}" is not held`);
     item.supported = false;
-    const chain = chainOf(body, hand), tip = new ChainTip(chain), bones = body.pose.skeleton.chain(chain), bone = bones[bones.length - 1];
+    const chain = chainOf(body, hand), tip = new ChainTip(chain), bones = body.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(body, bones);
     // (the hand where it puts the item there, as it holds it: its tip goes there, the chain bending as it may)
     const inHand = itemIn(body.pose, bone, item), path = isCourse(way) ? course(item, frame, way, { pace }) : null;
     const handAt = (f: Frame): Target => {
@@ -105,7 +105,11 @@ export function bring(body: Body, item: Item, way: Way, options: Bringing = {}):
     };
     let over = NaN, late = false;
     yield* action<Frame>({
-      update: (f) => tip.to(f, { position: handAt(f).position }, { ...DIP, accel: motion.accel ?? DIP.accel, speed: motion.speed ?? DIP.speed, turnAccel: undefined }),
+      update: (f) => {
+        const position = handAt(f).position;
+        stoop.to(f, position);
+        tip.to(f, { position }, { ...DIP, accel: motion.accel ?? DIP.accel, speed: motion.speed ?? DIP.speed, turnAccel: undefined });
+      },
       until: (f, clock, time) => {
         if (hold) return hold.until?.(f, clock, time) ?? false;
         if (path && !path.over(f)) return false;
@@ -151,8 +155,18 @@ function handBack<H extends string>(body: Body<H>, hands: readonly H[]): Behavio
 
 /** `handTo` for a body other than a person: hand `hand`'s chain tip to `target`, endless or until `until` (`'reached'`: there). */
 export function tipToward(body: Body, hand: string, target: Live<Target>, options: Partial<Pick<Motion, 'accel' | 'speed'>> & { on?: Carrier; until?: Until } = {}): Behaviour {
-  const { accel = DIP.accel, speed = DIP.speed, on, until } = options;
-  return chainTo(chainOf(body, hand), target, { ...DIP, accel, speed, turnAccel: undefined, on, until });
+  const { accel = DIP.accel, speed = DIP.speed, on, until } = options, chain = chainOf(body, hand), bones = body.pose.skeleton.chain(chain);
+  return function* () {
+    const tip = new ChainTip(chain), stoop = stooping(body, bones);
+    yield* action<Frame>({
+      update: (f) => {
+        const goal = live(target, f);
+        stoop.to(f, on ? on.toWorld(goal, _world, f.time).position : goal.position);
+        tip.to(f, goal, { ...DIP, accel, speed, turnAccel: undefined, on });
+      },
+      until: until === 'reached' ? (f) => reached(f, bones[bones.length - 1], live(target, f), on) : until,
+    });
+  };
 }
 
 /** a person's options given for another body: a misuse, said at once rather than dropped */
@@ -169,33 +183,19 @@ export function personOnly(verb: string, options: object, names: readonly string
 export function nuzzle(body: Body, hand: string, target: Live<Vector3>): Behaviour {
   return function* () {
     const chain = chainOf(body, hand), bones = body.pose.skeleton.chain(chain), bone = bones[bones.length - 1], at = () => live(target, body.frame).clone();
-    // (as low as its legs let it down and its front bows about its hind girdle)
-    const legs = body.species.legs?.chains ?? [];
-    const lowest = legs.length ? STOOPING.lowest * Math.min(...legs.map((leg) => chainLength(body, leg.joints.map(({ bone }) => bone)))) : 0;
-    const lever = (f: { prev: ReadonlyPose }) => {
-      const forward = forwardOf(body.yaw), root = f.prev.position(0), tops = legs.map((leg) => f.prev.position(leg.joints[0].bone).sub(root).dot(forward));
-      return Math.max(1e-3, _v.subVectors(f.prev.position(bones[0]), root).dot(forward) - (tops.length ? Math.min(...tops) : 0));
-    };
-    const off = standOff(body, chain, at(), lowest + (legs.length ? lever(body.frame) * Math.sin(STOOPING.bow) : 0));
+    const stoop = stooping(body, bones), off = standOff(body, chain, at(), stoop.most(body.frame));
     if (typeof off !== 'number') {
       yield* problemOnce({ check: 'touch out of reach: target from the hand\'s base, up or down, lowered (m)', ...off, where: chain })();
       return;
     }
     const walk = walkTo(body, { to: at, within: off });
     yield* !body.gazer ? walk() : parallel<Frame>('race', lookAt(body, at), walk);
-    // (how far short it falls standing as it sets out: let down and bowed for that, not for what is left once it is lower)
-    const tip = new ChainTip(chain), length = chainLength(body, bones), began = body.frame.time, standing = body.pose.position(bones[0]).y;
-    let late = false, pressing = 0;
+    const tip = new ChainTip(chain), began = body.frame.time;
+    let late = false;
     yield* action<Frame>({
       update: (f) => {
-        // (as low as the target needs: the base of the chain let down, then its front bowed for the rest — and lower still while its
-        // tip stays above what it reaches for: worked out from standing, it falls a little short)
-        const goal = live(target, f), short = standing - goal.y - OUT * length, most = lowest + lever(f) * Math.sin(STOOPING.bow);
-        pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(bone).y - goal.y - REACHED.distance) * PRESSING * f.dt));
-        const drop = Math.min(most, Math.max(0, short) + pressing);
-        if (drop > 0) {
-          request(body.asks, { lower: Math.min(drop, lowest), bow: Math.asin(Math.min(1, Math.max(0, drop - lowest) / lever(f))) });
-        }
+        const goal = live(target, f);
+        stoop.to(f, goal);
         tip.to(f, { position: goal }, { ...DIP, turnAccel: undefined });
       },
       until: (f) => {
@@ -211,6 +211,37 @@ export function nuzzle(body: Body, hand: string, target: Live<Vector3>): Behavio
   };
 }
 
+/**
+ * How a body other than a person stoops for its hand's chain (`bones`) to reach low (`touch`, `grab`, `handTo`, `carry`, `place`): its
+ * front bowed about its hind girdle and its body let down on its legs, each its share of as far as they let it (`most`, m, the chain's
+ * base lowered so); `to` asks it, a sub-step,
+ * as low as `goal` needs from how it stands — and lower still while the tip stays above it: worked out from standing, it
+ * falls a little short. A goal it reaches standing it does not stoop for. (A dog takes a ball off the floor with its front lowered and its neck flexed down, its hind legs standing.)
+ */
+function stooping(body: Body, bones: readonly number[]) {
+  const legs = body.species.legs?.chains ?? [], tip = bones[bones.length - 1], length = chainLength(body, bones);
+  const lowest = legs.length ? STOOPING.lowest * Math.min(...legs.map((leg) => chainLength(body, leg.joints.map(({ bone }) => bone)))) : 0;
+  // (the chain's base ahead of the hind legs' tops: how far down a bow takes it)
+  const lever = (f: { prev: ReadonlyPose }) => {
+    const forward = forwardOf(body.yaw), root = f.prev.position(0), tops = legs.map((leg) => _t.subVectors(f.prev.position(leg.joints[0].bone), root).dot(forward));
+    return Math.max(1e-3, _v.subVectors(f.prev.position(bones[0]), root).dot(forward) - (tops.length ? Math.min(...tops) : 0));
+  };
+  const bowed = (f: { prev: ReadonlyPose }) => legs.length ? lever(f) * Math.sin(STOOPING.bow) : 0;
+  // (the chain's base as high as it stands)
+  const standing = new Pose(body.pose.skeleton).position(bones[0]).y;
+  let pressing = 0;
+  return {
+    most: (f: { prev: ReadonlyPose }) => bowed(f) + lowest,
+    to(f: Frame, goal: Readonly<Vector3>) {
+      const short = standing - goal.y - OUT * length, most = bowed(f) + lowest;
+      pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(tip).y - goal.y - REACHED.distance) * PRESSING * f.dt));
+      // (shared between its bow and its letting down as far as each goes: a little lower, its front bowed more)
+      const drop = short > 0 ? Math.min(most, short + pressing) : 0, bow = drop * bowed(f) / most;
+      if (drop > 0) request(body.asks, { bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });
+    },
+  };
+}
+
 /** the chain of `bones` laid out end to end (m) */
 function chainLength(body: Body, bones: readonly number[]): number {
   return bones.slice(1).reduce((sum, b) => sum + body.pose.skeleton.bones[b].offset.length(), 0);
@@ -221,7 +252,8 @@ export function put(body: Body, item: Item, to: Live<Placement>): Behaviour {
   return function* () {
     const hand = handHolding(body, item);
     if (!hand) throw new Error(`"${item.name}" is not held`);
-    const at = () => live(to, body.frame).position.clone(), off = standOff(body, chainOf(body, hand), at());
+    const bones = body.pose.skeleton.chain(chainOf(body, hand)), at = () => live(to, body.frame).position.clone();
+    const off = standOff(body, chainOf(body, hand), at(), stooping(body, bones).most(body.frame));
     if (typeof off !== 'number') {
       yield* problemOnce({ check: 'place out of reach: placement from the hand\'s base, up or down (m)', ...off, where: `${item.name} ${chainOf(body, hand)}` })();
       return;
@@ -290,12 +322,15 @@ function standOff(body: Body, chain: string, point: Readonly<Vector3>, lowered =
 }
 
 /** the chain's tip to `goal` on `item`, until it is there */
-function tipTo(body: Body, chain: string, goal: Target, item: Item): Behaviour {
+function tipTo(body: Body, chain: string, goal: Target, item: Item, stoop: ReturnType<typeof stooping>): Behaviour {
   return function* () {
     const tip = new ChainTip(chain), bones = body.pose.skeleton.chain(chain), bone = bones[bones.length - 1], began = body.frame.time;
     let late = false;
     yield* action<Frame>({
-      update: (f) => tip.to(f, goal, { ...DIP, turnAccel: undefined, on: item }),
+      update: (f) => {
+        stoop.to(f, item.toWorld(goal, _world).position);
+        tip.to(f, goal, { ...DIP, turnAccel: undefined, on: item });
+      },
       until: (f) => {
         if (reached(f, bone, goal, item)) return true;
         if (!late && f.time - began > REACHING) {
@@ -311,5 +346,5 @@ function tipTo(body: Body, chain: string, goal: Target, item: Item): Behaviour {
 const REST = new Quaternion();
 const _q = new Quaternion(), _q2 = new Quaternion(), _hq = new Quaternion(), _iq = new Quaternion();
 const ORIGIN: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const _v = new Vector3();
+const _v = new Vector3(), _t = new Vector3();
 const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
