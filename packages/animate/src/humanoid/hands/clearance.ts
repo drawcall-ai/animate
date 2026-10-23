@@ -7,7 +7,7 @@ import type { Humanoid } from '../humanoid';
 
 // Inherited trunk capsule proxy from examples/test/clearance.ts: 6% of stature.
 // Uncalibrated; no verified anatomical source.
-const BODY_RADIUS = 0.06;
+export const BODY_RADIUS = 0.06;
 // Inherited 4 cm reserve, verified against mesh clearance; no empirical calibration recorded.
 export const LOAD_RESERVE = 0.04;
 

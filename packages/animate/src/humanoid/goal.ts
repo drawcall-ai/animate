@@ -6,6 +6,10 @@ import { heldMass } from '../core/worn';
 import { isPerson, type Humanoid } from './humanoid';
 import type { Side } from './bones';
 import { rests } from '../core/hands';
+import { BODY_RADIUS, LOAD_RESERVE } from './hands/clearance';
+import { ARM_REACH, PROTRACTION } from './arms';
+import { gripOf, type Item } from '../core/carrier';
+import { SIDES } from './bones';
 
 
 /** A comfortable carry in front of the hips, or beside one hip for a single hand; follows the body. */
@@ -37,11 +41,31 @@ function personCarried(h: Humanoid, side?: Side) {
     const goal = at(f);
     // A lift rises out of its squat: its resting height follows the floor under the feet (their ankles less the ankle's height), not
     // the lowered pelvis.
-    const p = h.proportions;
-    goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 - p.ankleHeight + p.hipHeight + CARRY_HEIGHT * h.scale;
+    const p = h.proportions, item = (side ? h.holding[side] : h.holding.left ?? h.holding.right)?.item;
+    const above = Math.max(CARRY_HEIGHT * h.scale, item ? inReach(h, item) : -Infinity);
+    goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 - p.ankleHeight + p.hipHeight + above;
     goal.velocity.y = 0;
     return goal;
   };
+}
+
+/**
+ * How high above the hips a load carried before the body goes at least (m) for every grip a hand holds to be in the arm's reach
+ * (held out, `ARM_REACH`, the clavicle drawn forward, `PROTRACTION`) of its shoulder standing: its back clear of the trunk (as
+ * `clearBody` puts it), a grip that far out is reached from that far below the shoulder at most — a bulky load for short arms is held
+ * higher, nearer the chest.
+ */
+function inReach(h: Humanoid, item: Item): number {
+  const p = h.proportions, o = p.offsets, reach = ARM_REACH * p.armLength + PROTRACTION * p.height;
+  const ahead = BODY_RADIUS * p.height + LOAD_RESERVE * h.scale - item.bounds.min.z;
+  return Math.max(-Infinity, ...SIDES.map((side) => {
+    const held = h.holding[side];
+    if (held?.item !== item) return -Infinity;
+    const grip = gripOf(item, held.grip).position;
+    const shoulder = o[`${side}Shoulder`].clone().add(o[`${side}UpperArm`]);
+    const across = Math.hypot(grip.x - shoulder.x, ahead + grip.z - o.spine.z - o.chest.z - shoulder.z);
+    return p.shoulderHeight - p.hipHeight - Math.sqrt(Math.max(0, reach ** 2 - across ** 2)) - grip.y;
+  }));
 }
 
 // Tuned carry staging (metres at default stature): clear the thighs, and leave room for a two-hand load.

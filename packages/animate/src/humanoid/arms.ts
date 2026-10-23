@@ -31,6 +31,8 @@ export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satis
 const CLAVICLE = { accel: 30 };
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 export const ARM_REACH = 0.95;
+/** how far the clavicle draws the shoulder joint toward a hand reaching out past 85% of the arm, at most (× height) */
+export const PROTRACTION = 0.035;
 
 /**
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
@@ -273,7 +275,7 @@ function shrug(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>, fr
   const elevation = smoothstep(-0.05, 0.6, v.dot(up) / L);
   const reach = v.length();
   const want = shoulder.addScaledVector(up, elevation * 0.03 * p.height);
-  if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, 0.035 * p.height) / reach);
+  if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, PROTRACTION * p.height) / reach);
   // (the joint on a sphere about the clavicle's origin: its rest offset turned toward it, in the chest's frame)
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(p.offsets[`${side}UpperArm`]).normalize(), to);

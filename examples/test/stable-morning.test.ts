@@ -48,16 +48,14 @@ const HAND_MARKER_RADIUS = 0.024;
 // Every story on the default body and on the skeletons unlike it (test/skeletons): what holds of a stable hand holds of any body,
 // the default's names kept. The cases that do not hold yet are listed in `OPEN` (expected to fail: each one fixed comes off the list).
 const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { joints, height }]) => [` on the ${name}`, () => skeletonModel(joints, height)] as const)] as const;
-// The soldier (arms 0.8× the default's) cannot yet hold the bulky saddle clear of its trunk within its arms' reach (its carry ends
-// late, so it never gets on to the rope; the saddle comes within 2 mm of its trunk) and lifts it 0.35 s after touching it; the
+// The soldier (arms 0.8× the default's) holds the bulky saddle within its arms' reach only with its trunk square: turned to look on
+// toward the horse, the far shoulder goes back and its carry ends 2 cm late, so it never gets on to the rope; and it lifts the saddle
+// 0.35 s after touching it; the
 // outlier's slack hand hangs where the scene's fixed hips-frame `SLACK_HAND` puts it, too little forward of its hips, and, its start
 // varied, its legs still jerk as it leads off (joint acceleration dev checks).
 const OPEN = new Set<string>([
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
-  ...[0, 1, 2].flatMap((seed) => [
-    `carries below the face until arrival and places clear of both bodies on the soldier #${seed}`,
-    `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`,
-  ]),
+  ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`),
   ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`),
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
 ]);
