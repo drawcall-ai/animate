@@ -238,18 +238,18 @@ const RISE_SAMPLES = 24;
  * leg is reached further than its legs hold it.
  */
 function ride(out: Riding, gait: Gait, speed: number, stride: { cycle: number; stance: number }, levers: readonly number[], k2: number): void {
-  const dt = stride.cycle / RIDE_SAMPLES, n = RIDE_SAMPLES;
-  const legs = levers.map((_, i) => ({ duty: stride.stance / stride.cycle, offset: offsetAt(gait, speed, i) }));
+  const n = RIDE_SAMPLES, dt = stride.cycle / n, duty = stride.stance / stride.cycle, offsets = levers.map((_, i) => offsetAt(gait, speed, i));
   const fore = (levers[0] + levers[1]) / 2, hind = (levers[2] + levers[3]) / 2, foreShare = -hind / (fore - hind);
+  // (how long ago in the stride leg `i` landed, at `u` cycles from the fore-left's landing)
+  const since = (u: number, i: number) => (((u + offsets[0] - offsets[i]) % 1) + 1) % 1;
   const { rise, pitch } = out;
   for (let k = 0; k < n; k++) {
-    const u = (k + 0.5) / n;
     let up = 0, turning = 0;
-    legs.forEach(({ duty, offset }, i) => {
-      const since = (((u + legs[0].offset - offset) % 1) + 1) % 1;
-      if (since >= duty) return;
-      const push = (i < 2 ? foreShare : 1 - foreShare) / 2 * GRAVITY * Math.PI / (2 * duty) * Math.sin(Math.PI * since / duty);
-      up += push; turning -= push * levers[i] / k2;
+    levers.forEach((lever, i) => {
+      const s = since((k + 0.5) / n, i);
+      if (s >= duty) return;
+      const push = (i < 2 ? foreShare : 1 - foreShare) / 2 * GRAVITY * Math.PI / (2 * duty) * Math.sin(Math.PI * s / duty);
+      up += push; turning -= push * lever / k2;
     });
     [rise[k], pitch[k]] = [up - GRAVITY, turning];
   }
@@ -261,12 +261,9 @@ function ride(out: Riding, gait: Gait, speed: number, stride: { cycle: number; s
     for (let k = 0; k < n; k++) a[k] -= mean;
   }
   out.low = -Infinity;
-  for (let k = 0; k < n; k++) {
-    const u = (k + 0.5) / n;
-    legs.forEach(({ duty, offset }, i) => {
-      if ((((u + legs[0].offset - offset + EARLY) % 1) + 1) % 1 < duty + EARLY) out.low = Math.max(out.low, rise[k] - levers[i] * Math.sin(pitch[k]));
-    });
-  }
+  for (let k = 0; k < n; k++) levers.forEach((lever, i) => {
+    if (since((k + 0.5) / n + EARLY, i) < duty + EARLY) out.low = Math.max(out.low, rise[k] - lever * Math.sin(pitch[k]));
+  });
 }
 /** Tuned: how early in a stride (cycles) a leg's landing may come and still find its top no higher than the legs hold it */
 const EARLY = 0.05;
