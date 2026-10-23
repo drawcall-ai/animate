@@ -11,7 +11,7 @@ import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { vary } from '../scripts/run';
 import { forwardOf, leftOf, wrapAngle } from '../src/math';
 import type { Role } from '../src/scenario';
-import { SKELETONS, skeletonModel } from './skeletons';
+import { SKELETONS, skeletonModel } from '../src/skeletons';
 
 // The shooter on every body: the default and the skeletons unlike it (`./skeletons`) — the rifle, its grips, the reload and the dev log
 // hold for any body; the default's tests keep their names, the others' are named for their body. The cases that do not yet hold are

@@ -5,7 +5,7 @@ import { legsBiped } from '../src/scenarios/legs';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { failed, measure, walkingForm } from './metrics';
-import { SKELETONS, skeletonModel } from './skeletons';
+import { SKELETONS, skeletonModel } from '../src/skeletons';
 import type { Frame } from './frame';
 
 // A walk's form as people walk (`walkingForm`: the stance's share, the trunk's lean, the elbows, the pelvis's rise and fall) on the

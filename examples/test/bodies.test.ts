@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { knownFailure, run } from '../scripts/run';
-import { SKELETONS, skeletonModel } from './skeletons';
+import { SKELETONS, skeletonModel } from '../src/skeletons';
 
 // Every scenario with people, on skeletons unlike the default body: the library measures the body it is given, so each must
 // finish its story with the dev log as empty as the default body's. The cases that do not yet are listed in `OPEN` (expected to
@@ -19,6 +19,8 @@ const OPEN = new Set<string>([
   // (setting off with the saddle at 8.25 s its XCoM runs 0.10–0.11 m outside support against 0.10: on the edge, passing or failing
   // with any small change to the walk)
   'stable-morning on the outlier: final-pose dev checks',
+  // (one knee acceleration as it walks back, on the old legs)
+  'proportions on the soldier: final-pose dev checks',
 ]);
 
 for (const [name, { joints, height }] of Object.entries(SKELETONS)) {

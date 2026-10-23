@@ -1,5 +1,6 @@
 import { AnimationMixer, Bone, Group, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
+import { OpenPoseSkeleton } from '../openpose';
 import soldier from './soldier.json';
 import outlier from './outlier.json';
 
@@ -33,3 +34,12 @@ export function skeletonModel(joints: Joints, height: number): CharacterModel {
  * trunk 1.3× and arms 1.3× as long).
  */
 export const SKELETONS = { soldier: { joints: soldier as unknown as Joints, height: 1.8 }, outlier: { joints: outlier as unknown as Joints, height: 1.75 } };
+export type SkeletonName = keyof typeof SKELETONS;
+
+/** `name`'s skeleton as a model drawn as an OpenPose skeleton */
+export function openPoseOf(name: SkeletonName): CharacterModel {
+  const { joints, height } = SKELETONS[name];
+  const model = skeletonModel(joints, height);
+  model.scene.add(new OpenPoseSkeleton(model));
+  return model;
+}

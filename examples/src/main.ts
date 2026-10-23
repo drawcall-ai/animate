@@ -8,7 +8,8 @@ import { Framing, placeCamera, PlayerCamera, VIEWS } from './stage/camera';
 import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
-import { FIXED_DT, type Look, type Scenario } from './scenario';
+import { FIXED_DT, type Look, type Role, type Scenario } from './scenario';
+import { SKELETONS, openPoseOf, type SkeletonName } from './skeletons';
 import { SCENARIOS } from './scenarios';
 import { stroll, walkThere } from './scenarios/stroll';
 import { legSystem } from '../../packages/animate/src/humanoid/idle';
@@ -32,6 +33,9 @@ stage.scene.add(props);
 const bodies = new Bodies(stage.scene);
 /** the soldier the people wear unless a scenario or body=openpose|mannequin says otherwise (rigged from a generated model) */
 const SOLDIER = { url: 'models/soldier.glb' };
+/** the skeleton body=soldier|outlier asks every person to stand on (drawn as an OpenPose skeleton), or none */
+const asked = params.get('body');
+const skeleton = asked && asked in SKELETONS ? (asked as SkeletonName) : undefined;
 /** the scenario's body, or the one body=openpose|mannequin asks for */
 function bodyOf(s: Scenario): NonNullable<Scenario['body']> {
   const asked = params.get('body');
@@ -85,13 +89,16 @@ function load(s: Scenario) {
   show();
 }
 
-/** the scenario's actors are OpenPose skeletons, or copies of its viverse character */
+/** the scenario's actors are OpenPose skeletons (of their own skeleton, if one is named), or copies of its viverse character */
 function start(s: Scenario) {
   const body = bodyOf(s);
-  if (body === 'openpose') return new Playback(new Simulation(s));
+  // (a role's own skeleton first, then the one body= asks for)
+  const named = (role: Role) => role.skeleton ?? skeleton;
+  if (body === 'openpose') return new Playback(new Simulation(s, skeleton && ((role) => openPoseOf(named(role)!))));
   const character = characters.get(body.url);
   if (!character) throw new Error(`character ${body.url ?? 'mannequin'} was not loaded`);
-  return new Playback(new Simulation(s, () => instance(character, body.url === undefined), false, (url, b) => new Skin(clone(skins.get(url)!), b.pose.skeleton)));
+  const person = (role: Role) => { const name = named(role); return name ? openPoseOf(name) : instance(character, body.url === undefined); };
+  return new Playback(new Simulation(s, person, false, (url, b) => new Skin(clone(skins.get(url)!), b.pose.skeleton)));
 }
 
 /** sets the stage for the playback just started */

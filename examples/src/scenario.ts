@@ -1,6 +1,7 @@
 import type { Quaternion, Vector3 } from 'three';
 import type { Body, Behaviour, Dressed, Humanoid, Item, Proportions } from '@drawcall/animate';
 import type { Report } from './report';
+import type { SkeletonName } from './skeletons';
 
 export const FIXED_DT = 1 / 60;
 
@@ -12,6 +13,8 @@ export interface Role {
   yaw?: number;
   /** standing height (m; default the model's) */
   height?: number;
+  /** a skeleton unlike the default body's (`SKELETONS`), drawn as an OpenPose skeleton */
+  skeleton?: SkeletonName;
 }
 
 /** A run of a scenario: its world, its scenery and carriers, and its actors' behaviours (made fresh for every run). */

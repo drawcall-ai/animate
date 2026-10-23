@@ -5,7 +5,7 @@ import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
 import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
 import { HORSE, LEAD_ROPE, stableMorning } from '../src/scenarios/stable-morning';
-import { SKELETONS, skeletonModel } from './skeletons';
+import { SKELETONS, skeletonModel } from '../src/skeletons';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
 const SEAT_HEIGHT = 0.16;

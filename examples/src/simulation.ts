@@ -1,6 +1,7 @@
 import type { CharacterModel } from '@pmndrs/viverse';
 import { Body, human, World, type Humanoid } from '@drawcall/animate';
 import { createOpenPoseModel } from './openpose';
+import { openPoseOf } from './skeletons';
 import type { Skin } from './stage/skin';
 import { FIXED_DT, type Prop, type Role, type Scenario, type Stage } from './scenario';
 
@@ -17,7 +18,7 @@ export class Simulation {
   /** `model` makes each actor's character model for its role, `skin` a body's skin from its url (none: the bodies are drawn as skeletons) */
   constructor(
     readonly scenario: Scenario,
-    model: (role: Role) => CharacterModel = (role) => createOpenPoseModel({ height: role.height }),
+    model: (role: Role) => CharacterModel = (role) => (role.skeleton ? openPoseOf(role.skeleton) : createOpenPoseModel({ height: role.height })),
     dev = false,
     skin?: (url: string, body: Body) => Skin,
   ) {
