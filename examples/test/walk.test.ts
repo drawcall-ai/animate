@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { stroll } from '../src/scenarios/stroll';
 import { legsBiped } from '../src/scenarios/legs';
@@ -7,6 +7,7 @@ import { Simulation } from '../src/simulation';
 import { failed, measure, walkingForm } from './metrics';
 import { SKELETONS, skeletonModel } from '../src/skeletons';
 import { frames } from './frame';
+import { cases } from '../../packages/animate/test/open';
 
 // A walk's form as people walk (`walkingForm`: the stance's share, the trunk's lean, the elbows, the pelvis's rise and fall) on the
 // default body and on skeletons unlike it, on both legs: the stroll's (a go-there point, balance) and a player's (the stepper under a
@@ -16,12 +17,12 @@ const BODIES: [string, (() => CharacterModel) | undefined][] = [['default body',
 const WALKS: [string, () => Scenario][] = [['strolling after a point', stroll], ['stepping under a scripted root', legsBiped]];
 
 /** Open (expected to fail: each one fixed comes off the list). */
-const OPEN = new Set([
+const test = cases([
   // (on the core legs, the people's only legs since 2026-10-23: none of the outlier's straight strides is steady enough to judge)
   'strolling after a point, the outlier walks as people do']);
 
 for (const [body, model] of BODIES) for (const [walk, scenario] of WALKS) {
-  (OPEN.has(`${walk}, ${body} walks as people do`) ? it.fails : it)(`${walk}, ${body} walks as people do`, () => {
+  test(`${walk}, ${body} walks as people do`, () => {
     const sim = new Simulation(scenario(), model);
     const m = measure(sim.scenario.id, frames(sim));
     const g = m.gait.summary(false, false);

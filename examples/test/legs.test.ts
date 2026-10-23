@@ -8,6 +8,7 @@ import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { along, legsBiped, legsHorse, scriptedRoot } from '../src/scenarios/legs';
+import { cases } from '../../packages/animate/test/open';
 
 // The legs on scripted roots: a person and two horses (walk, trot) carried along a straight, a bend and a stop by the scene.
 
@@ -61,10 +62,10 @@ const horseOn = (gait: Gait, pace: number, brake = 2, radius = 15) => {
 };
 /** Open: a person's joints at 1.3 m/s reach a p99 of ~690 °/s at the knee and ~610 °/s at the ankle against a ceiling of 500 (the gait's
  * swing is 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise */
-const OPEN = new Set(['a person walking', 'a person stopping hard']);
+const test = cases(['a person walking', 'a person stopping hard'].map((name) => `${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`));
 for (const [name, make] of [['a person walking', () => person(3)], ['a person stopping hard', () => person(0.5)], ['a horse walking', () => horseOn(HORSE_WALK, 1.6)],
   ['a horse trotting, braking in 2 s', () => horseOn(HORSE_TROT, 3.7)], ['a horse trotting, braking in 3 s', () => horseOn(HORSE_TROT, 3.7, 3)], ['a horse walking a 3 m turn', () => horseOn(HORSE_WALK, 1.6, 2, 3)]] as const) {
-  (OPEN.has(name) ? it.fails : it)(`${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`, () => {
+  test(`${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`, () => {
     const body: Body = make(), chains = body.species.legs?.chains, person = !!body.species.person;
     const sole = (i: number) => person ? solePoints(body as Humanoid, body.pose, i ? 'right' : 'left')
       : [chains![i].heel, chains![i].toe].map((at) => body.pose.point(chains![i].joints[chains![i].joints.length - 1].bone, at, new Vector3()));

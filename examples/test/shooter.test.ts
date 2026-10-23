@@ -11,6 +11,7 @@ import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { vary } from '../scripts/run';
 import type { Role } from '../src/scenario';
 import { SKELETONS, skeletonModel } from '../src/skeletons';
+import { cases } from '../../packages/animate/test/open';
 
 // The shooter on every body: the default and the skeletons unlike it (`./skeletons`) — the rifle, its grips, the reload and the dev log
 // hold for any body; the default's tests keep their names, the others' are named for their body. The cases that do not yet hold are
@@ -20,7 +21,7 @@ import { SKELETONS, skeletonModel } from '../src/skeletons';
 // - the soldier's support hand in a quick turn: the trunk lagging the aim the rifle is held in, its handguard goes out of its short
 //   arms' reach (up to 4 cm off it) — and its hip carry, held nearer its midline, shows the rifle just left of the view's middle
 //   (−0.003 of its half-width) as the view lags a strafe.
-const OPEN = new Set<string>([
+const open = cases([
   ...[0, 1, 2].map((i) => `keeps both grips, steady sights and final-pose checks clean #${i} — on the soldier`),
   'keeps the rifle on the aim through fast turns: standing and walking, at the hip and aiming — on the soldier',
   'sprints with the rifle, the trunk turning with the stride, both hands on their grips — on the soldier',
@@ -60,8 +61,7 @@ function display(playback: Playback, seconds: number, input: (t: number) => void
 
 for (const [body, model] of BODIES) {
   const title = (name: string) => body === 'default' ? name : `${name} — on the ${body}`;
-  // (`it`, or `it.fails` for a case still open)
-  const test = (name: string, fn: () => void) => (OPEN.has(title(name)) ? it.fails : it)(title(name), fn);
+  const test = (name: string, fn: () => void) => open(title(name), fn);
 
   for (const seed of [0, 1, 2]) test(`keeps both grips, steady sights and final-pose checks clean #${seed}`, () => {
     const scene = shooter();

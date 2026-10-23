@@ -2,6 +2,7 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
+import { cases } from '../open';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { type Humanoid, createSkeletonModel, INDEX, handTo, lookAt, grab, carry, hold, withGaze, when, walkTo, Item, facingAt, type Behaviour, type Frame, type Side } from '../../src';
 import { Life } from '../../src/humanoid/posture/life';
@@ -55,7 +56,9 @@ it('turns the trunk for an across-body reach and for an over-shoulder look withi
   }
 });
 
-it('grabs a floor grip while the gaze stays in range in a deep squat', () => {
+// (open at life seeds 1–3: squatting, the head pitches past straight down, its up axis up to 2.4° below level)
+const open = cases([['grabs a floor grip while the gaze stays in range in a deep squat', [1, 2, 3]]]);
+open('grabs a floor grip while the gaze stays in range in a deep squat', () => {
   const item = new Item(new Vector3(-0.1, 0.03, 0.45), new Quaternion(), { grip: { position: new Vector3() } });
   const h = body((h) => function* () {
     yield* grab(h, { right: [item, 'grip'] }, { first: true })();

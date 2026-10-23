@@ -7,6 +7,7 @@ import { Euler, Quaternion, Vector3 } from 'three';
  * next (turning back: > 90°); and the head's most roll in the world over all of them.
  */
 export function headShift(heads: readonly Quaternion[], dt: number) {
+  if (heads.length < 2) throw new Error(`headShift: ${heads.length} head rotations, not a movement`);
   const deg = 180 / Math.PI;
   const speeds = heads.slice(1).map((q, k) => q.angleTo(heads[k]) / dt);
   const peak = Math.max(...speeds);

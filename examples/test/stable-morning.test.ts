@@ -1,5 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 import { Simulation } from '../src/simulation';
 import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
@@ -7,6 +7,7 @@ import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
 import { HORSE, LEAD_ROPE, stableMorning } from '../src/scenarios/stable-morning';
 import { SKELETONS, skeletonModel } from '../src/skeletons';
 import { headShift, SHIFT_BOUNDS } from './gaze';
+import { cases } from '../../packages/animate/test/open';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
 const SEAT_HEIGHT = 0.16;
@@ -58,21 +59,27 @@ const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { join
 // On the core legs, the people's only legs since 2026-10-23: the default body sets off leading in the frame its gaze turns, not
 // after it, and, its start varied (#1), its right arm grazes its trunk fetching the saddle; the soldier carries the saddle 1.7 cm off
 // its own trunk (2 cm kept) and, its start varied, its legs come into the horse's as it places it.
-const OPEN = new Set<string>([
+const test = cases([
   `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back on the soldier`,
   // (on the core legs with the gaze followed in yaw and pitch: the default body's shift to the horse peaks at 420°/s, past its main
   // sequence's 359; the outlier's saddle, carried, passes its face)
-  `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back`,
+  [`turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back`, [0, 1, 2]],
   ...[0, 2].map((seed) => `carries below the face until arrival and places clear of both bodies on the outlier #${seed}`),
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
-  ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`),
-  'gathers the slack of a hanging rope of fixed length while walking on the outlier #1',
+  ...[0, 1].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`),
+  ['gathers the slack of a hanging rope of fixed length while walking on the soldier #2', [0, 2, 3]],
+  ['gathers the slack of a hanging rope of fixed length while walking on the outlier #1', [0, 1]],
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
   'leads upright with the near hand forward, slack outside, and halts beyond the gate',
-  'gathers the slack of a hanging rope of fixed length while walking #1',
+  ['gathers the slack of a hanging rope of fixed length while walking #1', [0, 1, 2]],
   ...[0, 1, 2].map((seed) => `carries below the face until arrival and places clear of both bodies on the soldier #${seed}`),
+  // (open at other life seeds than 0: the outlier carrying the saddle turns its head 22° and, at one, 250°/s; its rope's slack, its
+  // start varied, comes off it; at one its gaze never leaves for the knot within 16 s)
+  ['carries below the face until arrival and places clear of both bodies on the outlier #1', [1, 2, 3]],
+  ['gathers the slack of a hanging rope of fixed length while walking on the outlier #0', [1, 2, 3]],
+  ['gathers the slack of a hanging rope of fixed length while walking on the outlier #2', [2]],
+  [`turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back on the outlier`, [2]],
 ]);
-const test = (title: string, body: () => void) => (OPEN.has(title) ? it.fails : it)(title, body);
 
 for (const [on, model] of BODIES) {
 
@@ -362,7 +369,8 @@ test(`turns its eyes from the saddle's place to the horse, to the knot and back 
       if (sim.t - started.get(beat)! <= 1.5) heads.push(head);
     }
   }
-  for (const heads of shifts.values()) {
+  for (const [beat, heads] of shifts) {
+    expect(started.has(beat), `${beat} begins within 16 s`).toBe(true);
     const shift = headShift(heads, 1 / 60);
     expect(shift.amplitude).toBeGreaterThan(45);
     expect(shift.peak).toBeLessThan(SHIFT_BOUNDS.peak(shift.amplitude));

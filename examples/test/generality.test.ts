@@ -3,12 +3,13 @@ import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Body, withGaze, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
+import { cases } from '../../packages/animate/test/open';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, items high and low. Every run must
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed in `OPEN`
 // (expected to fail: each one fixed comes off the list).
 // (on the core legs, the people's only legs since 2026-10-23: a box put down at hip height or below ends its carry's course late)
-const OPEN = new Set([
+const check = cases([
   'a person puts a box down on a table 0.3 m high',
   'a person puts a box down on a table 0.5 m high',
   // (asked a goal 0.5 m behind it, facing on, the planner turns it round to walk there and back round — it never kept its facing — and
@@ -17,8 +18,9 @@ const OPEN = new Set([
   // (the cat — the Labrador scaled down — standing on all but straight forelegs, a planted fore paw falls out of its leg's reach once
   // on its eighth goal round the circle)
   'a cat walks round a circle',
+  // (its life seed varied, the handover's dev log has problems)
+  ['a person hands a bottle to another, who takes it and carries it off', [3]],
 ]);
-const check = (name: string, test: () => void) => (OPEN.has(name) ? it.fails : it)(name, test);
 
 /** runs `story` on `body` for at most `seconds`: whether it finished, and what went wrong */
 function run(make: (story: (body: Body) => Behaviour) => Body, story: (body: Body) => Behaviour, seconds: number) {

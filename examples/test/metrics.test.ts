@@ -13,6 +13,7 @@ import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
 import { frames } from './frame';
+import { cases, type Open } from '../../packages/animate/test/open';
 
 /** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
 function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
@@ -44,15 +45,20 @@ it('lists each scenario once', () => {
 // steady strides on its bend to judge; looking around further off the head lags its course by 5 cm; the knight 5% shorter has its
 // right hand 2.5–2.8 cm into the shield on the wall: its free arm swings into the board as it walks up to it.
 // With the gaze followed in yaw and pitch (2026-10-23), the knight with its gear 10 cm lower has its wrist 14 cm off a grip it holds at 9.1 s.
-const OPEN = new Set(['reach-around', 'stable-morning', 'stroll 15% faster', 'look-around, looking down 10 cm further off',
-  'knight-arming, the knight 5% shorter', 'knight-arming, the gear 10 cm lower']);
-const check = (title: string, body: () => void) => (OPEN.has(title) ? it.fails : it)(title, body);
+const OPEN: Open[] = ['reach-around', 'stable-morning', 'stroll 15% faster', 'look-around, looking down 10 cm further off',
+  'knight-arming, the knight 5% shorter', ['knight-arming, the gear 10 cm lower', [0, 1]],
+  // (open at other life seeds than 0)
+  ['stroll on a 20% tighter arc', [1, 2, 3]], ['look-around, the headset 20% faster', [1, 2, 3]], ['look-around, the headset 20% slower', [1]],
+  ['reach, the hand 20% faster', [2]], ['look-around, looking down 10 cm nearer', [3]], ['look-around, turned 0.3 rad right', [3]],
+  ['knight-arming, the stand, wall and rack 15 cm further left', [3]]];
+// (and the known task-accuracy failures, `known()`, below)
+const KNOWN = known();
+const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
 
 // These metrics assume humanoid balance owns h.feet/h.locomotion and centres the CoM.
 // The isolated leg scenes have final-pose contact/ROM/rate coverage in legs.test.ts and dev.test.ts.
 for (const sc of SCENARIOS.filter((s) => !s.id.startsWith('legs-') && s.actors.length)) {
-  if (sc.id === 'vr') it.fails(`${sc.id} target tracking (known)`, () => judged(sc));
-  else check(sc.id, () => judged(sc));
+  check(sc.id, () => judged(sc));
 }
 
 // the same limits a little off the script: no metric may hang on its exact numbers
@@ -121,8 +127,9 @@ const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
 ];
 for (const [name, sc, strides] of VARIATIONS) check(name, () => judged(sc, strides));
 
-// Known task-accuracy failures, tracked until fixed (it.fails turns red once they pass).
-const KNOWN: [string, Scenario][] = [
+// Known task-accuracy failures, tracked until fixed.
+function known(): [string, Scenario][] {
+  return [
   // a head bent down off the line the body faces, or a little further than it bows to, is reached by
   // the spine alone: `balance` carries the centre of mass toward it only by walking, and walks only
   // to a goal 14 cm off (asks.lean, being built, is the way: the weight shifted within the feet).
@@ -142,8 +149,9 @@ const KNOWN: [string, Scenario][] = [
   ['vr, the controllers 10 cm lower', vr({ rise: -0.1 })],
   ['vr, turned 0.3 rad left', vr({ turn: 0.3 })],
   ['vr, turned 0.3 rad right', vr({ turn: -0.3 })],
-];
-for (const [name, sc] of KNOWN) it.fails(`${name} (known)`, () => judged(sc));
+  ];
+}
+for (const [name, sc] of KNOWN) check(name, () => judged(sc));
 // (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)
 it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
   const m = measure('stroll', frames(new Simulation(stroll())));
