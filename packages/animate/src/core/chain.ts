@@ -110,6 +110,9 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const limits = bones.map((b) => skeleton.limits[b]);
   const a = _axis.copy(o2).normalize();
   const r0 = _r0;
+  // (a re-solve that keeps the limb's bend where its brakes left it keeps the middle bone's twist there too, unless asked another: split
+  // afresh, a wrist at the edge of its range could take the twist the other way — the forearm turned 25° in one sub-step, and back)
+  if (!swivels && twist === undefined) twist = twistAbout(_q2.setFromAxisAngle(h, hinge.now).multiply(neutral).invert().multiply(local[1]), a);
 
   /** the first bone placed (into `local[0]`, unclamped) for the middle joint bent `bend`: how far the limbs's limits are left out */
   const place = (bend: number) => {
