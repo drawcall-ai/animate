@@ -99,6 +99,22 @@ it('follows a moving goal with supported contacts and a root that turns toward i
   expect(body.log).toEqual([]);
 });
 
+// (a horse standing at rest: its neck rising from the withers, the poll above them, its croup a little below them — withers 138, back 127,
+// croup 136 cm in Icelandic horses (read: Acta Vet Scand 2025, PMC12180175) — and its face sloping 45–75° below horizontal, between a
+// nasal plane held extended (~51°) and neutral (~72°) (read: Go et al. 2014, BMC Vet Res 10:118))
+it('stands with its neck rising to a poll above its withers, its croup a little below them and its face sloping down', () => {
+  const pose = new Pose(SKELETON), withers = pose.position(LEGS[0].scapula!).y, deg = 180 / Math.PI;
+  const neck = pose.position(HEAD).clone().sub(pose.position(NECK)), face = new Vector3(0, -0.37, 0.3);
+  expect(Math.atan2(neck.y, neck.z) * deg).toBeGreaterThan(30);
+  expect(Math.atan2(neck.y, neck.z) * deg).toBeLessThan(50);
+  expect(pose.position(HEAD).y - withers).toBeGreaterThan(0.1);
+  expect(withers - pose.position(PELVIS).y).toBeGreaterThan(0);
+  expect(withers - pose.position(PELVIS).y).toBeLessThan(0.08);
+  const muzzle = pose.point(HEAD, face, new Vector3()).sub(pose.position(HEAD));
+  expect(Math.atan2(-muzzle.y, muzzle.z) * deg).toBeGreaterThan(45);
+  expect(Math.atan2(-muzzle.y, muzzle.z) * deg).toBeLessThan(75);
+});
+
 it('back flexion pivots about the hips without translating their attachments', () => {
   const pose = new Pose(SKELETON);
   const hips = LEGS.slice(2).map(leg => pose.position(leg.upper).clone());
