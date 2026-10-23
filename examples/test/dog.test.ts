@@ -1,7 +1,8 @@
-import { Euler, Quaternion, Vector3 } from 'three';
+import { Box3, Euler, Quaternion, Vector3 } from 'three';
+import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, Pose, walkTo } from '@drawcall/animate';
-import { DOG, dogFetch } from '../src/scenarios/dog';
+import { Body, grab, hold, Item, Pose, walkTo, type Frame } from '@drawcall/animate';
+import { DOG, dogFetch, SHORT_NECKED } from '../src/scenarios/dog';
 
 it('a dog made of data only trots to a ball, takes it in its jaw and carries it back, its whole body riding on the trot', () => {
   const scenario = dogFetch(), stage = scenario.stage(true);
@@ -83,9 +84,12 @@ it('leads a turn with its head, bends into it and leans into its speeding up and
   expect(Math.abs(turned)).toBeGreaterThan(Math.PI / 2);
   // (its head leads: halfway round 0.1–0.5 s before its body — a person's head leads the body's yaw by ~0.2 s, the eyes by ~0.4 s
   // (Lamontagne et al. 2020) — and by 15–45° on its way round: a person's head anticipates the way by up to ~25° (Imai et al. 2001),
-  // the neck taking the spine's bend on top)
+  // the neck taking the spine's bend on top. The time is the head's own lead, the bend's front half taken off it — as much as its back
+  // half turns the pelvis out: a person's trunk does not bend so, and turning slowly on the spot that bend alone is most of a second
+  // of its turn)
   const half = (a: number[]) => from + a.slice(from).findIndex((x) => sign * (x - a[from]) > Math.abs(turned) / 2);
-  const lead = (half(yaw) - half(look)) * dt, ahead = Math.max(...look.slice(from, to).map((x, i) => sign * (x - yaw[from + i])));
+  const led = look.map((x, i) => x + pelvisYaw[i]);
+  const lead = (half(yaw) - half(led)) * dt, ahead = Math.max(...look.slice(from, to).map((x, i) => sign * (x - yaw[from + i])));
   expect(lead).toBeGreaterThan(0.1);
   expect(lead).toBeLessThan(0.5);
   expect(ahead / DEG).toBeGreaterThan(15);
@@ -145,4 +149,31 @@ it('trots as a Labrador does: its stride, its duty and its carpus and hock foldi
   expect(range(carpus)).toBeLessThan(110);
   expect(range(hock)).toBeGreaterThan(45);
   expect(range(hock)).toBeLessThan(75);
+});
+
+// (taking a ball off the floor, it stands, pitches its head down to it and up again with it, upright and no faster than a brisk gaze
+// shift turns a head — ~340°/s at its peak (recalled: Guitton & Volle 1987, the library's `SHIFT`) — its ears level within a few
+// degrees: a head keeps its roll small (recalled: Pozzo et al. 1990). Read off the head's side axis, the roll is well defined looking
+// straight down.)
+it.each([['the dog', DOG], ['a short-necked one', SHORT_NECKED]] as const)('%s lowers its head to a ball and lifts it with it smoothly and upright', (_, species) => {
+  const ball = new Item(new Vector3(1.5, 0.04, 1.5), new Quaternion(), { middle: { position: new Vector3() } },
+    { name: 'ball', mass: 0.06, bounds: new Box3(new Vector3(-0.04, -0.04, -0.04), new Vector3(0.04, 0.04, 0.04)) });
+  const dog = new Body(species, (d) => function* () {
+    yield* grab(d, { jaw: [ball, 'middle'] })();
+    yield* parallel<Frame>('race', hold(d, ball), walkTo(d, { to: new Vector3(0, 0, 0.5) }));
+  }, { dev: true });
+  const head = dog.pose.skeleton.index('head'), was = new Quaternion(), side = new Vector3();
+  let taken = NaN, fastest = 0, roll = 0;
+  for (let i = 0; i < 12 / dt && !(dog.frame.time > taken + 1.5); i++) {
+    was.copy(dog.pose.rotation(head));
+    dog.update(dt);
+    if (Number.isNaN(taken) && dog.holding.jaw) taken = dog.frame.time;
+    if (dog.locomotion.velocity.length() > 0.1) continue;
+    fastest = Math.max(fastest, was.angleTo(dog.pose.rotation(head)) / dt);
+    roll = Math.max(roll, Math.abs(Math.asin(side.set(1, 0, 0).applyQuaternion(dog.pose.rotation(head)).y)));
+  }
+  expect(taken).toBeGreaterThan(0);
+  expect(fastest).toBeLessThan(340 * DEG);
+  expect(roll).toBeLessThan(5 * DEG);
+  expect(dog.log).toEqual([]);
 });

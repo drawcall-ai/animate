@@ -175,7 +175,9 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
         // face (`LEAD`), and takes the bend's front half; the head on it a share of the lead (`HEAD_LEAD`) as quickly.
         const led = clamp(turning.ahead, -LEAD, LEAD), follow = 1 - Math.exp(-4 * f.dt);
         const wanted = (extras.neckYaw ?? 0.18 * glance * (1 - m)) + led + bent / 2;
-        const previous = _e.setFromQuaternion(f.prev.local(neck), 'YXZ').y;
+        // (its yaw as the last pose left it, read off its side axis: a reach can pitch the neck past straight down, where an Euler yaw
+        // flips half a turn and the neck with it)
+        const previous = yawOf(f.prev.local(neck));
         const yaw = previous + (clamp(wanted, -0.55, 0.55) - previous) * follow;
         // (the head's own turn on the neck followed as the carriage last had it: not as a reach left it)
         headYaw += ((extras.headYaw ?? 0) + HEAD_LEAD * led - headYaw) * follow;

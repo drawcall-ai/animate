@@ -142,11 +142,19 @@ function handBack<H extends string>(body: Body<H>, hands: readonly H[]): Behavio
   return function* () {
     const bones = hands.flatMap((hand) => body.pose.skeleton.chain(chainOf(body, hand)));
     const began = body.frame.time;
-    // (each joint from where it was toward the base's, at a calm dip's pace, the base taking over as it gets there)
+    // (each joint from where it was toward the base's, at a calm dip's pace, the base taking over as it gets there: the dip followed on
+    // its own history — read off the blended pose, the base's share of each step was taken for the dip's speed and fed back, the neck
+    // flung up at 1000°/s)
+    const dips = bones.map((b) => [body.frame.prev2.local(b).clone(), body.frame.prev.local(b).clone()]);
     yield* action<Frame>({
       update: (f) => {
         const share = minimumJerk((f.time - began) / HANDING);
-        for (const b of bones) f.current.setLocal(b, _q.copy(followRotation(f.prev2.local(b), f.prev.local(b), f.current.local(b), { accel: DIP.turnAccel, speed: DIP.turnSpeed }, f.dt, _q2)).slerp(f.current.local(b), share));
+        bones.forEach((b, k) => {
+          const [before, was] = dips[k], dip = followRotation(before, was, f.current.local(b), { accel: DIP.turnAccel, speed: DIP.turnSpeed }, f.dt, _q2);
+          before.copy(was);
+          was.copy(dip);
+          f.current.setLocal(b, _q.copy(dip).slerp(f.current.local(b), share));
+        });
       },
       until: (f) => f.time - began >= HANDING,
     });
