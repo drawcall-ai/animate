@@ -75,9 +75,14 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   // Once bow is exhausted, close its unmet reach with the knees rather than
   // requesting the same saturated back angle forever.
   // (exhausted — below the hips by a quarter thigh, as far as the load lets it bow: a heavier reach that low has its knees take what its
-  // back may not; hip-high, it bows its most first)
+  // back may not; hip-high, it bows its most first. Hip-high for a load to take (`mass`), its most is what that load lets it: a
+  // short-armed body is not left short, knees straight, because its back may bow no further — its knees take what the arm held out
+  // (`ARM_REACH`) still falls short, less what the bow left to it will bring; not the planning reach's residual, the standing lever's
+  // there, which an arm all but straight closes. A load already held goes where its course takes it: the knees do not chase it.)
   const deep = hand.y < p.hipHeight - p.thigh / 4;
-  const overflow = Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * (p.shoulderHeight - p.hipHeight);
+  const span = p.shoulderHeight - p.hipHeight;
+  const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
+    : Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * span;
   if (low && overflow > 0) request(h.asks, { lower: Math.min(SQUAT * p.height, lower + overflow) * share });
   request(h.asks, { bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
 }
