@@ -1015,7 +1015,7 @@ export class Stepper {
   /** A swinging foot: minimum jerk toward its landing (heel strike), the lift arc over it, clear of the floor. */
   private swingPose(now: Now, leg: Leg, w: Swing, flying: number): FootPose {
     const { st, feet } = this, s = st.scale, pelvis = this.pelvis, { f, r, dt, airborne, air, rise, vy, moving } = now;
-    const { toes: toesBone, top } = feet.legs[leg.i];
+    const { top } = feet.legs[leg.i];
     if (airborne && !w.rel) this.relaunch(now, leg, w);
     const u = w.u;
     // (landing as it will stand: heel up already where the shank will lean past the ankle's bend, the hips as low as they are going)
