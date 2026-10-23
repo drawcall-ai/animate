@@ -12,7 +12,7 @@ const dt = 1 / 60;
 function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
   const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: true });
-  let lag = 0, sway = 0, steps = 0;
+  let apart = 0, steps = 0;
   const phases = h.feet.map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {
     root.velocity.add(velocity(t).sub(root.velocity).clampLength(0, 10 * dt));
@@ -20,18 +20,16 @@ function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => 
     root.yaw += (yaw(t) - root.yaw) * (1 - Math.exp(-dt / 0.025));
     h.update(dt);
     each?.(t, root, h);
+    // (the hips about the root: swaying over the stance foot, shifted fore and aft as the trunk nods)
     const hips = h.pose.position(0);
-    // (the root exact along the facing; the hips swaying across it only)
-    const off = new Vector3(hips.x - root.position.x, 0, hips.z - root.position.z);
-    lag = Math.max(lag, Math.abs(off.dot(forwardOf(h.locomotion.facing))));
-    sway = Math.max(sway, Math.abs(off.dot(leftOf(h.locomotion.facing))));
+    apart = Math.max(apart, Math.hypot(hips.x - root.position.x, hips.z - root.position.z));
     h.feet.forEach((foot, s) => { if (foot.phase === 'swing' && phases[s] === 'planted') steps++; phases[s] = foot.phase; });
   }
-  return { h, lag, sway, steps, root };
+  return { h, apart, steps, root };
 }
 
-/** the hips' sway about the root at most (m): ±1.4 cm walking */
-const SWAY_BAND = 0.0141;
+/** the hips' sway about the root at most (m): recalled (Orendurff et al. 2004), the pelvis sways 3–5 cm peak to peak walking */
+const SWAY_BAND = 0.025;
 
 const moving = (from: number, to: number, v: Vector3) => (t: number) => t > from && t < to ? v.clone() : new Vector3();
 
@@ -44,9 +42,8 @@ it.each([
   ['sprint start and stop', (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 5 ? (t > 1.5 && t < 4 ? 3.5 : 1.4) : 0)],
   ['strafe reversals', (t: number) => t < 1 ? new Vector3() : t < 3 ? forwardOf(0).multiplyScalar(1.4) : t < 4.5 ? leftOf(0).multiplyScalar(1.1) : t < 6 ? leftOf(0).multiplyScalar(-1.1) : new Vector3()],
 ] as const)('%s: the body is the given root; feet step without sliding, crossing or a hard touchdown', (_, velocity) => {
-  const { h, lag, sway, steps } = drive(8, velocity);
-  expect(lag).toBeLessThan(1e-9);
-  expect(sway).toBeLessThanOrEqual(SWAY_BAND);
+  const { h, apart, steps } = drive(8, velocity);
+  expect(apart).toBeLessThanOrEqual(SWAY_BAND);
   expect(steps).toBeGreaterThan(4);
   expect(h.log).toEqual([]);
   // (the balance bound is only noted for a driven body)
@@ -80,34 +77,36 @@ it.each([
   expect(arrival).toBeLessThan(20.5);
 });
 
-// (a player standing at ease: it breathes, sways and now and then shifts its weight over a foot — not frozen; holding still to aim, its
-// breathing and sway keep 30%; the root stays exact all the while)
+// (a player standing at ease: it breathes, sways and now and then shifts its weight onto a foot — not frozen, its centre of mass over
+// the feet; holding still to aim, its breathing and sway keep 30% (Era et al. 1996, as `Life` has it) — the hips within that share of
+// quiet stance's ≤ 1 cm sway (Winter 1995), no weight shift)
 it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
   const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root, seed: 3 }), { idle: false, dev: true });
-  let lowest = Infinity, highest = -Infinity, left = 0, right = 0, lag = 0;
+  let lowest = Infinity, highest = -Infinity, left = 0, right = 0, over = -Infinity;
   for (let t = dt; t <= 40; t += dt) {
     request(h.asks, { steady });
     h.update(dt);
     if (t < 2) continue;
-    const chest = h.pose.local(INDEX.chest);
-    const pitch = 2 * Math.asin(chest.x);
+    // (the thorax's pitch: the chest as it is turned in the world)
+    const pitch = Math.asin(-new Vector3(0, 0, 1).applyQuaternion(h.pose.rotation(INDEX.chest)).y);
     [lowest, highest] = [Math.min(lowest, pitch), Math.max(highest, pitch)];
     const off = h.pose.position(0).clone().sub(root.position);
-    lag = Math.max(lag, Math.abs(off.z));
     [left, right] = [Math.max(left, off.x), Math.min(right, off.x)];
+    // (the centre of mass across, past the ankle it shifts onto)
+    const com = h.pose.com(new Vector3()).x, ankles = [INDEX.leftFoot, INDEX.rightFoot].map((bone) => h.pose.position(bone).x);
+    over = Math.max(over, com - Math.max(...ankles), Math.min(...ankles) - com);
   }
   const breath = (highest - lowest) * 180 / Math.PI;
-  expect(lag).toBeLessThan(1e-9);
   expect(h.log).toEqual([]);
+  expect(over).toBeLessThan(0);
   if (steady) {
     // (~30% of the 2–3° at ease, no weight shift)
     expect(breath).toBeLessThan(1.2);
-    expect(Math.max(left, -right)).toBeLessThan(0.002);
+    expect(Math.max(left, -right)).toBeLessThan(0.3 * 0.01);
   } else {
     expect(breath).toBeGreaterThan(1.5);
     expect(Math.max(left, -right)).toBeGreaterThan(0.008);
-    expect(Math.max(left, -right)).toBeLessThanOrEqual(SWAY_BAND);
   }
 });
 
@@ -115,8 +114,8 @@ it.each([
   ['a quarter turn in place', Math.PI / 2],
   ['a half turn in place', 0.95 * Math.PI],
 ])('%s: the feet step round after the facing, the pelvis within reach of them', (_, turn) => {
-  const { h, lag, steps } = drive(4, () => new Vector3(), (t) => t > 0.5 ? turn : 0);
-  expect(lag).toBeLessThan(1e-9);
+  const { h, apart, steps } = drive(4, () => new Vector3(), (t) => t > 0.5 ? turn : 0);
+  expect(apart).toBeLessThanOrEqual(SWAY_BAND);
   expect(steps).toBeGreaterThanOrEqual(2);
   expect(h.log).toEqual([]);
   expect(Math.abs(h.locomotion.facing - turn)).toBeLessThan(0.01);
@@ -124,9 +123,9 @@ it.each([
 });
 
 it('walks a curve while turning, then stops and turns back in place', () => {
-  const { h, lag } = drive(7, (t) => t > 0.5 && t < 4 ? forwardOf(t > 1 ? (t - 1) * 0.4 : 0).multiplyScalar(1.4) : new Vector3(),
+  const { h, apart } = drive(7, (t) => t > 0.5 && t < 4 ? forwardOf(t > 1 ? (t - 1) * 0.4 : 0).multiplyScalar(1.4) : new Vector3(),
     (t) => t < 1 ? 0 : t < 4 ? (t - 1) * 0.4 : t < 4.8 ? 1.2 : -0.6);
-  expect(lag).toBeLessThan(1e-9);
+  expect(apart).toBeLessThanOrEqual(SWAY_BAND);
   expect(h.log).toEqual([]);
   expect(Math.abs(h.locomotion.facing + 0.6)).toBeLessThan(0.01);
 });
@@ -181,7 +180,7 @@ it.each([
   ['from a sprint', 3.5],
 ])('jumps %s: dips, flies the ballistic arc, lands it with the knees, without a slide or a knee snap', (_, speed) => {
   let pressed = NaN, off = NaN, landed = NaN, top = 0, standing = 0;
-  const { h, lag } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h) => {
+  const { h, apart } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h) => {
     const legs = h.stepper!;
     if (Math.abs(t - 1.5) < dt / 2) { legs.jump(2.5); [pressed, standing] = [t, h.pose.position(0).y]; }
     if (legs.airborne && Number.isNaN(off)) off = t;
@@ -192,7 +191,7 @@ it.each([
   expect(landed - off).toBeGreaterThan(0.45);
   expect(landed - off).toBeLessThan(0.6);
   expect(top).toBeGreaterThan(0.25);
-  expect(lag).toBeLessThan(1e-9);
+  expect(apart).toBeLessThanOrEqual(SWAY_BAND);
   expect(h.log).toEqual([]);
 });
 

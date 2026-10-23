@@ -1,4 +1,4 @@
-// A player's body: the core stepper keeps the legs under the root the scene drives; here the trunk, the leg chains and the human checks.
+// A person's body over its root, whoever drives it: the core stepper keeps the legs under it; here the carriage, the leg chains and the human checks.
 import { Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../core/body';
@@ -7,81 +7,83 @@ import { solveChain } from '../core/chain';
 import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { clampRotation } from '../core/limits';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, smoothstep, wrapAngle } from '../core/math';
+import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, smoothstep, wrapAngle, yawOf } from '../core/math';
 import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal } from '../core/legs/stepper';
-import { TrackedRotation } from '../core/track';
-import { Inertia } from '../core/inertia';
-import { createAsks, takeAsks, type Asks } from '../core/asks';
+import { TrackedPoint, TrackedRotation } from '../core/track';
+import { createAsks, takeAsks, type Asks, type Stance } from '../core/asks';
 import { seedOf } from '../core/random';
 import { Life } from './posture/life';
 import { ankleFor, ballOf, footRotation, heelOf } from './posture/foot';
 import { kneePole, shankTilt } from './posture/leg';
+import { BOW, PELVIS, TURN, followed } from './posture/pace';
+import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './posture/posture';
+import { armsHeld } from './posture/turn';
 import { hullOf, outside, xcomOfPoses } from '../core/legs/support';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { solePoints } from './landmarks';
 import { humanStepping } from './legs';
 import { KNEE_FLEXION } from './profile/limits';
-import { armsHeld, strideTurn, type Turn } from './posture/turn';
+import { defaultStance } from './stance';
 
 /**
- * Tuned: the trunk leaning forward crouched (rad), following within `TRUNK` (rad/s²); recalled (CMU mocap, as the balance posture has it): it
- * nods ~±1.2° walking, ~±3° running (rad, peak). Read (Thorstensson et al. 1984, Acta Physiol Scand 121:9, abstract): the trunk leans
- * forward ~6° walking, up to ~13° the faster it runs; tuned: `LEAN` (rad) on the nod's own forward mean, its hips → neck ~6° at 1.3 m/s.
- */
-const CROUCH_LEAN = 0.3, LEAN = { walk: 0.11, run: 0.12 }, LEANING = { accel: 3 }, TRUNK = { accel: 60 }, NOD = { walk: 0.06, run: 0.09 };
-/**
  * How quickly a person's legs take it up to a pace and down from it (m/s²), which the trunk carries itself at — its lean into the
- * acceleration (`Inertia`), its walking lean and nod — however quick the scene's root: read (Leteneur et al. 2013, PLoS ONE 8:e55256),
- * setting off the centre of mass is at 1.0 m/s by the first heel strike 0.96 s on, ~1 m/s², the trunk leaning ~7° over that step;
- * read (Crenna, Cuong & Brenière 2001, J Physiol, PMC2279001), stopping from a fast walk takes one stride in 98% of trials (30% from a
- * natural one); recalled, people brake about twice as hard as they speed up (the planner's `BRAKE_FACTOR` 2.2). Tuned: 1.5 and 3.3 — a
- * player's 10 m/s² set-off no longer throws the trunk 3° → 15° at ~100°/s, nor a stop back at ~45°/s: both now ≤ ~35°/s.
+ * acceleration (`Inertia`) and its walking lean — however quick the root: read (Leteneur et al. 2013, PLoS ONE 8:e55256), setting off the
+ * centre of mass is at 1.0 m/s by the first heel strike 0.96 s on, ~1 m/s², the trunk leaning ~7° over that step; read (Crenna, Cuong &
+ * Brenière 2001, J Physiol, PMC2279001), stopping from a fast walk takes one stride in 98% of trials (30% from a natural one); recalled,
+ * people brake about twice as hard as they speed up (the planner's `BRAKE_FACTOR` 2.2). Tuned: 1.5 and 3.3 — a player's 10 m/s² set-off
+ * no longer throws the trunk 3° → 15° at ~100°/s, nor a stop back at ~45°/s; a planner's root, paced already, is carried as it goes.
  */
 const PACE = { push: 1.5, brake: 3.3 };
-/** Recalled: anterior pelvic tilt grows with speed (~5° walking, ~15° running; Novacheck 1998); tuned: changing within `accel` (rad/s²). */
-const TILT = { walk: 0.06, run: 0.25, accel: 8 };
 /**
- * Recalled (Orendurff et al. 2004): the pelvis sways ~3–5 cm peak to peak over the stance foot walking, a runner's less; tuned: ±1.4 cm
- * walking, ±0.9 cm running (m, default body) — one sinusoid a stride, followed within `accel` (m/s²), the root kept exact — a player's camera and movement ride the root, not the hips
+ * Tuned: the ankles' middle stands this far behind the centre of mass (m; the old balance stood it `OVER_ANKLES` ahead of them; walking,
+ * less leaves the extrapolated centre of mass past the toes as the trailing foot lifts, more lowers the pelvis before contact)
  */
-const SWAY = { walk: 0.014, run: 0.009, accel: 1 };
+const OVER = 0.021;
 /**
- * Standing, its quiet life (`Life`: breathing, a seeded sway, weight shifts every 10–30 s — fading as it moves, and as it holds still to
- * aim, `asks.steady`). Recalled (Winter 1995; Prieto et al. 1996): quiet stance sways as an inverted pendulum about the ankles, the centre
- * of mass ~5–10 mm, mostly below 0.5 Hz: here the trunk leans by that sway over `pendulum` (m, ~the default body's centre of mass height),
- * the root kept exact. Tuned: a weight shift moves the pelvis `shift` (m, default body) over a foot — within the walking sway's band —
- * followed within `accel` (m/s²), ~1 s.
+ * Tuned (rad): crouched with its hips sitting back behind its feet, the trunk bows this far forward at the deepest, bringing its mass
+ * back over them — upright, a full crouch leaves the centre of mass ~1 cm behind the heels
  */
-const QUIET = { pendulum: 1, shift: 0.012, accel: 0.05 };
-/** Tuned (rad/s²): the pelvis's turn with the stride changes within this — ~4× a running pelvis's own swing (±0.2 rad at 1.4 strides/s peaks at ~16 rad/s², arms held ×1.6): only a walk eased into a run, or back, is smoothed */
-const TURN = { accel: 120 };
-/** Tuned (rad/m): the trunk leans back over the sway a little, the chest riding the pelvis no wider than it */
-const KEEP = 1;
+const CROUCH_LEAN = 0.3;
+/** Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low: ~0.26 m); a deeper ask waits for it to slow */
+const WALKING_CROUCH = 0.5;
+/** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */
+const LOWERED = 0.02;
 /** Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing (with its toe-out); tuned: eased in over this share of the swing */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1 };
 
 /**
- * Legs under a root the scene drives (`root`, read every sub-step; see `Stepper`): `h.stepper` takes a `jump` and says when
- * it is `airborne`. The pelvis tips forward with the stride; the trunk takes `h.asks.bow` and `twist`, nods as each foot takes
- * the weight; the pelvis' height is the legs' own (`crouch`, a leap): `lower` is not taken.
- * Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`), less as it holds still (`asks.steady`).
- * Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
+ * Legs under a root the scene drives (`root`, read every sub-step; see `Stepper`) — its hips over the floor, as a game's character
+ * capsule carries them: `h.stepper` takes a `jump` and says when it is `airborne`; the body over it is carried as a walker's is
+ * (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
 export function driven(h: Humanoid, root: Live<DrivenRoot>, seed?: number): Behaviour {
   return drivenBy(h, (f) => live(root, f), { seed });
 }
 
 /**
- * `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`); a body carrying
- * itself otherwise (`carry`: a walker's posture) places the pelvis and trunk itself, its quiet life its own.
+ * A person's root as the stepper takes it, at the hips (a scene's: the feet under them) or at the body's centre of mass (`centre`, a
+ * planner's: the hips holding it there, the feet's middle `OVER` behind it); and whether a walk is under way on it (`underway`, a
+ * planner's: from its start till it stops), else as the body moves.
  */
-export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal, { carry, seed }: {
-  carry?: (f: Frame, asks: Asks, stepper: Stepper) => [pelvis: number, thorax: number]; seed?: number } = {}): Behaviour {
+export interface PersonRoot extends RootGoal {
+  centre?: boolean;
+  underway?: boolean;
+}
+
+/**
+ * `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a scene's; a planner's, toward `asks.go`). Whoever
+ * drives it, the body is carried over it one way, as `Posture` has it: the hips swaying and turning with the stride about the root
+ * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
+ * to (`PACE`), nodding, bowed and twisted as asked, the thorax counter-rotating. Let down as asked (`lower`) or as the root crouches it,
+ * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
+ * less as it holds still (`asks.steady`).
+ */
+export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => PersonRoot, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
   return function* () {
-    const p = h.proportions;
+    const p = h.proportions, s = p.scale;
     const soles = SIDES.map((side, i) => [heelOf(p), ...[p.sole.bigToe, p.sole.smallToe]
       .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(p, side)))]);
     const feet: Feet = { hip: p.hipHalfWidth, length: p.legLength, thigh: p.thigh, shin: p.shin, fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: p.ankleHeight, rotation: footRotation,
@@ -99,83 +101,84 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
     // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
     const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, h.feet, h.yaw));
     let stepper = stepperFor(true), told = false;
-    const { run: runs, toeOut } = humanStepping(p);
-    const asks = createAsks();
-    const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], leans = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
-    const inertia = h.species.inertia && new Inertia(h.species.inertia);
-    let pace: Vector3 | null = null;
-    const life = new Life(seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z)), shifts = [0, 0];
+    const { toeOut, crouch: crouching } = humanStepping(p);
+    const asks = createAsks(), base = { ...defaultStance(p), ...options.stance };
+    const c: Upright = { p, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false, stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false };
+    const posture = new Posture(h.species.inertia), life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
+    const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 }, asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
+    const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
+    const tilts = [new Quaternion(), new Quaternion()];
+    let offsets: Vector3[] | null = null, pace: Vector3 | null = null, phase = 0;
     yield* action<Frame>({ update: (f) => {
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
       const dt = f.dt, r = rootOf(f, asks, stepper);
       if (!told && !r.forecast) stepper = stepperFor(false);
-      // (balance read off the body as it last stood, as the checks read it)
-      r.xcom = xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3());
       told = true;
-      if (!carry) {
-        // (the pelvis and the thorax turned with the stride as the feet last stood — the pelvis's turn followed within `TURN`, a run
-        // setting in within a step not snapping it round — the legs told of it before they reach from its hips; its arms held, the trunk
-        // turns further)
-        const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(forwardOf(stepper.yaw, _f));
-        strideTurn(ahead, p.legs, stepper.moving, stepper.run, armsHeld(h), turn);
-        turn.pelvis = follow(turns[0], turns[1], turn.pelvis, TURN, dt);
-        [turns[0], turns[1]] = [turns[1], turn.pelvis];
-        stepper.turn = turn.pelvis;
+      // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
+      if (!offsets) {
+        const from = r.centre ? f.prev.com(new Vector3()).setY(0) : r.position;
+        offsets = [f.prev2.position(0).clone().sub(from).setY(0), f.prev.position(0).clone().sub(from).setY(0)];
       }
-      stepper.move(f, r);
-      const k = stepper.crouch;
-      const { yaw, moving, run, Ts, legs } = stepper;
-      // (a body carrying itself otherwise — a walker's posture — places the pelvis and trunk itself, its thorax turned so far)
-      if (carry) [turn.pelvis, turn.thorax] = carry(f, asks, stepper);
-      if (!carry) {
-        // (the trunk carries itself at the pace its legs could have taken it to, within `PACE`: a player's quicker root does not throw
-        // it; spawned on the move, at that pace)
-        pace ??= new Vector3(r.velocity.x, 0, r.velocity.z);
-        const change = _v.set(r.velocity.x, 0, r.velocity.z).sub(pace);
-        pace.add(change.clampLength(0, (change.dot(pace) < 0 ? PACE.brake : PACE.push) * dt));
-        const paced = smoothstep(0, 1, pace.length()), running = smoothstep(runs[0], runs[1], pace.length());
-        // the pelvis tipped forward with the stride (room for the hip to extend behind), the trunk leaning on it as asked
-        // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
-        const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
-        [tilts[0], tilts[1]] = [tilts[1], tilt];
-        // (and the trunk leaning forward with the pace it goes forward — not side-stepping nor backing — taken up and given up gently)
-        const onward = smoothstep(0, 1, Math.max(0, pace.dot(forwardOf(yaw, _f))));
-        const forward = follow(leans[0], leans[1], lerp(LEAN.walk * onward, LEAN.run, running), LEANING, dt);
-        [leans[0], leans[1]] = [leans[1], forward];
-        f.current.setLocal(0, quatYXZ(yaw + turn.pelvis, tilt, 0, _q));
-        // (its quiet life: standing settled, nothing else asked of the legs or the trunk, it may shift its weight — let go as it walks off)
-        // (motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
-        const speed = Math.hypot(r.velocity.x, r.velocity.z), activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
-          f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
-        life.update(dt, !asks.go && stepper.settled && speed < 0.05 && asks.lower === 0 && asks.bow === 0 && asks.steady === 0, activity, asks.steady);
-        const shift = follow(shifts[0], shifts[1], QUIET.shift * p.scale * (life.onto === 'left' ? 1 : life.onto === 'right' ? -1 : 0), { accel: QUIET.accel }, dt);
-        [shifts[0], shifts[1]] = [shifts[1], shift];
-        // (the pelvis swaying over the stance foot, the root staying where the player has it: only the hips move about it)
-        // (a sinusoid of the stride, over the left foot at the right's mid-swing: `phase` 0 as the left lifts, its mid-swing π (1 − stance share) on)
-        const sway = follow(sways[0], sways[1], shift * (1 - moving) - lerp(SWAY.walk, SWAY.run, run) * p.scale * moving * Math.cos(stepper.phase - Math.PI * (1 - Ts / stepper.cycle)), { accel: SWAY.accel }, dt);
-        [sways[0], sways[1]] = [sways[1], sway];
-        f.current.setRoot(_v.copy(f.current.position(0)).addScaledVector(leftOf(yaw, _f), sway));
-        // (the trunk nods forward as each foot takes the weight, about its landing: continuous as feet lift and land, taken up with the
-        // pace; it leans into speeding up, back from slowing down and into a turn, as the body's `inertia` has it at that pace)
-        const nod = lerp(NOD.walk, NOD.run, running) * Math.min(moving, paced) * legs.reduce((sum, leg) => sum + 1 - Math.sin(Math.PI * (leg.swing ? leg.swing.u : Math.min(1, leg.planted / Ts))) ** 2, 0) / 2;
-        inertia?.step(pace, yaw, dt);
-        const lean = inertia ?? { pitch: 0, roll: 0 };
-        // (the thorax turned off the pelvis, the shoulder going forward rising with it)
-        const twist = clamp(asks.twist + turn.thorax - turn.pelvis, -0.8, 0.8);
-        const bend = quatYXZ(twist, asks.bow + forward + CROUCH_LEAN * k + lean.pitch - tilt + nod + life.drift.z / QUIET.pendulum,
-          KEEP * sway / p.scale + lean.roll - life.drift.x / QUIET.pendulum, _bend).slerp(IDENTITY, 0.5);
-        // (the shoulders' own roll with the stride, and the chest's breath)
-        const shoulders = quatYXZ(0, life.breath, turn.roll, _roll);
-        [INDEX.spine, INDEX.chest].forEach((bone, k) => {
-          const local = _local.copy(bend), limit = f.current.skeleton.limits[bone];
-          if (bone === INDEX.chest) local.multiply(shoulders);
-          if (limit) clampRotation(local, limit);
-          const followed = trunk[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TRUNK, dt, _q);
-          if (limit) clampRotation(followed, limit);
-          f.current.setLocal(bone, followed);
-        });
-      }
+      // the hips carried off the root: swaying and turning with the stride, off a centre of mass's as far as the mass leans ahead of them
+      const speed = r.velocity.length();
+      c.stance = asks.stance ? { ...base, ...asks.stance } : base;
+      [c.walk, c.moving, c.yaw, c.held] = [walking(c.walk, speed, dt), r.underway ?? h.locomotion.moving, stepper.yaw, armsHeld(h)];
+      c.root.copy(r.position);
+      // (the trunk carries itself — leaning, running — at the pace its legs could have taken it to, within `PACE`: a player's quicker root
+      // does not throw it; spawned on the move, at that pace)
+      pace ??= new Vector3(r.velocity.x, 0, r.velocity.z);
+      const change = _v.set(r.velocity.x, 0, r.velocity.z).sub(pace), most = (change.dot(pace) < 0 ? PACE.brake : PACE.push) * dt;
+      if (change.length() <= most) pace.set(r.velocity.x, 0, r.velocity.z);
+      else pace.addScaledVector(change, most / change.length());
+      c.velocity.copy(pace);
+      c.run = stepper.run;
+      if (r.centre) c.offset.copy(posture.center(f));
+      // (its quiet life: motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
+      const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
+        f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
+      life.update(dt, life.quiet(asks, h), activity, asks.steady);
+      // (let down, bowed and twisted at a squat's pace — or twisted at the rate asked, the trunk's joints pacing it within `TURN`: an aim
+      // tracks a turning look)
+      const twisting = asks.twistRate * dt, twist = twisting > 0 ? asked.twist[1] + clamp(asks.twist - asked.twist[1], -twisting, twisting) : follow(asked.twist[0], asked.twist[1], asks.twist, BOW, dt);
+      [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
+      const requested = { lower: followed(asked.lower, asks.lower, LOWER, dt), bow: followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt), twist };
+      const swing = stepper.legs.find((leg) => leg.swing)?.swing;
+      // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts; running, the stance leg compresses toward
+      // mid-stance, as the stepper lets the pelvis down)
+      phase = entrain(phase, stepper.phase, 2 * Math.PI / stepper.cycle, dt);
+      const compression = Math.min(1, stepper.legs.reduce((sum, leg) => sum + (leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / stepper.Ts)) ** 2), 0));
+      // (crouched over a root at its hips — sitting back behind the feet, the mass not held over the root — the trunk bows over them by
+      // `CROUCH_LEAN`, as the legs take the crouch)
+      const stoop = r.centre ? 0 : CROUCH_LEAN * stepper.crouch;
+      posture.carry(f, c, { ...requested, bow: requested.bow + stoop }, trunk, life,
+        { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle }, (height) => height);
+      const offset = hips.follow(offsets[0], offsets[1], c.pelvis.clone().sub(c.root).setY(0), PELVIS, dt, new Vector3());
+      [offsets[0], offsets[1]] = [offsets[1], offset];
+      // (the pelvis's turn with the stride followed off the facing; running, the legs are told of it before they reach from its hips —
+      // reversed, it swings the stance hip back off its foot; walking, they reach from a pelvis square to its facing, as a walker's do)
+      const tilt = rotation.follow(tilts[0], tilts[1], new Quaternion().setFromAxisAngle(UP, -c.yaw).multiply(c.pelvisRotation), TURN, dt, new Quaternion());
+      [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
+      stepper.turn = yawOf(tilt) * c.run;
+      // (the stepper given the feet's middle — a centre of mass's `behind` it, the hips that far ahead of it again; let down as asked or
+      // as the root crouches it, the feet staying put; balance read off the body as it last stood, as the checks read it)
+      const behind = r.centre ? feetBehind(stepper, s) : ZERO, forecast = r.forecast;
+      stepper.move(f, { ...r, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
+        // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass.
+        hips: offset.clone().add(behind), com: r.centre ? offset.clone().sub(c.offset).add(behind) : undefined,
+        crouch: Math.max(r.crouch ?? 0, Math.min(crouchFor(requested.lower / (crouching.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed)))),
+        tiptoe: Math.max(0, -requested.lower), still: !c.moving && Math.abs(requested.lower) > LOWERED * s,
+        xcom: xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3()) });
+      const { yaw, moving, run, legs } = stepper;
+      // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest
+      f.current.setLocal(0, tilt.premultiply(new Quaternion().setFromAxisAngle(UP, yaw)));
+      const chest = new Quaternion().setFromAxisAngle(UP, yaw - c.yaw).multiply(trunk.chest);
+      const half = f.current.local(0).clone().invert().multiply(chest).slerp(new Quaternion(), 0.5);
+      [INDEX.spine, INDEX.chest].forEach((bone, k) => {
+        const local = half.clone(), limit = f.current.skeleton.limits[bone];
+        if (limit) clampRotation(local, limit);
+        f.current.setLocal(bone, back[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TURN, dt, new Quaternion()));
+      });
       // the legs down to the feet
       legs.forEach((leg, i) => {
         const side = SIDES[i], thigh = f.current.position(INDEX[`${side}UpperLeg`]);
@@ -218,11 +221,11 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         h.feet[i].phase = leg.swing ? 'swing' : 'planted';
       });
       const g = h.locomotion, stepping = legs.some((leg) => leg.swing);
-      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.pelvisYaw, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, turn.pelvis, turn.thorax];
+      [g.phase, g.walk, g.run, g.facing, g.facingAhead, g.moving, g.pelvisYaw, g.thoraxYaw] = [stepper.phase, moving, run, wrapAngle(yaw), wrapAngle(yaw), Math.hypot(r.velocity.x, r.velocity.z) > 0.05 || stepping, trunk.pelvisYaw, trunk.thoraxYaw];
       g.velocity.copy(r.velocity).setY(0);
       g.planted = g.moving ? 0 : g.planted + dt;
       g.settled = stepper.settled;
-      if (!carry) g.quiet.set(0, 0, 0);
+      g.quiet.copy(posture.quiet);
     } });
   };
 }
@@ -264,5 +267,16 @@ function check(h: Humanoid, f: Frame, dev: Dev, legs: readonly Leg[]) {
   if (value > LIMIT.xcom) dev.note(time, { check: 'driven XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
 }
 
-const IDENTITY = new Quaternion(), _roll = new Quaternion(), _q = new Quaternion(), _bend = new Quaternion(), _local = new Quaternion();
-const [_a, _b, _pole, _v, _f, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+/** where the feet's middle stands from the centre of mass (`OVER` behind it, facing as the stepper does; × `scale`) */
+export const feetBehind = (stepper: Pick<Stepper, 'yaw'>, scale: number) => forwardOf(stepper.yaw).multiplyScalar(OVER * scale);
+
+/** the crouch (0 … 1) that lets the pelvis down `share` of the stepper's depth (its `minimumJerk` easing undone) */
+function crouchFor(share: number): number {
+  if (share <= 0 || share >= 1) return clamp(share, 0, 1);
+  let [lo, hi] = [0, 1];
+  for (let k = 0; k < 24; k++) [lo, hi] = minimumJerk((lo + hi) / 2) < share ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
+  return (lo + hi) / 2;
+}
+
+const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), _local = new Quaternion();
+const [_a, _b, _pole, _v, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];

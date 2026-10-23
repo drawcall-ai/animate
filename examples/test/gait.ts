@@ -40,6 +40,9 @@ interface Sample {
   pelvisYaw: number;
   thoraxRoll: number;
   thoraxYaw: number;
+  /** the thorax segment's own roll and yaw (rad): across its sternoclavicular joints, not the shoulders the girdle moves on its own */
+  segmentRoll: number;
+  segmentYaw: number;
   lean: number;
   headRoll: number;
   headYaw: number;
@@ -162,6 +165,7 @@ export class GaitKinematics {
     const thorax = angles(j('leftUpperArm'), j('rightUpperArm'));
     const head = angles(j('leftEye'), j('rightEye'));
     const torsoYaw = asked.get('torsoYaw');
+    const segment = angles(j('leftShoulder'), j('rightShoulder'));
     const eyes = j('leftEye').sub(j('rightEye'));
     // Eye-line inclination is independent of yaw, including a look behind the body.
     head.roll = Math.atan2(eyes.y, Math.hypot(eyes.x, eyes.z));
@@ -190,6 +194,8 @@ export class GaitKinematics {
       thoraxRoll: thorax.roll,
       // (approved, 2026-10-21: an asked torso turn — an aim — is taken off, the counter-rotation check judging the stride's own)
       thoraxYaw: thorax.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
+      segmentRoll: segment.roll,
+      segmentYaw: segment.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
       lean: Math.atan2(up.dot(across), up.y),
       headRoll: head.roll,
       headYaw: head.yaw,
@@ -325,9 +331,11 @@ export class GaitKinematics {
       armFit: fit.r2,
       armTurns: turns(S, a, b),
       armAcceleration: acc / (fit.amplitude * ((2 * Math.PI) / (S[b].t - S[a].t)) ** 2),
+      // (the thorax segment's, as motion capture's thorax is — not the shoulder line's: hands on a rifle move the shoulder girdle on
+      // their own)
       rollWithYaw: correlation(
-        S.slice(a, b).map((s) => s.thoraxRoll),
-        thoraxYaw,
+        S.slice(a, b).map((s) => s.segmentRoll),
+        S.slice(a, b).map((s) => s.segmentYaw),
       ),
       headCarry: S.slice(a, b).some((s) => s.gazed) ? NaN : range(S.slice(a, b).map((s) => s.headYaw)) / range(thoraxYaw),
       nod: amp((s) => s.trunk),

@@ -247,6 +247,12 @@ const ARRIVED = Math.PI / 180;
 const LONGEST = 1.2;
 const LEAD = [0.1, 0.3];
 
+/**
+ * How fast (rad/s) an aim's twist is taken up: at once, as a game's aim offset follows the look (recalled: Unreal's Aim Offset, applied
+ * over the spine as the look turns) — the trunk's joints alone pace it, a player's flick turned within them, not at a squat's pace.
+ */
+const AIM_TWIST = Infinity;
+
 /** Upper-body aim, with the gait's counter-rotation and balance preserved.
  * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck.
  * Tuned torso shares: 65% yaw, 25% pitch; the base shares them over spine/chest,
@@ -260,8 +266,8 @@ export function aimAt(h: Body, at: Live<Vector3>): Behaviour {
       const direction = live(at, f).clone().sub(gazer.eyes(f.prev, new Vector3()));
       const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.locomotion.facing);
       const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
-      // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation.
-      request(h.asks, { twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), bow: 0.25 * pitch });
+      // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at `AIM_TWIST`.
+      request(h.asks, { twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), twistRate: AIM_TWIST, bow: 0.25 * pitch });
     } }));
   };
 }

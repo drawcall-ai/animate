@@ -24,11 +24,12 @@ export interface DrivenRoot {
 
 /** A root as the stepper takes it: a scene's (`DrivenRoot`), or the planner's and a walker's, who know more of the body over it. */
 export interface RootGoal extends DrivenRoot {
-  /** where the hips are over the floor from the root, if not over it (m): the root then the feet's middle under the body's centre of mass, the
-   * hips swaying, sitting back or leaning over the toes from it; by default the hips are the root, the feet a crouch's `ahead` of them */
+  /** where the hips are over the floor from the root, if not over it (m): swaying, sitting back or leaning over the toes from it; by
+   * default the hips are the root */
   hips?: Vector3;
-  /** where the centre of mass is over the floor from the root, if the body knows (m; a walker's: a little ahead of its feet's middle);
-   * by default over the hips */
+  /** where the centre of mass is over the floor from the root, if the body keeps it there (m; a walker's: a little ahead of its feet's
+   * middle, the root); by default over the root — the hips swaying about it, not the mass — the feet a crouch's `ahead` of the hips
+   * as they sit back */
   com?: Vector3;
   /** how far up on the balls of its feet (m): the planted feet roll onto them as the hips rise */
   tiptoe?: number;
@@ -369,7 +370,7 @@ export class Stepper {
     const timed = { ...root, ...timing };
     const body: Body = {
       ...timed, yaw, width: this.widthAt(timed, v), moving: smoothstep(0, 1, v),
-      standing: this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? this.hips).setY(0),
+      standing: this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? ZERO).setY(0),
     };
     const now: Now = { ...body, ...this.landingReach(body) };
     this.now = now;
@@ -402,7 +403,7 @@ export class Stepper {
     // (crouched: lower, the feet wider and a little ahead of the hips — the hips sit back — shorter, lower steps)
     const k = clamp(follow(this.crouches[0], this.crouches[1], minimumJerk(clamp(r.crouch ?? 0, 0, 1)), CROUCHING, dt), 0, 1);
     [this.crouches[0], this.crouches[1], this.crouch] = [this.crouches[1], k, k];
-    const sitting = r.hips ? 0 : st.crouch.ahead * s * k, tiptoe = Math.max(0, r.tiptoe ?? 0);
+    const sitting = r.com ? 0 : st.crouch.ahead * s * k, tiptoe = Math.max(0, r.tiptoe ?? 0);
     const hips = this.hips.copy(r.hips ?? ZERO).setY(0);
     this.pelvis.copy(r.position).add(hips);
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)

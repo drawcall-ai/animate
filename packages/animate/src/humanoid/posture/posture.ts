@@ -19,6 +19,12 @@ const RUN_SWAY = 0.008;
 const BOB = 0.016;
 /** the trunk pitches forward at each double support and back over mid-stance (rad; CMU mocap); running, forward as the stance leg compresses */
 const NOD = { walk: 0.02, run: 0.06 };
+/**
+ * Running, the pelvis tips forward this much further (rad), room for the hip to extend behind: recalled (Novacheck 1998, Gait Posture
+ * 7:77), anterior pelvic tilt grows with speed, ~5° walking to ~15° running; tuned 0.25 (the walking tilt not taken up: a walk keeps
+ * the pelvis as it stands). The thorax keeps its own lean over it: the lower back takes the difference.
+ */
+const TILT = 0.25;
 /** how far the pelvis shifts back as the trunk nods forward (× height per rad): the body's centre of mass stays */
 const NOD_SHIFT = 0.1;
 /** how firmly the stride's phase is pulled into step with the feet (1/s) */
@@ -82,11 +88,13 @@ export interface Upright {
   held: boolean;
 }
 
+/** The stride as the feet have it: its phase (rad), the swing's bob and nod (0 … 1), a runner's compression, a foot's share of it standing. */
 export interface Cycle {
   phase: number;
   bob: number;
   nod: number;
   compression: number;
+  stance: number;
 }
 
 /**
@@ -130,7 +138,9 @@ export class Posture {
     const { bob, nod: nodPhase, compression: comp } = cycle;
     const stride = this.phase = cycle.phase;
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
-    const side = -lerp(SWAY, RUN_SWAY, run) * H * Math.sin(stride) * walk;
+    // (over the stance foot at its mid-stance: walking a quarter stride on from the other's lift, as a walk has it; running, its stance
+    // short, half the swing on — π(1 − stance share))
+    const side = -lerp(SWAY, RUN_SWAY, run) * H * Math.sin(stride + run * (Math.PI / 2 - Math.PI * (1 - cycle.stance))) * walk;
     // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
     const walkLift = -(0.001 + BOB * (1 - bob)) * L * walk;
     this.comp += (comp - this.comp) * Math.min(1, 40 * dt);
@@ -157,7 +167,7 @@ export class Posture {
     [this.leans[0], this.leans[1]] = [this.leans[1], pace];
     // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
     const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
-    quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
+    quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow + TILT * run, roll, c.pelvisRotation);
     const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
     pelvis.y = height(standing, standing - MOST_DROP * L, smoothstep(0, TIPTOE * p.scale, -lower));
 
