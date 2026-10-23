@@ -6,20 +6,19 @@ import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import type { Stance } from '../core/asks';
 import { clampRotation } from '../core/limits';
-import type { Stepper, Stepping } from '../core/legs/stepper';
-import { hullOf, past, xcomOfPoses } from '../core/legs/support';
+import type { Stepper } from '../core/legs/stepper';
+import { hullOf, past } from '../core/legs/support';
 import { footprint } from './posture/foot';
 import { BOW, PELVIS, TURN, followed } from './posture/pace';
 import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './posture/pace';
 import { checkSupport } from './posture/checks';
 import { Life } from './posture/life';
-import { LOWER, Posture, squatOf, entrain, walking, type Trunk, type Upright } from './posture/posture';
+import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './posture/posture';
 import { INDEX } from './bones';
 import { drivenBy } from './driven';
 import type { Humanoid } from './humanoid';
 import { armsHeld } from './posture/turn';
 import { humanGait, humanStepping } from './legs';
-import type { Proportions } from './proportions';
 import { defaultStance, OVER_ANKLES } from './stance';
 
 /**
@@ -33,7 +32,7 @@ import { defaultStance, OVER_ANKLES } from './stance';
  */
 export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
   const p = h.proportions, s = p.scale, toeOut = defaultStance(p).toeOut, base = { ...defaultStance(p), ...options.stance };
-  const stepping = walkerStepping(p), stop = new Vector3(), velocity = new Vector3();
+  const stepping = humanStepping(p), stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, moving = false, starting = false, seen = false, phase = 0, still: Vector3 | null = null, leaning = false;
   const c: Upright = { p, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: h.yaw, walk: 0, run: 0, moving: false, stance: base, feet: h.feet, pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false };
   const posture = new Posture(h.species.inertia), life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
@@ -122,10 +121,8 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     [offsets[0], offsets[1]] = [offsets[1], offset];
     // (the stepper given the feet's middle, `behind` the centre of mass, the hips that far ahead of it again)
     const forecast = r.forecast;
-    // (balance read off the body as it last stood, as the checks read it)
-    const xcom = xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3());
     // (let down as asked: the stepper crouches, the feet staying put; asked below none, up on the toes)
-    return { ...r, xcom, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
+    return { ...r, position: r.position.clone().sub(behind), forecast: forecast && ((t) => { const at = forecast(t); return { position: at.position.sub(behind), yaw: at.yaw }; }),
       // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass.
       hips: offset.clone().add(behind), com: offset.clone().sub(c.offset).add(behind), crouch: Math.min(crouchFor(requested.lower / (stepping.crouch.depth * s)), lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed))), tiptoe: Math.max(0, -requested.lower),
       still: !moving && Math.abs(requested.lower) > LOWERED * s };
@@ -143,19 +140,8 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     });
     h.locomotion.quiet.copy(posture.quiet);
     return [trunk.pelvisYaw, trunk.thoraxYaw];
-  }, record: stepping });
+  } });
 }
-
-/**
- * A walker's stepping: a player's, but the stance leg near straight at mid-stance (tuned to Perry's ~5–10° of knee flexion; a
- * player's body keeps more bend), a 60% stance (recalled: Perry 1992, stance 60% of the cycle at free speed; the shorter double
- * support keeps the extrapolated centre of mass within the feet), a deeper bob (tuned: its low in the double support, ~4 cm), a squat
- * as deep as `squatOf` on the feet where they stand, and its balance caught by a step `CAPTURE` past the feet.
- */
-const walkerStepping = (p: Proportions): Stepping => {
-  const player = humanStepping(p);
-  return { ...player, reach: 0.997, cadence: { ...player.cadence, side: SIDE_CADENCE }, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: squatOf(p) / p.scale, wider: 0 }, capture: CAPTURE, push: PUSH };
-};
 
 /** the crouch (0 … 1) that lets the pelvis down `share` of the stepper's depth (its `minimumJerk` easing undone) */
 function crouchFor(share: number): number {
@@ -165,13 +151,6 @@ function crouchFor(share: number): number {
   return (lo + hi) / 2;
 }
 
-/** Tuned: a walker side-stepping at speed steps at this cadence's base (cycles 2 / (base + perSpeed v)): short quick open-and-close steps,
- * its feet a stance or so apart, rather than straddles of a whole cycle's travel */
-const SIDE_CADENCE = 2.7;
-/** Tuned: a walker catches its extrapolated centre of mass this far past its feet (m; the checks allow 0.1) */
-const CAPTURE = 0.07;
-/** Recalled (Perry 1992; Winter 1991): the ankle plantarflexes ~20° just after toe-off, at any walking speed (rad) */
-const PUSH = 20 * Math.PI / 180;
 /** Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low: ~0.26 m); a deeper ask waits for it to slow */
 const WALKING_CROUCH = 0.5;
 /** Tuned: at rest, the weight shifts toward a reach this fast (m/s), its centre of mass kept this far within the feet's edge (m), and back till this near where it rested (m) */

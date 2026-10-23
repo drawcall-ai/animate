@@ -8,7 +8,7 @@ import { follow } from '../core/follow';
 import { live, type Behaviour, type Live } from '../core/goal';
 import { clampRotation } from '../core/limits';
 import { clamp, forwardOf, leftOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, smoothstep, wrapAngle } from '../core/math';
-import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal, type Stepping } from '../core/legs/stepper';
+import { Stepper, type DrivenRoot, type Feet, type Leg, type RootGoal } from '../core/legs/stepper';
 import { TrackedRotation } from '../core/track';
 import { Inertia } from '../core/inertia';
 import { createAsks, takeAsks, type Asks } from '../core/asks';
@@ -78,8 +78,8 @@ export function driven(h: Humanoid, root: Live<DrivenRoot>, seed?: number): Beha
  * `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a planner's, toward `asks.go`); a body carrying
  * itself otherwise (`carry`: a walker's posture) places the pelvis and trunk itself, its quiet life its own.
  */
-export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal, { carry, record = humanStepping(h.proportions), seed }: {
-  carry?: (f: Frame, asks: Asks, stepper: Stepper) => [pelvis: number, thorax: number]; record?: Stepping; seed?: number } = {}): Behaviour {
+export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: Stepper) => RootGoal, { carry, seed }: {
+  carry?: (f: Frame, asks: Asks, stepper: Stepper) => [pelvis: number, thorax: number]; seed?: number } = {}): Behaviour {
   return function* () {
     const p = h.proportions;
     const soles = SIDES.map((side, i) => [heelOf(p), ...[p.sole.bigToe, p.sole.smallToe]
@@ -96,7 +96,10 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle), sign = i === 0 ? 1 : -1;
         return Math.min(heelOf(p, _a).applyQuaternion(foot).y + ankle.y, ...[p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y));
       } };
-    const stepper = (h.stepper = new Stepper(record, feet, h.feet, h.yaw));
+    // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
+    const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, h.feet, h.yaw));
+    let stepper = stepperFor(true), told = false;
+    const { run: runs, toeOut } = humanStepping(p);
     const asks = createAsks();
     const trunk = [new TrackedRotation(), new TrackedRotation()], tilts = [0, 0], leans = [0, 0], sways = [0, 0], turn: Turn = { pelvis: 0, thorax: 0, roll: 0 }, turns = [0, 0];
     const inertia = h.species.inertia && new Inertia(h.species.inertia);
@@ -106,6 +109,10 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
       if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
       takeAsks(h.asks, asks);
       const dt = f.dt, r = rootOf(f, asks, stepper);
+      if (!told && !r.forecast) stepper = stepperFor(false);
+      // (balance read off the body as it last stood, as the checks read it)
+      r.xcom = xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3());
+      told = true;
       if (!carry) {
         // (the pelvis and the thorax turned with the stride as the feet last stood — the pelvis's turn followed within `TURN`, a run
         // setting in within a step not snapping it round — the legs told of it before they reach from its hips; its arms held, the trunk
@@ -127,7 +134,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         pace ??= new Vector3(r.velocity.x, 0, r.velocity.z);
         const change = _v.set(r.velocity.x, 0, r.velocity.z).sub(pace);
         pace.add(change.clampLength(0, (change.dot(pace) < 0 ? PACE.brake : PACE.push) * dt));
-        const paced = smoothstep(0, 1, pace.length()), running = smoothstep(record.run[0], record.run[1], pace.length());
+        const paced = smoothstep(0, 1, pace.length()), running = smoothstep(runs[0], runs[1], pace.length());
         // the pelvis tipped forward with the stride (room for the hip to extend behind), the trunk leaning on it as asked
         // (taken up and given up within an acceleration: a hard start or stop does not jerk the trunk)
         const tilt = follow(tilts[0], tilts[1], lerp(TILT.walk * moving, TILT.run, run), { accel: TILT.accel }, dt);
@@ -175,7 +182,7 @@ export function drivenBy(h: Humanoid, rootOf: (f: Frame, asks: Asks, stepper: St
         const pose = stepper.pose(i, thigh);
         // (swinging, the knee goes the way the foot points, but no further off the pelvis's way than `KNEE_OFF`: a foot still turned far
         // out leaves no knee swung out with it — eased in over the swing's first `KNEE_EASE`, not snapped round as it lifts)
-        const along = stepper.yaw + leg.sign * record.toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
+        const along = stepper.yaw + leg.sign * toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
         const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
         const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(p.thigh).add(thigh);
         // The pole guides the free swing; the chain progressively takes the foot orientation needed for contact.
