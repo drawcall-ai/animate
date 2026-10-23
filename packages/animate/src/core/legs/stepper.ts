@@ -577,6 +577,23 @@ export class Stepper {
     [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, moving, run, Ts, C];
     this.settled = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > 0.4) && legs.every((leg) => !wants(leg));
     this.plant = (leg, at) => plantedPose(leg, at);
+    // (where the feet will land for another forecast: those still re-aimed as this sub-step's would be, for it)
+    this.aim = (forecast) => {
+      const was = r.forecast;
+      r.forecast = forecast;
+      try {
+        return legs.map((leg) => {
+          const w = leg.swing;
+          if (!w || airborne || w.u >= AIMED || (w.age >= (1 - w.u) * w.T && !w.capture)) return leg.anchor;
+          // (kept within reach of the hip as `settle` keeps it)
+          const anchor = leg.anchor, aimed = landing(leg, (1 - w.u) * w.T)[0];
+          leg.anchor = aimed;
+          settle(leg, w, false);
+          leg.anchor = anchor;
+          return aimed;
+        });
+      } finally { r.forecast = was; }
+    };
     // (a gait's body as low as its running lets it down)
     [this.low, this.most] = [standing - ((clocked ? lerp(st.drop.walk, st.drop.run, run) : 0) + st.bob + STEP.short) * s, most];
 
@@ -705,9 +722,13 @@ export class Stepper {
         return Math.hypot(ankle.x - hip.x, ankle.z - hip.z) ** 2 + Math.max(0, this.low + (feet.legs[leg.i].up ?? 0) - ankle.y) ** 2 <= most * most;
       });
     };
-    // (balance first: a walker's extrapolated centre of mass kept within the feet as they stand and land — no further past them than it is)
+    // (balance first: a walker's extrapolated centre of mass kept within the feet as they stand and land — no further past them than it is;
+    // a landing still re-aimed where it lands for this forecast, as `move` would aim it: judged where it was aimed for the last forecast,
+    // a forecast would pass one sub-step and fail the next, once the landing is re-aimed for it — the root flipping between turning and
+    // not each sub-step, the foot landing where either had it)
     if (st.capture !== undefined && legs.some((leg) => leg.swing)) {
-      const support = hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw)));
+      const landings = this.aim(forecast);
+      const support = hullOf(legs.flatMap((leg, k) => feet.print(leg.i, landings[k], leg.yaw)));
       const xcom = (t: number) => { const at = forecast(t).position; return xcomOf(at, _c.subVectors(forecast(t + SUB_STEP).position, at).divideScalar(SUB_STEP), feet.length, _x); };
       const allowed = Math.max(st.capture * st.scale, outside(support, xcom(0))), rest = Math.max(...legs.map((leg) => leg.swing ? (1 - leg.swing.u) * leg.swing.T : 0));
       for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (outside(support, xcom(t)) > allowed + 1e-6) return false;
@@ -734,6 +755,7 @@ export class Stepper {
   }
 
   private plant: (leg: Leg, at: Vector3) => FootPose = () => { throw new Error('pose before move'); };
+  private aim: (forecast: (ahead: number) => { position: Vector3; yaw: number }) => Vector3[] = () => this.legs.map((leg) => leg.anchor);
 
   /** Leg `i`'s foot posed for this sub-step with its top joint at `top` (as the hips now stand); a swinging leg is never asked past its reach, where the knee's swivel is undefined. */
   pose(i: number, top: Vector3): FootPose {

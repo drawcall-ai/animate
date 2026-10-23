@@ -14,7 +14,8 @@ const OPEN = new Set<string>([
   'knight-arming on the soldier: final-pose dev checks',
   'lift-heavy on the soldier: final-pose dev checks',
   'shooter on the outlier: final-pose dev checks',
-  'knight-arming on the outlier: final-pose dev checks',
+  // (on Node 24 only: the knife edge another way on 22)
+  ...process.versions.node.startsWith('22.') ? [] : ['knight-arming on the outlier: final-pose dev checks'],
   // (the core legs, the people's only legs since 2026-10-23: the outlier's planted foot slides 1–1.5 mm a frame as it turns on it
   // (stroll, look-around) and its arm grazes its long trunk; the soldier's short arm reaches round its trunk through it)
   'stroll on the outlier: final-pose dev checks',
