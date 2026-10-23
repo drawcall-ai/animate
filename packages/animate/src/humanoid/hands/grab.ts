@@ -18,7 +18,7 @@ import { gripOf } from '../../core/carrier';
 import type { Grips } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
-import { bowLever, lowering, MOST_BOW, SQUAT } from '../posture/posture';
+import { bowLever, lowering, MOST_BOW, SQUAT, TIPTOE } from '../posture/posture';
 import { problemOnce } from '../../core/dev';
 import { defaultStance } from '../stance';
 
@@ -193,12 +193,14 @@ export function approach(h: Humanoid, holds: Grips | Vector3 | Live<Placement>, 
     let face = options.face ?? facingFor(h, grips);
     const p = h.proportions;
     const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
-    const standing = (h.feet[0].position.y + h.feet[1].position.y) / 2 + p.shoulderHeight;
+    // (the shoulders standing: as high above the floor under the feet — their ankles less the ankle's height — as the body's)
+    const standing = (h.feet[0].position.y + h.feet[1].position.y) / 2 - p.ankleHeight + p.shoulderHeight;
     const reach = ARM_REACH * p.armLength;
     // (a placing point low down the body lowers and bows for, as it does for a grip — as far as it must, at most squatting and bowing
     // its most: its shoulders that much lower and, bowed, that much further on)
     const { drop, forward } = point ? stoop(p, Math.max(0, standing - height - STOOPING * reach)) : { drop: 0, forward: 0 };
-    const shoulders = standing - drop;
+    // (and one above the shoulders it rises onto its toes for, as far as they lift it: `handLowering`'s)
+    const shoulders = standing - drop + (point ? Math.min(TIPTOE * p.scale, Math.max(0, height - standing)) : 0);
     const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) + forward : Infinity;
     // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
     const distance = !point && grips.length === 2 && height < p.hipHeight ? LOW_STAND / Math.sqrt(loadFactor(mass)) : WITHIN;

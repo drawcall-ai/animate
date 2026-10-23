@@ -35,8 +35,10 @@ function personCarried(h: Humanoid, side?: Side) {
   }, () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
   return (f: Frame) => {
     const goal = at(f);
-    // A lift rises out of its squat: its resting height follows the feet, not the lowered pelvis.
-    goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 + h.proportions.hipHeight + CARRY_HEIGHT * h.scale;
+    // A lift rises out of its squat: its resting height follows the floor under the feet (their ankles less the ankle's height), not
+    // the lowered pelvis.
+    const p = h.proportions;
+    goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 - p.ankleHeight + p.hipHeight + CARRY_HEIGHT * h.scale;
     goal.velocity.y = 0;
     return goal;
   };
