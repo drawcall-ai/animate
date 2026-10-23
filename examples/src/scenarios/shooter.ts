@@ -37,9 +37,12 @@ const FLICK = 600;
 // Tuned: how far the rifle rolls for a reload (rad, + toward the left hand), its well turned to the hand bringing the magazine
 const RELOAD_CANT = 0.4;
 // Tuned magazine pouches on the front of the vest, left of the middle, in the chest's frame (+x left, +z ahead; m, the default body's):
-// below the chest, clear of the trunk — where a plate carrier's are, within any arms' easy reach, so the support hand takes and stows a
-// magazine without the body bowing to it.
+// below the chest, clear of the trunk — where a plate carrier's are, so the support hand takes and stows a magazine without the body
+// bowing to it. Out from the chest as the trunk is deep; aside and down as the arms are long (`pouchFor`): a short-armed body wears
+// them nearer its shoulder, as it must to reach them.
 const POUCHES = [new Vector3(0.06, -0.17, 0.16), new Vector3(0.13, -0.17, 0.14)];
+/** pouch `i` for a body `arms` (`Proportions.arms`) over `scale` (its height's) of the default's, in the default body's metres */
+const pouchFor = (i: number, arms: number, scale: number) => POUCHES[i].clone().multiply(new Vector3(arms / scale, arms / scale, 1));
 /**
  * Standing at ease — not aiming, moving or turning — the rifle and the eyes keep a little life, gone as the sights come up (the body's own breathing and sway fade
  * by `steady`, the rifle held still in the aim). Recalled (game convention: first-person weapon idle sway, e.g. Call of Duty, Battlefield,
@@ -236,7 +239,7 @@ export function shooter(): Scenario {
           arms = p.arms;
           rifle.grips.foregrip.position.z = FOREGRIP.z * arms;
           return [{ item: rifle, on: INDEX.rightHand, at: { position: new Vector3(), quaternion: HAND.clone().invert() } },
-            { item: spare, on: INDEX.chest, at: { position: POUCHES[0].clone().multiplyScalar(p.scale) } }];
+            { item: spare, on: INDEX.chest, at: { position: pouchFor(0, arms, p.scale).multiplyScalar(p.scale) } }];
         },
         move: (t) => {
           if (!actor) throw new Error('the player drives its actor');
@@ -330,7 +333,7 @@ export function shooter(): Scenario {
             yield* bring(spent, onItem(rifle, OUT))();
             steps.push('stow');
             // (a placement on a bone scales with the body: the default body's metres)
-            const pouch = { position: POUCHES[slot].clone() };
+            const pouch = { position: pouchFor(slot, arms, h.scale) };
             yield* bring(spent, onBone(h, INDEX.chest, pouch))();
             yield* wear(h, spent, INDEX.chest, { to: pouch, motion: TAKE.seat })();
             yield* withGaze(h, well, function* () {

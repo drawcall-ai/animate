@@ -492,6 +492,25 @@ for (const [body, model] of BODIES) {
     expect(sim.actors[0].log).toEqual([]);
   });
 
+  // (the pouches ride on the vest and the well on the rifle the body holds: bowing would carry them away as far, so the arm alone
+  // reaches them and the trunk stays upright)
+  test('reloads standing upright: the magazine out, stowed, the full one in, the trunk within 3° of upright', () => {
+    const sim = new Simulation(shooter(), model, true), player = sim.stage.player!, h = sim.actors[0];
+    player.live = true;
+    let most = 0;
+    while (sim.t < 6) {
+      player.input.reload = sim.t > 3 && sim.t < 3.1;
+      sim.step();
+      if (sim.t > 3) {
+        const up = h.pose.position(INDEX.neck).clone().sub(h.pose.position(INDEX.hips));
+        most = Math.max(most, Math.atan2(Math.hypot(up.x, up.z), up.y));
+      }
+    }
+    expect(player.status!().steps).toEqual(['to magazine', 'out', 'stow', 'to pouch', 'insert', 'handguard']);
+    expect(most).toBeLessThan(3 * Math.PI / 180);
+    expect(h.log).toEqual([]);
+  });
+
   test('reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept', () => {
     const { frames, steps, sim } = recorded();
     expect(steps).toEqual(['to magazine', 'out', 'stow', 'to pouch', 'insert', 'handguard']);
