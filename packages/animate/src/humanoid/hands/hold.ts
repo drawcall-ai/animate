@@ -39,7 +39,9 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
       const aim = h.carrying.get(item);
       // (what another moves — a scene, another body — the hands keep to, the body not coming along for it)
       const moved = item.moved(f.time);
-      if (!aim && !item.supported && !item.wornBy && !moved) {
+      // (what nothing else moves goes along with the body: the body does not bow or step toward it — it would take it along)
+      const along = !aim && !item.supported && !item.wornBy && !moved;
+      if (along) {
         const turn = new Quaternion().copy(f.current.rotation(0)).multiply(new Quaternion().copy(f.prev.rotation(0)).invert());
         const at = item.current.position.clone().sub(f.prev.position(0)).applyQuaternion(turn).add(f.current.position(0));
         item.move(f.time, at, turn.multiply(item.current.quaternion));
@@ -49,7 +51,7 @@ export function followHeld(h: Humanoid): (f: Frame) => void {
       for (const side of sides) {
         const bones = [INDEX[`${side}Shoulder`], ...f.current.skeleton.chain(`${side}Arm`)];
         if (bones.some((bone) => !f.current.local(bone).equals(f.prev.local(bone)))) continue;
-        handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy && !moved }, arms[side]);
+        handStep(h, f, side, gripOf(item, grip(grips, side)), { on: aim ?? item, ...HOLD, lead: !item.wornBy && !moved && !along }, arms[side]);
       }
       // (an item another body has moved this sub-step — handed over, both hands on it — that one carries: these keep to it)
       if (aim && !item.moved(f.time)) fit(h, f, item, aim, grips, sides);
