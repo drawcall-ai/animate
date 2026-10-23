@@ -68,8 +68,7 @@ export const SEGMENT_RADIUS = 0.06;
 
 /**
  * Taking hold of things, each step under way before the last is over: the body walks up to take
- * them; the eyes go toward them (out of view, as far aside as the view goes while the body turns), notice them, follow
- * the path during a long approach, and return to them
+ * them; once they are in view, the eyes notice them, follow the path during a long approach, and return to them
  * within two steps of arriving (on the grips' middle, or `look`; `false`: not); within the last second, the hands set off toward them, the body
  * bowing and bending with the reach. It ends with the hands on the grips: hold on with
  * `hold` or `carry`. Reach waits until the final approach; `first: true` lets the eyes lead. `walk: false` takes them from where it
@@ -112,17 +111,6 @@ export function grab<H extends string>(h: Body<H>, holds: Grips<H>, options: Gra
       f.prev.com(com);
       return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - h.locomotion.facing)) < IN_VIEW;
     };
-    // (not yet in view: toward it, as far aside as the view goes — the eyes and head lead the body's turn to it, in one
-    // movement onto it as the body comes round, not ahead first and then a second shift across; eased into the view's edge
-    // over VIEW_EDGE, so the head does not lurch where it stops following the body's turn)
-    const toward = (f: Frame, at: Vector3): Vector3 | null => {
-      f.prev.com(com);
-      const bearing = wrapAngle(headingOf(at.x - com.x, at.z - com.z) - h.locomotion.facing);
-      const past = Math.abs(bearing) - (IN_VIEW - VIEW_EDGE);
-      if (past <= 0) return null;
-      const heading = h.locomotion.facing + Math.sign(bearing) * (IN_VIEW - VIEW_EDGE * Math.exp(-past / VIEW_EDGE));
-      return ahead.copy(com).setY(at.y).addScaledVector(forwardOf(heading, _side), Math.hypot(at.x - com.x, at.z - com.z));
-    };
     const target = look === true ? () => middleOf(holds) : look;
     const waitingHands = function* () {
       yield* when((f: Frame) => stood || (seen(f) && raising(f)));
@@ -134,9 +122,8 @@ export function grab<H extends string>(h: Body<H>, holds: Grips<H>, options: Gra
     };
     yield* parallel<Frame>('all', walk, function* () {
       if (target === false) { yield* waitingHands(); return; }
+      yield* when((f: Frame) => stood || seen(f));
       yield* withGaze(h, (f) => {
-        const aside = Number.isNaN(noticed) && !stood ? toward(f, live(target, f)) : null;
-        if (aside) return aside;
         if (Number.isNaN(noticed)) noticed = f.time;
         returning ||= close(f) || near(f);
         return stood || returning || f.time - noticed < LOOKING
@@ -149,10 +136,8 @@ export function grab<H extends string>(h: Body<H>, holds: Grips<H>, options: Gra
 }
 
 /** Horizontal view cone (rad, ~80°): neck and head turn ~75°, with the eyes taking the rest.
- * Further aside, the eyes go as far toward it as that and wait for the approach to turn the body to it. */
+ * Further aside, wait for the approach to turn the body before looking. */
 const IN_VIEW = 1.4;
-/** Tuned: how far inside the view's edge (rad) the eyes, waiting for the body to turn, begin to lag what they go toward */
-const VIEW_EDGE = 0.5;
 
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
 const LOOKING = 0.6;
@@ -331,5 +316,4 @@ function facingFor(h: Humanoid, grips: { side?: Side; at: Vector3 }[]): number {
 const flat = (a: Readonly<Vector3>, b: Readonly<Vector3>) => Math.hypot(a.x - b.x, a.z - b.z);
 
 const _com = new Vector3();
-const _side = new Vector3();
 const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

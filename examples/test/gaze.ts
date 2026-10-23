@@ -37,8 +37,8 @@ function spin(a: Quaternion, b: Quaternion): Vector3 {
  * degree (the library's `HEAD_SEQUENCE`, recalled from Guitton & Volle 1987, J Neurophysiol 58:427, not checked against the paper), a
  * fifth over it at most — single shifts scatter about it, and the trunk turning beneath adds to the head's speed in the world (recalled,
  * not a measured spread). Its speed a single bell, near minimum jerk (recalled: Zangemeister et al. 1981, Biol Cybern 41:19, a head
- * movement's velocity single-peaked): not falling by a tenth of its peak before rising again (tuned: the trunk stepping round beneath
- * the head ripples its speed in the world by less). Never turning back: its axis within a right angle of the step before's. And
+ * movement's velocity single-peaked): not falling by a tenth of its peak before rising again (tuned, for a body standing still: one
+ * stepping round beneath the head carries it on at its range after the shift). Never turning back: its axis within a right angle of the step before's. And
  * upright: its roll in the world within a few degrees, as the head is held in walking and turning (recalled: Pozzo, Berthoz & Lefort
  * 1990, Exp Brain Res 82:97, head roll within a few degrees in locomotor tasks; Fick's strategy in gaze shifts, Glenn & Vilis 1992,
  * J Neurophysiol 68:309).

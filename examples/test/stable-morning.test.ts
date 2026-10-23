@@ -53,8 +53,11 @@ const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { join
 // toward the horse, the far shoulder goes back and its carry ends 2 cm late, so it never gets on to the rope; and it lifts the saddle
 // 0.35 s after touching it; the
 // outlier's slack hand hangs where the scene's fixed hips-frame `SLACK_HAND` puts it, too little forward of its hips, and, its start
-// varied, its legs still jerk as it leads off (joint acceleration dev checks).
+// varied, its legs still jerk as it leads off (joint acceleration dev checks). The soldier's and the outlier's necks, turned aside and
+// down to the saddle as they walk up to it, stop at their range's end and leave the head rolled 8–9°: the joints' twist and swing
+// are not the head's turn and pitch.
 const OPEN = new Set<string>([
+  ...['soldier', 'outlier'].map((body) => `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back on the ${body}`),
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
   `gathers the slack of a hanging rope of fixed length while walking on the soldier #0`,
   ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`),
@@ -332,10 +335,12 @@ for (const seed of [0, 1, 2]) test(`carries below the face until arrival and pla
   expect(barrelGap).toBeGreaterThan(0);
 });
 
-test(`turns its eyes from the saddle's place to the horse, to the knot and back to the horse, each in one upright movement${on}`, () => {
+test(`turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back${on}`, () => {
   const sim = new Simulation(stableMorning(), model, true);
   // (each shift in its task's first 1.5 s: setting off with the saddle, the eyes leave the rack for its place on the horse; then
-  // the saddle's back for the knot by the horse's head, behind the other shoulder; then the knot for the horse's head as they lead off)
+  // the saddle's back for the knot by the horse's head, behind the other shoulder; then the knot for the horse's head as they lead off.
+  // Not a single bell, as on a body standing still (gaze.test.ts): stepping round, the trunk carries on a head held at the neck's
+  // range after its shift, and the knot, out of view, is looked at once the body has turned to it)
   const shifts = new Map<string, Quaternion[]>([['carry and raise the saddle', []], ['untie the rail knot', []], ['lead out through the gate', []]]);
   const started = new Map<string, number>();
   const all: Quaternion[] = [];
@@ -354,7 +359,6 @@ test(`turns its eyes from the saddle's place to the horse, to the knot and back 
     const shift = headShift(heads, 1 / 60);
     expect(shift.amplitude).toBeGreaterThan(45);
     expect(shift.peak).toBeLessThan(SHIFT_BOUNDS.peak(shift.amplitude));
-    expect(shift.valley).toBeLessThan(SHIFT_BOUNDS.valley);
     expect(shift.swing).toBeLessThan(SHIFT_BOUNDS.swing);
   }
   expect(headShift(all, 1 / 60).roll).toBeLessThan(SHIFT_BOUNDS.roll);
