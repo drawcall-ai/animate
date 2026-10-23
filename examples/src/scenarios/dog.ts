@@ -81,7 +81,7 @@ const HOCK: JointCycle = { duty: 0.45, keys: [[0, 5], [0.15, 10], [0.4, -10], [0
 // sagittal plane (read: Schilling & Carrier 2010, J Exp Biol 213:1490), its pelvis rolling and yawing with the hind legs' stance (a German
 // Shepherd's 9° of roll and 6° of yaw over a trot's stride: read, Schaub et al. 2021, Front Vet Sci 8:709966; a Whippet's under 3° each
 // way: read, Fischer et al. 2018; a Labrador's between), its head carried nearly level, riding with the withers and nodding a little
-const TROTTING = { bend: 0.6, withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 3, yaw: 1.5, headPitch: 2, headRise: 0, headWithers: 1 } as const;
+const TROTTING = { bend: 0.45, withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 3, yaw: 1.5, headPitch: 2, headRise: 0, headWithers: 1 } as const;
 
 /**
  * The dog: it trots (diagonal pairs), its whole body riding on the trot; it looks about with its neck, takes things in its jaw and
@@ -95,7 +95,7 @@ const TROTTING = { bend: 0.6, withers: -0.012, croup: [-0.012, 0], spine: 0, spi
  * (read: Wilson et al. 2013, Nature 498:185, cheetahs: "prevents pitching"): less. Round a bend it leans in about as far as atan(v² / r g)
  * (read via summary: Brocklehurst et al. 2014, horses 12.0° at 13.1°). Its spine bends into the turn: a horse's 4–6° thoracolumbar
  * and ~5° more of neck on a 5 m circle (read: Byström et al. 2021, Sci Rep 11:12734; Egenvall et al. 2023) is ~0.4 of the arc its
- * 1.1 m back walks; a dog's back is suppler (tuned: 0.6). The trunk's response a person's (0.8 Hz at 0.9 m hips) made dynamically
+ * 1.1 m back walks; a dog's back is a little suppler (tuned: 0.45). The trunk's response a person's (0.8 Hz at 0.9 m hips) made dynamically
  * similar on its 0.44 m legs: × √(0.9 / 0.44).
  */
 export const DOG: Species<'jaw'> = fourLegged({ head: v(0, 0.59, 0.33), jaw: v(0, 0.53, 0.5) });
@@ -112,10 +112,8 @@ export function dogFetch(): Scenario {
         { name: 'ball', mass: 0.06, bounds: new Box3(v(-0.04, -0.04, -0.04), v(0.04, 0.04, 0.04)) });
       let back = false;
       const dog = new Body(DOG, (dog) => function* () {
-        // (it trots out to the ball, slowing as it nears it, takes it and walks back with it)
-        yield* walkTo(dog, { to: ball.current.position.clone().setY(0), speed: 2, until: () => dog.pose.position(0).distanceTo(ball.current.position) < 2.6 })();
         yield* grab(dog, { jaw: [ball, 'middle'] })();
-        yield* parallel<Frame>('race', hold(dog, ball), walkTo(dog, { to: v(0, 0, 0.5), speed: 1 }));
+        yield* parallel<Frame>('race', hold(dog, ball), walkTo(dog, { to: v(0, 0, 0.5) }));
         back = true;
       }, { dev });
       return {
