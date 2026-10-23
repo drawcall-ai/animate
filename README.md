@@ -3,7 +3,7 @@
 Procedural, lifelike motion for three.js characters and creatures, with no animation clips and no runtime ML. A body is moved by behaviours written as [@pmndrs/timeline](https://github.com/pmndrs/timeline) timelines that flow into one another: it stands, walks, takes, carries and looks, scripted or driven by a player.
 
 ```sh
-npm install @drawcall/animate three @pmndrs/viverse
+npm install @drawcall/animate @pmndrs/timeline three @pmndrs/viverse
 ```
 
 ```ts

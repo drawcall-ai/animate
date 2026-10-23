@@ -50,14 +50,13 @@ importers:
         version: 3.2.7(@types/node@24.19.0)
 
   packages/animate:
-    dependencies:
-      '@pmndrs/timeline':
-        specifier: ^0.4.0
-        version: 0.4.0(three@0.180.0)
     devDependencies:
       '@pixiv/three-vrm':
         specifier: 3.5.5
         version: 3.5.5(three@0.180.0)
+      '@pmndrs/timeline':
+        specifier: ^0.4.0
+        version: 0.4.0(three@0.180.0)
       '@pmndrs/viverse':
         specifier: ^0.2.29
         version: 0.2.29(three@0.180.0)
