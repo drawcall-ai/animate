@@ -39,6 +39,9 @@ export function place(body: Body, item: Item, to: Live<Placement>): Behaviour {
       yield* parallel<Frame>('all', function* () {
         // Extension and turning overlap; a level or downward carry has no rise to wait for.
         yield* when(() => rise <= 0 || item.current.position.y >= from + rise * APPROACH_RISE);
+        // (setting off, the eyes leave where it was for where it goes: held on the empty spot, they would be left behind over a
+        // shoulder as the body turns away, and swing across to the other once it is behind)
+        lifting = false;
         yield* approach(h, to)();
         approached = true;
       }, function* () {
