@@ -15,13 +15,8 @@ const BODIES: [string, (() => CharacterModel) | undefined][] = [['default body',
   ...Object.entries(SKELETONS).map(([name, { joints, height }]): [string, () => CharacterModel] => [`the ${name}`, () => skeletonModel(joints, height)])];
 const WALKS: [string, () => Scenario][] = [['strolling after a point', stroll], ['stepping under a scripted root', legsBiped]];
 
-/**
- * Open (expected to fail: each one fixed comes off the list): the outlier's short legs, stepping under a scripted root, stand 65% of the
- * stride (≤ 0.65) — its quick cadence takes the stepper's one sub-step late lift-off as 2% more. Stance shortening with a dynamically
- * similar pace (Hebenstreit et al. 2015, −0.3% of the cycle per 0.1 m/s) would cure it, but moved the shooter's sprints past their joint
- * accelerations.
- */
-const OPEN = new Set(['stepping under a scripted root, the outlier walks as people do',
+/** Open (expected to fail: each one fixed comes off the list). */
+const OPEN = new Set([
   // (on the core legs, the people's only legs since 2026-10-23: none of the outlier's straight strides is steady enough to judge)
   'strolling after a point, the outlier walks as people do']);
 
