@@ -12,6 +12,7 @@ import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
 import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../core/inertia';
+import { follow } from '../../core/follow';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
 const LIST = 0.05;
 const SWAY = 0.0085;
@@ -44,8 +45,13 @@ export const LANDING_REACH = 0.998;
 /** Shared reach through heel loading (× leg length), from near extension to standing/walking. */
 export const plantedReach = (bent: number, landed: number) => lerp(LANDING_REACH, lerp(STANDING_REACH, REACH, bent), smoothstep(0, 0.2, landed));
 
-/** a light, brisk walk carries the trunk slightly forward (~3°), a run more (rad) */
-const gaitLean = (walk: number, run: number) => 0.05 * walk + 0.1 * run;
+/**
+ * The trunk leans forward with the pace it goes forward at (rad, the chest's; × the speed ahead up to 1 m/s), a run more: read (Thorstensson
+ * et al. 1984, Acta Physiol Scand 121:9, abstract), the trunk's mean forward inclination grows from 6° walking to ~13° running fast. Tuned:
+ * its hips → neck ~4.5–5° at 1.3 m/s (the chest ~9°); eased in and out within `LEANING` (rad/s², rad/s), no quicker than the stride's own nod as it sets off
+ * or stops; and given up as the trunk bows or the knees bend for a reach (`BOWED`, rad; `LOWERED`, × height): the bow leans it instead.
+ */
+const LEAN = { walk: 0.14, run: 0.15 }, LEANING = { accel: 1, speed: 0.1 }, BOWED = 0.15, LOWERED = 0.05;
 
 /** The inherited 6/s blend into and out of walking, with exact decay at finite dt. */
 export const walking = (walk: number, speed: number, dt: number) => walk + (smoothstep(0.08, 0.6, speed) - walk) * (1 - Math.exp(-dt * 6));
@@ -101,6 +107,7 @@ export class Posture {
   private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
   private readonly turn: Turn = { pelvis: 0, thorax: 0, roll: 0 };
+  private readonly leans = [0, 0];
   private readonly inertia: Inertia | null;
 
   constructor(inertia?: Inertial) {
@@ -148,6 +155,11 @@ export class Posture {
     // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
     const shifted = this.weight.dot(left) / Math.max(p.hipHalfWidth, 1e-6);
     roll += SHIFT.roll * shifted;
+    const onward = smoothstep(0, 1, Math.max(0, c.velocity.dot(fwd)));
+    const pace = follow(this.leans[0], this.leans[1], lerp(LEAN.walk * walk, LEAN.run, run) * onward, LEANING, dt);
+    [this.leans[0], this.leans[1]] = [this.leans[1], pace];
+    // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
+    const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
     quatYXZ(c.yaw + pelvisYaw + c.stance.blade, 0.5 * nod + hingeOf(p, lower) * bow, roll, c.pelvisRotation);
     const standing = p.hipHeight - c.stance.crouch - lower + lift - SHIFT.drop * p.scale * Math.abs(shifted);
     pelvis.y = height(standing, standing - MOST_DROP * L, smoothstep(0, TIPTOE * p.scale, -lower));
@@ -156,7 +168,7 @@ export class Posture {
     // nodding and bowing
     this.inertia?.step(c.velocity, c.yaw, dt);
     const lean = this.inertia ?? { pitch: 0, roll: 0 };
-    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, gaitLean(walk, run) + nod + bow - loadLean(f.prev, p, fwd) + life.breath + lean.pitch, thoraxRoll + lean.roll, out.chest);
+    quatYXZ(c.yaw + thoraxYaw + c.stance.blade, forward + nod + bow - loadLean(f.prev, p, fwd) + life.breath + lean.pitch, thoraxRoll + lean.roll, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }

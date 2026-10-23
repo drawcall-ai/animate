@@ -15,18 +15,13 @@ const BODIES: [string, (() => CharacterModel) | undefined][] = [['default body',
   ...Object.entries(SKELETONS).map(([name, { joints, height }]): [string, () => CharacterModel] => [`the ${name}`, () => skeletonModel(joints, height)])];
 const WALKS: [string, () => Scenario][] = [['strolling after a point', stroll], ['stepping under a scripted root', legsBiped]];
 /**
- * Open (expected to fail: each one fixed comes off the list). The balance legs' posture carries the trunk all but upright (its chest ~3°
- * forward, hips → neck ~1.5°): leaning it as people do (~6°) on the chest alone pitched it past the stable-morning lead's 5° bound and its
- * start and stop past the stroll's pitch-rate bounds; leaning it from the hips too raised the pelvis's excursion past balance.test.ts's.
- * The stepper's stance runs back of the hips — a foot lands ~0.2 m ahead of its
+ * Open (expected to fail: each one fixed comes off the list). The stepper's stance runs back of the hips — a foot lands ~0.2 m ahead of its
  * hip, held in by its reach, and leaves ~0.45 m behind — so a trailing leg is stretched past what its foot's roll gives it before it lifts:
  * the soldier's pelvis is pulled down ~3 cm just before toe-off and overshoots on (6 cm a stride), the outlier's short legs stand 65% of the
  * stride. Lifting the trailing foot before its leg holds the pelvis 1–2 cm low (`STEP.short`) cures both, but shifts the steps of the
  * crouched, sprinting and stopping cases in driven.test.ts past their bounds.
  */
-const OPEN = new Set(['strolling after a point, default body walks as people do', 'strolling after a point, the soldier walks as people do',
-  'strolling after a point, the outlier walks as people do', 'stepping under a scripted root, the soldier walks as people do',
-  'stepping under a scripted root, the outlier walks as people do']);
+const OPEN = new Set(['stepping under a scripted root, the soldier walks as people do', 'stepping under a scripted root, the outlier walks as people do']);
 
 for (const [body, model] of BODIES) for (const [walk, scenario] of WALKS) {
   (OPEN.has(`${walk}, ${body} walks as people do`) ? it.fails : it)(`${walk}, ${body} walks as people do`, () => {
