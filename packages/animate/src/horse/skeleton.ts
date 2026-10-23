@@ -141,7 +141,20 @@ function build(): { bones: BoneDef[]; legs: HorseLeg[] } {
       }
       const pastern = add2(`${end}Pastern`, cannon, fetlock, MASS.pastern, coffin, 0.5);
       const hoof = add2(`${end}Hoof`, pastern, coffin, MASS.hoof, sole, 0.5);
-      legs.push({ name: `${name}${end}`, fore, side, scapula, upper, middle, cannon, pastern, hoof, sole: m(sole).sub(m(coffin)), toe: m(sole).sub(m(coffin)).add(TOE), heel: m(sole).sub(m(coffin)).add(HEEL) });
+      legs.push({
+        name: `${name}${end}`,
+        fore,
+        side,
+        scapula,
+        upper,
+        middle,
+        cannon,
+        pastern,
+        hoof,
+        sole: m(sole).sub(m(coffin)),
+        toe: m(sole).sub(m(coffin)).add(TOE),
+        heel: m(sole).sub(m(coffin)).add(HEEL),
+      });
     }
   }
   // Recalled: minimum attention/follower joints; mass remains included in head/pelvis.
@@ -161,7 +174,11 @@ const fail = (what: string): never => {
 const DEG = Math.PI / 180;
 type Range = Omit<Limit, 'bone'>;
 /** a range in degrees: twist about y (the bone's length), swing about z (sideways) and x (fore and aft, + turning a hanging bone's end back) */
-const range = (z: [number, number], x: [number, number], twist: [number, number]): Range => ({ axis: 1, swing: [[z[0] * DEG, z[1] * DEG], [x[0] * DEG, x[1] * DEG]], twist: [twist[0] * DEG, twist[1] * DEG] });
+const range = (z: [number, number], x: [number, number], twist: [number, number]): Range => ({
+  axis: 1,
+  swing: [[z[0] * DEG, z[1] * DEG], [x[0] * DEG, x[1] * DEG]],
+  twist: [twist[0] * DEG, twist[1] * DEG],
+});
 
 /**
  * Each joint's range of motion off standing square (°; the left side's, the right mirrors it

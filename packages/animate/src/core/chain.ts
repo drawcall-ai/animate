@@ -49,7 +49,10 @@ const LONGEST = 16;
 export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
   const { position: at, quaternion: turned } = goal.tip;
   const finite = (...xs: number[]) => xs.every(Number.isFinite);
-  if (!finite(at.x, at.y, at.z) || (turned && !finite(turned.x, turned.y, turned.z, turned.w)) || (goal.pole && !finite(goal.pole.x, goal.pole.y, goal.pole.z)) || (goal.twist !== undefined && !finite(goal.twist))) {
+  const tipFinite = finite(at.x, at.y, at.z) && (!turned || finite(turned.x, turned.y, turned.z, turned.w));
+  const poleFinite = !goal.pole || finite(goal.pole.x, goal.pole.y, goal.pole.z);
+  const twistFinite = goal.twist === undefined || finite(goal.twist);
+  if (!tipFinite || !poleFinite || !twistFinite) {
     throw new Error(`chain "${chain}": a goal that is not finite`);
   }
   const pose = frame.current;

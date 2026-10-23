@@ -32,11 +32,22 @@ export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths?:
     const sign = (home.x >= 0 ? 1 : -1) as 1 | -1;
     return { sign, foot, toes: chain.toes?.bone, top, ahead: at.z, home: home.z, hip: Math.abs(at.x), up: at.y, length, out: sign * (home.x - at.x), stand: at.y - home.y };
   });
-  const partnered = legs.map((leg, i) => ({ ...leg, partner: legs.reduce((best, other, j) => other.sign !== leg.sign && (best < 0 || Math.abs(other.ahead - leg.ahead) < Math.abs(legs[best].ahead - leg.ahead)) ? j : best, -1) }));
+  const partnerOf = (leg: (typeof legs)[number]) => legs.reduce((best, other, j) =>
+    other.sign !== leg.sign && (best < 0 || Math.abs(other.ahead - leg.ahead) < Math.abs(legs[best].ahead - leg.ahead)) ? j : best, -1);
+  const partnered = legs.map((leg) => ({ ...leg, partner: partnerOf(leg) }));
   const ankleHeight = -Math.min(chains[0].heel.y, chains[0].toe.y);
   const length = Math.min(...legs.map((leg) => leg.length));
   return {
-    legs: partnered.map((leg, i) => ({ ...leg, partner: leg.partner < 0 ? undefined : leg.partner, depth: depths?.[i], stray: depths && strayOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand), span: depths && ((drop: number) => spanOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand - drop, Math.min(0, ...chains[i].rocker.map(([, pitch]) => pitch)) * Math.PI / 180)) })),
+    legs: partnered.map((leg, i) => ({
+      ...leg,
+      partner: leg.partner < 0 ? undefined : leg.partner,
+      depth: depths?.[i],
+      stray: depths && strayOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand),
+      span: depths && ((drop: number) => {
+        const rocker = Math.min(0, ...chains[i].rocker.map(([, pitch]) => pitch)) * Math.PI / 180;
+        return spanOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand - drop, rocker);
+      }),
+    })),
     hip: Math.max(...legs.map((leg) => leg.hip)), length, thigh: length / 2, shin: length / 2, ankleHeight,
     // (a hoof or paw has no knee of its own to fold under it, nor a shank to lean past an ankle's bend)
     fold: Math.PI,
@@ -96,8 +107,13 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
  */
 export function steppingOf(gait: Gait, feet: Feet, twist = TWIST, ball = 0): Stepping {
   const scale = 1, width = feet.hip, length = feet.length, clearance = Math.max(...gait.clearance);
-  const run = gait.run, lowered = (gait.drop ?? 0) * length, drop = lowered + (run?.drop ?? 0) * length, speedAt = (froude: number) => Math.sqrt(froude * GRAVITY * gait.height);
-  const spans = feet.legs.map((leg) => leg.span), travelAt = (drop: number) => spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans.map((span) => span?.(drop) ?? Infinity)) : TRAVEL * length;
+  const run = gait.run;
+  const lowered = (gait.drop ?? 0) * length;
+  const drop = lowered + (run?.drop ?? 0) * length;
+  const speedAt = (froude: number) => Math.sqrt(froude * GRAVITY * gait.height);
+  const spans = feet.legs.map((leg) => leg.span);
+  const travelAt = (drop: number) =>
+    spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans.map((span) => span?.(drop) ?? Infinity)) : TRAVEL * length;
   const travel = travelAt(lowered);
   return {
     scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: { base: 1, perSpeed: 0 }, duty: { walk: 0.6, side: 0.6, run: 0.6 },
@@ -174,8 +190,12 @@ export class ChainLeg {
     if (slide > CONTACT.slide) dev.append(time, { check: 'leg contact slide (m)', value: slide, limit: CONTACT.slide, where });
     if (!this.landed) return;
     const velocity = _v.subVectors(f.prev.position(terminal), f.prev2.position(terminal)).divideScalar(f.dt);
-    if (Math.abs(velocity.y) > TOUCHDOWN.down) dev.append(time, { check: 'leg touchdown vertical speed (m/s)', value: Math.abs(velocity.y), limit: TOUCHDOWN.down, where });
-    if (Math.hypot(velocity.x, velocity.z) > TOUCHDOWN.along) dev.append(time, { check: 'leg touchdown horizontal speed (m/s)', value: Math.hypot(velocity.x, velocity.z), limit: TOUCHDOWN.along, where });
+    if (Math.abs(velocity.y) > TOUCHDOWN.down) {
+      dev.append(time, { check: 'leg touchdown vertical speed (m/s)', value: Math.abs(velocity.y), limit: TOUCHDOWN.down, where });
+    }
+    if (Math.hypot(velocity.x, velocity.z) > TOUCHDOWN.along) {
+      dev.append(time, { check: 'leg touchdown horizontal speed (m/s)', value: Math.hypot(velocity.x, velocity.z), limit: TOUCHDOWN.along, where });
+    }
   }
 
   /** the joints as the foot lifted, while it swings */
@@ -327,7 +347,8 @@ export class ChainLeg {
     this.landed = this.held === null && swing === null && this.posed;
     this.posed = true;
     this.held = swing === null ? { position: target.position.clone(), rotation: target.rotation.clone() } : null;
-    this.put = swing === null ? this.put ?? [this.chain.heel, this.contact, this.chain.toe].map((point) => [point, point.clone().applyQuaternion(target.rotation).add(target.position)] as [Vector3, Vector3]) : null;
+    const putAt = (point: Vector3) => [point, point.clone().applyQuaternion(target.rotation).add(target.position)] as [Vector3, Vector3];
+    this.put = swing === null ? this.put ?? [this.chain.heel, this.contact, this.chain.toe].map(putAt) : null;
     if (!this.put) this.slipped = 0;
     // (swinging, each joint moves on from its history within the rig's own bounds on a joint's speed and acceleration: a foot in the
     // air never snaps to a solution the joints cannot reach in time)
@@ -336,7 +357,9 @@ export class ChainLeg {
       for (const [k, b] of solver.bones.entries()) {
         const snap = f.current.skeleton.bones[b].snap;
         if (!snap) continue;
-        const braked = followRotation(f.prev2.local(b), f.prev.local(b), f.current.local(b), { accel: BRAKE * snap.accel * DEG, speed: BRAKE * snap.speed * DEG }, f.dt, _q), limit = f.current.skeleton.limits[b];
+        const bounds = { accel: BRAKE * snap.accel * DEG, speed: BRAKE * snap.speed * DEG };
+        const braked = followRotation(f.prev2.local(b), f.prev.local(b), f.current.local(b), bounds, f.dt, _q);
+        const limit = f.current.skeleton.limits[b];
         if (limit) clampRotation(braked, limit);
         // (landing, handed over to the solution over the swing's last stretch: the foot comes down where it is put)
         f.current.setLocal(b, braked.slerp(solved[k], handed));

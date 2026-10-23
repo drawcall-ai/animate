@@ -34,7 +34,10 @@ function stretchedEyes(eyes: (pose: ReadonlyPose, out: Vector3) => Vector3, size
   const at = new Vector3(), views = new WeakMap<ReadonlyPose, ReadonlyPose>();
   const view = (pose: ReadonlyPose): ReadonlyPose => {
     let seen = views.get(pose);
-    if (!seen) views.set(pose, seen = Object.create(pose, { point: { value: (bone: number, local: Vector3, out: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), out) } }) as ReadonlyPose);
+    if (!seen) {
+      const point = (bone: number, local: Vector3, out: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), out);
+      views.set(pose, seen = Object.create(pose, { point: { value: point } }) as ReadonlyPose);
+    }
     return seen;
   };
   return (pose, out) => eyes(view(pose), out);

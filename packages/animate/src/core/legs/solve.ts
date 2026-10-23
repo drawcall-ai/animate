@@ -153,7 +153,10 @@ export class Solver {
     return miss;
   }
 
-  /** the joints `q` (rad, written back; starting from the references) that reach `target` off a base turned `turn` at `top` (the top joint's world position), the pose untouched. Returns the miss (m). */
+  /**
+   * the joints `q` (rad, written back; starting from the references) that reach `target` off a base turned `turn` at `top` (the top
+   * joint's world position), the pose untouched. Returns the miss (m).
+   */
   reach(turn: Readonly<Quaternion>, top: Readonly<Vector3>, target: LegTarget, q: Float64Array, seed = this.ref, steps = STEPS): number {
     const was = _was.subarray(0, this.n);
     was.set(this.q);

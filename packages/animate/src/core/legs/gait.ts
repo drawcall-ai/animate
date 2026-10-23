@@ -81,4 +81,18 @@ export interface Locomotion {
   quiet: Vector3;
 }
 
-export const createLocomotion = (facing: number): Locomotion => ({ eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0, pelvisYaw: 0, thoraxYaw: 0, quiet: new Vector3() });
+export const createLocomotion = (facing: number): Locomotion => ({
+  eta: Infinity,
+  phase: 0,
+  walk: 0,
+  run: 0,
+  facing,
+  velocity: new Vector3(),
+  moving: false,
+  settled: true,
+  there: false,
+  planted: 0,
+  pelvisYaw: 0,
+  thoraxYaw: 0,
+  quiet: new Vector3(),
+});

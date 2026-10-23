@@ -243,7 +243,8 @@ export function approach(h: Humanoid, holds: Grips | Vector3 | Live<Placement>, 
     };
     const yaw = clearFacing();
     if (yaw === undefined) {
-      yield* problemOnce({ check: options.face === undefined ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand', value: 1, limit: 0, where: `${grips.length} grips` })();
+      const check = options.face === undefined ? 'approach: no stand clear of nearby low segments' : 'approach: explicit face has a blocked stand';
+      yield* problemOnce({ check, value: 1, limit: 0, where: `${grips.length} grips` })();
       return;
     }
     face = yaw;

@@ -120,7 +120,10 @@ export class Item extends Carrier {
   readonly mass: number;
   readonly centre: Readonly<Vector3>;
   readonly bounds: Box3;
-  /** it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`, `carry`) or wearing it clears this, letting go of it where nothing else holds or wears it (`release`: put down) sets it */
+  /**
+   * it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`,
+   * `carry`) or wearing it clears this, letting go of it where nothing else holds or wears it (`release`: put down) sets it
+   */
   supported: boolean;
 
   constructor(

@@ -125,7 +125,12 @@ export function bring(body: Body, item: Item, way: Way, options: Bringing = {}):
         if (reached(f, bone, { position: handAt(f).position })) return true;
         if (!late && f.time - over > limit) {
           late = true;
-          f.dev?.append(f.time, { check: `late carry: hand distance after ${limit} s (m)`, value: f.prev.position(bone).distanceTo(handAt(f).position), limit: REACHED.distance, where: `${item.name} ${chain}` });
+          f.dev?.append(f.time, {
+            check: `late carry: hand distance after ${limit} s (m)`,
+            value: f.prev.position(bone).distanceTo(handAt(f).position),
+            limit: REACHED.distance,
+            where: `${item.name} ${chain}`,
+          });
         }
         return false;
       },
@@ -355,7 +360,12 @@ function tipTo(body: Body, chain: string, goal: Target, item: Item, stoop: Retur
         if (reached(f, bone, goal, item)) return true;
         if (!late && f.time - began > REACHING) {
           late = true;
-          f.dev?.append(f.time, { check: `late reach: grip distance after ${REACHING} s (m)`, value: f.prev.position(bone).distanceTo(item.toWorld(goal, _world).position), limit: REACHED.distance, where: `${item.name} ${chain}` });
+          f.dev?.append(f.time, {
+            check: `late reach: grip distance after ${REACHING} s (m)`,
+            value: f.prev.position(bone).distanceTo(item.toWorld(goal, _world).position),
+            limit: REACHED.distance,
+            where: `${item.name} ${chain}`,
+          });
         }
         return false;
       },

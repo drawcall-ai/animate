@@ -135,7 +135,12 @@ export function route(h: Body, options: WalkOptions, via: readonly Live<Vector3>
           else if (left < best - STALL.nearer * h.scale) { best = left; since = f.time; }
           else if (f.time - since > STALL.seconds) {
             stalled = true;
-            f.dev.append(f.time, { check: `stalled walk: no nearer its goal for ${STALL.seconds} s (m left)`, value: Math.hypot(body.x - go.to.x, body.z - go.to.z), limit: ARRIVED.distance * h.scale, where: 'walk' });
+            f.dev.append(f.time, {
+              check: `stalled walk: no nearer its goal for ${STALL.seconds} s (m left)`,
+              value: Math.hypot(body.x - go.to.x, body.z - go.to.z),
+              limit: ARRIVED.distance * h.scale,
+              where: 'walk',
+            });
           }
         }
         go.velocity = options.velocity === undefined ? undefined : live(options.velocity, f);

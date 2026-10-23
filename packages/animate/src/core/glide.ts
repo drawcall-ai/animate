@@ -22,7 +22,14 @@ export class Glide {
    * where it is a step of `dt` on toward `goal` moving at `going` (into `out`: its position and
    * velocity); `from` and `moving` are where it sets off from and how fast, read the first step
    */
-  step(from: Readonly<Vector3>, moving: Readonly<Vector3>, goal: Readonly<Vector3>, going: Readonly<Vector3>, dt: number, out: { position: Vector3; velocity: Vector3 }): { position: Vector3; velocity: Vector3 } {
+  step(
+    from: Readonly<Vector3>,
+    moving: Readonly<Vector3>,
+    goal: Readonly<Vector3>,
+    going: Readonly<Vector3>,
+    dt: number,
+    out: { position: Vector3; velocity: Vector3 },
+  ): { position: Vector3; velocity: Vector3 } {
     if (Number.isNaN(this.left)) {
       this.left = this.seconds;
       this.position.copy(from);

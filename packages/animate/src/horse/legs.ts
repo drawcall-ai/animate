@@ -177,7 +177,10 @@ export function horseMotion(start: ReadonlyPose, gait: Gait, seed = seedOf(start
         neckYaw: away || (0.3 * attended * (1 - m) + 0.18 * idle.value('head') * (1 - m) + 0.35 * toward * response),
         headYaw: 0.2 * toward * response, tail: 0.2 * response,
       });
-      EARS.forEach((ear, i) => f.current.setLocal(ear, turn(-0.3 * response, clamp(attended + idle.value(i === 0 ? 'leftEar' : 'rightEar') * 0.7 + toward * response, -2, 2)), 1 - Math.exp(-10 * f.dt)));
+      EARS.forEach((ear, i) => {
+        const swivel = clamp(attended + idle.value(i === 0 ? 'leftEar' : 'rightEar') * 0.7 + toward * response, -2, 2);
+        f.current.setLocal(ear, turn(-0.3 * response, swivel), 1 - Math.exp(-10 * f.dt));
+      });
       const tether = attention.tether && live(attention.tether, f);
       tied.length = tether?.length ?? 0;
       if (tether) {

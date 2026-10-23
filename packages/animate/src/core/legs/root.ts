@@ -15,7 +15,23 @@ export interface RootState {
 /** a planned root: where it is (`RootState`) at a time (s) */
 export interface RootPlan { root(time: number): RootState }
 
-export function rootPlan(f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, share: number, previous: RootState, acceleration: number, facing?: Quaternion, turnShare = 1, goalTurn = 0, speedShare = 1, stanceYaw = yawOf(previous.quaternion), travelFirst = false): RootPlan {
+export function rootPlan(
+  f: Frame,
+  goal: Readonly<Vector3>,
+  velocity: Vector3,
+  motion: Motion,
+  gait: Gait,
+  radius: number,
+  share: number,
+  previous: RootState,
+  acceleration: number,
+  facing?: Quaternion,
+  turnShare = 1,
+  goalTurn = 0,
+  speedShare = 1,
+  stanceYaw = yawOf(previous.quaternion),
+  travelFirst = false,
+): RootPlan {
   if (share === 0 && !facing) {
     const position = previous.position.clone();
     const quaternion = new Quaternion().setFromAxisAngle(UP, yawOf(previous.quaternion));

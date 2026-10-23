@@ -30,7 +30,10 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
   const gait = kind.gait;
   return function* () {
     const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest));
-    const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth)), record = steppingOf(gait, feet, Math.min(...posers.map((poser) => poser.turn)), Math.max(...posers.map((poser) => poser.ball)));
+    const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
+    const turn = Math.min(...posers.map((poser) => poser.turn));
+    const ball = Math.max(...posers.map((poser) => poser.ball));
+    const record = steppingOf(gait, feet, turn, ball);
     const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone().setY(feet.ankleHeight), yaw: body.yaw }));
     const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw));
     const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
@@ -55,7 +58,15 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
       }
     };
     const inertia = body.species.inertia && new Inertia(body.species.inertia);
-    const legs = { legs: phases, height: start.y, held: start.y, stride: { cycle: 1, stance: 0.5 }, turn: { rate: 0, ahead: 0 }, lean: inertia, rest: (p: readonly number[]) => p.forEach((pitch, i) => { pitches[i] = pitch; }) } satisfies Striding;
+    const legs = {
+      legs: phases,
+      height: start.y,
+      held: start.y,
+      stride: { cycle: 1, stance: 0.5 },
+      turn: { rate: 0, ahead: 0 },
+      lean: inertia,
+      rest: (p: readonly number[]) => p.forEach((pitch, i) => { pitches[i] = pitch; }),
+    } satisfies Striding;
     let facing = body.yaw;
     yield* action<Frame>({ update: (f) => {
       const asked0 = takeAsks(body.asks, asks), g = body.locomotion;

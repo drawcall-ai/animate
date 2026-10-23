@@ -306,7 +306,10 @@ function headPace(shift: number, motion: Required<Pick<Motion, 'turnAccel'>> & P
 
 /** the least acceleration a head turns with (rad/s²): what brings it to rest on a target that moves on */
 const BRAKE = 4;
-/** how briskly the head gets up to its peak: 1.5 v² / shift reaches it a third of the way, holds it a third and brakes the last (a bell flattened a little: the eyes' line gets there within ~0.6 s of a large shift's start) */
+/**
+ * how briskly the head gets up to its peak: 1.5 v² / shift reaches it a third of the way, holds it a third and brakes the last
+ * (a bell flattened a little: the eyes' line gets there within ~0.6 s of a large shift's start)
+ */
 const BELL = 1.5;
 
 /**
