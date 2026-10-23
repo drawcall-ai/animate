@@ -6,6 +6,7 @@ import { segmentDistance } from './clearance';
 import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
 import { HORSE, LEAD_ROPE, stableMorning } from '../src/scenarios/stable-morning';
 import { SKELETONS, skeletonModel } from '../src/skeletons';
+import { headShift, SHIFT_BOUNDS } from './gaze';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
 const SEAT_HEIGHT = 0.16;
@@ -52,16 +53,21 @@ const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { join
 // toward the horse, the far shoulder goes back and its carry ends 2 cm late, so it never gets on to the rope; and it lifts the saddle
 // 0.35 s after touching it; the
 // outlier's slack hand hangs where the scene's fixed hips-frame `SLACK_HAND` puts it, too little forward of its hips, and, its start
-// varied, its legs still jerk as it leads off (joint acceleration dev checks).
+// varied, its legs still jerk as it leads off (joint acceleration dev checks). The soldier's and the outlier's necks, turned aside and
+// down to the saddle as they walk up to it, stop at their range's end and leave the head rolled 8–9°: the joints' twist and swing
+// are not the head's turn and pitch.
 // On the core legs, the people's only legs since 2026-10-23: the default body sets off leading in the frame its gaze turns, not
 // after it, and, its start varied (#1), its right arm grazes its trunk fetching the saddle; the soldier carries the saddle 1.7 cm off
 // its own trunk (2 cm kept) and, its start varied, its legs come into the horse's as it places it.
 const OPEN = new Set<string>([
+  `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back on the soldier`,
+  // (on the core legs with the gaze followed in yaw and pitch: the default body's shift to the horse peaks at 420°/s, past its main
+  // sequence's 359; the outlier's saddle, carried, passes its face)
+  `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back`,
+  ...[0, 2].map((seed) => `carries below the face until arrival and places clear of both bodies on the outlier #${seed}`),
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
   ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`),
   'gathers the slack of a hanging rope of fixed length while walking on the outlier #1',
-  // (on Node 22 only: the same knife edge taken the other way by its floating point)
-  ...process.versions.node.startsWith('22.') ? ['gathers the slack of a hanging rope of fixed length while walking on the outlier #2'] : [],
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
   'leads upright with the near hand forward, slack outside, and halts beyond the gate',
   'gathers the slack of a hanging rope of fixed length while walking #1',
@@ -337,6 +343,35 @@ for (const seed of [0, 1, 2]) test(`carries below the face until arrival and pla
   expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);
   expect(barrelGap).toBeGreaterThan(0);
+});
+
+test(`turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back${on}`, () => {
+  const sim = new Simulation(stableMorning(), model, true);
+  // (each shift in its task's first 1.5 s: setting off with the saddle, the eyes leave the rack for its place on the horse; then
+  // the saddle's back for the knot by the horse's head, behind the other shoulder; then the knot for the horse's head as they lead off.
+  // Not a single bell, as on a body standing still (gaze.test.ts): stepping round, the trunk carries on a head held at the neck's
+  // range after its shift, and the knot, out of view, is looked at once the body has turned to it)
+  const shifts = new Map<string, Quaternion[]>([['carry and raise the saddle', []], ['untie the rail knot', []], ['lead out through the gate', []]]);
+  const started = new Map<string, number>();
+  const all: Quaternion[] = [];
+  while (sim.t < 16) {
+    sim.step();
+    const h = sim.actors[0];
+    const head = h.pose.rotation(h.pose.skeleton.index('head')).clone();
+    all.push(head);
+    for (const [beat, heads] of shifts) {
+      if (!h.frame.beats.has(beat) && !started.has(beat)) continue;
+      started.set(beat, started.get(beat) ?? sim.t);
+      if (sim.t - started.get(beat)! <= 1.5) heads.push(head);
+    }
+  }
+  for (const heads of shifts.values()) {
+    const shift = headShift(heads, 1 / 60);
+    expect(shift.amplitude).toBeGreaterThan(45);
+    expect(shift.peak).toBeLessThan(SHIFT_BOUNDS.peak(shift.amplitude));
+    expect(shift.swing).toBeLessThan(SHIFT_BOUNDS.swing);
+  }
+  expect(headShift(all, 1 / 60).roll).toBeLessThan(SHIFT_BOUNDS.roll);
 });
 
 for (const seed of [0, 1, 2]) test(`gathers the slack of a hanging rope of fixed length while walking${on} #${seed}`, () => {

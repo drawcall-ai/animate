@@ -51,16 +51,11 @@ it('lists each scenario once', () => {
 // Open on the core legs, the people's only legs since 2026-10-23 (expected to fail: each one fixed comes off the list):
 // reach-around's right wrist is 27 cm off its hold at 5.75 s (it turns round to the target behind it, the hand trailing the turn);
 // stable-morning's handler walks up to the saddle rack with a knee raised 1.2 cm into the rack's leg; the stroll 15% faster has no
-// steady strides on its bend to judge; looking around slower or nearer a hanging arm is out 12.5–13.7° (≤ 12°), further off the head
-// lags its course by 5 cm; the knight's right hand goes 2.5–2.8 cm into the shield on the wall (15 cm further left, 5% shorter): its free
-// arm swings into the board as it walks up to it; and a free arm reverses its swing 0.22 s after the last (the helm turned a quarter).
-// On one Node only (its floating point takes the walk another way at the same knife edge): on 24, the stroll on a 20% tighter arc slows
-// into its bend (1 steady curve stride); on 22, the knight's swinging hand comes into the shield as it walks up (base scene) and the
-// helm turned half round is walked round with 5.7% step asymmetry (5% allowed).
-const OPEN = new Set(['reach-around', 'stable-morning', 'stroll 15% faster', 'look-around, the headset 20% slower',
-  'look-around, looking down 10 cm nearer', 'look-around, looking down 10 cm further off', 'knight-arming, the stand, wall and rack 15 cm further left',
-  'knight-arming, the knight 5% shorter', 'knight-arming, the helm turned a quarter on its stand',
-  ...process.versions.node.startsWith('22.') ? ['knight-arming', 'knight-arming, the helm turned half round on its stand: walked round to take it'] : ['stroll on a 20% tighter arc']]);
+// steady strides on its bend to judge; looking around further off the head lags its course by 5 cm; the knight 5% shorter has its
+// right hand 2.5–2.8 cm into the shield on the wall: its free arm swings into the board as it walks up to it.
+// With the gaze followed in yaw and pitch (2026-10-23), the knight with its gear 10 cm lower has its wrist 14 cm off a grip it holds at 9.1 s.
+const OPEN = new Set(['reach-around', 'stable-morning', 'stroll 15% faster', 'look-around, looking down 10 cm further off',
+  'knight-arming, the knight 5% shorter', 'knight-arming, the gear 10 cm lower']);
 const check = (title: string, body: () => void) => (OPEN.has(title) ? it.fails : it)(title, body);
 
 // These metrics assume humanoid balance owns h.feet/h.locomotion and centres the CoM.

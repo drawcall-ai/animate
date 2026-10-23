@@ -1,10 +1,10 @@
-import { Quaternion, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import { clamp, lerp, wrapAngle, smoothstep } from './math';
 import { seeded, seedOf } from './random';
 import { when } from './when';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import type { Body, Frame } from './body';
-import { followRotation } from './follow';
+import { follow, followRotation } from './follow';
 import { live, type Behaviour, type Live, type Motion } from './goal';
 import { clampRotation } from './limits';
 import { spinOf } from './rotation';
@@ -54,6 +54,8 @@ export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<
     let shift = 0;
     /** the head's goal the sub-step before (null: none yet) */
     let seen: Quaternion | null = null;
+    /** the head's goal the sub-step before, in its own angles (`fick`; null: none, or not followed in them) */
+    let sighted: Vector3 | null = null;
     /** the target's turn followed the sub-step before (rad/s) */
     const pursued = new Vector3();
     /** where the target was the sub-step before (null: not yet seen) */
@@ -165,6 +167,18 @@ export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<
         pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
         const before = _was2.copy(f.prev2.rotation(last));
         const followed = followRotation(before, was, whole, { ...pace, velocity: pursuit }, f.dt, _out);
+        // (followed in the head's own angles, `fick`, it keeps upright on the way: the shortest turn between two upright looks
+        // rolls it mid-shift — 13–17° from aside and level across to down; but not from or to a line of sight steep up or down
+        // (`LEVEL`), where those angles hardly tell a turn about the vertical from a roll)
+        const level = Math.min(levelness(was), levelness(whole));
+        if (level > 0) {
+          const now = fick(was, _now), goal = fick(whole, _aim, now);
+          const turning = jumped || !sighted ? _turning.set(0, 0, 0)
+            : unwrapped(_turning.subVectors(goal, sighted)).divideScalar(f.dt).clampLength(0, motion.turnSpeed ?? Infinity);
+          const next = follow(fick(before, _before, now), now, goal, { ...pace, velocity: turning }, f.dt, _next);
+          followed.slerp(_fick.setFromEuler(_euler.set(next.x, next.y, next.z, 'YXZ')), level);
+        }
+        sighted = level > 0 ? fick(whole, sighted ?? new Vector3()) : null;
         followed.premultiply(_rel.copy(turned).invert());
         const share = _share.identity().slerp(followed, 1 / bones.length);
         for (const b of bones) {
@@ -325,6 +339,34 @@ function within(pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Q
   return out;
 }
 
+/** how far (0–1) a head turned `q` (world) looks level enough to be followed in its own angles (`LEVEL`) */
+function levelness(q: Readonly<Quaternion>): number {
+  const line = _tl.set(0, 0, 1).applyQuaternion(q);
+  return smoothstep(LEVEL[0], LEVEL[1], Math.hypot(line.x, line.z));
+}
+
+/** how much of a line of sight is horizontal (the cosine of its pitch) where a head is followed in its own angles, from none to all:
+ * from 75° to 60° up or down (tuned) */
+const LEVEL = [0.25, 0.5];
+
+/**
+ * `q` (world) in a head's own angles, Fick's gimbal: turned about the vertical, pitched (+ down) about its side axis, then rolled
+ * about its line — (pitch, yaw, roll), into `out`, each angle wound as near `near` as it goes. A head turns so, its roll kept small
+ * (Fick's strategy: Glenn & Vilis 1992, J Neurophysiol 68:309; head roll within a few degrees in walking and turning: Pozzo,
+ * Berthoz & Lefort 1990, Exp Brain Res 82:97 — both recalled, not checked against the papers): each angle followed on its own, it
+ * stays upright between upright looks, and upright its angular speed is the speed of its angles.
+ */
+function fick(q: Readonly<Quaternion>, out: Vector3, near?: Readonly<Vector3>): Vector3 {
+  _euler.setFromQuaternion(q, 'YXZ');
+  out.set(_euler.x, _euler.y, _euler.z);
+  return near ? unwrapped(out.sub(near)).add(near) : out;
+}
+
+/** each angle of `v` wrapped into (−π, π] */
+function unwrapped(v: Vector3): Vector3 {
+  return v.set(wrapAngle(v.x), wrapAngle(v.y), wrapAngle(v.z));
+}
+
 /**
  * looking along `d` (unit), turned `yaw` about the vertical and pitched in that plane (+ down, past
  * straight down for `d` behind it), then turned the least way onto `d` (off that plane only where
@@ -354,6 +396,14 @@ const _line = new Vector3();
 const _spin = new Vector3();
 const _was = new Quaternion();
 const _was2 = new Quaternion();
+const _tl = new Vector3();
+const _euler = new Euler();
+const _fick = new Quaternion();
+const _now = new Vector3();
+const _aim = new Vector3();
+const _turning = new Vector3();
+const _before = new Vector3();
+const _next = new Vector3();
 
 const _whole = new Quaternion();
 
