@@ -11,7 +11,7 @@ import { lookAround } from './look';
 import { stride } from './stride';
 
 /** Not public: the legs `idle` stands and walks on until the core engine replaces `balance` (the parity tests compare the two). */
-export const legSystem: { path: 'old' | 'core' } = { path: 'old' };
+export const legSystem: { path: 'old' | 'core' } = { path: 'core' };
 
 /**
  * A person's base, endless, root to tip: its balance (root, legs, trunk), its free arms hanging, `lookAround`; the story runs over it: what it writes

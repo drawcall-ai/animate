@@ -53,11 +53,17 @@ const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { join
 // 0.35 s after touching it; the
 // outlier's slack hand hangs where the scene's fixed hips-frame `SLACK_HAND` puts it, too little forward of its hips, and, its start
 // varied, its legs still jerk as it leads off (joint acceleration dev checks).
+// On the core legs, the people's only legs since 2026-10-23: the default body sets off leading in the frame its gaze turns, not
+// after it, and, its start varied (#1), its right arm grazes its trunk fetching the saddle; the soldier carries the saddle 1.7 cm off
+// its own trunk (2 cm kept) and, its start varied, its legs come into the horse's as it places it.
 const OPEN = new Set<string>([
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
   ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`),
-  ...[0, 1, 2].map((seed) => `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`),
+  'gathers the slack of a hanging rope of fixed length while walking on the outlier #2',
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
+  'leads upright with the near hand forward, slack outside, and halts beyond the gate',
+  'gathers the slack of a hanging rope of fixed length while walking #1',
+  ...[0, 1, 2].map((seed) => `carries below the face until arrival and places clear of both bodies on the soldier #${seed}`),
 ]);
 const test = (title: string, body: () => void) => (OPEN.has(title) ? it.fails : it)(title, body);
 

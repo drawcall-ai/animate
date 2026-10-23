@@ -6,6 +6,8 @@ import { createSkeletonModel, human, INDEX, walkTo, type Frame, type Humanoid } 
 import { idle } from '../../src/humanoid/idle';
 
 const dt = 1 / 60, DEG = Math.PI / 180;
+/** half a step walking at 1.3 m/s (sub-steps: ~0.47 s a step, ~2.1 steps/s) */
+const STEP = 15;
 
 /** a person walking 5 m ahead from standing and stopping there: its chest's pitch (rad, + forward) and its ground speed each sub-step */
 function walk(leaning: boolean) {
@@ -29,7 +31,11 @@ function walk(leaning: boolean) {
 it('leans into setting off and back from stopping, as far as people do, swings a little past upright and settles', () => {
   const leaning = walk(true), upright = walk(false);
   expect(leaning.log).toEqual([]);
-  const lean = leaning.pitch.map((x, i) => x - upright.pitch[i]);
+  // (each walk's pitch averaged over a step (±`STEP` sub-steps), so the stride's own nod drops out: the lean shifts the centre of mass, and the
+  // legs, keeping it over the feet, step a little off the upright walk's — subtracted frame by frame, the two nods read as ±2° of lean)
+  const smooth = (pitch: number[]) => pitch.map((_, i) => { const window = pitch.slice(Math.max(0, i - STEP), i + STEP + 1); return window.reduce((a, b) => a + b, 0) / window.length; });
+  const averaged = smooth(upright.pitch);
+  const lean = smooth(leaning.pitch).map((x, i) => x - averaged[i]);
   const accel = leaning.speed.map((v, i) => i ? (v - leaning.speed[i - 1]) / dt : 0);
   const stopped = leaning.speed.findIndex((v, i) => i > 60 && v < 1e-3);
   // (setting off at its most; stopping, as it slows over its last second)

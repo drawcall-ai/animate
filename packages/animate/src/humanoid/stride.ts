@@ -20,7 +20,7 @@ import type { Humanoid } from './humanoid';
 import { armsHeld } from './posture/turn';
 import { humanGait, humanStepping } from './legs';
 import type { Proportions } from './proportions';
-import { defaultStance } from './stance';
+import { defaultStance, OVER_ANKLES } from './stance';
 
 /**
  * A person standing and walking where asked on the core legs: the root — the body's centre of mass over the floor — goes where the
@@ -86,10 +86,16 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
     const lean = !moving && !go ? asks.lean : null;
     const leaned = still && (lean || leaning) ? within(still, lean, stepper) : null;
     leaning = !!leaned && (!!lean || root.distanceTo(leaned) > LEAN.back * s);
+    // (at rest on planted feet it settles over their rear half, `OVER_ANKLES` ahead of the ankles, as a person stands — read: Winter 1995,
+    // Gait Posture 3:193, the quiet gravity line ~4–6 cm ahead of the ankles — wherever it stopped; edging onto a goal still asked, its
+    // weight goes no further than `EDGING` from there: further, it steps)
+    const rest = !moving && stepper.legs.every((leg) => !leg.swing)
+      ? stepper.legs.reduce((sum, leg) => sum.add(leg.anchor), new Vector3()).divideScalar(stepper.legs.length).setY(0).addScaledVector(forwardOf(stance), OVER_ANKLES * s) : null;
+    const edged = go && rest ? stop.clone().sub(rest).clampLength(0, EDGING * s).add(rest) : stop;
     // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
     const behind = forwardOf(stepper.yaw).multiplyScalar(OVER * s);
-    const r = plan.step(f, { position: moving || go ? stop : leaned ?? root.clone(), velocity: moving ? velocity : new Vector3(), yaw: faced ? yaw : undefined },
-      { accel: go?.accel ?? 1.2 * s, speed: moving ? Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity) : go ? EDGE * s : leaned ? LEAN.speed * s : 0, turnSpeed: asks.face?.rate },
+    const r = plan.step(f, { position: moving ? stop : go ? edged : leaned ?? rest ?? root.clone(), velocity: moving ? velocity : new Vector3(), yaw: faced ? yaw : undefined },
+      { accel: go?.accel ?? 1.2 * s, speed: moving ? Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity) : go ? EDGE * s : leaned || rest ? LEAN.speed * s : 0, turnSpeed: asks.face?.rate },
       // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
       stance, (forecast) => stepper.reachable((t) => { const at = forecast(t); return { position: at.position.clone().sub(behind), yaw: at.yaw }; }));
     if (root.distanceTo(stop) < STOP.distance * s && r.velocity.length() < STOP.speed && velocity.length() < STOP.goalSpeed && unturned < STOP.yaw) moving = false;
@@ -168,8 +174,8 @@ const PUSH = 20 * Math.PI / 180;
 const WALKING_CROUCH = 0.5;
 /** Tuned: at rest, the weight shifts toward a reach this fast (m/s), its centre of mass kept this far within the feet's edge (m), and back till this near where it rested (m) */
 const LEAN = { speed: 0.15, inside: 0.03, back: 0.001 };
-/** Tuned: stopped close to a goal still asked (within `STOP`), the body edges onto it this fast (m/s) */
-const EDGE = 0.03;
+/** Tuned: stopped close to a goal still asked (within `STOP`), the body edges onto it this fast (m/s), its weight this far (m) either side of where it rests */
+const EDGE = 0.03, EDGING = 0.015;
 /** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /** Tuned: the ankles' middle stands this far behind the centre of mass (m; the old balance stood it `OVER_ANKLES` ahead of them; walking, less leaves the extrapolated centre of mass past the toes as the trailing foot lifts, more lowers the pelvis before contact) */

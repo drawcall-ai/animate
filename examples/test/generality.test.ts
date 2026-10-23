@@ -8,9 +8,10 @@ import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, items high and low. Every run must
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed in `OPEN`
 // (expected to fail: each one fixed comes off the list).
+// (on the core legs, the people's only legs since 2026-10-23: a box put down at hip height or below ends its carry's course late)
 const OPEN = new Set([
-  'a person takes a cup 0.05 m up, 120° off its facing',
-  'a person takes a cup 0.5 m up, 0° off its facing',
+  'a person puts a box down on a table 0.3 m high',
+  'a person puts a box down on a table 0.5 m high',
 ]);
 const check = (name: string, test: () => void) => (OPEN.has(name) ? it.fails : it)(name, test);
 

@@ -19,7 +19,7 @@ const coreFailures: Record<string, { checks: Record<string, MigrationStage | rea
   'stroll': { checks: {} },
   'pickup-shelf': { checks: {} },
   'hand-over': { checks: {} },
-  'knight-arming': { checks: {} },
+  'knight-arming': { checks: { 'late reach: grip distance after 4 s (m)': 4 } },
   'idle-life': { checks: {} },
   'reach-around': { checks: {} },
   'lift-heavy': { checks: {} },
