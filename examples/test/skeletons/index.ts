@@ -32,4 +32,4 @@ export function skeletonModel(joints: Joints, height: number): CharacterModel {
  * model: arms short for its 1.8 m, 0.46 m against the default's 0.60 m) and an outlier (the default's at 1.75 m with legs 0.7×,
  * trunk 1.3× and arms 1.3× as long).
  */
-export const SKELETONS = { soldier: { joints: soldier as Joints, height: 1.8 }, outlier: { joints: outlier as Joints, height: 1.75 } };
+export const SKELETONS = { soldier: { joints: soldier as unknown as Joints, height: 1.8 }, outlier: { joints: outlier as unknown as Joints, height: 1.75 } };
