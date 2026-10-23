@@ -55,7 +55,7 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
       }
     };
     const inertia = body.species.inertia && new Inertia(body.species.inertia);
-    const legs = { legs: phases, height: start.y, turn: { rate: 0, ahead: 0 }, lean: inertia, rest: (p: readonly number[]) => p.forEach((pitch, i) => { pitches[i] = pitch; }) } satisfies Striding;
+    const legs = { legs: phases, height: start.y, held: start.y, stride: { cycle: 1, stance: 0.5 }, turn: { rate: 0, ahead: 0 }, lean: inertia, rest: (p: readonly number[]) => p.forEach((pitch, i) => { pitches[i] = pitch; }) } satisfies Striding;
     let facing = body.yaw;
     yield* action<Frame>({ update: (f) => {
       const asked0 = takeAsks(body.asks, asks), g = body.locomotion;
@@ -98,6 +98,7 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
         p.phase = f.time <= f.dt ? at : (((ahead + off * Math.min(1, LOCKING * f.dt)) % 1) + 1) % 1;
       });
       legs.height = f.current.position(0).y;
+      [legs.stride.cycle, legs.stride.stance, legs.held] = [stepper.cycle, stepper.Ts, stepper.held];
       posture?.prepare(f, legs, attention, asks.look);
       if (carried) { carried.step(f, legs); carried.write(f); }
       // (let down and bowed as a task asks: the body lower on its legs, its front tipped down about its hind girdle — eased there and back)

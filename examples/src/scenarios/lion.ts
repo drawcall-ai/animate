@@ -36,12 +36,18 @@ const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ nam
 // the right fore down first, then the left, the gathered flight, the left hind, the right hind, the extended flight [read: Hudson, Corr &
 // Wilson 2012, J Exp Biol 215:2425, Fig. 2: a cheetah's and a greyhound's at 9–18 m/s]
 const WALK = [0.25, 0.75, 0, 0.5], TROT = [0.5, 0, 0, 0.5], GALLOP = [0.65, 0.55, 0, 0.1];
-// how it carries itself: trotting, bouncing on each diagonal (as the dog); galloping, once a stride, the withers lowest as the fores stand
-// and the croup as the hinds do, the spine extended in the extended flight and flexed in the gathered one [recalled: Hildebrand 1959,
-// the cheetah's flexing back; ±12° here, less than a cheetah's], the head held level [recalled: running felids and dogs hold the head
-// steady as the trunk bounces], the tail swinging against the croup's pitch [recalled: the tail as a counterweight]
-const TROTTING = { withers: -0.02, croup: [-0.02, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 1, headRise: 0, headWithers: 0.5 } as const;
-const GALLOPING = { withers: -0.03, croup: [-0.03, Math.PI], spine: 12, spinePhase: 4.1, roll: 1, yaw: 1, headPitch: 0, headRise: 0, headWithers: 0.2, once: 1, tail: 0.8 } as const;
+// how it carries itself: walking, its withers and croup dipping a centimetre with each step (tuned: a walk vaults over its legs, its
+// rise and fall small); trotting and galloping, riding its legs' push (`bounce`: its centre of mass falling as in flight between stances
+// and pitching as the fores and hinds push in turn — a cheetah's centre of mass rises and falls 5.7 ± 1.2 cm a stride at 15–18 m/s and
+// its body pitches 11.5° [read: Front Bioeng Biotechnol 2022, 10:825638, PMC9049215, measured cheetahs], a Thoroughbred's 8.3 cm
+// and 19° at 17 m/s, 18.5 cm and 11° at 7 [read: Pfau et al. 2006, J Exp Biol 209:3742]); galloping, the spine extended in the extended
+// flight and flexed in the gathered one [read: the same: a cheetah's 27° a stride; recalled: Hildebrand 1959; ±12° here,
+// less than a cheetah's], the head held steady as the trunk bounces — pitching about a third as much as the trunk [read: a cheetah's
+// head-to-torso pitch 0.37, bioRxiv 2026.09.03.748592], rising a tenth as much as the withers (tuned) — the tail swinging against the
+// croup's pitch [recalled: the tail as a counterweight]
+const WALKING = { withers: -0.01, croup: [-0.01, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 1, headRise: 0, headWithers: 0.5 } as const;
+const TROTTING = { ...WALKING, withers: 0, croup: [0, 0], bounce: 1 } as const;
+const GALLOPING = { withers: 0, croup: [0, 0], spine: 12, spinePhase: 4.1, roll: 1, yaw: 1, headPitch: 0, headRise: 0, headWithers: 0.1, once: 1, tail: 0.8, bounce: 1 } as const;
 
 /**
  * The lion: it walks, trots from a Froude number of 0.6 and gallops from 3 (walk–trot ~0.5, trot–gallop 2–3 [recalled: Alexander &
@@ -54,13 +60,16 @@ export const LION: Species<'jaw'> = {
   skeleton,
   gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.05, 0.2), out), range: { down: 0.4, up: 0.3, side: 0.5 } },
   hands: { jaw: 'mouth' },
+  // (it pitches head-end down into its acceleration as the dog does (read: Walter & Carrier 2009, see `DOG`), its response the dog's made
+  // dynamically similar on its 0.92 m legs)
+  inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 0.79, damping: 0.65 },
   legs: {
     chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
       heel: v(0, -0.06, -0.04), toe: v(0, -0.06, 0.08), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
     gait: {
       ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT], [2, TROT], [3, GALLOP]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
       run: { froude: [1, 3], drop: 0.15 },
-      body: carriages([[2, TROTTING], [3, GALLOPING]]),
+      body: carriages([[0.3, WALKING], [0.6, TROTTING], [2, TROTTING], [3, GALLOPING]]),
     },
     carriage: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
       life: [['tail', { every: [3, 7], rate: 1, pick: swing }]] },

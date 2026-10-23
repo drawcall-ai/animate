@@ -4,7 +4,7 @@ import { Life, type Rhythm } from '../life';
 import { clamp, GRAVITY, yawOf } from '../math';
 import { Pose, type ReadonlyPose } from '../pose';
 import { irregular } from '../random';
-import { strideAt, type Gait } from './gait';
+import { offsetAt, strideAt, type Gait } from './gait';
 import type { LegChain } from './legs';
 
 /**
@@ -16,7 +16,8 @@ import type { LegChain } from './legs';
  * running cat's). The tail's root pitches against the croup's pitch by `tail` (share). Once a stride, with the hind legs' stance, the
  * pelvis rolls `roll` (°) and yaws `yaw` (°), and the tail swings after it. Turning, the spine bends into the turn as `bend` of the arc
  * its back (withers to croup) walks would bend it — on the spot as walking its slowest — the neck taking the front half, the spine and
- * pelvis the back (none: it does not).
+ * pelvis the back (none: it does not). Running, the trunk rides its legs' push by `bounce` (share, on top of the wave): its centre of
+ * mass and pitch go as each stance's push and the flights' fall carry them (`Riding`).
  */
 export interface Carriage {
   bend?: number;
@@ -31,6 +32,7 @@ export interface Carriage {
   headWithers: number;
   once?: number;
   tail?: number;
+  bounce?: number;
 }
 
 /**
@@ -67,6 +69,10 @@ export interface Extras {
 export interface Striding {
   readonly legs: readonly { readonly phase: number }[];
   readonly height?: number;
+  /** the root's height its planted feet alone hold it at, if the legs set it: a running ride's, its flights not held down by its swinging feet */
+  readonly held?: number;
+  /** the stride's time and each stance's in it as the legs step them (s): the gait's, or cut short to keep within the legs' reach */
+  readonly stride?: { readonly cycle: number; readonly stance: number };
   /** the root's turn (rad/s, + left), and how much further round it faces a moment on (rad, + left): what the head leads into */
   readonly turn?: { readonly rate: number; readonly ahead: number };
   /** the trunk's lean into the root's acceleration (`Inertia`: rad, + front down, + left side up), if the body leans */
@@ -96,8 +102,14 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
   const across = Math.max(...chains.map((chain) => Math.abs(rest.position(chain.joints[0].bone).x - rest.position(0).x)));
   const weightRoll = spine === undefined ? 0 : s.limits[spine]?.swing[0][1] ?? 0;
   const neckBase = neck === undefined ? null : s.bones[neck].offset, poll = head === undefined ? null : s.bones[head].offset;
+  // (its centre of mass along the trunk, from the root, and how it takes a pitching push: its mass's spread about it, per kg)
+  const masses = s.bones.map((bone, i) => [bone.mass, rest.point(i, bone.com, new Vector3())] as const), mass = masses.reduce((sum, [m]) => sum + m, 0);
+  const centre = masses.reduce((sum, [m, at]) => sum.addScaledVector(at, m / mass), new Vector3()), comAt = centre.z - rest.position(0).z;
+  const k2 = masses.reduce((sum, [m, at]) => sum + m * ((at.z - centre.z) ** 2 + (at.y - centre.y) ** 2), 0) / mass;
+  const levers = chains.map((chain) => along(chain.joints[0].bone) - comAt), riding: Riding = { rise: new Float64Array(RIDE_SAMPLES), pitch: new Float64Array(RIDE_SAMPLES), low: 0 };
+  let clock = 0;
   const swing = { angle: 0, rate: 0 }, turning = { rate: 0, ahead: 0 }, lean = { pitch: 0, roll: 0 };
-  let moving = 0, speed = 0, phase = 0, hind = 0, swish = Infinity, base: number | undefined, bent = 0, headYaw = 0;
+  let moving = 0, speed = 0, phase = 0, hind = 0, swish = Infinity, base: number | undefined, planted: number | undefined, bent = 0, headYaw = 0;
   const body = (): Carriage => typeof gait.body === 'function' ? gait.body(speed, speed * speed / (GRAVITY * gait.height)) : gait.body ?? STILL;
   return {
     get moving() { return moving; },
@@ -110,7 +122,13 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       phase = 2 * Math.PI * (legs.legs[0].phase + (speed > 0 ? stride.frequency * f.dt : 0));
       hind = 2 * Math.PI * (legs.legs[2].phase + (speed > 0 ? stride.frequency * f.dt : 0));
       swish += f.dt;
-      base = legs.height;
+      [base, planted] = [legs.height, legs.held];
+      // (the stride's clock from the fore-left's landing, and the ride it carries the trunk on at this pace)
+      clock = phase / (2 * Math.PI);
+      if (chains.length === 4 && (body().bounce ?? 0) > 0) {
+        const stride = strideAt(gait, speed, 0);
+        ride(riding, gait, speed, legs.stride ?? { cycle: 1 / stride.frequency, stance: stride.duty / stride.frequency }, levers, k2);
+      }
       [turning.rate, turning.ahead] = [legs.turn?.rate ?? 0, legs.turn?.ahead ?? 0];
       [lean.pitch, lean.roll] = [legs.lean?.pitch ?? 0, legs.lean?.roll ?? 0];
       // (the spine bent into the turn — its back along the arc it walks, κ = turn / speed — as fast as `BENDING`)
@@ -126,17 +144,23 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       const drift = irregular(t, life.phase, 0.79, 1.37, 2.11) * (1 - m);
       const sway = Math.cos(hind - Math.PI * strideAt(gait, speed, 2).duty);
       // (on legs that hold the root's height, the withers rise to it at most: they only ever let it down)
-      const withers = b.withers * w(0) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
-      const pitch = Math.asin(clamp((b.croup[0] * w(b.croup[1]) - b.withers * w(0)) / span, -1, 1)) * m;
+      const waved = b.withers * w(0) * m - (base === undefined ? 0 : Math.abs(b.withers) * m), standing = base ?? height;
+      const wavePitch = Math.asin(clamp((b.croup[0] * w(b.croup[1]) - b.withers * w(0)) / span, -1, 1)) * m;
+      // (riding its legs' push: its centre of mass risen and the trunk pitched about it as the stride has them — on legs that hold the
+      // root's height, from where its planted feet hold it, let down so no stance leg's top rises past it: its swinging feet reach out
+      // rather than hold it down in its flights — the withers going with them)
+      const rides = (b.bounce ?? 0) * m * Number(chains.length === 4), pitch = wavePitch + rides * ridden(riding.pitch, clock);
+      const rise = rides * (ridden(riding.rise, clock) + (base === undefined ? 0 : (planted ?? base) - base - riding.low)) + comAt * (Math.sin(pitch) - Math.sin(wavePitch));
+      const withers = waved + rise - withersAt * (Math.sin(pitch) - Math.sin(wavePitch));
       // (on legs that hold the root's height, the croup no higher than it stood either: pitched, the root lets down what it would lift it —
       // `HOLD` of its most over the stride all along, so the croup keeps nearly its whole rise and fall, the rest as it comes)
-      const held = base === undefined ? 0 : HOLD * riseOver(b, m, span), croupRise = base === undefined ? 0 : held + Math.max(0, withers + span * Math.sin(pitch) - held);
+      const held = base === undefined ? 0 : HOLD * riseOver(b, m, span), croupRise = base === undefined ? 0 : held + Math.max(0, waved + span * Math.sin(wavePitch) - held);
       // (leaning into the root's acceleration, the trunk tips about the end that stays down — forward about its croup, back about its
       // withers, settling onto its haunches — and rolls about the side that does: the legs are never let out for it; the withers going
       // down with it)
       const tip = lean.pitch, pivot = tip > 0 ? withersAt - span : withersAt, sunk = (pivot - withersAt) * Math.sin(tip);
       const rolled = across * (Math.hypot(Math.sin(lean.roll), SMOOTH) - SMOOTH);
-      const rootHeight = standing + withers + withersAt * Math.sin(pitch) + pivot * Math.sin(tip) - rolled - croupRise + (extras.lift ?? 0) + 0.003 * drift;
+      const rootHeight = standing + waved + withersAt * Math.sin(wavePitch) + rise + pivot * Math.sin(tip) - rolled - croupRise + (extras.lift ?? 0) + 0.003 * drift;
       f.current.setRoot(_v.copy(f.current.position(0)).setY(rootHeight));
       f.current.setLocal(0, turn(pitch + tip, yawOf(f.current.rotation(0)), lean.roll));
       const glance = names.has('head') ? life.value('head') : 0, weight = names.has('weight') ? life.value('weight') : 0;
@@ -201,6 +225,60 @@ const wave = (once: number, x: number, c: number) => (1 - once) * Math.cos(2 * x
 const HOLD = 0.6;
 /** how finely a stride is looked over for the croup's highest */
 const RISE_SAMPLES = 24;
+/**
+ * How a running trunk rides its legs' push over a stride, as a rigid body would — the spring-mass of running, its flights ballistic:
+ * each leg pushes up through its stance as a half sine [recalled: the vertical ground force of a galloping or trotting leg rises and
+ * falls so, Walter & Carrier 2007, J Exp Biol 210:208; read: Hudson et al. 2012, J Exp Biol 215:2425, Fig. 5], the fore and the hind
+ * pairs bearing the weight in the shares that leave the trunk no net turn over the stride (as their tops stand about its centre of mass:
+ * a greyhound's fores bear 56% [read: Hudson et al. 2012]), the stride's whole push lifting its weight (∫F dt = m g T) — so between
+ * pushes it falls as in flight, a push ahead of its centre of mass lifts its front and one behind it its croup, against its pitching
+ * inertia `k2` (m², per kg). Its centre of mass's rise (m) and its pitch (rad, + front down) are the stride's accelerations integrated
+ * twice, periodic, `RIDE_SAMPLES` to a `stride` from the fore-left's landing (`levers`: each leg's top ahead of the centre of mass, m);
+ * `low` is the most a leg's top rises over the stride while its foot is down, or `EARLY` before: the root let down by it, no stance
+ * leg is reached further than its legs hold it.
+ */
+function ride(out: Riding, gait: Gait, speed: number, stride: { cycle: number; stance: number }, levers: readonly number[], k2: number): void {
+  const dt = stride.cycle / RIDE_SAMPLES, n = RIDE_SAMPLES;
+  const legs = levers.map((_, i) => ({ duty: stride.stance / stride.cycle, offset: offsetAt(gait, speed, i) }));
+  const fore = (levers[0] + levers[1]) / 2, hind = (levers[2] + levers[3]) / 2, foreShare = -hind / (fore - hind);
+  const { rise, pitch } = out;
+  for (let k = 0; k < n; k++) {
+    const u = (k + 0.5) / n;
+    let up = 0, turning = 0;
+    legs.forEach(({ duty, offset }, i) => {
+      const since = (((u + legs[0].offset - offset) % 1) + 1) % 1;
+      if (since >= duty) return;
+      const push = (i < 2 ? foreShare : 1 - foreShare) / 2 * GRAVITY * Math.PI / (2 * duty) * Math.sin(Math.PI * since / duty);
+      up += push; turning -= push * levers[i] / k2;
+    });
+    [rise[k], pitch[k]] = [up - GRAVITY, turning];
+  }
+  // (the pushes' sum, sampled, lifting the weight just so: no drift over the stride)
+  for (const a of [rise, pitch]) { const mean = a.reduce((sum, x) => sum + x, 0) / n; a.forEach((x, k) => { a[k] = x - mean; }); }
+  for (const a of [rise, rise, pitch, pitch]) {
+    let sum = 0, mean = 0;
+    for (let k = 0; k < n; k++) { sum += a[k] * dt; a[k] = sum; mean += sum / n; }
+    for (let k = 0; k < n; k++) a[k] -= mean;
+  }
+  out.low = -Infinity;
+  for (let k = 0; k < n; k++) {
+    const u = (k + 0.5) / n;
+    legs.forEach(({ duty, offset }, i) => {
+      if ((((u + legs[0].offset - offset + EARLY) % 1) + 1) % 1 < duty + EARLY) out.low = Math.max(out.low, rise[k] - levers[i] * Math.sin(pitch[k]));
+    });
+  }
+}
+/** Tuned: how early in a stride (cycles) a leg's landing may come and still find its top no higher than the legs hold it */
+const EARLY = 0.05;
+/** a stride's ride (`ride`) */
+interface Riding { rise: Float64Array; pitch: Float64Array; low: number }
+/** how finely a stride's ride is worked out */
+const RIDE_SAMPLES = 64;
+/** the ride `of` at `u` (cycles from the fore-left's landing), between its samples */
+function ridden(of: Float64Array, u: number): number {
+  const x = (((u * RIDE_SAMPLES - 0.5) % RIDE_SAMPLES) + RIDE_SAMPLES) % RIDE_SAMPLES, k = Math.floor(x), t = x - k;
+  return of[k] + (of[(k + 1) % RIDE_SAMPLES] - of[k]) * t;
+}
 const STILL: Carriage = { withers: 0, croup: [0, 0], spine: 0, spinePhase: 0, roll: 0, yaw: 0, headPitch: 0, headRise: 0, headWithers: 0 };
 const turn = (x = 0, y = 0, z = 0, out = _t) => out.setFromEuler(_e2.set(x, y, z, 'YXZ'));
 const _t = new Quaternion(), _v = new Vector3(), _e = new Euler(), _e2 = new Euler();
