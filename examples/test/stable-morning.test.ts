@@ -5,6 +5,7 @@ import { vary } from '../scripts/run';
 import { segmentDistance } from './clearance';
 import { RAISE_LEAD } from '../../packages/animate/src/humanoid/hands/place';
 import { HORSE, LEAD_ROPE, stableMorning } from '../src/scenarios/stable-morning';
+import { SKELETONS, skeletonModel } from './skeletons';
 
 // Read from the scene's saddle meshes and horse barrel, in metres.
 const SEAT_HEIGHT = 0.16;
@@ -44,8 +45,28 @@ const LIFT_RISE = 0.01;
 // Read from OpenPoseSkeleton's default jointRadius: the rendered wrist sphere (m).
 const HAND_MARKER_RADIUS = 0.024;
 
-it('leads upright with the near hand forward, slack outside, and halts beyond the gate', () => {
-  const sim = new Simulation(stableMorning(), undefined, true);
+// Every story on the default body and on the skeletons unlike it (test/skeletons): what holds of a stable hand holds of any body,
+// the default's names kept. The cases that do not hold yet are listed in `OPEN` (expected to fail: each one fixed comes off the list).
+const BODIES = [['', undefined], ...Object.entries(SKELETONS).map(([name, { joints, height }]) => [` on the ${name}`, () => skeletonModel(joints, height)] as const)] as const;
+// The soldier (arms 0.8× the default's) cannot yet hold the bulky saddle clear of its trunk within its arms' reach (its carry ends
+// late, so it never gets on to the rope; the saddle comes within 2 mm of its trunk) and lifts it 0.35 s after touching it; the
+// outlier's slack hand hangs where the scene's fixed hips-frame `SLACK_HAND` puts it, too little forward of its hips, and its legs
+// still jerk as it leads off (joint acceleration dev checks).
+const OPEN = new Set<string>([
+  'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
+  ...[0, 1, 2].flatMap((seed) => [
+    `carries below the face until arrival and places clear of both bodies on the soldier #${seed}`,
+    `gathers the slack of a hanging rope of fixed length while walking on the soldier #${seed}`,
+    `gathers the slack of a hanging rope of fixed length while walking on the outlier #${seed}`,
+  ]),
+  'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',
+]);
+const test = (title: string, body: () => void) => (OPEN.has(title) ? it.fails : it)(title, body);
+
+for (const [on, model] of BODIES) {
+
+test(`leads upright with the near hand forward, slack outside, and halts beyond the gate${on}`, () => {
+  const sim = new Simulation(stableMorning(), model, true);
   const chest: number[] = [];
   const phases = ['', ''];
   let ropeGap = Infinity;
@@ -216,9 +237,9 @@ it('leads upright with the near hand forward, slack outside, and halts beyond th
   expect(sim.stage.done()).toBe(true);
 });
 
-it.each([0, 1, 2])('carries below the face until arrival and places clear of both bodies #%i', (seed) => {
+for (const seed of [0, 1, 2]) test(`carries below the face until arrival and places clear of both bodies${on} #${seed}`, () => {
   const scene = stableMorning();
-  const sim = new Simulation(seed ? vary(scene, seed) : scene);
+  const sim = new Simulation(seed ? vary(scene, seed) : scene, model);
   let headGap = Infinity;
   let legGap = Infinity;
   let barrelGap = Infinity;
@@ -310,9 +331,9 @@ it.each([0, 1, 2])('carries below the face until arrival and places clear of bot
   expect(barrelGap).toBeGreaterThan(0);
 });
 
-it.each([0, 1, 2])('gathers the slack of a hanging rope of fixed length while walking #%i', (seed) => {
+for (const seed of [0, 1, 2]) test(`gathers the slack of a hanging rope of fixed length while walking${on} #${seed}`, () => {
   const scene = stableMorning();
-  const sim = new Simulation(seed ? vary(scene, seed) : scene, undefined, true);
+  const sim = new Simulation(seed ? vary(scene, seed) : scene, model, true);
   let rightAt = NaN, leftAt = NaN;
   let gatheringSteps = 0;
   while (sim.t < scene.duration) {
@@ -333,7 +354,8 @@ it.each([0, 1, 2])('gathers the slack of a hanging rope of fixed length while wa
       // Ungathered, the slack hangs below the knot hand.
       const tail = segments[segments.length - 1];
       if (tail.kind === 'cylinder') expect(tail.position.y).toBeLessThan(rope.current.position.y);
-      if (h.locomotion.velocity.length() > MOVING) gatheringSteps++;
+      // (walking: the body under way — not its speed above a bound its first, slow step holds at exactly)
+      if (h.locomotion.moving) gatheringSteps++;
       continue;
     }
     if (Number.isNaN(leftAt)) leftAt = sim.t;
@@ -344,3 +366,4 @@ it.each([0, 1, 2])('gathers the slack of a hanging rope of fixed length while wa
   expect(gatheringSteps).toBeGreaterThan(30);
   expect(sim.actors[0].log).toEqual([]);
 });
+}
