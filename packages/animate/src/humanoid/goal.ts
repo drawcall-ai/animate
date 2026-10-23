@@ -3,8 +3,8 @@ import type { Body, Frame } from '../core/body';
 import { movingPoint, type Placement } from '../core/goal';
 import { loadFactor } from '../core/load';
 import { heldMass } from '../core/worn';
-import { isPerson, type Humanoid } from './humanoid';
-import type { Side } from './bones';
+import { Humanoid } from './humanoid';
+import { sideOf, type Side } from './bones';
 import { rests } from '../core/hands';
 import { BODY_RADIUS, LOAD_RESERVE } from './hands/clearance';
 import { ARM_REACH, PROTRACTION } from './arms';
@@ -13,10 +13,12 @@ import { SIDES } from './bones';
 
 
 /** A comfortable carry in front of the hips, or beside one hip for a single hand; follows the body. */
-export function carried<H extends string>(body: Body<H>, hand?: H): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
+export function carried(h: Humanoid, side?: Side): (f: Frame) => Required<Placement> & { velocity: Vector3 };
+export function carried<H extends string>(body: Body<H>, hand?: H): (f: Frame) => Required<Placement> & { velocity: Vector3 };
+export function carried(body: Body, hand?: string): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
   // (another body's: where its hand rests)
-  if (!isPerson(body)) {
-    const rest = rests(body, hand ?? (Object.keys(body.hands)[0] as H)), velocity = new Vector3();
+  if (!(body instanceof Humanoid)) {
+    const rest = rests(body, hand ?? Object.keys(body.hands)[0]), velocity = new Vector3();
     let last: { time: number; position: Vector3 } | null = null;
     // (moving as the body carries it: a goal on the move is followed, not lagged behind)
     return (f) => {
@@ -27,7 +29,7 @@ export function carried<H extends string>(body: Body<H>, hand?: H): (f: Frame) =
       return { ...at, velocity: velocity.clone() };
     };
   }
-  return personCarried(body, hand as Side | undefined);
+  return personCarried(body, hand === undefined ? undefined : sideOf(hand));
 }
 
 function personCarried(h: Humanoid, side?: Side) {

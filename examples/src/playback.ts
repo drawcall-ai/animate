@@ -1,4 +1,4 @@
-import { type Humanoid, yawOf, type Body, isPerson } from '@drawcall/animate';
+import { Humanoid, yawOf, type Body } from '@drawcall/animate';
 import { Bone, Box3, Quaternion, Vector3, type Object3D } from 'three';
 import type { Look, Prop } from './scenario';
 import type { Simulation } from './simulation';
@@ -119,7 +119,7 @@ export class Playback {
 
   get velocity(): Vector3 {
     const body = this.subject();
-    if (isPerson(body)) return new Vector3().copy(body.velocity);
+    if (body instanceof Humanoid) return new Vector3().copy(body.velocity);
     const { frame } = body;
     return new Vector3().subVectors(frame.prev.position(0), frame.prev2.position(0)).divideScalar(frame.dt);
   }
@@ -140,7 +140,7 @@ export class Playback {
   private root() {
     if (this.sim.stage.bodies?.length && this.sim.actors.length) return this.bounds.getCenter(new Vector3());
     const body = this.subject();
-    return isPerson(body) ? body.model.scene.position.clone().setY(FOCUS_HEIGHT * body.proportions.height) : body.pose.position(0).clone();
+    return body instanceof Humanoid ? body.model.scene.position.clone().setY(FOCUS_HEIGHT * body.proportions.height) : body.pose.position(0).clone();
   }
 }
 

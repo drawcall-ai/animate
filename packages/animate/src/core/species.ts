@@ -1,8 +1,8 @@
 import type { Vector3 } from 'three';
-import type { Body, BodyOptions, Frame } from './body';
+import type { Frame } from './body';
 import type { Gazer } from './gaze';
 import type { Inertial } from './inertia';
-import type { Behaviour, Live } from './goal';
+import type { Live } from './goal';
 import type { Gait } from './legs/gait';
 import type { CarriedBones, Striding } from './legs/carriage';
 import type { LegChain } from './legs/legs';
@@ -26,8 +26,6 @@ export interface Species<H extends string = string> {
   inertia?: Inertial;
   /** its size against the body its distances were tuned for (`scaled`; default 1): a body made of it takes it as its `scale` */
   scale?: number;
-  /** a person (`human()`): the body made for it is a person's, its verbs a person's */
-  person?: { embody(story: (body: Body<H>) => Behaviour, options: BodyOptions): Body<H> };
 }
 
 /** What a creature heeds as it stands and walks besides what it looks at (`lookAt`): a tether it is tied by, a startle (a new point each time). */

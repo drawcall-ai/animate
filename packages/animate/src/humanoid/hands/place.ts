@@ -4,7 +4,7 @@ import type { Item } from '../../core/carrier';
 import { live, type Behaviour, type Live, type Placement } from '../../core/goal';
 import { withGaze } from '../../core/gaze';
 import { carried } from '../goal';
-import { isPerson } from '../humanoid';
+import { Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
 import { put } from '../../core/hands';
 import { arriving } from '../../core/walk';
@@ -25,7 +25,7 @@ const APPROACH_RISE = 2 / 3;
  * A live destination follows translation and rotation throughout the approach and transfer. */
 export function place(body: Body, item: Item, to: Live<Placement>): Behaviour {
   // (another body walks up, takes it there in its hand and lets go)
-  if (!isPerson(body)) return put(body, item, to);
+  if (!(body instanceof Humanoid)) return put(body, item, to);
   const h = body;
   return function* () {
     let lifting = true;

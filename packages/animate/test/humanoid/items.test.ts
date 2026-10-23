@@ -1,18 +1,17 @@
 import { Quaternion, Vector3 } from 'three';
-import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { describe, expect, it } from 'vitest';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { carry, grab, hold, INDEX, Item, release, takeOff, wear, when, type Behaviour, type Frame } from '../../src';
 import { closeHand } from '../../src/humanoid/hands/grips';
 import { STEP } from '../../src/core/body';
-import { type Humanoid } from '../../src/humanoid/humanoid';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
 /** a humanoid stepping `behaviour` (over its base) for `seconds` */
 function run(behaviour: (h: Humanoid) => Behaviour, seconds: number, dev = false): Humanoid {
   // (from the first sub-step on: a timeline starts running as its body is made, before the body is there to read)
-  const h = person(createSkeletonModel(), (h) =>
+  const h = new Humanoid(createSkeletonModel(), (h) =>
     function* () {
       yield* when(() => true);
       yield* parallel<Frame>('all', idle(h), behaviour(h));
@@ -159,7 +158,7 @@ describe('hands that cannot get there', () => {
 
 it('moves initial worn items once and loads their moved centres on the same step', () => {
   const item = new Item(new Vector3(), new Quaternion(), {}, { mass: 8 });
-  const h = person(createSkeletonModel(), () => function* () { yield* when(() => false); }, { idle: false, wearing: () => [{ item, on: INDEX.chest, at: { position: new Vector3(0.2, 0, 0) } }], });
+  const h = new Humanoid(createSkeletonModel(), () => function* () { yield* when(() => false); }, { idle: false, wearing: () => [{ item, on: INDEX.chest, at: { position: new Vector3(0.2, 0, 0) } }], });
   const initial = h.pose.com(new Vector3());
   h.update(STEP);
   expect(h.worn.size).toBe(1);

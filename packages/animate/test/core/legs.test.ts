@@ -14,7 +14,8 @@ import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '.
 import { Pose } from '../../src/core/pose';
 import type { Stepper } from '../../src/core/legs/stepper';
 import type { DrivenRoot } from '../../src/core/legs/stepper';
-import { human } from '../../src/humanoid/humanoid';
+import { Humanoid } from '../../src/humanoid/humanoid';
+import { createSkeletonModel } from '../../src/humanoid/model';
 import { INDEX } from '../../src/humanoid/bones';
 
 it('a Cartesian swing has a bell-shaped speed peaking halfway and zero contact acceleration', () => {
@@ -397,7 +398,7 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: solved hooves peak
 it('plants its feet from its own pelvis, whatever another stepper did since', () => {
   const driven = (x: number, speed: number) => {
     const root: DrivenRoot = { position: new Vector3(x, 0, 0), velocity: new Vector3(0, 0, speed), yaw: 0 };
-    return { root, body: new Body(human(), undefined, { at: { x, z: 0 }, idle: { root } }) };
+    return { root, body: new Humanoid(createSkeletonModel(), undefined, { at: { x, z: 0 }, idle: { root } }) };
   };
   const [a, b] = [driven(0, 3.5), driven(3, -3.5)];
   let most = 0;

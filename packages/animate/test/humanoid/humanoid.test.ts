@@ -1,5 +1,4 @@
 import { Quaternion, Vector3 } from 'three';
-import { person } from '../person';
 import { describe, expect, it } from 'vitest';
 import { action } from '@pmndrs/timeline';
 import { Pose, type Frame } from '../../src';
@@ -11,7 +10,7 @@ import { Rig } from '../../src/humanoid/rig';
 import { relaxedPose } from '../../src/humanoid/profile/relaxed';
 import { rng, turnUpTo } from './fixtures';
 import { INDEX } from '../../src/humanoid/bones';
-import { type Humanoid } from '../../src/humanoid/humanoid';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
 /** a behaviour writing `write` every sub-step, forever */
@@ -24,7 +23,7 @@ const at = (h: Humanoid, name: string) => h.model.scene.getObjectByName(name)?.g
 
 describe('Humanoid', () => {
   it('stands where it is put, relaxed, the soles on the floor, still', () => {
-    const h = person(createSkeletonModel(), () => every(() => {}), { idle: false, at: { x: 1, z: 2 }, yaw: 0.5 });
+    const h = new Humanoid(createSkeletonModel(), () => every(() => {}), { idle: false, at: { x: 1, z: 2 }, yaw: 0.5 });
     for (let i = 0; i < 10; i++) h.update(1 / 60);
     expect(h.yaw).toBeCloseTo(0.5, 9);
     expect(h.velocity.length()).toBe(0);
@@ -38,7 +37,7 @@ describe('Humanoid', () => {
 
   it('solves its named chains within its ranges of motion: a wrist onto a point in reach', () => {
     const target = new Vector3(-0.25, 1.2, 0.3);
-    const h = person(createSkeletonModel(), () => every((f) => solveChain(f, 'rightArm', { tip: { position: target }, pole: new Vector3(-0.6, 0.8, -0.3) })), { idle: false });
+    const h = new Humanoid(createSkeletonModel(), () => every((f) => solveChain(f, 'rightArm', { tip: { position: target }, pole: new Vector3(-0.6, 0.8, -0.3) })), { idle: false });
     h.update(1 / 60);
     h.model.scene.updateMatrixWorld(true);
     expect(at(h, 'rightHand').distanceTo(target)).toBeLessThan(1e-6);

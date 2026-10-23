@@ -1,17 +1,17 @@
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
 import type { Body, Frame } from '../core/body';
-import { personOnly, tipToward } from '../core/hands';
-import { Item, type Carrier } from '../core/carrier';
+import { tipToward, type Reaching } from '../core/hands';
+import { Item } from '../core/carrier';
 import { heldItems } from '../core/worn';
 import { followRotation } from '../core/follow';
 import { Glide } from '../core/glide';
-import { live, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from '../core/goal';
+import { live, type Behaviour, type Live, type Motion, type Placement, type Target } from '../core/goal';
 import { clampRotation } from '../core/limits';
 import { ChainTip, reached } from '../core/tip';
 import { TrackedRotation } from '../core/track';
 import { INDEX, SIDES, sideOf, type Side } from './bones';
-import { isPerson, type Humanoid } from './humanoid';
+import { Humanoid } from './humanoid';
 import { bringShoulder, twistToward } from './reach-posture';
 import { checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../core/math';
@@ -119,19 +119,16 @@ function set(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal:
   f.current.setLocal(bone, q);
 }
 
-/** How a hand goes to its target. */
-export interface HandOptions extends Partial<Motion> {
+/** How a person's hand goes to its target. */
+export interface HandOptions extends Partial<Motion>, Reaching {
   /** where the elbow bends toward (world; default as where the hand is asks: down and back hanging, out reaching across, …) */
   pole?: Live<Vector3>;
-  /** the target is on this carrier, in its frame */
-  on?: Carrier;
   /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default true); false: the hand only follows (a tracked controller: the head leads) */
   lead?: boolean;
   /** a reach that takes this long (s): the hand goes along a minimum-jerk path to the target (a bell of speed), then stays on it */
   seconds?: number;
   /** with `seconds`: the reach sets off this long after (s), the arm kept as it is till then */
   after?: number;
-  until?: Until;
 }
 
 /**
@@ -142,11 +139,10 @@ export interface HandOptions extends Partial<Motion> {
  * arm reaches standing asks the base to bow and bend the knees for it, one above to go up on the
  * toes. Another body's hand is its chain's tip, moved there until `until`.
  */
+export function handTo(h: Humanoid, hand: Side, target: Live<Target>, options?: HandOptions): Behaviour;
+export function handTo<H extends string>(body: Body<H>, hand: H, target: Live<Target>, options?: Reaching): Behaviour;
 export function handTo<H extends string>(body: Body<H>, hand: H, target: Live<Target>, options: HandOptions = {}): Behaviour {
-  if (!isPerson(body)) {
-    personOnly('handTo', options, ['pole', 'lead', 'seconds', 'after']);
-    return tipToward(body, hand, target, { on: options.on, accel: options.accel, speed: options.speed, until: options.until });
-  }
+  if (!(body instanceof Humanoid)) return tipToward(body, hand, target, options);
   return personHandTo(body, sideOf(hand), target, options);
 }
 

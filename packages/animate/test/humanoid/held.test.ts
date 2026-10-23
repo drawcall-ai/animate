@@ -1,5 +1,5 @@
 import { clearBody } from '../../src/humanoid/hands/clearance';
-import { person } from '../person';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { idle } from '../../src/humanoid/idle';
 import { pointSegmentDistance } from '../../src/core/math';
 import { RAISE_LEAD } from '../../src/humanoid/hands/place';
@@ -91,7 +91,7 @@ it('wears on a generic body, follows its bone from another frame, and takes off 
 
 it('never throws on a late reach — its beat, item, grip and distance go to the dev log — while errors carry time and beat', () => {
   const item = new Item(new Vector3(0, 1, 4), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'saddle' });
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), named('fetch saddle', reachFor(h, { right: [item, 'handle'] }, { limit: 0.1 })));
   }, { idle: false, dev: true });
   h.update(1);
@@ -155,7 +155,7 @@ it('keeps both carry grips until the slower course ends', () => {
   let done = false;
   let samples = 0;
   let off = 0;
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', action<Frame>({ update: (f) => {
       const at = f.current.position(INDEX.hips).clone();
       at.x = 0.04 * Math.sin(3 * f.time);
@@ -317,7 +317,7 @@ it.each([0.02, 0.22])('clears a %s m load from the final neck→head segment, in
 });
 
 it.each([false, true])('checks grip activation against the final wrist before fitting (late contact %s)', (contact) => {
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     const item = new Item(h.pose.position(INDEX.leftHand).clone().add(new Vector3(contact ? 0.1 : 0, 0, 0)), new Quaternion(), {
       end: { position: new Vector3() },
     }, { name: 'loose rope' });

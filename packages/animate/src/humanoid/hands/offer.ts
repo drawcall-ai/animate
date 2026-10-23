@@ -4,7 +4,7 @@ import type { Item } from '../../core/carrier';
 import type { Behaviour, Placement } from '../../core/goal';
 import { forwardOf } from '../../core/math';
 import { when } from '../../core/when';
-import { isPerson } from '../humanoid';
+import { Humanoid } from '../humanoid';
 import { carried } from '../goal';
 import { hold } from './carry';
 import { release } from './release';
@@ -25,12 +25,12 @@ export function offer(body: Body, item: Item, to: Body): Behaviour {
   const hands = () => (Object.keys(body.holding) as string[]).filter((hand) => body.holding[hand]?.item === item);
   return function* () {
     if (!hands().length) throw new Error(`offer: "${item.name}" is not held`);
-    const out = isPerson(body) ? (f: Frame): Placement => {
+    const out = body instanceof Humanoid ? (f: Frame): Placement => {
       // (held out halfway to the other, at a reach before the chest: the other comes for it)
       const at = f.prev.position(0), toward = to.pose.position(0).clone().sub(at).setY(0), far = toward.length();
-      const ahead = Math.min(far / 2, OUT * body.proportions!.armLength);
+      const ahead = Math.min(far / 2, OUT * body.proportions.armLength);
       const forward = far > 1e-6 ? toward.divideScalar(far) : forwardOf(body.yaw);
-      return { position: at.clone().setY(body.proportions!.shoulderHeight - DOWN * body.scale).addScaledVector(forward, ahead), quaternion: item.current.quaternion.clone() };
+      return { position: at.clone().setY(body.proportions.shoulderHeight - DOWN * body.scale).addScaledVector(forward, ahead), quaternion: item.current.quaternion.clone() };
     } : carried(body);
     item.offeredBy = body;
     try {

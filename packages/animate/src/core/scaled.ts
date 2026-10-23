@@ -9,12 +9,11 @@ import type { Species } from './species';
 /**
  * `species` at `size` times its size: its bones, its feet and its eyes `size` times as far apart, each bone `size`³ as heavy, and its
  * gait dynamically similar (Alexander & Jayes 1983, recalled: at equal Froude numbers, strides and lifts ∝ length, speeds ∝ √length,
- * cadences ∝ 1/√length, and so its lean into its acceleration). A body made of it takes `size` as its scale. A posture of the species' own is kept as it is; a person's
- * species is not scaled this way (its model is: `human(createSkeletonModel(height))`).
+ * cadences ∝ 1/√length, and so its lean into its acceleration). A body made of it takes `size` as its scale. A posture of the species' own is kept as it is; a person
+ * is scaled by its model instead: `new Humanoid(createSkeletonModel(height))`.
  */
 export function scaled<H extends string>(species: Species<H>, size: number): Species<H> {
   if (!(size > 0 && Number.isFinite(size))) throw new Error(`scaled: a size of ${size}`);
-  if (species.person) throw new Error('scaled: a person is scaled by its model');
   const { skeleton, gaze, legs, inertia } = species;
   const bones = skeleton.bones.map((bone) => ({ ...bone, offset: bone.offset.clone().multiplyScalar(size), com: bone.com.clone().multiplyScalar(size), mass: bone.mass * size ** 3 }));
   const chains = Object.fromEntries(skeleton.chainNames().map((name) => [name, skeleton.chain(name).map((bone) => skeleton.bones[bone].name)]));

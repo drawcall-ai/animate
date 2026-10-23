@@ -7,9 +7,9 @@ import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { SIDES } from '../bones';
 import { course, type Course, type Waypoint } from '../../core/course';
-import { isPerson, type Humanoid } from '../humanoid';
+import { Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
-import { bring, keep, personOnly, type Way } from '../../core/hands';
+import { bring, keep, type Keeping, type Way } from '../../core/hands';
 import { grip, gripsOf } from './grips';
 import { following, LEADING } from './reach';
 import { clearBody } from './clearance';
@@ -48,7 +48,7 @@ export interface HoldOptions {
 
 
 /**
- * Carry a held item along `way` and end once it has come to rest there; or several held items at once,
+ * Carry a held item along `way` and end once it has come to rest there; or (a person) several held items at once,
  * `[item, way]` each, every one kept at its end until all have come to rest. Waypoints are in metres in
  * the world by default; `frame` selects an item frame or a bone frame through `onItem` or `onBone`.
  * Waypoint seconds describe an unloaded item: a heavier item goes slower.
@@ -56,11 +56,11 @@ export interface HoldOptions {
  * still settling `limit` s after the course is over, it is a problem in the dev log (`Body.log`) and
  * keeps going: lateness never throws.
  */
-export function carry(h: Body, item: Item, way: Way, options?: CarryOptions): Behaviour;
-export function carry(h: Body, items: readonly (readonly [Item, Way])[], options?: CarryOptions): Behaviour;
+export function carry(h: Humanoid, items: readonly (readonly [Item, Way])[], options?: CarryOptions): Behaviour;
+export function carry(body: Body, item: Item, way: Way, options?: CarryOptions): Behaviour;
 export function carry(h: Body, what: Item | readonly (readonly [Item, Way])[], way?: Way | CarryOptions, options: CarryOptions = {}): Behaviour {
   // (another body's hand takes one item at a time, along its way in the world)
-  if (!isPerson(h)) {
+  if (!(h instanceof Humanoid)) {
     if (!(what instanceof Item) || !isWay(way)) throw new Error('carry: a creature carries one item at a time, along its way');
     return bring(h, what, way, options);
   }
@@ -162,12 +162,13 @@ class TrackedEnd {
  * the hands carry it there: they go for its grips
  * as it would be, followed toward `to` at `motion`'s pace (its own motion fed forward), the arms
  * reaching only as far as they do. Each sub-step, after the story, the item is fitted to the hands. Another body's hand
- * (`Species.hands`) goes back to rest with the item and keeps it there (`to` and `motion` are a person's).
+ * (`Species.hands`) brings it `to` a placement, or goes back to rest with it and keeps it there.
  */
+export function hold(h: Humanoid, item: Item, options?: HoldOptions): Behaviour;
+export function hold(body: Body, item: Item, options?: Keeping): Behaviour;
 export function hold(h: Body, item: Item, options: HoldOptions = {}): Behaviour {
-  if (!isPerson(h)) {
+  if (!(h instanceof Humanoid)) {
     if (options.to) return bring(h, item, options.to, { motion: options.motion, hold: { until: options.until } });
-    personOnly('hold', options, ['motion']);
     return keep(h, item, options.until);
   }
   return () => holding(h, item, new CarryAim(h, item, options.motion ?? CARRYING), options)();

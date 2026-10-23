@@ -1,21 +1,21 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Body, Frame } from '../../core/body';
-import { letGo, personOnly } from '../../core/hands';
+import { letGo } from '../../core/hands';
 import type { Behaviour, Target } from '../../core/goal';
 import { reached } from '../../core/tip';
 import { ARM_REACH, clearArm, handTo } from '../arms';
 import { INDEX, sideOf, type Side } from '../bones';
-import { isPerson, type Humanoid } from '../humanoid';
+import { Humanoid } from '../humanoid';
 import { facingAt } from '../../core/goal';
 import { heldItems } from '../../core/worn';
 
 // Letting go.
 
-/** How `release` goes about it. */
-export interface ReleaseOptions<H extends string = string> {
+/** How a person's `release` goes about it. */
+export interface ReleaseOptions {
   /** where each hand goes off to (m, in the body's frame), or `null`: only open */
-  away?: Partial<Record<H, Vector3>> | null;
+  away?: Partial<Record<Side, Vector3>> | null;
   /** seconds before the free arms take the hands, there or not */
   limit?: number;
 }
@@ -30,15 +30,13 @@ export interface ReleaseOptions<H extends string = string> {
  * (`supported`: on a shelf, a table). With `away: null`, only open: the next task owns the hands. Another body's hands let go and
  * go back to where its base has them.
  */
-export function release<H extends string>(body: Body<H>, hands: readonly H[], options: ReleaseOptions<H> = {}): Behaviour {
-  if (!isPerson(body)) {
-    personOnly('release', options, ['away', 'limit']);
-    return letGo(body, hands);
-  }
-  return person(body, hands.map(sideOf), { limit: options.limit, away: options.away === null ? null : options.away && Object.fromEntries(Object.entries(options.away).map(([hand, at]) => [sideOf(hand), at])) });
+export function release(h: Humanoid, hands: readonly Side[], options?: ReleaseOptions): Behaviour;
+export function release<H extends string>(body: Body<H>, hands: readonly H[]): Behaviour;
+export function release<H extends string>(body: Body<H>, hands: readonly H[], options: ReleaseOptions = {}): Behaviour {
+  return body instanceof Humanoid ? person(body, hands.map(sideOf), options) : letGo(body, hands);
 }
 
-function person(h: Humanoid, sides: readonly Side[], options: { away?: Partial<Record<Side, Vector3>> | null; limit?: number }): Behaviour {
+function person(h: Humanoid, sides: readonly Side[], options: ReleaseOptions): Behaviour {
   const { limit = LETTING_GO } = options;
   return function* () {
     const p = h.proportions;

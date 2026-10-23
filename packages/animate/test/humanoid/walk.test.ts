@@ -1,5 +1,5 @@
 import { Body } from '../../src/core/body';
-import { person } from '../person';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { idle } from '../../src/humanoid/idle';
 import { World } from '../../src/core/world';
 import { SEGMENT_RADIUS } from '../../src/humanoid/hands/grab';
@@ -142,7 +142,7 @@ it.each([
 
 it('logs an unreachable stand once and stands instead of asking for a walk', () => {
   for (const [point, ahead] of [[new Vector3(0, 1.4, 2), 2], [new Vector3(0, 10, 2), 0]] as const) {
-    const far = person(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }), { idle: false, dev: true });
+    const far = new Humanoid(createSkeletonModel(), (h) => approach(h, point, { spot: { ahead } }), { idle: false, dev: true });
     for (let tick = 0; tick < 30; tick++) far.update(STEP);
     expect(far.log.map((entry) => entry.check)).toEqual(["approach: placing point from the shoulders' middle, lowered and bowed (m)"]);
     expect(far.asks.go).toBeNull();
@@ -150,7 +150,7 @@ it('logs an unreachable stand once and stands instead of asking for a walk', () 
 });
 
 it('logs a vertically unreachable placing point with the default stand once and stands', () => {
-  const h = person(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)), { idle: false, dev: true });
+  const h = new Humanoid(createSkeletonModel(), (h) => approach(h, new Vector3(0, 10, 2)), { idle: false, dev: true });
   for (let tick = 0; tick < 30; tick++) h.update(STEP);
   expect(h.log.map((entry) => entry.check)).toEqual(["approach: placing point from the shoulders' middle, lowered and bowed (m)"]);
   expect(h.asks.go).toBeNull();
@@ -206,7 +206,7 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
     middle: { position: new Vector3() },
   });
   let done = false;
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), function* () {
       const grips: Vector3 | Grips = kind === 'placement' ? item.current.position : kind === 'one grip'
         ? { right: [item, 'middle'] as const }
@@ -221,7 +221,7 @@ it.each(['one grip', 'two grips', 'placement'])('chooses a clear stand including
   expect(Math.abs(h.locomotion.facing)).toBeGreaterThan(0.3);
   for (const foot of h.feet) expect(Math.hypot(foot.position.x + 0.25, foot.position.z - 1.6)).toBeGreaterThan(h.proportions.toeFront + SEGMENT_RADIUS);
   // (asked to face the blocked way, it logs that, once, and stands)
-  const facing = person(createSkeletonModel(), (h) => function* () {
+  const facing = new Humanoid(createSkeletonModel(), (h) => function* () {
     const grips: Vector3 | Grips = kind === 'placement' ? item.current.position : kind === 'one grip'
       ? { right: [item, 'middle'] as const }
       : { left: [item, 'left'] as const, right: [item, 'right'] as const };

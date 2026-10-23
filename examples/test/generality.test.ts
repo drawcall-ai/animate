@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, withGaze, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
+import { Body, withGaze, scaled, carried, carry, holds, offer, offered, touch, when, World, createSkeletonModel, grab, handTo, hold, horse, release, Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 import { cases } from '../../packages/animate/test/open';
 
@@ -23,7 +23,7 @@ const check = cases([
 ]);
 
 /** runs `story` on `body` for at most `seconds`: whether it finished, and what went wrong */
-function run(make: (story: (body: Body) => Behaviour) => Body, story: (body: Body) => Behaviour, seconds: number) {
+function run<B extends Body>(make: (story: (body: B) => Behaviour) => B, story: (body: B) => Behaviour, seconds: number) {
   let done = false;
   const body = make((b) => function* () { yield* story(b)(); done = true; });
   let error = '';
@@ -37,7 +37,7 @@ const creature = (species: Species) => (story: (body: Body) => Behaviour) => {
   const start = new Pose(species.skeleton);
   return new Body(species, story, { pose: start, dev: true });
 };
-const person = (story: (body: Body) => Behaviour) => new Body(human(), story, { dev: true });
+const person = (story: (h: Humanoid) => Behaviour) => new Humanoid(createSkeletonModel(), story, { dev: true });
 const around = (degrees: number, distance: number, y = 0) => new Vector3(Math.sin(degrees * DEG) * distance, y, Math.cos(degrees * DEG) * distance);
 const ok = { done: true, error: '', log: [] };
 
@@ -119,7 +119,7 @@ for (const height of [0.3, 0.5, 0.8, 1.1]) {
     const box = boxAt(around(0, 1.2, 0.8));
     expect(run(person, (b) => function* () {
       yield* grab(b, { left: [box, 'left'], right: [box, 'right'] })();
-      yield* place(b as Humanoid, box, { position: around(90, 1.5, height + 0.1), quaternion: new Quaternion() })();
+      yield* place(b, box, { position: around(90, 1.5, height + 0.1), quaternion: new Quaternion() })();
     }, 30)).toEqual(ok);
   });
 }
@@ -161,13 +161,13 @@ check('a person hands a bottle to another, who takes it and carries it off', () 
   const bottle = new Item(around(0, 1.2, 0.9), new Quaternion(), { bottom: { position: new Vector3(0, -0.08, 0) }, top: { position: new Vector3(0, 0.08, 0) } },
     { name: 'bottle', mass: 0.5, bounds: new Box3(new Vector3(-0.04, -0.12, -0.04), new Vector3(0.04, 0.12, 0.04)) });
   let offering = NaN, coming = NaN;
-  const giver = new Body(human(), (h) => function* () {
+  const giver = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* grab(h, { right: [bottle, 'bottom'] })();
     yield* when(timePassed(1, 'seconds')); // it looks at it a while before it holds it out
     offering = h.frame.time;
     yield* offer(h, bottle, taker)();
   }, { dev: true });
-  const taker: Body<Side> = new Body(human(), (h) => function* () {
+  const taker: Humanoid = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* when(() => offered(giver, bottle)); // it comes for it once it is held out
     coming = h.frame.time;
     yield* grab(h, { right: [bottle, 'top'] })();
@@ -187,7 +187,7 @@ check('a person hands a bottle to another, who takes it and carries it off', () 
 check('a person takes a ball off a tray the scene slides along, the world updated by uneven frames', () => {
   const at = (time: number) => new Vector3(0.3 * Math.sin(time * 0.8), 0.9, 1.2);
   const ball = ballAt(at(0));
-  const body = new Body(human(), (h) => function* () {
+  const body = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* grab(h, { right: [ball, 'middle'] })();
     yield* hold(h, ball, { to: carried(h, 'right') })();
   }, { dev: true });
@@ -202,7 +202,7 @@ check('a person takes a ball off a tray the scene slides along, the world update
 // (a goal in the head is held clear in front of it: noted, never silent)
 it('a cup held to the mouth stops in front of the face, and the notes say so', () => {
   const cup = new Item(around(0, 0.6, 0.9), new Quaternion(), { handle: { position: new Vector3() } }, { name: 'cup', mass: 0.3 });
-  const body = new Body(human(), (h) => function* () {
+  const body = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* grab(h, { right: [cup, 'handle'] })();
     yield* hold(h, cup, { to: (f) => ({ position: f.prev.point(INDEX.head, new Vector3(0, -0.06, 0.08), new Vector3()) }), until: timePassed(2, 'seconds') })();
   }, { dev: { notes: true } });
@@ -213,7 +213,7 @@ it('a cup held to the mouth stops in front of the face, and the notes say so', (
 });
 it('a hand a body does not have fails to compile', () => {
   const ball = ballAt(around(0, 1.5, 0.04));
-  const person = new Body(human(), (h) => function* () {
+  const person = new Humanoid(createSkeletonModel(), (h) => function* () {
     // @ts-expect-error: a person's hands are left and right
     yield* grab(h, { rigth: [ball, 'middle'] })();
   });
@@ -250,19 +250,21 @@ check('a dog follows a point on a moving cart with its jaw', () => {
   expect(body.done).toBe(true);
   expect(body.pose.position(body.hands.jaw).distanceTo(cart.toWorld({ position: new Vector3(0, 0.05, 0) }, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }).position)).toBeLessThan(0.05);
 });
-for (const [what, story] of [
-  ['grab facing a way', (b: Body, ball: Item) => grab(b, { jaw: [ball, 'middle'] }, { face: 0 })],
-  ['release with an away', (b: Body) => release(b, ['jaw'], { away: { jaw: new Vector3() } })],
-  ['hand to a point with a pole', (b: Body) => handTo(b, 'jaw', { position: new Vector3() }, { pole: new Vector3() })],
-] as const) {
-  it(`a dog asked to ${what} — a person's option — throws at once`, () => {
-    expect(() => story(new Body(DOG, undefined, { idle: false }), ballAt(around(0, 1, 0.04)))).toThrow(/a person's/);
-  });
-}
-it('one human() makes one body', () => {
-  const species = human();
-  new Body(species, undefined, { idle: false });
-  expect(() => new Body(species, undefined, { idle: false })).toThrow(/one body per human/);
+it("a person's options given a dog fail to compile", () => {
+  const ball = ballAt(around(0, 1, 0.04));
+  const dog = new Body(DOG, (b) => function* () {
+    // @ts-expect-error: where to face as it takes hold is a person's
+    yield* grab(b, { jaw: [ball, 'middle'] }, { face: 0 })();
+    // @ts-expect-error: where the hands go off to is a person's
+    yield* release(b, ['jaw'], { away: { jaw: new Vector3() } })();
+    // @ts-expect-error: an elbow to bend toward is a person's
+    yield* handTo(b, 'jaw', { position: new Vector3() }, { pole: new Vector3() })();
+    // @ts-expect-error: a pace for a hand kept at rest is a person's (a creature's hand takes one bringing it `to` somewhere)
+    yield* hold(b, ball, { motion: { accel: 1 } })();
+    // @ts-expect-error: a creature carries one item at a time
+    yield* carry(b, [[ball, [[1, { position: new Vector3() }]]]])();
+  }, { idle: false });
+  expect(dog.hands).toHaveProperty('jaw');
 });
 check('a horse leads with its eyes before a task without a neck chain', () => {
   expect(run(creature(horse()), (b) => withGaze(b, around(60, 3, 1), () => when(timePassed(0.5, 'seconds')), { first: true }), 10)).toEqual(ok);
@@ -303,7 +305,7 @@ for (const [what, options] of [
   ['a goal that is no point', { to: new Vector3(NaN, 0, 1) }], ['a facing that is no angle', { face: NaN }], ['no acceleration', { to: new Vector3(0, 0, 1), accel: 0 }],
   ['a negative speed', { to: new Vector3(0, 0, 1), speed: -1 }], ['a speed that is no number', { to: new Vector3(0, 0, 1), speed: NaN }], ['a negative within', { to: new Vector3(0, 0, 1), within: -1 }],
 ] as const) {
-  for (const [name, make] of [['dog', () => new Body(DOG, undefined, { idle: false })], ['person', () => new Body(human(), undefined, { idle: false })]] as const) {
+  for (const [name, make] of [['dog', () => new Body(DOG, undefined, { idle: false })], ['person', () => new Humanoid(createSkeletonModel(), undefined, { idle: false })]] as const) {
     it(`a ${name} asked to walk with ${what} throws at once`, () => expect(() => walkTo(make(), options)).toThrow(/walkTo/));
   }
 }

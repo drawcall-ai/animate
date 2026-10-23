@@ -15,10 +15,10 @@ Units are metres, seconds and radians; +Y is up, the floor is y = 0, and yaw 0 f
 
 ## Bodies, species and the world
 
-Every body is made the same way: `new Body(species, (body) => story, options)`, standing `at` a point on the floor facing `yaw`. A `Species` is data: a skeleton and, optionally, its gaze, its hands by name, and its legs with their gait and posture. A person's is `human(model)`, read off a @pmndrs/viverse character model, which its body poses after every update (`human()` alone makes a bare one; one body per `human()`). `horse()` ships with the package; *Your own creature* builds a dog. `body.done` turns true once the story has ended; the body goes on standing.
+A person is `new Humanoid(model, (h) => story, options)`: its skeleton and measures are read off a @pmndrs/viverse character model, which it poses after every update (`new Humanoid()` alone makes a bare one). Every other body is `new Body(species, (body) => story, options)`, of a `Species`: data, a skeleton and, optionally, its gaze, its hands by name, and its legs with their gait and posture. `horse()` ships with the package; *Your own creature* builds a dog. Either stands `at` a point on the floor facing `yaw`. `body.done` turns true once the story has ended; the body goes on standing.
 
 ```ts
-const groom = new Body(human(await loadCharacterModel()), story, { at: { x: -1.5, z: 0 }, dev: true });
+const groom = new Humanoid(await loadCharacterModel(), story, { at: { x: -1.5, z: 0 }, dev: true });
 const mare = new Body(horse(), (mare) => lookAt(mare, () => groom.pose.position(INDEX.head)), { at: { x: 1.2, z: 3 }, dev: true });
 
 const world = new World().add(groom, mare);
@@ -64,7 +64,7 @@ There is one verb per intent, for any body with hands: a person's `left` and `ri
 - reach to a point without taking anything: `touch`; move a free hand: `handTo`;
 - attach to a body and detach: `wear`, `takeOff`.
 
-What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does, its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl.current.position)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
+What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does (what only a person's arms take, such as `grab`'s `face` or `release`'s `away`, does not compile for it), its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl.current.position)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
 
 ```ts
 const across = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
@@ -73,7 +73,7 @@ const saddle = new Item(new Vector3(-1.1, 0.88, 2), across, {
 }, { name: 'saddle', mass: 8 });
 const onBack = { position: new Vector3(0, 0.23, 0), quaternion: across }; // in the horse's trunk frame
 
-const story = (h: Body<Side>): Behaviour => function* () {
+const story = (h: Humanoid): Behaviour => function* () {
   yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
   yield* named('saddle the horse', function* () {
     yield* place(h, saddle, onBone(mare, 0, onBack))();
@@ -90,11 +90,11 @@ const story = (h: Body<Side>): Behaviour => function* () {
 A hand-over is two stories meeting on a condition, never on time: one body `offer`s what it holds (it holds it out toward the other and lets go once the other has it in a hand), the other comes for it once it is `offered(giver, item)` and takes it by another grip (`holds(body, item)` tells who has it):
 
 ```ts
-const giver = new Body(human(), (h) => function* () {
+const giver = new Humanoid(await loadCharacterModel(), (h) => function* () {
   yield* grab(h, { right: [rope, 'knot'] })();
   yield* offer(h, rope, taker)();
 });
-const taker: Body<Side> = new Body(human(), (h) => function* () {
+const taker: Humanoid = new Humanoid(await loadCharacterModel(), (h) => function* () {
   yield* when(() => offered(giver, rope));
   yield* grab(h, { left: [rope, 'loop'] })();
   yield* hold(h, rope, { to: carried(h, 'left') })();
@@ -115,7 +115,7 @@ For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that
 
 ```ts
 const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
-const player = new Body(human(model), (p) => aimAt(p, () => aim), { idle: { root } });
+const player = new Humanoid(model, (p) => aimAt(p, () => aim), { idle: { root } });
 // every frame, before world.update(delta): move, strafe and look as the input asks, the walk relative to the look
 const pace = input.crouch ? 0.8 : 1.4, wish = new Vector3(input.x, 0, input.z).clampLength(0, 1).multiplyScalar(pace).applyAxisAngle(UP, input.yaw);
 root.velocity.lerp(wish, Math.min(1, 10 * delta));
@@ -219,7 +219,7 @@ A late entry means the goal is out of reach from where the body stands. Change w
 Expectations of a scene are watchers, composed beside the story. They read final poses and cost nothing with dev off:
 
 ```ts
-const watched = (h: Body<Side>): Behaviour => () => parallel<Frame>('all',
+const watched = (h: Humanoid): Behaviour => () => parallel<Frame>('all',
   eyesOnBefore(h, saddle, 0.4), // the eyes are on it 0.4 s before a hand takes it
   watch('horse clear of the face', (f) => {
     const d = mare.pose.position(HEAD).distanceTo(f.prev.position(INDEX.head));
@@ -227,7 +227,7 @@ const watched = (h: Body<Side>): Behaviour => () => parallel<Frame>('all',
   }),
   story(h),
 );
-const watchedGroom = new Body(human(), watched, { dev: true });
+const watchedGroom = new Humanoid(model, watched, { dev: true });
 ```
 
 ## Any rig

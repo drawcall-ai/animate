@@ -2,6 +2,8 @@ import { Quaternion, Vector3 } from 'three';
 import { NECK_PITCH } from './profile/limits';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { Body, type BodyOptions, type IdleOptions } from '../core/body';
+import type { Stance } from '../core/asks';
+import type { Dressed } from '../core/worn';
 import type { Species } from '../core/species';
 import { createSkeletonModel } from './model';
 import { personIdle } from './idle';
@@ -22,59 +24,58 @@ import { defaultStance, footYaw, stanceFeet } from './stance';
 import { followHeld } from './hands/hold';
 import type { Carrier, Item } from '../core/carrier';
 
-/**
- * A person, as a species (`new Body(human(model), story, options)`): its skeleton and measures read off a @pmndrs/viverse character
- * model (default a bare one, `createSkeletonModel()`), which its body poses after every update. Its body starts standing relaxed in its
- * stance where the options put it, its hands `left` and `right`; one body per `human()`.
- */
-export function human(model: CharacterModel = createSkeletonModel()): Species<Side> {
-  const rig = new Rig(model), eyes = rig.points.eyes;
-  let embodied = false;
-  const species: Species<Side> = { skeleton: rig.skeleton, gaze: humanGaze(eyes), hands: { left: 'leftArm', right: 'rightArm' }, inertia: INERTIA,
-    person: { embody: (story, options) => {
-      // (its model is posed by its one body: a second would pose the same model)
-      if (embodied) throw new Error('one body per human(): make a human() for each person');
-      embodied = true;
-      return new Humanoid(species, rig, story, options);
-    } } };
-  return species;
+/** How a person stands and moves when its story asks nothing of it (its base: balance, arms and glances), or a `root` the scene drives. */
+export interface HumanoidIdleOptions extends Pick<IdleOptions, 'root'> {
+  /** how it stands (default relaxed, for its proportions) */
+  stance?: Partial<Stance>;
+  /** fixes its idle variation (sway, breathing, weight shifts, glances) */
+  seed?: number;
 }
 
-/** whether `body` is a person (`human()`): its body is a person's */
-export const isPerson = <H extends string>(body: Body<H>): body is Body<H> & Humanoid => !!body.species.person;
+/** How a person is made: as any body (`BodyOptions`; its pose, scale and grip are its own), over a person's base, what it wears placed for its proportions if need be. */
+export interface HumanoidOptions extends Omit<BodyOptions, 'idle' | 'wearing' | 'pose' | 'scale' | 'hold'> {
+  /** its base under the story, tuned; `false`: none, the story poses it all */
+  idle?: HumanoidIdleOptions | false;
+  /** what it wears from the start (`BodyOptions.wearing`), or what is placed for its proportions */
+  wearing?: readonly Dressed[] | ((proportions: Proportions) => readonly Dressed[]);
+}
 
-/** A person's body (`human()`): the rig its pose drives, its measures, and where its feet stand. */
+/**
+ * A person: a body whose skeleton and measures are read off a @pmndrs/viverse character model (default a bare one,
+ * `createSkeletonModel()`), which it poses after every update. It starts standing relaxed in its stance where the options put it, its
+ * hands `left` and `right`; its feet stand where its base has them.
+ */
 export class Humanoid extends Body<Side> {
   /** where the feet stand or, stepping, land [left, right]: the base's */
   readonly feet: [Foot, Foot];
   declare readonly gazer: Gazer;
   /** what its hands carry this sub-step and along which aim (`hold` with `to`, `carry`): the hands fit each to its aim after the story */
   readonly carrying = new Map<Item, Carrier>();
-  private readonly measured: Proportions;
+  /** the rig its pose drives */
+  readonly rig: Rig;
+  /** measured from the model's rest pose */
+  readonly proportions: Proportions;
 
-  constructor(species: Species<Side>, readonly rig: Rig, story: (body: Body<Side>) => Behaviour, options: BodyOptions = {}) {
-    const p = rig.proportions, yaw = options.yaw ?? 0;
+  constructor(model: CharacterModel = createSkeletonModel(), story: (h: Humanoid) => Behaviour = NOTHING, options: HumanoidOptions = {}) {
+    const rig = new Rig(model), p = rig.proportions, yaw = options.yaw ?? 0;
     const start = standing(p, new Pose(rig.skeleton), options.at ?? { x: 0, z: 0 }, yaw);
-    const wearing = options.wearing;
-    super(species, story, {
+    const { wearing } = options;
+    super(speciesOf(rig), (body) => story(humanoid(body)), {
       ...options, pose: start.pose, scale: p.scale, wearing: typeof wearing === 'function' ? wearing(p) : wearing,
       hold: (body) => followHeld(humanoid(body)),
     });
     // (facing as given, not as read back off the pose)
     this.locomotion.facing = yaw;
-    this.measured = p;
+    this.rig = rig;
+    this.proportions = p;
     this.feet = start.feet;
     rig.write(this.pose, 0);
-    this.begin();
   }
-
-  /** measured from the model's rest pose */
-  get proportions(): Proportions { return this.measured; }
 
   /** the character model it poses */
   get model(): CharacterModel { return this.rig.model; }
 
-  protected base(options: IdleOptions): Behaviour { return personIdle(this, options); }
+  protected base(options: HumanoidIdleOptions): Behaviour { return personIdle(this, options); }
 
   /** Advances the body by `dt` seconds and poses the model; a VRM is updated by `dt` too. */
   update(dt: number) {
@@ -100,11 +101,19 @@ const INERTIA = { ahead: 0.9, back: 0.3, roll: 0.6, most: 0.35, frequency: 0.8, 
 const humanGaze = (eyes: Rig['points']['eyes']): Gazer => ({ neck: 'neck', eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),
   range: EYES, pitch: NECK_PITCH * Math.PI / 180, lead: (body, pose, point) => gazeAsks(humanoid(body), pose, point) });
 
+/** a person's kind: its skeleton and gaze off `rig`, its arms its hands */
+function speciesOf(rig: Rig): Species<Side> {
+  return { skeleton: rig.skeleton, gaze: humanGaze(rig.points.eyes), hands: { left: 'leftArm', right: 'rightArm' }, inertia: INERTIA };
+}
+
 /** `body` as the person it is */
 function humanoid(body: Body): Humanoid {
-  if (!isPerson(body)) throw new Error('not a person');
+  if (!(body instanceof Humanoid)) throw new Error('not a person');
   return body;
 }
+
+/** a story of nothing: the person only stands and walks as its base has it */
+const NOTHING = (): Behaviour => function* () {};
 
 /**
  * How far the eyes turn in the head comfortably (rad): down, the preferred declination of the line

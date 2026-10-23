@@ -25,8 +25,8 @@ export type { Carriage, CarriedBones } from './core/legs/carriage';
 export type { DrivenRoot } from './core/legs/stepper';
 export { horse, horseLeadPoint } from './horse/legs';
 
-// A person: a viverse character model as a body.
-export { human, isPerson, type Humanoid } from './humanoid/humanoid';
+// A person: a body of a viverse character model.
+export { Humanoid, type HumanoidIdleOptions, type HumanoidOptions } from './humanoid/humanoid';
 export { createSkeletonModel } from './humanoid/model';
 export { INDEX, SIDES, type BoneName, type Side } from './humanoid/bones';
 export { DEFAULT_HEIGHT, type Proportions } from './humanoid/proportions';
@@ -36,7 +36,7 @@ export { arriving, walkTo, type WalkOptions } from './core/walk';
 export type { Stance } from './core/asks';
 export { grab, type GrabOptions, type Spot } from './humanoid/hands/grab';
 export { carry, hold, type CarryOptions, type HoldOptions } from './humanoid/hands/carry';
-export type { Grips, Way } from './core/hands';
+export type { Grips, Keeping, Reaching, Taking, Way } from './core/hands';
 export { still, type Waypoint } from './core/course';
 export { place } from './humanoid/hands/place';
 export { release, type ReleaseOptions } from './humanoid/hands/release';

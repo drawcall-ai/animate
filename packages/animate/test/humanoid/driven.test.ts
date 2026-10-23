@@ -1,8 +1,7 @@
 import { Vector3 } from 'three';
-import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
-import { INDEX, type Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
+import { INDEX, Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/core/math';
 import type { Stepper } from '../../src/core/legs/stepper';
 import { request } from '../../src/core/asks';
@@ -12,7 +11,7 @@ const dt = 1 / 60;
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
 function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid) => void) {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = person(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: true });
+  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: true });
   let lag = 0, sway = 0, steps = 0;
   const phases = h.feet.map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {
@@ -85,7 +84,7 @@ it.each([
 // breathing and sway keep 30%; the root stays exact all the while)
 it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = person(createSkeletonModel(), (h) => idle(h, { root, seed: 3 }), { idle: false, dev: true });
+  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root, seed: 3 }), { idle: false, dev: true });
   let lowest = Infinity, highest = -Infinity, left = 0, right = 0, lag = 0;
   for (let t = dt; t <= 40; t += dt) {
     request(h.asks, { steady });
@@ -166,7 +165,7 @@ it('notes a driven XCoM only when asked', () => {
   const sprint = (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 3 ? 3.5 : 0);
   expect(drive(4, sprint).h.notes).toEqual([]);
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = person(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: { notes: true } });
+  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: { notes: true } });
   for (let t = dt; t <= 4; t += dt) {
     root.velocity.copy(sprint(t));
     root.position.addScaledVector(root.velocity, dt);

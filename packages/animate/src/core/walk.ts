@@ -187,7 +187,7 @@ function etaOf(h: Body, body: Readonly<Vector3>, go: Go, yaw: number | null): nu
   return Math.max(walk, turn);
 }
 
-/** where a walk takes the body: a person's centre of mass (its balance carries it there), another body's root (its legs do) */
-const placeOf = (h: Body, f: Frame) => (h.species.person ? f.prev.com(_com) : _com.copy(f.prev.position(0))).setY(0);
+/** where a walk takes the body: a species' legs carry its root there (`Species.legs`), a person's balance its centre of mass */
+const placeOf = (h: Body, f: Frame) => (h.species.legs ? _com.copy(f.prev.position(0)) : f.prev.com(_com)).setY(0);
 const _com = new Vector3();
 const _v = new Vector3();

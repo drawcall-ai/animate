@@ -2,11 +2,10 @@ import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { parallel, timePassed } from '@pmndrs/timeline';
-import { when, withGaze, type Frame } from '@drawcall/animate';
+import { Humanoid, when, withGaze, type Frame } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
 import { createOpenPoseModel } from '../src/openpose';
 import { SKELETONS, skeletonModel } from '../src/skeletons';
-import { person } from './person';
 import { headShift, SHIFT_BOUNDS } from './gaze';
 
 // A person's gaze shift from up on its left to down on its right, as people shift gaze: one movement, the head's speed a single bell
@@ -20,7 +19,7 @@ for (const [name, model] of BODIES) it(`shifts its gaze across and down in one u
     const eyes = h.gazer.eyes(f.prev, new Vector3());
     return eyes.add(new Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(distance));
   };
-  const h = person(model(), (h) => () => parallel<Frame>('all', idle(h), function* () {
+  const h: Humanoid = new Humanoid(model(), (h) => () => parallel<Frame>('all', idle(h), function* () {
     yield* withGaze(h, at(0.8, -0.2, 3), () => when(timePassed(SHIFT_AT, 'seconds')))();
     yield* withGaze(h, at(-0.9, 0.6, 1.2), () => when(() => false))();
   }), { idle: false, dev: true });

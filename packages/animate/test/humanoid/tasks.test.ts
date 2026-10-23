@@ -1,5 +1,4 @@
 import { Quaternion, Vector3 } from 'three';
-import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
@@ -8,12 +7,12 @@ import { ask, type Asks } from '../../src/rig';
 import { beyond } from '../../src/core/limits';
 
 import { INDEX } from '../../src/humanoid/bones';
-import { type Humanoid } from '../../src/humanoid/humanoid';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 
 /** a humanoid stepping `behaviour` for `seconds` */
 function run(behaviour: (h: Humanoid) => Behaviour, seconds: number): Humanoid {
-  const h = person(createSkeletonModel(), behaviour, { idle: false });
+  const h = new Humanoid(createSkeletonModel(), behaviour, { idle: false });
   for (let t = 0; t < seconds; t += 1 / 60) h.update(1 / 60);
   return h;
 }

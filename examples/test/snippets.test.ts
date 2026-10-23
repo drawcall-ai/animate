@@ -13,9 +13,9 @@ const DOCS = ['packages/animate/skills/animate/SKILL.md', 'README.md'];
 const TYPES = ['Behaviour', 'Frame', 'Side', 'Species', 'BoneDef', 'DrivenRoot', 'Placement', 'Grips'];
 /** what a snippet takes from the scene around it */
 const SCENE: Record<string, string> = {
-  story: '(b: Body<Side>) => Behaviour', saddle: 'Item', rope: 'Item', ball: 'Item', item: 'Item', mare: 'Body', groom: 'Body<Side>',
-  h: 'Body<Side>', HEAD: 'number', stall: 'Vector3', goal: 'Vector3', position: 'Vector3', aim: 'Vector3', UP: 'Vector3', bones: 'BoneDef[]',
-  delta: 'number', scene: '{ add(...o: unknown[]): unknown }', model: 'Parameters<typeof human>[0]',
+  story: '(h: Humanoid) => Behaviour', saddle: 'Item', rope: 'Item', ball: 'Item', item: 'Item', mare: 'Body', groom: 'Humanoid',
+  h: 'Humanoid', HEAD: 'number', stall: 'Vector3', goal: 'Vector3', position: 'Vector3', aim: 'Vector3', UP: 'Vector3', bones: 'BoneDef[]',
+  delta: 'number', scene: '{ add(...o: unknown[]): unknown }', model: 'NonNullable<ConstructorParameters<typeof Humanoid>[0]>',
   input: '{ x: number; z: number; yaw: number; crouch: boolean; jump: boolean }',
 };
 

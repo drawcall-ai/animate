@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { person } from './person';
 import { Bone, OrthographicCamera, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { action } from '@pmndrs/timeline';
-import { type Frame } from '@drawcall/animate';
+import { Humanoid, type Frame } from '@drawcall/animate';
 import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, createOpenPoseModel, drawOpenPose2D, OpenPoseSkeleton, projectBody25, toBody25, type Context2D } from '../src/openpose';
 
 /** OpenPose's own BODY_25 part names, in its order (poseParameters.cpp) */
@@ -21,7 +20,7 @@ const still = () =>
 /** an OpenPose model standing at the origin, facing +Z (its left is +X) */
 function standing(): CharacterModel {
   const model = createOpenPoseModel();
-  const h = person(model, still, { idle: false });
+  const h = new Humanoid(model, still, { idle: false });
   for (let i = 0; i < 30; i++) h.update(1 / 60);
   model.scene.updateMatrixWorld();
   return model;
@@ -124,7 +123,7 @@ describe('createOpenPoseModel', () => {
     const model = createOpenPoseModel({ height: 1.6 });
     expect(model.height).toBe(1.6);
     for (const b of ['hips', 'neck', 'leftUpperArm', 'rightFoot']) expect(model.scene.getObjectByName(b), b).toBeInstanceOf(Bone);
-    person(model, still, { idle: false }).update(0.5);
+    new Humanoid(model, still, { idle: false }).update(0.5);
     model.scene.updateMatrixWorld();
     const skeleton = model.scene.children.find((c) => c instanceof OpenPoseSkeleton);
     if (!skeleton) throw new Error('no skeleton');

@@ -6,9 +6,9 @@ import { loadFactor } from '../../core/load';
 import { when } from '../../core/when';
 import { ARM_REACH, handTo } from '../arms';
 import { INDEX, SIDES, type Side } from '../bones';
-import { isPerson, type Humanoid } from '../humanoid';
+import { Humanoid } from '../humanoid';
 import type { Body } from '../../core/body';
-import { personOnly, take } from '../../core/hands';
+import { take, type Taking } from '../../core/hands';
 import { pathAhead } from '../look';
 import { gazeLead, withGaze } from '../../core/gaze';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../core/math';
@@ -32,20 +32,16 @@ export interface Spot {
   aside?: number;
 }
 
-/** How `grab` goes about it. */
-export interface GrabOptions {
+/** How a person's `grab` goes about it. */
+export interface GrabOptions extends Taking {
   /** the yaw to stand at (rad); by default the one that faces the grips square */
   face?: number;
   /** where to stand */
   spot?: Spot;
-  /** where the eyes go: the grips' middle (`true`, the default), a point, or nowhere (`false`) */
-  look?: boolean | Live<Vector3>;
   /** bow at least this much while reaching (rad) */
   bow?: number;
   /** the eyes there before the hands set off */
   first?: boolean;
-  /** `false`: take them from where the body stands */
-  walk?: boolean;
 }
 
 /** Comfortable stand distance as a share of arm length. */
@@ -75,11 +71,10 @@ export const SEGMENT_RADIUS = 0.06;
  * stands: the hands go straight to them (on them already, they close at once). Another body takes hold with the chain its
  * species names for the hand, one at a time (`Species.hands`): it walks up, the chain's tip reaches the grip, the hand closes.
  */
+export function grab(h: Humanoid, holds: Grips<Side>, options?: GrabOptions): Behaviour;
+export function grab<H extends string>(body: Body<H>, holds: Grips<H>, options?: Taking): Behaviour;
 export function grab<H extends string>(h: Body<H>, holds: Grips<H>, options: GrabOptions = {}): Behaviour {
-  if (!isPerson(h)) {
-    personOnly('grab', options, ['face', 'spot', 'bow', 'first']);
-    return take(h, holds, { look: options.look, walk: options.walk });
-  }
+  if (!(h instanceof Humanoid)) return take(h, holds, options);
   const { look = true, bow } = options;
   if (options.walk === false) return look === false ? reachFor(h, holds) : withGaze(h, look === true ? () => middleOf(holds) : look, reachFor(h, holds), { bow });
   return function* () {

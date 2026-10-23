@@ -8,7 +8,7 @@ import { nuzzle } from '../../core/hands';
 import { handTo } from '../arms';
 import { INDEX, sideOf, type Side } from '../bones';
 import type { Frame } from '../../core/body';
-import { isPerson } from '../humanoid';
+import { Humanoid } from '../humanoid';
 import { approach } from './grab';
 
 /** Tuned: a touch is made with the hand's wrist this near what it touches (m, × the body's scale): the palm's length, roughly */
@@ -20,7 +20,7 @@ const PALM = 0.04;
  * the base then takes the hand back. Out of its reach from anywhere it could stand, that is a problem in the dev log and it stands.
  */
 export function touch<H extends string>(body: Body<H>, hand: H, target: Live<Vector3>): Behaviour {
-  if (!isPerson(body)) return nuzzle(body, hand, target);
+  if (!(body instanceof Humanoid)) return nuzzle(body, hand, target);
   const side = sideOf(hand);
   return function* () {
     // (standing to it as to a grip there for that hand: it in that hand's comfortable reach)

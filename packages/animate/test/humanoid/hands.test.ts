@@ -1,5 +1,4 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
@@ -11,7 +10,7 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { carry, grab, handTo, hold, INDEX, Item, release, when, type Behaviour, type Frame, type Waypoint } from '../../src';
 import { approach } from '../../src/rig';
 import { gazeOff } from '../../src/core/gaze';
-import { type Humanoid } from '../../src/humanoid/humanoid';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { createSkeletonModel } from '../../src/humanoid/model';
 import type { Side } from '../../src/humanoid/bones';
 import { standing } from './fixtures';
@@ -25,7 +24,7 @@ const onHips = (h: Humanoid, side: Side) => h.pose.position(INDEX[`${side}Hand`]
 function speeds(behaviour: (h: Humanoid, mark: () => void) => Behaviour, seconds: number): Record<Side, number[]> {
   const v: Record<Side, number[]> = { left: [], right: [] };
   let marked = false;
-  const h = person(createSkeletonModel(), (h) =>
+  const h = new Humanoid(createSkeletonModel(), (h) =>
     function* () {
       yield* when(() => true);
       const was = { left: new Vector3(), right: new Vector3() };
@@ -64,7 +63,7 @@ describe('grab', () => {
     const load = new Item(new Vector3(1.1, 0.88, 2), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2), {
       left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
     }, { mass: 8 });
-    const h = person(createSkeletonModel(1.75 + seed * 0.02), (h) => function* () {
+    const h = new Humanoid(createSkeletonModel(1.75 + seed * 0.02), (h) => function* () {
       yield* parallel<Frame>('all', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }, { face: Math.PI / 2 }));
     }, { idle: false, dev: true, at: { x: 1.5 + seed * 0.02, z: 0 }, yaw: -0.1 });
     const feet = h.feet.map((foot) => ({ phase: foot.phase, from: foot.position.clone() }));
@@ -93,7 +92,7 @@ describe('grab', () => {
   });
 
   open('keeps the free arm swing until the walk ETA reaches one second, even passing reachable grips', () => {
-    const make = (take: boolean) => person(createSkeletonModel(), (h) => function* () {
+    const make = (take: boolean) => new Humanoid(createSkeletonModel(), (h) => function* () {
       const load = new Item(new Vector3(1.1, 0.88, 2), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2), {
         left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
       }, { mass: 8 });
@@ -144,7 +143,7 @@ describe('grab', () => {
   it('anticipates: the eyes and then the hands go to what it takes before the body has come up to it', () => {
     const load = box(new Vector3(0.1, 0.9, 2.2));
     const at = { eyes: NaN, hands: NaN, stood: NaN };
-    const h = person(createSkeletonModel(), (h) =>
+    const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
         yield* when(() => true);
         const was = new Vector3();
@@ -181,7 +180,7 @@ describe('grab low', () => {
     const at = { arrived: NaN, down: NaN };
     let walked = false;
     let standing = NaN;
-    const h = person(createSkeletonModel(), (h) =>
+    const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
         yield* parallel<Frame>('race', idle(h), grab(h, { left: [load, 'left'], right: [load, 'right'] }, { first: true }), action<Frame>({
           update: (f) => {
@@ -205,7 +204,7 @@ describe('release', () => {
   it('follows through: a hand let go of something moving carries on its way, then off the item', () => {
     const load = box(new Vector3(0, 1.0, 0.4));
     const at = { let: new Vector3(), after: new Vector3() };
-    const h = person(createSkeletonModel(), (h) =>
+    const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
         yield* when(() => true);
         yield* parallel<Frame>('race', idle(h), function* () {

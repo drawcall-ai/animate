@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Body, horse, human, INDEX, Pose, walkTo, type Gait, type Humanoid, type ReadonlyPose } from '@drawcall/animate';
+import { Body, createSkeletonModel, horse, Humanoid, INDEX, Pose, walkTo, type Gait, type ReadonlyPose } from '@drawcall/animate';
 import type { Stepper } from '../../packages/animate/src/core/legs/stepper';
 import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../packages/animate/src/horse/legs';
 import { clampRotation } from '../../packages/animate/src/core/limits';
@@ -55,7 +55,7 @@ it('legs-biped playback leads along the scripted travel and turn', () => {
 // The stepper on scripted roots (a ramp up, a bend, a stop over `brake` s): each final pose with the soles on or over the floor, a
 // planted foot pivoting about a point of its sole that stays put, a landing frozen once past mid-swing, every joint in range, the
 // joints no faster than a snap, a horse's walk in its lateral sequence, every foot down at the end and the dev log empty.
-const person = (brake: number) => new Body(human(), undefined, { idle: { root: along(scriptedRoot(0, 1.3, new Vector3(), 0, 1, brake)) }, dev: true });
+const person = (brake: number) => new Humanoid(createSkeletonModel(), undefined, { idle: { root: along(scriptedRoot(0, 1.3, new Vector3(), 0, 1, brake)) }, dev: true });
 const horseOn = (gait: Gait, pace: number, brake = 2, radius = 15) => {
   const base = horse(), species = { ...base, legs: { ...base.legs!, gait, posture: (start: ReadonlyPose) => horseMotion(start, gait, 1) } };
   return new Body(species, undefined, { pose: new Pose(base.skeleton), idle: { root: along(scriptedRoot(0, pace, new Vector3(), 0, 0, brake, radius)) }, dev: true });
@@ -66,8 +66,8 @@ const test = cases(['a person walking', 'a person stopping hard'].map((name) => 
 for (const [name, make] of [['a person walking', () => person(3)], ['a person stopping hard', () => person(0.5)], ['a horse walking', () => horseOn(HORSE_WALK, 1.6)],
   ['a horse trotting, braking in 2 s', () => horseOn(HORSE_TROT, 3.7)], ['a horse trotting, braking in 3 s', () => horseOn(HORSE_TROT, 3.7, 3)], ['a horse walking a 3 m turn', () => horseOn(HORSE_WALK, 1.6, 2, 3)]] as const) {
   test(`${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`, () => {
-    const body: Body = make(), chains = body.species.legs?.chains, person = !!body.species.person;
-    const sole = (i: number) => person ? solePoints(body as Humanoid, body.pose, i ? 'right' : 'left')
+    const body: Body = make(), chains = body.species.legs?.chains, person = body instanceof Humanoid ? body : null;
+    const sole = (i: number) => person ? solePoints(person, body.pose, i ? 'right' : 'left')
       : [chains![i].heel, chains![i].toe].map((at) => body.pose.point(chains![i].joints[chains![i].joints.length - 1].bone, at, new Vector3()));
     const bones = (i: number) => person ? (['UpperLeg', 'LowerLeg', 'Foot'] as const).map((b) => INDEX[`${i ? 'right' : 'left'}${b}`]) : chains![i].joints.map((joint) => joint.bone);
     let ground = 0, pivot = 0, rom = 0, drift = 0;

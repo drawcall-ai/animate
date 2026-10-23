@@ -1,5 +1,5 @@
-import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import { STEP } from '../../src/core/body';
 import { leg } from '../core/rigs';
 
 it('checks a planted foot in the final pose after a later writer moved it', () => {
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), named('bad layer', function* () {
       yield* action<Frame>({ update: (f) => f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.04, 0, 0))) });
     }));
@@ -52,7 +52,7 @@ it('labels a timeline already made, as parallel makes it', () => {
 
 it.each([false, true])('checks and reads watchers only with dev on (%s)', (dev) => {
   const read = vi.fn(() => ({ check: 'bad', value: 1, limit: 0, where: 'root' }));
-  const h = person(createSkeletonModel(), () => function* () {
+  const h = new Humanoid(createSkeletonModel(), () => function* () {
     yield* parallel<Frame>('all', watch('scene', read), function* () {
       yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time > STEP ? 2 : 0)) });
     });
@@ -70,7 +70,7 @@ it.each([false, true])('checks and reads watchers only with dev on (%s)', (dev) 
 });
 
 it('catches a later joint writer and a snap from final rotations', () => {
-  const h = person(createSkeletonModel(), () => function* () {
+  const h = new Humanoid(createSkeletonModel(), () => function* () {
     yield* named('snap', function* () {
       yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time > STEP ? 2 : 0)) });
     })();
@@ -83,7 +83,7 @@ it('catches a later joint writer and a snap from final rotations', () => {
 it('a gaze watcher distinguishes a look that leads a grip from one that arrives with it', () => {
   const run = (wait: number) => {
     const item = new Item(new Vector3(0, 1.6, 1), new Quaternion(), { grip: { position: new Vector3() } });
-    const h = person(createSkeletonModel(), (h) => function* () {
+    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
       yield* parallel<Frame>('all', eyesOnBefore(h, item, 0.4), named('take', function* () {
         yield* action<Frame>({ update: (f) => { if (f.time >= wait) h.holding.right = { item, grip: 'grip' }; } });
       }));
@@ -96,7 +96,7 @@ it('a gaze watcher distinguishes a look that leads a grip from one that arrives 
 });
 
 it('checks sustained joint speed even when acceleration is below its ceiling', () => {
-  const h = person(createSkeletonModel(), () => function* () {
+  const h = new Humanoid(createSkeletonModel(), () => function* () {
     yield* action<Frame>({ update: (f) => f.current.setLocal(INDEX.head, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 15 * f.time)) });
   }, { idle: false, dev: true });
   h.update(4 * STEP);
@@ -106,7 +106,7 @@ it('checks sustained joint speed even when acceleration is below its ceiling', (
 });
 
 it('checks standing CoM against the soles once the final pose is still', () => {
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     const pose = new Pose(h.rig.skeleton).copy(h.pose);
     // Shift the segment's mass without moving the standing pose or its soles.
     h.rig.skeleton.bones[INDEX.hips].com.x = 3;

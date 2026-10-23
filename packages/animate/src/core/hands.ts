@@ -31,13 +31,21 @@ const AHEAD = 0.6;
 /** Tuned (m/s): how fast a creature lets itself further down while it falls short of what it reaches for low down */
 const PRESSING = 0.1;
 
+/** How any body takes hold (`grab`'s options, all a body other than a person takes). */
+export interface Taking {
+  /** where the eyes go: the grips' middle (`true`, the default), a point, or nowhere (`false`) */
+  look?: boolean | Live<Vector3>;
+  /** `false`: take it from where the body stands */
+  walk?: boolean;
+}
+
 /**
  * `grab` for a body other than a person, one hand at a time: it walks up to stand with the grip in its hand's
  * reach — bowed and lowered if it must, as far as its legs let it (`stooping`) — (not with `walk: false`), its eyes on the grip on the way (if it has any; not with `look: false`), then the
  * hand's chain reaches it, the hand closes and goes back to where the body's base has it, with what it took. Not there within REACHING s, it is a problem in the dev log and keeps going; a grip
  * out of its reach from anywhere it could stand is one too, and it stands where it is.
  */
-export function take<H extends string>(body: Body<H>, holds: Grips<H>, options: { look?: boolean | Live<Vector3>; walk?: boolean } = {}): Behaviour {
+export function take<H extends string>(body: Body<H>, holds: Grips<H>, options: Taking = {}): Behaviour {
   const [hand, ...more] = Object.keys(holds) as H[], hold = holds[hand];
   if (!hold || more.length) throw new Error('a creature takes hold with one hand at a time');
   const [item, grip] = hold, goal = gripOf(item, grip), chain = chainOf(body, hand);
@@ -161,8 +169,15 @@ function handBack<H extends string>(body: Body<H>, hands: readonly H[]): Behavio
   };
 }
 
+/** How any body moves its hand to a target (`handTo`'s options, all a body other than a person takes). */
+export interface Reaching extends Partial<Pick<Motion, 'accel' | 'speed'>> {
+  /** the target is on this carrier, in its frame */
+  on?: Carrier;
+  until?: Until;
+}
+
 /** `handTo` for a body other than a person: hand `hand`'s chain tip to `target`, endless or until `until` (`'reached'`: there). */
-export function tipToward(body: Body, hand: string, target: Live<Target>, options: Partial<Pick<Motion, 'accel' | 'speed'>> & { on?: Carrier; until?: Until } = {}): Behaviour {
+export function tipToward(body: Body, hand: string, target: Live<Target>, options: Reaching = {}): Behaviour {
   const { accel = DIP.accel, speed = DIP.speed, on, until } = options, chain = chainOf(body, hand), bones = body.pose.skeleton.chain(chain);
   return function* () {
     const tip = new ChainTip(chain), stoop = stooping(body, bones);
@@ -175,12 +190,6 @@ export function tipToward(body: Body, hand: string, target: Live<Target>, option
       until: until === 'reached' ? (f) => reached(f, bones[bones.length - 1], live(target, f), on) : until,
     });
   };
-}
-
-/** a person's options given for another body: a misuse, said at once rather than dropped */
-export function personOnly(verb: string, options: object, names: readonly string[]): void {
-  const given = names.filter((name) => (options as Record<string, unknown>)[name] !== undefined);
-  if (given.length) throw new Error(`${verb}: ${given.join(', ')} ${given.length > 1 ? 'are' : 'is'} a person's, not this body's`);
 }
 
 /**
@@ -287,6 +296,9 @@ function itemIn(pose: ReadonlyPose, bone: number, item: Item): Required<Placemen
   const inverse = pose.rotation(bone).clone().invert();
   return { position: item.current.position.clone().sub(pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(item.current.quaternion) };
 }
+
+/** How a body other than a person holds (`hold`'s options, as it takes them): the item kept at rest in its hand, or brought `to` a placement at `motion`'s pace. */
+export type Keeping = { until?: Exclude<Until, 'reached'> } & ({ to: Live<Placement>; motion?: Motion } | { to?: undefined; motion?: undefined });
 
 /**
  * `hold` for a body other than a person: the chain of the hand holding `item` goes back to how the base carries it — its tip to rest —

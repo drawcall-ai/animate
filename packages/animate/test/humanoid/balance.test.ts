@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { person } from '../person';
+import { Humanoid } from '../../src/humanoid/humanoid';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
 import { walkTo, type Frame } from '../../src';
@@ -14,7 +14,7 @@ const dt = 1 / 60;
 describe('balance', () => {
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
     const asked: number[] = [];
-    const h = person(createSkeletonModel(), (h) =>
+    const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
         yield* parallel<Frame>(
           'all',
@@ -33,7 +33,7 @@ describe('balance', () => {
   it('walks to a point and settles there on squared feet; walkTo ends then', () => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = -1;
-    const h = person(createSkeletonModel(), (h) =>
+    const h = new Humanoid(createSkeletonModel(), (h) =>
       function* () {
         yield* parallel<Frame>('all', idle(h), function* () {
           yield* walkTo(h, { to, face: 0.5 })();
@@ -50,7 +50,7 @@ describe('balance', () => {
   it('walks to a point without a facing and settles there', () => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = false;
-    const h = person(createSkeletonModel(), (h) => function* () {
+    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
       yield* parallel<Frame>('all', idle(h), function* () {
         yield* walkTo(h, { to })();
         arrived = true;
@@ -66,7 +66,7 @@ describe('balance', () => {
   }, 20000);
 
   it('bounds pelvis excursion and contact ringing in each steady stride and after stopping', () => {
-    const h = person(createSkeletonModel(), (h) => function* () {
+    const h = new Humanoid(createSkeletonModel(), (h) => function* () {
       yield* parallel<Frame>('all', idle(h), walkTo(h, { to: new Vector3(0, 0, 12) }));
     }, { idle: false });
     const samples: { y: number; speed: number }[] = [];
@@ -153,7 +153,7 @@ describe('balance', () => {
 it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without deferring its turn until after travel', (face) => {
   const to = new Vector3(0, 0, 4);
   let arrived = false;
-  const h = person(createSkeletonModel(), (h) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), function* () {
       yield* walkTo(h, { to, face })();
       arrived = true;

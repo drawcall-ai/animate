@@ -1,7 +1,6 @@
 import { parallel, type Timeline } from '@pmndrs/timeline';
-import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
-import { type Humanoid, createSkeletonModel, type Frame } from '../../src';
+import { Humanoid, createSkeletonModel, type Frame } from '../../src';
 // Test fixtures: character models as viverse loads them, and random rotations.
 import { AnimationMixer, Bone, Group, Quaternion, Vector3 } from 'three';
 import { VRM, VRMHumanoid, type VRMMeta } from '@pixiv/three-vrm';
@@ -66,7 +65,7 @@ export function turnUpTo(rand: () => number, angle: number): Quaternion {
 
 /** The same idle/task ordering in every interaction test. */
 export function standing(tasks: (h: Humanoid) => Timeline<Frame>[], height = 1.75): Humanoid {
-  return person(createSkeletonModel(height), (h) => function* () {
+  return new Humanoid(createSkeletonModel(height), (h) => function* () {
     yield* parallel<Frame>('all', idle(h), ...tasks(h));
   }, { idle: false });
 }

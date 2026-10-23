@@ -2,10 +2,8 @@ import { Quaternion, Vector3 } from 'three';
 import { parallel, TimelineRunner, type ReusableTimeline, type TimelineClock } from '@pmndrs/timeline';
 import { Pose, type ReadonlyPose } from './pose';
 import type { Attention, Species } from './species';
-import type { Stance } from './asks';
 import type { DrivenRoot } from './legs/stepper';
 import type { Behaviour, Live } from './goal';
-import type { Proportions } from '../humanoid/proportions';
 import { creature } from './legs/creature';
 import { Dev, type LogEntry } from './dev';
 import { checkLimits } from './limits';
@@ -54,15 +52,11 @@ export interface Jumper {
 }
 
 /**
- * How a body stands and moves when its story asks nothing of it (its base: a person's balance, arms and glances; a creature's legs and
- * carriage): its stance and the seed of its idle variation (a person's), what it heeds (a creature's), or a `root` the scene drives.
+ * How a body stands and moves when its story asks nothing of it (its base: its species' legs and carriage): what it heeds, or a `root`
+ * the scene drives. A person's is its own (`HumanoidIdleOptions`).
  */
 export interface IdleOptions {
-  /** a person's stance */
-  stance?: Partial<Stance>;
-  /** fixes a person's idle variation (sway, breathing, weight shifts, glances) */
-  seed?: number;
-  /** a creature's tether and startles */
+  /** its tether and startles */
   attention?: Attention;
   /** the scene owns the root (a player's): the legs keep up with it */
   root?: Live<DrivenRoot>;
@@ -83,16 +77,16 @@ export interface BodyOptions {
   dev?: boolean | { notes?: boolean };
   /** the pose it starts at, still (default the skeleton's rest pose) */
   pose?: ReadonlyPose;
-  /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone (a person's may be placed for its proportions) */
-  wearing?: readonly Dressed[] | ((proportions: Proportions) => readonly Dressed[]);
+  /** what it wears from the start: worn and borne from the first sub-step, each piece where it sits on its bone */
+  wearing?: readonly Dressed[];
   /** how its hands keep to what they hold, every sub-step after the worn items move (default: each item stays where it was on its hand when taken) */
   hold?: (body: Body) => (f: Frame) => void;
 }
 
 /**
- * A body of a species, moved by its story (`story(body)`, run once it is made; none: it only idles) over its base (`IdleOptions`: it stands and walks, looks
+ * A body of a species, moved by its story (`story(body)`, made on its first update; none: it only idles) over its base (`IdleOptions`: it stands and walks, looks
  * about, keeps its arms as the species does), standing `at` facing `yaw`; `done` once the story has ended (the base goes on). A person
- * (`human()`) is a body like any other. Each 1/60 s sub-step the base and the story write `current`; then the items it wears move with it, its hands keep to what they hold, the
+ * is a body of its own kind (`Humanoid`). Each 1/60 s sub-step the base and the story write `current`; then the items it wears move with it, its hands keep to what they hold, the
  * weight it bears loads its bones, and its world transforms are brought up to date and it becomes
  * the history: current → prev → prev2. Updates run as many whole sub-steps as the time they bring
  * covers and carry the rest over; the body shows its last final pose.
@@ -121,8 +115,7 @@ export class Body<H extends string = string> {
   declare readonly scale: number;
   /** the poses `frame` shows, as [prev2, prev, current] */
   private declare poses: [Pose, Pose, Pose];
-  private declare behaviour: ReusableTimeline<Frame>;
-  /** made on the first update: a behaviour may read the body (its pose) as it sets out */
+  /** made on the first update, with its story and base: a behaviour may read the body (its pose) as it sets out */
   private runner: TimelineRunner<Frame> | null = null;
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
   /** the time updates have brought that no sub-step has taken yet (s) */
@@ -134,8 +127,6 @@ export class Body<H extends string = string> {
   private alone: World | null = null;
 
   constructor(readonly species: Species<H>, story: (body: Body<H>) => Behaviour = NOTHING, options: BodyOptions = {}) {
-    // (a person is made as the person it is)
-    if (species.person && new.target === Body) return species.person.embody(story, options);
     const { skeleton } = species;
     this.scale = options.scale ?? species.scale ?? 1;
     this.gazer = species.gaze;
@@ -150,14 +141,7 @@ export class Body<H extends string = string> {
     this.locomotion = createLocomotion(yawOf(start.local(0)));
     this.hands = Object.fromEntries(Object.entries<string>(species.hands ?? {}).map(([hand, chain]) => [hand, skeleton.chain(chain).slice(-1)[0]])) as Record<H, number>;
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null])) as Record<H, null>;
-    const wearing = options.wearing;
-    const proportions = this.proportions;
-    let dressed: readonly Dressed[] = [];
-    if (typeof wearing === 'function') {
-      if (!proportions) throw new Error('a body other than a person wears what it is given, not what is placed for proportions');
-      dressed = wearing(proportions);
-    } else if (wearing) dressed = wearing;
-    dress(this, start, dressed);
+    dress(this, start, options.wearing ?? []);
     this.hold = (options.hold ?? weld)(this);
     this.poses = [new Pose(skeleton).copy(start), start, new Pose(skeleton).copy(start)];
     const body = this;
@@ -173,22 +157,18 @@ export class Body<H extends string = string> {
       prev: this.poses[1],
       current: this.poses[2],
     };
-    this.story = story;
+    this.story = () => story(this);
     this.idling = options.idle;
-    if (new.target === Body) this.begin();
   }
-
-  /** its story and its base, made once the body is (a subclass calls it last in its constructor) */
-  protected begin(): void {
-    const body = this, idling = this.idling, made = this.story(this), base = idling === false ? null : this.base(idling ?? {});
-    const tasks = function* () { yield* made(); body.done = true; };
-    this.behaviour = base ? () => parallel<Frame>('all', base, tasks) : tasks;
-  }
-  private declare readonly story: (body: Body<H>) => Behaviour;
+  private declare readonly story: () => Behaviour;
   private declare readonly idling: IdleOptions | false | undefined;
 
-  /** a person's measures (`human()`); none for other bodies */
-  get proportions(): Proportions | undefined { return undefined; }
+  /** its story and its base, run together: made on the first update, once a subclass has made all it is */
+  private behaviour(): ReusableTimeline<Frame> {
+    const body = this, idling = this.idling, made = this.story(), base = idling === false ? null : this.base(idling ?? {});
+    const tasks = function* () { yield* made(); body.done = true; };
+    return base ? () => parallel<Frame>('all', base, tasks) : tasks;
+  }
 
   /** its base under the story: a creature's legs and carriage (or where `root` drives it); a body without legs has none */
   protected base(options: IdleOptions): Behaviour | null {
@@ -252,7 +232,7 @@ export class Body<H extends string = string> {
     frame.time += dt;
     clock.delta = dt;
     for (const item of this.worn.keys()) item.due(frame.time);
-    (this.runner ??= new TimelineRunner(this.behaviour)).step(frame, clock);
+    (this.runner ??= new TimelineRunner(this.behaviour())).step(frame, clock);
     if (frame.dev) frame.dev.beat = frame.beats.size ? [...frame.beats].join(' ∥ ') : undefined;
     moveWorn(this, frame);
     this.hold(frame);

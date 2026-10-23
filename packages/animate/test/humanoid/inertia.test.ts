@@ -1,8 +1,7 @@
 import { Euler, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body } from '../../src/core/body';
-import { createSkeletonModel, human, INDEX, walkTo, type DrivenRoot, type Frame, type Humanoid } from '../../src';
+import { createSkeletonModel, Humanoid, INDEX, walkTo, type DrivenRoot, type Frame } from '../../src';
 import { idle } from '../../src/humanoid/idle';
 
 const dt = 1 / 60, DEG = Math.PI / 180;
@@ -11,11 +10,11 @@ const STEP = 15;
 
 /** a person walking 5 m ahead from standing and stopping there: its chest's pitch (rad, + forward) and its ground speed each sub-step */
 function walk(leaning: boolean) {
-  const species = human(createSkeletonModel());
-  if (!leaning) delete species.inertia;
-  const h = new Body(species, (b) => function* () {
+  const h = new Humanoid(createSkeletonModel(), (b) => function* () {
     yield* parallel<Frame>('all', idle(b), walkTo(b, { to: new Vector3(0, 0, 5) }));
-  }, { idle: false, dev: true }) as Humanoid;
+  }, { idle: false, dev: true });
+  // (its trunk read off its species as its base sets out, on the first update)
+  if (!leaning) delete h.species.inertia;
   const pitch: number[] = [], speed: number[] = [];
   for (let t = 0; t < 8; t += dt) {
     h.update(dt);
@@ -59,7 +58,7 @@ it('leans into setting off and back from stopping, as far as people do, swings a
 /** a player's body set off to 1.4 m/s at 10 m/s², as a game controller does, walked and stopped as quickly: its trunk's pitch each sub-step (rad, + forward, hips → neck) */
 function setOff() {
   const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Body(human(createSkeletonModel()), (b) => idle(b as Humanoid, { root }), { idle: false, dev: true }) as Humanoid;
+  const h = new Humanoid(createSkeletonModel(), (b) => idle(b, { root }), { idle: false, dev: true });
   const pitch: number[] = [];
   for (let t = dt; t < 6; t += dt) {
     root.velocity.z += Math.max(-10 * dt, Math.min(10 * dt, (t > 1 && t < 3.5 ? 1.4 : 0) - root.velocity.z));
