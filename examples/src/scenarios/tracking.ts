@@ -1,12 +1,8 @@
 import { Euler, MathUtils, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { handTo, headTo, lookAt, release, type Frame, type Humanoid, type Placement, type Target, yawOf } from '@drawcall/animate';
-import { ask, type Asks, idle } from '@drawcall/animate/rig';
-import { CALM } from '../../../packages/animate/src/humanoid/arms';
-import { reached } from '../../../packages/animate/src/core/tip';
-import { SHIFT } from '../../../packages/animate/src/core/gaze';
+import { leftOf, wrapAngle, handTo, headTo, lookAt, release, type Frame, type Humanoid, type Placement, type Target, yawOf } from '@drawcall/animate';
+import { SHIFT, ask, type Asks, idle, reached } from '@drawcall/animate/rig';
 import { destination, route, scalar, type Way } from '../keys';
-import { leftOf, wrapAngle } from '../math';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
 
@@ -285,8 +281,8 @@ function comeAlong(h: Humanoid, side: 'left' | 'right', target: (f: Frame) => Ve
   };
 }
 
-/** the reaching hand: calm, but its joints brisk enough to keep it on its way while the body turns under it (rad/s², rad/s) */
-const REACHING = { ...CALM, speed: 2, turnAccel: 200, turnSpeed: 15 };
+/** the reaching hand: as calm to set off as `handTo` has it, but quicker and its joints brisk enough to keep it on its way while the body turns under it (rad/s², rad/s) */
+const REACHING = { speed: 2, turnAccel: 200, turnSpeed: 15 };
 
 /** One hand reaching round: high, across the body, to the floor, behind, far ahead; the body comes along as it must. */
 export function reach(v: Variation = {}): Scenario {

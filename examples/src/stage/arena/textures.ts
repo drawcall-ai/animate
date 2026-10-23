@@ -1,6 +1,6 @@
 import { CanvasTexture, SRGBColorSpace, type Texture } from 'three';
 import { context2d } from '../../dom';
-import { random } from '../../math';
+import { seeded } from '@drawcall/animate/rig';
 import { APRON, FLOOR, HALF } from './layout';
 
 function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): Texture {
@@ -23,7 +23,7 @@ function noise(g: CanvasRenderingContext2D, w: number, h: number, n: number, alp
 
 /** ring canvas incl. apron: light grey fabric, navy apron band with lettering, centre logo */
 export function matTexture() {
-  const rand = random(3);
+  const rand = seeded(3);
   const S = 2048;
   const ppm = S / (2 * (HALF + APRON));
   return canvasTexture(S, S, (g) => {

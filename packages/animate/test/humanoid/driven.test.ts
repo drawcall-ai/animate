@@ -220,7 +220,6 @@ it.each([
     thorax.push({ phase, y: yawOf(h.pose.rotation(INDEX.chest)) });
   });
   const p = harmonic(pelvis), c = harmonic(thorax), deg = 180 / Math.PI, apart = Math.abs(wrapAngle(c.at - p.at)) * deg;
-  console.log(_, { pelvis: p.range * deg, thorax: c.range * deg, apart });
   expect(p.range * deg).toBeGreaterThanOrEqual(band.pelvis[0]);
   expect(p.range * deg).toBeLessThanOrEqual(band.pelvis[1]);
   expect(c.range * deg).toBeGreaterThanOrEqual(band.thorax[0]);

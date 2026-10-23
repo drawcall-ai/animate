@@ -178,7 +178,6 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without defe
     });
   }
   const lastTwo = landings.slice(-2);
-  console.log('arrival', { face, distance, afterTouchdown: Math.abs(wrapAngle(yawOf(h.pose.rotation(0)) - lastTwo[1]?.yaw)), footErrors: lastTwo.map((land) => land.error) });
   expect(arrived).toBe(true);
   expect(distance).toBeLessThanOrEqual(1.15 * to.length());
   expect(reversed).toBeLessThanOrEqual(1e-3);

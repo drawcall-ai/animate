@@ -1,3 +1,4 @@
+import { forwardOf, leftOf } from '@drawcall/animate';
 import {
   BoxGeometry,
   CapsuleGeometry,
@@ -12,7 +13,6 @@ import {
   Vector3,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { forwardOf, leftOf } from '../../math';
 import type { Keep } from '.';
 import { APRON, FACINGS, FLOOR, HALF } from './layout';
 import { tableClothTexture } from './textures';

@@ -2,7 +2,7 @@
 // following its stride cycle (the carpus folding, the hock flexing) as a soft reference.
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../body';
-import type { Pose, ReadonlyPose } from '../pose';
+import type { ReadonlyPose } from '../pose';
 import { angleAt, type JointCycle } from './cycle';
 import { offsetAt, strideAt, type Gait } from './gait';
 import type { LegChain } from './legs';

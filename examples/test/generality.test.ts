@@ -1,8 +1,7 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, withGaze, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, createSkeletonModel, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
-import { idle } from '@drawcall/animate/rig';
+import { Body, withGaze, scaled, carried, carry, holds, offer, offered, touch, when, World, type Side, grab, handTo, hold, horse, human, release, type Humanoid, Item, INDEX, place, Pose, walkTo, type Behaviour, type Frame, type Species } from '@drawcall/animate';
 import { DOG, SHORT_NECKED } from '../src/scenarios/dog';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, items high and low. Every run must

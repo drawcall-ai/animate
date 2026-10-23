@@ -1,6 +1,6 @@
+import { forwardOf, leftOf } from '@drawcall/animate';
 import { Vector3 } from 'three';
 import { eyesOf, jointOf } from '../src/joints';
-import { forwardOf, leftOf } from '../src/math';
 import { tasked, type Frame } from './frame';
 
 /** a stride is steady when its speed varies across it, and the stride before, by less than this share of its mean (and its turn rate by less than CURVE) */

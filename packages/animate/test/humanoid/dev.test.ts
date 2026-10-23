@@ -1,13 +1,10 @@
-import { World } from '../../src/core/world';
 import { person } from '../person';
 import { idle } from '../../src/humanoid/idle';
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
-import { Body, type Humanoid, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, named, watch, type Frame } from '../../src';
+import { Body, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, named, watch, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
-import { ballOf, footRotation, heelOf } from '../../src/humanoid/posture/foot';
-import { Dev } from '../../src/core/dev';
 import { leg } from '../core/rigs';
 
 it('checks a planted foot in the final pose after a later writer moved it', () => {

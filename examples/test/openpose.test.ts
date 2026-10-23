@@ -3,7 +3,7 @@ import { person } from './person';
 import { Bone, OrthographicCamera, Vector3 } from 'three';
 import type { CharacterModel } from '@pmndrs/viverse';
 import { action } from '@pmndrs/timeline';
-import { type Humanoid, type Frame } from '@drawcall/animate';
+import { type Frame } from '@drawcall/animate';
 import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, createOpenPoseModel, drawOpenPose2D, OpenPoseSkeleton, projectBody25, toBody25, type Context2D } from '../src/openpose';
 
 /** OpenPose's own BODY_25 part names, in its order (poseParameters.cpp) */

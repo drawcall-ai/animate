@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { INDEX } from '../../packages/animate/src/humanoid/bones';
+import { INDEX } from '@drawcall/animate';
 import { stroll, walkThere } from '../src/scenarios/stroll';
 import { checks, failed, measure } from './metrics';
-import type { Frame } from './frame';
+import { frames, type Frame } from './frame';
 import { Simulation } from '../src/simulation';
 import { knownFailure, run } from '../scripts/run';
 
@@ -14,9 +14,8 @@ it('strolls straight on: knees near straight at mid-stance, soft touchdowns, a 3
   const previous = ['planted', 'planted'];
   const heights: { t: number; y: number; knee: number; planted: boolean }[] = [], landings: number[] = [];
   let touchdown = 0;
-  function* frames(): Generator<Frame[]> {
-    while (sim.t < sim.scenario.duration) {
-      sim.step();
+  function* observed(): Generator<Frame[]> {
+    for (const each of frames(sim)) {
       const h = sim.actors[0];
       h.feet.forEach((foot, s) => {
         if (foot.phase === 'planted' && previous[s] === 'swing') {
@@ -30,10 +29,10 @@ it('strolls straight on: knees near straight at mid-stance, soft touchdowns, a 3
       const knee = h.pose.position(INDEX.leftLowerLeg);
       const flexion = Math.PI - h.pose.position(INDEX.leftUpperLeg).clone().sub(knee).angleTo(h.pose.position(INDEX.leftFoot).clone().sub(knee));
       heights.push({ t: sim.t, y: h.pose.position(0).y, knee: flexion * 180 / Math.PI, planted: h.feet[0].phase === 'planted' });
-      yield sim.actors.map((h) => ({ t: sim.t, h, asked: sim.stage.report.at(sim.t), solids: [] }));
+      yield each;
     }
   }
-  const metrics = measure('stroll', frames());
+  const metrics = measure('stroll', observed());
   sim.step(); // Check the last completed pose too.
   expect(sim.stage.done(), 'straight stroll finished').toBe(true);
   expect(checks(metrics, { strides: { straight: 3, curve: 0 }, startStop: null }).filter(failed)).toEqual([]);

@@ -13,9 +13,9 @@ import { EARS, HALTER, HEAD, LEGS, NECK, SKELETON } from './skeleton';
 import { powerGait, stanceOf } from '../core/legs/schedule';
 import type { Attention, Species } from '../core/species';
 
-/** a horse: its walk, and its posture over its legs as it heeds what it looks at, a tether and a startle */
-export const horse = (): Species<never> => ({ skeleton: SKELETON, gaze: { eyes: (pose, out) => pose.point(HEAD, EYES, out), range: EYE_RANGE },
-  legs: { chains: horseLegs(), gait: HORSE_WALK, posture: (start, gait) => horseMotion(start, gait) }, inertia: INERTIA });
+/** a horse: its walk (or `'trot'`), and its posture over its legs as it heeds what it looks at, a tether and a startle */
+export const horse = (gait: 'walk' | 'trot' = 'walk'): Species<never> => ({ skeleton: SKELETON, gaze: { eyes: (pose, out) => pose.point(HEAD, EYES, out), range: EYE_RANGE },
+  legs: { chains: horseLegs(), gait: gait === 'trot' ? HORSE_TROT : HORSE_WALK, posture: (start, gait) => horseMotion(start, gait) }, inertia: INERTIA });
 /**
  * How the horse's trunk takes its acceleration: pitched as a dog's but less (read: Walter & Carrier 2009 for a dog setting off, 0.3–0.5
  * of atan(a / g); no horse's measure found; tuned: below that, its forelegs straight in stance taking no more of its withers let down);

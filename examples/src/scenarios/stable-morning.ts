@@ -1,10 +1,8 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
-import { Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseLeadPoint, lookAt, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
-import { idle } from '@drawcall/animate/rig';
-import { Rope } from '../../../packages/animate/src/core/rope';
-import { minimumJerk } from '../../../packages/animate/src/core/math';
-import { forwardOf } from '../math';
+import { forwardOf, Body, horse as horseSpecies, Item, Pose, place, facingAt, eyesOnBefore, grab, handTo, hold, horseLeadPoint, lookAt, named, onBone, release, watch, wear, when, walkTo, withGaze, yawOf, type Behaviour, type Frame, type Humanoid } from '@drawcall/animate';
+import { idle, minimumJerk } from '@drawcall/animate/rig';
+import { Rope } from '../stage/rope';
 import { Report, reported, reporting } from '../report';
 import type { Prop, Scenario } from '../scenario';
 import { skeletonProps, line } from '../stage/props';

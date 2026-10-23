@@ -1,12 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Body, horse, human, Pose, walkTo, type Gait, type ReadonlyPose } from '@drawcall/animate';
+import { Body, horse, human, INDEX, Pose, walkTo, type Gait, type Humanoid, type ReadonlyPose } from '@drawcall/animate';
 import type { Stepper } from '../../packages/animate/src/core/legs/stepper';
 import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../packages/animate/src/horse/legs';
 import { clampRotation } from '../../packages/animate/src/core/limits';
 import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
-import { INDEX } from '../../packages/animate/src/humanoid/bones';
-import type { Humanoid } from '../../packages/animate/src/humanoid/humanoid';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { along, legsBiped, legsHorse, scriptedRoot } from '../src/scenarios/legs';

@@ -1,7 +1,7 @@
 import { Euler, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { INDEX } from '@drawcall/animate';
+import { forwardOf, leftOf, wrapAngle, INDEX } from '@drawcall/animate';
 import { shooter } from '../src/scenarios/shooter';
 import { Simulation } from '../src/simulation';
 import { Playback } from '../src/playback';
@@ -9,7 +9,6 @@ import { FIXED_DT } from '../src/scenario';
 import { PlayerCamera } from '../src/stage/camera';
 import { solePoints } from '../../packages/animate/src/humanoid/landmarks';
 import { vary } from '../scripts/run';
-import { forwardOf, leftOf, wrapAngle } from '../src/math';
 import type { Role } from '../src/scenario';
 import { SKELETONS, skeletonModel } from '../src/skeletons';
 
@@ -163,8 +162,6 @@ for (const [body, model] of BODIES) {
     const first = landings[0], last = landings[landings.length - 1];
     const stride = (last.z - first.z) / (landings.length - 1);
     const cadence = 120 * (landings.length - 1) / (last.time - first.time);
-    console.log('shooter', seed, { grip, sight, sightLine, raised, cadence, stride, flightSeconds: [Math.min(...flights.slice(1)), Math.max(...flights.slice(1))], lag, facing, heading, low,
-      xcom: Math.max(0, ...sim.actors[0].notes.map((note) => note.value)) });
     expect(lag).toBeLessThan(1e-9);
     expect(sway).toBeLessThanOrEqual(0.0141 * sim.actors[0].proportions.scale);
     // (the facing eases toward the look over 25 ms; turning harder than the feet can follow, the trunk takes the rest)
@@ -241,7 +238,6 @@ for (const [body, model] of BODIES) {
       }
       worst[name] = { angle: angle * 180 / Math.PI, grip };
     }
-    console.log('fast turns', worst);
     for (const [name, { angle, grip }] of Object.entries(worst)) {
       expect(angle).toBeLessThanOrEqual(name === 'aiming' ? 2 : 5);
       expect(grip).toBeLessThanOrEqual(0.01);
@@ -270,7 +266,6 @@ for (const [body, model] of BODIES) {
       const at = props[5].position.clone().project(camera);
       sight = Math.max(sight, Math.hypot(at.x, at.y));
     });
-    console.log('rifle in the view', walk, { angle: angle * 180 / Math.PI, sight });
     expect(angle).toBeLessThan(0.05 * Math.PI / 180);
     expect(sight).toBeLessThan(0.002);
   });
@@ -290,7 +285,6 @@ for (const [body, model] of BODIES) {
       }
       last = { props, position: camera.position.clone(), direction };
     });
-    console.log('through a shot', { prop, move, turn });
     expect(playback.sim.stage.props(playback.sim.t).length).toBeGreaterThan(0);
     expect(prop).toBeLessThan(0.02);
     expect(move).toBeLessThan(0.005);
@@ -323,7 +317,6 @@ for (const [body, model] of BODIES) {
     }
     const spread = (r: ReturnType<typeof range>) => ({ moved: r.hi.clone().sub(r.lo).length(), roll: r.roll[1] - r.roll[0], breath: r.breath[1] - r.breath[0] });
     const [atEase, aiming] = [spread(easy), spread(aimed)];
-    console.log('standing', { atEase, aiming });
     expect(atEase.moved).toBeGreaterThan(0.01);
     expect(atEase.roll).toBeGreaterThan(0.03);
     expect(aiming.moved).toBeLessThan(1e-4);
@@ -353,7 +346,6 @@ for (const [body, model] of BODIES) {
       grip = Math.max(grip, gripError(h));
     }
     const range = (a: number[]) => Math.max(...a) - Math.min(...a);
-    console.log('rifle sprint', { pelvis: range(pelvis), shoulders: range(shoulders), grip, run: sim.actors[0].locomotion.run });
     expect(sim.actors[0].locomotion.run).toBe(1);
     expect(range(pelvis)).toBeGreaterThanOrEqual(18);
     expect(range(pelvis)).toBeLessThanOrEqual(30);
@@ -443,7 +435,6 @@ for (const [body, model] of BODIES) {
     // crouch peaks at 5.77 × 0.37 m / 0.25² s ≈ 34 m/s², the steps' own less)
     let jerk = 0;
     for (let i = 2; i < frames.length; i++) if (frames[i].t > 35 && frames[i].t < 41) jerk = Math.max(jerk, Math.abs(frames[i].pelvis - 2 * frames[i - 1].pelvis + frames[i - 2].pelvis) * 3600);
-    console.log('crouch', { depth, speed: Math.max(...walking.map((f) => f.speed)), accel: jerk });
     // (as deep as the legs go: the default's 0.33–0.42 m × its legs over the default's)
     const legs = sim.actors[0].proportions.legs;
     expect(depth).toBeGreaterThan(0.33 * legs);
@@ -474,7 +465,6 @@ for (const [body, model] of BODIES) {
         const i = frames.findIndex((f, j) => j > off && f.soles[side] <= 0.005);
         return (frames[i - 1].soles[side] - frames[i].soles[side]) * 60;
       });
-      console.log('jump', press.t.toFixed(2), { latency, airtime, apex, absorb, recovered, touchdown, fall, speed: [press.speed, frames[down].speed] });
       expect(latency).toBeLessThanOrEqual(0.12);
       expect(airtime).toBeGreaterThan(0.4);
       expect(airtime).toBeLessThan(0.6);
@@ -517,7 +507,6 @@ for (const [body, model] of BODIES) {
     const press = frames.find((f) => f.reload)!;
     const begun = frames.find((f) => f.reloading)!, ended = frames.find((f) => f.t > begun.t && !f.reloading)!;
     const moving = frames.filter((f) => f.reloading).every((f) => f.speed > 1);
-    console.log('reload', { start: begun.t - press.t, seconds: ended.t - begun.t, held: Math.max(...frames.map((f) => f.held)) });
     expect(begun.t - press.t).toBeLessThan(0.05);
     expect(ended.t - begun.t).toBeGreaterThan(1.8);
     expect(ended.t - begun.t).toBeLessThan(2.8);

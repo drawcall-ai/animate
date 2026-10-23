@@ -1,29 +1,5 @@
 import { Vector3 } from 'three';
 
-/** `a` wrapped into [-π, π] */
-export function wrapAngle(a: number): number {
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
-}
-
-export const forwardOf = (yaw: number, out = new Vector3()) => out.set(Math.sin(yaw), 0, Math.cos(yaw));
-
-/** a character's left (+X when facing +Z) */
-export const leftOf = (yaw: number, out = new Vector3()) => out.set(Math.cos(yaw), 0, -Math.sin(yaw));
-
-/** A seeded uniform [0, 1) generator (mulberry32): the same seed, the same run. */
-export function random(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
  * A vector following a moving target on a critically damped spring; it starts on the first target
  * (or `reset`). Given the target's velocity, it follows without lagging (the spring then works only

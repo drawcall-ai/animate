@@ -1,5 +1,6 @@
 import type { Humanoid, Side } from '@drawcall/animate';
 import type { Solid } from '../src/scenario';
+import type { Simulation } from '../src/simulation';
 
 /** a body as the metrics read it: its posed model, and what `balance` (its heading and ground velocity: `gait.facing`, `gait.velocity`), the hands (what they hold) and the weight of what it holds and wears report of it */
 export type Actor = Pick<Humanoid, 'model' | 'proportions' | 'feet' | 'locomotion' | 'holding' | 'borne' | 'worn'>;
@@ -11,6 +12,16 @@ export interface Frame {
   asked: ReadonlyMap<string, unknown>;
   /** what must keep out of the first actor's body (the items it handles), as they are then */
   solids: readonly Solid[];
+}
+
+/** every actor's frame after each fixed step, to the scenario's end */
+export function* frames(sim: Simulation): Generator<Frame[]> {
+  while (sim.t < sim.scenario.duration) {
+    sim.step();
+    const asked = sim.stage.report.at(sim.t);
+    const solids = sim.stage.solids?.() ?? [];
+    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
+  }
 }
 
 /** the largest value seen and when */

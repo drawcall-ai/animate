@@ -1,7 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { handTo, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Spot } from '@drawcall/animate';
-import { headingOf } from '../../../../packages/animate/src/core/math';
+import { handTo, hold, INDEX, facingAt, onItem, wear, type Behaviour, type Frame, type Item, type Side, type Spot, headingOf } from '@drawcall/animate';
 import { along, at, eyesOn, take, turn, type Knight } from './knight';
 
 type F = Frame;

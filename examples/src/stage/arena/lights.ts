@@ -1,3 +1,4 @@
+import { forwardOf } from '@drawcall/animate';
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -14,7 +15,6 @@ import {
   SpotLight,
   Vector3,
 } from 'three';
-import { forwardOf } from '../../math';
 import type { Keep } from '.';
 import { CORNERS, FACINGS, FLOOR, HALF, SIDES, onSide } from './layout';
 import { screenTexture } from './textures';

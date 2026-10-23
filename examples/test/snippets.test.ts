@@ -43,7 +43,9 @@ function source(code: string): string {
 
 it('every code block in the skill and the README compiles', () => {
   const config = ts.readConfigFile(resolve(root, 'tsconfig.base.json'), ts.sys.readFile);
-  const { options } = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'examples'));
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'examples'));
+  // (every snippet is given all the exports, most of which it does not use)
+  const options = { ...parsed.options, noUnusedLocals: false };
   const files = new Map(blocks().map(({ name, code }, i) => [resolve(here, `__snippet${i + 1}.ts`), { name, text: source(code) }]));
   const host = ts.createCompilerHost(options);
   const { getSourceFile, fileExists, readFile } = host;

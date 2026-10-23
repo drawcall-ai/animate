@@ -12,22 +12,12 @@ import { Report } from '../src/report';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
-import type { Frame } from './frame';
-
-/** Frames for the remaining scenario metrics, after each fixed step. */
-function* steps(sim: Simulation): Generator<Frame[]> {
-  while (sim.t < sim.scenario.duration) {
-    sim.step();
-    const asked = sim.stage.report.at(sim.t);
-    const solids = sim.stage.solids?.() ?? [];
-    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
-  }
-}
+import { frames } from './frame';
 
 /** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
 function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   const sim = new Simulation(sc);
-  const m = measure(sc.id, steps(sim));
+  const m = measure(sc.id, frames(sim));
   const options: MetricsOptions = { startStop: null, strides };
   // Gait coverage and start/stop blending are run-level regressions.
   // (setting off, the trunk leans ~7° forward between the first knee movement and the first heel strike, under a second — read:
@@ -156,7 +146,7 @@ const KNOWN: [string, Scenario][] = [
 for (const [name, sc] of KNOWN) it.fails(`${name} (known)`, () => judged(sc));
 // (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)
 it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
-  const m = measure('stroll', steps(new Simulation(stroll())));
+  const m = measure('stroll', frames(new Simulation(stroll())));
   const straight = m.gait.summary(false, false);
   const curve = m.gait.summary(true, false);
   expect(straight && curve).toBeTruthy();
@@ -181,7 +171,7 @@ it('runs a scenario through the metrics: two actors standing still, relaxed, eac
         },
     }),
   };
-  const m = measure(still.id, steps(new Simulation(still)));
+  const m = measure(still.id, frames(new Simulation(still)));
   expect(seen.length).toBe(2 * 30);
   expect(seen.every((x, i) => Math.abs(x - (i % 2 === 0 ? 1 : -1)) < 0.05)).toBe(true);
   expect(m.report).toContain('== still (30 frames)');

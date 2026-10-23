@@ -1,5 +1,5 @@
 import { Color, FogExp2, Group, InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
-import { random } from '../../math';
+import { seeded } from '@drawcall/animate/rig';
 import { addBalconyLights, addCrowd } from './crowd';
 import { addJumbotron, addLights } from './lights';
 import { addRing } from './ring';
@@ -26,7 +26,7 @@ export type Keep = <T extends { dispose(): void }>(x: T) => T;
 const FLASHES = 14;
 
 export function createBoxingArena(center: Vector3): Environment {
-  const rand = random(11);
+  const rand = seeded(11);
   const group = new Group();
   group.position.set(center.x, 0, center.z);
   const disposables: { dispose(): void }[] = [];

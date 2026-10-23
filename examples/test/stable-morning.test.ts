@@ -98,7 +98,7 @@ test(`leads upright with the near hand forward, slack outside, and halts beyond 
   let leadingLegGap = Infinity;
   let gazeAt = Infinity, gripAt = Infinity, liftAt = Infinity;
   let gripHeight = NaN;
-  let contactKnee = NaN, contactPitch = NaN, contactDrop = NaN;
+  let contactKnee = NaN, contactPitch = NaN;
   while (sim.t < sim.scenario.duration) {
     sim.step();
     const saddle = sim.props().find(p => p.kind === 'box' && p.size.y === SEAT_HEIGHT);
@@ -121,7 +121,6 @@ test(`leads upright with the near hand forward, slack outside, and halts beyond 
         gripAt = sim.t;
         contactKnee = ['left', 'right'].reduce((sum, side) => sum + h.pose.local(h.pose.skeleton.index(`${side}LowerLeg`)).angleTo(new Quaternion()), 0) * 90 / Math.PI;
         contactPitch = new Euler().setFromQuaternion(h.pose.rotation(h.pose.skeleton.index('chest')), 'YXZ').x * 180 / Math.PI;
-        contactDrop = h.proportions.hipHeight - h.pose.position(0).y;
       }
     }
     const load = h.holding.left?.item;

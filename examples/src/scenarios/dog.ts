@@ -1,7 +1,6 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { Body, grab, hold, Item, powerGait, Skeleton, swing, walkTo, type Frame, type JointCycle, type Species } from '@drawcall/animate';
-import { idle } from '@drawcall/animate/rig';
 import { Report } from '../report';
 import type { Scenario } from '../scenario';
 import { skeletonProps } from '../stage/props';

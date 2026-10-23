@@ -1,5 +1,6 @@
+import { wrapAngle } from '@drawcall/animate';
 import { MathUtils, Quaternion, Vector3, type PerspectiveCamera } from 'three';
-import { Spring, wrapAngle } from '../math';
+import { Spring } from '../math';
 import { eyesOf, jointOf, type Posed } from '../joints';
 
 /** a camera placement: where it is, what it looks at, its vertical field of view (°) */

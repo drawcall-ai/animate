@@ -40,17 +40,11 @@ export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = co
   out.value[2] = 2 * Math.atan2(a, b);
   out.range[0] = limit.swing[0];
   out.range[1] = limit.swing[1];
-  // (the twist's range written into `out`'s own: as `twistRange` has it)
+  // (the twist's range, written into `out`'s own: opening up past `TWIST_FADE`)
   const open = smoothstep(TWIST_FADE, Math.PI, phi), lo = limit.twist[0], hi = limit.twist[1];
   out.range[2][0] = lo - (Math.PI + lo) * open;
   out.range[2][1] = hi + (Math.PI - hi) * open;
   return out;
-}
-
-/** the twist's range at a swing of `phi` (rad) */
-function twistRange({ twist: [lo, hi] }: Limit, phi: number): [number, number] {
-  const open = smoothstep(TWIST_FADE, Math.PI, phi);
-  return [lo - (Math.PI + lo) * open, hi + (Math.PI - hi) * open];
 }
 
 /** a rotation in a limit's coordinates: the swing's two components and the twist (rad), and their ranges */

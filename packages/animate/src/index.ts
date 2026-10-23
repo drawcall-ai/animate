@@ -14,7 +14,7 @@ export { when } from './core/when';
 export { named, watch, type LogEntry, type Problem, type WatchFrame } from './core/dev';
 export { Carrier, Item, onItem, type ItemOptions } from './core/carrier';
 export { takeOff, wear, type Dressed, type WearOptions } from './core/worn';
-export { yawOf } from './core/math';
+export { forwardOf, headingOf, leftOf, wrapAngle, yawOf } from './core/math';
 export { aimAt, lookAt, withGaze, type GazeOptions } from './core/gaze';
 // legs for your own creature, and a horse
 export type { LegChain } from './core/legs/legs';
@@ -29,7 +29,7 @@ export { horse, horseLeadPoint } from './horse/legs';
 export { human, isPerson, type Humanoid } from './humanoid/humanoid';
 export { createSkeletonModel } from './humanoid/model';
 export { INDEX, SIDES, type BoneName, type Side } from './humanoid/bones';
-export type { Proportions } from './humanoid/proportions';
+export { DEFAULT_HEIGHT, type Proportions } from './humanoid/proportions';
 
 // Verbs.
 export { arriving, walkTo, type WalkOptions } from './core/walk';

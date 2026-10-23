@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Rope } from '../../src/core/rope';
+import { Rope } from '../src/stage/rope';
 
 const dt = 1 / 60;
 const lengthOf = (rope: Rope) => rope.points.slice(1).reduce((sum, p, k) => sum + p.distanceTo(rope.points[k]), 0);

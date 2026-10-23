@@ -1,10 +1,7 @@
-import { HORSE_TROT, HORSE_WALK, horseMotion } from '../../../packages/animate/src/horse/legs';
 import { skeletonProps } from '../stage/props';
 import { Quaternion, Vector3 } from 'three';
-import { Body, horse as horseSpecies, type Humanoid, Pose, yawOf, type DrivenRoot, type Frame, type Gait, type Species } from '@drawcall/animate';
-import { idle } from '@drawcall/animate/rig';
-import type { RootGoal, Stepper } from '../../../packages/animate/src/core/legs/stepper';
-import { minimumJerk } from '../../../packages/animate/src/core/math';
+import { Body, horse as horseSpecies, type Humanoid, Pose, yawOf, type Frame } from '@drawcall/animate';
+import { idle, minimumJerk, type RootGoal } from '@drawcall/animate/rig';
 import type { Scenario } from '../scenario';
 import { Report } from '../report';
 
@@ -49,7 +46,7 @@ export function legsBiped(): Scenario {
       let person: Humanoid | null = null;
       return {
         report: new Report(), props: () => [],
-        done: () => !!person?.stepper && (person.stepper as Stepper).legs.every((leg) => !leg.swing) && person.frame.time > 15,
+        done: () => !!person && !person.locomotion.moving && person.frame.time > 15,
         script: (h) => {
           person = h;
           return idle(h, { root: along(scriptedRoot(0, 1.3, h.pose.position(0).clone().setY(0), yawOf(h.pose.rotation(0)), 1, 3)) });
@@ -64,18 +61,18 @@ export function legsHorse(): Scenario {
     id: 'legs-horse', title: 'Legs: horse walk and trot on scripted roots', duration: 16, actors: [], cameraDistance: 9, skins: ['models/horse.glb', 'models/horse.glb'],
     description: 'Two horses on their stepper: walk and trot along scripted roots. No planner.',
     stage: (dev = false) => {
-      const make = (gait: Gait, pace: number, x: number) => {
-        const base = horseSpecies(), species: Species = { ...base, legs: { ...base.legs!, gait, posture: (start) => horseMotion(start, gait) } };
+      const make = (gait: 'walk' | 'trot', pace: number, x: number) => {
+        const species = horseSpecies(gait);
         const pose = new Pose(HORSE);
         pose.setRoot(new Vector3(x, pose.position(0).y, 0));
         const route = scriptedRoot(0, pace, new Vector3(x, 0, 0));
         return new Body(species, undefined, { pose, dev, idle: { root: along(route) } });
       };
-      const bodies = [make(HORSE_WALK, 1.6, -2), make(HORSE_TROT, 3.7, 2)];
+      const bodies = [make('walk', 1.6, -2), make('trot', 3.7, 2)];
       return {
         report: new Report(), bodies,
         props: () => bodies.flatMap((body) => skeletonProps(body.pose)),
-        done: () => bodies.every((body) => !!body.stepper && (body.stepper as Stepper).legs.every((leg) => !leg.swing) && body.frame.time > 15),
+        done: () => bodies.every((body) => !body.locomotion.moving && body.frame.time > 15),
         script: () => { throw new Error('horse scenario has no humanoids'); },
       };
     },

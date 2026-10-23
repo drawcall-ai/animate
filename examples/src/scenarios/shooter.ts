@@ -1,12 +1,8 @@
 import { Box3, Euler, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { INDEX, Item, aimAt, swing, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper, type Rhythm } from '@drawcall/animate';
-import { Life, ask, follow, followRotation, idle } from '@drawcall/animate/rig';
-import { reached } from '../../../packages/animate/src/core/tip';
-import { spinOf } from '../../../packages/animate/src/core/rotation';
-import { irregular } from '../../../packages/animate/src/core/random';
+import { forwardOf, leftOf, wrapAngle, INDEX, Item, aimAt, swing, grab, handTo, hold, named, onBone, onItem, release, takeOff, watch, wear, when, withGaze, type DrivenRoot, type Placement, type Frame, type Humanoid, type Jumper, type Rhythm } from '@drawcall/animate';
+import { Life, ask, follow, followRotation, idle, irregular, reached, spinOf } from '@drawcall/animate/rig';
 import { scalar } from '../keys';
-import { forwardOf, leftOf, wrapAngle } from '../math';
 import { Report, reporting } from '../report';
 import type { Look, Player, Prop, Scenario } from '../scenario';
 

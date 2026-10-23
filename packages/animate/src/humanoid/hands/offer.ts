@@ -1,4 +1,3 @@
-import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Body, Frame } from '../../core/body';
 import type { Item } from '../../core/carrier';

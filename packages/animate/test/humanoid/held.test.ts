@@ -7,7 +7,7 @@ import { standing } from './fixtures';
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, type Humanoid, createSkeletonModel, grab, INDEX, Item, place, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
+import { Body, createSkeletonModel, grab, INDEX, Item, place, carried, carry, hold, named, walkTo, onBone, release, takeOff, wear, when, withGaze, type Frame } from '../../src';
 import { Carrier } from '../../src/core/carrier';
 import { closeHand } from '../../src/humanoid/hands/grips';
 import { reachFor } from '../../src/humanoid/hands/reach';

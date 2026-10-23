@@ -1,6 +1,6 @@
+import { forwardOf, leftOf, wrapAngle } from '@drawcall/animate';
 import { Vector3 } from 'three';
 import { jointOf } from '../src/joints';
-import { forwardOf, leftOf, wrapAngle } from '../src/math';
 import { comOf } from './com';
 import { Peak, type Frame, type Actor } from './frame';
 

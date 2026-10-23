@@ -1,6 +1,6 @@
-import { type LogEntry } from '@drawcall/animate';
+import { DEFAULT_HEIGHT, type LogEntry } from '@drawcall/animate';
+import { seeded } from '@drawcall/animate/rig';
 import type { CharacterModel } from '@pmndrs/viverse';
-import { DEFAULT_HEIGHT } from '../../packages/animate/src/humanoid/proportions';
 import type { Role, Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 
@@ -16,7 +16,7 @@ export function run(sc: Scenario, model?: (role: Role) => CharacterModel): LogEn
 
 /** a seeded variation of `sc`: each actor starting up to 10 cm off, turned up to 0.15 rad and up to 4% taller or shorter — what no script may hang on */
 export function vary(sc: Scenario, seed: number): Scenario {
-  const random = mulberry32(seed);
+  const random = seeded(seed);
   const jitter = (range: number) => (random() * 2 - 1) * range;
   return {
     ...sc,
@@ -25,18 +25,6 @@ export function vary(sc: Scenario, seed: number): Scenario {
       yaw: (r.yaw ?? 0) + jitter(0.15),
       height: (r.height ?? DEFAULT_HEIGHT) * (1 + jitter(0.04)),
     })),
-  };
-}
-
-/** a small seeded generator of uniform numbers in [0, 1) */
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 

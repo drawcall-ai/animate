@@ -1,8 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { carried, carry, grab, handTo, hold, Item, walkTo, withGaze, type Frame } from '@drawcall/animate';
+import { forwardOf, carried, carry, grab, handTo, hold, Item, walkTo, withGaze, type Frame } from '@drawcall/animate';
 import { idle } from '@drawcall/animate/rig';
-import { forwardOf } from '../math';
 import type { Scenario } from '../scenario';
 import { Report, reported, reporting } from '../report';
 
