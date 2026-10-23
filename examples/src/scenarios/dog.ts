@@ -6,9 +6,10 @@ import { Report } from '../report';
 import type { Scenario } from '../scenario';
 import { skeletonProps } from '../stage/props';
 
-// A dog, as data only: a Labrador of ~30 kg, 0.55 m at the withers, standing square (+Y up, facing +Z, its left +X). Its joints are
-// where the rigged mesh it is shown as has them (measured on `examples/public/models/dog.glb`, left and right averaged), so the skin
-// bends where the body does and hardly stretches; standing so, its legs are a Labrador's (see `LEG`).
+// A dog, as data only: a Labrador of ~30 kg, 0.54 m at the withers (the breed's 54–57 cm: read, FCI standard 122), standing square (+Y
+// up, facing +Z, its left +X). Its joints are where the rigged mesh it is shown as has them (measured on `examples/public/models/dog.glb`,
+// left and right averaged), so the skin bends where the body does and hardly stretches — but for its body standing 2 cm lower, its elbows
+// and stifles bent to it (see `LEG`).
 const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
 /** A dog's body, its head and jaw where `neck` puts them standing square (world): `DOG`'s, or a shorter neck's. */
 function fourLegged(neck: { head: Vector3; jaw: Vector3 }): Species<'jaw'> {
@@ -51,18 +52,21 @@ function fourLegged(neck: { head: Vector3; jaw: Vector3 }): Species<'jaw'> {
 }
 const legs = ['leftFore', 'rightFore', 'leftHind', 'rightHind'];
 /**
- * Each left leg's joints standing (m, world): top, elbow or stifle, carpus or hock, paw — the mesh's. The foreleg's top is high on the
- * scapula, its line to the elbow (scapula and humerus as one) and the forearm plumb under the withers, the pastern sloping forward;
- * behind, the stifle at ~135° and the hock at ~133°, the hind cannon near plumb — Labradors stand at a stifle of 132–139° and a tarsus
- * of 133–141° (see `STANDING`).
+ * Each left leg's joints standing (m, world): top, elbow or stifle, carpus or hock, paw — the mesh's, the tops 2 cm lower and the elbow
+ * and stifle bent to them. The foreleg's top is high on the scapula, its line to the elbow (scapula and humerus as one) and the forearm
+ * under the withers, the elbow at ~142°, the pastern sloping forward; behind, the hind paw behind the hip, the stifle at ~121° and the
+ * hock at ~125°, the hind cannon near plumb. (The mesh stands at ~134° and ~133°, its forelegs all but straight: legs so straight have no
+ * reach left to step with. Labradors stand with the stifle and hock flexed 32° and 26° and the hip 30°, more extended than German
+ * Shepherds: read, Humphries et al. 2020, PLOS ONE e0239832, its angles' zero not given.)
  */
 const LEG: Record<string, [number, number, number][]> = {
   Fore: [[0.07, 0.474, 0.238], [0.06, 0.297, 0.169], [0.075, 0.094, 0.231], [0.081, 0.035, 0.271]],
   Hind: [[0.07, 0.474, -0.233], [0.054, 0.302, -0.191], [0.064, 0.165, -0.329], [0.077, 0.035, -0.308]],
 };
 // each leg joint's range off standing (°): sideways, fore and aft (+ its end back), twist — top, elbow or stifle, carpus or hock, paw. The
-// elbow folds 100° and opens only to straight (scapula and humerus are one segment here); the carpus folds 110° in the swing and gives
-// 15° more under load; the stifle and hock open past standing to ~160° and ~168°, and fold to ~35° and ~63°.
+// elbow folds 100° and opens to all but straight (scapula and humerus are one segment here); the carpus folds 110° in the swing and
+// gives 30° more under load (a Labrador's carpus 32–192° passively, its elbow 36–165°: read via Lappalainen et al. 2023, Front Vet Sci
+// 9:1099903, of Jaegger et al. 2002); the stifle and hock open past standing to ~146° and ~160°, and fold to ~21° and ~55°.
 const RANGES: Record<string, number[][]> = { Fore: [[25, -70, 70, 20], [5, -100, 30, 5], [5, -30, 110, 5], [15, -60, 90, 10]],
   Hind: [[25, -70, 70, 20], [5, -25, 100, 5], [5, -70, 35, 5], [15, -60, 90, 10]] };
 const deg = Math.PI / 180;
@@ -96,7 +100,8 @@ const TROTTING = { bend: 0.45, withers: -0.012, croup: [-0.012, 0], spine: 0, sp
  * (read via summary: Brocklehurst et al. 2014, horses 12.0° at 13.1°). Its spine bends into the turn: a horse's 4–6° thoracolumbar
  * and ~5° more of neck on a 5 m circle (read: Byström et al. 2021, Sci Rep 11:12734; Egenvall et al. 2023) is ~0.4 of the arc its
  * 1.1 m back walks; a dog's back is a little suppler (tuned: 0.45). The trunk's response a person's (0.8 Hz at 0.9 m hips) made dynamically
- * similar on its 0.44 m legs: × √(0.9 / 0.44).
+ * similar on its 0.44 m legs: × √(0.9 / 0.44). On the move it is let down a tenth of its legs' length (`drop`): its forelegs, all but
+ * straight standing, reach fore and aft so (a trotting dog's leg shortens in its stance, its elbow and stifle bent [recalled]).
  */
 export const DOG: Species<'jaw'> = fourLegged({ head: v(0, 0.59, 0.33), jaw: v(0, 0.53, 0.5) });
 
