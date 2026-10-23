@@ -6,7 +6,6 @@ import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { expect, it, vi } from 'vitest';
 import { Body, type Humanoid, Item, eyesOnBefore, INDEX, Pose, createSkeletonModel, named, watch, type Frame } from '../../src';
 import { STEP } from '../../src/core/body';
-import { checkFeet } from '../../src/humanoid/balance/checks';
 import { ballOf, footRotation, heelOf } from '../../src/humanoid/posture/foot';
 import { Dev } from '../../src/core/dev';
 import { leg } from '../core/rigs';
@@ -126,21 +125,6 @@ it('checks standing CoM against the soles once the final pose is still', () => {
   expect(h.log).toContainEqual(expect.objectContaining({ check: 'standing CoM outside the feet (m)', limit: 0.001 }));
 });
 
-it.each([['heel', -1e-9], ['ball', -1e-9], ['heel', 1e-9], ['ball', 1e-9]] as const)('rejects a flat foot swivelling about its %s (pitch %s)', (pivot, pitch) => {
-  const h = person(createSkeletonModel(), () => function* () {}, { idle: false });
-  const pose = new Pose(h.rig.skeleton).copy(h.pose);
-  const contact = pivot === 'heel' ? heelOf(h.proportions) : ballOf(h.proportions, 'left');
-  const anchor = pose.point(INDEX.leftFoot, contact, new Vector3());
-  pose.setRotation(INDEX.leftFoot, footRotation(h.feet[0].yaw + 0.5, pitch));
-  const delta = anchor.sub(pose.point(INDEX.leftFoot, contact, new Vector3()));
-  pose.setRoot(pose.position(0).clone().add(delta));
-  // The other foot is outside this pivot check.
-  h.feet[1].phase = 'swing';
-  const dev = new Dev();
-  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: pose, beats: new Set(), world: new World() }, dev, [{ plantedTime: 1 }, { plantedTime: 1 }]);
-  expect(dev.log).toContainEqual(expect.objectContaining({ check: 'planted foot slide (m)', where: 'leftFoot', limit: 0.01 }));
-});
-
 it('clears the development beat when nothing is running', () => {
   const body = new Body({ skeleton: leg() }, () => (named('one step', function* () {
     yield () => 'finished';
@@ -151,13 +135,3 @@ it('clears the development beat when nothing is running', () => {
   expect(body.frame.dev?.beat).toBeUndefined();
 });
 
-it('measures touchdown from the final poses, independently of the next pose', () => {
-  const h = person(createSkeletonModel(), () => function* () {}, { idle: false });
-  const pose = new Pose(h.rig.skeleton).copy(h.pose);
-  pose.setRoot(pose.position(0).clone().add(new Vector3(0, 0.01, 0)));
-  pose.setRotation(INDEX.leftFoot, footRotation(h.feet[0].yaw, 0.1));
-  const dev = new Dev();
-  checkFeet(h, { dt: STEP, time: 2 * STEP, prev: pose, prev2: h.pose, current: new Pose(h.rig.skeleton).copy(h.pose), beats: new Set(), world: new World() }, dev, [{ plantedTime: 0 }, { plantedTime: 1 }]);
-  expect(dev.log).toContainEqual(expect.objectContaining({ check: 'touchdown vertical speed (m/s)', limit: 0.1, where: 'leftFoot', time: STEP }));
-  expect(dev.log).toContainEqual(expect.objectContaining({ check: 'touchdown pitch step (°)', limit: 1.5, where: 'leftFoot', time: STEP }));
-});

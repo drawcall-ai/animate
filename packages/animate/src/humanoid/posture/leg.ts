@@ -1,9 +1,8 @@
-// A person's leg, as both legs' engines read it.
+// A person's leg, as the legs read it.
 import { Quaternion, Vector3 } from 'three';
 import { forwardOf, wrapAngle } from '../../core/math';
 import type { ReadonlyPose } from '../../core/pose';
 import { INDEX, type Side } from '../bones';
-import type { Proportions } from '../proportions';
 
 /** a leg's chain */
 export const legOf = (side: Side) => (side === 'left' ? 'leftLeg' : 'rightLeg');
@@ -13,9 +12,6 @@ export function shankTilt(pose: ReadonlyPose, side: Side, yaw: number): number {
   const shin = _v.subVectors(pose.position(INDEX[`${side}LowerLeg`]), pose.position(INDEX[`${side}Foot`]));
   return Math.atan2(shin.x * Math.sin(yaw) + shin.z * Math.cos(yaw), shin.y);
 }
-
-/** The shortest hip–ankle span permitted by the knee's flexion limit. */
-export const foldedReach = (p: Proportions, bend: number) => Math.sqrt(p.thigh ** 2 + p.shin ** 2 + 2 * p.thigh * p.shin * Math.cos(bend));
 
 /**
  * Where a leg's knee bends (a direction, into `out`): over the toes (the foot's heading `yaw`

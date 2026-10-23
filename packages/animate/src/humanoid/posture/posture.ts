@@ -5,9 +5,8 @@ import type { Frame } from '../../core/body';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, quatYXZ, smoothstep, wrapAngle } from '../../core/math';
+import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../core/math';
 import { DEFAULT_HEIGHT, type Proportions } from '../proportions';
-import type { Side } from '../bones';
 import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
 import { strideTurn, type Turn } from './turn';
@@ -40,10 +39,6 @@ export const LOWER = { accel: 3, speed: 0.6 };
 export const REACH = 0.975;
 /** Standing planted reach (× leg length): nearly extended, without a singular knee. */
 export const STANDING_REACH = 0.995;
-/** Landing reach (× leg length): near extension before heel loading takes in the knee. */
-export const LANDING_REACH = 0.998;
-/** Shared reach through heel loading (× leg length), from near extension to standing/walking. */
-export const plantedReach = (bent: number, landed: number) => lerp(LANDING_REACH, lerp(STANDING_REACH, REACH, bent), smoothstep(0, 0.2, landed));
 
 /**
  * The trunk leans forward with the pace it goes forward at (rad, the chest's; × the speed ahead up to 1 m/s), a run more: read (Thorstensson
@@ -66,7 +61,7 @@ export interface Trunk {
   thoraxYaw: number;
 }
 
-/** The body upright over its legs: root and posture state shared by both leg controllers. */
+/** The body upright over its legs: the root and the posture state the legs and `Posture` share. */
 export interface Upright {
   p: Proportions;
   root: Vector3;

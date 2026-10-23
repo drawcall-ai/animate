@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Behaviour } from '../core/goal';
 import { Planner } from '../core/legs/planner';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
+import { clamp, forwardOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../core/math';
 import { seedOf } from '../core/random';
 import { TrackedPoint, TrackedRotation } from '../core/track';
 import type { Stance } from '../core/asks';

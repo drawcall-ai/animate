@@ -1,6 +1,5 @@
 // From the old core (a801be4:packages/core/src/stance.ts).
 import type { Vector3 } from 'three';
-import { wrapAngle } from '../core/math';
 import type { Proportions } from './proportions';
 import type { Stance } from '../core/asks';
 
@@ -23,11 +22,3 @@ export const OVER_ANKLES = 0.03;
 /** the heading of a planted foot of `side` (1 left, −1 right) when the body faces `yaw` */
 export const footYaw = (yaw: number, side: 1 | -1, stance: Stance) => yaw + stance.blade + side * stance.toeOut;
 
-/** the body's facing a planted foot of `side` heading `foot` stands for (`footYaw` undone) */
-export const bodyYaw = (foot: number, side: 1 | -1, stance: Stance) => foot - stance.blade - side * stance.toeOut;
-
-/** the body's facing as feet heading `left` and `right` stand */
-export function feetFacing(left: number, right: number, stance: Stance): number {
-  const a = bodyYaw(left, 1, stance);
-  return a + 0.5 * wrapAngle(bodyYaw(right, -1, stance) - a);
-}

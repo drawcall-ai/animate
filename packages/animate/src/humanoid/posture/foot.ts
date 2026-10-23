@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Side } from '../bones';
-import { clamp, lerp, quatYXZ } from '../../core/math';
+import { quatYXZ } from '../../core/math';
 import type { Proportions } from '../proportions';
 
 /** planted: bearing weight on the floor; swing: stepping */
@@ -12,9 +12,6 @@ export interface Foot {
   yaw: number;
   phase: FootPhase;
 }
-
-/** the most a planted heel rises (rad) */
-export const MAX_HEEL = 1.05;
 
 /** half a foot's width at the toes (m, default body): how far past the ankle's line a foot holds the body sideways */
 export const FOOT_HALF_WIDTH = 0.04;
@@ -50,24 +47,6 @@ export function footprint(p: Proportions, ankle: Readonly<Vector3>, yaw: number)
     [ankle.x + fx * p.toeFront - fz * w, ankle.z + fz * p.toeFront + fx * w],
   ];
 }
-
-/** Recalled CMU mocap anchors: 0.18 at s=0.3, 0.39 at 0.5, 0.8 at 0.8 (inherited).
- * Derived tail: C² join at s=0.75 to the original fit, ending at 1 with v=a=0; supersedes the 0.8 anchor. */
-export function swingProgress(s: number): number {
-  if (s <= 0.75) return s + s * (1 - s) * (-0.66 - 0.78 * s + 2.44 * s * s);
-  const t = (s - 0.75) / 0.25;
-  return 0.77390625 + t * (0.3690625 + t * (-0.069375 + t * (0.2546875 + t * (-0.64703125 + t * 0.31875))));
-}
-
-/** the ankle's rise above its straight path at swing progress `s`, peak 1, as the knee flexes (CMU mocap: walking peaks at s ≈ 0.38, running at 0.47) */
-export function swingHump(s: number, run: number): number {
-  const t = clamp(s, 0, 1);
-  const a = lerp(1.5, 1.7, run);
-  const b = lerp(2.5, 1.9, run);
-  const top = a / (a + b);
-  return (Math.pow(t, a) * Math.pow(1 - t, b)) / (Math.pow(top, a) * Math.pow(1 - top, b));
-}
-
 
 const _pivot = new Vector3();
 const _world = new Vector3();

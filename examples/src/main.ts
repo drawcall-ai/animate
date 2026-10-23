@@ -11,8 +11,6 @@ import { Playback } from './playback';
 import { FIXED_DT, type Look, type Role, type Scenario } from './scenario';
 import { SKELETONS, openPoseOf, type SkeletonName } from './skeletons';
 import { SCENARIOS } from './scenarios';
-import { stroll, walkThere } from './scenarios/stroll';
-import { legSystem } from '../../packages/animate/src/humanoid/idle';
 import { Simulation } from './simulation';
 import { drawProps } from './stage/props';
 import { FOV, Stage } from './stage';
@@ -77,9 +75,6 @@ window.addEventListener('resize', () => stage.resize());
 stage.resize();
 
 let scenario = SCENARIOS.find((s) => s.id === params.get('example')) ?? SCENARIOS[0];
-const legs = params.get('legs');
-if (scenario.id === 'stroll' && (legs === 'old' || legs === 'core'))
-  [legSystem.path, scenario] = [legs, params.has('face') ? walkThere(new Vector3(0, 0, 4), Number(params.get('face'))) : stroll({ radius: Number(params.get('radius') ?? 3) })];
 let playback = start(scenario);
 show();
 

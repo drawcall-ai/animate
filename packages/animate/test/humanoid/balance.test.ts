@@ -2,27 +2,14 @@ import { Vector3 } from 'three';
 import { person } from '../person';
 import { describe, expect, it } from 'vitest';
 import { action, parallel } from '@pmndrs/timeline';
-import { type Humanoid, walkTo, type Frame } from '../../src';
+import { walkTo, type Frame } from '../../src';
 import { INDEX } from '../../src/humanoid/bones';
-import { heelOf, swingProgress } from '../../src/humanoid/posture/foot';
+import { heelOf } from '../../src/humanoid/posture/foot';
 import { wrapAngle, yawOf } from '../../src/core/math';
 import { createSkeletonModel } from '../../src/humanoid/model';
-import { idle, legSystem } from '../../src/humanoid/idle';
-
-/** `idle` on the old or the core legs (the migration's switch, read as `idle` is called) */
-function idleOn(h: Humanoid, legs: 'old' | 'core') {
-  legSystem.path = legs;
-  try { return idle(h); } finally { legSystem.path = 'old'; }
-}
+import { idle } from '../../src/humanoid/idle';
 
 const dt = 1 / 60;
-
-it('ends swing progression with zero speed and acceleration', () => {
-  const d = 1e-4;
-  expect(swingProgress(1)).toBeCloseTo(1, 12);
-  expect((swingProgress(1 + d) - swingProgress(1 - d)) / (2 * d)).toBeCloseTo(0, 5);
-  expect((swingProgress(1 + d) - 2 * swingProgress(1) + swingProgress(1 - d)) / d ** 2).toBeCloseTo(0, 4);
-});
 
 describe('balance', () => {
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
@@ -43,12 +30,12 @@ describe('balance', () => {
     expect(asked.every((x) => x === 0)).toBe(true);
   });
 
-  it.each(['old', 'core'] as const)('%s walks to a point and settles there on squared feet; walkTo ends then', (legs) => {
+  it('walks to a point and settles there on squared feet; walkTo ends then', () => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = -1;
     const h = person(createSkeletonModel(), (h) =>
       function* () {
-        yield* parallel<Frame>('all', idleOn(h, legs), function* () {
+        yield* parallel<Frame>('all', idle(h), function* () {
           yield* walkTo(h, { to, face: 0.5 })();
           arrived = h.locomotion.moving ? -2 : 1;
         });
@@ -60,11 +47,11 @@ describe('balance', () => {
     for (const [s, f] of h.feet.entries()) expect(Math.abs(f.yaw - (0.5 + (s === 0 ? 0.12 : -0.12)))).toBeLessThan(0.1);
   });
 
-  it('core walks to a point without a facing and settles there', () => {
+  it('walks to a point without a facing and settles there', () => {
     const to = new Vector3(0.6, 0, 2);
     let arrived = false;
     const h = person(createSkeletonModel(), (h) => function* () {
-      yield* parallel<Frame>('all', idleOn(h, 'core'), function* () {
+      yield* parallel<Frame>('all', idle(h), function* () {
         yield* walkTo(h, { to })();
         arrived = true;
       });
@@ -78,16 +65,16 @@ describe('balance', () => {
     expect(h.log).toEqual([]);
   }, 20000);
 
-  it.each(['old', 'core'] as const)('%s bounds pelvis excursion and contact ringing in each steady stride and after stopping', (legs) => {
+  it('bounds pelvis excursion and contact ringing in each steady stride and after stopping', () => {
     const h = person(createSkeletonModel(), (h) => function* () {
-      yield* parallel<Frame>('all', idleOn(h, legs), walkTo(h, { to: new Vector3(0, 0, 12) }));
+      yield* parallel<Frame>('all', idle(h), walkTo(h, { to: new Vector3(0, 0, 12) }));
     }, { idle: false });
     const samples: { y: number; speed: number }[] = [];
     const contacts: number[] = [];
     const phases = ['planted', 'planted'];
     const touch: number[] = [], pitchSteps: number[] = [], heels: number[] = [];
-    // Core starts the opposite leg late in stance; only an observed landing starts its heel window.
-    const landed = [legs === 'old', legs === 'old'];
+    // (the opposite leg sets off late in stance: only an observed landing starts its heel window)
+    const landed = [false, false];
     const rocker: number[][] = [[], []];
     const pitch = (side: 'left' | 'right', previous = false) => {
       const forward = new Vector3(0, 0, 1).applyQuaternion((previous ? h.frame.prev2 : h.pose).rotation(INDEX[`${side}Foot`]));
@@ -163,11 +150,11 @@ describe('balance', () => {
 });
 
 // research-contact §3: arrival-turn claims [R-s], numerical details [C]; 20° here is the requested gate.
-it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('core arrives facing %s without deferring its turn until after travel', (face) => {
+it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without deferring its turn until after travel', (face) => {
   const to = new Vector3(0, 0, 4);
   let arrived = false;
   const h = person(createSkeletonModel(), (h) => function* () {
-    yield* parallel<Frame>('all', idleOn(h, 'core'), function* () {
+    yield* parallel<Frame>('all', idle(h), function* () {
       yield* walkTo(h, { to, face })();
       arrived = true;
     });
@@ -199,7 +186,7 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('core arrives facing %s without
   expect(Math.abs(wrapAngle(yawOf(h.pose.rotation(0)) - lastTwo[1].yaw))).toBeLessThanOrEqual(20 * Math.PI / 180);
   expect(lastTwo[1].error).toBeLessThan(lastTwo[0].error);
   h.update(dt);
-  // (open on the core path, paused with the human switch — stage 4: arriving with a 120° turn the extrapolated centre of mass passes the
+  // (open: arriving with a 120° turn the extrapolated centre of mass passes the
   // feet by ~0.109 m against 0.1; a tighter capture breaks the straight and curved strides, so it is listed here, not filtered)
   const open = face === 2 * Math.PI / 3 ? h.log.filter((entry) => entry.check === 'XCoM outside support (m)' && entry.value < 0.11) : [];
   expect(h.log.filter((entry) => !open.includes(entry))).toEqual([]);
