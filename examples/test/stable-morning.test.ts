@@ -224,7 +224,9 @@ test(`leads upright with the near hand forward, slack outside, and halts beyond 
   expect(leadGap).toBeGreaterThan(0.02);
   expect(airborneTilt * 180 / Math.PI).toBeLessThan(5);
   const degrees = 180 / Math.PI;
-  expect(Math.max(...chest.map(Math.abs)) * degrees).toBeLessThan(5);
+  // (upright as people walk, not plumb: the trunk leans ~6° forward walking — read: Thorstensson et al. 1984, Acta Physiol Scand 121:9,
+  // abstract — the thorax 8.6 ± 3.9° off the vertical in one group — read: Leardini et al. 2013, PLoS ONE 8:e77168; was 5°, 2026-10-23)
+  expect(Math.max(...chest.map(Math.abs)) * degrees).toBeLessThan(10);
   expect(ropeGap).toBeGreaterThan(0.02);
   expect(leading).toBeGreaterThan(60);
   expect(settled).toBeGreaterThan(30);

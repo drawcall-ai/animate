@@ -565,7 +565,9 @@ export class Stepper {
       return ankle.y + Math.sqrt(Math.max(0, folded ** 2 - (ankle.x - at.x) ** 2 - (ankle.z - at.z) ** 2));
     }));
     const want = Math.max(y - rise, standing - LOWEST * s);
-    const base = airborne ? flying : Math.max(Math.min(want, lifted(want)), fold - rise);
+    // (let down no further than the feet need: a quick drop is not carried on past it — the soldier's pelvis sank 3 cm more than its trailing
+    // leg asked, a 6 cm bob a stride)
+    const base = airborne ? flying : Math.max(Math.min(want, lifted(want)), Math.min(want, heights[1] - crouched), fold - rise);
     [heights[0], heights[1]] = [heights[1], base + crouched];
     y = base + rise;
     f.current.setRoot(_v.copy(pelvis).setY(y));
