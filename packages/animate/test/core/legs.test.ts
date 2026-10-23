@@ -195,7 +195,8 @@ function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, 
   return { body, planted, phase };
 }
 const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samples);
-/** the croup read where the research measured it: over the lumbosacral joint, 9 cm ahead of the pelvis bone's origin (in its frame) */
+/** the croup read at the landmark its bounds were set at: the pelvis bone's origin before it moved to where the rigged horse has it, now
+ * 9 cm ahead of and 3 cm above it (in its frame) */
 const CROUP = new Vector3(0, 0.03, 0.09);
 const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'YXZ').x;
 

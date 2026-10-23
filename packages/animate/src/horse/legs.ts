@@ -36,7 +36,9 @@ const NECK_BASE = SKELETON.bones[NECK].offset, POLL = SKELETON.bones[HEAD].offse
 const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5], stride: 2.3, stance: stanceOf(0.68, 1.6, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] });
 export const HORSE_WALK: Gait = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
-  // research-contact.md §5: [R via summary] Dunbar ranges; [D] landmark/hip phase after solving.
+  // research-contact.md §5: [R via summary] Dunbar ranges; [D] landmark/hip phase after solving. [D] The croup's rise × 1.1 since the pelvis
+  // moved 9 cm back: the trunk pitching ~6° over a back that much longer (read: Dunbar et al. 2008, withers 7 ± 1 cm, head 12–15 cm, its
+  // pitch ~9°; Faber et al. 2000, the back flexing ~7° twice a stride at 1.6 m/s — the test's bounds).
   body: { withers: 0.035, croup: [0.055, 1.52], spine: 2.5, spinePhase: 0.3, roll: 4, yaw: 2.5, headPitch: 4.5, headRise: 0.0675, headWithers: 0 },
   // Tuned from the read 28% fore-cannon crossing, allowing for the coffin's forward offset.
   contacts: walk.contacts.map((contact, i) => ({
