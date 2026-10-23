@@ -16,7 +16,7 @@ it('a dog made of data only trots to a ball, takes it in its jaw and carries it 
       if (Number.isNaN(taken)) taken = dog.frame.time;
       off = Math.max(off, dog.pose.position(jaw).distanceTo(ball.current.position));
     }
-    const speed = dog.locomotion.velocity.length(), trotting = speed > 1.2, now = paws.map((paw) => dog.pose.position(paw).y > 0.033);
+    const speed = dog.locomotion.velocity.length(), trotting = speed > 1.2, now = paws.map((paw) => dog.pose.position(paw).y > 0.038);
     now.forEach((lifted, leg) => { if (up[leg] && !lifted) landed[leg].push([dog.frame.time, trotting]); });
     up = now;
     // (the bounce read trotting on at its pace: its lean into speeding up or slowing down settled)

@@ -14,6 +14,9 @@ export interface Gait {
   readonly referenceBlend?: number;
   readonly height: number;
   readonly clearance: readonly number[];
+  /** how far the body is let down on its legs on the move, as a share of their length (default none): legs that stand straight reach
+   * fore and aft so, as a trotting dog's stance shortens its legs and its elbows and stifles stay bent */
+  readonly drop?: number;
   /** running (a gallop), the body let down on its legs by `drop` of their length — eased in from Froude number `froude[0]` to `froude[1]` —
    * its stances reaching as far fore and aft as the legs reach so */
   readonly run?: { froude: readonly [number, number]; drop: number };

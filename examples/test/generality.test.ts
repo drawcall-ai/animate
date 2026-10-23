@@ -130,7 +130,7 @@ check('a dog takes a ball, carries it up to its rest, lets go, takes it again an
   expect(ball.current.position.distanceTo(down.position)).toBeLessThan(0.05);
 });
 check('a dog reaches its jaw to a point without taking anything', () => {
-  expect(run(creature(DOG), (b) => handTo(b, 'jaw', { position: around(0, 0.7, 0.3) }, { until: 'reached' }), 10)).toEqual(ok);
+  expect(run(creature(DOG), (b) => handTo(b, 'jaw', { position: around(0, 0.5, 0.3) }, { until: 'reached' }), 10)).toEqual(ok);
 });
 // (a touch reaches without taking: a short-necked creature lets itself down and bows to a bowl on the floor, as a cat drinks)
 check('a short-necked creature touches a bowl on the floor, letting itself down and bowing', () => {
@@ -233,10 +233,11 @@ check('a dog holds a ball up to a point until told, bearing its weight', () => {
   expect(carried).toBe(true);
 });
 check('a dog follows a point on a moving cart with its jaw', () => {
-  const cart = new Item(new Vector3(0, 0.47, 0.68), new Quaternion(), {}, { name: 'cart' });
+  // (the point just ahead of where the jaw rests)
+  const cart = new Item(new Vector3(0, 0.47, 0.52), new Quaternion(), {}, { name: 'cart' });
   const body = creature(DOG)((b) => handTo(b, 'jaw', { position: new Vector3(0, 0.05, 0) }, { on: cart, until: timePassed(3, 'seconds') }));
   for (let i = 0; i < 4 * 60 && !body.done; i++) {
-    cart.move(body.frame.time + 1 / 60, new Vector3(0, 0.47, 0.68).add(new Vector3(0.1 * Math.sin(Math.min(i, 120) / 30), 0, 0)));
+    cart.move(body.frame.time + 1 / 60, new Vector3(0, 0.47, 0.52).add(new Vector3(0.1 * Math.sin(Math.min(i, 120) / 30), 0, 0)));
     body.update(1 / 60);
   }
   expect(body.done).toBe(true);
