@@ -14,7 +14,6 @@ const OPEN = new Set<string>([
   'knight-arming on the soldier: final-pose dev checks',
   'lift-heavy on the soldier: final-pose dev checks',
   'shooter on the outlier: final-pose dev checks',
-  'stable-morning on the outlier: final-pose dev checks',
   'vr on the outlier: final-pose dev checks',
   'knight-arming on the outlier: final-pose dev checks',
 ]);
