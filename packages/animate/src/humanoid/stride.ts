@@ -13,7 +13,7 @@ import { BOW, PELVIS, TURN, followed } from './posture/pace';
 import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './posture/pace';
 import { checkSupport } from './posture/checks';
 import { Life } from './posture/life';
-import { LOWER, Posture, SQUAT, entrain, walking, type Trunk, type Upright } from './posture/posture';
+import { LOWER, Posture, squatOf, entrain, walking, type Trunk, type Upright } from './posture/posture';
 import { INDEX } from './bones';
 import { drivenBy } from './driven';
 import type { Humanoid } from './humanoid';
@@ -150,11 +150,11 @@ export function stride(h: Humanoid, options: { stance?: Partial<Stance>; seed?: 
  * A walker's stepping: a player's, but the stance leg near straight at mid-stance (tuned to Perry's ~5–10° of knee flexion; a
  * player's body keeps more bend), a 60% stance (recalled: Perry 1992, stance 60% of the cycle at free speed; the shorter double
  * support keeps the extrapolated centre of mass within the feet), a deeper bob (tuned: its low in the double support, ~4 cm), a squat
- * as deep as `SQUAT` on the feet where they stand, and its balance caught by a step `CAPTURE` past the feet.
+ * as deep as `squatOf` on the feet where they stand, and its balance caught by a step `CAPTURE` past the feet.
  */
 const walkerStepping = (p: Proportions): Stepping => {
   const player = humanStepping(p);
-  return { ...player, reach: 0.997, cadence: { ...player.cadence, side: SIDE_CADENCE }, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: SQUAT * p.height / p.scale, wider: 0 }, capture: CAPTURE, push: PUSH };
+  return { ...player, reach: 0.997, cadence: { ...player.cadence, side: SIDE_CADENCE }, duty: { ...player.duty, walk: 0.6 }, bob: 0.042, crouch: { ...player.crouch, depth: squatOf(p) / p.scale, wider: 0 }, capture: CAPTURE, push: PUSH };
 };
 
 /** the crouch (0 … 1) that lets the pelvis down `share` of the stepper's depth (its `minimumJerk` easing undone) */

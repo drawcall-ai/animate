@@ -18,7 +18,7 @@ import { gripOf } from '../../core/carrier';
 import type { Grips } from '../../core/hands';
 import { reachFor } from './reach';
 import { bringShoulder } from '../reach-posture';
-import { bowLever, lowering, MOST_BOW, SQUAT, TIPTOE } from '../posture/posture';
+import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../posture/posture';
 import { problemOnce } from '../../core/dev';
 import { defaultStance } from '../stance';
 
@@ -148,7 +148,7 @@ const STOOPING = 0.7;
 
 /** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */
 function stoop(p: Humanoid['proportions'], want: number): { drop: number; forward: number } {
-  const lever = bowLever(p, p.shoulderHeight), most = SQUAT * p.height + lever * (1 - Math.cos(MOST_BOW));
+  const lever = bowLever(p, p.shoulderHeight), most = squatOf(p) + lever * (1 - Math.cos(MOST_BOW));
   const drop = Math.min(want, most), { bow } = lowering(p, { drop, ahead: 0, height: p.shoulderHeight });
   return { drop, forward: lever * Math.sin(bow) };
 }
