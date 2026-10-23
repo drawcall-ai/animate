@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import type { Frame } from '../core/body';
 import type { ReadonlyPose } from '../core/pose';
 import { forwardOf, smoothstep, wrapAngle } from '../core/math';
-import { handLowering, MOST_BOW, SQUAT } from './posture/posture';
+import { handLowering, MOST_BOW, squatOf } from './posture/posture';
 import { INDEX, type Side } from './bones';
 import type { Humanoid } from './humanoid';
 import { NECK_PITCH } from './profile/limits';
@@ -83,7 +83,7 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
   const span = p.shoulderHeight - p.hipHeight;
   const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
     : Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * span;
-  if (low && overflow > 0) request(h.asks, { lower: Math.min(SQUAT * p.height, lower + overflow) * share });
+  if (low && overflow > 0) request(h.asks, { lower: Math.min(squatOf(p), lower + overflow) * share });
   request(h.asks, { bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
 }
 

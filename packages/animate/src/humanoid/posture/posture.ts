@@ -6,7 +6,7 @@ import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../core/math';
-import { DEFAULT_HEIGHT, type Proportions } from '../proportions';
+import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../proportions';
 import type { Stance } from '../../core/asks';
 import type { Foot } from './foot';
 import { strideTurn, type Turn } from './turn';
@@ -28,11 +28,14 @@ const ENTRAIN = 4;
 export const TIPTOE = 0.07;
 /** the most a trailing foot's reach lowers the pelvis (× height, of the default body's: × its legs): one left behind further is lifted instead */
 const MOST_DROP = 0.035;
-/** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; how far the knees let the pelvis down at most (× height): a squat */
+/** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest */
 const HINGE = 0.6;
 // Tuned quiet shift: unload one knee while keeping both soles planted.
 const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
-export const SQUAT = 0.38;
+/** how far the knees let the pelvis down at most (m): a squat, the hip joints over the ankles, the knees folded as far as the default
+ * body's let its pelvis down 0.38 of its height (tuned; 154°, a degree short of their range) — `FOLD`, the cosine between thigh and shin */
+export const squatOf = (p: Proportions) => p.legLength - Math.sqrt(p.thigh ** 2 + p.shin ** 2 - 2 * p.thigh * p.shin * FOLD);
+const FOLD = (({ thigh, shin, legLength }) => (thigh ** 2 + shin ** 2 - (legLength - 0.38 * DEFAULT_HEIGHT) ** 2) / (2 * thigh * shin))(proportionsFor(DEFAULT_HEIGHT));
 /** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
 export const LOWER = { accel: 3, speed: 0.6 };
 /** Walking planted reach (× leg length): a soft knee under load. */
@@ -178,7 +181,7 @@ export class Posture {
 }
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
-const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, SQUAT * p.height, lower));
+const hingeOf = (p: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, squatOf(p), lower));
 
 /** Posture needed to bring a shoulder within hand reach. */
 export function handLowering(p: Proportions, request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number }): { lower: number; bow: number } {
@@ -208,10 +211,10 @@ export function lowering(p: Proportions, request: { drop: number; ahead: number;
 }
 
 function lowered(p: Proportions, lever: number, drop: number, aheadBow: number) {
-  const deepBow = Math.acos(1 - clamp((drop - SQUAT * p.height) / lever, 0, 1));
+  const deepBow = Math.acos(1 - clamp((drop - squatOf(p)) / lever, 0, 1));
   // A small vertical reach recruits bow before the knees reach their deep-squat reserve.
-  const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * smoothstep(0, SQUAT * p.height, drop)));
-  const lower = clamp(drop - lever * (1 - Math.cos(bow)), 0, SQUAT * p.height);
+  const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * smoothstep(0, squatOf(p), drop)));
+  const lower = clamp(drop - lever * (1 - Math.cos(bow)), 0, squatOf(p));
   // Discard the sub-ulp residual from inverse trig followed by its forward projection.
   return { lower: drop < 0 ? Math.max(drop, -TIPTOE * p.scale) : lower <= Number.EPSILON * p.height ? 0 : lower, bow };
 }
