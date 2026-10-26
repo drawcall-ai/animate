@@ -1,6 +1,6 @@
 import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
-import type { AnySpecies } from '../core/species';
-import type { ReadonlyPose } from '../core/pose';
+import type { AnySpecies } from '../species/define';
+import type { ReadonlyPose } from '../kernel/pose';
 
 /**
  * The scene-graph side of a body: `object`, a group on the floor turned by the body's facing alone, and `bones`, by name. Given a

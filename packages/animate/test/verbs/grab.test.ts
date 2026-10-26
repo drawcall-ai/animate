@@ -1,9 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { grab, wait } from '../../src';
-import { gazeOff } from '../../src/core/gaze';
-import { INDEX, type Side } from '../../src/humanoid/bones';
-import type { Person } from '../../src/humanoid/person';
+import { grab, wait } from '../../src/index';
+import { gazeOff } from '../../src/look/gaze';
+import { INDEX, type Side } from '../../src/species/humanoid/bones';
+import type { Person } from '../../src/body/person';
 import { insides, person, play } from '../bodies';
 import { box, roomOf, worldOf } from '../things';
 

@@ -1,11 +1,11 @@
 import { runTimeline, type ReusableTimeline } from '@pmndrs/timeline';
-import { Body, humanoid, type BodyOptions } from '../src';
+import { Body, humanoid, type BodyOptions } from '../src/index';
 import { selfOf } from '../src/body/body';
-import { during, type Channel, type Tier } from '../src/body/requests';
-import type { Frame } from '../src/core/frame';
-import type { Go } from '../src/core/go';
-import type { Person } from '../src/humanoid/person';
-import { personOf } from '../src/humanoid/person';
+import { during, type Channel, type Tier } from '../src/kernel/requests';
+import type { Frame } from '../src/kernel/frame';
+import type { Go } from '../src/kernel/go';
+import type { Person } from '../src/body/person';
+import { personOf } from '../src/body/person';
 import { PERSON } from './skeletons/person';
 
 /** the sub-step (s) */

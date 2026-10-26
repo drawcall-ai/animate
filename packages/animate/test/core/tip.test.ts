@@ -1,13 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
-import { Carrier } from '../../src/core/carrier';
+import { Carrier } from '../../src/kernel/carrier';
 import { describe, expect, it } from 'vitest';
-import { Body, species } from '../../src';
+import { Body, species } from '../../src/index';
 import { selfOf } from '../../src/body/body';
-import { TrackedRotation } from '../../src/core/track';
-import { looking, SHIFT } from '../../src/core/gaze';
-import { spinOf } from '../../src/core/rotation';
-import { ChainTip, reached } from '../../src/core/tip';
-import type { ReadonlyPose } from '../../src/core/pose';
+import { TrackedRotation } from '../../src/kernel/track';
+import { looking, SHIFT } from '../../src/look/gaze';
+import { spinOf } from '../../src/kernel/rotation';
+import { ChainTip, reached } from '../../src/kernel/tip';
+import type { ReadonlyPose } from '../../src/kernel/pose';
 import { claim, dt } from '../bodies';
 import { turn } from './rigs';
 

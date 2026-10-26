@@ -1,7 +1,7 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { arriving, grab, reach, release, wait, walkTo } from '../../src';
+import { arriving, grab, reach, release, wait, walkTo } from '../../src/index';
 import { insides, person, play } from '../bodies';
 import { box, roomOf } from '../things';
 

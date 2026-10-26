@@ -1,12 +1,12 @@
 import { Vector3, type Object3D } from 'three';
 import { selfOf, type Body, type HandOf } from '../body/body';
-import { bodyOf, goalOn } from '../body/hold';
-import { Thing } from '../body/things';
-import type { AnySpecies } from '../core/species';
-import { taking } from '../core/hands';
-import { Person, sideOf } from '../humanoid/person';
-import { grabbing } from '../humanoid/hands/grab';
-import { liftingClear } from '../humanoid/hands/carry';
+import { bodyOf, goalOn } from '../things/hold';
+import { Thing } from '../things/thing';
+import type { AnySpecies } from '../species/define';
+import { taking } from '../hands/creature/hands';
+import { Person, sideOf } from '../body/person';
+import { grabbing } from '../hands/person/grab';
+import { liftingClear } from '../hands/person/carry';
 import { verb, type Until, type Verb } from './story';
 
 /** How a grab goes. */

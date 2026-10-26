@@ -1,8 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { course, still, type Waypoint } from '../../src/core/course';
-import { STEP, type Frame } from '../../src/core/frame';
-import { Pose } from '../../src/core/pose';
+import { course, still, type Waypoint } from '../../src/kernel/course';
+import { STEP, type Frame } from '../../src/kernel/frame';
+import { Pose } from '../../src/kernel/pose';
 import { leg } from './rigs';
 
 const WORLD = { position: new Vector3(), quaternion: new Quaternion() };

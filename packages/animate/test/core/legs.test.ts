@@ -1,14 +1,14 @@
 import { expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { ReusableTimeline } from '@pmndrs/timeline';
-import { Body, horse, walkTo, wait, type Life, type Verb } from '../../src';
+import { Body, horse, walkTo, wait, type Life, type Verb } from '../../src/index';
 import { selfOf } from '../../src/body/body';
-import type { Frame } from '../../src/core/frame';
-import { strideAt } from '../../src/core/legs/gait';
-import { quintic } from '../../src/core/legs/swing';
-import { HORSE_WALK } from '../../src/horse/horse';
-import { Pose } from '../../src/core/pose';
-import { INDEX } from '../../src/humanoid/bones';
+import type { Frame } from '../../src/kernel/frame';
+import { strideAt } from '../../src/species/gait';
+import { quintic } from '../../src/legs/step/swing';
+import { HORSE_WALK } from '../../src/species/horse';
+import { Pose } from '../../src/kernel/pose';
+import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, person, scene } from '../bodies';
 import { HORSE } from '../skeletons/horse';
 

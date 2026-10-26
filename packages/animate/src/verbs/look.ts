@@ -1,8 +1,8 @@
 import { parallel } from '@pmndrs/timeline';
-import { during } from '../body/requests';
+import { during } from '../kernel/requests';
 import { selfOf, type Body } from '../body/body';
-import type { Frame } from '../core/frame';
-import { aiming, looking } from '../core/gaze';
+import type { Frame } from '../kernel/frame';
+import { aiming, looking } from '../look/gaze';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 

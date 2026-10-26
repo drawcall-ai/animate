@@ -1,8 +1,8 @@
 import { Euler, Vector3 } from 'three';
 import { runTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, humanoid, walkTo } from '../../src';
-import { INDEX } from '../../src/humanoid/bones';
+import { Body, humanoid, walkTo } from '../../src/index';
+import { INDEX } from '../../src/species/humanoid/bones';
 import { dt, insides, person } from '../bodies';
 import { PERSON } from '../skeletons/person';
 

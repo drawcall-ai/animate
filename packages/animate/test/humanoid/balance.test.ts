@@ -1,10 +1,10 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { runTimeline } from '@pmndrs/timeline';
-import { walkTo } from '../../src';
-import { INDEX } from '../../src/humanoid/bones';
-import { heelOf } from '../../src/humanoid/posture/foot';
-import { wrapAngle, yawOf } from '../../src/core/math';
+import { walkTo } from '../../src/index';
+import { INDEX } from '../../src/species/humanoid/bones';
+import { heelOf } from '../../src/legs/person/foot';
+import { wrapAngle, yawOf } from '../../src/kernel/math';
 import { claim, dt, insides, person, play, run } from '../bodies';
 
 describe('balance', () => {

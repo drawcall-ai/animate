@@ -1,12 +1,12 @@
 import { Object3D } from 'three';
 import { selfOf, type Body } from '../body/body';
-import { handsOn } from '../body/hold';
-import { Thing } from '../body/things';
-import type { Frame } from '../core/frame';
-import type { Placement } from '../core/goal';
-import { bringing } from '../core/hands';
-import { Person } from '../humanoid/person';
-import { carrying, wayOf } from '../humanoid/hands/carry';
+import { handsOn } from '../things/hold';
+import { Thing } from '../things/thing';
+import type { Frame } from '../kernel/frame';
+import type { Placement } from '../kernel/goal';
+import { bringing } from '../hands/creature/hands';
+import { Person } from '../body/person';
+import { carrying, wayOf } from '../hands/person/carry';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 

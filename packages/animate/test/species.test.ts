@@ -1,11 +1,11 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { horse, humanoid, species } from '../src';
+import { horse, humanoid, species } from '../src/index';
 import { powerGait } from '../src/species';
-import { Pose } from '../src/core/pose';
-import { proportionsFor } from '../src/humanoid/proportions';
-import { massFor } from '../src/humanoid/skeleton';
-import { Body } from '../src';
+import { Pose } from '../src/kernel/pose';
+import { proportionsFor } from '../src/species/humanoid/proportions';
+import { massFor } from '../src/species/humanoid/skeleton';
+import { Body } from '../src/index';
 import { run } from './bodies';
 import { PERSON } from './skeletons/person';
 import { HORSE } from './skeletons/horse';

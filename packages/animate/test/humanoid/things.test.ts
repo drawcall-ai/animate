@@ -1,6 +1,6 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, release, wait } from '../../src';
+import { carry, grab, release, wait } from '../../src/index';
 import { insides, person, play, run } from '../bodies';
 import { box, empty, roomOf, worldOf } from '../things';
 

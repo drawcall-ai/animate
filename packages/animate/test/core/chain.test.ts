@@ -1,9 +1,9 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose } from '../../src/core/pose';
-import type { Skeleton } from '../../src/core/skeleton';
-import { solveChain } from '../../src/core/chain';
-import { beyond } from '../../src/core/limits';
+import { Pose } from '../../src/kernel/pose';
+import type { Skeleton } from '../../src/kernel/skeleton';
+import { solveChain } from '../../src/kernel/chain';
+import { beyond } from '../../src/kernel/limits';
 import { hinge, horseLeg, leg, turn } from './rigs';
 
 const solve = (skeleton: Skeleton, ...args: Parameters<typeof solveChain> extends [unknown, unknown, ...infer R] ? R : never) => {

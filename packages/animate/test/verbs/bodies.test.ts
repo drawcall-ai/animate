@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { Body, carry, dog, grab, horse, lookAt, release, wait, walkTo } from '../../src';
+import { Body, carry, dog, grab, horse, lookAt, release, wait, walkTo } from '../../src/index';
 import { insides, person, play } from '../bodies';
 import { DOG } from '../skeletons/dog';
 import { HORSE } from '../skeletons/horse';

@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { parallel, runTimeline } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { grab, lookAt, reach, wait, walkTo, watch } from '../../src';
+import { grab, lookAt, reach, wait, walkTo, watch } from '../../src/index';
 import { claim, dt, insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 

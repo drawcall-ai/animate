@@ -1,13 +1,13 @@
 import { Vector3, type Group, type Object3D } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import type { ReadonlyPose } from '../core/pose';
-import type { LogEntry } from '../core/dev';
-import type { AnySpecies, Species } from '../core/species';
-import { Person } from '../humanoid/person';
-import { Self, type Driven, type Life, type SelfOptions } from './self';
-import { handsOn } from './hold';
-import { Thing } from './things';
-import type { Tier } from './requests';
+import type { ReadonlyPose } from '../kernel/pose';
+import type { LogEntry } from '../kernel/dev';
+import type { AnySpecies, Species } from '../species/define';
+import { Person } from './person';
+import { Self, type Driven, type Life, type SelfOptions } from './runtime';
+import { handsOn } from '../things/hold';
+import { Thing } from '../things/thing';
+import type { Tier } from '../kernel/requests';
 
 /** How a body is made. */
 export interface BodyOptions {

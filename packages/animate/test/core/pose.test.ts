@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose } from '../../src/core/pose';
+import { Pose } from '../../src/kernel/pose';
 import { leg, turn } from './rigs';
 
 describe('Pose', () => {

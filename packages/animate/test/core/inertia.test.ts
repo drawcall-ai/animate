@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Inertia, type Inertial } from '../../src/core/inertia';
-import { GRAVITY } from '../../src/core/math';
+import { Inertia, type Inertial } from '../../src/kernel/inertia';
+import { GRAVITY } from '../../src/kernel/math';
 
 const dt = 1 / 60, LEAN: Inertial = { ahead: 0.9, back: 0.3, roll: 0.6, most: 0.35, frequency: 0.8, damping: 0.7 };
 

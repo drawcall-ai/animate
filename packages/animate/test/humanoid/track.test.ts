@@ -1,9 +1,9 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { track } from '../../src';
-import { beyond } from '../../src/core/limits';
-import { INDEX } from '../../src/humanoid/bones';
-import type { Person } from '../../src/humanoid/person';
+import { track } from '../../src/index';
+import { beyond } from '../../src/kernel/limits';
+import { INDEX } from '../../src/species/humanoid/bones';
+import type { Person } from '../../src/body/person';
 import { insides, person, play } from '../bodies';
 
 const eyes = (h: Person) => h.pose.point(INDEX.head, h.proportions.eyes, new Vector3());

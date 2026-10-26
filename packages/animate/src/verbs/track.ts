@@ -1,12 +1,12 @@
 import { parallel } from '@pmndrs/timeline';
-import { during } from '../body/requests';
+import { during } from '../kernel/requests';
 import { selfOf, type Body } from '../body/body';
-import type { Frame } from '../core/frame';
-import type { Target as Goal } from '../core/goal';
-import { personOf } from '../humanoid/person';
-import { heading } from '../humanoid/head';
-import { reaching } from '../humanoid/arms';
-import type { Side } from '../humanoid/bones';
+import type { Frame } from '../kernel/frame';
+import type { Target as Goal } from '../kernel/goal';
+import { personOf } from '../body/person';
+import { heading } from '../look/head';
+import { reaching } from '../hands/person/arms';
+import type { Side } from '../species/humanoid/bones';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 

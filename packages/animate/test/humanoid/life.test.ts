@@ -1,8 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { carry, grab, lookAt, reach, walkTo } from '../../src';
-import { INDEX, type Side } from '../../src/humanoid/bones';
-import { Life } from '../../src/humanoid/posture/life';
+import { carry, grab, lookAt, reach, walkTo } from '../../src/index';
+import { INDEX, type Side } from '../../src/species/humanoid/bones';
+import { Life } from '../../src/legs/person/life';
 import { insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 

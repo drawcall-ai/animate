@@ -2,7 +2,7 @@ import { CapsuleGeometry, Group, Mesh, MeshBasicMaterial, Scene, SkinnedMesh, Ve
 import { parallel, runTimeline } from '@pmndrs/timeline';
 import { skin } from '@drawcall/rig';
 import { expect, it } from 'vitest';
-import { Body, horse, humanoid, lookAt, walkTo } from '../src';
+import { Body, horse, humanoid, lookAt, walkTo } from '../src/index';
 import { dt } from './bodies';
 import { HORSE } from './skeletons/horse';
 import { PERSON } from './skeletons/person';

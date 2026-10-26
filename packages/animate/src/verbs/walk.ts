@@ -1,8 +1,8 @@
-import { during } from '../body/requests';
+import { during } from '../kernel/requests';
 import { selfOf, type Body } from '../body/body';
-import type { Frame } from '../core/frame';
-import { headingOf } from '../core/math';
-import { Walk } from '../core/walk';
+import type { Frame } from '../kernel/frame';
+import { headingOf } from '../kernel/math';
+import { Walk } from '../legs/walk';
 import { finder, headingOfTurn, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 

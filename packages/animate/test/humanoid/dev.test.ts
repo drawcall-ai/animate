@@ -1,9 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { lookAt, wait, watch } from '../../src';
+import { lookAt, wait, watch } from '../../src/index';
 import { selfOf } from '../../src/body/body';
-import { Pose } from '../../src/core/pose';
-import { INDEX } from '../../src/humanoid/bones';
+import { Pose } from '../../src/kernel/pose';
+import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, dt, insides, person, play, run } from '../bodies';
 
 it('checks a planted foot in the final pose after a later writer moved it, naming the requests running', () => {

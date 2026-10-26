@@ -1,13 +1,13 @@
 import { Box3, Matrix4, Object3D, Vector3 } from 'three';
 import { selfOf, type Body, type HandOf } from '../body/body';
-import type { AnySpecies } from '../core/species';
-import { attach, bodyOf, grasp, handsOn, take } from '../body/hold';
-import { during } from '../body/requests';
-import type { Self } from '../body/self';
-import { Thing } from '../body/things';
-import { handingBack } from '../core/hands';
-import { Person, sideOf } from '../humanoid/person';
-import { backingOut } from '../humanoid/hands/release';
+import type { AnySpecies } from '../species/define';
+import { attach, bodyOf, grasp, handsOn, take } from '../things/hold';
+import { during } from '../kernel/requests';
+import type { Self } from '../body/runtime';
+import { Thing } from '../things/thing';
+import { handingBack } from '../hands/creature/hands';
+import { Person, sideOf } from '../body/person';
+import { backingOut } from '../hands/person/release';
 
 /** how near an empty a thing put onto it must be (m): nearer, it is set exactly there */
 const ONTO = 0.005;

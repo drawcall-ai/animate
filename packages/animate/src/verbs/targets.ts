@@ -1,7 +1,7 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
-import type { Frame } from '../core/frame';
-import type { Self } from '../body/self';
-import { headingOf } from '../core/math';
+import type { Frame } from '../kernel/frame';
+import type { Self } from '../body/runtime';
+import { headingOf } from '../kernel/math';
 
 /**
  * Where a verb goes: a point (`Vector3`), a place that moves with its parent and sets the orientation too (an `Object3D`: an empty, a

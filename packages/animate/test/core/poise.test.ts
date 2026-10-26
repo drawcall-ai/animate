@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Poise } from '../../src/core/poise';
+import { Poise } from '../../src/kernel/poise';
 
 // (what the parts ask of the stance combines one rule a field, whichever asks first)
 it('combines what is asked by one rule a field, in either order', () => {

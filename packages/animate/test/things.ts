@@ -1,5 +1,5 @@
 import { BoxGeometry, Group, Mesh, Object3D, Vector3 } from 'three';
-import type { Body } from '../src';
+import type { Body } from '../src/index';
 
 /** an empty named `name` at `at` under `parent` */
 export function empty(parent: Object3D, name: string, at: Vector3): Object3D {

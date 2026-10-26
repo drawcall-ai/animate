@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { Skeleton, type BoneDef, type Limit } from '../../src/core/skeleton';
+import { Skeleton, type BoneDef, type Limit } from '../../src/kernel/skeleton';
 
 const bone = (name: string, parent: number, offset: [number, number, number]): BoneDef => ({
   name,
