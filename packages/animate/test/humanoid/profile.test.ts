@@ -4,7 +4,7 @@ import { beyond } from '../../src/core/limits';
 import { BONES, CHILD_BONES, INDEX } from '../../src/humanoid/bones';
 import { ranges } from '../../src/humanoid/profile/limits';
 import { relaxedPose } from '../../src/humanoid/profile/relaxed';
-import { rng, turnUpTo } from './fixtures';
+import { rng, turnUpTo } from '../random';
 
 const DEG = Math.PI / 180;
 

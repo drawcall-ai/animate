@@ -1,11 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { ReadonlyPose } from './pose';
-import type { ReusableTimeline, UntilCondition } from '@pmndrs/timeline';
-import type { Frame } from './body';
+import type { Frame } from './frame';
 import type { Placed } from './carrier';
-
-/** A behaviour: a timeline a body steps every sub-step, writing its pose. */
-export type Behaviour = ReusableTimeline<Frame>;
 
 /** A goal as it is, or as it is at each sub-step (`T` is never itself a function). */
 export type Live<T> = T | ((f: Frame) => T);
@@ -27,7 +23,7 @@ export interface Placement {
 export interface Target extends Placement {
   velocity?: Vector3;
   spin?: Vector3;
-  /** the body whose bone carries it (`movingPoint`): that body letting itself down or bowing carries it down too */
+  /** the body whose bone carries it: that body letting itself down or bowing carries it down too */
   carriedBy?: object;
   /** the tip may roll freely about this line (a hand round a bar, a palm on a face; in the frame the target is in): of the rotations so, the one nearest it is */
   axis?: Vector3;
@@ -49,23 +45,10 @@ export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
   on?: Placed;
 };
 
-/** When a goal-following behaviour ends: a condition, or once it has `'reached'` its goal (within 1 cm and 2°, under 5 cm/s off its velocity). */
-export type Until = UntilCondition<Frame> | 'reached';
-
-/** what `'reached'` allows: m, rad, m/s */
 /** the longest a hand takes to get to its goal, unless told, before it is a problem in the dev log (s): a person's and another body's alike */
 export const REACHING = 4;
+/** what reaching a goal allows: m, rad, m/s */
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };
-
-/** A placement on a bone, scaled with its body and followed from final poses. */
-export function onBone(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint(h, bone, () => local, () => h.pose.rotation(bone).clone());
-}
-
-/** A placement at a joint, aligned with body facing instead of the joint's rotation. */
-export function facingAt(h: { readonly pose: ReadonlyPose; readonly scale: number; readonly locomotion: { facing: number } }, bone: number, local: Placement = { position: new Vector3() }) {
-  return movingPoint(h, bone, () => local, () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
-}
 
 /** a point moving with bone `bone` of a body (`offset` from it, turned by `turn`), its velocity read off where it was a sub-step before */
 export function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Placement, turn: () => Quaternion) {
@@ -84,5 +67,3 @@ export function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: nu
     return { position, quaternion, velocity: velocity.clone(), carriedBy: h };
   };
 }
-
-const UP = new Vector3(0, 1, 0);

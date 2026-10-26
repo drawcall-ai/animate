@@ -1,25 +1,26 @@
 import { Vector3 } from 'three';
-import { idle } from '../../src/humanoid/idle';
 import { expect, it } from 'vitest';
-import { INDEX, Humanoid, createSkeletonModel, type DrivenRoot } from '../../src';
+import type { Body, Driven } from '../../src';
+import { INDEX } from '../../src/humanoid/bones';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/core/math';
-import type { Stepper } from '../../src/core/legs/stepper';
-import { request } from '../../src/core/asks';
+import type { Person } from '../../src/humanoid/person';
+import { dt, insides, person } from '../bodies';
 
-const dt = 1 / 60;
+/** a driven root, as a player's controller writes it */
+type Root = Driven & { velocity: Vector3; crouch: number };
 
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
-function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: DrivenRoot, h: Humanoid) => void) {
-  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: true });
+function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: Root, h: Person, body: Body) => void) {
+  const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
+  const body = person({ drive: () => root, dev: true }), h = insides(body);
   let apart = 0, steps = 0;
   const phases = h.feet.map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {
     root.velocity.add(velocity(t).sub(root.velocity).clampLength(0, 10 * dt));
     root.position.addScaledVector(root.velocity, dt);
     root.yaw += (yaw(t) - root.yaw) * (1 - Math.exp(-dt / 0.025));
-    h.update(dt);
-    each?.(t, root, h);
+    body.update(dt);
+    each?.(t, root, h, body);
     // (the hips about the root: swaying over the stance foot, shifted fore and aft as the trunk nods)
     const hips = h.pose.position(0);
     apart = Math.max(apart, Math.hypot(hips.x - root.position.x, hips.z - root.position.z));
@@ -81,12 +82,11 @@ it.each([
 // the feet; holding still to aim, its breathing and sway keep 30% (Era et al. 1996, as `Life` has it) — the hips within that share of
 // quiet stance's ≤ 1 cm sway (Winter 1995), no weight shift)
 it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
-  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root, seed: 3 }), { idle: false, dev: true });
+  const root: Driven = { position: new Vector3(), velocity: new Vector3(), yaw: 0, steady };
+  const body = person({ drive: () => root, life: { seed: 3 }, dev: true }), h = insides(body);
   let lowest = Infinity, highest = -Infinity, left = 0, right = 0, over = -Infinity;
   for (let t = dt; t <= 40; t += dt) {
-    request(h.asks, { steady });
-    h.update(dt);
+    body.update(dt);
     if (t < 2) continue;
     // (the thorax's pitch: the chest as it is turned in the world)
     const pitch = Math.asin(-new Vector3(0, 0, 1).applyQuaternion(h.pose.rotation(INDEX.chest)).y);
@@ -146,7 +146,7 @@ it('crouches as asked: the pelvis let down smoothly, feet wider, steps still cle
 it('crouches on a key press and stands on its release, the feet kept to the floor', () => {
   const { h } = drive(4, () => new Vector3(), () => 0, (t, root) => { root.crouch = t > 0.5 && t < 2.5 ? 1 : 0; });
   expect(h.log).toEqual([]);
-  expect((h.stepper as Stepper).crouch).toBe(0);
+  expect(h.stepper?.crouch).toBe(0);
 });
 // (crouched: turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does)
 it.each([
@@ -163,8 +163,8 @@ it('notes a driven XCoM only when asked', () => {
   // (a sprint stopped dead: the root halts at once, the body's momentum carries its centre of mass on past its feet)
   const sprint = (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 3 ? 3.5 : 0);
   expect(drive(4, sprint).h.notes).toEqual([]);
-  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Humanoid(createSkeletonModel(), (h) => idle(h, { root }), { idle: false, dev: { notes: true } });
+  const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const h = person({ drive: () => root, dev: { notes: true } });
   for (let t = dt; t <= 4; t += dt) {
     root.velocity.copy(sprint(t));
     root.position.addScaledVector(root.velocity, dt);
@@ -180,12 +180,12 @@ it.each([
   ['from a sprint', 3.5],
 ])('jumps %s: dips, flies the ballistic arc, lands it with the knees, without a slide or a knee snap', (_, speed) => {
   let pressed = NaN, off = NaN, landed = NaN, top = 0, standing = 0;
-  const { h, apart } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h) => {
-    const legs = h.stepper!;
-    if (Math.abs(t - 1.5) < dt / 2) { legs.jump(2.5); [pressed, standing] = [t, h.pose.position(0).y]; }
-    if (legs.airborne && Number.isNaN(off)) off = t;
-    if (!legs.airborne && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
-    if (legs.airborne) top = Math.max(top, h.pose.position(0).y - standing);
+  const { h, apart } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, root, h, body) => {
+    root.jump = Math.abs(t - 1.5 + dt) < dt / 2 ? 2.5 : undefined;
+    if (Math.abs(t - 1.5) < dt / 2) [pressed, standing] = [t, h.pose.position(0).y];
+    if (body.airborne && Number.isNaN(off)) off = t;
+    if (!body.airborne && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
+    if (body.airborne) top = Math.max(top, h.pose.position(0).y - standing);
   });
   expect(off - pressed).toBeLessThanOrEqual(0.12);
   expect(landed - off).toBeGreaterThan(0.45);

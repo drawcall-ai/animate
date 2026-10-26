@@ -1,6 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from './body';
-import type { Item } from './carrier';
+import type { Frame } from './frame';
 import { live, type Live, type Placement, type Target } from './goal';
 import { exp, log } from './rotation';
 import { minimumJerk } from './math';
@@ -27,7 +26,7 @@ export interface Course {
  * stops to reverse), it comes to rest there and sets off again.
  * It sets off `delay` s after it is first read.
  */
-export function course(item: Item, frame: Live<Placement>, waypoints: readonly Waypoint[], { scale = 1, pace = 1, delay = 0 } = {}): Course {
+export function course(item: { readonly current: Required<Placement> }, frame: Live<Placement>, waypoints: readonly Waypoint[], { scale = 1, pace = 1, delay = 0 } = {}): Course {
   let start = NaN;
   let runs: Run[] = [];
   let from: Required<Placement> | undefined;

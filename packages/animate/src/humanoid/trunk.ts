@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../core/body';
+import type { Frame } from '../core/frame';
 import { solveChain } from '../core/chain';
 import type { Dev } from '../core/dev';
 import { clampRotation } from '../core/limits';

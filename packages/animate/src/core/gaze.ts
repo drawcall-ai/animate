@@ -1,15 +1,14 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { clamp, lerp, wrapAngle, smoothstep } from './math';
 import { seeded, seedOf } from './random';
-import { when } from './when';
-import { action, parallel, timePassed } from '@pmndrs/timeline';
-import type { Body, Frame } from './body';
+import type { Frame } from './frame';
 import { follow, followRotation } from './follow';
-import { live, type Behaviour, type Live, type Motion } from './goal';
+import type { Motion } from './goal';
 import { clampRotation } from './limits';
 import { spinOf } from './rotation';
 import type { ReadonlyPose } from './pose';
 import { request } from './asks';
+import type { Self, Step } from '../body/self';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {
@@ -22,7 +21,7 @@ export interface Gazer {
   /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
   pitch?: number;
   /** Ask the body to help before aiming the head. */
-  lead?(body: Body, pose: ReadonlyPose, point: Readonly<Vector3>): void;
+  lead?(self: Self, pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
 
 /** the most a head turns to look about (rad/s², rad/s): a glance aside, at most */
@@ -42,203 +41,166 @@ export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
  * slowly, a large one briskly, a bell either way), at most at `motion`'s pace, and shared evenly
  * over the neck chain's bones, each within its limit.
  */
-export function lookAt(body: Body, target: Live<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Behaviour {
-  const gazer = body.gazer, neck = gazer?.neck;
+export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Step {
+  const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
-  if (neck === undefined) return function* () {
-    yield* action<Frame>({ update: (f) => void (body.asks.look = live(target, f)) });
+  if (neck === undefined) return (f) => void (self.asks.look = target(f));
+  let over: boolean | null = null;
+  /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
+  let shift = 0;
+  /** the head's goal the sub-step before (null: none yet) */
+  let seen: Quaternion | null = null;
+  /** the head's goal the sub-step before, in its own angles (`fick`; null: none, or not followed in them) */
+  let sighted: Vector3 | null = null;
+  /** the target's turn followed the sub-step before (rad/s) */
+  const pursued = new Vector3();
+  /** where the target was the sub-step before (null: not yet seen) */
+  let aimed: Vector3 | null = null;
+  let eyePitch = 0, declination = 0;
+  return (f) => {
+    const pose = f.current;
+    const bones = pose.skeleton.chain(neck);
+    const point = target(f);
+    gazer.lead?.(self, f.prev, point);
+    // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
+    const distance = aimed?.distanceTo(point) ?? Infinity;
+    const jumped = distance > JUMP * f.dt;
+    if (jumped) {
+      // A new sight starts a gaze shift; pursuit and branch history belong to the old one.
+      over = null;
+      seen = null;
+      pursued.set(0, 0, 0);
+      shift = 0;
+    }
+    // Carry the last final eyes forward one step; an earlier layer's temporary head pose is not the gaze being overridden.
+    const base = bones[0];
+    const parentBone = pose.skeleton.bones[base].parent;
+    const carried = _rel.copy(pose.rotation(parentBone)).multiply(_p.copy(f.prev.rotation(parentBone)).invert());
+    const origin = gazer.eyes(f.prev, _eyes).sub(f.prev.position(base)).applyQuaternion(carried).add(pose.position(base));
+    const d = _d.subVectors(point, origin).normalize();
+    if (d.lengthSq() === 0) return;
+    // upright: turned about the vertical, then pitched (+ down); looking nearly straight up or
+    // down, the way it faces eases to the neck's parent's (the target's own heading flips
+    // there), then the least turn that puts the eyes on the target — either turned toward it,
+    // or away and pitched back over past straight down or up (a point just behind the feet)
+    const parent = pose.skeleton.bones[bones[0]].parent;
+    const right = _f.set(1, 0, 0).applyQuaternion(pose.rotation(parent));
+    const facing = Math.atan2(-right.z, right.x);
+    const turned = pose.rotation(parent);
+    const local = _line.copy(d).applyQuaternion(_rel.copy(turned).invert());
+    const down = Math.max(0, Math.atan2(-local.y, Math.hypot(local.x, local.z)));
+    const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
+    const worldDown = Math.atan2(-d.y, d.x * Math.sin(facing) + d.z * Math.cos(facing));
+    if (jumped || !seen) eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
+    else if (gazer.pitch !== undefined && aimed) {
+      const before = _line.subVectors(aimed, origin);
+      const targetTurn = wrapAngle(worldDown - Math.atan2(-before.y, before.x * Math.sin(facing) + before.z * Math.cos(facing)));
+      const change = wrapAngle(worldDown - declination);
+      // Moving eyes absorb body travel; target pursuit keeps the usual eye/head share.
+      const share = clamp(change - (1 - EYES) * targetTurn, Math.min(EYES * change, change), Math.max(EYES * change, change));
+      eyePitch = clamp(eyePitch + share, 0, gazer.range.down);
+    }
+    declination = worldDown;
+    (aimed ??= new Vector3()).copy(point);
+    const ways = (line: Vector3) => {
+      const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
+      const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
+      upright(line, facing + toward * vertical, _q);
+      upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
+      _q.multiply(_p.setFromAxisAngle(X, -eyePitch));
+      _o.multiply(_p);
+    };
+    ways(d);
+    const last = bones[bones.length - 1];
+    const was = _was.copy(f.prev.rotation(last));
+    // Acquire from the final head history once; earlier gaze layers cannot choose the branch.
+    over ??= _o.angleTo(was) < _q.angleTo(was);
+    const [kept, other] = over ? [_o, _q] : [_q, _o];
+    const strained = strain(gazer, pose, bones, turned, kept, point);
+    if (strain(gazer, pose, bones, turned, other, point) < strained - HYSTERESIS) over = !over;
+    // (the head's line, the way taken: the eyes take the rest of a turn aside, EYES of it from
+    // where the neck's parent faces and no more than EYES_MOST of what is left of their range
+    // where the neck stops short — a large shift ends with the eyes a little off the head's
+    // line; up or down, and looking over the top, the head all the way: the neck pitches
+    // nearer its stops, and the eyes have little to spare there)
+    const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
+    const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2)));
+    if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
+    // Follow in world space so the trunk can move beneath a steady gaze.
+    const whole = _whole.copy(over ? _o : _q);
+    const used = strain(gazer, pose, bones, turned, whole, point);
+    if (used > 1 && eyePitch > 0) {
+      // A close target can consume lateral and downward eye range together.
+      // Give the head the missing declination before asking the eyes beyond their ellipse.
+      const full = _full.copy(whole).multiply(_p.setFromAxisAngle(X, eyePitch));
+      const best = strain(gazer, pose, bones, turned, full, point);
+      if (best < used) {
+        let lo = 0, hi = eyePitch;
+        while (hi - lo > SETTLED) {
+          const middle = (lo + hi) / 2;
+          const candidate = _candidate.copy(whole).multiply(_p.setFromAxisAngle(X, middle));
+          if (strain(gazer, pose, bones, turned, candidate, point) > Math.max(EYES_MOST, best)) lo = middle;
+          else hi = middle;
+        }
+        whole.multiply(_p.setFromAxisAngle(X, hi));
+        eyePitch -= hi;
+      }
+    }
+    // (the whole turn followed once from the neck's history, then shared evenly down it, each
+    // joint stopped at its range's end: the head turns at the gaze shift's pace, however many
+    // joints share it — as fast as the shift is large (`headPace`), at most `motion`'s)
+    // (a target moving smoothly is pursued: its own turn followed without lag, at most at
+    // `motion`'s speed; and as it speeds up or slows, the head with it: its own acceleration on
+    // top of the shift's)
+    const pursuit = jumped || !seen ? _spin.set(0, 0, 0) : spinOf(seen, whole, f.dt, _spin).clampLength(0, motion.turnSpeed ?? Infinity);
+    (seen ??= new Quaternion()).copy(whole);
+    const speeding = pursuit.distanceTo(pursued) / f.dt;
+    pursued.copy(pursuit);
+    const gap = was.angleTo(whole);
+    shift = gap > shift || gap < SETTLED ? gap : shift;
+    const pace = headPace(shift, motion);
+    pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
+    const before = _was2.copy(f.prev2.rotation(last));
+    const followed = followRotation(before, was, whole, { ...pace, velocity: pursuit }, f.dt, _out);
+    // (followed in the head's own angles, `fick`, it keeps upright on the way: the shortest turn between two upright looks
+    // rolls it mid-shift — 13–17° from aside and level across to down; but not from or to a line of sight steep up or down
+    // (`LEVEL`), where those angles hardly tell a turn about the vertical from a roll)
+    const level = Math.min(levelness(was), levelness(whole));
+    if (level > 0) {
+      const now = fick(was, _now), goal = fick(whole, _aim, now);
+      const turning = jumped || !sighted ? _turning.set(0, 0, 0)
+        : unwrapped(_turning.subVectors(goal, sighted)).divideScalar(f.dt).clampLength(0, motion.turnSpeed ?? Infinity);
+      const next = follow(fick(before, _before, now), now, goal, { ...pace, velocity: turning }, f.dt, _next);
+      followed.slerp(_fick.setFromEuler(_euler.set(next.x, next.y, next.z, 'YXZ')), level);
+    }
+    sighted = level > 0 ? fick(whole, sighted ?? new Vector3()) : null;
+    followed.premultiply(_rel.copy(turned).invert());
+    const share = _share.identity().slerp(followed, 1 / bones.length);
+    for (const b of bones) {
+      const limit = pose.skeleton.limits[b];
+      const local = _goal.copy(share);
+      if (limit) clampRotation(local, limit);
+      pose.setLocal(b, local);
+    }
   };
-  return function* () {
-    let over: boolean | null = null;
-    /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
-    let shift = 0;
-    /** the head's goal the sub-step before (null: none yet) */
-    let seen: Quaternion | null = null;
-    /** the head's goal the sub-step before, in its own angles (`fick`; null: none, or not followed in them) */
-    let sighted: Vector3 | null = null;
-    /** the target's turn followed the sub-step before (rad/s) */
-    const pursued = new Vector3();
-    /** where the target was the sub-step before (null: not yet seen) */
-    let aimed: Vector3 | null = null;
-    let eyePitch = 0, declination = 0;
-    yield* action<Frame>({
-      update: (f) => {
-        const pose = f.current;
-        const bones = pose.skeleton.chain(neck);
-        const point = live(target, f);
-        gazer.lead?.(body, f.prev, point);
-        // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
-        const distance = aimed?.distanceTo(point) ?? Infinity;
-        const jumped = distance > JUMP * f.dt;
-        if (jumped) {
-          // A new sight starts a gaze shift; pursuit and branch history belong to the old one.
-          over = null;
-          seen = null;
-          pursued.set(0, 0, 0);
-          shift = 0;
-        }
-        // Carry the last final eyes forward one step; an earlier layer's temporary head pose is not the gaze being overridden.
-        const base = bones[0];
-        const parentBone = pose.skeleton.bones[base].parent;
-        const carried = _rel.copy(pose.rotation(parentBone)).multiply(_p.copy(f.prev.rotation(parentBone)).invert());
-        const origin = gazer.eyes(f.prev, _eyes).sub(f.prev.position(base)).applyQuaternion(carried).add(pose.position(base));
-        const d = _d.subVectors(point, origin).normalize();
-        if (d.lengthSq() === 0) return;
-        // upright: turned about the vertical, then pitched (+ down); looking nearly straight up or
-        // down, the way it faces eases to the neck's parent's (the target's own heading flips
-        // there), then the least turn that puts the eyes on the target — either turned toward it,
-        // or away and pitched back over past straight down or up (a point just behind the feet)
-        const parent = pose.skeleton.bones[bones[0]].parent;
-        const right = _f.set(1, 0, 0).applyQuaternion(pose.rotation(parent));
-        const facing = Math.atan2(-right.z, right.x);
-        const turned = pose.rotation(parent);
-        const local = _line.copy(d).applyQuaternion(_rel.copy(turned).invert());
-        const down = Math.max(0, Math.atan2(-local.y, Math.hypot(local.x, local.z)));
-        const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
-        const worldDown = Math.atan2(-d.y, d.x * Math.sin(facing) + d.z * Math.cos(facing));
-        if (jumped || !seen) eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
-        else if (gazer.pitch !== undefined && aimed) {
-          const before = _line.subVectors(aimed, origin);
-          const targetTurn = wrapAngle(worldDown - Math.atan2(-before.y, before.x * Math.sin(facing) + before.z * Math.cos(facing)));
-          const change = wrapAngle(worldDown - declination);
-          // Moving eyes absorb body travel; target pursuit keeps the usual eye/head share.
-          const share = clamp(change - (1 - EYES) * targetTurn, Math.min(EYES * change, change), Math.max(EYES * change, change));
-          eyePitch = clamp(eyePitch + share, 0, gazer.range.down);
-        }
-        declination = worldDown;
-        (aimed ??= new Vector3()).copy(point);
-        const ways = (line: Vector3) => {
-          const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
-          const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
-          upright(line, facing + toward * vertical, _q);
-          upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
-          _q.multiply(_p.setFromAxisAngle(X, -eyePitch));
-          _o.multiply(_p);
-        };
-        ways(d);
-        const last = bones[bones.length - 1];
-        const was = _was.copy(f.prev.rotation(last));
-        // Acquire from the final head history once; earlier gaze layers cannot choose the branch.
-        over ??= _o.angleTo(was) < _q.angleTo(was);
-        const [kept, other] = over ? [_o, _q] : [_q, _o];
-        const strained = strain(gazer, pose, bones, turned, kept, point);
-        if (strain(gazer, pose, bones, turned, other, point) < strained - HYSTERESIS) over = !over;
-        // (the head's line, the way taken: the eyes take the rest of a turn aside, EYES of it from
-        // where the neck's parent faces and no more than EYES_MOST of what is left of their range
-        // where the neck stops short — a large shift ends with the eyes a little off the head's
-        // line; up or down, and looking over the top, the head all the way: the neck pitches
-        // nearer its stops, and the eyes have little to spare there)
-        const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
-        const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2)));
-        if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
-        // Follow in world space so the trunk can move beneath a steady gaze.
-        const whole = _whole.copy(over ? _o : _q);
-        const used = strain(gazer, pose, bones, turned, whole, point);
-        if (used > 1 && eyePitch > 0) {
-          // A close target can consume lateral and downward eye range together.
-          // Give the head the missing declination before asking the eyes beyond their ellipse.
-          const full = _full.copy(whole).multiply(_p.setFromAxisAngle(X, eyePitch));
-          const best = strain(gazer, pose, bones, turned, full, point);
-          if (best < used) {
-            let lo = 0, hi = eyePitch;
-            while (hi - lo > SETTLED) {
-              const middle = (lo + hi) / 2;
-              const candidate = _candidate.copy(whole).multiply(_p.setFromAxisAngle(X, middle));
-              if (strain(gazer, pose, bones, turned, candidate, point) > Math.max(EYES_MOST, best)) lo = middle;
-              else hi = middle;
-            }
-            whole.multiply(_p.setFromAxisAngle(X, hi));
-            eyePitch -= hi;
-          }
-        }
-        // (the whole turn followed once from the neck's history, then shared evenly down it, each
-        // joint stopped at its range's end: the head turns at the gaze shift's pace, however many
-        // joints share it — as fast as the shift is large (`headPace`), at most `motion`'s)
-        // (a target moving smoothly is pursued: its own turn followed without lag, at most at
-        // `motion`'s speed; and as it speeds up or slows, the head with it: its own acceleration on
-        // top of the shift's)
-        const pursuit = jumped || !seen ? _spin.set(0, 0, 0) : spinOf(seen, whole, f.dt, _spin).clampLength(0, motion.turnSpeed ?? Infinity);
-        (seen ??= new Quaternion()).copy(whole);
-        const speeding = pursuit.distanceTo(pursued) / f.dt;
-        pursued.copy(pursuit);
-        const gap = was.angleTo(whole);
-        shift = gap > shift || gap < SETTLED ? gap : shift;
-        const pace = headPace(shift, motion);
-        pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
-        const before = _was2.copy(f.prev2.rotation(last));
-        const followed = followRotation(before, was, whole, { ...pace, velocity: pursuit }, f.dt, _out);
-        // (followed in the head's own angles, `fick`, it keeps upright on the way: the shortest turn between two upright looks
-        // rolls it mid-shift — 13–17° from aside and level across to down; but not from or to a line of sight steep up or down
-        // (`LEVEL`), where those angles hardly tell a turn about the vertical from a roll)
-        const level = Math.min(levelness(was), levelness(whole));
-        if (level > 0) {
-          const now = fick(was, _now), goal = fick(whole, _aim, now);
-          const turning = jumped || !sighted ? _turning.set(0, 0, 0)
-            : unwrapped(_turning.subVectors(goal, sighted)).divideScalar(f.dt).clampLength(0, motion.turnSpeed ?? Infinity);
-          const next = follow(fick(before, _before, now), now, goal, { ...pace, velocity: turning }, f.dt, _next);
-          followed.slerp(_fick.setFromEuler(_euler.set(next.x, next.y, next.z, 'YXZ')), level);
-        }
-        sighted = level > 0 ? fick(whole, sighted ?? new Vector3()) : null;
-        followed.premultiply(_rel.copy(turned).invert());
-        const share = _share.identity().slerp(followed, 1 / bones.length);
-        for (const b of bones) {
-          const limit = pose.skeleton.limits[b];
-          const local = _goal.copy(share);
-          if (limit) clampRotation(local, limit);
-          pose.setLocal(b, local);
-        }
-      },
-    });
-  };
-}
-
-/** How `withGaze` leads with the eyes. */
-export interface GazeOptions {
-  /** with `first`, seconds more before the task sets off */
-  lead?: number;
-  /** bow at least this much (rad) */
-  bow?: number;
-  /** the task waits until the eyes are there */
-  first?: boolean;
 }
 
 /**
- * `task` with the eyes on `at`. With `first: true`, `task` sets off once they are within 1° of comfortable eye range or after 1.2 s, and
- * a moment more, `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the
- * hand goes for ~0.5 s before it (Land & Hayhoe 2001) — and they stay till it ends. For a point
- * further below the eyes than the neck pitches the head, the body bows to see it (asking the base),
- * or at least `bow` (rad: work at the waist, the eyes over the hands). By default
- * `task` sets off at once (the eyes on what the hands already work). Put it after the
- * base (its `lookAt` overrides `lookAround`'s).
+ * A condition for setting off once the eyes are on `at`: within 1° of their comfortable range or after 1.2 s, and a moment more,
+ * `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the hand goes for ~0.5 s before it (Land & Hayhoe 2001).
+ * It does not move the eyes: something else must be looking there.
  */
-export function withGaze(h: Body, at: Live<Vector3>, task: Behaviour, options: GazeOptions = {}): Behaviour {
-  const { bow = 0, first = false } = options;
-  return function* () {
-    yield* parallel<Frame>(
-      'race',
-      function* () {
-        if (first) yield* gazeLead(h, at, options.lead)();
-        yield* task();
-      },
-      lookAt(h, at, SHIFT),
-      action<Frame>({ update: () => request(h.asks, { bow }) }),
-    );
-  };
-}
-
-/** Wait for the current gaze before starting a task; does not own or move the eyes. */
-export function gazeLead(h: Body, at: Live<Vector3>, seconds = NaN): Behaviour {
-  const gazer = h.gazer;
-  if (!gazer) throw new Error('gazeLead: the body has no gaze');
-  return function* () {
-    let lead = seconds;
-    yield* when((f, _, time) => {
-      const point = live(at, f);
-      if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
-      // (a gaze without a neck chain — its posture turns the head — gives the time it takes a head to turn)
-      return time > LONGEST || (gazer.neck !== undefined && gazeOff(gazer, f.prev, point) < ARRIVED);
-    });
-    yield* when(timePassed(lead, 'seconds'));
+export function eyesOn(self: Self, at: (f: Frame) => Readonly<Vector3>, seconds = NaN): (f: Frame) => boolean {
+  const gazer = self.gazer;
+  if (!gazer) throw new Error('eyesOn: the body has no gaze');
+  let lead = seconds, began = NaN, there = NaN;
+  return (f) => {
+    const point = at(f);
+    if (Number.isNaN(began)) began = f.time;
+    if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
+    // (a gaze without a neck chain — its posture turns the head — gives the time it takes a head to turn)
+    if (Number.isNaN(there) && (f.time - began > LONGEST || (gazer.neck !== undefined && gazeOff(gazer, f.prev, point) < ARRIVED))) there = f.time;
+    return !Number.isNaN(there) && f.time - there >= lead - 1e-9;
   };
 }
 
@@ -253,22 +215,20 @@ const LEAD = [0.1, 0.3];
  */
 const AIM_TWIST = Infinity;
 
-/** Upper-body aim, with the gait's counter-rotation and balance preserved.
+/** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned and pitched toward `at`, a sub-step.
  * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck.
  * Tuned torso shares: 65% yaw, 25% pitch; the base shares them over spine/chest,
  * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
  */
-export function aimAt(h: Body, at: Live<Vector3>): Behaviour {
-  const gazer = h.gazer;
-  if (!gazer) throw new Error('aimAt: the body has no gaze');
-  return function* () {
-    yield* parallel<Frame>('all', lookAt(h, at, SHIFT), action<Frame>({ update: (f) => {
-      const direction = live(at, f).clone().sub(gazer.eyes(f.prev, new Vector3()));
-      const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - h.locomotion.facing);
-      const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
-      // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at `AIM_TWIST`.
-      request(h.asks, { twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), twistRate: AIM_TWIST, bow: 0.25 * pitch });
-    } }));
+export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>): Step {
+  const gazer = self.gazer;
+  if (!gazer) throw new Error('lookAt: the body has no gaze');
+  return (f) => {
+    const direction = at(f).clone().sub(gazer.eyes(f.prev, new Vector3()));
+    const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - self.locomotion.facing);
+    const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
+    // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at `AIM_TWIST`.
+    request(self.asks, { twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), twistRate: AIM_TWIST, bow: 0.25 * pitch });
   };
 }
 

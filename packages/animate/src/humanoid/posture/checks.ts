@@ -1,15 +1,15 @@
 // A person's balance read off its final poses, whichever legs carry it.
 import { Vector3 } from 'three';
-import type { Frame } from '../../core/body';
+import type { Frame } from '../../core/frame';
 import type { Dev } from '../../core/dev';
 import { SIDES } from '../bones';
-import type { Humanoid } from '../humanoid';
+import type { Person } from '../person';
 import { solePoints } from '../landmarks';
 import { footprint } from './foot';
 import { hullOf, outside, xcomOf } from '../../core/legs/support';
 
 /** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
-export function checkSupport(h: Humanoid, f: Frame, dev: Dev): void {
+export function checkSupport(h: Person, f: Frame, dev: Dev): void {
   if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);

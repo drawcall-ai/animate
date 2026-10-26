@@ -1,6 +1,5 @@
-import { Box3, Quaternion, Vector3 } from 'three';
-import { STEP } from './body';
-import type { Body, Frame } from './body';
+import { Quaternion, Vector3 } from 'three';
+import { STEP } from './frame';
 import type { Placement, Target } from './goal';
 import { spinOf } from './rotation';
 
@@ -12,10 +11,9 @@ export interface Placed {
 }
 
 /**
- * A rigid frame things move on (a cart, a board, a held box), with a history like a body's:
- * `current` where it was last moved to, `prev` and `prev2` the two sub-steps before. Its one
- * mover moves it once per sub-step: a scene before the bodies that read it, a body that wears it
- * after its behaviour. Read it at a sub-step's time (`at`).
+ * A rigid frame as a body follows it (a held box, a socket, a moving target), with a history like a body's: `current` where it was
+ * last moved to, `prev` and `prev2` the two sub-steps before. It is moved once per sub-step: by the body that moves what it is, after
+ * that body's hands, or as it is found the first time it is read in a sub-step. Read it at a sub-step's time (`at`).
  */
 export class Carrier implements Placed {
   readonly prev2: Required<Placement>;
@@ -94,67 +92,6 @@ export class Carrier implements Placed {
     out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(out.spin, r));
     return out;
   }
-}
-
-/** An item's mass (kg; default none), where its centre of mass is in its frame (default its origin), and whether it rests on something (default true). */
-export interface ItemOptions {
-  /** Identifies the item in reach and carry errors. */
-  name?: string;
-  mass?: number;
-  centre?: Vector3;
-  /** Optional solid envelope in item-local metres; otherwise bounds the centre and grips. */
-  bounds?: Box3;
-  supported?: boolean;
-}
-
-/**
- * A carrier something holds by its grips (targets in its frame: a palm on a face rolls freely about
- * its normal, `axis`), with a mass: a body that holds or wears it carries it (its centre of mass).
- */
-export class Item extends Carrier {
-  readonly name: string;
-  /** which body wears it; null while unattached */
-  wornBy: Body | null = null;
-  /** which body holds it out to another (`offer`); null while none does */
-  offeredBy: Body | null = null;
-  readonly mass: number;
-  readonly centre: Readonly<Vector3>;
-  readonly bounds: Box3;
-  /**
-   * it rests on something (a table, a rack, a peg): a hand on it bears none of its weight; carrying it off (`hold` with `to`,
-   * `carry`) or wearing it clears this, letting go of it where nothing else holds or wears it (`release`: put down) sets it
-   */
-  supported: boolean;
-
-  constructor(
-    position: Vector3,
-    quaternion: Quaternion,
-    readonly grips: Readonly<Record<string, Target>>,
-    { name = "item", mass = 0, centre = new Vector3(), supported = true, bounds }: ItemOptions = {},
-  ) {
-    super(position, quaternion);
-    if (!(mass >= 0 && Number.isFinite(mass))) throw new Error(`an item of mass ${mass}`);
-    if (bounds && (bounds.isEmpty() || ![...bounds.min.toArray(), ...bounds.max.toArray()].every(Number.isFinite))) {
-      throw new Error(`"${name}" has empty or non-finite bounds`);
-    }
-    this.name = name;
-    this.mass = mass;
-    this.centre = centre.clone();
-    this.bounds = bounds?.clone() ?? new Box3().setFromPoints([centre, ...Object.values(grips).map((g) => g.position)]);
-    this.supported = supported;
-  }
-}
-
-/** grip `name` of `item`: a target in its frame */
-export function gripOf(item: Item, name: string): Target {
-  const g = item.grips[name];
-  if (!g) throw new Error(`"${item.name}" has no grip "${name}"`);
-  return g;
-}
-
-/** `local` (a placement in `item`'s frame) as a goal: where it is in the world at a sub-step, moving with the item (its velocity and spin fed forward) */
-export function onItem(item: Carrier, local: Placement = { position: new Vector3(), quaternion: new Quaternion() }): (f: Frame) => Target {
-  return (f) => item.toWorld(local, { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }, f.time);
 }
 
 function copy(to: Required<Placement>, from: Required<Placement>) {

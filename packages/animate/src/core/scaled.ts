@@ -10,20 +10,23 @@ import type { Species } from './species';
  * `species` at `size` times its size: its bones, its feet and its eyes `size` times as far apart, each bone `size`³ as heavy, and its
  * gait dynamically similar (Alexander & Jayes 1983, recalled: at equal Froude numbers, strides and lifts ∝ length, speeds ∝ √length,
  * cadences ∝ 1/√length, and so its lean into its acceleration). A body made of it takes `size` as its scale. A posture of the species' own is kept as it is; a person
- * is scaled by its model instead: `new Humanoid(createSkeletonModel(height))`.
+ * is sized by its skeleton instead.
  */
-export function scaled<H extends string>(species: Species<H>, size: number): Species<H> {
+export function scaled<Bone extends string, Hand extends string>(species: Species<Bone, Hand>, size: number): Species<Bone, Hand> {
   if (!(size > 0 && Number.isFinite(size))) throw new Error(`scaled: a size of ${size}`);
+  if (species.person) throw new Error('scaled: a person is sized by its skeleton');
   const { skeleton, gaze, legs, inertia } = species;
   const bones = skeleton.bones.map((bone) => ({ ...bone, offset: bone.offset.clone().multiplyScalar(size), com: bone.com.clone().multiplyScalar(size), mass: bone.mass * size ** 3 }));
   const chains = Object.fromEntries(skeleton.chainNames().map((name) => [name, skeleton.chain(name).map((bone) => skeleton.bones[bone].name)]));
   const limits = skeleton.limits.filter((limit) => limit !== undefined);
   return {
     ...species,
+    bones: species.bones.map((bone) => ({ ...bone, position: [bone.position[0] * size, bone.position[1] * size, bone.position[2] * size] as const })),
     skeleton: new Skeleton(bones, { limits, chains }),
-    scale: (species.scale ?? 1) * size,
+    mass: species.mass * size ** 3,
+    scale: species.scale * size,
     gaze: gaze && { ...gaze, eyes: stretchedEyes(gaze.eyes, size) },
-    legs: legs && { ...legs, chains: legs.chains.map((chain) => feet(chain, size)), gait: gait(legs.gait, size) },
+    legs: legs && { ...legs, chains: legs.chains.map((chain) => feet(chain, size)), gait: gaitAt(legs.gait, size) },
     // (its trunk's lean as quick as its stride: ∝ 1/√length)
     inertia: inertia && { ...inertia, frequency: inertia.frequency / Math.sqrt(size) },
   };
@@ -53,7 +56,7 @@ function feet(chain: LegChain, size: number): LegChain {
 }
 
 /** the gait dynamically similar at `size`: read at the speed of the same Froude number */
-function gait(g: Gait, size: number): Gait {
+export function gaitAt(g: Gait, size: number): Gait {
   const k = Math.sqrt(size), at = (v: number) => v / k;
   const offsetAt = (offset: Gait['contacts'][number]['offset']) => typeof offset === 'number' ? offset : (v: number, fr: number) => offset(at(v), fr);
   return {

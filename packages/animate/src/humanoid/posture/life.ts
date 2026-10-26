@@ -1,5 +1,5 @@
 import type { Asks } from '../../core/asks';
-import type { Humanoid } from '../humanoid';
+import type { Person } from '../person';
 import { Vector3 } from 'three';
 import { lerp, smoothstep } from '../../core/math';
 import { irregular } from '../../core/random';
@@ -37,7 +37,7 @@ export class Life {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(asks: Asks, h: Humanoid): boolean {
+  quiet(asks: Asks, h: Person): boolean {
     return !asks.go && !h.locomotion.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0 && asks.steady === 0;
   }
 

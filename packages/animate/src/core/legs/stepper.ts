@@ -3,7 +3,7 @@
 // foot placement): each foot has a home under its hip; it steps when it falls too far from it,
 // landing where the home will be.
 import { Quaternion, Vector3 } from 'three';
-import { STEP as SUB_STEP, type Frame } from '../body';
+import { STEP as SUB_STEP, type Frame } from '../frame';
 import type { ReadonlyPose } from '../pose';
 import { follow } from '../follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, smoothstep, softMin, softplus, wrapAngle, yawOf } from '../math';

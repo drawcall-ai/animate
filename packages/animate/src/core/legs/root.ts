@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { STEP, type Frame } from '../body';
+import { STEP, type Frame } from '../frame';
 import { follow } from '../follow';
 import type { Motion } from '../goal';
 import { clamp, lerp, smoothstep, wrapAngle, yawOf } from '../math';

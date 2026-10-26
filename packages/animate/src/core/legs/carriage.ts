@@ -1,5 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import type { Frame } from '../body';
+import type { Frame } from '../frame';
 import { Life, type Rhythm } from '../life';
 import { clamp, GRAVITY, yawOf } from '../math';
 import { Pose, type ReadonlyPose } from '../pose';

@@ -1,6 +1,6 @@
 // The body over its feet: the gait's oscillations.
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../../core/body';
+import type { Frame } from '../../core/frame';
 import type { ReadonlyPose } from '../../core/pose';
 import type { Life } from './life';
 import { INDEX } from '../bones';

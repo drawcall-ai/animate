@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Carrier } from '../../src/core/carrier';
-import { STEP } from '../../src/core/body';
+import { STEP } from '../../src/core/frame';
 import { turn } from './rigs';
 
 describe('Carrier', () => {

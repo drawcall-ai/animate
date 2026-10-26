@@ -1,0 +1,212 @@
+import { Object3D, Quaternion, Vector3 } from 'three';
+import type { Frame } from '../core/frame';
+import type { Pose } from '../core/pose';
+import { Carrier } from '../core/carrier';
+import { follow } from '../core/follow';
+import { anchors, resolve } from './resolve';
+import { Self } from './self';
+import { Thing, type Local } from './things';
+
+/** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
+export function hangsFrom(self: Self, object: Object3D): number {
+  for (let at: Object3D | null = object; at; at = at.parent) {
+    const anchor = anchors.get(at);
+    if (anchor) return anchor.body === self ? anchor.bone : NaN;
+  }
+  return NaN;
+}
+
+/** the body `object` is on (attached under its object or a bone of it), if any */
+export function bodyOf(object: Object3D): Self | null {
+  for (let at: Object3D | null = object; at; at = at.parent) {
+    const anchor = anchors.get(at);
+    if (anchor) return anchor.body instanceof Self ? anchor.body : null;
+  }
+  return null;
+}
+
+/** whether `thing` is on `self`: attached under it, or in its hands */
+export function onBody(self: Self, thing: Thing): boolean {
+  return bodyOf(thing.object) === self || held(self).includes(thing);
+}
+
+/** what `self`'s hands hold, a two-handed thing once */
+export function held(self: Self): Thing[] {
+  return [...new Set(Object.values(self.holding).flatMap((hold) => hold ? [hold.thing] : []))];
+}
+
+/** the weight `self`'s hands bear: what they hold off its support, a two-handed thing once (kg) */
+export function heldMass(self: Self): number {
+  return held(self).reduce((sum, thing) => sum + (supported(thing) ? 0 : thing.mass), 0);
+}
+
+/** the hands of `self` holding `thing` */
+export function handsOn(self: Self, thing: Thing): string[] {
+  return Object.keys(self.holding).filter((hand) => self.holding[hand]?.thing === thing);
+}
+
+/** whether `thing` rests on what it is in: not lifted since it was last put down in the room, and on no body */
+export function supported(thing: Thing): boolean {
+  return !thing.lifted && !bodyOf(thing.object);
+}
+
+/** `thing` attached under `parent`, where it is now (three's `attach`), moved by `self` from now on if `self` is given */
+export function attach(thing: Thing, parent: Object3D, self?: Self): void {
+  const object = thing.object;
+  for (const body of [...movers]) body.carried.delete(object);
+  parent.updateWorldMatrix(true, false);
+  object.updateWorldMatrix(true, false);
+  parent.attach(object);
+  if (!self) return;
+  const at = resolve(self, object, { position: new Vector3(), quaternion: new Quaternion() });
+  const carrier = new Carrier(at.position, at.quaternion);
+  carrier.place(self.frame.time, at.position, at.quaternion);
+  self.carried.set(object, carrier);
+  movers.add(self);
+}
+
+/** the bodies that move things (attach keeps one mover per thing) */
+const movers = new Set<Self>();
+
+/**
+ * Where `self` moves what it carries, after its hands: a thing a carry aims this sub-step fitted to the wrists holding it (two: their
+ * middle, turned so the line between its grips lies along the line between them; one: its grip on that wrist), as the aim turns it;
+ * one nothing aims going along with the root bone; each written into its object relative to the bone it hangs from.
+ */
+export function move(self: Self, f: Frame, aims: ReadonlyMap<Object3D, Carrier>): void {
+  for (const [object, carrier] of self.carried) {
+    const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
+    if (aim && hands.length) fit(self, f, thing, aim, hands, carrier);
+    else along(f, carrier);
+    if (!carrier.moved(f.time)) carrier.move(f.time, carrier.current.position, carrier.current.quaternion);
+    const parent = object.parent;
+    if (!parent) continue;
+    const frame = resolve(self, parent, _frame), back = _back.copy(frame.quaternion).invert();
+    object.position.copy(carrier.current.position).sub(frame.position).applyQuaternion(back);
+    object.quaternion.copy(back).multiply(carrier.current.quaternion);
+  }
+}
+
+/** a carried thing nothing aims, moved with the root bone as it moved this sub-step */
+function along(f: Frame, carrier: Carrier): void {
+  const turn = _turn.copy(f.current.rotation(0)).multiply(_back.copy(f.prev.rotation(0)).invert());
+  const at = _at.copy(carrier.current.position).sub(f.prev.position(0)).applyQuaternion(turn).add(f.current.position(0));
+  carrier.move(f.time, at, turn.multiply(carrier.current.quaternion));
+}
+
+/** a carried thing where the wrists hold it: as `aim` has it, carried along with the wrists */
+function fit(self: Self, f: Frame, thing: Thing, aim: Carrier, hands: readonly string[], carrier: Carrier): void {
+  const at = (hand: string, out: Vector3) => {
+    const hold = self.holding[hand];
+    if (!hold) throw new Error(`fit: the ${hand} hand holds nothing`);
+    return out.copy(hold.at.position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
+  };
+  const wrist = (hand: string, out: Vector3) => out.copy(f.current.position(self.hands[hand]));
+  const turn = _turn.identity();
+  if (hands.length === 2) {
+    const grips = _a.subVectors(at(hands[1], _g1), at(hands[0], _g2)).normalize();
+    const wrists = _b.subVectors(wrist(hands[1], _w1), wrist(hands[0], _w2)).normalize();
+    turn.setFromUnitVectors(grips, wrists);
+  }
+  const middle = _m.set(0, 0, 0), between = _h.set(0, 0, 0);
+  for (const hand of hands) {
+    middle.add(at(hand, _g1));
+    between.add(wrist(hand, _w1));
+  }
+  middle.divideScalar(hands.length);
+  between.divideScalar(hands.length);
+  carrier.move(f.time, _at.subVectors(aim.current.position, middle).applyQuaternion(turn).add(between), _q.copy(turn).multiply(aim.current.quaternion));
+}
+
+/** How much of a thing's weight a body bears: its share (0 … 1) now and the two sub-steps before, its mass borne (kg) and the bones it bears on. */
+export interface Bearing {
+  share: number;
+  prev: number;
+  prev2: number;
+  kg: number;
+  bones: number[];
+}
+
+/** how quickly a weight is taken up and given up (share/s², share/s) */
+const BEARING = { accel: 16, speed: 4 };
+
+/**
+ * The weight `self` bears, a sub-step on: each thing it holds off its support borne by the hands holding it (and by them, what hangs
+ * from it), each it wears by the bone it hangs from; each share taken up and given up over a moment, and loaded onto those bones at
+ * the thing's centre of mass in this sub-step's pose.
+ */
+export function bear(self: Self, f: Frame, worn: readonly Thing[], borne: Map<Thing, Bearing>): void {
+  const things = new Set<Thing>([...worn, ...held(self), ...borne.keys()]);
+  for (const thing of things) {
+    if (thing.mass === 0) continue;
+    const bones = bearers(self, thing);
+    let bearing = borne.get(thing);
+    if (!bearing) borne.set(thing, (bearing = { share: 0, prev: 0, prev2: 0, kg: 0, bones }));
+    [bearing.prev2, bearing.prev] = [bearing.prev, bearing.share];
+    bearing.share = Math.min(1, Math.max(0, follow(bearing.prev2, bearing.prev, bones.length > 0 ? 1 : 0, BEARING, f.dt)));
+    if (bones.length > 0) bearing.bones = bones;
+    if (bearing.share === 0 && bones.length === 0) {
+      borne.delete(thing);
+      continue;
+    }
+    bearing.kg = bearing.share * thing.mass;
+  }
+  load(self, f.current, borne);
+}
+
+/** the bones `thing` bears on: the hands holding it (or what it hangs from) off its support, else the bone of `self` it hangs from */
+function bearers(self: Self, thing: Thing): number[] {
+  for (let at: Object3D | null = thing.object; at; at = at.parent) {
+    const anchor = anchors.get(at);
+    if (anchor) return anchor.body === self && anchor.bone >= 0 ? [anchor.bone] : [];
+    if (at.userData.mass === undefined) continue;
+    const above = Thing.of(at), hands = handsOn(self, above);
+    if (hands.length) return supported(above) ? [] : hands.map((hand) => self.hands[hand]);
+  }
+  return [];
+}
+
+/** what `self` bears loaded onto its bones in `pose`, each thing's at its centre of mass */
+export function load(self: Self, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): void {
+  const mass = new Map<number, number>(), moment = new Map<number, Vector3>();
+  for (const [thing, bearing] of borne) {
+    const placed = self.track(thing.object).at(self.frame.time).current;
+    const centre = _c.copy(thing.centre).applyQuaternion(placed.quaternion).add(placed.position);
+    for (const bone of bearing.bones) {
+      mass.set(bone, (mass.get(bone) ?? 0) + bearing.kg / bearing.bones.length);
+      let sum = moment.get(bone);
+      if (!sum) moment.set(bone, (sum = new Vector3()));
+      sum.addScaledVector(centre, bearing.kg / bearing.bones.length);
+    }
+  }
+  for (let bone = 0; bone < pose.skeleton.bones.length; bone++) {
+    const m = mass.get(bone) ?? 0, sum = moment.get(bone);
+    if (m === 0 || !sum) {
+      pose.setLoad(bone, 0, ZERO);
+      continue;
+    }
+    pose.setLoad(bone, m, sum.divideScalar(m).sub(pose.position(bone)).applyQuaternion(_q.copy(pose.rotation(bone)).invert()));
+  }
+}
+
+/** the things under `self` (on its object or bones) its hands do not hold: what it wears */
+export function wornOf(self: Self): Thing[] {
+  const worn: Thing[] = [], holding = held(self);
+  self.binding.object.traverse((node) => {
+    if (node.userData.mass === undefined) return;
+    const thing = Thing.of(node);
+    if (!holding.includes(thing)) worn.push(thing);
+  });
+  return worn;
+}
+
+/** a thing's placement in its own frame, as `self` tracks it this sub-step */
+export function placed(self: Self, thing: Thing): Local {
+  return self.track(thing.object).at(self.frame.time).current;
+}
+
+const ZERO = new Vector3();
+const _frame: Local = { position: new Vector3(), quaternion: new Quaternion() };
+const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
+const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
+const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();

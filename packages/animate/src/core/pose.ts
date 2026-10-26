@@ -4,6 +4,8 @@ import type { Skeleton } from './skeleton';
 /** A pose to read: by bone index, the transforms of `Pose`. */
 export interface ReadonlyPose {
   readonly skeleton: Skeleton;
+  /** the way the body faces (rad about +Y; 0 faces +Z): its stance's, which the root's own turn sways about */
+  readonly facing: number;
   local(bone: number): Readonly<Quaternion>;
   position(bone: number): Readonly<Vector3>;
   rotation(bone: number): Readonly<Quaternion>;
@@ -28,6 +30,7 @@ export class Pose implements ReadonlyPose {
   /** what each bone carries besides its segment: a mass (kg) at a point in its frame */
   private readonly loads: { mass: number; at: Vector3 }[];
   private stale = true;
+  facing = 0;
 
   constructor(readonly skeleton: Skeleton) {
     const n = skeleton.bones.length;
@@ -115,6 +118,7 @@ export class Pose implements ReadonlyPose {
   copy(from: ReadonlyPose): this {
     if (from.skeleton !== this.skeleton) throw new Error('cannot copy a pose of another skeleton');
     this.root.copy(from.position(0));
+    this.facing = from.facing;
     this.locals.forEach((q, i) => q.copy(from.local(i)));
     this.loads.forEach((_, i) => {
       const l = from.load(i);

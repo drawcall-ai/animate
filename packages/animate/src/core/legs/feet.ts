@@ -1,7 +1,7 @@
 // A species' leg chains as the stepper's feet, and each leg posed over the foot the stepper places: its joints solved to it, each
 // following its stride cycle (the carpus folding, the hock flexing) as a soft reference.
 import { Euler, Quaternion, Vector3 } from 'three';
-import type { Frame } from '../body';
+import type { Frame } from '../frame';
 import type { ReadonlyPose } from '../pose';
 import { angleAt, type JointCycle } from './cycle';
 import { offsetAt, strideAt, type Gait } from './gait';

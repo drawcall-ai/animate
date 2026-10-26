@@ -1,9 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Item } from '../../core/carrier';
-import type { Frame } from '../../core/body';
+import type { Frame } from '../../core/frame';
+import type { Local, Thing } from '../../body/things';
+import { bodyOf } from '../../body/hold';
 import { forwardOf, leftOf } from '../../core/math';
 import { INDEX } from '../bones';
-import type { Humanoid } from '../humanoid';
+import type { Person } from '../person';
 
 // Inherited trunk capsule proxy from examples/test/clearance.ts: 6% of stature.
 // Uncalibrated; no verified anatomical source.
@@ -12,13 +13,13 @@ export const BODY_RADIUS = 0.06;
 export const LOAD_RESERVE = 0.04;
 
 /** Clear a load position against the trunk and neck→head chain, in place; returns how far the neck and head moved it (m). */
-export function clearBody(h: Humanoid, f: Frame, item: Item, at: Vector3, rotation: Quaternion): number {
-  if (item.wornBy) return 0;
+export function clearBody(h: Person, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Local): number {
+  if (bodyOf(item.object) && !h.carried.has(item.object)) return 0;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
   const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);
   let back = Infinity, bottom = Infinity, top = -Infinity, near = Infinity, far = -Infinity;
   for (let i = 0; i < 2; i++) {
-    const turn = i === 0 ? rotation : item.current.quaternion;
+    const turn = i === 0 ? rotation : current.quaternion;
     const inverse = _inverse.copy(turn).invert();
     const axis = _axis.copy(forward).applyQuaternion(inverse);
     back = Math.min(back, center.dot(axis) - extent(half, axis));

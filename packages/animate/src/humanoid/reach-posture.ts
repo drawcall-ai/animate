@@ -1,13 +1,13 @@
 import { Vector3 } from 'three';
-import type { Frame } from '../core/body';
+import type { Frame } from '../core/frame';
 import type { ReadonlyPose } from '../core/pose';
 import { forwardOf, smoothstep, wrapAngle } from '../core/math';
 import { handLowering, MOST_BOW, squatOf } from './posture/posture';
 import { INDEX, type Side } from './bones';
-import type { Humanoid } from './humanoid';
+import type { Person } from './person';
 import { NECK_PITCH } from './profile/limits';
 import { ARM_REACH, PROTRACTION } from './arms';
-import { heldMass } from '../core/worn';
+import { heldMass } from '../body/hold';
 import { loadFactor } from '../core/load';
 import { request } from '../core/asks';
 
@@ -17,7 +17,7 @@ import { request } from '../core/asks';
  * `held` m off its goal (reaching across it) turns it as far as brings the shoulder that far
  * forward, up to the thoracolumbar spine's active rotation (45°, AAOS; recalled). */
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9, held: Math.PI / 4 };
-export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0) {
+export function twistToward(h: Person, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0) {
   const station = pose.com(_station);
   const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - h.locomotion.facing);
   const distance = Math.hypot(point.x - station.x, point.z - station.z);
@@ -31,7 +31,7 @@ export function twistToward(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vec
 const BOWED = 0.95;
 
 /** Standing reach requests, closed against the solved shoulder and chest; `carried`: the hand's goal rides on the body itself. */
-export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
+export function bringShoulder(h: Person, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
   const p = h.proportions;
   const factor = loadFactor(Math.max(mass, heldMass(h)));
   const low = hand.y < p.hipHeight;
@@ -88,7 +88,7 @@ export function bringShoulder(h: Humanoid, f: Frame, side: Side, hand: Readonly<
 }
 
 /** Downward gaze recruits the same bow solver once neck and eye declination run out. */
-export function gazeAsks(h: Humanoid, pose: ReadonlyPose, point: Readonly<Vector3>) {
+export function gazeAsks(h: Person, pose: ReadonlyPose, point: Readonly<Vector3>) {
   twistToward(h, pose, point);
   const p = h.proportions;
   const hips = pose.position(0);

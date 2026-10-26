@@ -1,12 +1,11 @@
 import { Quaternion, Vector3 } from 'three';
-import { action } from '@pmndrs/timeline';
-import type { Frame } from './body';
+import type { Frame } from './frame';
 import type { Carrier, Placed } from './carrier';
 import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { clampRotation } from './limits';
 import { exp, log } from './rotation';
-import { live, REACHED, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './goal';
+import { live, REACHED, type Live, type Motion, type Placement, type Target } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
@@ -139,18 +138,6 @@ export class ChainTip {
   }
 }
 
-/** A chain's tip moved to `target` (a `ChainTip`) every sub-step: endless, or until `until`. */
-export function chainTo(chain: string, target: Live<Target>, options: TipOptions & { until?: Until }): Behaviour {
-  const { until } = options;
-  return function* () {
-    const tip = new ChainTip(chain);
-    yield* action<Frame>({
-      update: (f) => void tip.to(f, live(target, f), options),
-      until: until === 'reached' ? (f) => reached(f, tipOf(f, chain), live(target, f), options.on) : until,
-    });
-  };
-}
-
 /**
  * Bone `tip` of a body (its last poses `prev2`, `prev`, `dt` apart, before the sub-step at `time`) is on `target`: within
  * REACHED's distance and angle, and moving with it to within its speed. The last pose is a sub-step old, so it is judged
@@ -214,9 +201,3 @@ const _then = new Vector3();
 const _was = new Vector3();
 const _was2 = new Vector3();
 const _goal: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-
-/** the tip bone of chain `chain` */
-function tipOf(f: Frame, chain: string): number {
-  const bones = f.current.skeleton.chain(chain);
-  return bones[bones.length - 1];
-}

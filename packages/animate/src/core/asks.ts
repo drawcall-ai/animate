@@ -1,7 +1,4 @@
 import type { Vector3 } from 'three';
-import { action, type UntilCondition } from '@pmndrs/timeline';
-import type { Body, Frame } from './body';
-import { live, type Behaviour, type Live } from './goal';
 
 /** Walking somewhere: the point on the floor the body goes to, its velocity, and how fast the body may go (m/s, m/s²). */
 export interface Go {
@@ -83,19 +80,4 @@ export function takeAsks(asks: Asks, into: Asks): Asks {
   Object.assign(into, asks);
   Object.assign(asks, createAsks());
   return into;
-}
-
-/**
- * Asks the base for what `asks` gives (the fields it has, combined with what other tasks ask: `request`), every
- * sub-step, endless or until `until`: a task of its own for what no other task asks (shift weight, turn to a facing while the hands work).
- */
-export function ask(h: Body, asks: Live<Partial<Asks>>, until?: UntilCondition<Frame>): Behaviour {
-  return function* () {
-    yield* action<Frame>({
-      update: (f) => {
-        request(h.asks, live(asks, f));
-      },
-      until,
-    });
-  };
 }

@@ -1,6 +1,6 @@
 // The root planner: a root stream toward a goal — the same a player's input makes — for a stepper to follow.
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../body';
+import type { Frame } from '../frame';
 import type { Motion } from '../goal';
 import { wrapAngle, yawOf } from '../math';
 import type { Gait } from './gait';

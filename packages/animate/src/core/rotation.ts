@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from './body';
+import type { Frame } from './frame';
 import type { Dev } from './dev';
 
 /** the rotation by the rotation vector (x, y, z) (rad) */
