@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import type { RootGoal } from './step/stepper';
+import type { RootGoal } from './step/state';
 import type { Legged } from './legged';
 
 /**

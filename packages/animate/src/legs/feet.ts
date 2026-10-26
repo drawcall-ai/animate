@@ -11,7 +11,7 @@ import { SINGULAR } from './cholesky';
 import { GRAVITY, minimumJerk, wrapAngle } from '../kernel/math';
 import { followRotation } from '../kernel/follow';
 import { clampRotation } from '../kernel/limits';
-import type { Feet, FootPose, Stepping } from './step/stepper';
+import type { Feet, FootPose, Stepping } from './step/state';
 import type { Spot } from './support';
 
 /** A foot's turn: heading `yaw`, pitched `pitch` (rad, + toes up). */

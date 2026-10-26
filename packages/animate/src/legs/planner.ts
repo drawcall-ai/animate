@@ -5,7 +5,7 @@ import type { Motion } from '../kernel/goal';
 import { wrapAngle, yawOf } from '../kernel/math';
 import type { Gait } from '../species/gait';
 import { rootPlan, type RootState } from './root';
-import type { RootGoal } from './step/stepper';
+import type { RootGoal } from './step/state';
 
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
 export interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number }

@@ -2,7 +2,7 @@
 import type { Proportions } from '../../species/humanoid/proportions';
 import type { Gait } from '../../species/gait';
 import { powerGait, stanceOf } from '../../species/schedule';
-import type { Stepping } from '../step/stepper';
+import type { Stepping } from '../step/state';
 import { squatOf, STANDING_REACH } from './posture';
 import { defaultStance } from '../../species/humanoid/stance';
 
