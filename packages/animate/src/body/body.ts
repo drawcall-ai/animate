@@ -4,7 +4,9 @@ import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
 import { Person } from './person';
-import { Self, type Driven, type Life, type SelfOptions } from './runtime';
+import { Self, type SelfOptions } from './runtime';
+import type { Driven } from '../legs/legged';
+import type { Temperament } from '../species/define';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Tier } from '../kernel/requests';
@@ -20,7 +22,7 @@ export interface BodyOptions {
   /** the bodies it keeps clear of besides those it deals with (bystanders; one shared set works for a crowd) */
   avoid?: Iterable<Body>;
   /** its quiet life: a seed that fixes its variation, what tethers it and what startles it */
-  life?: Life;
+  life?: Temperament;
   /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces */
   tempo?: number;
   /** what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³); default its species' */

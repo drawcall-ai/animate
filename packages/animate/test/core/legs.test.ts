@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { ReusableTimeline } from '@pmndrs/timeline';
-import { Body, horse, walkTo, wait, type Life, type Verb } from '../../src/index';
+import { Body, horse, walkTo, wait, type Temperament, type Verb } from '../../src/index';
 import { selfOf } from '../../src/body/body';
 import type { Frame } from '../../src/kernel/frame';
 import { strideAt } from '../../src/species/gait';
@@ -295,7 +295,7 @@ it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up 
 });
 
 
-function movingHorse(gait: 'walk' | 'trot', speed: number, life: Life = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
+function movingHorse(gait: 'walk' | 'trot', speed: number, life: Temperament = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
   const body: Body = new Body(horse(HORSE, gait), { life: { ...life, seed }, dev: true });
   claim(body, 'look', () => { const at = look(); if (at) selfOf(body).look = at; });
   const step = scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 200), { speed, accel }); } : undefined);

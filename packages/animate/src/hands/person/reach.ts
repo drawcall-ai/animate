@@ -1,5 +1,5 @@
 import { Box3, Vector3 } from 'three';
-import { parallel } from '@pmndrs/timeline';
+import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Target } from '../../kernel/goal';
 import { lerp } from '../../kernel/math';
@@ -9,8 +9,11 @@ import { during, type Request } from '../../kernel/requests';
 import { grasp, onBody, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { CALM, reaching } from './arms';
-import { SIDES, type Side } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
+import { ARM_REACH } from './bend';
+import { standing, walking } from './stand';
+import { looking, SHIFT } from '../../look/gaze';
+import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
+import type { Reacher } from './reacher';
 import { LOAD_RESERVE } from './clearance';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
@@ -24,7 +27,7 @@ export interface Taking {
 }
 
 /** where a grip is in the world this sub-step, as `h` tracks its thing */
-export function gripAt(h: Person, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
+export function gripAt(h: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
   const frame = h.track(take.thing.object).at(f.time).current;
   return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
 }
@@ -36,7 +39,7 @@ export function gripAt(h: Person, take: Pick<Taking, 'thing' | 'goal'>, f: Frame
  * round the outside of the thing it reaches into (a box's handle from outside). Hands not there within `REACHING` s are a problem in the
  * dev log, and they keep going: lateness never throws.
  */
-export function* reachFor(h: Person, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
+export function* reachFor(h: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const began = h.frame.time;
   const there = (f: Frame) => takes.every((take) => reached(f, h.hands[take.side], take.goal, h.track(take.thing.object)));
   // (hands at their grips already close at once)
@@ -152,3 +155,52 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
   const rand = seeded(seedOf(...SIDES.map((s) => grips[s] ?? ''), Math.round(at.x * 1000), Math.round(at.y * 1000), Math.round(at.z * 1000)));
   return { delay: lerp(FOLLOWING.delay[0], FOLLOWING.delay[1], rand()), slower: lerp(FOLLOWING.slower[0], FOLLOWING.slower[1], rand()) };
 }
+
+/**
+ * Hands to targets, taking nothing: from where the body stands if the arms reach them (the trunk turning — a shoulder up to its
+ * half-width nearer — and bowing for them), else it walks up first (borrowed legs); the eyes on them (borrowed); the hands going (asked)
+ * as the walk will arrive within `NEAR` s, each in the time a calm reach that far takes or at the pace asked. Met once they are there; they
+ * keep there. `false` if it can stand nowhere in reach.
+ */
+export function* reachingTo(h: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Target }[], pace: { speed?: number; accel?: number }) {
+  const most = ARM_REACH * h.proportions.armLength + h.proportions.shoulderHalfWidth;
+  const inReach = aims.every(({ side, target }) => h.pose.position(INDEX[`${side}UpperArm`]).distanceTo(target(h.frame).position) < most);
+  const plan = inReach ? 'there' : standing(h, { grips: aims.map(({ side, target }) => ({ side, at: target(h.frame).position.clone() })), mass: 0 });
+  if (plan === 'nowhere') {
+    request.fail();
+    return;
+  }
+  let stood = plan === 'there';
+  const near = () => stood || (plan !== 'there' && plan.walk.eta <= NEAR);
+  const middle = (f: Frame) => aims.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(aims.length);
+  const there = (f: Frame) => aims.every(({ side, target }) => reached(f, h.hands[side], target(f)));
+  const going = aims.map(({ side, target }) => {
+    const distance = h.pose.position(h.hands[side]).distanceTo(target(h.frame).position);
+    const { speed } = pace, accel = pace.accel ?? CALM.accel;
+    if (speed !== undefined) return { side, step: reaching(h, side, target, { accel, speed }), lasts: distance / speed + speed / accel };
+    const seconds = reachTime(distance / h.scale, seedOf(side, Math.round(distance * 1000))) / h.tempo;
+    return { side, step: reaching(h, side, target, { seconds }), lasts: seconds };
+  });
+  // (what it moves arrives once the farthest hand does: the hands set off `NEAR` s before a walk arrives)
+  const lasts = Math.max(...going.map((hand) => hand.lasts));
+  let setOff = NaN;
+  yield* parallel<Frame>('all', function* () {
+    if (plan === 'there') return;
+    if (!(yield* walking(request, plan, Math.max(0, lasts - NEAR)))) request.fail();
+    stood = true;
+  }, function* () {
+    yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(h, middle, SHIFT)), function* () {
+      yield* action<Frame>({ until: near });
+      const eta = (f: Frame) => void (request.eta = Math.max(0, (Number.isNaN(setOff) ? (setOff = f.time) : setOff) + lasts - f.time));
+      yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ update: eta, until: there }));
+    });
+  });
+  if (request.outcome === 'failed') return;
+  request.met();
+  // (there, it keeps its hands there till its story moves on)
+  yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
+}
+
+/** the hands set off once the walk will arrive within this (s) */
+const NEAR = 0.6;
+const _middle = new Vector3();

@@ -2,12 +2,8 @@ import { Box3, Matrix4, Object3D, Vector3 } from 'three';
 import { selfOf, type Body, type HandOf } from '../body/body';
 import type { AnySpecies } from '../species/define';
 import { attach, bodyOf, grasp, handsOn, take } from '../things/hold';
-import { during } from '../kernel/requests';
 import type { Self } from '../body/runtime';
 import { Thing } from '../things/thing';
-import { handingBack } from '../hands/creature/hands';
-import { Person, sideOf } from '../body/person';
-import { backingOut } from '../hands/person/release';
 
 /** how near an empty a thing put onto it must be (m): nearer, it is set exactly there */
 const ONTO = 0.005;
@@ -47,7 +43,7 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
   const lowest = new Box3().copy(thing.bounds).applyMatrix4(new Matrix4().compose(placed.position, placed.quaternion, object.scale)).min.y;
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
-  backOut(self, hands);
+  self.handling.backOut(hands);
   // (a hand of its own still on it: that hand carries it alone)
   if (handsOn(self, thing).length) {
     take(self, thing);
@@ -67,16 +63,6 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
   }
 }
 
-/** the hands that let go backing out of what they held: a request of the body's own */
-function backOut(self: Self, hands: readonly string[]): void {
-  if (self instanceof Person) {
-    const sides = hands.map(sideOf);
-    self.own('release', '', (request) => () => backingOut(self, request, sides));
-    return;
-  }
-  const back = handingBack(self, hands);
-  self.own('release', '', (request) => () => during(request, `hand.${hands[0]}`, 'borrowed', back.step, back.done));
-}
 
 /**
  * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there within 5 mm, else where it is; development says when it is

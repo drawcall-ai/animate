@@ -3,12 +3,13 @@ import { forwardOf, leftOf, wrapAngle } from '../kernel/math';
 import type { Frame } from '../kernel/frame';
 import { Poise } from '../kernel/poise';
 import { Pose } from '../kernel/pose';
-import { carriage, type Striding } from './carriage';
+import { carriage, type Striding } from '../species/carriage';
 import { seedOf } from '../kernel/random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
 import { Planner } from './planner';
 import { Stepper, type RootGoal } from './step/stepper';
-import type { Self, Step } from '../body/runtime';
+import type { Legged } from './legged';
+import type { Step } from '../kernel/frame';
 import { drivenRoot } from './driven';
 import { strideAt } from '../species/gait';
 import { Inertia } from '../kernel/inertia';
@@ -19,7 +20,7 @@ import { Inertia } from '../kernel/inertia';
  * drives it; the stepper keeps its feet under it, its posture or carriage rides on the stride, and each leg is posed down to its foot.
  * Asked nothing, it stands. It keeps `locomotion` for walks and `arriving`.
  */
-export function creature(body: Self): Step {
+export function creature(body: Legged): Step {
   const kind = body.species.legs;
   if (!kind) throw new Error('creature: the species has no legs');
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);

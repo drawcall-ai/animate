@@ -3,13 +3,13 @@ import { Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Dev } from '../../kernel/dev';
 import { SIDES } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
+import type { PersonLegged } from './legged';
 import { solePoints } from '../../species/humanoid/landmarks';
 import { footprint } from './foot';
 import { hullOf, outside, xcomOf } from '../support';
 
 /** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
-export function checkSupport(h: Person, f: Frame, dev: Dev): void {
+export function checkSupport(h: PersonLegged, f: Frame, dev: Dev): void {
   if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
@@ -17,7 +17,7 @@ export function checkSupport(h: Person, f: Frame, dev: Dev): void {
   const support = h.feet.flatMap((foot, s) => {
     if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
     const side = SIDES[s];
-    return solePoints(h, f.prev, side).map((at): [number, number] => [at.x, at.z]);
+    return solePoints(h.proportions, f.prev, side).map((at): [number, number] => [at.x, at.z]);
   });
   const hull = hullOf(support);
   if (h.locomotion.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {

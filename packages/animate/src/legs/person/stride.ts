@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import type { Step } from '../../body/runtime';
+import type { Step } from '../../kernel/frame';
 import { Planner } from '../planner';
 import { forwardOf, wrapAngle } from '../../kernel/math';
 import type { Stance } from '../../kernel/go';
@@ -9,7 +9,7 @@ import { footprint } from './foot';
 import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './pace';
 import { checkSupport } from './checks';
 import { drivenBy, feetBehind } from './balance';
-import type { Person } from '../../body/person';
+import type { PersonLegged } from './legged';
 import { humanGait } from './stepping';
 import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
 
@@ -20,7 +20,7 @@ import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
  */
-export function stride(h: Person, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
+export function stride(h: PersonLegged, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
   const p = h.proportions, s = p.scale, toeOut = defaultStance(p).toeOut;
   const stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, still: Vector3 | null = null;

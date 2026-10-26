@@ -1,7 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { ReadonlyPose } from './pose';
 import type { Frame } from './frame';
-import type { Placed } from './carrier';
 
 /** A goal as it is, or as it is at each sub-step (`T` is never itself a function). */
 export type Live<T> = T | ((f: Frame) => T);
@@ -17,6 +16,13 @@ const isRead = <T>(goal: Live<T>): goal is (f: Frame) => T => typeof goal === 'f
 export interface Placement {
   position: Vector3;
   quaternion?: Quaternion;
+}
+
+/** Where a carrier is at a sub-step (`current`) and the two before. */
+export interface Placed {
+  readonly prev2: Required<Placement>;
+  readonly prev: Required<Placement>;
+  readonly current: Required<Placement>;
 }
 
 /** A placement to go to: its own velocity (m/s) and spin (rad/s) are followed without lag. */

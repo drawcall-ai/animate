@@ -1,11 +1,11 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './frame';
-import type { Carrier, Placed } from './carrier';
+import type { Carrier } from './carrier';
 import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { clampRotation } from './limits';
 import { exp, log } from './rotation';
-import { live, REACHED, type Live, type Motion, type Placement, type Target } from './goal';
+import { live, REACHED, type Live, type Motion, type Placed, type Placement, type Target } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 

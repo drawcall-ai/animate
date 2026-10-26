@@ -2,7 +2,10 @@ import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { seeded } from '../kernel/random';
 import type { ReadonlyPose } from '../kernel/pose';
-import type { Person } from '../body/person';
+import type { PersonLegged } from '../legs/person/legged';
+
+/** a person as its idle eyes see it: how it walks, and its proportions */
+type Walking = Pick<PersonLegged, 'locomotion' | 'proportions'>;
 import { forwardOf, lerp, smoothstep } from '../kernel/math';
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
@@ -16,7 +19,7 @@ const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
  * Where the eyes go when nothing else asks for them, a sub-step at a time: ahead (on the path, walking, the head carrying a share of the
  * thorax's swing), and, standing still for a while, a glance aside now and then (seeded: the same `seed`, the same glances).
  */
-export function lookAround(h: Person, seed = 1): (f: Frame) => Vector3 {
+export function lookAround(h: Walking, seed = 1): (f: Frame) => Vector3 {
   const rand = seeded(seed);
   const target = new Vector3();
   let next = lerp(GLANCES.every[0], GLANCES.every[1], rand());
@@ -47,7 +50,7 @@ export function lookAround(h: Person, seed = 1): (f: Frame) => Vector3 {
 }
 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
-export function pathAhead(h: Person, pose: ReadonlyPose, out: Vector3): Vector3 {
+export function pathAhead(h: Walking, pose: ReadonlyPose, out: Vector3): Vector3 {
   return out.copy(pose.com(_com)).setY(AHEAD.walk.height * h.proportions.height)
     .addScaledVector(forwardOf(h.locomotion.facingAhead ?? h.locomotion.facing, _v), AHEAD.walk.distance);
 }

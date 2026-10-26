@@ -1,5 +1,4 @@
 import type { ReadonlyPose } from '../../kernel/pose';
-import type { Person } from '../../body/person';
 import { Vector3 } from 'three';
 import { INDEX, type ChildBone, type Side } from './bones';
 import type { Proportions } from './proportions';
@@ -91,10 +90,16 @@ export function pointsOf(p: Proportions): Record<PointName, BonePoint> {
   };
 }
 
-/** The three support points of one sole, in world space. */
-export function solePoints(h: Person, pose: ReadonlyPose, side: Side): Vector3[] {
+/** The three support points of one sole of a person of proportions `p`, in world space. */
+export function solePoints(p: Proportions, pose: ReadonlyPose, side: Side): Vector3[] {
+  let points = soles.get(p);
+  if (!points) soles.set(p, (points = pointsOf(p)));
+  const named = points;
   return (['Heel', 'BigToe', 'SmallToe'] as const).map((name) => {
-    const point = h.points[`${side}${name}`];
+    const point = named[`${side}${name}`];
     return pose.point(point.bone, point.at, new Vector3());
   });
 }
+
+/** each person's points, by their proportions (read once) */
+const soles = new WeakMap<Proportions, Record<PointName, BonePoint>>();

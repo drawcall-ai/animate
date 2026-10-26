@@ -4,7 +4,7 @@ import type { Local, Thing } from '../../things/thing';
 import { worn } from '../../things/hold';
 import { forwardOf, leftOf } from '../../kernel/math';
 import { INDEX } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
+import type { Reacher } from './reacher';
 
 // Inherited trunk capsule proxy from examples/test/clearance.ts: 6% of stature.
 // Uncalibrated; no verified anatomical source.
@@ -13,7 +13,7 @@ export const BODY_RADIUS = 0.06;
 export const LOAD_RESERVE = 0.04;
 
 /** Clear a load position against the trunk and neck→head chain, in place; returns how far the neck and head moved it (m). */
-export function clearBody(h: Person, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Local): number {
+export function clearBody(h: Reacher, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Local): number {
   if (worn(item)) return 0;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
   const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);

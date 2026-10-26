@@ -1,6 +1,9 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { ReadonlyPose } from '../kernel/pose';
-import type { Local } from './thing';
+import type { Carrier } from '../kernel/carrier';
+import type { Frame } from '../kernel/frame';
+import type { Target } from '../kernel/goal';
+import type { Local, Thing } from './thing';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
@@ -19,11 +22,35 @@ export interface Resolving {
   scaleOf(bone: number): number;
 }
 
+/** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame). */
+export interface Hold {
+  thing: Thing;
+  grip: string;
+  goal: Target;
+}
+
+/**
+ * A body as the things it holds see it: where it is in the scene (its object and each moving bone's node), its hands (each one's tip
+ * bone, and what it holds), the things it moves itself and how it tracks the scene.
+ */
+export interface Holder extends Resolving {
+  readonly frame: Frame;
+  readonly object: Object3D;
+  boneNode(bone: number): Object3D;
+  readonly hands: Readonly<Record<string, number>>;
+  readonly holding: Record<string, Hold | null>;
+  /** what it moves itself (things in both its hands), each on its own frame's history */
+  readonly carried: ReadonlyMap<Object3D, Carrier>;
+  track(node: Object3D): Carrier;
+  carry(node: Object3D, carrier: Carrier): void;
+  leave(node: Object3D): void;
+}
+
 /** each body's object (bone −1) and moving bones, by node */
-export const anchors = new WeakMap<Object3D, { body: Resolving; bone: number }>();
+export const anchors = new WeakMap<Object3D, { body: Holder; bone: number }>();
 
 /** the body that moves each thing it carries in both hands itself (one hand's hangs from that hand's bone) */
-export const movers = new WeakMap<Object3D, Resolving>();
+export const movers = new WeakMap<Object3D, Holder>();
 
 /** a node's local transform from one update to the next, the update it was last read in, and under which parent */
 export interface Interpolated {

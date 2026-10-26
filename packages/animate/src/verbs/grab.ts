@@ -1,12 +1,7 @@
 import { Vector3, type Object3D } from 'three';
 import { selfOf, type Body, type HandOf } from '../body/body';
-import { bodyOf, goalOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
-import { taking } from '../hands/creature/hands';
-import { Person, sideOf } from '../body/person';
-import { grabbing } from '../hands/person/grab';
-import { liftingClear } from '../hands/person/carry';
 import { verb, type Until, type Verb } from './story';
 
 /** How a grab goes. */
@@ -31,18 +26,8 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
   if (!named.length) throw new Error('grab: name a grip for a hand');
   return verb(body, 'grab', (request) => function* () {
     const self = selfOf(body), held = Thing.of(thing);
-    const loose = held.massive && !bodyOf(thing);
     for (const { grip } of named) checkScale(self.frame, held.grip(grip).node);
-    if (!(self instanceof Person)) {
-      if (named.length > 1) throw new Error('grab: a creature takes hold with one hand at a time');
-      yield* taking(self, request, named[0].hand, held, named[0].grip);
-      if (request.outcome !== 'failed') request.met();
-      return;
-    }
-    const takes = named.map(({ hand, grip }) => ({ side: sideOf(hand), thing: held, grip, goal: goalOn(held.grip(grip), self.restOf(self.hands[hand])) }));
-    if (!(yield* grabbing(self, request, takes, options.speed === undefined ? undefined : { speed: options.speed, accel: options.accel }))) return;
-    if (loose) yield* liftingClear(self, request, held);
-    request.met();
+    yield* self.handling.take(request, held, named, options);
   }, options.until);
 }
 

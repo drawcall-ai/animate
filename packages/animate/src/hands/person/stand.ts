@@ -5,9 +5,9 @@ import { loadFactor } from '../../kernel/load';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../kernel/math';
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
-import { ARM_REACH } from './arms';
+import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
+import type { Reacher } from './reacher';
 import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../../legs/person/posture';
 import { defaultStance } from '../../species/humanoid/stance';
 
@@ -56,7 +56,7 @@ export type Standing = 'there' | 'nowhere' | { walk: Walk; arrived: (f: Frame) =
  * (`nowhere`), and the body stands where it is — as a body its app drives always does. A placing
  * point that moves is followed, its translation and rotation, as it goes.
  */
-export function standing(h: Person, to: Stand): Standing {
+export function standing(h: Reacher, to: Stand): Standing {
   const f0 = h.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
   const grips: { side?: Side; at: Vector3 }[] = [];
@@ -193,14 +193,14 @@ export function* walking(request: Request, plan: { walk: Walk; arrived: (f: Fram
 }
 
 /** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */
-function stoop(p: Person['proportions'], want: number): { drop: number; forward: number } {
+function stoop(p: Reacher['proportions'], want: number): { drop: number; forward: number } {
   const lever = bowLever(p, p.shoulderHeight), most = squatOf(p) + lever * (1 - Math.cos(MOST_BOW));
   const drop = Math.min(want, most), { bow } = lowering(p, { drop, ahead: 0, height: p.shoulderHeight });
   return { drop, forward: lever * Math.sin(bow) };
 }
 
 /** the facing to take grips `grips` with: the left hand's to the left of the right's, or toward a single one from where the body stands */
-function facingFor(h: Person, grips: { side?: Side; at: Vector3 }[]): number {
+function facingFor(h: Reacher, grips: { side?: Side; at: Vector3 }[]): number {
   const left = grips.find((g) => g.side === 'left');
   const right = grips.find((g) => g.side === 'right');
   if (left && right) return Math.atan2(-(left.at.z - right.at.z), left.at.x - right.at.x);

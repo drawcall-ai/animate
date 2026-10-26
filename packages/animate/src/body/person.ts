@@ -1,19 +1,23 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import { Pose } from '../kernel/pose';
+import { Pose, type ReadonlyPose } from '../kernel/pose';
+import { gazeAsks } from '../hands/person/bend';
+import { personHands } from '../hands/person/handling';
+import type { Handling } from '../hands/handling';
+import { looking } from '../look/gaze';
+import type { Gazer } from '../species/define';
 import type { Carrier } from '../kernel/carrier';
 import { solveChain } from '../kernel/chain';
 import { REACHED, type Target } from '../kernel/goal';
 import { ChainTip } from '../kernel/tip';
 import { forwardOf, leftOf } from '../kernel/math';
-import { looking, type Gazer } from '../look/gaze';
-import { Self, type Behaviours, type Hold, type SelfOptions } from './runtime';
+import { Self, type Behaviours, type SelfOptions } from './runtime';
+import type { Hold } from '../things/resolve';
 import { resolve } from '../things/resolve';
 import { bear, bodyOf, checkParents, inHand, move, supported, worn } from '../things/hold';
 import type { Thing } from '../things/thing';
-import { INDEX, SIDES, type Side } from '../species/humanoid/bones';
+import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
-import { pointsOf, type BonePoint, type PointName } from '../species/humanoid/landmarks';
 import { footRotation, type Foot } from '../legs/person/foot';
 import { legOf } from '../legs/person/leg';
 import { STANDING_REACH } from '../legs/person/posture';
@@ -21,7 +25,7 @@ import { relaxedPose } from '../species/humanoid/relaxed';
 import { defaultStance, footYaw, stanceFeet } from '../species/humanoid/stance';
 import { driven } from '../legs/person/balance';
 import { stride } from '../legs/person/stride';
-import { hanging, handStep } from '../hands/person/arms';
+import { hanging, handStep, HOLD } from '../hands/person/arms';
 import { lookAround } from '../look/around';
 import type { AnySpecies } from '../species/define';
 
@@ -37,8 +41,6 @@ export class Person extends Self {
   /** what its hands carry this sub-step and along which aim: fitted to the wrists after the hands */
   readonly carrying = new Map<Object3D, Carrier>();
   readonly proportions: Proportions;
-  /** its named points: landmarks, eyes, wrists, palms */
-  readonly points: Record<PointName, BonePoint>;
 
   constructor(species: AnySpecies, options: SelfOptions) {
     const p = species.person;
@@ -52,7 +54,16 @@ export class Person extends Self {
     if (!feet) throw new Error('a person stands where it is made');
     this.feet = feet;
     this.proportions = p;
-    this.points = pointsOf(p);
+  }
+
+  /** a person's hands: both at once, the right leading */
+  protected handle(): Handling {
+    return personHands(this);
+  }
+
+  /** before the head aims at `point`: the body bows and lowers to see low down */
+  lead(pose: ReadonlyPose, point: Readonly<Vector3>): void {
+    gazeAsks(this, pose, point);
   }
 
   protected behave(): Behaviours {
@@ -112,16 +123,7 @@ export function personOf(self: Self): Person {
   return self;
 }
 
-/** `hand` as a person's side: a person's hands are `left` and `right` */
-export function sideOf(hand: string): Side {
-  const side = SIDES.find((s) => s === hand);
-  if (!side) throw new Error(`a person's hands are left and right, not "${hand}"`);
-  return side;
-}
 
-/** Tuned: how briskly a holding hand keeps to its grip as the thing or the body moves (m/s², m/s, rad/s², rad/s): a firm hold, far
- * quicker than a reach, so it never trails what it holds */
-export const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
 /**
  * How far a hand may be from a grip it starts holding (m): a reach ends once the wrist is within `REACHED.distance`, and the same

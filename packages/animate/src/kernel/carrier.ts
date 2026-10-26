@@ -1,14 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { STEP } from './frame';
-import type { Placement, Target } from './goal';
+import type { Placed, Placement, Target } from './goal';
 import { spinOf } from './rotation';
-
-/** Where a carrier is at a sub-step (`current`) and the two before. */
-export interface Placed {
-  readonly prev2: Required<Placement>;
-  readonly prev: Required<Placement>;
-  readonly current: Required<Placement>;
-}
 
 /**
  * A rigid frame as a body follows it (a held box, a socket, a moving target), with a history like a body's: `current` where it was

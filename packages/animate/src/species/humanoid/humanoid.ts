@@ -1,15 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Skeleton } from '../../kernel/skeleton';
-import type { Gazer } from '../../look/gaze';
-import { needing, type BoneNames, type Having, type Species } from '../define';
+import { needing, type BoneNames, type Gazer, type Having, type Species } from '../define';
 import { BONES, CHILD_BONES, PARENT, createRest, perBone, type BoneName, type ChildBone, type Side } from './bones';
 import { pointsOf } from './landmarks';
 import { NECK_PITCH, ranges } from './limits';
 import { derive, type Proportions } from './proportions';
 import { CHAINS, massFor, skeletonOf } from './skeleton';
-import { gazeAsks } from '../../hands/person/bend';
-import { personOf } from '../../body/person';
 
 /** the bones a person's skeleton names: every humanoid bone but the toes, which a foot without them is given at its ball */
 export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
@@ -109,7 +106,6 @@ function humanGaze(p: Proportions): Gazer {
     eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),
     range: EYES,
     pitch: NECK_PITCH * Math.PI / 180,
-    lead: (self, pose, point) => gazeAsks(personOf(self), pose, point),
   };
 }
 

@@ -9,7 +9,7 @@ import { clamp, minimumJerk, yawOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
 import { swing } from '../kernel/life';
 import type { Gait } from './gait';
-import { carriage, type CarriedBones, type Striding } from '../legs/carriage';
+import { carriage, type CarriedBones, type Striding } from './carriage';
 import type { JointCycle } from './cycle';
 import type { LegChain } from './leg';
 import { powerGait, stanceOf } from './schedule';

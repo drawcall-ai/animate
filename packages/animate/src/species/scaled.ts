@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Gait } from './gait';
-import type { Carriage } from '../legs/carriage';
+import type { Carriage } from './gait';
 import type { LegChain } from './leg';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton } from '../kernel/skeleton';

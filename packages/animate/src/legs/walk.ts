@@ -3,8 +3,7 @@ import type { Frame } from '../kernel/frame';
 import type { Go, Stance } from '../kernel/go';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
-import type { Self } from '../body/runtime';
-import { heldMass } from '../things/hold';
+import type { Legged } from './legged';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
 const STROLL = { speed: 1.3, accel: 1.2 };
@@ -58,7 +57,7 @@ export class Walk {
   private since = 0;
   private nowhere = false;
 
-  constructor(private readonly self: Self, private readonly way: Way, private readonly arrives = true) {
+  constructor(private readonly self: Legged, private readonly way: Way, private readonly arrives = true) {
     this.go.plant = way.plant;
   }
 
@@ -101,7 +100,7 @@ export class Walk {
   /** where it goes this sub-step (`go.to`), and the facing it arrives with (null: none) */
   private where(f: Frame): number | null {
     const { self, way, go } = this, within = way.within ?? 0, via = way.via ?? [];
-    const effort = loadFactor(heldMass(self));
+    const effort = loadFactor(self.load);
     go.speed = way.speed ?? STROLL.speed * self.tempo / effort;
     go.accel = way.accel ?? STROLL.accel * self.tempo / effort;
     const body = placeOf(self, f).setY(0);
@@ -144,7 +143,7 @@ export class Walk {
  * setting off), plus slowing to a stop, or the turn left, whichever is longer (the trajectory a motion-matching query predicts, here from
  * the walk's own goal)
  */
-function etaOf(self: Self, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
+function etaOf(self: Legged, body: Readonly<Vector3>, go: Go, yaw: number | null): number {
   const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * self.scale;
   const v = Math.min(go.speed, Math.max(self.locomotion.velocity.length(), SETTING_OFF));
   const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;
@@ -153,6 +152,6 @@ function etaOf(self: Self, body: Readonly<Vector3>, go: Go, yaw: number | null):
 }
 
 /** where a walk takes the body: a species' legs carry its root there, a person's balance its centre of mass */
-const placeOf = (self: Self, f: Frame) => (self.species.legs ? _com.copy(f.prev.position(0)) : f.prev.com(_com)).setY(0);
+const placeOf = (self: Legged, f: Frame) => (self.species.legs ? _com.copy(f.prev.position(0)) : f.prev.com(_com)).setY(0);
 const _com = new Vector3();
 const _v = new Vector3();

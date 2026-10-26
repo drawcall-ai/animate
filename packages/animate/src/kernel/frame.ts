@@ -22,3 +22,6 @@ export interface Frame {
   current: Pose;
   readonly dev?: Dev;
 }
+
+/** a body part's behaviour this sub-step */
+export type Step = (f: Frame) => void;

@@ -6,8 +6,11 @@ import type { Pose } from '../kernel/pose';
 import { TrackedPoint, TrackedRotation } from '../kernel/track';
 import { lowering, LOWER } from '../legs/person/posture';
 import { INDEX } from '../species/humanoid/bones';
-import type { Person } from '../body/person';
-import type { Step } from '../body/runtime';
+import type { PersonLegged } from '../legs/person/legged';
+
+/** a person as a led head sees it: its proportions, how it walks and stands, and what its parts ask of its stance */
+type Led = Pick<PersonLegged, 'proportions' | 'locomotion' | 'stepper' | 'poise'>;
+import type { Step } from '../kernel/frame';
 import { forwardOf, wrapAngle, yawOf } from '../kernel/math';
 import type { Go } from '../kernel/go';
 
@@ -45,7 +48,7 @@ const UNDER = { speed: 1.0, accel: 1.2 };
  * turned further than the trunk and neck take, stands where the eyes are over it, bows and squats for a head lower than standing and goes
  * up on its toes for one higher.
  */
-export function heading(h: Person, eyes: (f: Frame) => Placement, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
+export function heading(h: Led, eyes: (f: Frame) => Placement, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
   const joints = SPINE.map(() => new TrackedRotation());
@@ -95,7 +98,7 @@ class Under {
   private off = 0;
   private height = NaN;
 
-  constructor(private readonly h: Person) {}
+  constructor(private readonly h: Led) {}
 
   /** the body bowed and let down for the eyes at `eyes`, the head facing `yaw`, and where its legs go under them */
   ask(f: Frame, eyes: Vector3, yaw: number): Go {

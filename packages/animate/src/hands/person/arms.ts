@@ -8,11 +8,11 @@ import { clampRotation } from '../../kernel/limits';
 import { ChainTip } from '../../kernel/tip';
 import { TrackedRotation } from '../../kernel/track';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
-import type { Step } from '../../body/runtime';
+import type { Reacher } from './reacher';
+import type { Step } from '../../kernel/frame';
 import type { Thing } from '../../things/thing';
 import { hangsFrom, onBody } from '../../things/hold';
-import { bringShoulder, twistToward } from './bend';
+import { bringShoulder, PROTRACTION, twistToward } from './bend';
 import { checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -38,10 +38,6 @@ const SWING = { accel: 25, speed: 2.5 };
 export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
-/** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
-export const ARM_REACH = 0.95;
-/** how far the clavicle draws the shoulder joint toward a hand reaching out past 85% of the arm, at most (× height) */
-export const PROTRACTION = 0.035;
 
 /**
  * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
@@ -49,7 +45,7 @@ export const PROTRACTION = 0.035;
  * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
  * task let go of swings back into it. A hand holding any item follows its grip until release, including supported and worn items.
  */
-export function hanging(h: Person): Step {
+export function hanging(h: Reacher): Step {
   const goals = new Map<number, TrackedRotation>();
   let phase = h.locomotion.phase;
   return (f) => {
@@ -101,7 +97,7 @@ export function hanging(h: Person): Step {
 }
 
 /** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh, judged facing `yaw` (default: the pelvis's). */
-export function clearArm(h: Person, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0))): Vector3 {
+export function clearArm(h: Reacher, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0))): Vector3 {
   const sign = side === 'left' ? 1 : -1, hips = f.current.position(0);
   const inverse = _r.setFromAxisAngle(Y, -yaw);
   const local = _rest.subVectors(at, hips).applyQuaternion(inverse);
@@ -129,6 +125,10 @@ function set(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal:
   f.current.setLocal(bone, q);
 }
 
+/** Tuned: how briskly a holding hand keeps to its grip as the thing or the body moves (m/s², m/s, rad/s², rad/s): a firm hold, far
+ * quicker than a reach, so it never trails what it holds */
+export const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
+
 /** How a person's hand goes to its target. */
 export interface HandOptions extends Partial<Motion> {
   /** the target is on this frame (a thing's, tracked), in its frame: the hand goes with it */
@@ -155,7 +155,7 @@ export interface HandOptions extends Partial<Motion> {
  * Leading (by default), a target below what the arm reaches standing asks balance to bow and bend the knees for it, one above to go up
  * on the toes.
  */
-export function reaching(h: Person, side: Side, target: Live<Target>, options: HandOptions = {}): Step {
+export function reaching(h: Reacher, side: Side, target: Live<Target>, options: HandOptions = {}): Step {
   const { seconds, after = 0 } = options;
   const arm = new ChainTip(`${side}Arm`);
   // (gliding: set off once the hand need not wait for the body, in what is left of the reach's time — at least half of it)
@@ -250,7 +250,7 @@ interface Toward {
 }
 
 /** one sub-step of `handTo`, its arm's tip `arm` */
-export function handStep(h: Person, f: Frame, side: Side, target: Target, options: HandOptions, arm: ChainTip, toward?: Toward) {
+export function handStep(h: Reacher, f: Frame, side: Side, target: Target, options: HandOptions, arm: ChainTip, toward?: Toward) {
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
   if (options.thing && f.current.skeleton.chain(`${side}Arm`).includes(hangsFrom(h, options.thing.object))) return;
   const p = h.proportions;

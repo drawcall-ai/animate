@@ -4,36 +4,8 @@ import { Life, type Rhythm } from '../kernel/life';
 import { clamp, GRAVITY, yawOf } from '../kernel/math';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
 import { irregular } from '../kernel/random';
-import { offsetAt, strideAt, type Gait } from '../species/gait';
-import type { LegChain } from '../species/leg';
-
-/**
- * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
- * and the wave w(c) = (1 − once) · cos(2x − c) + once · cos(x − c) — twice a stride (a walk's, a trot's: a bounce on each diagonal) or
- * once (a gallop's: `once` 1) — the withers rise `withers · w(0)` (m) and the croup `croup[0] · w(croup[1])`, the trunk pitching between
- * them; the spine pitches `spine · w(spinePhase)` (°, + its hind end up: extending); the head pitches `headPitch` (°) and rises
- * `headRise` (m) with the wave from the fore-left's landing, and rises with the withers by `headWithers` (share: 0 holds it level, as a
- * running cat's). The tail's root pitches against the croup's pitch by `tail` (share). Once a stride, with the hind legs' stance, the
- * pelvis rolls `roll` (°) and yaws `yaw` (°), and the tail swings after it. Turning, the spine bends into the turn as `bend` of the arc
- * its back (withers to croup) walks would bend it — on the spot as walking its slowest — the neck taking the front half, the spine and
- * pelvis the back (none: it does not). Running, the trunk rides its legs' push by `bounce` (share, on top of the wave): its centre of
- * mass and pitch go as each stance's push and the flights' fall carry them (`Riding`).
- */
-export interface Carriage {
-  bend?: number;
-  withers: number;
-  croup: readonly [number, number];
-  spine: number;
-  spinePhase: number;
-  roll: number;
-  yaw: number;
-  headPitch: number;
-  headRise: number;
-  headWithers: number;
-  once?: number;
-  tail?: number;
-  bounce?: number;
-}
+import { offsetAt, strideAt, type Carriage, type Gait } from './gait';
+import type { LegChain } from './leg';
 
 /**
  * What of a species' skeleton its gait carries (`Species.legs.carriage`), by bone name — the legs ordered fore-left, fore-right,

@@ -1,15 +1,26 @@
 import { Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import type { Gazer } from '../look/gaze';
 import type { Inertial } from '../kernel/inertia';
 import type { Gait } from './gait';
-import type { CarriedBones, Striding } from '../legs/carriage';
+import type { CarriedBones, Striding } from './carriage';
 import type { JointCycle } from './cycle';
 import type { LegChain } from './leg';
 import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton, type BoneDef, type Limit } from '../kernel/skeleton';
 import type { Proportions } from './humanoid/proportions';
+
+/** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
+export interface Gazer {
+  /** the chain that turns the head; without one, the species' posture turns it toward where the eyes are asked (`look`) */
+  neck?: string;
+  /** the point the eyes look from (world), into `out` */
+  eyes(pose: ReadonlyPose, out: Vector3): Vector3;
+  /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
+  range: { down: number; up: number; side: number };
+  /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
+  pitch?: number;
+}
 
 /** A point as a skeleton writes it: [x, y, z] (m; +Y up, the body facing +Z, its left +X). */
 export type Vec3 = readonly [number, number, number];
@@ -63,6 +74,12 @@ export type AnySpecies = Species<string, string>;
 export interface Attention {
   tether?: (time: number) => { position: Readonly<Vector3>; length: number } | undefined;
   startle?: (time: number) => Readonly<Vector3> | undefined;
+}
+
+/** What a body's legs are asked by the scene and its quiet life: a seed, a tether, a startle. */
+export interface Temperament extends Attention {
+  /** fixes its variation: sway, breathing, weight shifts, glances */
+  seed?: number;
 }
 
 /** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */

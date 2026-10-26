@@ -4,16 +4,17 @@ import type { Frame } from '../../kernel/frame';
 import { movingPoint, type Target } from '../../kernel/goal';
 import { reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
-import { ARM_REACH, clearArm, reaching } from './arms';
+import { clearArm, reaching } from './arms';
+import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
+import type { Reacher } from './reacher';
 
 /**
  * Hands that let go backing out: each goes off what it held, carried on the way it was going (its follow-through) and away from it
  * (toward the hand's rest beside its thigh), as near as its arm reaches — never folded on itself nor stretched out, the body not bowing
  * nor rising after it. Once they are there, or `LETTING_GO` s on, the free arms take them.
  */
-export function* backingOut(h: Person, request: Request, sides: readonly Side[]) {
+export function* backingOut(h: Reacher, request: Request, sides: readonly Side[]) {
   const p = h.proportions, began = h.frame.time;
   let targets: ((f: Frame) => Target)[] | null = null;
   let time = NaN, goals: Target[] = [];

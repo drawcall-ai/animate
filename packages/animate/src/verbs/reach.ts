@@ -1,19 +1,7 @@
-import { Vector3 } from 'three';
-import { action, parallel } from '@pmndrs/timeline';
 import { selfOf, type Body, type HandOf } from '../body/body';
-import { during } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import type { Target as Goal } from '../kernel/goal';
 import type { AnySpecies } from '../species/define';
-import { looking, SHIFT } from '../look/gaze';
-import { reached } from '../kernel/tip';
-import { seedOf } from '../kernel/random';
-import { nuzzling } from '../hands/creature/hands';
-import { Person, sideOf } from '../body/person';
-import { ARM_REACH, CALM, reaching } from '../hands/person/arms';
-import { INDEX } from '../species/humanoid/bones';
-import { reachTime } from '../hands/person/reach';
-import { standing, walking } from '../hands/person/stand';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
@@ -37,58 +25,13 @@ export function reach<S extends AnySpecies>(body: Body<S>, targets: Partial<Reco
   if (!named.length) throw new Error('reach: name a target for a hand');
   return verb(body, 'reach', (request) => function* () {
     const self = selfOf(body);
-    if (!(self instanceof Person)) {
-      if (named.length > 1) throw new Error('reach: a creature reaches with one hand at a time');
-      const find = finder(self, named[0].target);
-      yield* nuzzling(self, request, named[0].hand, (f) => find(f).position);
-      return;
-    }
-    const h = self, hands = named.map(({ hand, target }) => ({ side: sideOf(hand), find: finder(h, target) }));
-    const goal = (find: ReturnType<typeof finder>) => (f: Frame): Goal => {
-      const found = find(f);
-      return { position: found.position, quaternion: found.quaternion ?? undefined, velocity: found.velocity };
-    };
-    // (targets the arms reach from where it stands are reached from there, the trunk turning — its shoulder up to its half-width nearer —
-    // and bowing for them)
-    const most = ARM_REACH * h.proportions.armLength + h.proportions.shoulderHalfWidth;
-    const inReach = hands.every(({ side, find }) => h.pose.position(INDEX[`${side}UpperArm`]).distanceTo(find(h.frame).position) < most);
-    const plan = inReach ? 'there' : standing(h, { grips: hands.map(({ side, find }) => ({ side, at: find(h.frame).position.clone() })), mass: 0 });
-    if (plan === 'nowhere') {
-      request.fail();
-      return;
-    }
-    let stood = plan === 'there';
-    const near = () => stood || (plan !== 'there' && plan.walk.eta <= NEAR);
-    const middle = (f: Frame) => hands.reduce((sum, { find }) => sum.add(find(f).position), _middle.set(0, 0, 0)).divideScalar(hands.length);
-    const there = (f: Frame) => hands.every(({ side, find }) => reached(f, h.hands[side], goal(find)(f)));
-    const going = hands.map(({ side, find }) => {
-      const distance = h.pose.position(h.hands[side]).distanceTo(find(h.frame).position);
-      const { speed } = options, accel = options.accel ?? CALM.accel;
-      if (speed !== undefined) return { side, step: reaching(h, side, goal(find), { accel, speed }), lasts: distance / speed + speed / accel };
-      const seconds = reachTime(distance / h.scale, seedOf(side, Math.round(distance * 1000))) / h.tempo;
-      return { side, step: reaching(h, side, goal(find), { seconds }), lasts: seconds };
+    const aims = named.map(({ hand, target }) => {
+      const find = finder(self, target);
+      return { hand, target: (f: Frame): Goal => {
+        const found = find(f);
+        return { position: found.position, quaternion: found.quaternion ?? undefined, velocity: found.velocity };
+      } };
     });
-    // (what it moves arrives once the farthest hand does: the hands set off `NEAR` s before a walk arrives)
-    const lasts = Math.max(...going.map((hand) => hand.lasts));
-    let setOff = NaN;
-    yield* parallel<Frame>('all', function* () {
-      if (plan === 'there') return;
-      if (!(yield* walking(request, plan, Math.max(0, lasts - NEAR)))) request.fail();
-      stood = true;
-    }, function* () {
-      yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(h, middle, SHIFT)), function* () {
-        yield* action<Frame>({ until: near });
-        const eta = (f: Frame) => void (request.eta = Math.max(0, (Number.isNaN(setOff) ? (setOff = f.time) : setOff) + lasts - f.time));
-        yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ update: eta, until: there }));
-      });
-    });
-    if (request.outcome === 'failed') return;
-    request.met();
-    // (there, it keeps its hands there till its story moves on)
-    yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
+    yield* self.handling.reach(request, aims, options);
   }, options.until);
 }
-
-/** the hands set off once the walk will arrive within this (s) */
-const NEAR = 0.6;
-const _middle = new Vector3();

@@ -6,20 +6,19 @@ import type { Motion } from '../kernel/goal';
 import { clampRotation } from '../kernel/limits';
 import { spinOf } from '../kernel/rotation';
 import type { ReadonlyPose } from '../kernel/pose';
-import type { Self, Step } from '../body/runtime';
+import type { Step } from '../kernel/frame';
+import type { Poise } from '../kernel/poise';
+import type { Gazer } from '../species/define';
+import type { Locomotion } from '../legs/locomotion';
 
-/** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
-export interface Gazer {
-  /** the chain that turns the head; without one, the species' posture turns it toward where the eyes are asked (`look`) */
-  neck?: string;
-  /** the point the eyes look from (world), into `out` */
-  eyes(pose: ReadonlyPose, out: Vector3): Vector3;
-  /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
-  range: { down: number; up: number; side: number };
-  /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
-  pitch?: number;
-  /** Ask the body to help before aiming the head. */
-  lead?(self: Self, pose: ReadonlyPose, point: Readonly<Vector3>): void;
+/** A body as its eyes see it: its gaze, where a neckless species' posture turns its head, its poise and its walk. */
+export interface Looker {
+  readonly gazer?: Gazer;
+  look: Readonly<Vector3> | null;
+  readonly poise: Poise;
+  readonly locomotion: Locomotion;
+  /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
+  lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
 
 /** the most a head turns to look about (rad/s², rad/s): a glance aside, at most */
@@ -39,7 +38,7 @@ export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
  * slowly, a large one briskly, a bell either way), at most at `motion`'s pace, and shared evenly
  * over the neck chain's bones, each within its limit.
  */
-export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Step {
+export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   if (neck === undefined) return (f) => void (self.look = target(f));
@@ -59,7 +58,7 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, mot
     const pose = f.current;
     const bones = pose.skeleton.chain(neck);
     const point = target(f);
-    gazer.lead?.(self, f.prev, point);
+    self.lead?.(f.prev, point);
     // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it)
     const distance = aimed?.distanceTo(point) ?? Infinity;
     const jumped = distance > JUMP * f.dt;
@@ -194,7 +193,7 @@ const AIM_TWIST = Infinity;
  * Tuned torso shares: 65% yaw, 25% pitch; the base shares them over spine/chest,
  * gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow.
  */
-export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>): Step {
+export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>): Step {
   const gazer = self.gazer;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   return (f) => {

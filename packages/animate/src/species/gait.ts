@@ -1,6 +1,32 @@
-import { Vector3 } from 'three';
 import { GRAVITY } from '../kernel/math';
-import type { Carriage } from '../legs/carriage';
+
+/**
+ * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
+ * and the wave w(c) = (1 − once) · cos(2x − c) + once · cos(x − c) — twice a stride (a walk's, a trot's: a bounce on each diagonal) or
+ * once (a gallop's: `once` 1) — the withers rise `withers · w(0)` (m) and the croup `croup[0] · w(croup[1])`, the trunk pitching between
+ * them; the spine pitches `spine · w(spinePhase)` (°, + its hind end up: extending); the head pitches `headPitch` (°) and rises
+ * `headRise` (m) with the wave from the fore-left's landing, and rises with the withers by `headWithers` (share: 0 holds it level, as a
+ * running cat's). The tail's root pitches against the croup's pitch by `tail` (share). Once a stride, with the hind legs' stance, the
+ * pelvis rolls `roll` (°) and yaws `yaw` (°), and the tail swings after it. Turning, the spine bends into the turn as `bend` of the arc
+ * its back (withers to croup) walks would bend it — on the spot as walking its slowest — the neck taking the front half, the spine and
+ * pelvis the back (none: it does not). Running, the trunk rides its legs' push by `bounce` (share, on top of the wave): its centre of
+ * mass and pitch go as each stance's push and the flights' fall carry them (`Riding`).
+ */
+export interface Carriage {
+  bend?: number;
+  withers: number;
+  croup: readonly [number, number];
+  spine: number;
+  spinePhase: number;
+  roll: number;
+  yaw: number;
+  headPitch: number;
+  headRise: number;
+  headWithers: number;
+  once?: number;
+  tail?: number;
+  bounce?: number;
+}
 
 /** A contact table, in leg order. All functions read speed (m/s) and Froude v²/(g·height). */
 export interface Gait {
@@ -51,48 +77,3 @@ export function offsetAt(gait: Gait, speed: number, leg: number): number {
 /** Round only negative speed noise; real reverse speeds still fail validation. */
 const speedOf = (speed: number) => speed < 0 && speed > -1e-9 ? 0 : speed;
 
-/** Walk state, of any legs: the legs report the motion; walkTo publishes and clears its arrival estimate. */
-export interface Locomotion {
-  /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
-  phase: number;
-  /** 0 standing … 1 walking, 0 walking … 1 running */
-  walk: number;
-  run: number;
-  /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
-  facing: number;
-  /** the heading it will walk with half a second ahead (rad), for the eyes to lead */
-  facingAhead?: number;
-  velocity: Vector3;
-  /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
-  eta: number;
-  /** a walk is under way */
-  moving: boolean;
-  /** come to rest: no walk under way, both feet planted a while and none wanting to step */
-  settled: boolean;
-  /** the legs hold the walk's still goal reached, as near as they take the body to it (a creature stops just short of or past it rather than
-   * edging about); a walk ends there as it does within its own reach of the goal */
-  there: boolean;
-  /** seconds standing on planted feet since the current walk started; the base resets it on a new walk */
-  planted: number;
-  /** the pelvis's and the thorax's turn with the stride (rad, + to the left) */
-  pelvisYaw: number;
-  thoraxYaw: number;
-  /** the requested quiet stance displacement from the centred stance (m, world) */
-  quiet: Vector3;
-}
-
-export const createLocomotion = (facing: number): Locomotion => ({
-  eta: Infinity,
-  phase: 0,
-  walk: 0,
-  run: 0,
-  facing,
-  velocity: new Vector3(),
-  moving: false,
-  settled: true,
-  there: false,
-  planted: 0,
-  pelvisYaw: 0,
-  thoraxYaw: 0,
-  quiet: new Vector3(),
-});

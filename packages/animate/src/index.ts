@@ -2,7 +2,8 @@
 // What a species of your own needs is in '@drawcall/animate/species'.
 
 export { Body, type BodyOptions, type Foot, type Goal, type Goals } from './body/body';
-export type { Driven, Life } from './body/runtime';
+export type { Driven } from './legs/legged';
+export type { Temperament } from './species/define';
 export { humanoid, type HumanoidBone } from './species/humanoid/humanoid';
 export { horse, type HorseBone } from './species/horse';
 export { dog, type DogBone } from './species/dog';

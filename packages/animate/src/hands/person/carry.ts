@@ -11,16 +11,14 @@ import { during, type Request } from '../../kernel/requests';
 import { carriedBy, handsOn, heldMass, supported, take } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { resolve } from '../../things/resolve';
-import type { Person } from '../../body/person';
-import { sideOf } from '../../body/person';
-import { handStep, ARM_REACH, PROTRACTION } from './arms';
-import { SIDES, type Side } from '../../species/humanoid/bones';
-import { bringShoulder } from './bend';
+import type { Reacher } from './reacher';
+import { handStep, HOLD } from './arms';
+import { SIDES, sideOf, type Side } from '../../species/humanoid/bones';
+import { ARM_REACH, bringShoulder, PROTRACTION } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { BODY_RADIUS, clearBody, LOAD_RESERVE } from './clearance';
 import { following, LEADING } from './reach';
 import { standing, walking } from './stand';
-import { HOLD } from '../../body/person';
 
 // Carrying: the hands on a thing's grips, carrying it where it goes.
 
@@ -63,7 +61,7 @@ export interface Way {
  * last of the walk. It is met once the thing has come to rest at the way's end; the hands then keep it there. Its eyes go where it goes
  * (borrowed). An end out of reach from anywhere it could stand fails it.
  */
-export function* carrying(h: Person, request: Request, thing: Thing, way: Way, options: { speed?: number; accel?: number } = {}) {
+export function* carrying(h: Reacher, request: Request, thing: Thing, way: Way, options: { speed?: number; accel?: number } = {}) {
   const sides = handsOn(h, thing).map(sideOf);
   if (!sides.length) throw new Error(`carry: no hand holds "${thing.object.name}"`);
   const resting = supported(thing);
@@ -123,12 +121,12 @@ export function* carrying(h: Person, request: Request, thing: Thing, way: Way, o
 }
 
 /** the eyes on where the carry goes (borrowed), for as long as the carry runs */
-function aiming(h: Person, request: Request, thing: Thing, end: (f: Frame) => Placement) {
+function aiming(h: Reacher, request: Request, thing: Thing, end: (f: Frame) => Placement) {
   return during(request, 'look', 'borrowed', looking(h, (f) => end(f).position, SHIFT));
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(h: Person, request: Request, thing: Thing, way: Way, motion: Motion, resting: boolean, speed = ALONG.speed * h.tempo) {
+function* along(h: Reacher, request: Request, thing: Thing, way: Way, motion: Motion, resting: boolean, speed = ALONG.speed * h.tempo) {
   const points = way.points;
   const straight = way.last !== undefined && points.length > 1;
   const first = straight ? points.slice(0, -1) : points;
@@ -137,7 +135,7 @@ function* along(h: Person, request: Request, thing: Thing, way: Way, motion: Mot
 }
 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `ALONG.least` s */
-function timed(h: Person, thing: Thing, points: readonly ((f: Frame) => Placement)[], speed: number): Waypoint[] {
+function timed(h: Reacher, thing: Thing, points: readonly ((f: Frame) => Placement)[], speed: number): Waypoint[] {
   const f = h.frame;
   let from = h.track(thing.object).current.position.clone();
   const lengths = points.map((point) => {
@@ -159,7 +157,7 @@ function wayToCourse(way: Way, seconds: number): Waypoint[] {
  * `thing` off whatever it rests on or is in, into the person's hands (`take`), its weight taken up. A heavy load resting on something first gets the anticipatory knee dip (100 ms, 5 mm). A thing
  * without a mass is lifted all the same, a problem in the dev log.
  */
-export function* lifting(h: Person, request: Request, thing: Thing) {
+export function* lifting(h: Reacher, request: Request, thing: Thing) {
   if (carriedBy(h, thing)) return;
   const f = h.frame;
   if (!thing.massive) f.dev?.append(f.time, { check: 'lifted a thing without userData.mass (kg)', value: 0, limit: 0, where: thing.object.name });
@@ -175,7 +173,7 @@ export function* lifting(h: Person, request: Request, thing: Thing) {
 }
 
 /** a loose thing with a mass, held, lifted clear of what it rests on (`CLEAR`), then held as it is */
-export function* liftingClear(h: Person, request: Request, thing: Thing) {
+export function* liftingClear(h: Reacher, request: Request, thing: Thing) {
   const resting = supported(thing);
   yield* lifting(h, request, thing);
   const carrier = h.track(thing.object);
@@ -194,7 +192,7 @@ export function* liftingClear(h: Person, request: Request, thing: Thing) {
  * its weight (its lift's pace and acceleration), a heavy one taken up off its support (`resting`) dipping a little as it rises, then
  * recovering; still settling `RESTING` s after the course is over, a problem in the dev log, and it goes on.
  */
-function* travel(h: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], motion: Motion, resting: boolean, near = END.distance) {
+function* travel(h: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], motion: Motion, resting: boolean, near = END.distance) {
   const carrier = h.track(thing.object);
   const sides = handsOn(h, thing).map(sideOf);
   const grips = Object.fromEntries(sides.map((side) => [side, h.holding[side]?.grip ?? '']));
@@ -256,7 +254,7 @@ function planned(carrier: Carrier, waypoints: readonly Waypoint[], options: { pa
  * do), every sub-step until `until` (endless without), each hand asked: one hand goes where the thing, hanging from it, is to be; two go
  * to their grips on it, and after the hands the body fits it to them.
  */
-function holding(h: Person, request: Request, thing: Thing, aim: CarryAim, to: Live<Placement>, until?: (f: Frame) => boolean) {
+function holding(h: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Placement>, until?: (f: Frame) => boolean) {
   const sides = handsOn(h, thing).map(sideOf);
   const tips = new Map(sides.map((side) => [side, new ChainTip(`${side}Arm`)]));
   const single = sides.length === 1 ? inHandOf(h, sides[0], thing) : null;
@@ -288,8 +286,8 @@ function holding(h: Person, request: Request, thing: Thing, aim: CarryAim, to: L
  * where hand `side` goes for `thing`, which hangs from it, to be where a carrier has it: the thing's frame times where the hand bone is
  * in it (read once: hanging from the hand, it keeps its place on it), the hand bone's rest undone
  */
-function inHandOf(h: Person, side: Side, thing: Thing): (carrier: Carrier) => Target & { velocity: Vector3 } {
-  const bone = h.hands[side], node = h.binding.bones[h.skeleton.bones[bone].name];
+function inHandOf(h: Reacher, side: Side, thing: Thing): (carrier: Carrier) => Target & { velocity: Vector3 } {
+  const bone = h.hands[side], node = h.boneNode(bone);
   const hand = resolve(h, node, { position: new Vector3(), quaternion: new Quaternion() });
   const at = resolve(h, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
   const back = at.quaternion.clone().invert();
@@ -336,7 +334,7 @@ class CarryAim {
   /** whether a goal moved clear of the head has been noted */
   private cleared = false;
 
-  constructor(private readonly h: Person, private readonly thing: Thing, private readonly motion: Motion) {
+  constructor(private readonly h: Reacher, private readonly thing: Thing, private readonly motion: Motion) {
     const own = h.track(thing.object);
     this.nominal = new Carrier(own.current.position, own.current.quaternion);
     this.carrier = new Carrier(own.current.position, own.current.quaternion);
@@ -373,7 +371,7 @@ class CarryAim {
 }
 
 /** A comfortable carry in front of the hips (beside one hip for a single hand), following the body: where a transfer carries its load. */
-export function carried(h: Person, side?: Side): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
+export function carried(h: Reacher, side?: Side): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
   const at = movingPoint(h, 0, () => {
     // Recalled load law: shorten the lever arm with squared pace effort (35 → 19 cm at 8 kg).
     const effort = loadFactor(heldMass(h));
@@ -397,7 +395,7 @@ export function carried(h: Person, side?: Side): (f: Frame) => Required<Placemen
  * it), a grip that far out is reached from that far below the shoulder at most — a bulky load for short arms is held higher, nearer the
  * chest.
  */
-function inReach(h: Person, thing: Thing): number {
+function inReach(h: Reacher, thing: Thing): number {
   const p = h.proportions, o = p.offsets, reach = ARM_REACH * p.armLength + PROTRACTION * p.height;
   const ahead = BODY_RADIUS * p.height + LOAD_RESERVE * h.scale - thing.bounds.min.z;
   return Math.max(-Infinity, ...SIDES.map((side) => {
@@ -416,7 +414,7 @@ function inReach(h: Person, thing: Thing): number {
  * approach comes (slowing to its `userData.speed` on the last straight), the last's orientation reached by the start of that straight;
  * leaving from the point of its way out nearest where the thing is.
  */
-export function wayOf(h: Person, thing: Thing, targets: readonly ((f: Frame) => Placement)[], end: Object3D | null): Way {
+export function wayOf(h: Reacher, thing: Thing, targets: readonly ((f: Frame) => Placement)[], end: Object3D | null): Way {
   const f = h.frame, at = h.track(thing.object).current.position.clone();
   const turn = (f: Frame) => targets[targets.length - 1](f).quaternion;
   const seat = thing.object.parent;
@@ -435,7 +433,7 @@ export function wayOf(h: Person, thing: Thing, targets: readonly ((f: Frame) => 
 }
 
 /** the empties beside `empty` its approach names (`userData.approach`, outermost first) */
-function approachOf(h: Person, empty: Object3D): Object3D[] {
+function approachOf(h: Reacher, empty: Object3D): Object3D[] {
   const names = empty.userData.approach;
   if (names === undefined) return [];
   if (!Array.isArray(names) || !names.every((name): name is string => typeof name === 'string')) throw new Error(`"${empty.name}" has a userData.approach that is no list of names`);

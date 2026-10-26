@@ -4,9 +4,6 @@ import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Frame } from '../kernel/frame';
 import type { Placement } from '../kernel/goal';
-import { bringing } from '../hands/creature/hands';
-import { Person } from '../body/person';
-import { carrying, wayOf } from '../hands/person/carry';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
@@ -43,11 +40,6 @@ export function carry(body: Body, thing: Object3D, target: Target | readonly Tar
       };
     });
     const last = targets[targets.length - 1];
-    if (!(self instanceof Person)) {
-      yield* bringing(self, request, hands[0], carried, points[points.length - 1]);
-      return;
-    }
-    const way = wayOf(self, carried, points, last instanceof Object3D ? last : null);
-    yield* carrying(self, request, carried, way, options);
+    yield* self.handling.bring(request, carried, points, last instanceof Object3D ? last : null, options);
   }, options.until);
 }

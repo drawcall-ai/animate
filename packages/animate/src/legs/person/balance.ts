@@ -19,8 +19,8 @@ import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './po
 import { armsHeld } from './turn';
 import { hullOf, outside, xcomOfPoses } from '../support';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
-import type { Step } from '../../body/runtime';
+import type { PersonLegged } from './legged';
+import type { Step } from '../../kernel/frame';
 import { drivenRoot } from '../driven';
 import { solePoints } from '../../species/humanoid/landmarks';
 import { humanStepping } from './stepping';
@@ -66,7 +66,7 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
  * capsule carries them: a leap it asks is taken as soon as the feet can, and `airborne` says when it is in the air; the body over it is
  * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
-export function driven(h: Person, seed?: number): Step {
+export function driven(h: PersonLegged, seed?: number): Step {
   const root = drivenRoot(h);
   return drivenBy(h, (f) => root(f), { seed });
 }
@@ -90,7 +90,7 @@ export interface PersonRoot extends RootGoal {
  * less as it holds still (`steady`).
  */
 export function drivenBy(
-  h: Person,
+  h: PersonLegged,
   rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => PersonRoot,
   options: { stance?: Partial<Stance>; seed?: number } = {},
 ): Step {
@@ -314,12 +314,12 @@ export function drivenBy(
 }
 
 /** Final-pose checks of the last sub-step, against the legs as they were posed then. */
-function check(h: Person, f: Frame, dev: Dev, legs: readonly Leg[]) {
+function check(h: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
   const p = h.proportions, time = f.time - f.dt;
   legs.forEach((leg, i) => {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];
     if (leg.swing) {
-      const sink = -Math.min(...solePoints(h, f.prev, side).map((at) => at.y));
+      const sink = -Math.min(...solePoints(h.proportions, f.prev, side).map((at) => at.y));
       if (sink > 0.002) dev.append(time, { check: 'driven swing sole sink (m)', value: sink, limit: 0.002, where: `${side}Foot` });
       return;
     }
@@ -351,7 +351,7 @@ function check(h: Person, f: Frame, dev: Dev, legs: readonly Leg[]) {
     dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * p.scale - gap, limit: 0, where: 'legs' });
   }
   // Noted only: a driven body follows its input, not its balance.
-  const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(h, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
+  const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(h.proportions, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
   if (!support.length) return;
   const xcom = xcomOfPoses(f.prev, f.prev2, f.dt, p.legLength, new Vector3());
   const value = outside(hullOf(support), xcom);

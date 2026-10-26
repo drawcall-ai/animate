@@ -1,5 +1,5 @@
 import { GRAVITY } from '../kernel/math';
-import type { Carriage } from '../legs/carriage';
+import type { Carriage } from './gait';
 import type { Gait } from './gait';
 
 /**

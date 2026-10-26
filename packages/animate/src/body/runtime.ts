@@ -7,64 +7,33 @@ import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
 import { Poise } from '../kernel/poise';
 import type { Go } from '../kernel/go';
-import { createLocomotion, type Locomotion } from '../species/gait';
+import { createLocomotion, type Locomotion } from '../legs/locomotion';
+import type { Driven } from '../legs/legged';
+import type { Step } from '../kernel/frame';
 import type { Stepper } from '../legs/step/stepper';
-import type { Gazer } from '../look/gaze';
-import type { AnySpecies, Attention } from '../species/define';
+import type { AnySpecies, Gazer, Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
-import type { Target } from '../kernel/goal';
 import { yawOf } from '../kernel/math';
 import { Binding } from './model';
-import { anchors, movers, resolve, type Interpolated, type Resolving } from '../things/resolve';
+import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing, Local } from '../things/thing';
-import { bear, checkParents, wornOf, type Bearing } from '../things/hold';
+import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
 import { creature } from '../legs/creature';
-import { keeping } from '../hands/creature/hands';
-
-/** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
-export interface Driven {
-  /** its point on the floor (m) */
-  position: Vector3;
-  /** its velocity over the floor (m/s); default read off its moves */
-  velocity?: Vector3;
-  /** its facing (rad about +Y; 0 faces +Z) */
-  yaw: number;
-  /** how far it crouches (0 standing … 1 a deep crouch) */
-  crouch?: number;
-  /** how still it holds itself (0 at ease … 1 aiming): its breathing and sway fade by it */
-  steady?: number;
-  /** leap at this speed (m/s up) as soon as the feet can */
-  jump?: number;
-}
-
-/** What a body's legs are asked by the scene and its quiet life: a seed, a tether, a startle. */
-export interface Life extends Attention {
-  /** fixes its variation: sway, breathing, weight shifts, glances */
-  seed?: number;
-}
+import { creatureHands, keeping } from '../hands/creature/hands';
+import type { Handling } from '../hands/handling';
 
 /** How a body is made (`Body`'s options, as its runtime takes them). */
 export interface SelfOptions {
   at?: Vector3;
   face?: number;
   drive?: (time: number) => Driven;
-  life?: Life;
+  life?: Temperament;
   tempo?: number;
   mass?: number | { readonly closed: boolean; readonly volume: number | null };
   model?: Object3D;
   dev?: boolean | { notes?: boolean };
 }
-
-/** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame). */
-export interface Hold {
-  thing: Thing;
-  grip: string;
-  goal: Target;
-}
-
-/** one body part's behaviour this sub-step */
-export type Step = (f: Frame) => void;
 
 /**
  * A body as it moves: its pose history, what its story asks of it (requests on its parts) and the behaviours that serve them. Each
@@ -72,7 +41,7 @@ export type Step = (f: Frame) => void;
  * staging, then for each part the request that has it — the legs, the eyes (else they look about), the trunk, each hand (else it keeps
  * hold, or hangs free) — and the things it moves; then the final pose becomes the history: current → prev → prev2.
  */
-export class Self implements Resolving {
+export class Self implements Holder {
   readonly skeleton: Skeleton;
   readonly scale: number;
   /** how quick it is, all told (1: as tuned): its walks', reaches' and carries' paces */
@@ -99,7 +68,7 @@ export class Self implements Resolving {
   readonly holding: Record<string, Hold | null>;
   readonly binding: Binding;
   readonly drive?: (time: number) => Driven;
-  readonly life: Life;
+  readonly life: Temperament;
   /** the bodies it keeps clear of: those it has dealt with, either way, and those it was told to avoid */
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
@@ -151,6 +120,18 @@ export class Self implements Resolving {
   /** what it bears of the things it holds and wears */
   readonly borne = new Map<Thing, Bearing>();
 
+  /** what its hands do for the verbs (made when first asked, once all it is has been made) */
+  get handling(): Handling {
+    return (this.handled ??= this.handle());
+  }
+
+  private handled: Handling | null = null;
+
+  /** a creature's hands: one at a time, each the tip of its chain */
+  protected handle(): Handling {
+    return creatureHands(this);
+  }
+
   /** its behaviours (made on its first sub-step, once all it is has been made): a creature's legs and carriage, its jaw keeping hold */
   protected behave(): Behaviours {
     return {
@@ -161,6 +142,21 @@ export class Self implements Resolving {
         bear(this, f, this.worn, this.borne);
       },
     };
+  }
+
+  /** the weight its hands bear off their support (kg) */
+  get load(): number {
+    return heldMass(this);
+  }
+
+  /** its object in the scene: a group on the floor, turned by its facing */
+  get object(): Object3D {
+    return this.binding.object;
+  }
+
+  /** the scene node of moving bone `bone` */
+  boneNode(bone: number): Object3D {
+    return this.binding.bones[this.skeleton.bones[bone].name];
   }
 
   /** the last final pose */
@@ -213,7 +209,7 @@ export class Self implements Resolving {
   /** moves `node` itself from now on (a thing in both its hands), from where `carrier` has it */
   carry(node: Object3D, carrier: Carrier): void {
     const mover = movers.get(node);
-    if (mover instanceof Self) mover.leave(node);
+    mover?.leave(node);
     this.carried.set(node, carrier);
     movers.set(node, this);
   }

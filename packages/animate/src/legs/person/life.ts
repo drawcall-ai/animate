@@ -1,6 +1,6 @@
 import type { Go } from '../../kernel/go';
 import type { Poise } from '../../kernel/poise';
-import type { Person } from '../../body/person';
+import type { PersonLegged } from './legged';
 import { Vector3 } from 'three';
 import { lerp, smoothstep } from '../../kernel/math';
 import { irregular } from '../../kernel/random';
@@ -38,7 +38,7 @@ export class Life {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(go: Go | null, poise: Poise, h: Person): boolean {
+  quiet(go: Go | null, poise: Poise, h: PersonLegged): boolean {
     return !go && !h.locomotion.moving && !h.holding.left && !h.holding.right && poise.lower === 0 && poise.bow === 0 && poise.steady === 0;
   }
 

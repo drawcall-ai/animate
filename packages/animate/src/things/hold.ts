@@ -3,13 +3,12 @@ import type { Frame } from '../kernel/frame';
 import type { Pose } from '../kernel/pose';
 import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
-import { anchors, movers, resolve, type Resolving } from './resolve';
-import { Self, type Hold } from '../body/runtime';
+import { anchors, movers, resolve, type Hold, type Holder, type Resolving } from './resolve';
 import { Thing, type Grip, type Local } from './thing';
 import type { Target } from '../kernel/goal';
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
-export function hangsFrom(self: Self, object: Object3D): number {
+export function hangsFrom(self: Holder, object: Object3D): number {
   for (let at: Object3D | null = object; at; at = at.parent) {
     const anchor = anchors.get(at);
     if (anchor) return anchor.body === self ? anchor.bone : NaN;
@@ -18,16 +17,16 @@ export function hangsFrom(self: Self, object: Object3D): number {
 }
 
 /** the body `object` is on (attached under its object or a bone of it), if any */
-export function bodyOf(object: Object3D): Self | null {
+export function bodyOf(object: Object3D): Holder | null {
   for (let at: Object3D | null = object; at; at = at.parent) {
     const anchor = anchors.get(at);
-    if (anchor) return anchor.body instanceof Self ? anchor.body : null;
+    if (anchor) return anchor.body;
   }
   return null;
 }
 
 /** whether `thing` is on `self`: attached under it, or in its hands */
-export function onBody(self: Self, thing: Thing): boolean {
+export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
 }
 
@@ -43,7 +42,7 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Target {
 }
 
 /** hand `hand` of `self` holding `hold` (null: letting go), the thing's holders kept */
-export function grasp(self: Self, hand: string, hold: Hold | null): void {
+export function grasp(self: Holder, hand: string, hold: Hold | null): void {
   const was = self.holding[hand];
   self.holding[hand] = hold;
   if (was && !handsOn(self, was.thing).length) was.thing.holders.delete(self);
@@ -53,17 +52,17 @@ export function grasp(self: Self, hand: string, hold: Hold | null): void {
 }
 
 /** what `self`'s hands hold, a two-handed thing once */
-export function held(self: Self): Thing[] {
+export function held(self: Holder): Thing[] {
   return [...new Set(Object.values(self.holding).flatMap((hold) => hold ? [hold.thing] : []))];
 }
 
 /** the weight `self`'s hands bear: what they hold off its support, a two-handed thing once (kg) */
-export function heldMass(self: Self): number {
+export function heldMass(self: Holder): number {
   return held(self).reduce((sum, thing) => sum + (supported(thing) ? 0 : thing.mass), 0);
 }
 
 /** the hands of `self` holding `thing` */
-export function handsOn(self: Self, thing: Thing): string[] {
+export function handsOn(self: Holder, thing: Thing): string[] {
   return Object.keys(self.holding).filter((hand) => self.holding[hand]?.thing === thing);
 }
 
@@ -77,12 +76,12 @@ export function worn(thing: Thing): boolean {
 }
 
 /** whether `self` carries `thing`: in both its hands, moving it itself, or hanging from the one hand that holds it */
-export function carriedBy(self: Self, thing: Thing): boolean {
+export function carriedBy(self: Holder, thing: Thing): boolean {
   return movers.get(thing.object) === self || inHand(self, thing);
 }
 
 /** whether `thing` hangs from a hand of `self` that holds it (a thing held in one hand is attached under that hand's bone) */
-export function inHand(self: Self, thing: Thing): boolean {
+export function inHand(self: Holder, thing: Thing): boolean {
   const bone = hangsFrom(self, thing.object);
   return handsOn(self, thing).some((hand) => self.hands[hand] === bone);
 }
@@ -98,7 +97,7 @@ export function supported(thing: Thing): boolean {
  */
 export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void {
   const object = thing.object, mover = movers.get(object);
-  if (mover instanceof Self) mover.leave(object);
+  mover?.leave(object);
   parent.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, false);
   parent.attach(object);
@@ -114,11 +113,11 @@ export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void
  * `thing` taken into `self`'s hands that hold it, where it is: held in one, attached under that hand's bone (it goes where the hand
  * goes); in both, attached under the root bone and moved by `self` itself (fitted to the wrists, `move`)
  */
-export function take(self: Self, thing: Thing): void {
+export function take(self: Holder, thing: Thing): void {
   const hands = handsOn(self, thing);
   if (!hands.length) throw new Error(`"${thing.object.name}" is in none of the body's hands`);
   if (carriedBy(self, thing)) return;
-  const bone = (index: number) => self.binding.bones[self.skeleton.bones[index].name];
+  const bone = (index: number) => self.boneNode(index);
   if (hands.length === 1) {
     attach(thing, bone(self.hands[hands[0]]), self);
     return;
@@ -136,7 +135,7 @@ export function take(self: Self, thing: Thing): void {
  * (their middle, turned so the line between its grips lies along the line between them), as the aim turns it; one nothing aims going
  * along with the root bone; each written into its object relative to the bone it hangs from.
  */
-export function move(self: Self, f: Frame, aims: ReadonlyMap<Object3D, Carrier>): void {
+export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier>): void {
   for (const [object, aim] of aims) pivot(self, f, Thing.of(object), aim);
   for (const [object, carrier] of self.carried) {
     const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
@@ -154,7 +153,7 @@ export function move(self: Self, f: Frame, aims: ReadonlyMap<Object3D, Carrier>)
  * a thing hanging from the one hand that holds it by a free grip, where a carry aims it: turned as the aim has it about its grip, which
  * stays on the wrist (the hand turning on it as it may)
  */
-function pivot(self: Self, f: Frame, thing: Thing, aim: Carrier): void {
+function pivot(self: Holder, f: Frame, thing: Thing, aim: Carrier): void {
   const [hand, ...others] = handsOn(self, thing), hold = hand === undefined ? null : self.holding[hand];
   if (!hold || others.length || hold.goal.quaternion !== undefined || !inHand(self, thing)) return;
   const object = thing.object, parent = object.parent;
@@ -174,7 +173,7 @@ function along(f: Frame, carrier: Carrier): void {
 }
 
 /** a thing in both hands where the wrists hold it: as `aim` has it, carried along with the wrists */
-function fit(self: Self, f: Frame, aim: Carrier, hands: readonly string[], carrier: Carrier): void {
+function fit(self: Holder, f: Frame, aim: Carrier, hands: readonly string[], carrier: Carrier): void {
   const at = (hand: string, out: Vector3) => {
     const hold = self.holding[hand];
     if (!hold) throw new Error(`fit: the ${hand} hand holds nothing`);
@@ -206,7 +205,7 @@ const BEARING = { accel: 16, speed: 4 };
  * from it), each it wears by the bone it hangs from; each share taken up and given up over a moment (what it wears from its first
  * sub-step, borne from then), and loaded onto those bones at the thing's centre of mass in this sub-step's pose.
  */
-export function bear(self: Self, f: Frame, worn: readonly Thing[], borne: Map<Thing, Bearing>): void {
+export function bear(self: Holder, f: Frame, worn: readonly Thing[], borne: Map<Thing, Bearing>): void {
   const things = new Set<Thing>([...worn, ...held(self), ...borne.keys()]);
   for (const thing of things) {
     if (thing.mass === 0) continue;
@@ -228,7 +227,7 @@ export function bear(self: Self, f: Frame, worn: readonly Thing[], borne: Map<Th
 }
 
 /** the bones `thing` bears on: the hands holding it (or what it hangs from) off its support, else the bone of `self` it hangs from */
-function bearers(self: Self, thing: Thing): number[] {
+function bearers(self: Holder, thing: Thing): number[] {
   for (let at: Object3D | null = thing.object; at; at = at.parent) {
     const anchor = anchors.get(at);
     if (anchor) return anchor.body === self && anchor.bone >= 0 ? [anchor.bone] : [];
@@ -240,7 +239,7 @@ function bearers(self: Self, thing: Thing): number[] {
 }
 
 /** what `self` bears loaded onto its bones in `pose`, each thing's at its centre of mass */
-export function load(self: Self, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): void {
+export function load(self: Holder, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): void {
   const mass = new Map<number, number>(), moment = new Map<number, Vector3>();
   for (const [thing, bearing] of borne) {
     const placed = self.track(thing.object).at(self.frame.time).current;
@@ -266,7 +265,7 @@ export function load(self: Self, pose: Pose, borne: ReadonlyMap<Thing, Bearing>)
  * development: a thing whose parent changed under a holding hand of `self` but not by the library (a stray `scene.add`, a physics
  * sync) is a problem, once; the hand follows it where it is now, and `self` no longer moves it
  */
-export function checkParents(self: Self, f: Frame): void {
+export function checkParents(self: Holder, f: Frame): void {
   for (const thing of held(self)) {
     const now = thing.object.parent;
     if (!thing.parent || now === thing.parent) continue;
@@ -277,9 +276,9 @@ export function checkParents(self: Self, f: Frame): void {
 }
 
 /** the things under `self` (on its object or bones) its hands do not hold: what it wears */
-export function wornOf(self: Self): Thing[] {
+export function wornOf(self: Holder): Thing[] {
   const worn: Thing[] = [], holding = held(self);
-  self.binding.object.traverse((node) => {
+  self.object.traverse((node) => {
     if (node.userData.mass === undefined) return;
     const thing = Thing.of(node);
     if (!holding.includes(thing)) worn.push(thing);

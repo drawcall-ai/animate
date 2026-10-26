@@ -1,13 +1,13 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { RootGoal } from './step/stepper';
-import type { Self } from '../body/runtime';
+import type { Legged } from './legged';
 
 /**
  * A body's root as its app drives it (`drive`), a sub-step at a time: where it is, its velocity (read off its moves when not given),
  * facing and crouch; a leap it asks is passed to the legs, and how still it holds itself to its balance (`steady`).
  */
-export function drivenRoot(self: Self): (f: Frame) => RootGoal {
+export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise'>): (f: Frame) => RootGoal {
   const drive = self.drive;
   if (!drive) throw new Error('drivenRoot: the body is not driven');
   let last: Vector3 | null = null;

@@ -7,7 +7,7 @@ import type { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
 import { reaching } from './arms';
 import { INDEX } from '../../species/humanoid/bones';
-import type { Person } from '../../body/person';
+import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { gripAt, reachFor, type Taking } from './reach';
@@ -32,7 +32,7 @@ const CLOSE = 1.6;
  * within the last second the hands (asked) rise toward them, and as it arrives they reach them, the body bowing and bending with the
  * reach; the hands close on them and the eyes leave. `false` if it can stand nowhere to take them.
  */
-export function* grabbing(h: Person, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
+export function* grabbing(h: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(h, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   const plan = standing(h, { grips: takes.map((take) => ({ side: take.side, at: gripAt(h, take, h.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)) });
   if (plan === 'nowhere') {
