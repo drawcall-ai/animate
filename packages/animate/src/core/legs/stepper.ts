@@ -197,6 +197,20 @@ const SLOT = 0.25;
 const STANDING = 2;
 /** how long a gait's foot bears weight once down before it lifts again (share of a cycle) */
 const SETTLING = 0.1;
+/** Derived: a gait's feet whose footfalls are within `TOGETHER` of a cycle leave the floor together (a trot's diagonals, 0.02 apart in
+ * Clayton-Hobbs' offsets), the others at least that far apart (a walk's neighbours are 0.25 apart: half of that and more is clear of both) */
+const TOGETHER = 0.1;
+/** Derived: a walk's swing quickened by a turn is at most this share of its stance — its feet half a cycle apart on a girdle never in the
+ * air together (Hildebrand's walk: more than half a cycle on the floor), the one landing `SETTLING` of a cycle before the other lifts */
+const PAIRED = (0.5 - SETTLING) / (0.5 + SETTLING);
+/** Tuned: a quickened walk lets go of the turn it quickened for no faster than this (rad/s²): held back and let go by the planner sub-step
+ * by sub-step, its cadence would flicker, a swing quickened mid-air slamming down */
+const SWEEPING = 4;
+/** Tuned: walking, a planted foot is kept within reach toward its own turn this share of a cycle at most: the planner holds the root for
+ * it rather than the foot stepping out of turn, and not so long the walk holds back a cycle for a foot that is nearly due */
+const AWAIT = 0.1;
+/** Tuned: a sole this far (m) above the floor in a final pose has left it (planted, it stands within 0.1 mm of it) */
+const LIFTED = 0.005;
 /** how much further behind than its stance takes it a gait's foot falls before it steps out of turn (share of a stance's travel) */
 const BEHIND = 0.5;
 /** Tuned: moving, a foot lifts whatever the others do once it has stood `DUE` stances or is `DUE` stances' travel off its home */
@@ -325,6 +339,14 @@ export class Stepper {
   private owed: boolean[] = [];
   /** whether a gait's cycle is under way */
   private going = false;
+  /** how far a gait's clock has run since it set off from standing (cycles): a foot is in its turn only for a turn that has come round
+   * since, and overdue only for a stance it has stood since — standing, every foot has stood long, and the one before the first in the
+   * gait is still in its turn as the clock starts */
+  private since = 0;
+  /** the turn (rad/s) a walk's stride is quickened for: let go of no faster than `SWEEPING` (rad/s²) */
+  private sweeping = 0;
+  /** which soles were off the floor in the last final pose `check` read */
+  private aloft: boolean[] | null = null;
   /** how fast (1/m … per rad) a gait's turn uses up its feet's stray: the hips' furthest from the root over the feet's narrowest sweep */
   private readonly sweep: number;
   /** where the pelvis stands this sub-step, and a hip's place worked out from it: kept for `pose`, which plants feet after `move` */
@@ -389,6 +411,36 @@ export class Stepper {
     [this.low, this.most] = [now.standing - (drop + st.bob + STEP.short) * s, now.most];
   }
 
+  /**
+   * Development check of the last final pose (`f.prev`): a gait's feet leave the floor one by one, in its order — only those whose
+   * footfalls it has within `TOGETHER` of a cycle (a trot's diagonals) together; a leap's all at once — and, walking, two whose turns are a
+   * swing or more apart (a girdle's) are never in the air together.
+   */
+  check(f: Frame) {
+    if (!f.dev || !this.clocked) return;
+    const { feet, legs } = this, was = this.aloft;
+    const aloft = legs.map((leg) => {
+      const { foot, toes } = feet.legs[leg.i], rotation = f.prev.rotation(foot);
+      return feet.sole(leg.i, f.prev.position(foot), rotation, toes === undefined ? rotation : f.prev.rotation(toes)) > LIFTED;
+    });
+    this.aloft = aloft;
+    if (!was || this.airborne) return;
+    const name = (leg: Leg) => f.prev.skeleton.bones[feet.legs[leg.i].foot].name, now = this.now;
+    // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — never has two whose footfalls are half
+    // a cycle apart in the air together: a girdle's; a walk's stance cut short past half the cycle is a run's)
+    if (now && now.Ts / now.C >= 0.5 && this.walking()) for (const a of legs) for (const b of legs) {
+      const d = mod(this.footfalls[a.i] - this.footfalls[b.i]), value = Math.min(d, 1 - d);
+      if (b.i <= a.i || !aloft[a.i] || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
+      f.dev.append(f.time - f.dt, { check: 'walk pair in the air together (cycle apart)', value, limit: 0.5 - TOGETHER, where: `${name(a)} with ${name(b)}` });
+    }
+    const left = legs.filter((leg) => aloft[leg.i] && !was[leg.i]);
+    for (const a of left) for (const b of left) {
+      if (b.i <= a.i || this.together(a, b)) continue;
+      const apart = this.footfalls[a.i] - this.footfalls[b.i], value = Math.abs(apart - Math.round(apart));
+      f.dev.append(f.time - f.dt, { check: 'gait lift-off together (cycle apart)', value, limit: TOGETHER, where: `${name(a)} with ${name(b)}` });
+    }
+  }
+
   /** whether the feet keep a gait's clock (a four-legged one's) */
   private get clocked() { return !!this.st.gait; }
   /** the most the pelvis turns from a planted foot (rad) */
@@ -445,9 +497,16 @@ export class Stepper {
     const swingTime = (1 - duty) * C;
     if (v * duty * C > most) C = stride ? most / v + swingTime : most / (v * duty);
     // (a gait's stance turning cut short too as its hips sweep across their feet: each foot from as far one way as it strays to as far
-    // the other, the hips swinging round at the turn's rate about the root)
-    if (stride && this.sweep < Infinity && Math.abs(pressed) * this.sweep * (C - swingTime) > 1) C = 1 / (Math.abs(pressed) * this.sweep) + swingTime;
-    const Ts = stride ? C - swingTime : duty * C, Tsw = C - Ts;
+    // the other, the hips swinging round at the turn's rate about the root — a run's swing keeping its time; a walk's whole stride
+    // quickening, quicker smaller steps, its swing no more than `PAIRED` of its stance: its feet half a cycle apart never in the air together)
+    let swing = swingTime;
+    const walking = this.walking(), turn = this.sweeping = walking ? Math.max(Math.abs(pressed), this.sweeping - SWEEPING * root.dt) : Math.abs(pressed);
+    if (stride && this.sweep < Infinity && turn * this.sweep * (C - swing) > 1) {
+      const cut = 1 / (turn * this.sweep);
+      swing = walking && duty >= 0.5 ? Math.min(swing, cut * PAIRED) : swing;
+      C = cut + swing;
+    }
+    const Ts = stride ? C - swing : duty * C, Tsw = C - Ts;
     const lead = Math.min(lerp(st.lead.share, st.lead.side, Math.abs(across)) * Ts, (lerp(st.lead.most, st.lead.run, run) * s) / Math.max(v, 1e-6));
     return { pacing, across, C, duty, Ts, Tsw, most, lead };
   }
@@ -605,18 +664,26 @@ export class Stepper {
     // (how many of the other feet the gait has down as each lifts: each in the air for its swing's share after its own turn comes round)
     const down = (leg: Leg) => legs.filter((other) => other !== leg && mod(this.lifts[leg.i] - this.lifts[other.i]) >= Tsw / C - 1e-9);
     this.scheduled = legs.map((leg) => down(leg).length);
-    // (setting off from standing, the gait's cycle starts with the foot furthest behind where it would land: it steps first)
-    const underway = moving > 0 || pressed !== 0;
-    if (underway && !this.going && legs.every((leg) => !leg.swing)) this.clock = this.lifts[this.furthest(now, lead)[0].i];
+    // (setting off from standing, the gait's cycle starts with the foot furthest behind where it would land: it steps first; a root its
+    // legs hold back is setting off too — its feet step in their turn to make way for it, else it waits on feet that wait on it)
+    const underway = moving > 0 || pressed !== 0 || now.r.turning !== undefined;
+    if (underway && !this.going && legs.every((leg) => !leg.swing)) [this.clock, this.since] = [this.lifts[this.furthest(now, lead)[0].i], 0];
     this.going = underway || legs.some((leg) => leg.swing);
     if (!underway && !legs.some((leg) => leg.swing || this.wants(now, cues, leg))) return;
     // (a foot whose turn passes while it is held down still owes its step: it takes it as soon as it may, not a cycle on)
-    const was = this.clock;
+    const was = legs.map((leg) => this.inTurn(leg));
     this.clock = (this.clock + dt / C) % 1;
+    this.since += dt / C;
     for (const leg of legs) {
-      const passed = mod(was - this.lifts[leg.i]) < SLOT && mod(this.clock - this.lifts[leg.i]) >= SLOT;
+      const passed = was[leg.i] && mod(this.clock - this.lifts[leg.i]) >= SLOT;
       if (!leg.swing && passed && this.stood(now, leg) && moving > 0) this.owed[leg.i] = true;
     }
+  }
+
+  /** whether a foot's turn in a gait has come round since it set off, within `SLOT` of a cycle */
+  private inTurn(leg: Leg): boolean {
+    const into = mod(this.clock - this.lifts[leg.i]);
+    return into < SLOT && into <= this.since + 1e-9;
   }
 
   /** The feet that are due lifted, the furthest from home first. */
@@ -635,12 +702,17 @@ export class Stepper {
     // (a gait's body never leaves fewer than `STANDING` feet on the floor — nor than its gait has down as this one lifts: a trot quicker
     // than half its cycle in stance has a moment in the air — one out of reach waits, the others land first)
     // (one of a pair lifting in this sub-step still counts as down: the pair leaves the floor together)
-    const down = legs.filter((o) => o !== leg && (!o.swing || o.swing.age <= dt)).length;
+    const down = legs.filter((o) => o !== leg && (!o.swing || (o.swing.age <= dt && this.together(leg, o)))).length;
     if (this.clocked && !airborne && down < Math.min(STANDING, this.scheduled[leg.i])) return false;
+    // (nor, walking, while one its gait never has in the air with it is — their turns a swing or more apart — out of reach or not: it waits
+    // for it to land, as the planner foresees)
+    if (this.clocked && !airborne && this.walking() && legs.some((o) => o.swing && this.exclusive(leg, o, now))) return false;
     // (nor lifts a foot it has only just put down: a step lands and bears weight before the next)
     if (this.clocked && !leg.swing && leg.planted < SETTLING * C) return false;
     // With a planned root, touchdown bears weight before another swing; the planner can hold the root back.
     if (leg.swing || (!airborne && r.forecast && leg.landed)) return false;
+    // (nor just after one its gait sets apart from it, out of reach or not: the feet leave the floor one by one, `TOGETHER` apart)
+    if (this.clocked && !airborne && legs.some((o) => o !== leg && o.lifted < TOGETHER * C && !this.together(leg, o))) return false;
     if (urgent) return true;
     if (leg.landed || !this.wants(now, cues, leg)) return false;
     // alternate: lift once the other foot has stood (walking) or before it lands (running, a flight)
@@ -736,9 +808,26 @@ export class Stepper {
    */
   private due(now: Now, leg: Leg): boolean {
     const { C, Ts, moving } = now;
-    if (this.clocked) return mod(this.clock - this.lifts[leg.i]) < SLOT || this.owed[leg.i] || leg.planted >= C * DUE;
+    if (this.clocked) return this.inTurn(leg) || this.owed[leg.i] || (leg.planted >= C * DUE && this.since >= DUE);
     if (moving > 0) return this.legs[this.before[leg.i]].lifted >= C * this.gap[leg.i] || leg.planted >= Ts * DUE;
     return leg.planted >= STEP.square;
+  }
+
+  /** whether a gait's feet each leave the floor in a turn of their own (a walk's), none with another (a trot's diagonals) */
+  private walking(): boolean {
+    return this.legs.every((a) => this.legs.every((b) => a === b || !this.together(a, b)));
+  }
+
+  /** whether a gait never has two feet in the air together: their turns a swing or more apart either way round */
+  private exclusive(a: Leg, b: Leg, now: Timing): boolean {
+    const d = mod(this.lifts[a.i] - this.lifts[b.i]);
+    return Math.min(d, 1 - d) >= now.Tsw / now.C - 1e-9;
+  }
+
+  /** whether a gait has two feet leave the floor together: their footfalls within `TOGETHER` of a cycle */
+  private together(a: Leg, b: Leg): boolean {
+    const apart = this.footfalls[a.i] - this.footfalls[b.i];
+    return Math.abs(apart - Math.round(apart)) < TOGETHER;
   }
 
   /** whether a foot has stood `SLOT` of a cycle, or half the gait's stance if that is shorter (a gallop's) */
@@ -1201,6 +1290,12 @@ export class Stepper {
       const own = mod(this.lifts[leg.i] - this.clock) * this.cycle;
       let wait = other ? remaining(other) : 0;
       if (st.gait) wait = Math.max(Math.min(landed, this.scheduled[leg.i] < STANDING ? own : Infinity), this.moving > 0.05 ? 0 : own);
+      // (walking, toward its own turn too, `AWAIT` of a cycle at most, and till what it waits for to lift lands)
+      const now = this.now;
+      if (st.gait && now && this.walking()) {
+        if (!this.owed[leg.i]) wait = Math.max(wait, this.inTurn(leg) ? 0 : Math.min(own, AWAIT * this.cycle));
+        wait = Math.max(wait, ...legs.map((o) => o.swing && this.exclusive(leg, o, now) ? remaining(o.swing) : 0));
+      }
       for (let t = 0; t <= wait + 1e-9; t += Math.max(1 / 60, wait / 6)) if (!within(leg, t, [0, st.pitch.heel, st.pitch.ball])) return false;
       return true;
     });

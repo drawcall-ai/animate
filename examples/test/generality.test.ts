@@ -15,9 +15,6 @@ const check = cases([
   // (asked a goal 0.5 m behind it, facing on, the planner turns it round to walk there and back round — it never kept its facing — and
   // the Labrador's paws, 0.58 m apart fore to hind where the old dog's stood 0.46 m, turn it round slower than its stall check allows)
   'a dog walks 0.5 m back, keeping its facing',
-  // (the cat — the Labrador scaled down — standing on all but straight forelegs, a planted fore paw falls out of its leg's reach once
-  // on its eighth goal round the circle)
-  'a cat walks round a circle',
   // (its life seed varied, the handover's dev log has problems)
   ['a person hands a bottle to another, who takes it and carries it off', [3]],
 ]);

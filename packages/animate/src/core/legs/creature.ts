@@ -73,7 +73,7 @@ function stepping(body: Body, kind: NonNullable<Species['legs']>, attention: Att
       // (a goal nowhere — not a finite point — it does not go for: it stands)
       const finite = !asked0.go || [asked0.go.to.x, asked0.go.to.z, ...(asked0.go.velocity?.toArray() ?? [])].every(Number.isFinite);
       const go = finite ? asked0.go : undefined;
-      if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); }
+      if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); stepper.check(f); }
       const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - planner.root.yaw), 0) / stepper.legs.length + planner.root.yaw;
       // (a goal off its way it turns to first, as a person does: facing it till it is on its way; nearer than its feet stand, it is there)
       // (it sets off for a goal further than `STOP.start`, or one on the move, and stops within `STOP.distance` of a still one, slow:

@@ -37,8 +37,10 @@ it('a lion made of data only walks, trots and gallops after its prey — a rotar
   expect(lion.locomotion.velocity.length()).toBe(0);
   expect(fastest).toBeGreaterThan(13.9);
 
-  // (trotting: each fore paw lands with the hind paw across from it)
-  const at = (leg: number, slow: number, fast: number) => landed[leg].filter(([, v]) => v > slow && v < fast).map(([t]) => t);
+  // (trotting: each fore paw lands with the hind paw across from it — on the way up to the gallop: slowing from it, the footfalls shift
+  // back over a stride or two, `SHIFT`, its diagonals not yet together)
+  const before = gallop[0]?.time ?? Infinity;
+  const at = (leg: number, slow: number, fast: number) => landed[leg].filter(([t, v]) => v > slow && v < fast && t < before).map(([t]) => t);
   for (const [fore, hind] of [[0, 3], [1, 2]]) {
     expect(at(fore, 3.2, 3.8).length).toBeGreaterThan(4);
     for (const t of at(fore, 3.2, 3.8)) expect(Math.min(...landed[hind].map(([u]) => Math.abs(u - t)))).toBeLessThan(0.05);

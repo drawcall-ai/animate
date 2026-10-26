@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
-import { action, parallel } from '@pmndrs/timeline';
+import { action, parallel, timePassed } from '@pmndrs/timeline';
 import { Body, type Frame } from '../../src/core/body';
 import { strideAt, type Gait } from '../../src/core/legs/gait';
 import { quintic } from '../../src/core/legs/swing';
@@ -9,6 +9,7 @@ import { horseMotion } from '../../src/horse/legs';
 import { idle } from '../../src/humanoid/idle';
 import { walkTo } from '../../src/core/walk';
 import type { Species } from '../../src/core/species';
+import type { Behaviour } from '../../src/core/goal';
 import type { Attention as HorseAttention } from '../../src/core/species';
 import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
 import { Pose } from '../../src/core/pose';
@@ -196,6 +197,86 @@ it('brakes for a moving goal that crosses behind a travelling root', () => {
   expect(body.pose.position(0).z).toBeGreaterThan(0.5);
   expect(body.pose.position(0).z).toBeLessThan(3);
   expect(body.log).toEqual([]);
+});
+
+/**
+ * A horse walking as `story` has it for `seconds` (a person `led` along beside it, if any), read off its final poses: the sub-steps two
+ * hooves left the floor together that its walk sets apart — every two of its footfalls are a quarter of a cycle or more apart (Hildebrand's
+ * lateral sequence) — the sub-steps two were in the air together that its walk has half a cycle apart (a girdle's: a walk is more than
+ * half a cycle on the floor, so they never are), those all four were up, and how long it took to turn 162°. A hoof is up once the lowest
+ * of its sole's ends is `UP` (m) off the floor.
+ */
+function walked(story: (b: Body) => Behaviour, seconds: number, led?: Body) {
+  const UP = 0.005, chains = horse().legs!.chains, offsets = HORSE_WALK.contacts.map((c) => c.offset as number);
+  const body = new Body(horse(), story, { at: { x: 2.6, z: -0.8 }, yaw: 0, dev: true });
+  const up = () => chains.map(({ joints, heel, toe }) => {
+    const bone = joints[joints.length - 1].bone;
+    return Math.min(...[heel, toe].map((end) => body.pose.point(bone, end, new Vector3()).y)) > UP;
+  });
+  const apart = (a: number, b: number) => { const d = Math.abs(offsets[a] - offsets[b]); return Math.min(d, 1 - d); };
+  const together: string[] = [], paired: string[] = [];
+  let was = up(), all = 0, turned = 0, yaw = 0, turnedBy = NaN;
+  for (let tick = 0; tick < seconds * 60; tick++) {
+    led?.update(1 / 60);
+    body.update(1 / 60);
+    const now = up(), left = now.flatMap((u, i) => u && !was[i] ? [i] : []), at = `@${body.frame.time.toFixed(2)}`;
+    for (const a of left) for (const b of left) if (a < b && apart(a, b) >= 0.25) together.push(`${a}+${b} ${at}`);
+    for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) if (now[a] && now[b] && apart(a, b) >= 0.5) paired.push(`${a}+${b} ${at}`);
+    if (now.every(Boolean)) all++;
+    was = now;
+    const facing = body.yaw;
+    turned += Math.atan2(Math.sin(facing - yaw), Math.cos(facing - yaw));
+    yaw = facing;
+    if (Number.isNaN(turnedBy) && Math.abs(turned) >= 0.9 * Math.PI) turnedBy = body.frame.time;
+  }
+  return { steps: { together, paired, all, log: body.log }, turnedBy };
+}
+const after = (goal: (f: Frame) => Vector3) => (b: Body) => walkTo(b, { to: goal, until: () => false });
+const clean = { together: [], paired: [], all: 0, log: [] };
+
+// (setting off from standing, a walk's first foot steps alone and the rest follow it in their turn — the clock starts at the feet as they
+// stand, none of them overdue for having stood: Hildebrand's lateral sequence from the first footfall on — whether its goal is ahead,
+// beside or behind it — its forefeet, and its hind feet, never in the air together)
+it.each([['ahead', 2.6, 6], ['beside', 6, -0.8], ['behind', 0, -4], ['ahead and aside', 4.9, 1.6]] as const)('sets off for a goal %s one hoof at a time', (_, x, z) => {
+  expect(walked(after(() => new Vector3(x, 0, z)), 6).steps).toEqual(clean);
+});
+
+// (turning half round on the spot, as quick as before — 162° in under 5.5 s — in quicker, smaller steps at its walk's footfalls)
+it.each([['left', 1], ['right', -1]] as const)('turns half round on the spot to its %s, its forefeet and hind feet never in the air together', (_, side) => {
+  const { steps, turnedBy } = walked((b) => walkTo(b, { to: new Vector3(2.6, 0, -0.8), face: side * 0.99 * Math.PI }), 8);
+  expect(steps).toEqual(clean);
+  expect(turnedBy).toBeLessThan(5.5);
+});
+
+// (and so again each time it sets off after its goal, which stops and goes on: walking 0.8 m/s for 2 s, standing 2.5 s)
+it('follows a goal that stops and goes on, setting off one hoof at a time', () => {
+  const goal = (t: number) => { const n = Math.floor(t / 4.5); return new Vector3(4.9, 0, -1.4 + 0.8 * (2 * n + Math.min(2, t - 4.5 * n))); };
+  expect(walked(after((f) => goal(f.time)), 16.5).steps).toEqual(clean);
+});
+
+// (led: following a person who walks 2 m on and stands 2.5 s, four times, a little behind and aside of them)
+it('follows a walking person, its forefeet and hind feet never in the air together', () => {
+  const person = new Humanoid(createSkeletonModel(), (h) => function* () {
+    for (const z of [2, 4, 6, 8]) { yield* walkTo(h, { to: new Vector3(0, 0, z) })(); yield* action({ until: timePassed(2.5, 'seconds') }); }
+  }, {});
+  const beside = new Vector3(2.3, 0, -0.6);
+  expect(walked(after(() => person.pose.position(0).clone().setY(0).add(beside)), 16.5, person).steps).toEqual(clean);
+});
+
+it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up together, in the final pose, only with dev enabled', () => {
+  const run = (dev: boolean) => {
+    // (a later writer lifts the whole standing body 2 cm on one sub-step: all four hooves leave the floor at once, no leap)
+    const body = writtenOver(dev, 0, (f) => { if (Math.abs(f.time - 0.5) < 1e-6) f.current.setRoot(f.current.position(0).clone().add(new Vector3(0, 0.02, 0))); });
+    for (let k = 0; k < 40; k++) body.update(1 / 60);
+    return body.log.filter((entry) => entry.check.startsWith('gait lift-off together') || entry.check.startsWith('walk pair in the air'));
+  };
+  const checks = run(true).map((entry) => `${entry.check} ${entry.where}`);
+  expect(checks).toContain('gait lift-off together (cycle apart) leftForeHoof with rightForeHoof');
+  expect(checks).toContain('walk pair in the air together (cycle apart) leftForeHoof with rightForeHoof');
+  expect(checks).toContain('walk pair in the air together (cycle apart) leftHindHoof with rightHindHoof');
+  // (a walk's hooves a quarter of a cycle apart may be up together: a diagonal or lateral pair is no girdle's)
+  expect(checks.filter((c) => c.startsWith('walk pair') && /Fore\w* with \w*Hind/.test(c))).toEqual([]);
+  expect(run(false)).toEqual([]);
 });
 
 

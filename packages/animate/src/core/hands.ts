@@ -23,7 +23,8 @@ export type Grips<H extends string = string> = [H] extends [never] ? { readonly 
 
 /** Tuned: how long (s) a creature's hand, let go, takes to be its base's again */
 const HANDING = 0.6;
-/** Tuned: how a creature's hand goes to a grip (m/s², m/s) and back to rest (rad/s², rad/s): a calm dip of the head */
+/** Tuned: how a creature's hand goes to a grip (m/s², m/s), each joint of its chain braked to its turn (rad/s², rad/s) on the way there
+ * and back to rest: a calm dip of the head, its joints never flung round by the solve as the tip comes in */
 const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };
 /** Tuned: standing to take something, the share of the hand's chain it reaches out to, and the share of that reach along the floor the grip is ahead of the chain's base */
 const OUT = 0.9;
@@ -116,7 +117,7 @@ export function bring(body: Body, item: Item, way: Way, options: Bringing = {}):
       update: (f) => {
         const position = handAt(f).position;
         stoop.to(f, position);
-        tip.to(f, { position }, { ...DIP, accel: motion.accel ?? DIP.accel, speed: motion.speed ?? DIP.speed, turnAccel: undefined });
+        tip.to(f, { position }, { ...DIP, accel: motion.accel ?? DIP.accel, speed: motion.speed ?? DIP.speed });
       },
       until: (f, clock, time) => {
         if (hold) return hold.until?.(f, clock, time) ?? false;
@@ -190,7 +191,7 @@ export function tipToward(body: Body, hand: string, target: Live<Target>, option
       update: (f) => {
         const goal = live(target, f);
         stoop.to(f, on ? on.toWorld(goal, _world, f.time).position : goal.position);
-        tip.to(f, goal, { ...DIP, accel, speed, turnAccel: undefined, on });
+        tip.to(f, goal, { ...DIP, accel, speed, on });
       },
       until: until === 'reached' ? (f) => reached(f, bones[bones.length - 1], live(target, f), on) : until,
     });
@@ -218,7 +219,7 @@ export function nuzzle(body: Body, hand: string, target: Live<Vector3>): Behavio
       update: (f) => {
         const goal = live(target, f);
         stoop.to(f, goal);
-        tip.to(f, { position: goal }, { ...DIP, turnAccel: undefined });
+        tip.to(f, { position: goal }, { ...DIP });
       },
       until: (f) => {
         if (reached(f, bone, { position: live(target, f) })) return true;
@@ -341,8 +342,9 @@ function chainOf(body: Body, hand: string): string {
 function standOff(body: Body, chain: string, point: Readonly<Vector3>, lowered = 0): number | { value: number; limit: number } {
   const { skeleton } = body.pose, bones = skeleton.chain(chain);
   const base = body.pose.position(bones[0]), length = chainLength(body, bones);
-  const out = OUT * length, drop = Math.max(-out, base.y - lowered - point.y);
-  if (drop > out || base.y - point.y < -out) return { value: Math.abs(base.y - point.y), limit: out + lowered };
+  // (let down for a point below the base, never for one above it: it stoops only to reach down)
+  const out = OUT * length, below = base.y - point.y, drop = Math.max(-out, below > 0 ? below - lowered : below);
+  if (drop > out || below < -out) return { value: Math.abs(below), limit: out + lowered };
   return _v.subVectors(base, body.pose.position(0)).dot(forwardOf(body.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
 }
 
@@ -354,7 +356,7 @@ function tipTo(body: Body, chain: string, goal: Target, item: Item, stoop: Retur
     yield* action<Frame>({
       update: (f) => {
         stoop.to(f, item.toWorld(goal, _world).position);
-        tip.to(f, goal, { ...DIP, turnAccel: undefined, on: item });
+        tip.to(f, goal, { ...DIP, on: item });
       },
       until: (f) => {
         if (reached(f, bone, goal, item)) return true;
