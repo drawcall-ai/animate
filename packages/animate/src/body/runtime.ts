@@ -1,4 +1,5 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
+import type { SkinReport } from '@drawcall/rig';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
 import { STEP, type Frame } from '../kernel/frame';
 import { Dev, type LogEntry } from '../kernel/dev';
@@ -23,15 +24,26 @@ import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
 
-/** How a body is made (`Body`'s options, as its runtime takes them). */
+/** How a body is made. */
 export interface SelfOptions {
+  /** where it stands on the floor (default the origin) */
   at?: Vector3;
+  /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
+  /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
   drive?: (time: number) => Driven;
+  /** its quiet life: a seed that fixes its variation, what tethers it and what startles it */
   life?: Temperament;
+  /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces */
   tempo?: number;
-  mass?: number | { readonly closed: boolean; readonly volume: number | null };
+  /**
+   * what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³, within half and twice its
+   * species' mass: development says when it is held so, or the mesh is open and the species' mass is taken); default its species'
+   */
+  mass?: number | Pick<SkinReport, 'closed' | 'volume'>;
+  /** the container its mesh was rigged in with @drawcall/rig (`skin(model, skeleton)`): the body poses its bones; without it, the body is bare */
   model?: Object3D;
+  /** checks final poses and records problems in `log`; `{ notes: true }` also records what is only reported (a player-driven body's balance) */
   dev?: boolean | { notes?: boolean };
 }
 
@@ -66,7 +78,6 @@ export class Self implements Holder {
   /** each hand's tip bone, by name */
   readonly hands: Readonly<Record<string, number>>;
   readonly holding: Record<string, Hold | null>;
-  readonly binding: Binding;
   readonly drive?: (time: number) => Driven;
   readonly life: Temperament;
   /** the bodies it keeps clear of: those it has dealt with, either way, and those it was told to avoid */
@@ -85,8 +96,9 @@ export class Self implements Holder {
   private stepping = false;
   private behaviours: Behaviours | null = null;
 
-  constructor(readonly species: AnySpecies, options: SelfOptions, start?: (skeleton: Skeleton) => Pose) {
-    this.skeleton = massed(species, options.mass);
+  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton) => Pose) {
+    const dev = options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined;
+    this.skeleton = massed(species, options.mass, dev);
     this.scale = species.scale;
     this.tempo = options.tempo ?? 1;
     if (!(this.tempo > 0 && Number.isFinite(this.tempo))) throw new Error(`a tempo of ${this.tempo}`);
@@ -100,14 +112,13 @@ export class Self implements Holder {
     this.poses = [new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose)];
     this.before = [new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose)];
     this.frame = {
-      dev: options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined,
+      dev,
       dt: STEP,
       time: 0,
       prev2: this.poses[0],
       prev: this.poses[1],
       current: this.poses[2],
     };
-    this.binding = new Binding(species, options.model);
     anchors.set(this.binding.object, { body: this, bone: -1 });
     this.skeleton.bones.forEach((bone, i) => {
       const node: Object3D | undefined = this.binding.bones[bone.name];
@@ -425,9 +436,9 @@ export interface Behaviours {
 }
 
 /** the species' skeleton, its masses for a body of `mass` kg (a skin report's closed volume at 1000 kg/m³, kept within a sane range) */
-function massed(species: AnySpecies, mass: SelfOptions['mass']): Skeleton {
+function massed(species: AnySpecies, mass: SelfOptions['mass'], dev?: Dev): Skeleton {
   if (mass === undefined) return species.skeleton;
-  const total = typeof mass === 'number' ? mass : volumeMass(species, mass);
+  const total = typeof mass === 'number' ? mass : volumeMass(species, mass, dev);
   if (!(total > 0 && Number.isFinite(total))) throw new Error(`a body of ${total} kg`);
   if (total === species.mass) return species.skeleton;
   const { skeleton } = species, share = total / species.mass;
@@ -435,10 +446,18 @@ function massed(species: AnySpecies, mass: SelfOptions['mass']): Skeleton {
   return new Skeleton(skeleton.bones.map((bone) => ({ ...bone, mass: bone.mass * share })), { limits: skeleton.limits.filter((limit) => limit !== undefined), chains });
 }
 
-/** a body's mass from a closed mesh's volume, held within half and twice the species' own */
-function volumeMass(species: AnySpecies, report: { closed: boolean; volume: number | null }): number {
-  if (!report.closed || report.volume === null) return species.mass;
-  return Math.min(2 * species.mass, Math.max(species.mass / 2, report.volume * 1000));
+/**
+ * a body's mass from a closed mesh's volume, held within half and twice the species' own; an open mesh's, the species' own — development
+ * says when it took either
+ */
+function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'volume'>, dev?: Dev): number {
+  if (!report.closed || report.volume === null) {
+    dev?.append(0, { check: "an open mesh's volume (its species' mass taken, kg)", value: species.mass, limit: 0, where: 'mass' });
+    return species.mass;
+  }
+  const mass = report.volume * 1000, held = Math.min(2 * species.mass, Math.max(species.mass / 2, mass));
+  if (held !== mass) dev?.append(0, { check: "a mesh's mass past half or twice its species' (kg)", value: mass, limit: held, where: 'mass' });
+  return held;
 }
 
 /** the skeleton's rest pose standing `at` facing `face` */

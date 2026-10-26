@@ -41,9 +41,9 @@ export function* grabbing(h: Reacher, request: Request, takes: readonly Taking[]
   }
   let stood = plan === 'there';
   const walk: Walk | null = plan === 'there' ? null : plan.walk;
-  // (what it moves arrives once the walk does: it is moving nothing else yet)
-  const arriving = (seconds: number) => () => walk ? walk.eta <= seconds : h.locomotion.settled;
-  const preparing = arriving(LOWERING), near = arriving(LOOKING), raising = arriving(1);
+  // (the walk up ends within `seconds`: standing there already, once the body is at rest)
+  const walkEnds = (seconds: number) => () => walk ? walk.eta <= seconds : h.locomotion.settled;
+  const preparing = walkEnds(LOWERING), near = walkEnds(LOOKING), raising = walkEnds(1);
   // (the body bows and bends for the grips under their load: walking up, from the last landing on; from where it stands, as far as each
   // hand has come toward its grip, so that the hands lead it and it does not bow before they set off)
   const from = takes.map((take) => h.pose.position(h.hands[take.side]).distanceTo(gripAt(h, take, h.frame)));

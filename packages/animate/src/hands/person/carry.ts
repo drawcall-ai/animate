@@ -12,6 +12,7 @@ import { carriedBy, handsOn, heldMass, supported, take } from '../../things/hold
 import type { Thing } from '../../things/thing';
 import { resolve } from '../../things/resolve';
 import type { Reacher } from './reacher';
+import { floorUnder } from '../../legs/person/legged';
 import { handStep, HOLD } from './arms';
 import { SIDES, sideOf, type Side } from '../../species/humanoid/bones';
 import { ARM_REACH, bringShoulder, PROTRACTION } from './bend';
@@ -63,7 +64,6 @@ export interface Way {
  */
 export function* carrying(h: Reacher, request: Request, thing: Thing, way: Way, options: { speed?: number; accel?: number } = {}) {
   const sides = handsOn(h, thing).map(sideOf);
-  if (!sides.length) throw new Error(`carry: no hand holds "${thing.object.name}"`);
   const resting = supported(thing);
   yield* lifting(h, request, thing);
   const end = way.points[way.points.length - 1];
@@ -383,7 +383,7 @@ export function carried(h: Reacher, side?: Side): (f: Frame) => Required<Placeme
     // lowered pelvis.
     const p = h.proportions, hold = (side ? h.holding[side] : h.holding.left ?? h.holding.right);
     const above = Math.max(CARRY_HEIGHT * h.scale, hold ? inReach(h, hold.thing) : -Infinity);
-    goal.position.y = (h.feet[0].position.y + h.feet[1].position.y) / 2 - p.ankleHeight + p.hipHeight + above;
+    goal.position.y = floorUnder(h) + p.hipHeight + above;
     goal.velocity.y = 0;
     return goal;
   };

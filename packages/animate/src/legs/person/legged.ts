@@ -1,11 +1,15 @@
+import { INDEX } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
 import type { Legged } from '../legged';
-import type { Foot } from './foot';
 
-/** A person as its legs see it: a body on legs of its proportions, where its feet stand, and whether its hands hold anything. */
+/** A person as its legs see it: a body on legs of its proportions, and whether its hands hold anything. */
 export interface PersonLegged extends Legged {
   readonly proportions: Proportions;
-  /** where the feet stand or, stepping, land [left, right] */
-  readonly feet: [Foot, Foot];
   readonly holding: Readonly<Record<string, object | null>>;
+}
+
+/** how high the floor is under a person's feet (m): their ankles where they stand or land (as it is made, its own), less the ankle's height */
+export function floorUnder(h: Pick<PersonLegged, 'stepper' | 'pose' | 'proportions'>): number {
+  const [left, right] = h.stepper?.legs.map((leg) => leg.anchor.y) ?? [h.pose.position(INDEX.leftFoot).y, h.pose.position(INDEX.rightFoot).y];
+  return (left + right) / 2 - h.proportions.ankleHeight;
 }

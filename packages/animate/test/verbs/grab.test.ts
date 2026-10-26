@@ -4,7 +4,7 @@ import { grab, wait } from '../../src/index';
 import { gazeOff } from '../../src/look/gaze';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
-import { insides, person, play } from '../bodies';
+import { insides, person, play, feetOf } from '../bodies';
 import { box, roomOf, worldOf } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
@@ -48,7 +48,7 @@ describe('grab, walking up', () => {
   it.each([0, 1, 2])('looks at a two-hand pickup at least a second before its last travelling touchdown (variation %i)', (variation) => {
     const body = person({ dev: true, at: new Vector3(1.5 + variation * 0.02, 0, 0), face: -0.1 }), h = insides(body), room = roomOf(body);
     const load = box(room, new Vector3(1.1, 0.88, 2), { size: new Vector3(0.44, 0.25, 0.3), mass: 8, turn: Math.PI / 2 });
-    const feet = h.feet.map((foot) => ({ phase: foot.phase, from: new Vector3() }));
+    const feet = [0, 1].map(() => ({ phase: 'planted', from: new Vector3() }));
     let walking = false, stood = NaN, looking = NaN, touchdown = NaN, held = false;
     play(function* () {
       held = yield* grab(body, load, BOTH);
@@ -59,7 +59,7 @@ describe('grab, walking up', () => {
       if (gazeOff(h.gazer!, h.pose, worldOf(load)) >= 0.2) looking = NaN;
       else if (Number.isNaN(looking)) looking = time;
       const com = h.pose.com(new Vector3());
-      h.feet.forEach((foot, s) => {
+      feetOf(h).forEach((foot, s) => {
         const was = feet[s];
         if (foot.phase === 'swing' && was.phase !== 'swing') was.from.copy(com);
         if (foot.phase === 'planted' && was.phase === 'swing' && Math.hypot(com.x - was.from.x, com.z - was.from.z) > 0.1) touchdown = time;

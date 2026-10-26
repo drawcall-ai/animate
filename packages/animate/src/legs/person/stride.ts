@@ -10,6 +10,7 @@ import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './pace
 import { checkSupport } from './checks';
 import { drivenBy, feetBehind } from './balance';
 import type { PersonLegged } from './legged';
+import { offTheWay, stanceYaw } from '../walker';
 import { humanGait } from './stepping';
 import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
 
@@ -69,9 +70,8 @@ export function stride(h: PersonLegged, options: { stance?: Partial<Stance>; see
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
     const yaw = face?.yaw ?? (moving ? travelYaw : plan.root.yaw);
-    const faced = !!face || !moving || Math.abs(wrapAngle(heading - plan.root.yaw)) >= Math.PI / 4;
-    const turned = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - leg.sign * toeOut - plan.root.yaw), 0);
-    const stance = turned / stepper.legs.length + plan.root.yaw;
+    const faced = !!face || !moving || offTheWay(heading, plan.root.yaw);
+    const stance = stanceYaw(stepper.legs, plan.root.yaw, toeOut);
     // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
     const lean = !moving && !go ? poise.lean : null;
     const leaned = still && (lean || leaning) ? within(still, lean, stepper) : null;

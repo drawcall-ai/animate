@@ -1,37 +1,17 @@
 import { Vector3, type Group, type Object3D } from 'three';
-import type { SkeletonBone } from '@drawcall/rig';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
 import { Person } from './person';
 import { Self, type SelfOptions } from './runtime';
-import type { Driven } from '../legs/legged';
-import type { Temperament } from '../species/define';
+import { Binding } from './model';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Tier } from '../kernel/requests';
 
-/** How a body is made. */
-export interface BodyOptions {
-  /** where it stands on the floor (default the origin) */
-  at?: Vector3;
-  /** the way it faces (rad about +Y; 0 faces +Z) */
-  face?: number;
-  /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
-  drive?: (time: number) => Driven;
-  /** the bodies it keeps clear of besides those it deals with (bystanders; one shared set works for a crowd) */
-  avoid?: Iterable<Body>;
-  /** its quiet life: a seed that fixes its variation, what tethers it and what startles it */
-  life?: Temperament;
-  /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces */
-  tempo?: number;
-  /** what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³); default its species' */
-  mass?: number | { readonly closed: boolean; readonly volume: number | null };
-  /** the container its mesh was rigged in with @drawcall/rig (`skin(model, skeleton)`): the body poses its bones; without it, the body is bare */
-  model?: Object3D;
-  /** checks final poses and records problems in `log`; `{ notes: true }` also records what is only reported (a player-driven body's balance) */
-  dev?: boolean | { notes?: boolean };
-}
+/** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
+ * set works for a crowd). */
+export type BodyOptions = SelfOptions & { avoid?: Iterable<Body> };
 
 /** the names of a species' bones */
 export type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone : never;
@@ -56,6 +36,8 @@ export interface Goals {
 /** A foot as it stands or, swinging, where it lands. */
 export interface Foot {
   position: Vector3;
+  /** which way it points (rad about +Y) */
+  yaw: number;
   planted: boolean;
 }
 
@@ -72,12 +54,12 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   constructor(readonly species: S, options: BodyOptions = {}) {
     const { avoid, ...rest } = options;
-    const made: SelfOptions = rest;
-    const self = species.person ? new Person(species, made) : new Self(species, made);
+    const binding = new Binding(species, rest.model);
+    const self = species.person ? new Person(species, rest, binding) : new Self(species, rest, binding);
     selves.set(this, self);
     for (const body of avoid ?? []) self.near.add(selfOf(body));
-    this.object = self.binding.object;
-    this.bones = bonesOf(self.binding.bones, species.bones);
+    this.object = binding.object;
+    this.bones = binding.bones;
   }
 
   /** advances it by `seconds` (a frame's time; at most 0.1 s is taken): every whole 1/60 s sub-step it covers, the rest kept for the next */
@@ -121,9 +103,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** its feet, as they stand or, swinging, where they land */
   get feet(): readonly Foot[] {
-    const self = selfOf(this);
-    if (self instanceof Person) return self.feet.map((foot) => ({ position: foot.position.clone(), planted: foot.phase === 'planted' }));
-    return (self.stepper?.legs ?? []).map((leg) => ({ position: leg.anchor.clone(), planted: !leg.swing }));
+    return (selfOf(this).stepper?.legs ?? []).map((leg) => ({ position: leg.anchor.clone(), yaw: leg.yaw, planted: !leg.swing }));
   }
 
   /** whether any of its hands holds `thing` */
@@ -194,13 +174,3 @@ function read(body: Body): ReadonlyPose {
   return reader && reader !== self ? self.poseFor(reader) : self.pose;
 }
 
-/** the bones by name, checked to be every one the skeleton names */
-function bonesOf<Name extends string>(bones: Readonly<Record<string, Object3D>>, names: readonly SkeletonBone<Name>[]): Readonly<Record<Name, Object3D>> {
-  if (complete(bones, names)) return bones;
-  const missing = names.filter(({ name }) => !(name in bones)).map(({ name }) => name);
-  throw new Error(`the model has no bone named ${missing.join(', ')} (rig it with this skeleton: skin(model, skeleton))`);
-}
-
-function complete<Name extends string>(bones: Readonly<Record<string, Object3D>>, names: readonly SkeletonBone<Name>[]): bones is Readonly<Record<Name, Object3D>> {
-  return names.every(({ name }) => name in bones);
-}

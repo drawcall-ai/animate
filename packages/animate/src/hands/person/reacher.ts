@@ -1,6 +1,5 @@
 import type { Object3D, Vector3 } from 'three';
 import type { Carrier } from '../../kernel/carrier';
-import type { Foot } from '../../legs/person/foot';
 import type { PersonLegged } from '../../legs/person/legged';
 import type { Gazer } from '../../species/define';
 import type { Hold } from '../../things/resolve';
@@ -11,7 +10,6 @@ export interface Reacher extends Handed, PersonLegged {
   readonly gazer: Gazer;
   look: Readonly<Vector3> | null;
   readonly holding: Record<string, Hold | null>;
-  readonly feet: [Foot, Foot];
   /** what the hands carry in both this sub-step, and along which aim: fitted to the wrists after the hands */
   readonly carrying: Map<Object3D, Carrier>;
 }

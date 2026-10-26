@@ -14,13 +14,14 @@ export function checkSupport(h: PersonLegged, f: Frame, dev: Dev): void {
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
   const xcom = xcomOf(com, velocity, h.proportions.legLength, new Vector3());
-  const support = h.feet.flatMap((foot, s) => {
-    if (foot.phase === 'swing') return footprint(h.proportions, foot.position, foot.yaw);
+  const legs = h.stepper?.legs ?? [];
+  const support = legs.flatMap((leg, s) => {
+    if (leg.swing) return footprint(h.proportions, leg.anchor, leg.yaw);
     const side = SIDES[s];
     return solePoints(h.proportions, f.prev, side).map((at): [number, number] => [at.x, at.z]);
   });
   const hull = hullOf(support);
-  if (h.locomotion.settled && h.feet.every((foot) => foot.phase === 'planted') && Math.hypot(velocity.x, velocity.z) < 0.05) {
+  if (h.locomotion.settled && legs.every((leg) => !leg.swing) && Math.hypot(velocity.x, velocity.z) < 0.05) {
     const value = outside(hull, com);
     if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
   }

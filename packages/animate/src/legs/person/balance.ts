@@ -25,7 +25,7 @@ import { drivenRoot } from '../driven';
 import { solePoints } from '../../species/humanoid/landmarks';
 import { humanStepping } from './stepping';
 import { KNEE_FLEXION } from '../../species/humanoid/limits';
-import { defaultStance } from '../../species/humanoid/stance';
+import { defaultStance, standingFeet } from '../../species/humanoid/stance';
 
 /**
  * How quickly a person's legs take it up to a pace and down from it (m/s²), which the trunk carries itself at — its lean into the
@@ -127,7 +127,9 @@ export function drivenBy(
     },
   };
   // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
-  const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, h.feet, h.yaw));
+  // (the feet where they stand as it is made: in its stance under it)
+  const standing = standingFeet(p, h.pose.position(0).x, h.pose.position(0).z, h.yaw);
+  const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, standing, h.yaw));
   let stepper = stepperFor(true), first = true;
   const { toeOut, crouch: crouching } = humanStepping(p);
   const poise = new Poise();
@@ -142,13 +144,14 @@ export function drivenBy(
     run: 0,
     moving: false,
     stance: base,
-    feet: h.feet,
+    // (where the feet stood as the sub-step began: the posture shifts the weight between them)
+    feet: standing.map((foot) => ({ anchor: foot.position.clone() })),
     pelvis: new Vector3(),
     pelvisRotation: new Quaternion(),
     held: false,
   };
   const posture = new Posture(h.species.inertia);
-  const life = new Life(options.seed ?? seedOf(p.height, h.feet[0].position.x, h.feet[0].position.z));
+  const life = new Life(options.seed ?? seedOf(p.height, standing[0].position.x, standing[0].position.z));
   const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
   const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
@@ -292,10 +295,8 @@ export function drivenBy(
         const sunk = -feet.sole(i, ankle, f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
         if (sunk > 0) place(_lift.copy(pose.ankle).setY(pose.ankle.y + sunk));
       }
-      h.feet[i].position.copy(leg.anchor);
-      h.feet[i].yaw = leg.yaw;
-      h.feet[i].phase = leg.swing ? 'swing' : 'planted';
     });
+    legs.forEach((leg, i) => upright.feet[i].anchor.copy(leg.anchor));
     const locomotion = h.locomotion, stepping = legs.some((leg) => leg.swing);
     locomotion.phase = stepper.phase;
     locomotion.walk = moving;

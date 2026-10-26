@@ -4,7 +4,7 @@ import type { Body, Driven } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/kernel/math';
 import type { Person } from '../../src/body/person';
-import { dt, insides, person } from '../bodies';
+import { dt, insides, person, feetOf } from '../bodies';
 
 /** a driven root, as a player's controller writes it */
 type Root = Driven & { velocity: Vector3; crouch: number };
@@ -14,7 +14,7 @@ function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => 
   const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
   const body = person({ drive: () => root, dev: true }), h = insides(body);
   let apart = 0, steps = 0;
-  const phases = h.feet.map((foot) => foot.phase);
+  const phases = feetOf(h).map((foot) => foot.phase);
   for (let t = dt; t <= T + 1e-9; t += dt) {
     root.velocity.add(velocity(t).sub(root.velocity).clampLength(0, 10 * dt));
     root.position.addScaledVector(root.velocity, dt);
@@ -24,7 +24,7 @@ function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => 
     // (the hips about the root: swaying over the stance foot, shifted fore and aft as the trunk nods)
     const hips = h.pose.position(0);
     apart = Math.max(apart, Math.hypot(hips.x - root.position.x, hips.z - root.position.z));
-    h.feet.forEach((foot, s) => { if (foot.phase === 'swing' && phases[s] === 'planted') steps++; phases[s] = foot.phase; });
+    feetOf(h).forEach((foot, s) => { if (foot.phase === 'swing' && phases[s] === 'planted') steps++; phases[s] = foot.phase; });
   }
   return { h, apart, steps, root };
 }
@@ -50,7 +50,7 @@ it.each([
   expect(h.log).toEqual([]);
   // (the balance bound is only noted for a driven body)
   expect(h.notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
-  expect(h.feet.every((foot) => foot.phase === 'planted')).toBe(true);
+  expect(feetOf(h).every((foot) => foot.phase === 'planted')).toBe(true);
   expect(h.locomotion.settled).toBe(true);
 });
 
@@ -120,7 +120,7 @@ it.each([
   expect(steps).toBeGreaterThanOrEqual(2);
   expect(h.log).toEqual([]);
   expect(Math.abs(h.locomotion.facing - turn)).toBeLessThan(0.01);
-  for (const [s, foot] of h.feet.entries()) expect(Math.abs(foot.yaw - turn - (s === 0 ? 0.12 : -0.12))).toBeLessThan(25 * Math.PI / 180);
+  for (const [s, foot] of feetOf(h).entries()) expect(Math.abs(foot.yaw - turn - (s === 0 ? 0.12 : -0.12))).toBeLessThan(25 * Math.PI / 180);
 });
 
 it('walks a curve while turning, then stops and turns back in place', () => {

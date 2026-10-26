@@ -51,7 +51,7 @@ it('checks standing CoM against the soles once the final pose is still', () => {
   claim(body, 'trunk', (f) => {
     f.current.copy(pose);
     h.locomotion.settled = true;
-    for (const foot of h.feet) foot.phase = 'planted';
+    for (const leg of h.stepper?.legs ?? []) leg.swing = null;
   });
   run(body, 3 * dt);
   expect(body.log).toContainEqual(expect.objectContaining({ check: 'standing CoM outside the feet (m)', limit: 0.001 }));

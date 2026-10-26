@@ -17,6 +17,9 @@ export const person = (options: BodyOptions = {}, height = 1.75) => new Body(hum
 /** the default person's skeleton, every position times `factor` */
 const scaled = (factor: number) => PERSON.map((bone) => ({ ...bone, position: bone.position.map((x) => x * factor) as [number, number, number] }));
 
+/** a person's feet as its stepper has them: where each stands or lands, which way it points, planted or swinging */
+export const feetOf = (h: Person) => (h.stepper?.legs ?? []).map((leg) => ({ position: leg.anchor, yaw: leg.yaw, phase: leg.swing ? 'swing' : 'planted' }));
+
 /** `body`'s runtime, as a person */
 export const insides = (body: Body): Person => personOf(selfOf(body));
 

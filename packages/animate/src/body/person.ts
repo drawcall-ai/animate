@@ -10,19 +10,20 @@ import type { Carrier } from '../kernel/carrier';
 import { solveChain } from '../kernel/chain';
 import { REACHED, type Target } from '../kernel/goal';
 import { ChainTip } from '../kernel/tip';
-import { forwardOf, leftOf } from '../kernel/math';
+import { forwardOf } from '../kernel/math';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
+import type { Binding } from './model';
 import type { Hold } from '../things/resolve';
 import { resolve } from '../things/resolve';
 import { bear, bodyOf, checkParents, inHand, move, supported, worn } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
-import { footRotation, type Foot } from '../legs/person/foot';
+import { footRotation } from '../legs/person/foot';
 import { legOf } from '../legs/person/leg';
 import { STANDING_REACH } from '../legs/person/posture';
 import { relaxedPose } from '../species/humanoid/relaxed';
-import { defaultStance, footYaw, stanceFeet } from '../species/humanoid/stance';
+import { standingFeet } from '../species/humanoid/stance';
 import { driven } from '../legs/person/balance';
 import { stride } from '../legs/person/stride';
 import { hanging, handStep, HOLD } from '../hands/person/arms';
@@ -36,23 +37,14 @@ import type { AnySpecies } from '../species/define';
  */
 export class Person extends Self {
   declare readonly gazer: Gazer;
-  /** where the feet stand or, stepping, land [left, right]: balance's */
-  readonly feet: [Foot, Foot];
   /** what its hands carry this sub-step and along which aim: fitted to the wrists after the hands */
   readonly carrying = new Map<Object3D, Carrier>();
   readonly proportions: Proportions;
 
-  constructor(species: AnySpecies, options: SelfOptions) {
+  constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const p = species.person;
     if (!p || !species.gaze) throw new Error('a person is made of a humanoid species');
-    let feet: [Foot, Foot] | null = null;
-    super(species, options, (skeleton) => {
-      const start = standing(p, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0);
-      feet = start.feet;
-      return start.pose;
-    });
-    if (!feet) throw new Error('a person stands where it is made');
-    this.feet = feet;
+    super(species, options, binding, (skeleton) => standing(p, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0));
     this.proportions = p;
   }
 
@@ -173,33 +165,29 @@ function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
 }
 
 /**
- * `pose` standing relaxed at `floor` facing `yaw`: the feet flat where the default stance puts them,
- * the pelvis as high as they reach, the legs solved down to them; and the feet
+ * `pose` standing relaxed at `floor` facing `yaw`: the feet flat where the default stance puts them, the pelvis as high as they reach,
+ * the legs solved down to them
  */
-function standing(p: Proportions, pose: Pose, floor: Vector3, yaw: number): { pose: Pose; feet: [Foot, Foot] } {
+function standing(p: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
   for (const { bone, rotation } of relaxedPose()) pose.setLocal(bone, rotation);
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));
   pose.setRoot(new Vector3(floor.x, p.hipHeight, floor.z));
   pose.facing = yaw;
-  const stance = defaultStance(p);
-  const ankles: [Vector3, Vector3] = [new Vector3(), new Vector3()];
-  stanceFeet(floor.x, floor.z, forwardOf(yaw), leftOf(yaw), p, stance, ankles);
+  const feet = standingFeet(p, floor.x, floor.z, yaw);
   // (no higher than the legs reach)
   const reach = STANDING_REACH * p.legLength;
   let y = p.hipHeight;
   SIDES.forEach((side, s) => {
-    const hip = pose.position(INDEX[`${side}UpperLeg`]);
-    y = Math.min(y, ankles[s].y + Math.sqrt(reach * reach - (hip.x - ankles[s].x) ** 2 - (hip.z - ankles[s].z) ** 2) + p.hipHeight - hip.y);
+    const hip = pose.position(INDEX[`${side}UpperLeg`]), ankle = feet[s].position;
+    y = Math.min(y, ankle.y + Math.sqrt(reach * reach - (hip.x - ankle.x) ** 2 - (hip.z - ankle.z) ** 2) + p.hipHeight - hip.y);
   });
   pose.setRoot(new Vector3(floor.x, y, floor.z));
-  const feet = SIDES.map((side, s): Foot => {
-    const heading = footYaw(yaw, s === 0 ? 1 : -1, stance);
-    const foot = footRotation(heading, 0);
+  SIDES.forEach((side, s) => {
+    const { position, yaw: heading } = feet[s];
     const knee = forwardOf(heading).add(pose.position(INDEX[`${side}UpperLeg`]));
-    solveChain({ current: pose }, legOf(side), { tip: { position: ankles[s], quaternion: foot }, pole: knee });
-    return { position: ankles[s], yaw: heading, phase: 'planted' };
+    solveChain({ current: pose }, legOf(side), { tip: { position, quaternion: footRotation(heading, 0) }, pole: knee });
   });
-  return { pose, feet: [feet[0], feet[1]] };
+  return pose;
 }
 
 const _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };

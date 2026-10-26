@@ -9,6 +9,7 @@ import { ChainLeg, feetOf, steppingOf } from './feet';
 import { Planner } from './planner';
 import { Stepper, type RootGoal } from './step/stepper';
 import type { Legged } from './legged';
+import { offTheWay, stanceYaw } from './walker';
 import type { Step } from '../kernel/frame';
 import { drivenRoot } from './driven';
 import { strideAt } from '../species/gait';
@@ -71,7 +72,7 @@ export function creature(body: Legged): Step {
     const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
     const go = finite ? asked0 : null;
     if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); stepper.check(f); }
-    const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - planner.root.yaw), 0) / stepper.legs.length + planner.root.yaw;
+    const stance = stanceYaw(stepper.legs, planner.root.yaw);
     // (a goal off its way it turns to first, as a person does: facing it till it is on its way; nearer than its feet stand, it is there)
     // (it sets off for a goal further than `STOP.start`, or one on the move, and stops within `STOP.distance` of a still one, slow:
     // there it stands, not edging about)
@@ -87,7 +88,7 @@ export function creature(body: Legged): Step {
     const behind = _gap.copy(asked).sub(root).dot(forwardOf(planner.root.yaw, _to)) < 0;
     if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && !face) going = false;
     const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
-    const faced = face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
+    const faced = face?.yaw ?? (to.distanceTo(root) > radius && offTheWay(heading, planner.root.yaw) ? heading : undefined);
     // (or where the scene drives it)
     const r: RootGoal = driven ? driven(f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
       { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));

@@ -1,7 +1,7 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { carry, grab, release, wait } from '../../src/index';
-import { insides, person, play, run } from '../bodies';
+import { insides, person, play, run, feetOf } from '../bodies';
 import { box, empty, roomOf, worldOf } from '../things';
 
 describe('what a body wears', () => {
@@ -28,7 +28,7 @@ describe('what a body wears', () => {
 
   it('stands its loaded centre of mass over its feet', () => {
     const { h } = loaded();
-    const feet = h.feet[0].position.clone().add(h.feet[1].position).multiplyScalar(0.5);
+    const feet = feetOf(h)[0].position.clone().add(feetOf(h)[1].position).multiplyScalar(0.5);
     expect(Math.abs(h.pose.com(new Vector3()).x - feet.x)).toBeLessThan(0.02);
   });
 

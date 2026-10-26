@@ -7,7 +7,6 @@ import { INDEX } from '../../species/humanoid/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../../species/humanoid/proportions';
 import type { Stance } from '../../kernel/go';
-import type { Foot } from './foot';
 import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../kernel/inertia';
 import { follow } from '../../kernel/follow';
@@ -85,7 +84,8 @@ export interface Upright {
   run: number;
   moving: boolean;
   stance: Stance;
-  feet: readonly Foot[];
+  /** where the feet stood or, swinging, were to land as the sub-step began */
+  feet: readonly { readonly anchor: Vector3 }[];
   pelvis: Vector3;
   pelvisRotation: Quaternion;
   /** neither arm free to swing: both hands hold something */
@@ -166,8 +166,8 @@ export class Posture {
     this.quiet.copy(left).multiplyScalar(life.drift.x * p.scale).addScaledVector(fwd, life.drift.z * p.scale);
     const weight = _v.set(0, 0, 0);
     if (onto && !upright.moving) {
-      weight.addVectors(upright.feet[0].position, upright.feet[1].position).multiplyScalar(0.5);
-      weight.subVectors(upright.feet[onto === 'left' ? 0 : 1].position, weight).multiplyScalar(SHIFT.share);
+      weight.addVectors(upright.feet[0].anchor, upright.feet[1].anchor).multiplyScalar(0.5);
+      weight.subVectors(upright.feet[onto === 'left' ? 0 : 1].anchor, weight).multiplyScalar(SHIFT.share);
     }
     this.weight.lerp(weight, 1 - Math.exp(-dt));
     pelvis.add(this.quiet.add(this.weight));

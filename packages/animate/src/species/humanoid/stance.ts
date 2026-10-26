@@ -1,4 +1,5 @@
-import type { Vector3 } from 'three';
+import { Vector3 } from 'three';
+import { forwardOf, leftOf } from '../../kernel/math';
 import type { Proportions } from './proportions';
 import type { Stance } from '../../kernel/go';
 
@@ -21,3 +22,10 @@ export const OVER_ANKLES = 0.03;
 /** the heading of a planted foot of `side` (1 left, −1 right) when the body faces `yaw` */
 export const footYaw = (yaw: number, side: 1 | -1, stance: Stance) => yaw + stance.blade + side * stance.toeOut;
 
+
+/** where a person of proportions `p` standing in its stance at the ground point (x, z) facing `yaw` has its feet: each ankle and heading */
+export function standingFeet(p: Proportions, x: number, z: number, yaw: number): { position: Vector3; yaw: number }[] {
+  const stance = defaultStance(p), ankles: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  stanceFeet(x, z, forwardOf(yaw), leftOf(yaw), p, stance, ankles);
+  return ankles.map((position, s) => ({ position, yaw: footYaw(yaw, s === 0 ? 1 : -1, stance) }));
+}

@@ -8,6 +8,7 @@ import { during, type Request } from '../../kernel/requests';
 import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
+import { floorUnder } from '../../legs/person/legged';
 import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../../legs/person/posture';
 import { defaultStance } from '../../species/humanoid/stance';
 
@@ -71,7 +72,7 @@ export function standing(h: Reacher, to: Stand): Standing {
   const p = h.proportions;
   const height = grips.reduce((sum, g) => sum + g.at.y, 0) / grips.length;
   // (the shoulders standing: as high above the floor under the feet — their ankles less the ankle's height — as the body's)
-  const standing = (h.feet[0].position.y + h.feet[1].position.y) / 2 - p.ankleHeight + p.shoulderHeight;
+  const standing = floorUnder(h) + p.shoulderHeight;
   const reach = ARM_REACH * p.armLength;
   // (a placing point low down the body lowers and bows for, as it does for a grip — as far as it must, at most squatting and bowing
   // its most: its shoulders that much lower and, bowed, that much further on)
@@ -173,7 +174,7 @@ export function standing(h: Reacher, to: Stand): Standing {
     walk,
     arrived: (f) => {
       const spot = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
-      return turned(facing(f)) && flat(f.prev.com(_com), spot) < ARRIVED * p.scale && !h.locomotion.moving && h.feet.some((foot) => foot.phase === 'planted');
+      return turned(facing(f)) && flat(f.prev.com(_com), spot) < ARRIVED * p.scale && !h.locomotion.moving && (h.stepper?.legs.some((leg) => !leg.swing) ?? true);
     },
   };
 }

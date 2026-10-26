@@ -1,4 +1,5 @@
 import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
+import type { SkeletonBone } from '@drawcall/rig';
 import type { AnySpecies } from '../species/define';
 import type { ReadonlyPose } from '../kernel/pose';
 
@@ -9,9 +10,10 @@ import type { ReadonlyPose } from '../kernel/pose';
  * update, `write` poses them: each moving bone's rotation through its rest turns (`turnₚ · q · turn⁻¹`, read once relative to the
  * body), the root's position relative to `object`, which follows the body. Bones the species does not move follow their parents.
  */
-export class Binding {
+export class Binding<Name extends string = string> {
   readonly object = new Group();
-  readonly bones: Record<string, Object3D> = {};
+  /** every bone the skeleton as written names, by name */
+  readonly bones: Readonly<Record<Name, Object3D>>;
   /**
    * each moving bone's node, its rest turn (the skeleton's straight limbs onto the node's rest) and the nodes it hangs from; none for a
    * bone the skeleton as written lacks (a person's toes, placed at the ball of a foot without them)
@@ -20,22 +22,23 @@ export class Binding {
   /** where the root bone's position is written from: `object`'s frame into the root node's parent's */
   private readonly rootFrame = new Matrix4();
 
-  constructor(readonly species: AnySpecies, model?: Object3D) {
+  constructor(readonly species: Pick<AnySpecies, 'skeleton' | 'turns'> & { readonly bones: readonly SkeletonBone<Name>[] }, model?: Object3D) {
     const { skeleton } = species;
-    if (model) {
-      this.object.add(model);
-      for (const bone of species.bones) {
-        const node = model.getObjectByName(bone.name);
-        if (node) this.bones[bone.name] = node;
-      }
-      const written = new Set(species.bones.map((bone) => bone.name));
-      const missing = skeleton.bones.filter((bone) => written.has(bone.name) && !this.bones[bone.name]).map((bone) => bone.name);
-      if (missing.length) throw new Error(`the model has no bone named ${missing.join(', ')} (rig it with this skeleton: skin(model, skeleton))`);
-    } else this.bare();
+    if (model) this.object.add(model);
+    const found = model ? Object.fromEntries(species.bones.flatMap((bone) => {
+      const node = model.getObjectByName(bone.name);
+      return node ? [[bone.name, node]] : [];
+    })) : this.bare();
+    const byName: Readonly<Record<string, Object3D | undefined>> = found;
+    if (!named(found, species.bones)) {
+      const missing = species.bones.filter((bone) => !byName[bone.name]).map((bone) => bone.name);
+      throw new Error(`the model has no bone named ${missing.join(', ')} (rig it with this skeleton: skin(model, skeleton))`);
+    }
+    this.bones = found;
     this.object.updateMatrixWorld(true);
     const inverse = new Matrix4().copy(this.object.matrixWorld).invert();
     const rest = (node: Object3D) => new Matrix4().multiplyMatrices(inverse, node.matrixWorld);
-    const nodes: (Object3D | undefined)[] = skeleton.bones.map((bone) => this.bones[bone.name]);
+    const nodes = skeleton.bones.map((bone) => byName[bone.name]);
     this.moving = skeleton.bones.map((bone, i): Moving | null => {
       const node = nodes[i];
       if (!node) return null;
@@ -95,12 +98,12 @@ export class Binding {
 
   private readonly cache: Quaternion[] = [];
 
-  /** library bones like the skeleton's, standing at rest under `object` */
-  private bare(): void {
+  /** library bones like the skeleton's, standing at rest under `object`, by name */
+  private bare(): Record<string, Object3D> {
     const at = new Map(this.species.bones.map((bone) => [bone.name, new Vector3(...bone.position)]));
-    for (const bone of this.species.bones) this.bones[bone.name] = Object.assign(new Object3D(), { name: bone.name });
+    const bones: Record<string, Object3D> = Object.fromEntries(this.species.bones.map((bone) => [bone.name, Object.assign(new Object3D(), { name: bone.name })]));
     for (const bone of this.species.bones) {
-      const node = this.bones[bone.name], position = at.get(bone.name);
+      const node = bones[bone.name], position = at.get(bone.name);
       if (!position) continue;
       if (bone.parent === undefined) {
         node.position.copy(position);
@@ -110,9 +113,15 @@ export class Binding {
       const parent = at.get(bone.parent);
       if (!parent) throw new Error(`bone "${bone.name}" has no parent "${bone.parent}"`);
       node.position.subVectors(position, parent);
-      this.bones[bone.parent].add(node);
+      bones[bone.parent].add(node);
     }
+    return bones;
   }
+}
+
+/** whether `bones` has every bone `written` names */
+function named<Name extends string>(bones: Record<string, Object3D>, written: readonly SkeletonBone<Name>[]): bones is Record<Name, Object3D> {
+  return written.every((bone) => bone.name in bones);
 }
 
 interface Moving {
