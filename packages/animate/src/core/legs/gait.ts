@@ -49,7 +49,7 @@ export function offsetAt(gait: Gait, speed: number, leg: number): number {
 }
 
 /** Round only negative speed noise; real reverse speeds still fail validation. */
-export const speedOf = (speed: number) => speed < 0 && speed > -1e-9 ? 0 : speed;
+const speedOf = (speed: number) => speed < 0 && speed > -1e-9 ? 0 : speed;
 
 /** Walk state, of any legs: the legs report the motion; walkTo publishes and clears its arrival estimate. */
 export interface Locomotion {

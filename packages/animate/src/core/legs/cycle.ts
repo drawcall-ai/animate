@@ -53,7 +53,7 @@ function cyclePhase(u: number, duty: number, cycleDuty: number): number {
 export const angleAt = (c: JointCycle, u: number, duty: number, blend = 0) => cycleAt(c, cyclePhase(u, duty, c.duty), blend);
 
 /** The reference at its own phase, independently of the contact schedule. */
-export function cycleAt(c: JointCycle, phase: number, blend = 0): number {
+function cycleAt(c: JointCycle, phase: number, blend = 0): number {
   const base = valueAt(c.keys, phase);
   if (!c.alternate || blend === 0) return base * DEG;
   return (base + (valueAt(c.alternate, phase) - base) * blend) * DEG;

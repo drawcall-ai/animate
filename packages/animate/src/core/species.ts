@@ -187,7 +187,7 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
  * the bones under `root` (default the skeleton's one root) and it, parents first: in the order the skeleton lists them if it lists them
  * so, else level by level; throws on a skeleton that is no tree under it
  */
-export function descendants<B extends SkeletonBone>(skeleton: readonly B[], root?: string): B[] {
+function descendants<B extends SkeletonBone>(skeleton: readonly B[], root?: string): B[] {
   const roots = skeleton.filter((bone) => bone.parent === undefined);
   if (roots.length !== 1) throw new Error(`a skeleton has one root, not ${roots.length}`);
   const top = root ?? roots[0].name;

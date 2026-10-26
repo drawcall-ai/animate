@@ -8,7 +8,7 @@ import { ChainTip } from '../core/tip';
 import { forwardOf, leftOf } from '../core/math';
 import { looking, type Gazer } from '../core/gaze';
 import { Self, type Behaviours, type SelfOptions } from '../body/self';
-import { bear, bodyOf, move, supported } from '../body/hold';
+import { bear, bodyOf, checkParents, move, supported } from '../body/hold';
 import type { Thing } from '../body/things';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Proportions } from './proportions';
@@ -57,7 +57,7 @@ export class Person extends Self {
   protected behave(): Behaviours {
     const seed = this.life.seed;
     const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
-    const taking: Partial<Record<Side, readonly [Thing, string]>> = {};
+    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
     return {
       balance: this.drive ? driven(this, seed) : stride(this, { seed }),
       gaze: looking(this, lookAround(this, seed)),
@@ -70,9 +70,10 @@ export class Person extends Self {
         handStep(this, f, side, { position: hold.at.position }, { on: frame, thing, ...HOLD, lead: supported(thing) }, arms[side]);
       },
       things: (f) => {
+        checkParents(this, f);
         if (f.dev) checkTaking(this, f, taking);
         move(this, f, this.carrying);
-        if (f.dev) checkWorn(this, f);
+        if (f.dev) checkHeld(this, f, noted);
         this.carrying.clear();
         bear(this, f, this.worn, this.borne);
       },
@@ -103,6 +104,9 @@ export const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
  * limit).
  */
 const GRIP_TAKEN = REACHED.distance + 0.02;
+/** How far a wrist may be from the grip it holds on what the body carries (m; tuned: a load carried at the body as it walks and turns
+ * lags its turn, the wrists up to ~4 cm off their grips) */
+const HELD = 0.05;
 
 /** development: each grip a hand has just taken, its wrist as near it as a grip taken is */
 function checkTaking(h: Person, f: Frame, taking: Partial<Record<Side, readonly [Thing, string]>>): void {
@@ -116,14 +120,22 @@ function checkTaking(h: Person, f: Frame, taking: Partial<Record<Side, readonly 
   }
 }
 
-/** development: a hand on something worn (on a bone) keeps to its grip: one rigid owner moves it */
-function checkWorn(h: Person, f: Frame): void {
+/**
+ * development: a hand on something worn (on a bone) keeps to its grip, one rigid owner moving it; one on what the body carries stays
+ * within `HELD` of its grip as the thing is fitted to the wrists (said once a hold: arms falling short of where a carry aims it draw the
+ * wrists together, off the grips)
+ */
+function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = h.holding[side];
-    if (!hold || h.carried.has(hold.thing.object) || !bodyOf(hold.thing.object)) continue;
+    if (!hold) continue;
+    const carried = h.carried.has(hold.thing.object);
+    if (!carried && !bodyOf(hold.thing.object)) continue;
     const at = h.track(hold.thing.object).toWorld({ position: hold.at.position }, _target, f.time).position;
-    const value = f.current.position(h.hands[side]).distanceTo(at);
-    if (value > REACHED.distance) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: REACHED.distance, where: `${hold.thing.object.name} ${side}` });
+    const value = f.current.position(h.hands[side]).distanceTo(at), limit = carried ? HELD : REACHED.distance;
+    if (value <= limit || (carried && noted.has(hold))) continue;
+    if (carried) noted.add(hold);
+    f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${hold.thing.object.name} ${side}` });
   }
 }
 

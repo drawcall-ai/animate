@@ -1,240 +1,87 @@
 ---
 name: animate
-description: Animate three.js characters and creatures with @drawcall/animate — people, the shipped horse or creatures of your own from data — by stories of @pmndrs/timeline behaviours that flow into one another over a base that stands, walks and looks about by itself, scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
+description: Animate three.js characters and creatures with @drawcall/animate — people, horses, dogs or creatures of your own from a rigged skeleton — by stories of verbs (walkTo, grab, carry, release, reach, lookAt, track) run on an @pmndrs/timeline runner over a body that stands, walks and looks about by itself, scripted or driven by a player. Use when writing or reviewing code that imports @drawcall/animate.
 ---
 
 # @drawcall/animate
 
 ## The model
 
-A body runs one behaviour, a [@pmndrs/timeline](https://github.com/pmndrs/timeline) timeline it steps in fixed 1/60 s sub-steps as it is updated. Nothing is keyframed: every sub-step each running behaviour writes goals for the bones it owns and moves toward them from the pose history at its own pace. So any task can end at any moment, and whatever writes those bones next takes them over from where and how fast they were going. Behaviours run in parallel layers, and on a bone two of them write, the later one wins.
-
-The calling convention, for every verb in the package: it returns a `Behaviour`, a function that makes a fresh timeline. Inside a generator, run one to its end with `yield* walkTo(h, { to })()`. To run several at once, pass them uncalled to `parallel<Frame>('all' | 'race', a, b)` and `yield*` that, without calling it. Wait with conditions — `yield* when(condition)`, `timePassed`, or a verb's `until` option — never with Promises or wall-clock time.
-
-Units are metres, seconds and radians; +Y is up, the floor is y = 0, and yaw 0 faces +Z, with +X then the body's left. Any goal may be live, a function of the frame read every sub-step: use that for whatever moves.
-
-## Bodies, species and the world
-
-A person is `new Humanoid(model, (h) => story, options)`: its skeleton and measures are read off a @pmndrs/viverse character model, which it poses after every update (`new Humanoid()` alone makes a bare one). Every other body is `new Body(species, (body) => story, options)`, of a `Species`: data, a skeleton and, optionally, its gaze, its hands by name, and its legs with their gait and posture. `horse()` ships with the package; *Your own creature* builds a dog. Either stands `at` a point on the floor facing `yaw`. `body.done` turns true once the story has ended; the body goes on standing.
+A story is any `function*` your app runs with `runTimeline` from @pmndrs/timeline. Verbs are generators: `yield* walkTo(body, target)` runs one to its end and returns `true` once its goal is met, `false` once it cannot be (no stand reaches the grips, the walk stalled). `parallel('all' | 'race', …)` runs verbs and generators at once; `wait(seconds | () => boolean)` waits; every verb takes `until` (seconds, a condition or `Infinity`), which ends it `true` whatever its goal. `release` alone is instant: call it without `yield*`.
 
 ```ts
-const groom = new Humanoid(await loadCharacterModel(), story, { at: { x: -1.5, z: 0 }, dev: true });
-const mare = new Body(horse(), (mare) => lookAt(mare, () => groom.pose.position(INDEX.head)), { at: { x: 1.2, z: 3 }, dev: true });
-
-const world = new World().add(groom, mare);
-// every frame:
-world.update(delta);
-```
-
-A body alone can be updated by itself. Bodies that share a scene go into one `World`, updated instead of them: each reads the others' last poses, and a walk up to something stands clear of the other bodies' low parts. Scenery is not an obstacle. No body knows of walls, tables or props, except the items it handles (by their `bounds`), so route walks round scenery yourself. What the scene moves itself (a cart, a target) it moves in `world.moving((time) => item.move(time, position))`, run before every sub-step at its time, however long your frames.
-
-## The base under every story
-
-A body's story runs over its base. For a person, the base balances, walks where it is asked, breathes, sways, shifts its weight, swings the free arms and looks about, all seeded (`idle: { seed }`). Don't author any of that. To have the body stand a while, just wait (`when(timePassed(2, 'seconds'))`). A task wins on the bones it writes and, when it ends, the base takes them back. Tasks never write the root or the legs: walks and reaches ask the base's legs for them. For another body, the base stands and walks on its species' legs with its posture on top, heeding the `attention` its species reads (`idle: { attention }`; the horse: a `tether` while tied, a `startle` point). A body without legs has no base. To order the base among layers of your own, give `idle: false` and run `idle(body)` from `@drawcall/animate/rig` yourself.
-
-## Walking
-
-`walkTo` ends once the body has arrived, turned and settled. Given `until`, it follows a live `to` however it moves until that is met, which is how one body follows another. Leave `speed` off unless matching another body's pace: walks already slow for what the hands hold.
-
-The motion conditions — `arriving(h, s)`, `h.locomotion.settled` and `h.locomotion.moving` — describe the body now, so they are true at the start for a body standing still. `arriving` also holds when no walk is running and the body is settled. Wait on them only alongside the walk they are to observe, as in the next section.
-
-## Anticipation: start the next thing before this one ends
-
-People look at, turn to and reach for the next thing while still finishing the last. Tasks done strictly one after another read as mechanical. To get this, run the next thing's opening in `parallel('all', …)` with the end of the current one, started by a condition:
-
-```ts
-// the eyes on the horse a second before the walk arrives
-yield* parallel<Frame>('all', walkTo(h, { to: stall }), function* () {
-  yield* when(arriving(h, 1));
-  yield* withGaze(h, () => mare.pose.position(HEAD), () => when(timePassed(1.5, 'seconds')))();
+const updateStory = runTimeline(function* () {
+  yield* grab(person, box, { left: 'left', right: 'right' }); // walks up, eyes first, hands rise before it arrives
+  yield* carry(person, box, shelfTop);                        // in over the front edge, by the shelf's own approach
+  release(person, box, shelfTop);                             // attached to the shelf, exactly there
 });
-// the hands letting go while the next grab sets off
-yield* parallel<Frame>('all', release(h, ['left', 'right']), grab(h, { right: [rope, 'knot'] }));
+function everyFrame(seconds: number) {
+  updateStory(undefined, seconds);
+  person.update(seconds);
+  mare.update(seconds);                                       // bodies read each other as they were before this frame: any order
+}
 ```
 
-The opening must leave the bones that are finishing alone, because a later writer wins: start with the eyes and feet while the hands finish, not the hands. The verbs already overlap their own parts: `grab` walks up, looks and reaches at once, so don't walk up and look first yourself.
+The story decides once per frame; the motion runs in fixed 1/60 s sub-steps inside `update` and never waits on the story. Units are metres, seconds and radians; +Y is up, the floor is y = 0, a facing of 0 looks along +Z, with +X then the body's left. A target is a `Vector3` (a point), an `Object3D` (it moves with its parent and also sets the orientation: an empty, a bone, `body.bones.head`) or a function of the body's time returning either.
 
-## Hands and items
+## Bodies
 
-An `Item` is a rigid thing with named grips (targets in its frame), a `mass` and a `name`. Give it its mass rather than slowing anything yourself: walks, holds and lifts slow down and prepare for the load. Give a solid item `bounds` from its mesh, so hands approach outside it before closing. Hanging straps are grips, not part of the rigid shell.
+A body is a species of a skeleton — `humanoid(skeleton)`, `horse(skeleton)`, `dog(skeleton)` or `species(skeleton, roles, tuning)` — where the skeleton is @drawcall/rig's `SkeletonBone[]` written for the mesh (`as const`, so bone names are checked). Rig the mesh with `await skin(container, skeleton)`, then `new Body(humanoid(skeleton), { model: container })`: the body drives the rig's bound bones by name. Add `body.object` (a group on the floor that follows the body, holding the model) to the scene once, under an untransformed parent. Without `model` the body is bare, for tests and headless runs; `body.bones` are then its own.
 
-There is one verb per intent, for any body with hands: a person's `left` and `right`, a dog's `jaw`. The hands' names are the species' (`Species<'jaw'>`), so a misspelt hand does not compile.
-- take hold: `grab`; keep hold: `hold` (to walk off with it, hold it `to` a carry pose such as `carried(h)`: without `to` the hands stay with the item, so one resting on something stays there);
-- move what is held along a way and end there: `carry`; put it down somewhere: `place`; let go: `release`; give it to another: `offer`;
-- reach to a point without taking anything: `touch`; move a free hand: `handTo`;
-- attach to a body and detach: `wear`, `takeOff`.
+Options: `at` and `face` where it starts; `mass` (kg, or rig's skin report when the mesh is closed); `life` fixes its variation (`seed`) and says what tethers or startles a creature; `tempo` paces it; `drive` hands its root to a player (below); `avoid` lists bystanders its walks keep clear of (the bodies it deals with it keeps clear of anyway); `dev` turns on checking. State: `position`, `velocity`, `facing`, `settled`, `airborne`, `gait`, `feet`, `holds(thing)`, `goals`, `pose`, `log`.
 
-What nothing holds or wears stays where it was let go. `handTo` moves a free hand (`until: 'reached'` to end there). A creature's hand is the tip of its chain: it carries, puts down and lets go as a person's does (what only a person's arms take, such as `grab`'s `face` or `release`'s `away`, does not compile for it), its head going back to where its base has it as it lets go. What its neck does not reach low down, it lets its body down and bows its front for, as a cat to its bowl does (`touch(cat, 'jaw', bowl.current.position)`); a task of your own can ask the same with `ask(body, { lower, bow })` from `@drawcall/animate/rig`.
+## What a body does by itself, and what a story asks
 
-```ts
-const across = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 2);
-const saddle = new Item(new Vector3(-1.1, 0.88, 2), across, {
-  left: { position: new Vector3(0.22, 0, 0) }, right: { position: new Vector3(-0.22, 0, 0) },
-}, { name: 'saddle', mass: 8 });
-const onBack = { position: new Vector3(0, 0.23, 0), quaternion: across }; // in the horse's trunk frame
+A person balances, breathes, sways, shifts its weight, swings its free arms and looks about by itself, seeded; a creature stands, glances and swishes its tail. Never author any of that: to stand a while, `wait`.
 
-const story = (h: Humanoid): Behaviour => function* () {
-  yield* named('fetch the saddle', grab(h, { left: [saddle, 'left'], right: [saddle, 'right'] }))();
-  yield* named('saddle the horse', function* () {
-    yield* place(h, saddle, onBone(mare, 0, onBack))();
-    yield* wear(mare, saddle, 0)(); // the horse moves it from now on
-  })();
-  yield* withGaze(h, () => mare.pose.position(HEAD), release(h, ['left', 'right']))();
-  // something held up to look at it
-  yield* grab(h, { right: [rope, 'knot'] })();
-  yield* carry(h, rope, facingAt(h, INDEX.head, { position: new Vector3(0, -0.15, 0.35) }))();
-  yield* carry(h, rope, [[0.6, carried(h, 'right')], [1.5, still]])();
-};
-```
+Each part of a body — its legs, eyes, trunk and each hand — does one thing at a time. A verb asks for the parts it is about (`walkTo` the legs, `lookAt` the eyes, `grab` the hands) and borrows the rest it needs (`grab` borrows the legs to walk up and the eyes to find the grips). The newest asked verb takes a part; when it ends, the one it overrode takes the part back from where it is, so nothing snaps. Anything asked beats anything borrowed, and among borrowers the first keeps the legs. So run things side by side freely: a `lookAt` over a `grab` takes only the eyes. `body.goals` says which verb holds each part (verb, call site, tier) when a scene does something unexpected.
 
-A hand-over is two stories meeting on a condition, never on time: one body `offer`s what it holds (it holds it out toward the other and lets go once the other has it in a hand), the other comes for it once it is `offered(giver, item)` and takes it by another grip (`holds(body, item)` tells who has it):
+## Anticipation: the next thing starts before this one ends
+
+People look at, turn to and reach for the next thing while still finishing the last; tasks strictly one after another read as mechanical. Start the next thing in `parallel('all', …)` with the end of the current one, on `arriving(body, seconds)` (true once what the body moves toward will arrive within that time, or once it rests):
 
 ```ts
-const giver = new Humanoid(await loadCharacterModel(), (h) => function* () {
-  yield* grab(h, { right: [rope, 'knot'] })();
-  yield* offer(h, rope, taker)();
+yield* parallel('all', walkTo(groom, stall), function* () {
+  yield* wait(arriving(groom, 1));
+  yield* lookAt(groom, mare.bones.head, { until: 1.5 });   // the eyes on the horse a second before the walk arrives
 });
-const taker: Humanoid = new Humanoid(await loadCharacterModel(), (h) => function* () {
-  yield* when(() => offered(giver, rope));
-  yield* grab(h, { left: [rope, 'loop'] })();
-  yield* hold(h, rope, { to: carried(h, 'left') })();
-}, { at: { x: 0, z: 3 }, yaw: Math.PI });
 ```
 
-A goal lives in one of three frames: the world (the default), a bone (`onBone(body, bone, local)`, or `facingAt` turned with the body's facing rather than the bone), or an item (`onItem(item, local)`). Put what belongs to a body in its frame. `carried(h)` is a carry pose for this body's stature, and `onBone(mare, …)` stays right as the horse moves; the horse's position plus an offset is right only while it stands. In a course, `[seconds, still]` pauses on purpose, and course seconds are written for an unloaded item.
+The verbs overlap their own parts already: `grab` walks, looks and reaches at once, so do not walk up and look first yourself. Hand things over on conditions, never on time.
 
-Leave placement to the library: a hand-placed number usually reads worse and breaks for another body. `grab` stands where the grips are in comfortable reach, facing squarely; give `face` only for a particular orientation. `release` follows through and settles where the free arms take over. What you author is the scene, the order of beats, the places on props that a course passes, and how long a pause lasts.
+## Things
 
-## Gaze
+A thing is any `Object3D`. `userData.mass` (kg) makes it movable, and the body slows and prepares for it: give the mass instead of slowing anything yourself. Grips are named empties under the thing (`{ right: 'handle' }`; the thing's own name is its origin). An empty that things are put onto or taken from may name its `userData.approach` (empties beside it, outermost first: a shelf's front edge, a scabbard's way out) and `userData.speed` (m/s on the last straight); `carry` comes in, and goes out, that way.
 
-Keep the eyes on something with `lookAt` (endless, a layer of its own), or on what a task works on for as long as it runs with `withGaze`. A player's aim is `aimAt`, which brings the trunk along; a headset's is `headTo`.
+A thing moves with its scene-graph parent, and the verbs re-parent it:
+- `grab` never takes a thing off what it is attached to. A loose thing with mass (on no body) is lifted clear and drawn in; anything else stays where it is and the hands follow it (a sword in its scabbard, a door handle).
+- `carry` moves what is held to a target or through a list of targets — off its hip or pouch first, out the way its empty's approach comes in, walking there if it must, in by the target's approach — and keeps it there.
+- `release(body, thing, onto?)` attaches it onto the empty `onto` (exactly there within 5 mm), else to another hand still holding it (that body moves it now: a hand-over), else back to the parent it was taken from, where it is. The hands back out the way they came in.
+- What a body wears is whatever its bones carry in the scene graph: add a thing under `body.bones.hips` and the body bears its weight.
+
+Leave standing to the library: `grab`, `reach` and `carry` stand where the grips are in comfortable reach, facing them squarely, or take them from where the body stands when they are in reach. What you author is the scene: its places and empties, the order of beats, and the pauses.
+
+## Gaze and tracking
+
+`lookAt(body, target, { trunk, until })` keeps the eyes on a target (with `trunk`, the trunk turns with them, as an aim does). It is an aimer: it never ends by itself, so give it `until` in a sequence or run it in a `parallel`. `track(person, { head, left, right })` follows a headset and controllers.
 
 ## Player control
 
-For a body the player drives, make it with `idle: { root }`, a `DrivenRoot` that your controller moves every frame before the update. The body stands exactly on it and faces its `yaw`, and the legs step to keep up. Set `crouch` straight to 0 or 1 from the key; the legs ease into and out of it themselves. A leap is `h.stepper?.jump(speed)`.
+`drive: (time) => ({ position, yaw, velocity?, crouch?, steady?, jump? })` gives a person's root to your controller, read every sub-step at its time: the body stands on that point facing that way and its legs step to keep up. Nothing borrows a driven body's legs (`walkTo` throws for it), but its hands, eyes and trunk take any verb. `crouch` goes straight to 0 or 1 from the key, the legs ease it; `steady` (0 at ease, 1 aiming) fades its breathing and sway; `jump` is a leap's speed up.
 
-```ts
-const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
-const player = new Humanoid(model, (p) => aimAt(p, () => aim), { idle: { root } });
-// every frame, before world.update(delta): move, strafe and look as the input asks, the walk relative to the look
-const pace = input.crouch ? 0.8 : 1.4, wish = new Vector3(input.x, 0, input.z).clampLength(0, 1).multiplyScalar(pace).applyAxisAngle(UP, input.yaw);
-root.velocity.lerp(wish, Math.min(1, 10 * delta));
-root.position.addScaledVector(root.velocity, delta);
-root.yaw = input.yaw;
-root.crouch = input.crouch ? 1 : 0;
-if (input.jump) player.stepper?.jump(2.5);
-```
+## Creatures of your own
 
-Standing, the player's body breathes, sways and shifts its weight like any person's (seeded by `idle: { root, seed }`). While the player aims, ask it to hold still with `ask(p, () => ({ steady: aiming }))` (from `@drawcall/animate/rig`, 0 at ease to 1 aiming): its breathing and sway fade to about a third and it shifts no weight.
-
-Crouched, keep to a crouch-walk's pace (about 0.8 m/s) and turn on the spot in steps rather than steadily: a steady turn on the spot while crouched crosses the legs, and crouched steps, walking back most of all, still log a few touchdowns a little too fast.
-
-A held tool that must stay steady in view, such as a first-person weapon, belongs to the aim rather than a hand. Move it yourself every frame before updating the body: place it in the camera's frame, follow only its place in that frame (`follow` / `followRotation` from `@drawcall/animate/rig`, so carry, aim and sprint poses sway into each other), and `hold` it in both hands with no `to`. Hands holding an item that something else moves keep to its grips at any turn rate. A hand chasing the camera with `handTo` lags and overshoots instead. Keep the tool within the arms' reach. Show the camera from the same look the tool was placed in on that step, blended between steps as you blend the bodies, not from the newest mouse input: otherwise the tool trails the view by a step whenever the player turns.
-
-## Life
-
-A person's quiet life is part of its base. A species gives its own as rhythms in its `carriage` (`CarriedBones`: a glance about, a roll of the weight, a swish of the tail), each fired every few seconds, seeded.
-
-## Your own creature
-
-A species is data: a skeleton (bones parents first, bone 0 the root, rest rotations identity, standing square), chains for the neck and for each hand, leg chains with their foot geometry, a gait with how it carries the body (`body`: the trunk's bounce, pitch and roll, the head's nod, how far its spine `bend`s into a turn), which bones that carriage moves, and how its trunk leans into speeding up, slowing down and turning (`inertia`). Its head leads every turn by itself. This dog trots, its whole body riding on the trot, looks about, takes things in its jaw and wags its tail:
-
-```ts
-const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
-// each bone: its name, its parent's, where its joint is standing square, its mass (kg)
-const joints: [string, string, Vector3, number][] = [['trunk', '', v(0, 0.46, 0), 15], ['pelvis', 'trunk', v(0, 0.45, -0.16), 4],
-  ['neck', 'trunk', v(0, 0.44, 0.27), 2], ['head', 'neck', v(0, 0.62, 0.45), 2.5], ['jaw', 'head', v(0, 0.54, 0.67), 0.3],
-  ['tail', 'pelvis', v(0, 0.47, -0.32), 0.3]];
-const legs = ['leftFore', 'rightFore', 'leftHind', 'rightHind'];
-for (const leg of legs) {
-  // (top, knee or elbow, hock or wrist, paw: the elbow bends back, the stifle forward)
-  const x = leg.startsWith('left') ? 0.08 : -0.08, fore = leg.endsWith('Fore'), z = fore ? 0.22 : -0.24, knee = fore ? -0.06 : 0.1;
-  [v(x, 0.43, z), v(x, 0.28, z + knee), v(x, 0.1, z - knee / 2), v(x, 0.03, z)]
-    .forEach((at, k) => joints.push([`${leg}${k}`, k ? `${leg}${k - 1}` : fore ? 'trunk' : 'pelvis', at, 1.5 / (k + 1)]));
-}
-// each leg joint's range (°): sideways, fore and aft (+ its end back), twist — top, knee or elbow, hock or wrist, paw
-const RANGES: Record<string, number[][]> = { Fore: [[25, -70, 70, 20], [5, -100, 30, 5], [5, -10, 110, 5], [15, -60, 90, 10]],
-  Hind: [[25, -70, 70, 20], [5, -40, 100, 5], [5, -100, 30, 5], [15, -60, 90, 10]] };
-const at = (name: string) => joints.find(([n]) => n === name)![2], deg = Math.PI / 180;
-const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ name, parent: joints.findIndex(([n]) => n === parent), offset: parent ? joint.clone().sub(at(parent)) : joint, mass, com: v(0, 0, 0) })), {
-  chains: { neck: ['neck', 'head'], mouth: ['neck', 'head', 'jaw'] },
-  limits: joints.flatMap(([name], bone) => {
-    const [, end, k] = /^(?:left|right)(Fore|Hind)(\d)$/.exec(name) ?? [];
-    if (!end) return [];
-    const [z, back, forth, twist] = RANGES[end][Number(k)];
-    return [{ bone, axis: 1 as const, swing: [[-z * deg, z * deg], [back * deg, forth * deg]] as [[number, number], [number, number]], twist: [-twist * deg, twist * deg] as [number, number] }];
-  }),
-});
-
-const dog: Species<'jaw'> = {
-  skeleton,
-  gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.02, 0.1), out), range: { down: 0.5, up: 0.4, side: 0.6 } },
-  hands: { jaw: 'mouth' },
-  // (head-end down into setting off by 0.4 of atan(a / g), up from stopping by 0.3, rolled into a bend by 0.9, settling at 1.15 Hz)
-  inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 1.15, damping: 0.65 },
-  legs: {
-    chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
-      heel: v(0, -0.03, -0.02), toe: v(0, -0.03, 0.04), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
-    gait: {
-      ...powerGait({ height: 0.44, slowest: 0.3, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.93, clearance: [0.03, 0.03, 0.03, 0.03] }),
-      body: { bend: 0.6, withers: -0.012, croup: [-0.012, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
-    },
-    carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
-      life: [['tail', { every: [2, 5], rate: 1, pick: swing }]] },
-  },
-};
-
-const rex = new Body(dog, (rex) => function* () {
-  yield* grab(rex, { jaw: [ball, 'middle'] })(); // trots up, dips its head, takes it
-  yield* parallel<Frame>('race', hold(rex, ball), walkTo(rex, { to: v(0, 0, 0.5) })); // and brings it back
-  yield* place(rex, ball, { position: v(0.3, 0.04, 0.5) })(); // and puts it down
-}, { dev: true });
-```
-
-A hand of a creature is the tip of its chain: `grab` walks the body up until the grip is in the chain's reach, and the chain reaches it. Limits on the bones (`Skeleton`'s `limits`) keep joints in range; a leg needs them, for how far each leg reaches — and so how far it strides and strays as it turns — is read from its joints' ranges. The gait's offsets place each leg's footfall in the cycle in the order of the chains (fore-left, fore-right, hind-left, hind-right); diagonal pairs together make a trot. Each leg needs some bend standing, a reserve for the trunk's bounce.
-
-A gait can change with the pace, as the Froude number v²/(g·height) rises: `footfalls` shifts the offsets from a walk's to a trot's to a gallop's (the legs take a stride or two to change over), `carriages` the carriage with them, and `run` lets the body down on its legs galloping so they reach further fore and aft. A gallop's carriage rides `once` a stride rather than twice, its spine flexing and extending (`spine`, ° + extending, at `spinePhase`), its head held level (`headWithers` near 0) and its tail swinging against the croup (`tail`). Running, `bounce: 1` lets the trunk ride its legs' push instead of a set wave: its centre of mass falls as in flight between stances and rises with each push, and it pitches as the fores and hinds push in turn, all from the gait's footfalls and the skeleton's masses. The lion example (`examples/src/scenarios/lion.ts`) runs so:
-
-```ts
-// a walk, a trot, a rotary gallop leading with the left fore (offsets fore-left, fore-right, hind-left, hind-right)
-const WALK = [0.25, 0.75, 0, 0.5], TROT = [0.5, 0, 0, 0.5], GALLOP = [0.65, 0.55, 0, 0.1];
-const walking = { withers: -0.01, croup: [-0.01, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 1, headRise: 0, headWithers: 0.5 } as const;
-const trotting = { ...walking, withers: 0, croup: [0, 0], bounce: 1 } as const; // riding its legs' push
-const galloping = { ...trotting, spine: 12, spinePhase: 4.1, roll: 1, headPitch: 0, headWithers: 0.1, once: 1, tail: 0.8 } as const;
-const gait = {
-  ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT], [2, TROT], [3, GALLOP]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
-  run: { froude: [1, 3], drop: 0.15 } as const, // let down by 15% of its legs' length from Froude number 1 to 3
-  body: carriages([[0.3, walking], [0.6, trotting], [2, trotting], [3, galloping]]),
-};
-```
-
-For another size, take `scaled(dog, 0.55)` (a cat): its gait stays dynamically similar. Scaling by hand instead, multiply every length and `powerGait`'s `height` and `clearance` by the size, masses by its cube and `slowest` by its square root; `stride` and `stance` are dimensionless and stay.
+`species(skeleton, roles, tuning)`: `roles` says what the bones do — the `root`, the `legs` (each a joint chain top to paw with its heel and toe, fore-left, fore-right, hind-left, hind-right), the `gaze` (a neck chain and the eyes on a bone), the `hands` (a chain each to the hand or jaw) and the `carriage` its gait moves; `tuning` gives its `gait`, each bone's mass and centre, joint ranges (`limits`: a leg needs them, for how far it reaches is read from them) and `inertia`. `@drawcall/animate/species` holds what a species needs: `powerGait`, `footfalls` and `carriages` (gaits that change with the pace), `scaled` (another size, dynamically similar), `Life` and `swing` for its quiet life. `src/dog/dog.ts` is a complete example. A creature's hand is the tip of its chain: `grab` walks it up until the grip is in reach and the chain takes it, one hand at a time.
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Each sub-step then checks the final pose (joint ranges and speeds, planted feet) and appends any problem to `body.log` with its time and beat; `named('beat', task)` labels beats. A body throws only for misuse, such as an item worn twice or a grip that does not exist, and the error carries the time and beat. Lateness never throws, so live input can never crash a game: a reach or carry still short of its goal after its `limit` adds one entry to the log and keeps going, and a goal no stand brings within reach (`grab`, `place`, `touch`) adds one and the body stands where it is. With dev off none of this is reported anywhere, so test with dev on. A scripted story therefore fails by stalling rather than throwing, and says so: a walk (its own, or the one `grab`, `place` or `touch` walks up with) no nearer its goal for a while logs one `stalled walk` entry. Keep dev on in its tests and assert that `body.log` is empty and the story finished. What a body only reports, never as a failure — a cup held to the mouth stopping in front of the face, a player's body off balance where the player takes it — is in `body.notes` with `dev: { notes: true }`.
+Develop with `{ dev: true }` on every body. Every sub-step then checks the final pose (joint ranges and speeds, planted feet, balance, the hands on what they hold) and the scene (a thing let go in mid-air, put onto an empty far off it or taken, re-parented under a hand by something else; a lifted thing without mass; an aimer without `until` in a sequence; a story that stopped stepping its verbs) and appends each problem to `body.log` with its time and the verbs running. Lateness never throws: a reach or carry still short of its goal adds one entry and keeps going, and a goal nothing can reach ends its verb `false`. A body throws only for misuse (a grip that does not exist, carrying what no hand holds), the error carrying the time and verbs. So test stories with dev on, and assert the outcomes, that the story finished and that `body.log` is empty. What a body only reports, never as a failure (a player's body off balance where the player takes it), goes to `body.notes` with `dev: { notes: true }`.
 
-A late entry means the goal is out of reach from where the body stands. Change where it stands (approach its destination placement) or change the course; a longer `limit` only reports it later. Name every `Item`, so entries say which one.
-
-Expectations of a scene are watchers, composed beside the story. They read final poses and cost nothing with dev off:
+A scene's own expectations are watchers beside the story: `watch(label, () => problem | null)` checks every frame and puts what it finds into the log of the body the problem names.
 
 ```ts
-const watched = (h: Humanoid): Behaviour => () => parallel<Frame>('all',
-  eyesOnBefore(h, saddle, 0.4), // the eyes are on it 0.4 s before a hand takes it
-  watch('horse clear of the face', (f) => {
-    const d = mare.pose.position(HEAD).distanceTo(f.prev.position(INDEX.head));
-    return d < 0.5 ? { check: 'head clearance (m)', value: d, limit: 0.5, where: 'head' } : null;
-  }),
-  story(h),
-);
-const watchedGroom = new Humanoid(model, watched, { dev: true });
-```
-
-## Any rig
-
-A skeleton with named chains is enough for a body: build its behaviours from the parts in `@drawcall/animate/rig` — `chainTo` / `ChainTip` / `solveChain` and `follow` / `followRotation` / `TrackedPoint` / `TrackedRotation`. Each of these moves from the pose history toward a goal, which is what lets layers hand over; setting a bone outright (`setLocal` to a fixed rotation) snaps it. The rig also holds what the verbs are made of: asking the base for a stance, a bow or a step, walking up to something without taking it, and the base itself, to run under `idle: false`.
-
-```ts
-const arm = new Skeleton(bones, { chains: { arm: ['shoulder', 'elbow', 'hand'] } });
-const reacher = new Body({ skeleton: arm }, () => chainTo('arm', { position: goal }, { accel: 6, speed: 1, until: 'reached' }));
+yield* parallel('race', story(), watch('horse clear of the face', () => {
+  const distance = mare.bones.head.getWorldPosition(new Vector3()).distanceTo(groom.bones.head.getWorldPosition(new Vector3()));
+  return distance < 0.5 ? { body: groom, check: 'head clearance (m)', value: distance, limit: 0.5, where: 'head' } : null;
+}));
 ```

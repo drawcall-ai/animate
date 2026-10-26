@@ -1,6 +1,5 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { clamp, lerp, wrapAngle, smoothstep } from './math';
-import { seeded, seedOf } from './random';
+import { clamp, wrapAngle, smoothstep } from './math';
 import type { Frame } from './frame';
 import { follow, followRotation } from './follow';
 import type { Motion } from './goal';
@@ -25,7 +24,7 @@ export interface Gazer {
 }
 
 /** the most a head turns to look about (rad/s², rad/s): a glance aside, at most */
-export const GLANCE = { turnAccel: 40, turnSpeed: 6 };
+const GLANCE = { turnAccel: 40, turnSpeed: 6 };
 /**
  * the most a head turns to what the hands go for (rad/s², rad/s): a large brisk gaze shift's head,
  * ~3400°/s² and ~340°/s at its peak (recalled from Guitton & Volle 1987, J Neurophysiol 58:427,
@@ -184,30 +183,6 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, mot
     }
   };
 }
-
-/**
- * A condition for setting off once the eyes are on `at`: within 1° of their comfortable range or after 1.2 s, and a moment more,
- * `lead` s (default 0.1–0.3 s, seeded by where `at` is) — the eyes reach what the hand goes for ~0.5 s before it (Land & Hayhoe 2001).
- * It does not move the eyes: something else must be looking there.
- */
-export function eyesOn(self: Self, at: (f: Frame) => Readonly<Vector3>, seconds = NaN): (f: Frame) => boolean {
-  const gazer = self.gazer;
-  if (!gazer) throw new Error('eyesOn: the body has no gaze');
-  let lead = seconds, began = NaN, there = NaN;
-  return (f) => {
-    const point = at(f);
-    if (Number.isNaN(began)) began = f.time;
-    if (Number.isNaN(lead)) lead = lerp(LEAD[0], LEAD[1], seeded(seedOf(Math.round(point.x * 1000), Math.round(point.y * 1000), Math.round(point.z * 1000)))());
-    // (a gaze without a neck chain — its posture turns the head — gives the time it takes a head to turn)
-    if (Number.isNaN(there) && (f.time - began > LONGEST || (gazer.neck !== undefined && gazeOff(gazer, f.prev, point) < ARRIVED))) there = f.time;
-    return !Number.isNaN(there) && f.time - there >= lead - 1e-9;
-  };
-}
-
-/** the eyes have got where they look: within this of it (rad, 1°), or looked toward it this long (s: a point the head cannot turn to); and how long after that a task they lead sets off (s) */
-const ARRIVED = Math.PI / 180;
-const LONGEST = 1.2;
-const LEAD = [0.1, 0.3];
 
 /**
  * How fast (rad/s) an aim's twist is taken up: at once, as a game's aim offset follows the look (recalled: Unreal's Aim Offset, applied

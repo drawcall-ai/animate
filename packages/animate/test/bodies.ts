@@ -10,8 +10,11 @@ import { PERSON } from './skeletons/person';
 /** the sub-step (s) */
 export const dt = 1 / 60;
 
-/** a bare person of the default proportions */
-export const person = (options: BodyOptions = {}) => new Body(humanoid(PERSON), options);
+/** a bare person of the default proportions — or as tall as `height` (m), every bone scaled by it */
+export const person = (options: BodyOptions = {}, height = 1.75) => new Body(humanoid(height === 1.75 ? PERSON : scaled(height / 1.75)), options);
+
+/** the default person's skeleton, every position times `factor` */
+const scaled = (factor: number) => PERSON.map((bone) => ({ ...bone, position: bone.position.map((x) => x * factor) as [number, number, number] }));
 
 /** `body`'s runtime, as a person */
 export const insides = (body: Body): Person => personOf(selfOf(body));

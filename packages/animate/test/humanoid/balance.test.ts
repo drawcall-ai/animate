@@ -153,7 +153,8 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without defe
     last = at;
     h.feet.forEach((foot, s) => {
       if (foot.phase === 'planted' && phases[s] === 'swing' && h.locomotion.velocity.length() > 0.05) {
-        landings.push({ yaw: yawOf(h.pose.rotation(0)), error: Math.abs(wrapAngle(face + (s === 0 ? 0.12 : -0.12) - yawOf(h.pose.rotation(s === 0 ? INDEX.leftFoot : INDEX.rightFoot)))), t: tick * dt });
+        const foot = yawOf(h.pose.rotation(s === 0 ? INDEX.leftFoot : INDEX.rightFoot));
+        landings.push({ yaw: yawOf(h.pose.rotation(0)), error: Math.abs(wrapAngle(face + (s === 0 ? 0.12 : -0.12) - foot)), t: tick * dt });
       }
       phases[s] = foot.phase;
     });

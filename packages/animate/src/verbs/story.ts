@@ -1,9 +1,17 @@
-import { action, type TimelineYield } from '@pmndrs/timeline';
+import { action, type NonReuseableTimeline, type Timeline, type TimelineYield } from '@pmndrs/timeline';
 import type { Body } from '../body/body';
 import { selfOf } from '../body/body';
 import type { Problem } from '../core/dev';
 import type { Staging } from '../body/requests';
 import type { Self } from '../body/self';
+
+declare module '@pmndrs/timeline' {
+  /**
+   * `parallel` runs verbs as they are: their outcome is what a `yield*` of one returns, and `parallel` discards what its timelines
+   * return (its own types ask for `void`)
+   */
+  export function parallel<T>(type: 'all' | 'race', ...timelines: Array<Timeline<T, unknown> | boolean>): NonReuseableTimeline<T>;
+}
 
 /** When something ends: after this many seconds of the story's time, once a condition holds, or never (`Infinity`). */
 export type Until = number | (() => boolean);

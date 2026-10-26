@@ -1,6 +1,14 @@
 import { Quaternion, Vector3 } from 'three';
+import { parallel } from '@pmndrs/timeline';
 import type { Frame } from './frame';
-import { REACHED, type Placement } from './goal';
+import { REACHED, REACHING, type Placement, type Target } from './goal';
+import type { Carrier } from './carrier';
+import { ChainTip, reached } from './tip';
+import { looking } from './gaze';
+import { Walk } from './walk';
+import { during, type Request } from '../body/requests';
+import { attach, bodyOf, grasp } from '../body/hold';
+import type { Thing } from '../body/things';
 import { Pose, type ReadonlyPose } from './pose';
 import { STOOPING } from './legs/creature';
 import { forwardOf, minimumJerk } from './math';
@@ -12,10 +20,10 @@ import type { Self } from '../body/self';
 // it holds rigidly (attached to the tip's bone).
 
 /** Tuned: how long (s) a creature's hand, let go, takes to be its balance's again */
-export const HANDING = 0.6;
+const HANDING = 0.6;
 /** Tuned: how a creature's hand goes to a grip (m/s², m/s), each joint of its chain braked to its turn (rad/s², rad/s) on the way there
  * and back to rest: a calm dip of the head, its joints never flung round by the solve as the tip comes in */
-export const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };
+const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };
 /** Tuned: standing to take something, the share of the hand's chain it reaches out to, and the share of that reach along the floor the grip is ahead of the chain's base */
 const OUT = 0.9;
 const AHEAD = 0.6;
@@ -23,7 +31,7 @@ const AHEAD = 0.6;
 const PRESSING = 0.1;
 
 /** the chain hand `hand` reaches with */
-export function chainOf(self: Self, hand: string): string {
+function chainOf(self: Self, hand: string): string {
   const chain = self.species.hands?.get(hand);
   if (!chain) throw new Error(`the body has no hand "${hand}"`);
   return chain;
@@ -75,7 +83,7 @@ export function handingBack(self: Self, hands: readonly string[]) {
  * reaches standing it does not stoop for. (A dog takes a ball off the floor with its front lowered and its neck flexed down, its hind
  * legs standing.)
  */
-export function stooping(self: Self, bones: readonly number[]) {
+function stooping(self: Self, bones: readonly number[]) {
   const legs = self.species.legs?.chains ?? [], tip = bones[bones.length - 1], length = chainLength(self, bones);
   const lowest = legs.length ? STOOPING.lowest * Math.min(...legs.map((leg) => chainLength(self, leg.joints.map(({ bone }) => bone)))) : 0;
   // (the chain's base ahead of the hind legs' tops: how far down a bow takes it)
@@ -100,7 +108,7 @@ export function stooping(self: Self, bones: readonly number[]) {
 }
 
 /** the chain of `bones` laid out end to end (m) */
-export function chainLength(self: Self, bones: readonly number[]): number {
+function chainLength(self: Self, bones: readonly number[]): number {
   return bones.slice(1).reduce((sum, b) => sum + self.pose.skeleton.bones[b].offset.length(), 0);
 }
 
@@ -108,7 +116,7 @@ export function chainLength(self: Self, bones: readonly number[]): number {
  * how far ahead of the root (m) the body stands to take something at `point` with `chain` (its base as it stands now); out of its
  * reach up or down, how far it is from the base that way and how far the hand reaches (m)
  */
-export function standOff(self: Self, chain: string, point: Readonly<Vector3>, lowered = 0): number | { value: number; limit: number } {
+function standOff(self: Self, chain: string, point: Readonly<Vector3>, lowered = 0): number | { value: number; limit: number } {
   const { skeleton } = self.pose, bones = skeleton.chain(chain);
   const base = self.pose.position(bones[0]), length = chainLength(self, bones);
   // (let down for a point below the base, never for one above it: it stoops only to reach down)
@@ -130,3 +138,121 @@ export function rests(self: Self, hand: string): (f: Frame) => Required<Placemen
 const REST = new Quaternion();
 const _q = new Quaternion(), _q2 = new Quaternion();
 const _v = new Vector3(), _t = new Vector3();
+
+/** where a creature stands to reach `point` with `hand`'s chain, and the stoop it reaches with; nowhere, a problem in the dev log */
+function reachOf(self: Self, hand: string, point: Readonly<Vector3>, where: string) {
+  const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
+  const off = standOff(self, chain, point, stoop.most(self.frame));
+  if (typeof off === 'number') return { chain, bones, stoop, off };
+  self.frame.dev?.append(self.frame.time, { check: 'out of reach: from the hand\'s base, up or down (m)', ...off, where: `${where} ${chain}` });
+  return null;
+}
+
+/** a creature walking up (borrowed legs) to stand `off` before `at`, its eyes on it on the way (borrowed), if it has eyes */
+function* coming(self: Self, request: Request, at: (f: Frame) => Readonly<Vector3>, off: number) {
+  const walk = new Walk(self, { to: at, within: off });
+  const legs = during(request, 'go', 'borrowed', (f) => {
+    walk.step(f);
+    request.eta = walk.eta;
+  }, (f, _, time) => time > 0 && (walk.stalled || walk.arrived(f)));
+  yield* self.gazer ? parallel<Frame>('race', legs, during(request, 'look', 'borrowed', looking(self, at))) : legs;
+  return !walk.stalled;
+}
+
+/** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */
+function tipping(self: Self, request: Request, hand: string, goal: (f: Frame) => Target, on?: Carrier) {
+  const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new ChainTip(chain);
+  const began = self.frame.time;
+  let late = false;
+  return during(request, `hand.${hand}`, 'asked', (f) => {
+    const target = goal(f);
+    stoop.to(f, on ? on.toWorld(target, _world, f.time).position : target.position);
+    tip.to(f, target, { ...DIP, on });
+  }, (f) => {
+    if (reached(f, bone, goal(f), on)) return true;
+    if (!late && f.time - began > REACHING) {
+      late = true;
+      const target = goal(f), at = on ? on.toWorld(target, _world, f.time).position : target.position;
+      f.dev?.append(f.time, { check: `late reach: distance after ${REACHING} s (m)`, value: f.prev.position(bone).distanceTo(at), limit: REACHED.distance, where: chain });
+    }
+    return false;
+  });
+}
+
+/**
+ * A creature taking hold with one hand (a jaw): it walks up to stand with the grip in its hand's reach — bowed and lowered if it must,
+ * as far as its legs let it — its eyes on the grip on the way, then the hand's chain reaches it, the hand closes (a loose thing with a
+ * mass is taken into it: held rigidly) and goes back to where balance has it, with what it took. `false` for a grip out of its reach
+ * from anywhere it could stand.
+ */
+export function* taking(self: Self, request: Request, hand: string, thing: Thing, grip: string) {
+  const at = thing.grip(grip).at, frame = self.track(thing.object);
+  const point = (f: Frame) => frame.toWorld({ position: at.position }, _world, f.time).position;
+  const reach = reachOf(self, hand, point(self.frame), thing.object.name);
+  if (!reach || !(yield* coming(self, request, (f) => point(f).clone(), reach.off))) {
+    request.fail();
+    return;
+  }
+  yield* tipping(self, request, hand, () => ({ position: at.position }), self.track(thing.object));
+  grasp(self, hand, { thing, grip, at });
+  if (thing.massive && !bodyOf(thing.object)) {
+    [thing.home, thing.taken] = [thing.object.parent, self.track(thing.object).current.position.clone()];
+    thing.lifted = true;
+    attach(thing, self.binding.bones[self.skeleton.bones[reach.bones[reach.bones.length - 1]].name]);
+  }
+  const back = handingBack(self, [hand]);
+  yield* during(request, `hand.${hand}`, 'asked', back.step, back.done);
+}
+
+/**
+ * A creature's hand bringing what it holds to `to` (its placement, a sub-step at a time) at a calm dip's pace, the hand asked: it walks
+ * up first (borrowed) if `to` is beyond its reach; met once there, it keeps it there. `false` if `to` is out of its reach from anywhere.
+ */
+export function* bringing(self: Self, request: Request, hand: string, thing: Thing, to: (f: Frame) => Placement) {
+  const reach = reachOf(self, hand, to(self.frame).position, thing.object.name);
+  if (!reach) {
+    request.fail();
+    return;
+  }
+  const bone = reach.bones[reach.bones.length - 1];
+  if (!(yield* coming(self, request, (f) => to(f).position, reach.off))) {
+    request.fail();
+    return;
+  }
+  // (the hand where it puts the thing there, as it holds it: its tip goes there, the chain bending as it may)
+  const placed = self.track(thing.object).current, inverse = self.pose.rotation(bone).clone().invert();
+  const inHand = { position: placed.position.clone().sub(self.pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(placed.quaternion) };
+  const handAt = (f: Frame): Target => {
+    const at = to(f), turn = at.quaternion ?? self.track(thing.object).at(f.time).current.quaternion;
+    const quaternion = _hq.copy(turn).multiply(_iq.copy(inHand.quaternion).invert());
+    return { position: inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position) };
+  };
+  yield* tipping(self, request, hand, handAt);
+  request.met();
+  const tip = new ChainTip(reach.chain);
+  yield* during(request, `hand.${hand}`, 'asked', (f) => {
+    const target = handAt(f);
+    reach.stoop.to(f, target.position);
+    tip.to(f, target, DIP);
+  });
+}
+
+/** A creature's hand reaching `target` (a sub-step at a time), walking up first if it must: met once there, it stays there. */
+export function* nuzzling(self: Self, request: Request, hand: string, target: (f: Frame) => Readonly<Vector3>) {
+  const reach = reachOf(self, hand, target(self.frame), 'reach');
+  if (!reach || !(yield* coming(self, request, target, reach.off))) {
+    request.fail();
+    return;
+  }
+  yield* tipping(self, request, hand, (f) => ({ position: target(f).clone() }));
+  request.met();
+  const tip = new ChainTip(reach.chain);
+  yield* during(request, `hand.${hand}`, 'asked', (f) => {
+    const position = target(f);
+    reach.stoop.to(f, position);
+    tip.to(f, { position }, DIP);
+  });
+}
+
+const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _hq = new Quaternion(), _iq = new Quaternion();

@@ -217,7 +217,7 @@ export const HORSE_WALK: Gait = {
   })),
 };
 /** a warmblood's trot */
-export const HORSE_TROT: Gait = {
+const HORSE_TROT: Gait = {
   ...powerGait({ height: 1.2, slowest: 0.8, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: stanceOf(0.3, 3.7, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] }),
   // Read via summary: Dunbar's 1° trunk ROM is the low end of 2±1°; read or read via summary: back 4–6°, roll 9.5°. Derived: the croup with the withers
   // but for 0.5° of trunk pitch over the 1.14 m between withers and croup.

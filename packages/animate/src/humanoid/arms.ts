@@ -283,7 +283,8 @@ export function handStep(h: Person, f: Frame, side: Side, target: Target, option
   });
   // The body joins a glide with the hand, rather than moving for its starting hang.
   if (options.lead ?? true) {
-    const mass = options.thing?.mass ?? 0, carried = target.carriedBy === h || options.on?.carriedBy === h;
+    // (the thing's weight once the hand follows it — a glide toward it from afar, moving in the world, does not yet bear it)
+    const mass = options.on && options.thing ? options.thing.mass : 0, carried = target.carriedBy === h || options.on?.carriedBy === h;
     bringShoulder(h, f, side, toward?.at ?? at, toward?.share ?? 1, mass, carried);
     const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
     twistToward(h, f.current, goal, toward?.share ?? 1, held);

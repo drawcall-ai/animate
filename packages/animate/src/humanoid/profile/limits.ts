@@ -36,9 +36,9 @@ const range = (axis: 0 | 1 | 2, a: [number, number], b: [number, number], twist:
 /** Comfortable total cervical flexion, shared by neck and head (degrees). */
 export const NECK_PITCH = 60;
 /** Total cervical extension from the clinical range above (degrees). */
-export const NECK_EXTENSION = 80;
+const NECK_EXTENSION = 80;
 /** Total thoracolumbar flexion, shared by spine and chest (degrees). */
-export const TRUNK_PITCH = 80;
+const TRUNK_PITCH = 80;
 
 /** The knee's most flexion (degrees). */
 export const KNEE_FLEXION = 155;

@@ -41,7 +41,8 @@ it.each([
   ['back', moving(0.5, 4, forwardOf(0).multiplyScalar(-1.1))],
   ['diagonal', moving(0.5, 4, new Vector3(0.9, 0, 0.9))],
   ['sprint start and stop', (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 5 ? (t > 1.5 && t < 4 ? 3.5 : 1.4) : 0)],
-  ['strafe reversals', (t: number) => t < 1 ? new Vector3() : t < 3 ? forwardOf(0).multiplyScalar(1.4) : t < 4.5 ? leftOf(0).multiplyScalar(1.1) : t < 6 ? leftOf(0).multiplyScalar(-1.1) : new Vector3()],
+  ['strafe reversals', (t: number) =>
+    t < 1 ? new Vector3() : t < 3 ? forwardOf(0).multiplyScalar(1.4) : t < 4.5 ? leftOf(0).multiplyScalar(1.1) : t < 6 ? leftOf(0).multiplyScalar(-1.1) : new Vector3()],
 ] as const)('%s: the body is the given root; feet step without sliding, crossing or a hard touchdown', (_, velocity) => {
   const { h, apart, steps } = drive(8, velocity);
   expect(apart).toBeLessThanOrEqual(SWAY_BAND);

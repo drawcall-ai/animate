@@ -17,8 +17,13 @@ export class Thing {
   readonly bounds: Box3;
   /** lifted by a body since it last rested in the room */
   lifted = false;
-  /** the parent it was lifted from: where a release with nowhere else to go puts it */
+  /** the parent it was lifted from, and where it was then (world): where a release with nowhere else to go puts it */
   home: Object3D | null = null;
+  taken: Vector3 | null = null;
+  /** the parent the library last gave it: another (a stray `scene.add`, a physics sync) under a holding hand is a problem */
+  parent: Object3D | null = null;
+  /** the bodies whose hands hold it */
+  readonly holders = new Set<Holder>();
 
   private constructor(readonly object: Object3D) {
     const { mass, centre } = object.userData;
@@ -54,6 +59,11 @@ export class Thing {
 }
 
 const things = new WeakMap<Object3D, Thing>();
+
+/** a body as a thing knows it holds it */
+export interface Holder {
+  readonly holding: Readonly<Record<string, { thing: Thing } | null>>;
+}
 
 /** the descendant of `root` named `name` (or `root`), not looking into things attached to it */
 function find(root: Object3D, name: string): Object3D | undefined {

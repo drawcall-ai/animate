@@ -301,7 +301,8 @@ export function drivenBy(
     locomotion.run = run;
     locomotion.facing = wrapAngle(yaw);
     locomotion.facingAhead = wrapAngle(yaw);
-    locomotion.moving = Math.hypot(root.velocity.x, root.velocity.z) > 0.05 || stepping;
+    // (a walker's walk under way, as its planner says — its weight shifting over planted feet is none; a player's root moving)
+    locomotion.moving = (root.underway ?? Math.hypot(root.velocity.x, root.velocity.z) > 0.05) || stepping;
     locomotion.pelvisYaw = trunk.pelvisYaw;
     locomotion.thoraxYaw = trunk.thoraxYaw;
     locomotion.velocity.copy(root.velocity).setY(0);

@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { Pose, type ReadonlyPose } from '../core/pose';
 import { STEP, type Frame } from '../core/frame';
 import { Dev, type LogEntry } from '../core/dev';
@@ -16,7 +16,7 @@ import { Binding } from './model';
 import { anchors, resolve, type Interpolated, type Resolving } from './resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from './requests';
 import type { Thing, Local } from './things';
-import { bear, wornOf, type Bearing } from './hold';
+import { bear, checkParents, wornOf, type Bearing } from './hold';
 import { creature } from '../core/legs/creature';
 import { keeping } from '../core/hands';
 
@@ -135,6 +135,7 @@ export class Self implements Resolving {
       const node: Object3D | undefined = this.binding.bones[bone.name];
       if (node) anchors.set(node, { body: this, bone: i });
     });
+    if (this.frame.dev && options.model) checkShear(this.binding, this.frame.dev);
     this.binding.write(this.pose);
   }
 
@@ -146,7 +147,10 @@ export class Self implements Resolving {
     return {
       balance: this.species.legs ? creature(this) : undefined,
       keep: keeping(this),
-      things: (f) => bear(this, f, this.worn, this.borne),
+      things: (f) => {
+        checkParents(this, f);
+        bear(this, f, this.worn, this.borne);
+      },
     };
   }
 
@@ -188,6 +192,14 @@ export class Self implements Resolving {
     return this.binding.scaleOf(bone);
   }
 
+  /** stops moving `node` itself: it reads it on from there, its history (velocity, spin) carried over */
+  leave(node: Object3D): void {
+    const carrier = this.carried.get(node);
+    if (!carrier) return;
+    this.carried.delete(node);
+    this.tracked.set(node, carrier);
+  }
+
   /** where `node` is this sub-step, tracked over the sub-steps (velocity, spin, the frame a hand follows on it) */
   track(node: Object3D): Carrier {
     const f = this.frame, own = this.carried.get(node);
@@ -215,6 +227,15 @@ export class Self implements Resolving {
     this.requests.push(request);
     return request;
   }
+
+  /** a request of the body's own (a hand backing out of what it let go): no story renews it; it ends with its staging */
+  own(verb: string, site: string, staging: Staging): Request {
+    const request = this.file(verb, site, staging);
+    this.owned.add(request);
+    return request;
+  }
+
+  private readonly owned = new Set<Request>();
 
   /** a request's verb has ended: its staging stops, its claims let go */
   drop(request: Request): void {
@@ -273,6 +294,7 @@ export class Self implements Resolving {
     this.before[0].copy(this.frame.prev);
     this.before[1].copy(this.frame.prev2);
     this.worn = wornOf(this);
+    if (this.frame.dev) this.checkPlacement(this.frame.dev);
     try {
       for (let i = 0; i < steps; i++) {
         this.share = (i + 1) / steps;
@@ -284,6 +306,27 @@ export class Self implements Resolving {
     }
     this.updates++;
     this.binding.write(this.pose);
+  }
+
+  /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
+  private parent: Object3D | null | undefined = undefined;
+  private placed = false;
+
+  /** development: its object stays where it was added (it is not mounted on anything), under a parent that is the world's frame */
+  private checkPlacement(dev: Dev): void {
+    const object = this.binding.object, parent = object.parent;
+    if (this.placed) return;
+    this.parent ??= parent;
+    if (parent !== this.parent) {
+      this.placed = true;
+      dev.append(this.frame.time, { check: "the body's object was re-parented: add it once, where it stays", value: 1, limit: 0, where: parent?.name ?? 'nothing' });
+      return;
+    }
+    if (!parent) return;
+    parent.updateWorldMatrix(true, false);
+    if (parent.matrixWorld.equals(IDENTITY)) return;
+    this.placed = true;
+    dev.append(this.frame.time, { check: "the body's object is under a moved, turned or scaled parent: add it to the world's frame", value: 1, limit: 0, where: parent.name });
   }
 
   private beat(): string {
@@ -302,7 +345,14 @@ export class Self implements Resolving {
     const behaviours = (this.behaviours ??= this.behave());
     // (balance first, on what was asked last sub-step; then the requests' staging, reading the body as balance has it now)
     behaviours.balance?.(f);
-    for (const request of [...this.requests]) request.stage(f);
+    for (const request of [...this.requests]) {
+      request.stage(f);
+      if (!this.owned.has(request)) continue;
+      request.renewed = f.time;
+      if (!request.finished) continue;
+      this.owned.delete(request);
+      this.drop(request);
+    }
     if (f.dev) {
       f.dev.beat = this.beat() || undefined;
       for (const request of this.requests) {
@@ -365,6 +415,20 @@ function standing(skeleton: Skeleton, at?: Vector3, face = 0): Pose {
   return pose;
 }
 
+/** development: a model's bones neither sheared nor scaled unevenly at rest, relative to the body (rig's own contract) */
+function checkShear(binding: Binding, dev: Dev): void {
+  binding.object.updateMatrixWorld(true);
+  const inverse = new Matrix4().copy(binding.object.matrixWorld).invert();
+  for (const [name, node] of Object.entries(binding.bones)) {
+    const rest = new Matrix4().multiplyMatrices(inverse, node.matrixWorld), position = new Vector3(), turn = new Quaternion(), scale = new Vector3();
+    rest.decompose(position, turn, scale);
+    const spread = Math.max(scale.x, scale.y, scale.z) / Math.min(scale.x, scale.y, scale.z) - 1;
+    const sheared = !new Matrix4().compose(position, turn, scale).equals(rest) && rest.elements.some((x, k) => Math.abs(x - new Matrix4().compose(position, turn, scale).elements[k]) > 1e-6);
+    if (spread > 1e-6 || sheared) dev.append(0, { check: 'a bone sheared or scaled unevenly at rest (spread)', value: spread, limit: 0, where: name });
+  }
+}
+
+const IDENTITY = new Matrix4();
 /** the longest frame an update takes (s) */
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */

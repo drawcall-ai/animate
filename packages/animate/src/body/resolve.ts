@@ -22,9 +22,10 @@ export interface Resolving {
 /** each body's object (bone −1) and moving bones, by node */
 export const anchors = new WeakMap<Object3D, { body: Resolving; bone: number }>();
 
-/** a node's local transform from one update to the next, and the update it was last read in */
+/** a node's local transform from one update to the next, the update it was last read in, and under which parent */
 export interface Interpolated {
   update: number;
+  parent: Object3D | null;
   from: Matrix4;
   to: Matrix4;
 }
@@ -64,11 +65,17 @@ function frameOf(pose: ReadonlyPose, body: Resolving, bone: number): Matrix4 {
   return _anchor.compose(pose.position(bone), _q.copy(pose.rotation(bone)).multiply(body.restOf(bone)), _s.set(scale, scale, scale));
 }
 
-/** `node`'s local transform, eased across the reader's update if the app moved it since the last */
+/** `node`'s local transform, eased across the reader's update if the app moved it since the last (not if it re-parented it: a new frame) */
 function localOf(reader: Resolving, node: Object3D): Matrix4 {
   node.updateMatrix();
   let seen = reader.frames.get(node);
-  if (!seen) reader.frames.set(node, (seen = { update: reader.updates, from: node.matrix.clone(), to: node.matrix.clone() }));
+  if (!seen) reader.frames.set(node, (seen = { update: reader.updates, parent: node.parent, from: node.matrix.clone(), to: node.matrix.clone() }));
+  if (seen.parent !== node.parent) {
+    seen.from.copy(node.matrix);
+    seen.to.copy(node.matrix);
+    seen.parent = node.parent;
+    seen.update = reader.updates;
+  }
   if (seen.update !== reader.updates) {
     seen.from.copy(seen.update === reader.updates - 1 ? seen.to : node.matrix);
     seen.to.copy(node.matrix);

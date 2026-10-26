@@ -49,8 +49,6 @@ export const CHAINS = {
   neck: ['neck', 'head'],
 } satisfies Record<string, readonly BoneName[]>;
 
-/** a chain of the humanoid's skeleton */
-export type Chain = keyof typeof CHAINS;
 
 /**
  * The body's skeleton: a bone per BONES entry (in its order, so `INDEX` finds them), each at its

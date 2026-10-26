@@ -70,7 +70,8 @@ it('leg contact checks read the final pose after a later writer, and disappear w
   expect(run(false)).toEqual([]);
 });
 
-it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const)('checks %s touchdown after later pose writers, only with dev enabled', (axis, offset, limit) => {
+const OFFSETS = [['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const;
+it.each(OFFSETS)('checks %s touchdown after later pose writers, only with dev enabled', (axis, offset, limit) => {
   const run = (dev: boolean) => {
     let landed = -1;
     const { body, step } = writtenOver(dev, 0.95, (f, b) => {
@@ -318,7 +319,8 @@ const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'Y
 
 it.each([['walk', 1.6], ['trot', 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
   const { body, step, phase: phaseOf } = movingHorse(gait, speed);
-  const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [], back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];
+  const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [];
+  const back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];
   const high: number[] = [], low: number[] = [], relative: number[] = [], relativeCroup: number[] = [];
   // (at speed: 10 s on, then 6 s)
   for (let tick = 0; tick < 960; tick++) {

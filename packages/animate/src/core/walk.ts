@@ -7,7 +7,7 @@ import type { Self } from '../body/self';
 import { heldMass } from '../body/hold';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
-export const STROLL = { speed: 1.3, accel: 1.2 };
+const STROLL = { speed: 1.3, accel: 1.2 };
 /** arrived: the body this close to its goal (m, default body) and turned this close to its facing (rad), at rest on both feet */
 const ARRIVED = { distance: 0.15, yaw: 0.15 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */

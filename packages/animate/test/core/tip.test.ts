@@ -22,7 +22,8 @@ const leg = () => new Body(species(LEG, { hands: { leg: ['thigh', 'shin', 'foot'
 const NECK = [
   { name: 'chest', position: [0, 1.4, 0] }, { name: 'neck', parent: 'chest', position: [0, 1.5, 0] }, { name: 'head', parent: 'neck', position: [0, 1.6, 0] },
 ] as const;
-const gazing = () => new Body(species(NECK, { gaze: { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, 0.05, 0.08] }, range: { down: 0.5, up: 0.35, side: 0.35 } } }, { masses: { chest: 1, neck: 1, head: 1 } }));
+const GAZE = { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, 0.05, 0.08] }, range: { down: 0.5, up: 0.35, side: 0.35 } } as const;
+const gazing = () => new Body(species(NECK, { gaze: GAZE }, { masses: { chest: 1, neck: 1, head: 1 } }));
 const eyesOf = (body: Body) => body.pose.point(2, new Vector3(0, 0.05, 0.08), new Vector3());
 
 describe('chainTo', () => {

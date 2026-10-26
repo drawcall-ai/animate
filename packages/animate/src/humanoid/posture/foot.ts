@@ -14,7 +14,7 @@ export interface Foot {
 }
 
 /** half a foot's width at the toes (m, default body): how far past the ankle's line a foot holds the body sideways */
-export const FOOT_HALF_WIDTH = 0.04;
+const FOOT_HALF_WIDTH = 0.04;
 
 /** the heel (on the sole) in the foot bone's frame */
 export const heelOf = (p: Proportions, out = new Vector3()) => out.copy(p.sole.heel);

@@ -58,6 +58,11 @@ export class Request {
     this.renewed = body.time;
   }
 
+  /** whether its staging has ended */
+  get finished(): boolean {
+    return this.runner?.finished ?? false;
+  }
+
   /** how development and `goals` name it */
   get label(): string {
     return this.site ? `${this.verb} (${this.site})` : this.verb;

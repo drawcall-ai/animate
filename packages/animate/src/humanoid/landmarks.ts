@@ -34,7 +34,7 @@ export interface Landmark {
 const mirror = (v: Vector3) => new Vector3(-v.x, v.y, v.z);
 
 /** The landmarks of a body (the right side mirrors the left's x). */
-export function landmarksOf(p: Proportions): Record<LandmarkName, Landmark> {
+function landmarksOf(p: Proportions): Record<LandmarkName, Landmark> {
   const { head: h, sole } = p;
   return {
     nose: { bone: 'head', at: h.nose.clone() },
