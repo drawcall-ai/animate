@@ -178,10 +178,16 @@ export function standing(h: Person, to: Stand): Standing {
   };
 }
 
-/** a person's walk to where it stands (borrowed legs) until it has arrived, `true`, or stalled, `false` */
-export function* walking(request: Request, plan: { walk: Walk; arrived: (f: Frame) => boolean }) {
+/**
+ * a person's walk to where it stands (borrowed legs) until it has arrived, `true`, or stalled, `false`; given `after` (s), what the request
+ * moves arrives that long after the walk does (its `eta`)
+ */
+export function* walking(request: Request, plan: { walk: Walk; arrived: (f: Frame) => boolean }, after?: number) {
   const { walk, arrived } = plan;
-  yield* during(request, 'go', 'borrowed', (f) => walk.step(f), (f, _, time) => time > 0 && (walk.stalled || arrived(f)));
+  yield* during(request, 'go', 'borrowed', (f) => {
+    walk.step(f);
+    if (after !== undefined) request.eta = walk.eta + after;
+  }, (f, _, time) => time > 0 && (walk.stalled || arrived(f)));
   return !walk.stalled;
 }
 

@@ -67,7 +67,7 @@ export class Person extends Self {
         if (!hold) return;
         const thing = hold.thing, frame = this.track(thing.object);
         // (what rests where it lies the body comes down to keep its hands on; what it carries, or another moves, they follow)
-        handStep(this, f, side, { position: hold.at.position }, { on: frame, thing, ...HOLD, lead: supported(thing) }, arms[side]);
+        handStep(this, f, side, hold.goal, { on: frame, thing, ...HOLD, lead: supported(thing) }, arms[side]);
       },
       things: (f) => {
         checkParents(this, f);
@@ -114,7 +114,7 @@ function checkTaking(h: Person, f: Frame, taking: Partial<Record<Side, readonly 
     const hold = h.holding[side], was = taking[side];
     taking[side] = hold ? [hold.thing, hold.grip] : undefined;
     if (!hold || (was?.[0] === hold.thing && was[1] === hold.grip)) continue;
-    const at = h.track(hold.thing.object).toWorld({ position: hold.at.position }, _target, f.time).position;
+    const at = h.track(hold.thing.object).toWorld({ position: hold.goal.position }, _target, f.time).position;
     const value = f.current.position(h.hands[side]).distanceTo(at);
     if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${hold.thing.object.name} ${side} ${hold.grip}` });
   }
@@ -131,7 +131,7 @@ function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
     if (!hold) continue;
     const carried = h.carried.has(hold.thing.object);
     if (!carried && !bodyOf(hold.thing.object)) continue;
-    const at = h.track(hold.thing.object).toWorld({ position: hold.at.position }, _target, f.time).position;
+    const at = h.track(hold.thing.object).toWorld({ position: hold.goal.position }, _target, f.time).position;
     const value = f.current.position(h.hands[side]).distanceTo(at), limit = carried ? HELD : REACHED.distance;
     if (value <= limit || (carried && noted.has(hold))) continue;
     if (carried) noted.add(hold);

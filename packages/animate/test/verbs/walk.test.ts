@@ -1,7 +1,7 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { arriving, grab, wait, walkTo } from '../../src';
+import { arriving, grab, reach, release, wait, walkTo } from '../../src';
 import { insides, person, play } from '../bodies';
 import { box, roomOf } from '../things';
 
@@ -47,6 +47,44 @@ it('arriving reads what the body moves toward: its walk while it walks, its rest
     seen.push(insides(body).locomotion.settled);
   }, [body], 8, () => seen.length === 4);
   expect(seen).toEqual([true, false, false, true]);
+});
+
+it('arriving foresees every mover: a reach before its hands get there, a grab while it walks up; what the body does itself after a release holds it up not', () => {
+  const body = person(), h = insides(body), room = roomOf(body);
+  const near = box(room, new Vector3(-0.2, 1.1, 0.4), { mass: 1, solid: false, name: 'near' });
+  const far = box(room, new Vector3(0.1, 0.9, 2.5), { mass: 1, solid: false, name: 'far' });
+  const at: Record<string, number> = {};
+  const mark = (name: string) => function* () { at[name] = h.frame.time; };
+  play(function* () {
+    yield* parallel('all', function* () {
+      yield* reach(body, { right: new Vector3(-0.25, 1.2, 0.45) });
+      yield* mark('reached')();
+    }, function* () {
+      yield* wait(0.1);
+      yield* wait(arriving(body, 0.6));
+      yield* mark('reach arriving')();
+    });
+    yield* grab(body, near, { right: 'right' });
+    yield* wait(() => h.locomotion.settled);
+    release(body, near);
+    yield* wait(0.1);
+    // (the hands backing out — the body's own request — while what its stories moved has arrived: as settled as the body is)
+    at.backing = h.requests.some((request) => request.owned) ? 1 : 0;
+    at.unheld = arriving(body, 0.1)() && h.locomotion.settled ? 1 : 0;
+    yield* parallel('all', function* () {
+      yield* grab(body, far, { left: 'left', right: 'right' });
+      yield* mark('grabbed')();
+    }, function* () {
+      yield* wait(0.1);
+      yield* wait(arriving(body, 0.6));
+      yield* mark('grab arriving')();
+      at.walking = insides(body).locomotion.moving ? 1 : 0;
+    });
+  }, [body], 15, () => at.grabbed !== undefined);
+  expect(at['reach arriving']).toBeLessThan(at.reached - 0.3);
+  expect([at.backing, at.unheld]).toEqual([1, 1]);
+  expect(at['grab arriving']).toBeLessThan(at.grabbed - 0.4);
+  expect(at.walking).toBe(1);
 });
 
 it('given until, walks after a target that moves, and stops with it', () => {

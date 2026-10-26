@@ -1,6 +1,6 @@
 import { Vector3, type Object3D } from 'three';
 import { selfOf, type Body, type HandOf } from '../body/body';
-import { bodyOf } from '../body/hold';
+import { bodyOf, goalOn } from '../body/hold';
 import { Thing } from '../body/things';
 import type { AnySpecies } from '../core/species';
 import { taking } from '../core/hands';
@@ -39,7 +39,7 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
       if (request.outcome !== 'failed') request.met();
       return;
     }
-    const takes = named.map(({ hand, grip }) => ({ side: sideOf(hand), thing: held, grip, at: held.grip(grip).at }));
+    const takes = named.map(({ hand, grip }) => ({ side: sideOf(hand), thing: held, grip, goal: goalOn(held.grip(grip), self.restOf(self.hands[hand])) }));
     if (!(yield* grabbing(self, request, takes, options.speed === undefined ? undefined : { speed: options.speed, accel: options.accel }))) return;
     if (loose) yield* liftingClear(self, request, held);
     request.met();

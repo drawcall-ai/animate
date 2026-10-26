@@ -46,6 +46,8 @@ export class Request {
   renewed: number;
   /** whether development has said it went unrenewed */
   stale = false;
+  /** whether the body filed it itself (a hand backing out of what it let go): no story waits on it */
+  owned = false;
   private runner: TimelineRunner<Frame> | null = null;
   private readonly claims = new Set<Claim>();
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };

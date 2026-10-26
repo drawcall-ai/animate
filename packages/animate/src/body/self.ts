@@ -11,6 +11,7 @@ import type { Stepper } from '../core/legs/stepper';
 import type { Gazer } from '../core/gaze';
 import type { AnySpecies, Attention } from '../core/species';
 import { Carrier } from '../core/carrier';
+import type { Target } from '../core/goal';
 import { yawOf } from '../core/math';
 import { Binding } from './model';
 import { anchors, resolve, type Interpolated, type Resolving } from './resolve';
@@ -54,11 +55,11 @@ export interface SelfOptions {
   dev?: boolean | { notes?: boolean };
 }
 
-/** What a hand holds: the thing, by which of its empties, and where that is in the thing's frame. */
+/** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame). */
 export interface Hold {
   thing: Thing;
   grip: string;
-  at: Local;
+  goal: Target;
 }
 
 /** one body part's behaviour this sub-step */
@@ -231,11 +232,9 @@ export class Self implements Resolving {
   /** a request of the body's own (a hand backing out of what it let go): no story renews it; it ends with its staging */
   own(verb: string, site: string, staging: Staging): Request {
     const request = this.file(verb, site, staging);
-    this.owned.add(request);
+    request.owned = true;
     return request;
   }
-
-  private readonly owned = new Set<Request>();
 
   /** a request's verb has ended: its staging stops, its claims let go */
   drop(request: Request): void {
@@ -347,11 +346,9 @@ export class Self implements Resolving {
     behaviours.balance?.(f);
     for (const request of [...this.requests]) {
       request.stage(f);
-      if (!this.owned.has(request)) continue;
+      if (!request.owned) continue;
       request.renewed = f.time;
-      if (!request.finished) continue;
-      this.owned.delete(request);
-      this.drop(request);
+      if (request.finished) this.drop(request);
     }
     if (f.dev) {
       f.dev.beat = this.beat() || undefined;

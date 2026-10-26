@@ -63,18 +63,23 @@ export function reach<S extends AnySpecies>(body: Body<S>, targets: Partial<Reco
     const there = (f: Frame) => hands.every(({ side, find }) => reached(f, h.hands[side], goal(find)(f)));
     const going = hands.map(({ side, find }) => {
       const distance = h.pose.position(h.hands[side]).distanceTo(find(h.frame).position);
-      const pace = options.speed !== undefined ? { accel: options.accel ?? CALM.accel, speed: options.speed }
-        : { seconds: reachTime(distance / h.scale, seedOf(side, Math.round(distance * 1000))) / h.tempo };
-      return { side, step: reaching(h, side, goal(find), pace) };
+      const { speed } = options, accel = options.accel ?? CALM.accel;
+      if (speed !== undefined) return { side, step: reaching(h, side, goal(find), { accel, speed }), lasts: distance / speed + speed / accel };
+      const seconds = reachTime(distance / h.scale, seedOf(side, Math.round(distance * 1000))) / h.tempo;
+      return { side, step: reaching(h, side, goal(find), { seconds }), lasts: seconds };
     });
+    // (what it moves arrives once the farthest hand does: the hands set off `NEAR` s before a walk arrives)
+    const lasts = Math.max(...going.map((hand) => hand.lasts));
+    let setOff = NaN;
     yield* parallel<Frame>('all', function* () {
       if (plan === 'there') return;
-      if (!(yield* walking(request, plan))) request.fail();
+      if (!(yield* walking(request, plan, Math.max(0, lasts - NEAR)))) request.fail();
       stood = true;
     }, function* () {
       yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(h, middle, SHIFT)), function* () {
         yield* action<Frame>({ until: near });
-        yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ until: there }));
+        const eta = (f: Frame) => void (request.eta = Math.max(0, (Number.isNaN(setOff) ? (setOff = f.time) : setOff) + lasts - f.time));
+        yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ update: eta, until: there }));
       });
     });
     if (request.outcome === 'failed') return;

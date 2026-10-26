@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { grab, wait } from '../../src';
 import { gazeOff } from '../../src/core/gaze';
@@ -164,6 +164,23 @@ describe('grab, from where it stands', () => {
     const lag = gone(speed.left, 0.1) - gone(speed.right, 0.1);
     expect(lag).toBeGreaterThanOrEqual(0.04);
     expect(lag).toBeLessThanOrEqual(0.15);
+  });
+
+  it("turns the hand as its grip is turned, the hand bone's axes on the empty's", () => {
+    const body = person(), room = roomOf(body);
+    const handle = box(room, new Vector3(-0.2, 1.0, 0.35), { mass: null, solid: false, name: 'handle' });
+    const grip = handle.getObjectByName('right')!;
+    // (turned as the hand hangs, then a quarter turn more about its forearm: a hand that must turn to take it)
+    delete grip.userData.free;
+    grip.quaternion.copy(body.bones.rightHand.getWorldQuaternion(new Quaternion())).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 0.8));
+    room.updateMatrixWorld(true);
+    let held = false;
+    play(function* () {
+      held = yield* grab(body, handle, { right: 'right' });
+    }, [body], 3, () => held);
+    expect(held).toBe(true);
+    room.updateMatrixWorld(true);
+    expect(body.bones.rightHand.getWorldQuaternion(new Quaternion()).angleTo(grip.getWorldQuaternion(new Quaternion()))).toBeLessThan(0.05);
   });
 
   it('takes a grip on a turned thing, the wrist on it', () => {

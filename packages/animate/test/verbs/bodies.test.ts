@@ -37,7 +37,7 @@ describe('bodies together', () => {
     const labrador = new Body(dog(DOG), { dev: true, at: new Vector3(0, 0, 0.5), face: Math.PI });
     const room = roomOf(owner, labrador);
     const stick = box(room, new Vector3(0.3, 0.03, 3), { size: new Vector3(0.04, 0.04, 0.5), mass: 0.2, solid: false, name: 'stick' });
-    empty(stick, 'middle', new Vector3());
+    empty(stick, 'middle', new Vector3()).userData.free = true;
     const steps: string[] = [];
     play(function* () {
       steps.push(`fetched ${yield* grab(labrador, stick, { jaw: 'middle' })}`);

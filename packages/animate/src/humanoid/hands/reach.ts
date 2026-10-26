@@ -7,7 +7,7 @@ import { seeded, seedOf } from '../../core/random';
 import { reached } from '../../core/tip';
 import { during, type Request } from '../../body/requests';
 import { grasp, onBody, worn } from '../../body/hold';
-import type { Local, Thing } from '../../body/things';
+import type { Thing } from '../../body/things';
 import { CALM, reaching } from '../arms';
 import { SIDES, type Side } from '../bones';
 import type { Person } from '../person';
@@ -15,18 +15,18 @@ import { LOAD_RESERVE } from './clearance';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
 
-/** A hand's hold to take: the hand, the thing, the empty it takes it by and where that is in the thing's frame. */
+/** A hand's hold to take: the hand, the thing, the empty it takes it by and where the hand goes on it (in the thing's frame). */
 export interface Taking {
   side: Side;
   thing: Thing;
   grip: string;
-  at: Local;
+  goal: Target;
 }
 
 /** where a grip is in the world this sub-step, as `h` tracks its thing */
-export function gripAt(h: Person, take: Pick<Taking, 'thing' | 'at'>, f: Frame, out = new Vector3()): Vector3 {
+export function gripAt(h: Person, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
   const frame = h.track(take.thing.object).at(f.time).current;
-  return out.copy(take.at.position).applyQuaternion(frame.quaternion).add(frame.position);
+  return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
 }
 
 /**
@@ -38,15 +38,15 @@ export function gripAt(h: Person, take: Pick<Taking, 'thing' | 'at'>, f: Frame, 
  */
 export function* reachFor(h: Person, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const began = h.frame.time;
-  const goalOf = (take: Taking): Target => ({ position: take.at.position });
-  const there = (f: Frame) => takes.every((take) => reached(f, h.hands[take.side], goalOf(take), h.track(take.thing.object)));
+  const there = (f: Frame) => takes.every((take) => reached(f, h.hands[take.side], take.goal, h.track(take.thing.object)));
   // (hands at their grips already close at once)
   if (takes.every((take) => h.pose.position(h.hands[take.side]).distanceTo(gripAt(h, take, h.frame)) <= REACHED.distance)) {
-    for (const take of takes) grasp(h, take.side, { thing: take.thing, grip: take.grip, at: take.at });
+    for (const take of takes) grasp(h, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
     return;
   }
-  let late = false;
+  let late = false, ends = Infinity;
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
+    request.eta = Math.max(0, ends - f.time);
     if (ready(f)) return true;
     if (!late && f.time - began > REACHING) {
       late = true;
@@ -61,8 +61,8 @@ export function* reachFor(h: Person, request: Request, takes: readonly Taking[],
     const frame = h.track(take.thing.object).current, seed = frame.position;
     const from = h.pose.position(h.hands[take.side]).clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
     // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly)
-    const route = onBody(h, take.thing) ? [] : outside(take.thing.bounds, take.at.position, from, LOAD_RESERVE * h.scale);
-    const points = route.length ? route : [take.at.position];
+    const route = onBody(h, take.thing) ? [] : outside(take.thing.bounds, take.goal.position, from, LOAD_RESERVE * h.scale);
+    const points = route.length ? route : [take.goal.position];
     let was = from;
     const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
     const distance = lengths.reduce((sum, length) => sum + length, 0);
@@ -73,13 +73,18 @@ export function* reachFor(h: Person, request: Request, takes: readonly Taking[],
   });
   const arrived = until((f) => plan.every((p) => reached(f, h.hands[p.side], { position: p.points[p.points.length - 1] }, h.track(p.thing.object))));
   const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
+  // (when the hands will be there: at a pace asked, as long as that pace takes the farthest)
+  const lasts = (p: (typeof plan)[number]) => motion ? p.distance / motion.speed + motion.speed / (motion.accel ?? CALM.accel) : Math.max(p.delay, finish - p.seconds) + p.seconds;
+  ends = began + Math.max(...plan.map(lasts));
+  request.eta = ends - began;
   for (const take of takes) grasp(h, take.side, null);
   yield* parallel<Frame>('all', ...plan.map((p) => function* () {
     for (const [i, position] of p.points.entries()) {
       const began = h.frame.time;
       const seconds = p.distance > 0 ? p.seconds * p.lengths[i] / p.distance : p.seconds;
       const after = i === 0 ? Math.max(p.delay, finish - p.seconds) : 0;
-      const goal = p.route.length ? { position } : goalOf(p);
+      // (on the way round, already turning as it will hold it)
+      const goal = p.route.length ? { ...p.goal, position } : p.goal;
       const ready = p.route.length
         ? i === p.points.length - 1 ? arrived : until((f) => f.time >= began + seconds + after)
         : until(there);
@@ -92,9 +97,9 @@ export function* reachFor(h: Person, request: Request, takes: readonly Taking[],
   // (both hands reach the outside staging points before closing on the actual grips)
   if (plan.some(({ route }) => route.length)) {
     yield* parallel<Frame>('all', ...plan.map((p) => during(request, `hand.${p.side}`, 'asked',
-      reaching(h, p.side, goalOf(p), { on: h.track(p.thing.object), thing: p.thing, lead: !worn(p.thing) }), until(there))));
+      reaching(h, p.side, p.goal, { on: h.track(p.thing.object), thing: p.thing, lead: !worn(p.thing) }), until(there))));
   }
-  for (const take of takes) grasp(h, take.side, { thing: take.thing, grip: take.grip, at: take.at });
+  for (const take of takes) grasp(h, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
 }
 
 /** Route around the envelope to its nearest grip face; the final closure is separate. */

@@ -5,7 +5,8 @@ import { Carrier } from '../core/carrier';
 import { follow } from '../core/follow';
 import { anchors, resolve } from './resolve';
 import { Self, type Hold } from './self';
-import { Thing, type Local } from './things';
+import { Thing, type Grip, type Local } from './things';
+import type { Target } from '../core/goal';
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
 export function hangsFrom(self: Self, object: Object3D): number {
@@ -28,6 +29,17 @@ export function bodyOf(object: Object3D): Self | null {
 /** whether `thing` is on `self`: attached under it, or in its hands */
 export function onBody(self: Self, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
+}
+
+/**
+ * where a hand bone goes on `grip` (in the thing's frame): on the empty, turned as it is — the hand bone's rest (`rest`, its scene frame
+ * against its pose's) undone — or rolling about its free line, or turned as the hand comes
+ */
+export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Target {
+  const position = grip.at.position.clone();
+  if (grip.free === true) return { position };
+  const quaternion = grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
+  return grip.free ? { position, quaternion, axis: grip.free.clone().applyQuaternion(grip.at.quaternion) } : { position, quaternion };
 }
 
 /** hand `hand` of `self` holding `hold` (null: letting go), the thing's holders kept */
@@ -116,7 +128,7 @@ function fit(self: Self, f: Frame, thing: Thing, aim: Carrier, hands: readonly s
   const at = (hand: string, out: Vector3) => {
     const hold = self.holding[hand];
     if (!hold) throw new Error(`fit: the ${hand} hand holds nothing`);
-    return out.copy(hold.at.position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
+    return out.copy(hold.goal.position).applyQuaternion(aim.current.quaternion).add(aim.current.position);
   };
   const wrist = (hand: string, out: Vector3) => out.copy(f.current.position(self.hands[hand]));
   const turn = _turn.identity();

@@ -89,7 +89,7 @@ describe('a sword in a scabbard on the hips', () => {
     sword.userData.mass = 1.2;
     sword.position.set(0, 0.05, 0);
     scabbard.getObjectByName('mouth')!.add(sword);
-    empty(sword, 'hilt', new Vector3(0, 0.1, 0));
+    empty(sword, 'hilt', new Vector3(0, 0.1, 0)).userData.free = true;
     room.updateMatrixWorld(true);
     return { body, room, scabbard, sword, mouth: scabbard.getObjectByName('mouth')!, out: scabbard.getObjectByName('out')! };
   }

@@ -20,6 +20,9 @@ const IN_VIEW = 1.4;
 const LOOKING = 0.6;
 /** Prepare the knees during the last landing (s before arrival). */
 const LOWERING = 0.3;
+/** how long after the walk arrives the hands are on the grips (s, derived): a calm reach of ~0.5 m takes ~0.95 s (`reachTime`), set off
+ * `LOOKING` s before arriving */
+const REACHED_AFTER = 0.35;
 /** Two-step gaze horizon (read via summary); default-body distance proxy (m, derived). */
 const CLOSE = 1.6;
 
@@ -73,7 +76,7 @@ export function* grabbing(h: Person, request: Request, takes: readonly Taking[],
   };
   yield* parallel<Frame>('all', function* () {
     if (plan === 'there') return;
-    if (!(yield* walking(request, plan))) request.fail();
+    if (!(yield* walking(request, plan, REACHED_AFTER))) request.fail();
     stood = true;
   }, function* () {
     // (the eyes never borrowed toward what they cannot see; they leave it as the hands close on it)

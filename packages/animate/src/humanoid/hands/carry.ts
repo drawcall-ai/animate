@@ -72,7 +72,7 @@ export function* carrying(h: Person, request: Request, thing: Thing, way: Way, o
   const held = sides.map((side) => {
     const hold = h.holding[side];
     if (!hold) throw new Error(`carry: the ${side} hand let go`);
-    return { side, at: hold.at.position };
+    return { side, at: hold.goal.position };
   });
   const plan = standing(h, { place: end, held });
   if (plan === 'nowhere') {
@@ -266,10 +266,10 @@ function holding(h: Person, request: Request, thing: Thing, aim: CarryAim, to: L
     const carrier = aim.read(f, to);
     const hold = h.holding[side];
     if (!hold) return;
-    bringShoulder(h, f, side, _g.copy(hold.at.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carrier.carriedBy === h);
+    bringShoulder(h, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carrier.carriedBy === h);
     h.carrying.set(thing.object, carrier);
     const tip = tips.get(side);
-    if (tip) handStep(h, f, side, { position: hold.at.position }, { on: carrier, thing, ...HOLD, lead: true }, tip);
+    if (tip) handStep(h, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
   };
   return parallel<Frame>('race', ...sides.map((side) => during(request, `hand.${side}`, 'asked', step(side), until && ((f) => until(f)))));
 }
@@ -375,7 +375,7 @@ function inReach(h: Person, thing: Thing): number {
   return Math.max(-Infinity, ...SIDES.map((side) => {
     const hold = h.holding[side];
     if (hold?.thing !== thing) return -Infinity;
-    const grip = hold.at.position;
+    const grip = hold.goal.position;
     const shoulder = o[`${side}Shoulder`].clone().add(o[`${side}UpperArm`]);
     const across = Math.hypot(grip.x - shoulder.x, ahead + grip.z - o.spine.z - o.chest.z - shoulder.z);
     return p.shoulderHeight - p.hipHeight - Math.sqrt(Math.max(0, reach ** 2 - across ** 2)) - grip.y;

@@ -57,13 +57,14 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
 }
 
 /**
- * A condition for `wait` and `until`: true once what `body` is moving toward (its walk, its hands, what it carries) will arrive within
- * `seconds` — or, moving nothing, once it has come to rest.
+ * A condition for `wait` and `until`: true once what `body`'s stories move it toward (its walk, its hands, what it carries) will arrive
+ * within `seconds` — or, moving nothing, once it has come to rest. What the body does of itself (its hands backing out of what they let
+ * go) does not hold it up.
  */
 export function arriving(body: Body, seconds: number): () => boolean {
   const self = selfOf(body);
   return () => {
-    const movers = self.requests.filter((request) => !request.aimer && request.outcome === 'running');
+    const movers = self.requests.filter((request) => !request.aimer && !request.owned && request.outcome === 'running');
     return movers.length ? movers.every((request) => request.eta <= seconds) : self.locomotion.settled;
   };
 }

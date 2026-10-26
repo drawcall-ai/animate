@@ -7,7 +7,7 @@ import { ChainTip, reached } from './tip';
 import { looking } from './gaze';
 import { Walk } from './walk';
 import { during, type Request } from '../body/requests';
-import { attach, bodyOf, grasp } from '../body/hold';
+import { attach, bodyOf, goalOn, grasp } from '../body/hold';
 import type { Thing } from '../body/things';
 import { Pose, type ReadonlyPose } from './pose';
 import { STOOPING } from './legs/creature';
@@ -143,17 +143,24 @@ const _v = new Vector3(), _t = new Vector3();
 function reachOf(self: Self, hand: string, point: Readonly<Vector3>, where: string) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
   const off = standOff(self, chain, point, stoop.most(self.frame));
-  if (typeof off === 'number') return { chain, bones, stoop, off };
+  // (how long the hand then takes to get there: at most its chain's reach, at a calm dip's pace)
+  if (typeof off === 'number') return { chain, bones, stoop, off, after: dipping(OUT * chainLength(self, bones)) };
   self.frame.dev?.append(self.frame.time, { check: 'out of reach: from the hand\'s base, up or down (m)', ...off, where: `${where} ${chain}` });
   return null;
 }
 
-/** a creature walking up (borrowed legs) to stand `off` before `at`, its eyes on it on the way (borrowed), if it has eyes */
-function* coming(self: Self, request: Request, at: (f: Frame) => Readonly<Vector3>, off: number) {
+/** how long a creature's hand takes to go `distance` (s) at a calm dip's pace */
+const dipping = (distance: number) => distance / DIP.speed + DIP.speed / DIP.accel;
+
+/**
+ * a creature walking up (borrowed legs) to stand `off` before `at`, its eyes on it on the way (borrowed), if it has eyes: what it moves
+ * arrives `after` s after the walk
+ */
+function* coming(self: Self, request: Request, at: (f: Frame) => Readonly<Vector3>, { off, after }: { off: number; after: number }) {
   const walk = new Walk(self, { to: at, within: off });
   const legs = during(request, 'go', 'borrowed', (f) => {
     walk.step(f);
-    request.eta = walk.eta;
+    request.eta = walk.eta + after;
   }, (f, _, time) => time > 0 && (walk.stalled || walk.arrived(f)));
   yield* self.gazer ? parallel<Frame>('race', legs, during(request, 'look', 'borrowed', looking(self, at))) : legs;
   return !walk.stalled;
@@ -169,10 +176,11 @@ function tipping(self: Self, request: Request, hand: string, goal: (f: Frame) =>
     stoop.to(f, on ? on.toWorld(target, _world, f.time).position : target.position);
     tip.to(f, target, { ...DIP, on });
   }, (f) => {
-    if (reached(f, bone, goal(f), on)) return true;
+    const target = goal(f), at = on ? on.toWorld(target, _world, f.time).position : target.position;
+    request.eta = dipping(f.prev.position(bone).distanceTo(at));
+    if (reached(f, bone, target, on)) return true;
     if (!late && f.time - began > REACHING) {
       late = true;
-      const target = goal(f), at = on ? on.toWorld(target, _world, f.time).position : target.position;
       f.dev?.append(f.time, { check: `late reach: distance after ${REACHING} s (m)`, value: f.prev.position(bone).distanceTo(at), limit: REACHED.distance, where: chain });
     }
     return false;
@@ -186,15 +194,15 @@ function tipping(self: Self, request: Request, hand: string, goal: (f: Frame) =>
  * from anywhere it could stand.
  */
 export function* taking(self: Self, request: Request, hand: string, thing: Thing, grip: string) {
-  const at = thing.grip(grip).at, frame = self.track(thing.object);
-  const point = (f: Frame) => frame.toWorld({ position: at.position }, _world, f.time).position;
+  const goal = goalOn(thing.grip(grip), self.restOf(self.hands[hand])), frame = self.track(thing.object);
+  const point = (f: Frame) => frame.toWorld({ position: goal.position }, _world, f.time).position;
   const reach = reachOf(self, hand, point(self.frame), thing.object.name);
-  if (!reach || !(yield* coming(self, request, (f) => point(f).clone(), reach.off))) {
+  if (!reach || !(yield* coming(self, request, (f) => point(f).clone(), reach))) {
     request.fail();
     return;
   }
-  yield* tipping(self, request, hand, () => ({ position: at.position }), self.track(thing.object));
-  grasp(self, hand, { thing, grip, at });
+  yield* tipping(self, request, hand, () => goal, self.track(thing.object));
+  grasp(self, hand, { thing, grip, goal });
   if (thing.massive && !bodyOf(thing.object)) {
     [thing.home, thing.taken] = [thing.object.parent, self.track(thing.object).current.position.clone()];
     thing.lifted = true;
@@ -215,7 +223,7 @@ export function* bringing(self: Self, request: Request, hand: string, thing: Thi
     return;
   }
   const bone = reach.bones[reach.bones.length - 1];
-  if (!(yield* coming(self, request, (f) => to(f).position, reach.off))) {
+  if (!(yield* coming(self, request, (f) => to(f).position, reach))) {
     request.fail();
     return;
   }
@@ -240,7 +248,7 @@ export function* bringing(self: Self, request: Request, hand: string, thing: Thi
 /** A creature's hand reaching `target` (a sub-step at a time), walking up first if it must: met once there, it stays there. */
 export function* nuzzling(self: Self, request: Request, hand: string, target: (f: Frame) => Readonly<Vector3>) {
   const reach = reachOf(self, hand, target(self.frame), 'reach');
-  if (!reach || !(yield* coming(self, request, target, reach.off))) {
+  if (!reach || !(yield* coming(self, request, target, reach))) {
     request.fail();
     return;
   }
