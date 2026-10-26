@@ -50,7 +50,11 @@ export class Request {
   private readonly claims = new Set<Claim>();
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
 
-  constructor(readonly body: Filed, readonly verb: string, readonly site: string, private readonly staging: Staging) {
+  /**
+   * `aimer`: it keeps on at its goal (a look, a tracked pose) rather than moving something somewhere: no arrival to foresee, it ends only
+   * when its story says
+   */
+  constructor(readonly body: Filed, readonly verb: string, readonly site: string, private readonly staging: Staging, readonly aimer = false) {
     this.renewed = body.time;
   }
 

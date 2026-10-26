@@ -34,8 +34,9 @@ export function creature(body: Self): Step {
   const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius, false);
   // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)
   const turning = Math.PI * strideAt(gait, gait.slowest, 0).frequency / HALF_TURN;
-  const posture = kind.posture?.(body.pose, gait), asks = createAsks();
-  const start = body.pose.position(0), carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seedOf(start.x, start.z)) : null;
+  const start = body.pose.position(0), seed = body.life.seed ?? seedOf(start.x, start.z);
+  const posture = kind.posture?.(body.pose, gait, seed), asks = createAsks();
+  const carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seed) : null;
   const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
   let going = false, followed: Vector3 | null = null;
   let lowering: Eased = [0, 0], bowing: Eased = [0, 0];

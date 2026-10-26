@@ -35,11 +35,10 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
   };
   // (its size against the warmblood its numbers are for: the trunk's height)
   const size = at('trunk').y / TRUNK;
-  const point = (from: string, offset: Vector3): Vec3 => at(from).add(offset.clone().multiplyScalar(size)).toArray();
+  const sized = (offset: Vector3): Vec3 => offset.clone().multiplyScalar(size).toArray();
   const masses: Record<string, number> = { trunk: MASS.trunk, pelvis: MASS.pelvis, neck: MASS.neck, head: MASS.head };
   const centres: Record<string, Vec3 | readonly [string, number]> = {
-    trunk: point('trunk', new Vector3(0, -0.28, 0.3)), pelvis: point('pelvis', new Vector3(0, -0.12, -0.11)),
-    neck: ['head', 0.45], head: point('head', MUZZLE.clone().multiplyScalar(0.4)),
+    trunk: sized(CENTRE.trunk), pelvis: sized(CENTRE.pelvis), neck: ['head', 0.45], head: sized(CENTRE.head),
   };
   const legs: LegRole<string>[] = [];
   for (const [fore, end] of [[true, 'Fore'], [false, 'Hind']] as const) {
@@ -51,11 +50,11 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
       else Object.assign(masses, { [upper]: MASS.femur, [middle]: MASS.gaskin, [cannon]: MASS.hindCannon });
       Object.assign(masses, { [pastern]: MASS.pastern, [hoof]: MASS.hoof });
       // (the sole on the floor under the coffin joint, a little behind it: the hoof's middle, where it stands)
-      const sole = new Vector3(0, -at(hoof).y, (fore ? -0.03 : -0.016) * size);
+      const sole = new Vector3(0, -at(hoof).y, (fore ? SOLE.fore : SOLE.hind) * size);
       Object.assign(centres, {
         ...(fore ? { [name('Scapula')]: [upper, 0.5] } : {}),
         [upper]: [middle, 0.45], [middle]: [cannon, 0.4], [cannon]: [pastern, 0.45], [pastern]: [hoof, 0.5],
-        [hoof]: at(hoof).addScaledVector(sole, 0.5).toArray(),
+        [hoof]: sole.clone().multiplyScalar(0.5).toArray(),
       });
       legs.push({
         joints: [
@@ -106,7 +105,7 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
   const bones = { head: built.index('head'), neck: built.index('neck'), ears: [built.index('leftEar'), built.index('rightEar')] };
   const halter = HALTER.clone().multiplyScalar(size);
   const chains = made.legs?.chains ?? [];
-  return { ...made, bones: skeleton, scale: size, legs: made.legs && { ...made.legs, posture: (start, g) => horseMotion(start, g, chains, bones, halter) } };
+  return { ...made, bones: skeleton, scale: size, legs: made.legs && { ...made.legs, posture: (start, g, seed) => horseMotion(start, g, chains, bones, halter, seed) } };
 }
 
 /** every bone a horse's skeleton names */
@@ -126,8 +125,17 @@ const DEG = Math.PI / 180;
  * 1993; checked in the tests).
  */
 const MASS = { trunk: 213, pelvis: 90, neck: 32, head: 22, scapula: 9, humerus: 12, forearm: 7, foreCannon: 2, femur: 24, gaskin: 9, hindCannon: 2.5, pastern: 1.3, hoof: 1.2 };
-/** the muzzle from the poll (m): the head's mass centres 0.4 of the way there */
-const MUZZLE = new Vector3(0, -0.37, 0.3);
+/**
+ * where the trunk's, pelvis's and head's masses centre from their joints (m): the warmblood's points less its joints — the trunk's below
+ * and ahead of the root, the pelvis's below and behind its joint, the head's 0.4 of the way from the poll to the muzzle
+ */
+const CENTRE = {
+  trunk: new Vector3(0, 1.12, 0.3).sub(new Vector3(0, 1.4, 0)),
+  pelvis: new Vector3(0, 1.27, -0.68).sub(new Vector3(0, 1.39, -0.57)),
+  head: new Vector3(0, 1.38, 1.5).sub(new Vector3(0, 1.75, 1.2)).multiplyScalar(0.4),
+};
+/** how far behind the coffin joint the sole's middle stands (m): the warmblood's, fore and hind */
+const SOLE = { fore: 0.7 - 0.73, hind: -0.64 - -0.624 };
 /** the toe ahead of the sole's middle and the heel behind it (m): a shod hoof ~14 cm long */
 const TOE = new Vector3(0, 0, 0.075);
 const HEEL = new Vector3(0, 0, -0.065);
@@ -275,8 +283,8 @@ const turn = (x = 0, y = 0, z = 0, out = _q) => out.setFromEuler(_e.set(x, y, z,
 
 /** Posture before contact solving: contact phase read via summary, idle/tail timing recalled.
  * Gait ranges keep the provenance given with them above, not fresh paper readings. */
-function horseMotion(start: ReadonlyPose, gait: Gait, legs: readonly LegChain[], bones: { head: number; neck: number; ears: number[] }, halter: Vector3) {
-  const seed = seedOf(start.position(0).x, start.position(0).z);
+function horseMotion(start: ReadonlyPose, gait: Gait, legs: readonly LegChain[], bones: { head: number; neck: number; ears: number[] }, halter: Vector3,
+  seed = seedOf(start.position(0).x, start.position(0).z)) {
   const carried = carriage(start, legs, HORSE_CARRIAGE, gait, seed), idle = carried.life, rand = idle.rand;
   const { head: headBone, neck: neckBone, ears } = bones;
   const rest = { quiet: 0, value: 0, side: 0, at: 60 + 120 * rand(), pitches: [0, 0, 0, 0] };

@@ -44,7 +44,7 @@ export interface Species<Bone extends string = string, Hand extends string = str
     readonly chains: readonly LegChain[];
     readonly gait: Gait;
     readonly carriage?: CarriedBones;
-    readonly posture?: (start: ReadonlyPose, gait: Gait) => Posture;
+    readonly posture?: (start: ReadonlyPose, gait: Gait, seed?: number) => Posture;
   };
   /** how its trunk takes its root's acceleration (none: it does not lean) */
   readonly inertia?: Inertial;
@@ -95,7 +95,7 @@ export interface Roles<Name extends string, Hand extends string> {
 }
 
 /**
- * A species' numbers: its legs' `gait`; each bone's mass (kg; a bone not named has none) and where it centres (a point, model space, or
+ * A species' numbers: its legs' `gait`; each bone's mass (kg; a bone not named has none) and where it centres (an offset from its joint, or
  * a share of the way to another bone's joint; default its joint); each joint's range; the trunk's `inertia`; development snap ceilings.
  */
 export interface Tuning<Name extends string> {
@@ -134,7 +134,7 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
   const centreOf = (name: string): Vector3 => {
     const centre = tuning.centres?.[name];
     if (centre === undefined) return new Vector3();
-    if (isVec3(centre)) return new Vector3(...centre).sub(point(name));
+    if (isVec3(centre)) return new Vector3(...centre);
     const [toward, share] = centre;
     return point(toward).clone().sub(point(name)).multiplyScalar(share);
   };

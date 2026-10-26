@@ -66,8 +66,9 @@ export type Step = (f: Frame) => void;
 
 /**
  * A body as it moves: its pose history, what its story asks of it (requests on its parts) and the behaviours that serve them. Each
- * 1/60 s sub-step: the requests' staging; then, in this order, balance (the legs and the trunk over them, as walks and reaches ask),
- * the eyes, each hand, and the things it moves; then the final pose becomes the history: current → prev → prev2.
+ * 1/60 s sub-step, in this order: balance (the legs and the trunk over them, as walks and reaches asked), the requests' staging, the
+ * legs' and the trunk's asks for the next, the eyes, each hand, and the things it moves; then the final pose becomes the history:
+ * current → prev → prev2.
  */
 export class Self implements Resolving {
   readonly skeleton: Skeleton;
@@ -209,8 +210,8 @@ export class Self implements Resolving {
   }
 
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
-  file(verb: string, site: string, staging: Staging): Request {
-    const request = new Request(this, verb, site, staging);
+  file(verb: string, site: string, staging: Staging, aimer = false): Request {
+    const request = new Request(this, verb, site, staging, aimer);
     this.requests.push(request);
     return request;
   }
@@ -299,6 +300,8 @@ export class Self implements Resolving {
     }
     f.time += f.dt;
     const behaviours = (this.behaviours ??= this.behave());
+    // (balance first, on what was asked last sub-step; then the requests' staging, reading the body as balance has it now)
+    behaviours.balance?.(f);
     for (const request of [...this.requests]) request.stage(f);
     if (f.dev) {
       f.dev.beat = this.beat() || undefined;
@@ -308,7 +311,6 @@ export class Self implements Resolving {
         f.dev.append(f.time, { check: `request not renewed for ${STALE} s: its story stopped stepping (s)`, value: f.time - request.renewed, limit: STALE, where: request.label });
       }
     }
-    behaviours.balance?.(f);
     this.run('go', f);
     behaviours.gaze?.(f);
     this.run('look', f);
