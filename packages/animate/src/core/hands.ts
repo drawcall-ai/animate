@@ -7,13 +7,12 @@ import { ChainTip, reached } from './tip';
 import { looking } from './gaze';
 import { Walk } from './walk';
 import { during, type Request } from '../body/requests';
-import { attach, bodyOf, goalOn, grasp } from '../body/hold';
+import { bodyOf, goalOn, grasp, take } from '../body/hold';
 import type { Thing } from '../body/things';
 import { Pose, type ReadonlyPose } from './pose';
 import { STOOPING } from './legs/creature';
 import { forwardOf, minimumJerk } from './math';
 import { followRotation } from './follow';
-import { request } from './asks';
 import type { Self } from '../body/self';
 
 // A creature's hands, by name (`Species.hands`): the tip of the skeleton's chain named for each (a jaw, a trunk) reaches; what it takes
@@ -102,7 +101,7 @@ function stooping(self: Self, bones: readonly number[]) {
       pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(tip).y - goal.y - REACHED.distance) * PRESSING * f.dt));
       // (shared between its bow and its letting down as far as each goes: a little lower, its front bowed more)
       const drop = short > 0 ? Math.min(most, short + pressing) : 0, bow = drop * bowed(f) / most;
-      if (drop > 0) request(self.asks, { bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });
+      if (drop > 0) self.poise.add({ bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });
     },
   };
 }
@@ -159,8 +158,9 @@ const dipping = (distance: number) => distance / DIP.speed + DIP.speed / DIP.acc
 function* coming(self: Self, request: Request, at: (f: Frame) => Readonly<Vector3>, { off, after }: { off: number; after: number }) {
   const walk = new Walk(self, { to: at, within: off });
   const legs = during(request, 'go', 'borrowed', (f) => {
-    walk.step(f);
+    const go = walk.step(f);
     request.eta = walk.eta + after;
+    return go;
   }, (f, _, time) => time > 0 && (walk.stalled || walk.arrived(f)));
   yield* self.gazer ? parallel<Frame>('race', legs, during(request, 'look', 'borrowed', looking(self, at))) : legs;
   return !walk.stalled;
@@ -206,7 +206,7 @@ export function* taking(self: Self, request: Request, hand: string, thing: Thing
   if (thing.massive && !bodyOf(thing.object)) {
     [thing.home, thing.taken] = [thing.object.parent, self.track(thing.object).current.position.clone()];
     thing.lifted = true;
-    attach(thing, self.binding.bones[self.skeleton.bones[reach.bones[reach.bones.length - 1]].name]);
+    take(self, thing);
   }
   const back = handingBack(self, [hand]);
   yield* during(request, `hand.${hand}`, 'asked', back.step, back.done);

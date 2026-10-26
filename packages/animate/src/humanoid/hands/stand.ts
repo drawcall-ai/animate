@@ -185,8 +185,9 @@ export function standing(h: Person, to: Stand): Standing {
 export function* walking(request: Request, plan: { walk: Walk; arrived: (f: Frame) => boolean }, after?: number) {
   const { walk, arrived } = plan;
   yield* during(request, 'go', 'borrowed', (f) => {
-    walk.step(f);
+    const go = walk.step(f);
     if (after !== undefined) request.eta = walk.eta + after;
+    return go;
   }, (f, _, time) => time > 0 && (walk.stalled || arrived(f)));
   return !walk.stalled;
 }

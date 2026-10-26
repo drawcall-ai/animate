@@ -297,7 +297,7 @@ it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up 
 
 function movingHorse(gait: 'walk' | 'trot', speed: number, life: Life = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
   const body: Body = new Body(horse(HORSE, gait), { life: { ...life, seed }, dev: true });
-  claim(body, 'look', () => { const at = look(); if (at) selfOf(body).asks.look = at; });
+  claim(body, 'look', () => { const at = look(); if (at) selfOf(body).look = at; });
   const step = scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 200), { speed, accel }); } : undefined);
   const stepper = () => {
     const legs = selfOf(body).stepper;

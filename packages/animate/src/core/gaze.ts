@@ -6,12 +6,11 @@ import type { Motion } from './goal';
 import { clampRotation } from './limits';
 import { spinOf } from './rotation';
 import type { ReadonlyPose } from './pose';
-import { request } from './asks';
 import type { Self, Step } from '../body/self';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {
-  /** the chain that turns the head; without one, the species' posture turns it toward where the eyes are asked (`asks.look`) */
+  /** the chain that turns the head; without one, the species' posture turns it toward where the eyes are asked (`look`) */
   neck?: string;
   /** the point the eyes look from (world), into `out` */
   eyes(pose: ReadonlyPose, out: Vector3): Vector3;
@@ -43,7 +42,7 @@ export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, motion: Required<Pick<Motion, 'turnAccel'>> & Pick<Motion, 'turnSpeed'> = GLANCE): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
-  if (neck === undefined) return (f) => void (self.asks.look = target(f));
+  if (neck === undefined) return (f) => void (self.look = target(f));
   let over: boolean | null = null;
   /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
   let shift = 0;
@@ -203,7 +202,7 @@ export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>): Step {
     const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - self.locomotion.facing);
     const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
     // Derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at `AIM_TWIST`.
-    request(self.asks, { twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), twistRate: AIM_TWIST, bow: 0.25 * pitch });
+    self.poise.add({ twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), twistRate: AIM_TWIST, bow: 0.25 * pitch });
   };
 }
 

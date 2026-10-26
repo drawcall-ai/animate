@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { forwardOf, leftOf, wrapAngle } from '../math';
 import type { Frame } from '../frame';
-import { createAsks, takeAsks } from '../asks';
+import { Poise } from '../poise';
 import { Pose } from '../pose';
 import { carriage, type Striding } from './carriage';
 import { seedOf } from '../random';
@@ -14,7 +14,7 @@ import { strideAt } from './gait';
 import { Inertia } from '../inertia';
 
 /**
- * A creature's balance, a sub-step at a time: its species' legs carry it where a walk asks (`asks.go`) — the planner takes its root
+ * A creature's balance, a sub-step at a time: its species' legs carry it where the request that has its legs asks (`going`) — the planner takes its root
  * there as a player's input would (turning on the spot to a goal off its way, walking on as far as the legs keep up) — or where its app
  * drives it; the stepper keeps its feet under it, its posture or carriage rides on the stride, and each leg is posed down to its foot.
  * Asked nothing, it stands. It keeps `locomotion` for walks and `arriving`.
@@ -35,7 +35,7 @@ export function creature(body: Self): Step {
   // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)
   const turning = Math.PI * strideAt(gait, gait.slowest, 0).frequency / HALF_TURN;
   const start = body.pose.position(0), seed = body.life.seed ?? seedOf(start.x, start.z);
-  const posture = kind.posture?.(body.pose, gait, seed), asks = createAsks();
+  const posture = kind.posture?.(body.pose, gait, seed), poise = new Poise();
   const carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seed) : null;
   const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
   let going = false, followed: Vector3 | null = null;
@@ -64,10 +64,11 @@ export function creature(body: Self): Step {
   } satisfies Striding;
   let facing = body.yaw;
   return (f) => {
-    const asked0 = takeAsks(body.asks, asks), g = body.locomotion;
+    body.poise.pass(poise);
+    const g = body.locomotion, asked0 = body.going, face = asked0?.face;
     // (a goal nowhere — not a finite point — it does not go for: it stands)
-    const finite = !asked0.go || [asked0.go.to.x, asked0.go.to.z, ...(asked0.go.velocity?.toArray() ?? [])].every(Number.isFinite);
-    const go = finite ? asked0.go : undefined;
+    const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
+    const go = finite ? asked0 : null;
     if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); stepper.check(f); }
     const stance = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - planner.root.yaw), 0) / stepper.legs.length + planner.root.yaw;
     // (a goal off its way it turns to first, as a person does: facing it till it is on its way; nearer than its feet stand, it is there)
@@ -83,12 +84,12 @@ export function creature(body: Self): Step {
     // (a still goal behind it, nearer than its feet stand, it does not turn round for: come past it, it is there; asked a facing, it
     // steps back to it)
     const behind = _gap.copy(asked).sub(root).dot(forwardOf(planner.root.yaw, _to)) < 0;
-    if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && !asks.face) going = false;
+    if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && !face) going = false;
     const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
-    const faced = asks.face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
+    const faced = face?.yaw ?? (to.distanceTo(root) > radius && Math.abs(wrapAngle(heading - planner.root.yaw)) >= Math.PI / 4 ? heading : undefined);
     // (or where the scene drives it)
     const r: RootGoal = driven ? driven(f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
-      { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(asks.face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));
+      { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));
     stepper.move(f, r);
     f.current.setLocal(0, _yaw.setFromAxisAngle(UP, stepper.yaw));
     // (the root's turn, and how much further round it will face `LOOKING` s on: what its head leads into; its lean into its acceleration)
@@ -105,11 +106,11 @@ export function creature(body: Self): Step {
     });
     legs.height = f.current.position(0).y;
     [legs.stride.cycle, legs.stride.stance, legs.held] = [stepper.cycle, stepper.Ts, stepper.held];
-    posture?.prepare(f, legs, attention, asks.look);
+    posture?.prepare(f, legs, attention, body.look);
     if (carried) { carried.step(f, legs); carried.write(f); }
     // (let down and bowed as a task asks: the body lower on its legs, its front tipped down about its hind girdle — eased there and back)
-    lowering = ease(lowering, Math.max(0, Math.min(asks.lower, LOWEST * feet.length)), f.dt);
-    bowing = ease(bowing, Math.max(0, Math.min(asks.bow, asks.bowLimit, MOST_BOW)), f.dt);
+    lowering = ease(lowering, Math.max(0, Math.min(poise.lower, LOWEST * feet.length)), f.dt);
+    bowing = ease(bowing, Math.max(0, Math.min(poise.bow, poise.bowLimit, MOST_BOW)), f.dt);
     if (lowering[0] > 1e-6 || bowing[0] > 1e-6) {
       const behind = Math.min(...feet.legs.map((leg) => leg.ahead ?? 0)), pivot = _p.set(0, 0, 0);
       const hinds = feet.legs.filter((leg) => (leg.ahead ?? 0) <= behind + 1e-6);

@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import type { Step } from '../body/self';
 import { Planner } from '../core/legs/planner';
 import { forwardOf, wrapAngle } from '../core/math';
-import type { Stance } from '../core/asks';
+import type { Stance } from '../core/go';
 import type { Stepper } from '../core/legs/stepper';
 import { hullOf, past } from '../core/legs/support';
 import { footprint } from './posture/foot';
@@ -15,7 +15,7 @@ import { defaultStance, OVER_ANKLES } from './stance';
 
 /**
  * A person standing and walking where asked on the core legs: the root — the body's centre of mass over the floor — goes where the
- * planner takes it toward `asks.go` (facing `asks.face`, or the way it goes) as a player's input would drive it, and the stepper keeps
+ * planner takes it where its legs are asked to go (facing as asked, or the way it goes) as a player's input would drive it, and the stepper keeps
  * the legs under it and carries the body over it as it would a player's (`drivenBy`), catching the extrapolated centre of mass with a
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
@@ -38,10 +38,10 @@ export function stride(h: Person, options: { stance?: Partial<Stance>; seed?: nu
     }
     return at(lo);
   };
-  return drivenBy(h, (f, asks, stepper) => {
+  return drivenBy(h, (f, go, poise, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
     if (f.dev) checkSupport(h, f, f.dev);
-    const dt = f.dt, go = asks.go;
+    const dt = f.dt, face = go?.face;
     if (!planner) {
       planner = new Planner(f.prev.com(new Vector3()), h.yaw, humanGait(p), p.hipHalfWidth);
       stop.copy(planner.root.position);
@@ -62,18 +62,18 @@ export function stride(h: Person, options: { stance?: Partial<Stance>; seed?: nu
     still = moving ? null : leaning ? still : root.clone();
     // (a walk is under way while the body turns to a facing asked too, as the old carriage had it: turning on the spot, a goal moving off
     // is walked after at once, not once it is a start's distance away)
-    const unturned = asks.face ? Math.abs(wrapAngle(asks.face.yaw - plan.root.yaw)) : 0;
+    const unturned = face ? Math.abs(wrapAngle(face.yaw - plan.root.yaw)) : 0;
     const off = (still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced;
     if (!moving && off) [moving, starting, still, leaning] = [true, true, null, false];
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
-    const yaw = asks.face?.yaw ?? (moving ? travelYaw : plan.root.yaw);
-    const faced = !!asks.face || !moving || Math.abs(wrapAngle(heading - plan.root.yaw)) >= Math.PI / 4;
+    const yaw = face?.yaw ?? (moving ? travelYaw : plan.root.yaw);
+    const faced = !!face || !moving || Math.abs(wrapAngle(heading - plan.root.yaw)) >= Math.PI / 4;
     const turned = stepper.legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - leg.sign * toeOut - plan.root.yaw), 0);
     const stance = turned / stepper.legs.length + plan.root.yaw;
     // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
-    const lean = !moving && !go ? asks.lean : null;
+    const lean = !moving && !go ? poise.lean : null;
     const leaned = still && (lean || leaning) ? within(still, lean, stepper) : null;
     leaning = !!leaned && (!!lean || root.distanceTo(leaned) > LEAN.back * s);
     // (at rest on planted feet it settles over their rear half, `OVER_ANKLES` ahead of the ankles, as a person stands — read: Winter 1995,
@@ -94,7 +94,7 @@ export function stride(h: Person, options: { stance?: Partial<Stance>; seed?: nu
     };
     const walking = Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity);
     const speed = moving ? walking : go ? EDGE * s : leaned || rest ? LEAN.speed * s : 0;
-    const motion = { accel: go?.accel ?? 1.2 * s, speed, turnSpeed: asks.face?.rate };
+    const motion = { accel: go?.accel ?? 1.2 * s, speed, turnSpeed: face?.rate };
     // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
     const holds: Parameters<Planner['step']>[4] = (forecast) => stepper.reachable((t) => {
       const at = forecast(t);

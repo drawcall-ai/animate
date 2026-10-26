@@ -168,6 +168,22 @@ describe('release', () => {
     expect(body.holds(load)).toBe(false);
   });
 
+  it('lets go with the hands named, the others keeping hold: one hand left carries the thing alone', () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const load = box(room, new Vector3(0, 1.0, 0.4), { mass: 1, solid: false });
+    let done = false;
+    play(function* () {
+      yield* grab(body, load, BOTH);
+      release(body, { right: load });
+      yield* wait(0.5);
+      done = true;
+    }, [body], 8, () => done);
+    expect(insides(body).holding.left?.thing.object).toBe(load);
+    expect(insides(body).holding.right).toBeNull();
+    expect(load.parent).toBe(body.bones.leftHand);
+    expect(body.log).toEqual([]);
+  });
+
   it('puts a thing back where it was taken from, or onto an empty, exactly there', () => {
     const body = person({ dev: true }), room = roomOf(body);
     const taken = new Vector3(0, 0.9, 0.45);

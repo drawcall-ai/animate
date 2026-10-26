@@ -11,7 +11,7 @@ describe('balance', () => {
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
     const asked: number[] = [];
     const body = person(), h = insides(body);
-    claim(body, 'trunk', () => void (asked.push(h.asks.lower), (h.asks.lower = 0.01)));
+    claim(body, 'trunk', () => void (asked.push(h.poise.lower), h.poise.add({ lower: 0.01 })));
     const start = h.feet.map((f) => f.position.clone());
     run(body, 2);
     expect(h.feet.every((f, s) => f.phase === 'planted' && f.position.equals(start[s]))).toBe(true);

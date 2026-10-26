@@ -74,14 +74,19 @@ export function* grabbing(h: Person, request: Request, takes: readonly Taking[],
       reaching(h, take.side, (f) => ({ position: f.prev.position(INDEX[`${take.side}UpperArm`]).clone().lerp(gripAt(h, take, f, _grip), 0.5) }), { lead: false })))));
     yield* hands();
   };
+  let held = false;
   yield* parallel<Frame>('all', function* () {
     if (plan === 'there') return;
-    if (!(yield* walking(request, plan, REACHED_AFTER))) request.fail();
+    // (the hands on the grips, it stands: a walk it has not yet ended — the legs another's — is not walked on, away from what they hold)
+    yield* parallel<Frame>('race', action<Frame>({ until: () => held }), function* () {
+      if (!(yield* walking(request, plan, REACHED_AFTER))) request.fail();
+    });
     stood = true;
   }, function* () {
     // (the eyes never borrowed toward what they cannot see; they leave it as the hands close on it)
     yield* action<Frame>({ until: (f) => stood || seen(f) });
     yield* parallel<Frame>('race', waitingHands, during(request, 'look', 'borrowed', looking(h, gaze, SHIFT)));
+    held = true;
   });
   return request.outcome !== 'failed';
 }

@@ -1,5 +1,6 @@
 import { TimelineRunner, action, type ReusableTimeline, type TimelineClock, type UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from '../core/frame';
+import type { Go } from '../core/go';
 
 /**
  * What a body part is asked to do, and how firmly: `asked` by a verb for what it is about (a grab's hands, a walk's legs, a look's
@@ -11,12 +12,15 @@ export type Tier = 'borrowed' | 'asked';
 /** A body part a request takes: the legs (`go`, with the facing), the eyes (`look`), the trunk's turn (`trunk`), a hand by name. */
 export type Channel = 'go' | 'look' | 'trunk' | `hand.${string}`;
 
-/** What a request does with a body part every sub-step it holds it, at its tier. */
+/**
+ * What a request does with a body part every sub-step it has it, at its tier: the legs' step returns where it asks them to go (and a
+ * legs' claim another has still ticks, its ask unheard); the others pose what they move and ask the body's poise.
+ */
 export interface Claim {
   readonly request: Request;
   readonly channel: Channel;
   readonly tier: Tier;
-  step(f: Frame): void;
+  step(f: Frame): Go | void;
 }
 
 /** what a request's verb stages, sub-step by sub-step: a timeline over the body's frames that claims body parts as it goes */
@@ -80,7 +84,7 @@ export class Request {
   }
 
   /** `channel` taken at `tier` while the returned function has not been called: `step` runs every sub-step with the body part's others */
-  claim(channel: Channel, tier: Tier, step: (f: Frame) => void): () => void {
+  claim(channel: Channel, tier: Tier, step: (f: Frame) => Go | void): () => void {
     const claim: Claim = { request: this, channel, tier, step };
     this.claims.add(claim);
     this.body.claim(claim);
@@ -107,7 +111,7 @@ export class Request {
 }
 
 /** `channel` claimed at `tier`, `step` run every sub-step, until `until`: an action of a request's staging */
-export function during(request: Request, channel: Channel, tier: Tier, step: (f: Frame) => void, until?: UntilCondition<Frame>) {
+export function during(request: Request, channel: Channel, tier: Tier, step: (f: Frame) => Go | void, until?: UntilCondition<Frame>) {
   return action<Frame>({ init: () => request.claim(channel, tier, step), until });
 }
 

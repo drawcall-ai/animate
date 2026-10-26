@@ -9,7 +9,7 @@ import { INDEX } from './bones';
 import type { Person } from './person';
 import type { Step } from '../body/self';
 import { forwardOf, wrapAngle, yawOf } from '../core/math';
-import { request } from '../core/asks';
+import type { Go } from '../core/go';
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
 const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
@@ -45,7 +45,7 @@ const UNDER = { speed: 1.0, accel: 1.2 };
  * turned further than the trunk and neck take, stands where the eyes are over it, bows and squats for a head lower than standing and goes
  * up on its toes for one higher.
  */
-export function heading(h: Person, eyes: (f: Frame) => Placement, pace: Motion = HEADSET): { under: Step; look: Step } {
+export function heading(h: Person, eyes: (f: Frame) => Placement, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
   const joints = SPINE.map(() => new TrackedRotation());
@@ -65,7 +65,7 @@ export function heading(h: Person, eyes: (f: Frame) => Placement, pace: Motion =
     under: (f) => {
       const goal = follow(f);
       followed = f.time;
-      under.ask(f, goal.position, yawOf(head.quaternion));
+      return under.ask(f, goal.position, yawOf(head.quaternion));
     },
     look: (f) => {
       if (followed !== f.time) follow(f);
@@ -82,14 +82,14 @@ export function heading(h: Person, eyes: (f: Frame) => Placement, pace: Motion =
 }
 
 /**
- * The body brought under a led head (`h.asks`), every sub-step: turned round after the head once it
+ * The body brought under a led head, every sub-step: turned round after the head once it
  * is turned further than the trunk and neck take (TURN), and held facing as it was otherwise;
  * bowed and let down as far as the eyes go ahead and down (`stoop`); standing where that puts the
  * eyes, walking there (its way fed forward) once it is far enough to.
  */
 class Under {
-  private readonly go = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER };
   private readonly face = { yaw: NaN };
+  private readonly go: Go & { velocity: Vector3 } = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER, face: this.face };
   /** turning after the head; how long it has been turned past TURN (s); the eyes' last height */
   private turning = false;
   private off = 0;
@@ -97,8 +97,8 @@ class Under {
 
   constructor(private readonly h: Person) {}
 
-  /** asks for the eyes at `eyes`, the head facing `yaw` */
-  ask(f: Frame, eyes: Vector3, yaw: number) {
+  /** the body bowed and let down for the eyes at `eyes`, the head facing `yaw`, and where its legs go under them */
+  ask(f: Frame, eyes: Vector3, yaw: number): Go {
     const { h, go, face } = this;
     const p = h.proportions;
     const facing = h.locomotion.facing;
@@ -124,7 +124,8 @@ class Under {
       : _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
     if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
     go.to.copy(spot);
-    request(h.asks, { lower, bow, go, face });
+    h.poise.add({ lower, bow });
+    return go;
   }
 }
 

@@ -8,7 +8,8 @@ import { clampRotation } from '../core/limits';
 import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, smoothstep, wrapAngle, yawOf } from '../core/math';
 import { Stepper, type Feet, type Leg, type RootGoal } from '../core/legs/stepper';
 import { TrackedPoint, TrackedRotation } from '../core/track';
-import { createAsks, takeAsks, type Asks, type Stance } from '../core/asks';
+import { Poise } from '../core/poise';
+import type { Go, Stance } from '../core/go';
 import { seedOf } from '../core/random';
 import { Life } from './posture/life';
 import { ankleFor, ballOf, footRotation, heelOf } from './posture/foot';
@@ -81,16 +82,16 @@ export interface PersonRoot extends RootGoal {
 }
 
 /**
- * `driven`, the root read each sub-step from `rootOf` once the tasks' asks are taken (a scene's; a planner's, toward `asks.go`). Whoever
+ * `driven`, the root read each sub-step from `rootOf` once what was asked is taken (a scene's; a planner's, toward where its legs are asked to go). Whoever
  * drives it, the body is carried over it one way, as `Posture` has it: the hips swaying and turning with the stride about the root
  * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
  * to (`PACE`), nodding, bowed and twisted as asked, the thorax counter-rotating. Let down as asked (`lower`) or as the root crouches it,
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
- * less as it holds still (`asks.steady`).
+ * less as it holds still (`steady`).
  */
 export function drivenBy(
   h: Person,
-  rootOf: (f: Frame, asks: Asks, stepper: Stepper) => PersonRoot,
+  rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => PersonRoot,
   options: { stance?: Partial<Stance>; seed?: number } = {},
 ): Step {
   const p = h.proportions, s = p.scale;
@@ -129,7 +130,7 @@ export function drivenBy(
   const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, h.feet, h.yaw));
   let stepper = stepperFor(true), first = true;
   const { toeOut, crouch: crouching } = humanStepping(p);
-  const asks = createAsks();
+  const poise = new Poise();
   const base = { ...defaultStance(p), ...options.stance };
   const upright: Upright = {
     p,
@@ -155,8 +156,8 @@ export function drivenBy(
   let offsets: Vector3[] | null = null, pace: Vector3 | null = null, phase = 0;
   return (f) => {
     if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
-    takeAsks(h.asks, asks);
-    const dt = f.dt, root = rootOf(f, asks, stepper);
+    h.poise.pass(poise);
+    const dt = f.dt, go = h.going, root = rootOf(f, go, poise, stepper);
     if (first && !root.forecast) stepper = stepperFor(false);
     first = false;
     // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
@@ -166,7 +167,7 @@ export function drivenBy(
     }
     // the hips carried off the root: swaying and turning with the stride, off a centre of mass's as far as the mass leans ahead of them
     const speed = root.velocity.length();
-    upright.stance = asks.stance ? { ...base, ...asks.stance } : base;
+    upright.stance = go?.stance ? { ...base, ...go.stance } : base;
     upright.walk = walking(upright.walk, speed, dt);
     upright.moving = root.underway ?? h.locomotion.moving;
     upright.yaw = stepper.yaw;
@@ -185,17 +186,17 @@ export function drivenBy(
     // (its quiet life: motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
       f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
-    life.update(dt, life.quiet(asks, h), activity, asks.steady);
+    life.update(dt, life.quiet(go, poise, h), activity, poise.steady);
     // (let down, bowed and twisted at a squat's pace — or twisted at the rate asked, the trunk's joints pacing it within `TURN`: an aim
     // tracks a turning look)
-    const twisting = asks.twistRate * dt;
+    const twisting = poise.twistRate * dt;
     const twist = twisting > 0
-      ? asked.twist[1] + clamp(asks.twist - asked.twist[1], -twisting, twisting)
-      : follow(asked.twist[0], asked.twist[1], asks.twist, BOW, dt);
+      ? asked.twist[1] + clamp(poise.twist - asked.twist[1], -twisting, twisting)
+      : follow(asked.twist[0], asked.twist[1], poise.twist, BOW, dt);
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
     const requested = {
-      lower: followed(asked.lower, asks.lower, LOWER, dt),
-      bow: followed(asked.bow, Math.min(asks.bow, asks.bowLimit), BOW, dt),
+      lower: followed(asked.lower, poise.lower, LOWER, dt),
+      bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt),
       twist,
     };
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;

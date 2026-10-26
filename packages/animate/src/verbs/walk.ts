@@ -43,8 +43,9 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
     };
     const walk = new Walk(self, { to: (f) => find(f).position, face: yaw, velocity: (f) => find(f).object ? find(f).velocity : undefined, speed, accel }, until === undefined);
     const step = (f: Frame) => {
-      walk.step(f);
+      const go = walk.step(f);
       request.eta = walk.eta;
+      return go;
     };
     // (given `until`, it follows its target, however it moves, until then)
     if (until !== undefined) yield* during(request, 'go', 'asked', step);

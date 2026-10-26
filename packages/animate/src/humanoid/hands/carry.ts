@@ -6,11 +6,11 @@ import { movingPoint, type Live, type Motion, type Placement, type Target } from
 import { loadFactor } from '../../core/load';
 import { TrackedPoint, TrackedRotation } from '../../core/track';
 import { course, type Course, type Waypoint } from '../../core/course';
-import { request as ask } from '../../core/asks';
 import { looking, SHIFT } from '../../core/gaze';
 import { during, type Request } from '../../body/requests';
-import { attach, handsOn, heldMass, supported } from '../../body/hold';
+import { carriedBy, handsOn, heldMass, supported, take } from '../../body/hold';
 import type { Thing } from '../../body/things';
+import { resolve } from '../../body/resolve';
 import type { Person } from '../person';
 import { sideOf } from '../person';
 import { handStep, ARM_REACH, PROTRACTION } from '../arms';
@@ -89,8 +89,7 @@ export function* carrying(h: Person, request: Request, thing: Thing, way: Way, o
     return;
   }
   // (a transfer: lifted to the body, carried there as the legs walk, raised onto its place over the last of the walk)
-  const carrier = h.carried.get(thing.object);
-  if (!carrier) throw new Error(`carry: "${thing.object.name}" is not carried`);
+  const carrier = h.track(thing.object);
   const from = carrier.current.position.y, watched = carrier.current.position.clone();
   const atBody = carried(h);
   const rise = atBody(h.frame).position.y - from;
@@ -140,7 +139,7 @@ function* along(h: Person, request: Request, thing: Thing, way: Way, motion: Mot
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `ALONG.least` s */
 function timed(h: Person, thing: Thing, points: readonly ((f: Frame) => Placement)[], speed: number): Waypoint[] {
   const f = h.frame;
-  let from = h.carried.get(thing.object)?.current.position.clone() ?? new Vector3();
+  let from = h.track(thing.object).current.position.clone();
   const lengths = points.map((point) => {
     const to = point(f).position, length = from.distanceTo(to);
     from = to.clone();
@@ -157,31 +156,29 @@ function wayToCourse(way: Way, seconds: number): Waypoint[] {
 }
 
 /**
- * `thing` off whatever it rests on or is in, into the person's hands: moved by the person from now on (attached under its root bone,
- * where it is), its weight taken up. A heavy load resting on something first gets the anticipatory knee dip (100 ms, 5 mm). A thing
+ * `thing` off whatever it rests on or is in, into the person's hands (`take`), its weight taken up. A heavy load resting on something first gets the anticipatory knee dip (100 ms, 5 mm). A thing
  * without a mass is lifted all the same, a problem in the dev log.
  */
 export function* lifting(h: Person, request: Request, thing: Thing) {
-  if (h.carried.has(thing.object)) return;
+  if (carriedBy(h, thing)) return;
   const f = h.frame;
   if (!thing.massive) f.dev?.append(f.time, { check: 'lifted a thing without userData.mass (kg)', value: 0, limit: 0, where: thing.object.name });
   if (supported(thing) && thing.mass > PREPARED && (thing.object.getWorldPosition(_v).y >= h.proportions.hipHeight || h.proportions.hipHeight - h.pose.position(0).y < 0.005 * h.scale)) {
     // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
     let since = NaN;
-    yield* during(request, 'trunk', 'borrowed', () => ask(h.asks, { lower: 0.005 * h.scale }), (g) => (Number.isNaN(since) ? (since = g.time, false) : g.time - since >= 0.1 - 1e-9));
+    yield* during(request, 'trunk', 'borrowed', () => h.poise.add({ lower: 0.005 * h.scale }), (g) => (Number.isNaN(since) ? (since = g.time, false) : g.time - since >= 0.1 - 1e-9));
   }
   const parent = thing.object.parent;
   if (parent && !thing.lifted) [thing.home, thing.taken] = [parent, h.track(thing.object).current.position.clone()];
   thing.lifted = true;
-  attach(thing, h.binding.bones[h.skeleton.bones[0].name], h);
+  take(h, thing);
 }
 
 /** a loose thing with a mass, held, lifted clear of what it rests on (`CLEAR`), then held as it is */
 export function* liftingClear(h: Person, request: Request, thing: Thing) {
   const resting = supported(thing);
   yield* lifting(h, request, thing);
-  const carrier = h.carried.get(thing.object);
-  if (!carrier) return;
+  const carrier = h.track(thing.object);
   // (up from where it is held, drawn in toward the hips to within `CLEAR.out` of them: held at arm's length, the arms would fall short of
   // it once the reach no longer bows the body for them)
   const root = h.pose.position(0);
@@ -198,8 +195,7 @@ export function* liftingClear(h: Person, request: Request, thing: Thing) {
  * recovering; still settling `RESTING` s after the course is over, a problem in the dev log, and it goes on.
  */
 function* travel(h: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], motion: Motion, resting: boolean, near = END.distance) {
-  const carrier = h.carried.get(thing.object);
-  if (!carrier) throw new Error(`carry: "${thing.object.name}" is not carried`);
+  const carrier = h.track(thing.object);
   const sides = handsOn(h, thing).map(sideOf);
   const grips = Object.fromEntries(sides.map((side) => [side, h.holding[side]?.grip ?? '']));
   const lag = grips[LEADING] === undefined && h.holding[LEADING] ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
@@ -257,21 +253,53 @@ function planned(carrier: Carrier, waypoints: readonly Waypoint[], options: { pa
 
 /**
  * The hands on `thing`'s grips carrying it toward `to` along `aim` (its own motion fed forward, the arms reaching only as far as they
- * do), every sub-step until `until` (endless without): each hand asked; after the hands, the thing is fitted to them.
+ * do), every sub-step until `until` (endless without), each hand asked: one hand goes where the thing, hanging from it, is to be; two go
+ * to their grips on it, and after the hands the body fits it to them.
  */
 function holding(h: Person, request: Request, thing: Thing, aim: CarryAim, to: Live<Placement>, until?: (f: Frame) => boolean) {
   const sides = handsOn(h, thing).map(sideOf);
   const tips = new Map(sides.map((side) => [side, new ChainTip(`${side}Arm`)]));
+  const single = sides.length === 1 ? inHandOf(h, sides[0], thing) : null;
+  // (a free grip: the hand goes where the grip is to be, turning as it may, and the thing keeps its turn about the grip — `move`)
+  const free = single && h.holding[sides[0]]?.goal.quaternion === undefined;
   const step = (side: Side) => (f: Frame) => {
-    const carrier = aim.read(f, to);
-    const hold = h.holding[side];
-    if (!hold) return;
+    const carrier = aim.read(f, to), hold = h.holding[side], tip = tips.get(side);
+    if (!hold || !tip) return;
+    if (single && free) {
+      bringShoulder(h, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(carrier.current.position), 1, 0, carrier.carriedBy === h);
+      h.carrying.set(thing.object, carrier);
+      handStep(h, f, side, { position: hold.goal.position }, { ...HOLD, on: carrier, lead: true }, tip);
+      return;
+    }
+    if (single) {
+      const goal = single(carrier);
+      bringShoulder(h, f, side, goal.position, 1, 0, carrier.carriedBy === h);
+      handStep(h, f, side, goal, { ...HOLD, lead: true }, tip);
+      return;
+    }
     bringShoulder(h, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carrier.carriedBy === h);
     h.carrying.set(thing.object, carrier);
-    const tip = tips.get(side);
-    if (tip) handStep(h, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
+    handStep(h, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
   };
   return parallel<Frame>('race', ...sides.map((side) => during(request, `hand.${side}`, 'asked', step(side), until && ((f) => until(f)))));
+}
+
+/**
+ * where hand `side` goes for `thing`, which hangs from it, to be where a carrier has it: the thing's frame times where the hand bone is
+ * in it (read once: hanging from the hand, it keeps its place on it), the hand bone's rest undone
+ */
+function inHandOf(h: Person, side: Side, thing: Thing): (carrier: Carrier) => Target & { velocity: Vector3 } {
+  const bone = h.hands[side], node = h.binding.bones[h.skeleton.bones[bone].name];
+  const hand = resolve(h, node, { position: new Vector3(), quaternion: new Quaternion() });
+  const at = resolve(h, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
+  const back = at.quaternion.clone().invert();
+  const inThing = { position: hand.position.sub(at.position).applyQuaternion(back), quaternion: back.multiply(hand.quaternion) };
+  const rest = h.restOf(bone).clone().invert(), velocity = new Vector3();
+  return (carrier) => ({
+    position: inThing.position.clone().applyQuaternion(carrier.current.quaternion).add(carrier.current.position),
+    quaternion: carrier.current.quaternion.clone().multiply(inThing.quaternion).multiply(rest),
+    velocity: carrier.velocity(velocity),
+  });
 }
 
 /**
@@ -309,8 +337,7 @@ class CarryAim {
   private cleared = false;
 
   constructor(private readonly h: Person, private readonly thing: Thing, private readonly motion: Motion) {
-    const own = h.carried.get(thing.object);
-    if (!own) throw new Error(`carry: "${thing.object.name}" is not carried`);
+    const own = h.track(thing.object);
     this.nominal = new Carrier(own.current.position, own.current.quaternion);
     this.carrier = new Carrier(own.current.position, own.current.quaternion);
     this.nominal.prev.position.copy(own.prev.position);
@@ -320,16 +347,17 @@ class CarryAim {
   read(f: Frame, to: Live<Placement>): Carrier {
     if (this.time === f.time) return this.carrier;
     this.time = f.time;
-    const { nominal: aim, goal, h, thing, motion } = this, own = h.carried.get(thing.object);
+    const { nominal: aim, goal, h, thing, motion } = this, own = h.track(thing.object).at(f.time);
     const target: Target = typeof to === 'function' ? to(f) : to;
     this.carrier.carriedBy = target.carriedBy;
     goal.position.copy(target.position);
-    goal.quaternion.copy(target.quaternion ?? own?.current.quaternion ?? goal.quaternion);
+    // (a goal that sets no turn keeps the one the aim set out with: the thing's own turn, a hand's lag in it, is not fed back)
+    goal.quaternion.copy(target.quaternion ?? this.nominal.current.quaternion);
     // Continue the intended motion, rather than feeding wrist-fitting lag back into it.
     const turned = this.rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion,
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned);
     // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front: noted once, so it is no silent change)
-    const current = own?.current ?? goal;
+    const current = own.current;
     const moved = clearBody(h, f, thing, goal.position, turned, current);
     if (moved > CLEARED * h.scale && !this.cleared && f.dev) {
       this.cleared = true;

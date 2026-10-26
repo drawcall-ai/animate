@@ -6,7 +6,7 @@ import type { Life } from './life';
 import { INDEX } from '../bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../core/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../proportions';
-import type { Stance } from '../../core/asks';
+import type { Stance } from '../../core/go';
 import type { Foot } from './foot';
 import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../core/inertia';

@@ -1,6 +1,5 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../frame';
-import { request } from '../asks';
 import type { RootGoal } from './stepper';
 import type { Self } from '../../body/self';
 
@@ -19,7 +18,7 @@ export function drivenRoot(self: Self): (f: Frame) => RootGoal {
     last = position.clone();
     if (![position.x, position.z, velocity.x, velocity.z, root.yaw].every(Number.isFinite)) throw new Error('drive: a root that is not finite');
     if (root.jump !== undefined) self.stepper?.jump(root.jump);
-    if (root.steady !== undefined) request(self.asks, { steady: root.steady });
+    if (root.steady !== undefined) self.poise.add({ steady: root.steady });
     return { position, velocity, yaw: root.yaw, crouch: root.crouch };
   };
 }

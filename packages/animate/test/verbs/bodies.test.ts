@@ -44,9 +44,9 @@ describe('bodies together', () => {
       steps.push(`brought ${yield* carry(labrador, stick, new Vector3(0, 0.55, -0.9))}`);
       steps.push(`taken ${yield* grab(owner, stick, { right: 'right' })}`);
       release(labrador, stick);
-      steps.push(insides(owner).carried.has(stick) ? 'the owner moves it' : 'nobody moves it');
+      steps.push(stick.parent === owner.bones.rightHand ? 'in the owner\'s hand' : 'elsewhere');
     }, [owner, labrador], 30, () => steps.length === 4);
-    expect(steps).toEqual(['fetched true', 'brought true', 'taken true', 'the owner moves it']);
+    expect(steps).toEqual(['fetched true', 'brought true', 'taken true', 'in the owner\'s hand']);
     expect(owner.holds(stick)).toBe(true);
     expect(labrador.holds(stick)).toBe(false);
     expect([...owner.log, ...labrador.log]).toEqual([]);

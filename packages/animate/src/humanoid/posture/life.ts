@@ -1,4 +1,5 @@
-import type { Asks } from '../../core/asks';
+import type { Go } from '../../core/go';
+import type { Poise } from '../../core/poise';
 import type { Person } from '../person';
 import { Vector3 } from 'three';
 import { lerp, smoothstep } from '../../core/math';
@@ -37,8 +38,8 @@ export class Life {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(asks: Asks, h: Person): boolean {
-    return !asks.go && !h.locomotion.moving && !h.holding.left && !h.holding.right && asks.lower === 0 && asks.bow === 0 && asks.steady === 0;
+  quiet(go: Go | null, poise: Poise, h: Person): boolean {
+    return !go && !h.locomotion.moving && !h.holding.left && !h.holding.right && poise.lower === 0 && poise.bow === 0 && poise.steady === 0;
   }
 
   /** `steady`: how still it holds itself (0 … 1: aiming) */

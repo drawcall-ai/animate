@@ -65,7 +65,7 @@ it('prepares a heavy lift before its support leaves it, and carries it slower th
       if (!Number.isNaN(held) && Number.isNaN(off)) {
         if (load.parent === room) {
           down = Math.max(down, hips - h.pose.position(0).y);
-          preparation = Math.max(preparation, h.asks.lower);
+          preparation = Math.max(preparation, h.poise.lower);
         } else off = time;
       }
       return !Number.isNaN(end);
@@ -92,7 +92,7 @@ it('slows its walk under a load, counting a load held in both hands once', () =>
       yield* grab(body, load, both ? { left: 'left', right: 'right' } : { right: 'right' });
       yield* walkTo(body, new Vector3(0, 0, 3), { until: 0.3 });
     }, [body], 4, () => {
-      if (h.asks.go && body.goals.go?.verb === 'walkTo') speed = h.asks.go.speed;
+      if (h.going && body.goals.go?.verb === 'walkTo') speed = h.going.speed;
     });
     expect(body.log).toEqual([]);
     return speed;

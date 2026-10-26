@@ -7,8 +7,9 @@ import { REACHED, type Target } from '../core/goal';
 import { ChainTip } from '../core/tip';
 import { forwardOf, leftOf } from '../core/math';
 import { looking, type Gazer } from '../core/gaze';
-import { Self, type Behaviours, type SelfOptions } from '../body/self';
-import { bear, bodyOf, checkParents, move, supported } from '../body/hold';
+import { Self, type Behaviours, type Hold, type SelfOptions } from '../body/self';
+import { resolve } from '../body/resolve';
+import { bear, bodyOf, checkParents, inHand, move, supported, worn } from '../body/hold';
 import type { Thing } from '../body/things';
 import { INDEX, SIDES, type Side } from './bones';
 import type { Proportions } from './proportions';
@@ -57,6 +58,7 @@ export class Person extends Self {
   protected behave(): Behaviours {
     const seed = this.life.seed;
     const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') };
+    const held = { left: keptOnBody(this, 'left'), right: keptOnBody(this, 'right') };
     const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
     return {
       balance: this.drive ? driven(this, seed) : stride(this, { seed }),
@@ -65,9 +67,11 @@ export class Person extends Self {
       keep: (f, hand) => {
         const side = sideOf(hand), hold = this.holding[side];
         if (!hold) return;
-        const thing = hold.thing, frame = this.track(thing.object);
-        // (what rests where it lies the body comes down to keep its hands on; what it carries, or another moves, they follow)
-        handStep(this, f, side, hold.goal, { on: frame, thing, ...HOLD, lead: supported(thing) }, arms[side]);
+        const thing = hold.thing;
+        // (what hangs from the hand stays where the hand holds it on the body; what rests where it lies the body comes down to keep its
+        // hand on; what it carries in both, or another moves, the hands follow)
+        if (inHand(this, thing)) handStep(this, f, side, held[side](f), { ...HOLD, lead: false }, arms[side]);
+        else handStep(this, f, side, hold.goal, { on: this.track(thing.object), thing, ...HOLD, lead: supported(thing) }, arms[side]);
       },
       things: (f) => {
         checkParents(this, f);
@@ -79,6 +83,27 @@ export class Person extends Self {
       },
     };
   }
+}
+
+/**
+ * where hand `side` is kept on the body while nothing asks for it: where it was relative to the root bone when it was last let be (a
+ * mug held before the chest stays there as the body walks and turns)
+ */
+function keptOnBody(h: Person, side: Side): (f: Frame) => Target {
+  const bone = h.hands[side];
+  let time = -Infinity;
+  const kept = { position: new Vector3(), quaternion: new Quaternion() };
+  return (f) => {
+    // (let be since the last sub-step it was kept: from where it is now)
+    if (f.time - time > 1.5 * f.dt) {
+      const back = _q.copy(f.prev.rotation(0)).invert();
+      kept.position.copy(f.prev.position(bone)).sub(f.prev.position(0)).applyQuaternion(back);
+      kept.quaternion.copy(back).multiply(f.prev.rotation(bone));
+    }
+    time = f.time;
+    const turn = f.current.rotation(0);
+    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(0)), quaternion: turn.clone().multiply(kept.quaternion) };
+  };
 }
 
 /** `self` as the person it is */
@@ -108,13 +133,19 @@ const GRIP_TAKEN = REACHED.distance + 0.02;
  * lags its turn, the wrists up to ~4 cm off their grips) */
 const HELD = 0.05;
 
+/** where `hold`'s grip is as the body is posed now (read afresh: a thing hanging from a hand moves with it after the hands) */
+function gripIn(h: Person, hold: Hold): Vector3 {
+  const at = resolve(h, hold.thing.object, _placed);
+  return _grip.copy(hold.goal.position).applyQuaternion(at.quaternion).add(at.position);
+}
+
 /** development: each grip a hand has just taken, its wrist as near it as a grip taken is */
 function checkTaking(h: Person, f: Frame, taking: Partial<Record<Side, readonly [Thing, string]>>): void {
   for (const side of SIDES) {
     const hold = h.holding[side], was = taking[side];
     taking[side] = hold ? [hold.thing, hold.grip] : undefined;
     if (!hold || (was?.[0] === hold.thing && was[1] === hold.grip)) continue;
-    const at = h.track(hold.thing.object).toWorld({ position: hold.goal.position }, _target, f.time).position;
+    const at = gripIn(h, hold);
     const value = f.current.position(h.hands[side]).distanceTo(at);
     if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${hold.thing.object.name} ${side} ${hold.grip}` });
   }
@@ -129,9 +160,9 @@ function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = h.holding[side];
     if (!hold) continue;
-    const carried = h.carried.has(hold.thing.object);
-    if (!carried && !bodyOf(hold.thing.object)) continue;
-    const at = h.track(hold.thing.object).toWorld({ position: hold.goal.position }, _target, f.time).position;
+    if (!bodyOf(hold.thing.object)) continue;
+    const carried = !worn(hold.thing);
+    const at = gripIn(h, hold);
     const value = f.current.position(h.hands[side]).distanceTo(at), limit = carried ? HELD : REACHED.distance;
     if (value <= limit || (carried && noted.has(hold))) continue;
     if (carried) noted.add(hold);
@@ -169,4 +200,4 @@ function standing(p: Proportions, pose: Pose, floor: Vector3, yaw: number): { po
   return { pose, feet: [feet[0], feet[1]] };
 }
 
-const _target: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };

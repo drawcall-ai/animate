@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { parallel, runTimeline } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { grab, lookAt, reach, wait, walkTo, watch } from '../../src';
-import { dt, person, play } from '../bodies';
+import { claim, dt, insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 
 describe('requests', () => {
@@ -48,6 +48,26 @@ describe('requests', () => {
     expect(looks[0]).toBe(looks[2]);
     expect(looks[1]).not.toBe(looks[0]);
     expect(looks[3]).toBe('idle');
+  });
+
+  it("only the request that has a part moves it; the legs' others keep their count, unheard", () => {
+    const body = person(), h = insides(body);
+    const runs = { trunk: [0, 0], go: [0, 0] };
+    const borrowed = claim(body, 'trunk', () => void runs.trunk[0]++, 'borrowed');
+    const asked = claim(body, 'trunk', () => void runs.trunk[1]++);
+    claim(body, 'go', () => void runs.go[0]++, 'borrowed');
+    claim(body, 'go', () => {
+      runs.go[1]++;
+      return { to: new Vector3(0, 0, 1), speed: 1, accel: 1 };
+    });
+    run(body, 0.5);
+    expect(runs.trunk).toEqual([0, 30]);
+    expect(runs.go).toEqual([30, 30]);
+    expect(h.going?.to.z).toBe(1);
+    asked();
+    run(body, 0.5);
+    expect(runs.trunk).toEqual([30, 30]);
+    borrowed();
   });
 
   it('among borrowers, the first keeps the legs', () => {

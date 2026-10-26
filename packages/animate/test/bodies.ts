@@ -3,6 +3,7 @@ import { Body, humanoid, type BodyOptions } from '../src';
 import { selfOf } from '../src/body/body';
 import { during, type Channel, type Tier } from '../src/body/requests';
 import type { Frame } from '../src/core/frame';
+import type { Go } from '../src/core/go';
 import type { Person } from '../src/humanoid/person';
 import { personOf } from '../src/humanoid/person';
 import { PERSON } from './skeletons/person';
@@ -31,11 +32,11 @@ export function run(body: Body, seconds: number, each?: (time: number) => void):
  * a request on `body` that takes `channel` at `tier` for as long as it is not dropped (no story renews it: it renews itself), `step` its
  * every sub-step; returns the drop
  */
-export function claim(body: Body, channel: Channel, step: (f: Frame) => void, tier: Tier = 'asked'): () => void {
+export function claim(body: Body, channel: Channel, step: (f: Frame) => Go | void, tier: Tier = 'asked'): () => void {
   const self = selfOf(body);
   const request = self.file('test', '', (filed) => () => during(filed, channel, tier, (f) => {
     filed.renewed = f.time;
-    step(f);
+    return step(f);
   }));
   return () => self.drop(request);
 }

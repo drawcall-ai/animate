@@ -5,7 +5,8 @@ import { Dev, type LogEntry } from '../core/dev';
 import { Skeleton } from '../core/skeleton';
 import { checkLimits } from '../core/limits';
 import { SnapChecks } from '../core/rotation';
-import { createAsks, type Asks } from '../core/asks';
+import { Poise } from '../core/poise';
+import type { Go } from '../core/go';
 import { createLocomotion, type Locomotion } from '../core/legs/gait';
 import type { Stepper } from '../core/legs/stepper';
 import type { Gazer } from '../core/gaze';
@@ -14,7 +15,7 @@ import { Carrier } from '../core/carrier';
 import type { Target } from '../core/goal';
 import { yawOf } from '../core/math';
 import { Binding } from './model';
-import { anchors, resolve, type Interpolated, type Resolving } from './resolve';
+import { anchors, movers, resolve, type Interpolated, type Resolving } from './resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from './requests';
 import type { Thing, Local } from './things';
 import { bear, checkParents, wornOf, type Bearing } from './hold';
@@ -67,9 +68,9 @@ export type Step = (f: Frame) => void;
 
 /**
  * A body as it moves: its pose history, what its story asks of it (requests on its parts) and the behaviours that serve them. Each
- * 1/60 s sub-step, in this order: balance (the legs and the trunk over them, as walks and reaches asked), the requests' staging, the
- * legs' and the trunk's asks for the next, the eyes, each hand, and the things it moves; then the final pose becomes the history:
- * current → prev → prev2.
+ * 1/60 s sub-step, in this order: balance (the legs and the trunk over them, as walks and reaches asked a sub-step before), the requests'
+ * staging, then for each part the request that has it — the legs, the eyes (else they look about), the trunk, each hand (else it keeps
+ * hold, or hangs free) — and the things it moves; then the final pose becomes the history: current → prev → prev2.
  */
 export class Self implements Resolving {
   readonly skeleton: Skeleton;
@@ -83,7 +84,12 @@ export class Self implements Resolving {
   updates = 0;
   share = 0;
   readonly frames = new WeakMap<Object3D, Interpolated>();
-  readonly asks: Asks = createAsks();
+  /** how it is asked to hold itself over its legs, by all its parts this sub-step: balance takes it at the start of the next */
+  readonly poise = new Poise();
+  /** where the request that has its legs asks them to take it this sub-step (balance takes it at the start of the next) */
+  going: Go | null = null;
+  /** where the request that has its eyes asks them to look, for a species whose posture turns its head (it has no neck chain) */
+  look: Readonly<Vector3> | null = null;
   readonly locomotion: Locomotion;
   /** its stepping legs, made with its balance */
   stepper: Stepper | null = null;
@@ -106,6 +112,8 @@ export class Self implements Resolving {
   private readonly tracked = new WeakMap<Object3D, Carrier>();
   private readonly snaps = new SnapChecks();
   private pending = 0;
+  /** whether it is posing a sub-step (its current pose is being written) */
+  private stepping = false;
   private behaviours: Behaviours | null = null;
 
   constructor(readonly species: AnySpecies, options: SelfOptions, start?: (skeleton: Skeleton) => Pose) {
@@ -165,9 +173,12 @@ export class Self implements Resolving {
     return yawOf(this.pose.local(0));
   }
 
-  /** the pose `reader` reads this body by: its own as posed so far; another's as it was before its update this frame, if it is ahead */
+  /**
+   * the pose `reader` reads this body by: its own as posed so far this sub-step (between sub-steps, its last); another's as it was before
+   * its update this frame, if it is ahead
+   */
   poseFor(reader: Resolving): ReadonlyPose {
-    if (reader === this) return this.frame.current;
+    if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
     if (reader instanceof Self) {
       this.near.add(reader);
       reader.near.add(this);
@@ -180,10 +191,16 @@ export class Self implements Resolving {
     return this.updates > reader.updates ? [this.before[0], this.before[1]] : [this.frame.prev, this.frame.prev2];
   }
 
-  moved(node: Object3D): Local | null {
+  /** where it moves `node`, as `reader` reads it (`poseFor`): its own this sub-step; another's as it was before its update this frame */
+  movedFor(reader: Resolving, node: Object3D): Local | null {
     const carrier = this.carried.get(node);
-    return carrier ? carrier.at(this.frame.time).current : null;
+    if (!carrier) return null;
+    if (reader === this) return carrier.at(this.frame.time).current;
+    return this.updates > reader.updates ? this.movedBefore.get(node) ?? carrier.current : carrier.current;
   }
+
+  /** where it moved each thing it carries as its last update began: what others read while it is ahead of them */
+  private readonly movedBefore = new Map<Object3D, Local>();
 
   restOf(bone: number): Readonly<Quaternion> {
     return this.binding.restOf(bone);
@@ -193,11 +210,21 @@ export class Self implements Resolving {
     return this.binding.scaleOf(bone);
   }
 
+  /** moves `node` itself from now on (a thing in both its hands), from where `carrier` has it */
+  carry(node: Object3D, carrier: Carrier): void {
+    const mover = movers.get(node);
+    if (mover instanceof Self) mover.leave(node);
+    this.carried.set(node, carrier);
+    movers.set(node, this);
+  }
+
   /** stops moving `node` itself: it reads it on from there, its history (velocity, spin) carried over */
   leave(node: Object3D): void {
     const carrier = this.carried.get(node);
     if (!carrier) return;
     this.carried.delete(node);
+    this.movedBefore.delete(node);
+    if (movers.get(node) === this) movers.delete(node);
     this.tracked.set(node, carrier);
   }
 
@@ -268,10 +295,16 @@ export class Self implements Resolving {
     return claims?.[claims.length - 1];
   }
 
-  /** every claim of `channel` run, the one that has it last */
-  private run(channel: Channel, f: Frame): void {
+  /**
+   * the step of the claim that has `channel` run, and what it asks returned; the legs' others tick too (a walk keeps its own count of
+   * how it is getting on), their asks unheard
+   */
+  private run(channel: Channel, f: Frame): Go | void {
     const claims = this.claims.get(channel);
-    if (claims) for (const claim of [...claims]) claim.step(f);
+    if (!claims?.length) return;
+    const owner = claims[claims.length - 1];
+    if (channel === 'go') for (const claim of claims.slice(0, -1)) claim.step(f);
+    return owner.step(f);
   }
 
   get log(): readonly LogEntry[] {
@@ -292,9 +325,16 @@ export class Self implements Resolving {
     this.pending = Math.max(0, this.pending - steps * STEP);
     this.before[0].copy(this.frame.prev);
     this.before[1].copy(this.frame.prev2);
+    for (const [node, carrier] of this.carried) {
+      const before = this.movedBefore.get(node) ?? { position: new Vector3(), quaternion: new Quaternion() };
+      before.position.copy(carrier.current.position);
+      before.quaternion.copy(carrier.current.quaternion);
+      this.movedBefore.set(node, before);
+    }
     this.worn = wornOf(this);
     if (this.frame.dev) this.checkPlacement(this.frame.dev);
     try {
+      this.stepping = true;
       for (let i = 0; i < steps; i++) {
         this.share = (i + 1) / steps;
         this.step();
@@ -302,6 +342,8 @@ export class Self implements Resolving {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       throw new Error(`${this.frame.time.toFixed(3)} s, ${this.beat() || 'idle'}: ${message}`, { cause });
+    } finally {
+      this.stepping = false;
     }
     this.updates++;
     this.binding.write(this.pose);
@@ -358,14 +400,15 @@ export class Self implements Resolving {
         f.dev.append(f.time, { check: `request not renewed for ${STALE} s: its story stopped stepping (s)`, value: f.time - request.renewed, limit: STALE, where: request.label });
       }
     }
-    this.run('go', f);
+    this.going = this.run('go', f) ?? null;
+    this.look = null;
     behaviours.gaze?.(f);
     this.run('look', f);
     this.run('trunk', f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
-      if (this.holding[hand]) behaviours.keep?.(f, hand);
-      this.run(`hand.${hand}`, f);
+      if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);
+      else if (this.holding[hand]) behaviours.keep?.(f, hand);
     }
     behaviours.things?.(f);
     current.facing = this.locomotion.facing;

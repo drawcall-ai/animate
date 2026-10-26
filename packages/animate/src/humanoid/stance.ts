@@ -1,6 +1,6 @@
 import type { Vector3 } from 'three';
 import type { Proportions } from './proportions';
-import type { Stance } from '../core/asks';
+import type { Stance } from '../core/go';
 
 /** feet about hip-width apart, turned out a little (heels 0.10–0.15 of the height apart, 0–12°) */
 export const defaultStance = (p: Proportions): Stance => ({ width: 0.065 * p.height, stagger: 0, crouch: 0, blade: 0, toeOut: 0.12 });

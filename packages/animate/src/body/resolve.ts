@@ -4,16 +4,16 @@ import type { Local } from './things';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
- * another body's as it was before that body's update this frame (the two now interact) — its bones as they stand in the scene, and
- * where a thing it moves itself is this sub-step (its moves come after its hands). As a reader: how many updates it has finished, the
- * share of the update's time its sub-step has reached, and the local transforms it has seen.
+ * another body's as it was before that body's update this frame — its bones as they stand in the scene, and where a thing it moves
+ * itself is, read the same way (its own this sub-step: its moves come after its hands). As a reader: how many updates it has finished,
+ * the share of the update's time its sub-step has reached, and the local transforms it has seen.
  */
 export interface Resolving {
   readonly updates: number;
   readonly share: number;
   readonly frames: WeakMap<Object3D, Interpolated>;
   poseFor(reader: Resolving): ReadonlyPose;
-  moved(node: Object3D): Local | null;
+  movedFor(reader: Resolving, node: Object3D): Local | null;
   /** a moving bone's rest frame in the scene (`turn⁻¹ · rest`), and its scale */
   restOf(bone: number): Readonly<Quaternion>;
   scaleOf(bone: number): number;
@@ -21,6 +21,9 @@ export interface Resolving {
 
 /** each body's object (bone −1) and moving bones, by node */
 export const anchors = new WeakMap<Object3D, { body: Resolving; bone: number }>();
+
+/** the body that moves each thing it carries in both hands itself (one hand's hangs from that hand's bone) */
+export const movers = new WeakMap<Object3D, Resolving>();
 
 /** a node's local transform from one update to the next, the update it was last read in, and under which parent */
 export interface Interpolated {
@@ -32,14 +35,14 @@ export interface Interpolated {
 
 /**
  * Where `node` is in the world this sub-step, as `reader` finds it (into `out`): the frame of the nearest anchor among its ancestors
- * (a body's object or moving bone, from that body's pose; a thing the reader moves, from where it moves it), times the local chain
+ * (a body's object or moving bone, from that body's pose; a thing a body moves, from where it moves it), times the local chain
  * below it — each local the app moves eased from where it was at the reader's last update to where it is now across the update's
  * sub-steps, exact at its end. Scale is left out of the result (a body's frames are metres) but carried through the chain.
  */
 export function resolve(reader: Resolving, node: Object3D, out: Local): Local {
   const chain = _chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
-    const moved = reader.moved(at);
+    const moved = movers.get(at)?.movedFor(reader, at);
     if (moved) {
       chain.premultiply(_anchor.compose(moved.position, moved.quaternion, at.scale));
       break;

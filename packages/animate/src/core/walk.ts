@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Frame } from './frame';
-import type { Go, Stance } from './asks';
+import type { Go, Stance } from './go';
 import { loadFactor } from './load';
 import { forwardOf, headingOf, wrapAngle } from './math';
 import type { Self } from '../body/self';
@@ -48,7 +48,7 @@ export class Walk {
   eta = Infinity;
   stalled = false;
   private readonly go: Go = { to: new Vector3(), speed: STROLL.speed, accel: STROLL.accel };
-  private readonly face = { yaw: 0 };
+
   private readonly end = new Vector3();
   private start: Vector3 | null = null;
   private leg = 0;
@@ -62,8 +62,8 @@ export class Walk {
     this.go.plant = way.plant;
   }
 
-  /** the asks of this sub-step */
-  step(f: Frame): void {
+  /** where it asks the legs to take the body this sub-step (none: a goal that is no point) */
+  step(f: Frame): Go | undefined {
     const { self, way, go } = this, yaw = this.where(f);
     if (this.arrives && !this.stalled) this.watch(f, yaw);
     go.velocity = way.velocity?.(f);
@@ -71,10 +71,9 @@ export class Walk {
     if (![go.to.x, go.to.z, ...(go.velocity?.toArray() ?? [])].every(Number.isFinite)) {
       if (!this.nowhere) f.dev?.append(f.time, { check: 'walk goal not finite', value: 1, limit: 0, where: 'goal' });
       this.nowhere = true;
-      return;
+      return undefined;
     }
-    self.asks.go = go;
-    if (way.stance) self.asks.stance = way.stance;
+    go.stance = way.stance;
     this.eta = etaOf(self, placeOf(self, f), go, yaw);
     const via = way.via ?? [];
     if (this.leg < via.length) {
@@ -85,9 +84,8 @@ export class Walk {
         previous = next;
       }
     }
-    if (yaw === null) return;
-    this.face.yaw = yaw;
-    self.asks.face = this.face;
+    go.face = yaw === null ? undefined : { yaw };
+    return go;
   }
 
   /** whether it has arrived: at its goal (or as near as its legs take it), turned to its facing and settled */
