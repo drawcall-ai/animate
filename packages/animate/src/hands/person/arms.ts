@@ -33,11 +33,7 @@ export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satis
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 
-/**
- * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the steps as a pendulum (the locomotion's
- * stride), opposite the legs, wider and bent walking faster; the clavicles and hands at rest. Endless; every joint follows its pose from
- * its history, so an arm a task let go of swings back into it. A hand holding anything (supported and worn things too) is left to it.
- */
+/** Free arms follow their own histories back into stride swing; holding hands keep their grips. */
 export function hanging(person: Reacher): Step {
   const goals = new Map<number, TrackedRotation>();
   let phase = person.locomotion.phase;
@@ -133,21 +129,13 @@ interface HandOptions extends Partial<Motion> {
   after?: number;
 }
 
-/**
- * Hand `side`'s wrist (and, given its rotation, the hand) to `target`, a sub-step at a time: the hand moving on from its history at
- * `Motion`'s pace (calm by default) — or, given `seconds`, along a minimum-jerk path there in that time — its arm solved to it and
- * braked; the clavicle shrugging for a hand up high and drawn forward for one far out; the elbow swivelled as where the hand is asks.
- * Leading (by default), a target out of the arm's reach standing asks balance to bow and bend the knees, or go up on the toes, for it.
- */
+/** Reach by a timed glide or pace, borrowing posture when leading. */
 export function reaching(person: Reacher, side: Side, target: Live<Goal>, options: HandOptions = {}): Step {
   const seconds = options.seconds, arm = new ChainTip(`${side}Arm`), bone = INDEX[`${side}Hand`];
-  // (gliding: set off once the hand need not wait for the body, in what is left of the reach's time — at least half of it)
   let glide: Glide | null = null, waited = 0, waiting = options.after ?? 0;
   // (waiting, the arm's joints kept as they were when it began: the hand neither dropped to its hang nor taken up by the arm's solve)
   let kept: [number, Quaternion][] | null = null;
   const joints = new Map<number, TrackedRotation>();
-  // (gliding: as the arm stood when the hand set off — the elbow from the shoulder, in the chest's frame; the clavicle — and how far the
-  // hand had to go)
   let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
   return (f) => {
     const goal = live(target, f);
@@ -181,7 +169,6 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       toFrame(placed.prev, from);
       toFrame(placed.prev2, was);
     }
-    // (gliding round the trunk to a goal in its way: to where it is moved clear of it, the elbow as the reach would have it there)
     const end = _end.copy(aim.position);
     const near = placed ? null : elbowPole(f, person.proportions, side, end, _spare);
     const held = near ? Math.max(0, clearWrist(f.current, person.proportions, side, end, near, _spare)) : 0;
@@ -235,7 +222,6 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   const at = options.on ? options.on.toWorld(target, _target, f.time).position : target.position;
   shrug(f, proportions, side, toward?.at ?? at, toward);
   const pole = options.pole === undefined ? elbowPole(f, proportions, side, at, _pole) : live(options.pole, f);
-  // (a goal in the trunk's way moved round it, the elbow as the reach would have it there; and how far the trunk holds the hand off it)
   let held = Math.max(toward?.held ?? 0, clearWrist(f.current, proportions, side, _cleared.copy(at), elbowPole(f, proportions, side, at, _spare), _spare));
   if (held > 0) {
     const shift = _cleared.sub(at);
@@ -283,7 +269,6 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
   const reach = v.length();
   const want = shoulder.addScaledVector(up, elevation * 0.03 * proportions.height);
   if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, PROTRACTION * proportions.height) / reach);
-  // (the joint on a sphere about the clavicle's origin: its rest offset turned toward it, in the chest's frame)
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(proportions.offsets[`${side}UpperArm`]).normalize(), to);
   if (from) goal.slerpQuaternions(from.clavicle, _q.copy(goal), from.share);

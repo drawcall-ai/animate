@@ -3,7 +3,8 @@ import { bodyOf, goalOn } from '../../things/hold';
 import { sideOf } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { grabbing } from './grab';
-import { carrying, liftingClear, wayOf } from './carry';
+import { carrying, liftingClear } from './carry';
+import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
 

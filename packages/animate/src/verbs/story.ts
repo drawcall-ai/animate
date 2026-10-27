@@ -4,7 +4,6 @@ import type { Problem } from '../kernel/dev';
 import type { Staging } from '../kernel/requests';
 import type { Self } from '../body/runtime';
 
-// (to be proposed upstream to @pmndrs/timeline: its `parallel` asks its timelines for `void`, which a verb's outcome is not)
 declare module '@pmndrs/timeline' {
   /**
    * `parallel` runs verbs as they are: their outcome is what a `yield*` of one returns, and `parallel` discards what its timelines

@@ -48,11 +48,7 @@ export interface WalkUp {
 /** Where a person stands to take or put something: there already, nowhere it could, or a walk there. */
 type Footing = 'there' | 'nowhere' | WalkUp;
 
-/**
- * whether a hand reaches `at` from where the body stands: within the arm's reach (`ARM_REACH`) of its shoulder (`side`'s, else the
- * shoulders' middle) as high as it stands upright, not as low as a bow or squat has it now — a `free` hand's up to a shoulder's
- * half-width further, the trunk turning its shoulder toward it, which a hand placing what it holds cannot (the load keeps the trunk square)
- */
+/** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
   const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight);
   return shoulder.distanceTo(at) < ARM_REACH * proportions.armLength + (free ? proportions.shoulderHalfWidth : 0);
@@ -64,16 +60,7 @@ function shoulderOf(person: Reacher, side?: Side): Vector3 {
     : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
 }
 
-/**
- * Where a person walks up to grips or a placing point: to stand facing them squarely with the grips' middle in comfortable reach — no
- * step if every grip is in comfortable reach of its shoulder already (a placing point: in the arm's reach), or it stands there already
- * (`there`). The last leg arrives clear of the support and, for a rigid two-hand placement, within a cone of its facing (aside at most
- * half as far as ahead), through a waypoint beside it when the direct path would cut through the support or across the load. It has
- * arrived turned and come to rest (or stood still on planted feet). A placing point is measured from the shoulders' middle, lowered and
- * bowed as far as a low point needs; one out of reach even so, a grip above the shoulders' reach on tiptoe, or no stand clear of the
- * bodies it keeps clear of, is a problem in the dev log (`nowhere`), and the body stands where it is, as a body its app drives always
- * does. A placing point that moves is followed, its translation and rotation, as it goes.
- */
+/** Find a comfortable stand clear of bodies and support, or report that no reachable stand exists. */
 export function footing(person: Reacher, to: Stand): Footing {
   const f0 = person.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
@@ -87,33 +74,24 @@ export function footing(person: Reacher, to: Stand): Footing {
   let face = facingFor(person, grips);
   const proportions = person.proportions;
   const height = grips.reduce((sum, grip) => sum + grip.at.y, 0) / grips.length;
-  // (the shoulders standing: as high above the floor under the feet — their ankles less the ankle's height — as the body's)
   const standing = floorUnder(person) + proportions.shoulderHeight;
   const reach = ARM_REACH * proportions.armLength;
-  // (a placing point low down the body lowers and bows for, as it does for a grip — as far as it must, at most squatting and bowing
-  // its most: its shoulders that much lower and, bowed, that much further on)
   const { drop, forward } = point ? stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach)) : { drop: 0, forward: 0 };
-  // (and one above the shoulders it rises onto its toes for, as far as they lift it: `handLowering`'s)
   const shoulders = standing - drop + (point ? Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing)) : 0);
   const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2)) + forward : Infinity;
   // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
   const distance = !point && grips.length === 2 && height < proportions.hipHeight ? LOW_STAND / Math.sqrt(loadFactor('mass' in to ? to.mass : 0)) : WITHIN;
-  // (both hands well below the hips — taking or setting down — it stands up to the load: no further beyond its toes than `LOW_AHEAD`
-  // taking and `LOW_SETTING` setting down, the load before the shins as the knees bend)
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
   const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
   const ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up);
   const middle = grips.reduce((sum, grip) => sum.add(grip.at), new Vector3()).divideScalar(grips.length);
-  // (out of reach from anywhere it could stand: a problem in the dev log, once, the body standing where it is)
   const nowhere = (check: string, value: number, limit = reach) => {
     f0.dev?.append(f0.time, { check, value, limit, where: `${grips.length} grips` });
     return 'nowhere' as const;
   };
-  // (a point lowered and bowed its most, or a grip above what the arm reaches from the shoulders up on the toes)
   if (point && Math.abs(height - shoulders) > reach) return nowhere(`approach: placing point from the shoulders' middle, lowered and bowed (m)`, Math.abs(height - shoulders));
   const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - (standing + TIPTOE * proportions.scale);
   if (above > reach) return nowhere('approach: grip above the shoulders on tiptoe (m)', above);
-  // (a body its app drives stands where the app puts it: nothing borrows its legs)
   if (person.drive) return 'there';
   const at = middle.clone(), there = new Vector3();
   // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
@@ -137,12 +115,9 @@ export function footing(person: Reacher, to: Stand): Footing {
   if (clearYaw === undefined) return nowhere('approach: no stand clear of nearby low segments', 1, 0);
   face = clearYaw;
   const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
-  // (one hand reaches round to its grip as it stands; two take theirs facing them — no further out than it would stand to them, so not
-  // past what a bow or squat reaches low down; what it holds it puts anywhere its arms reach)
   const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
   if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there';
   if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there';
-  // (standing where it would walk to already, as near as a walk there arrives)
   if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there';
   const rotation = (f: Frame) => {
     const current = point ? to.place(f) : null;

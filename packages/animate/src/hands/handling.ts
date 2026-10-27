@@ -11,6 +11,10 @@ export interface Pace {
   accel?: number;
 }
 
+export function paceOf(pace: Pace, defaults: Required<Pace>): Required<Pace> {
+  return { speed: pace.speed ?? defaults.speed, accel: pace.accel ?? defaults.accel };
+}
+
 /** A staging a hand works through for a request: it says when it has met its goal (`request.met`) or never can (`request.fail`). */
 type Handwork = NonReuseableTimeline<Frame>;
 

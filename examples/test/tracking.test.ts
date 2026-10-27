@@ -1,3 +1,4 @@
+import { run } from './dev-log';
 import { expect } from 'vitest';
 import { Group, Vector3 } from 'three';
 import { reach } from '@drawcall/animate';
@@ -5,7 +6,6 @@ import { lookAround, reaching, vr } from '../src/scenarios/tracking';
 import type { Cast, Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { route } from '../src/keys';
-import { run } from '../scripts/run';
 import { cases } from '../../packages/animate/test/open';
 
 // Open (expected to fail: each one fixed comes off the list), library defects:
@@ -62,6 +62,6 @@ test('looks around with an empty dev log', () => {
   expect(run(lookAround())).toEqual([]);
 });
 
-test('reaches round with an empty dev log', () => {
+test('reaches round with only its sustained-reach lateness diagnostic', () => {
   expect(run(reaching())).toEqual([]);
 });

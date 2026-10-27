@@ -1,13 +1,14 @@
 import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, release, type Body } from '../../src/index';
+import { carry, grab, reach, release, Body, dog } from '../../src/index';
+import { DOG } from '../skeletons/dog';
 import { person, play } from '../bodies';
 import { box, empty, roomOf } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
 /** `story` run on `body` for a moment: a misuse in it throws out of the frame it is found in */
-const playing = (body: Body, story: () => Generator<unknown, void, unknown>) => () => play(story as never, [body], 0.5);
+const playing = (body: Body, story: Parameters<typeof play>[0]) => () => play(story, [body], 0.5);
 
 describe('a misuse throws, saying what is wrong', () => {
   it('a grip the thing has no empty for', () => {
@@ -59,4 +60,73 @@ describe('a misuse throws, saying what is wrong', () => {
       }, [body], 6)).toThrow(`"slot" ${message}`);
     }
   });
+});
+
+it('rejects malformed placement speed instead of defaulting it', () => {
+  for (const speed of ['slow', 0, -1, NaN, Infinity]) {
+    const body = person(), room = roomOf(body);
+    const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 1, solid: false });
+    const slot = empty(room, 'slot', new Vector3(0.1, 1, 0.45));
+    slot.userData.speed = speed;
+    expect(() => play(function* () {
+      yield* grab(body, load, BOTH);
+      yield* carry(body, load, slot);
+    }, [body], 6)).toThrow('invalid userData.speed');
+  }
+});
+
+it('rejects creature carry routes it cannot traverse', () => {
+  for (const route of ['waypoints', 'destination', 'source', 'speed']) {
+    const body = new Body(dog(DOG)), room = roomOf(body);
+    const load = box(room, new Vector3(0, 0.25, 0.65), { mass: 0.1, solid: false });
+    const slot = empty(room, 'slot', new Vector3(0, 0.3, 0.7));
+    if (route === 'destination') {
+      empty(room, 'front', new Vector3(0, 0.3, 0.6));
+      slot.userData.approach = ['front'];
+    }
+    if (route === 'speed') slot.userData.speed = 0.2;
+    expect(() => play(function* () {
+      if (!(yield* grab(body, load, { jaw: 'left' }))) throw new Error('fixture grab failed');
+      if (route === 'source') {
+        if (!load.parent) throw new Error('fixture has no parent');
+        empty(load.parent.parent ?? load.parent, 'front', new Vector3(0, 0.3, 0.6));
+        load.parent.userData.approach = ['front'];
+      }
+      yield* carry(body, load, route === 'waypoints' ? [new Vector3(0, 0.4, 0.6), slot] : slot);
+    }, [body], 12)).toThrow(/creature hands do not support/);
+  }
+});
+
+it.each(['reach', 'grab', 'carry'] as const)('uses creature %s pace in its motion', (verb) => {
+  const after = (pace: { speed: number; accel: number }) => {
+    const body = new Body(dog(DOG)), room = roomOf(body);
+    const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
+    if (verb === 'carry') {
+      play(function* () { yield* grab(body, load, { jaw: 'left' }); }, [body], 6);
+      expect(body.holds(load)).toBe(true);
+    }
+    play(function* () {
+      if (verb === 'reach') yield* reach(body, { jaw: new Vector3(0, 0.4, 0.48) }, pace);
+      else if (verb === 'grab') yield* grab(body, load, { jaw: 'left' }, pace);
+      else yield* carry(body, load, new Vector3(0, 0.4, 0.48), pace);
+    }, [body], 0.3);
+    return body.bones.jaw.getWorldPosition(new Vector3());
+  };
+  expect(after({ speed: 0.2, accel: 2 })).not.toEqual(after({ speed: 0.8, accel: 2 }));
+  expect(after({ speed: 0.5, accel: 0.2 })).not.toEqual(after({ speed: 0.5, accel: 2 }));
+});
+
+it('lifts an attached item when a creature starts carrying it', () => {
+  const body = new Body(dog(DOG)), room = roomOf(body);
+  const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
+  body.bones.trunk.attach(load);
+  let finished = false;
+  play(function* () {
+    if (!(yield* grab(body, load, { jaw: 'left' }))) throw new Error('fixture grab failed');
+    expect(load.parent).toBe(body.bones.trunk);
+    yield* carry(body, load, new Vector3(0, 0.45, 0.5), { until: 0.2 });
+    finished = true;
+  }, [body], 12, () => finished);
+  expect(finished).toBe(true);
+  expect(load.parent).toBe(body.bones.jaw);
 });

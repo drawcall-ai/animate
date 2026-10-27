@@ -113,7 +113,7 @@ export function personOf(self: Self): Person {
 
 /**
  * How far a hand may be from a grip it starts holding (m): a reach ends once the wrist is within `REACHED.distance`, and the same frame's
- * hold step and fit may pull it up to ~2 cm more (tuned against the scenes' grabs, none of which comes closer than 1 cm to this limit).
+ * hold step and fit have an additional 2 cm allowance: artistic calibration for apparent contact during acquisition, not measured anatomy.
  */
 const GRIP_TAKEN = REACHED.distance + 0.02;
 /** How far a wrist may be from the grip it holds on what the body carries (m; tuned: a load carried at the body as it walks and turns

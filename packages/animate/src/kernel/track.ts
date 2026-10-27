@@ -11,15 +11,24 @@ type Pace = Pick<Motion, 'accel' | 'speed'>;
  * without lag (`follow` with its velocity), a jump braked. A goal not seen before is taken as still. One per goal followed.
  */
 export class TrackedPoint {
-  private last: Vector3 | null = null;
+  private readonly sample = new PointVelocity();
 
-  /** the next value of something at `prev2`, `prev` following `goal` (into `out`) */
   follow(prev2: Readonly<Vector3>, prev: Readonly<Vector3>, goal: Readonly<Vector3>, pace: Pace, dt: number, out: Vector3): Vector3 {
+    return follow(prev2, prev, goal, { ...pace, velocity: this.sample.read(goal, dt, pace.speed) }, dt, out);
+  }
+}
+
+/** Finite-difference target velocity; first samples and jumps are stationary goals. */
+export class PointVelocity {
+  private last: Vector3 | null = null;
+  private readonly velocity = new Vector3();
+
+  read(goal: Readonly<Vector3>, dt: number, speed = Infinity): Vector3 {
     const last = (this.last ??= goal.clone());
-    const velocity = _v.subVectors(goal, last).divideScalar(dt);
-    if (velocity.length() > (pace.speed ?? Infinity)) velocity.set(0, 0, 0);
+    this.velocity.subVectors(goal, last).divideScalar(dt);
+    if (!Number.isFinite(dt) || this.velocity.length() > speed) this.velocity.set(0, 0, 0);
     last.copy(goal);
-    return follow(prev2, prev, goal, { ...pace, velocity }, dt, out);
+    return this.velocity;
   }
 }
 

@@ -1,6 +1,7 @@
+import { run } from './dev-log';
 import { expect } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
-import { knownFailure, run } from '../scripts/run';
+import { knownFailure } from '../scripts/run';
 import { OUTLIER, SOLDIER } from '../src/skeletons';
 import { cases } from '../../packages/animate/test/open';
 

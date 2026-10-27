@@ -1,7 +1,8 @@
+import { run } from './dev-log';
 import { expect } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { reaching } from '../src/scenarios/tracking';
-import { knownFailure, run, seeded } from '../scripts/run';
+import { knownFailure, seeded } from '../scripts/run';
 import { cases } from '../../packages/animate/test/open';
 
 // Every scenario's run with development checks on: its dev log empty and its story finished; and a few of them varied (each person
