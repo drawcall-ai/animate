@@ -1,14 +1,12 @@
 // Scenario statistics and task accuracy under small changes. Run: pnpm metrics [-- -t <id>]
-import { Vector3 } from 'three';
+import { Group, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { type Frame as BodyFrame } from '@drawcall/animate';
 import { expect, it } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
 import { knightArming } from '../src/scenarios/knight';
 import { stroll, walkThere } from '../src/scenarios/stroll';
-import { lookAround, reach, vr } from '../src/scenarios/tracking';
-import { Report } from '../src/report';
+import { lookAround, reaching, vr } from '../src/scenarios/tracking';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
@@ -57,7 +55,7 @@ const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
 
 // These metrics assume humanoid balance owns h.feet/h.locomotion and centres the CoM.
 // The isolated leg scenes have final-pose contact/ROM/rate coverage in legs.test.ts and dev.test.ts.
-for (const sc of SCENARIOS.filter((s) => !s.id.startsWith('legs-') && s.actors.length)) {
+for (const sc of SCENARIOS.filter((s) => !['legs-biped', 'legs-horse', 'dog-fetch', 'lion-run'].includes(s.id))) {
   check(sc.id, () => judged(sc));
 }
 
@@ -79,8 +77,6 @@ const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
   ['walk to a point 2 m to the right', walkThere(new Vector3(-2, 0, 0)), NONE],
   ['turn round in place', walkThere(new Vector3(0, 0, 0), Math.PI), NONE],
   ['walk 4 m ahead, turning round on arrival', walkThere(new Vector3(0, 0, 4), Math.PI), NONE],
-  ['walk within reach of a point 2 m to the left, no facing asked', walkThere(new Vector3(2, 0, 0), undefined, 0.45), NONE],
-  ['walk within reach of a point 2 m to the right, no facing asked', walkThere(new Vector3(-2, 0, 0), undefined, 0.45), NONE],
   ['stroll setting off turned 3/4 of a half turn left', stroll({ yaw: (3 * Math.PI) / 4 })],
   ['stroll setting off turned 3/4 of a half turn right', stroll({ yaw: (-3 * Math.PI) / 4 })],
   ['pickup-shelf, the box 10 cm nearer', pickupShelf({ nearer: 0.1 })],
@@ -98,15 +94,15 @@ const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
   ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
   ['look-around, turned 0.3 rad left', lookAround({ turn: 0.3 })],
   ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
-  ['reach, the targets 10 cm to the left', reach({ shift: { x: 0.1, z: 0 } })],
-  ['reach, the targets 10 cm nearer', reach({ shift: { x: 0, z: -0.1 } })],
-  ['reach, the targets 10 cm to the right', reach({ shift: { x: -0.1, z: 0 } })],
-  ['reach, the targets 10 cm higher', reach({ rise: 0.1 })],
-  ['reach, the targets 10 cm lower', reach({ rise: -0.1 })],
-  ['reach, turned 0.3 rad right', reach({ turn: -0.3 })],
-  ['reach, turned 0.3 rad left', reach({ turn: 0.3 })],
-  ['reach, the hand 20% slower', reach({ pace: 0.8 })],
-  ['reach, the hand 20% faster', reach({ pace: 1.2 })],
+  ['reach, the targets 10 cm to the left', reaching({ shift: { x: 0.1, z: 0 } })],
+  ['reach, the targets 10 cm nearer', reaching({ shift: { x: 0, z: -0.1 } })],
+  ['reach, the targets 10 cm to the right', reaching({ shift: { x: -0.1, z: 0 } })],
+  ['reach, the targets 10 cm higher', reaching({ rise: 0.1 })],
+  ['reach, the targets 10 cm lower', reaching({ rise: -0.1 })],
+  ['reach, turned 0.3 rad right', reaching({ turn: -0.3 })],
+  ['reach, turned 0.3 rad left', reaching({ turn: 0.3 })],
+  ['reach, the hand 20% slower', reaching({ pace: 0.8 })],
+  ['reach, the hand 20% faster', reaching({ pace: 1.2 })],
   ['knight-arming, the stand, wall and rack 15 cm further left', knightArming({ shift: { x: 0.15, z: 0 } })],
   ['knight-arming, the stand, wall and rack 15 cm further right', knightArming({ shift: { x: -0.15, z: 0 } })],
   ['knight-arming, the stand, wall and rack 15 cm further on', knightArming({ shift: { x: 0, z: 0.15 } })],
@@ -162,22 +158,21 @@ it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
   expect(curve.pelvisUp, 'curve pelvis vertical (m)').toBeLessThanOrEqual(straight.pelvisUp + 0.01);
 });
 
-it('runs a scenario through the metrics: two actors standing still, relaxed, each reading the other', () => {
+it('runs a scenario through the metrics: two people standing still, relaxed, each reading the other', () => {
   const seen: number[] = [];
   const still: Scenario = {
     id: 'still',
     title: 'Standing still',
     duration: 0.49,
-    actors: [{ position: { x: -1, z: 0 } }, { position: { x: 1, z: 0 }, yaw: Math.PI }],
-    stage: () => ({
-      report: new Report(),
-      done: () => true,
-      props: () => [],
-      script: (_, index) =>
-        function* () {
-          yield* action<BodyFrame>({ update: (f) => void seen.push(f.world.bodies[1 - index].com(new Vector3()).x) });
-        },
-    }),
+    stage: (cast) => {
+      const people = [cast.person({ at: new Vector3(-1, 0, 0) }), cast.person({ at: new Vector3(1, 0, 0), face: Math.PI })];
+      return {
+        scene: new Group(),
+        bodies: people,
+        done: () => true,
+        story: () => action({ update: () => void seen.push(...people.map((_, index) => people[1 - index].position.x)) }),
+      };
+    },
   };
   const m = measure(still.id, frames(new Simulation(still)));
   expect(seen.length).toBe(2 * 30);

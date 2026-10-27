@@ -1,13 +1,13 @@
 import { Vector3, type Group, type Object3D } from 'three';
 import type { ReusableTimeline } from '@pmndrs/timeline';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, humanoid, type BodyOptions, type HumanoidBone, type Species } from '@drawcall/animate';
+import { Body, humanoid, type BodyOptions, type Species } from '@drawcall/animate';
 import { PERSON, scaled, type PersonSkeleton } from './skeletons';
 
 export const FIXED_DT = 1 / 60;
 
 /** A person: a body of a humanoid species. */
-export type Person = Body<Species<HumanoidBone, 'left' | 'right'>>;
+export type Person = Body<Species<string, 'left' | 'right'>>;
 
 /** How a run makes its bodies: checked or not, on which person's skeleton, dressed in which models, varied how. */
 export interface CastOptions {

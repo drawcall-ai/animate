@@ -1,7 +1,7 @@
 import { Group, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { reach, walkTo } from '@drawcall/animate';
-import type { Person, Scenario } from '../scenario';
+import type { Scenario } from '../scenario';
 import { OUTLIER, PERSON, SOLDIER } from '../skeletons';
 import { ball } from '../things';
 
@@ -23,16 +23,14 @@ export function proportions(): Scenario {
       const people = [PERSON, SOLDIER, OUTLIER].map((skeleton, lane) => cast.person({ at: new Vector3(LANES[lane], 0, 0) }, skeleton));
       const balls = LANES.map((x) => ball(scene, 'ball', 0.04, new Vector3(x, BALL.height, BALL.ahead)));
       let back = 0;
-      const touchAndReturn = function* (person: Person, lane: number) {
-        yield* walkTo(person, new Vector3(LANES[lane], 0, 3.6));
-        yield* reach(person, { right: balls[lane].position });
-        yield* walkTo(person, new Vector3(LANES[lane], 0, 0), { face: 0 });
-        back++;
-      };
       return {
         scene,
         bodies: people,
-        story: () => parallel('all', ...people.map((person, lane) => touchAndReturn(person, lane))),
+        story: () => parallel('all', ...people.map(function* (person, lane) {
+          yield* walkTo(person, new Vector3(LANES[lane], 0, 3.6));
+          yield* reach(person, { right: balls[lane].position });
+          if (yield* walkTo(person, new Vector3(LANES[lane], 0, 0), { face: 0 })) back++;
+        })),
         done: () => back === people.length,
       };
     },
