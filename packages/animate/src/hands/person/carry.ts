@@ -6,7 +6,7 @@ import { movingPoint, type Live, type Motion, type Placement, type Goal } from '
 import { loadFactor } from '../../kernel/load';
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
 import { course, type Course, type Waypoint } from '../../kernel/course';
-import { looking, SHIFT } from '../../look/gaze';
+import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
 import { carriedBy, handsOn, heldMass, supported, take } from '../../things/hold';
 import type { Thing } from '../../things/thing';
@@ -78,7 +78,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   }
   const motion = { ...CARRYING, accel: options.accel ?? CARRYING.accel, speed: CARRYING.speed };
   if (plan === 'there') {
-    yield* parallel<Frame>('race', aiming(person, request, thing, end), function* () {
+    yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), function* () {
       yield* along(person, request, thing, way, motion, resting, options.speed);
     });
     request.met();
@@ -98,7 +98,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
     request.eta = Math.max(0, plan.walk.eta - RAISE_LEAD) + RAISE / loadFactor(thing.mass);
     return atBody(f);
   };
-  yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(person, eyes, SHIFT)), function* () {
+  yield* parallel<Frame>('race', noticing(person, request, eyes), function* () {
     yield* parallel<Frame>('all', function* () {
       // (extension and turning overlap; a level or downward carry has no rise to wait for)
       yield* action<Frame>({ until: () => lifted || carrier.current.position.y >= from + rise * APPROACH_RISE });
@@ -117,11 +117,6 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   });
   request.met();
   yield* holding(person, request, thing, new CarryAim(person, thing, motion), end);
-}
-
-/** the eyes on where the carry goes (borrowed), for as long as the carry runs */
-function aiming(person: Reacher, request: Request, thing: Thing, end: (f: Frame) => Goal) {
-  return during(request, 'look', 'borrowed', looking(person, (f) => end(f).position, SHIFT));
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
@@ -176,14 +171,14 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
   const resting = supported(thing);
   yield* lifting(person, request, thing);
   const carrier = person.track(thing.object);
-  // (up from where it is held, drawn in toward the hips to within `CLEAR.out` of them: held at arm's length, the arms would fall short of
-  // it once the reach no longer bows the body for them)
-  const root = person.pose.position(0);
-  const to = carrier.current.position.clone(), out = Math.hypot(to.x - root.x, to.z - root.z), most = CLEAR.out * person.proportions.armLength;
-  if (out > most) to.set(root.x + (to.x - root.x) * most / out, to.y, root.z + (to.z - root.z) * most / out);
-  to.y += CLEAR.height * person.scale;
-  const seconds = Math.max(CLEAR.seconds, Math.max(0, out - most) / ALONG.speed) / person.tempo;
-  yield* travel(person, request, thing, [[seconds, { position: to, quaternion: carrier.current.quaternion.clone() }]], CARRYING, resting, CLEAR.near * person.scale);
+  // (first up off what it rests on, then drawn in toward the hips to within `CLEAR.out` of them: held at arm's length, the arms would
+  // fall short of it once the reach no longer bows the body for them)
+  const quaternion = carrier.current.quaternion.clone(), up = carrier.current.position.clone(), root = person.pose.position(0);
+  up.y += CLEAR.height * person.scale;
+  const way: Waypoint[] = [[CLEAR.seconds / person.tempo, { position: up, quaternion }]];
+  const out = Math.hypot(up.x - root.x, up.z - root.z), most = CLEAR.out * person.proportions.armLength;
+  if (out > most) way.push([(out - most) / ALONG.speed / person.tempo, { position: new Vector3(root.x + (up.x - root.x) * most / out, up.y, root.z + (up.z - root.z) * most / out), quaternion }]);
+  yield* travel(person, request, thing, way, CARRYING, resting, CLEAR.near * person.scale);
 }
 
 /**

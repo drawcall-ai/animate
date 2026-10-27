@@ -478,12 +478,14 @@ function restPose(skeleton: Skeleton, at?: Vector3, face = 0): Pose {
 function checkShear(binding: Binding, dev: Dev): void {
   binding.object.updateMatrixWorld(true);
   const inverse = new Matrix4().copy(binding.object.matrixWorld).invert();
+  // (a pose turns and moves bones, so each must rest as a turn, a move and one scale: its matrix what those recompose to, as rig checks it)
+  const close = (a: number, b: number) => Math.abs(a - b) <= 1e-8 * Math.max(1, Math.abs(a), Math.abs(b));
   for (const [name, node] of Object.entries(binding.bones)) {
     const rest = new Matrix4().multiplyMatrices(inverse, node.matrixWorld), position = new Vector3(), turn = new Quaternion(), scale = new Vector3();
     rest.decompose(position, turn, scale);
-    const spread = Math.max(scale.x, scale.y, scale.z) / Math.min(scale.x, scale.y, scale.z) - 1;
-    const sheared = !new Matrix4().compose(position, turn, scale).equals(rest) && rest.elements.some((x, k) => Math.abs(x - new Matrix4().compose(position, turn, scale).elements[k]) > 1e-6);
-    if (spread > 1e-6 || sheared) dev.append(0, { check: 'a bone sheared or scaled unevenly at rest (spread)', value: spread, limit: 0, where: name });
+    const recomposed = new Matrix4().compose(position, turn, scale).elements;
+    const even = close(Math.abs(scale.x), Math.abs(scale.y)) && close(Math.abs(scale.y), Math.abs(scale.z));
+    if (!even || !rest.elements.every((x, k) => close(x, recomposed[k]))) dev.append(0, { check: 'a bone sheared or scaled unevenly at rest', value: 1, limit: 0, where: name });
   }
 }
 

@@ -65,9 +65,10 @@ export interface Interpolated {
  * Where `node` is in the world this sub-step, as `reader` finds it (into `out`): the frame of the nearest anchor among its ancestors
  * (a body's object or moving bone, from that body's pose; a thing a body moves, from where it moves it), times the local chain
  * below it — each local the app moves eased from where it was at the reader's last update to where it is now across the update's
- * sub-steps, exact at its end. Scale is left out of the result (a body's frames are metres) but carried through the chain.
+ * sub-steps, exact at its end, or as it is now if `fresh` (the app moves it every sub-step). Scale is left out of the result (a body's
+ * frames are metres) but carried through the chain.
  */
-export function resolve(reader: Resolving, node: Object3D, out: Placement): Placement {
+export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh = false): Placement {
   const chain = _chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
     const moved = movers.get(at)?.movedFor(reader, at);
@@ -80,7 +81,8 @@ export function resolve(reader: Resolving, node: Object3D, out: Placement): Plac
       chain.premultiply(frameOf(anchor.body.poseFor(reader), anchor.body, anchor.bone));
       break;
     }
-    chain.premultiply(localOf(reader, at));
+    if (fresh) at.updateMatrix();
+    chain.premultiply(fresh ? at.matrix : localOf(reader, at));
   }
   chain.decompose(out.position, out.quaternion, _scale);
   return out;

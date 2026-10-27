@@ -4,7 +4,7 @@ import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import type { Carrier } from '../../kernel/carrier';
 import { ChainTip, reached } from '../../kernel/tip';
-import { looking } from '../../look/gaze';
+import { noticing } from '../../look/gaze';
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
 import { bodyOf, goalOn, grasp, handsOn, take } from '../../things/hold';
@@ -154,7 +154,7 @@ function* coming(self: Handed, request: Request, at: (f: Frame) => Readonly<Vect
     request.eta = walk.eta + after;
     return go;
   }, (f, _, time) => time > 0 && (walk.stalled || walk.arrived(f)));
-  yield* self.gazer ? parallel<Frame>('race', legs, during(request, 'look', 'borrowed', looking(self, at))) : legs;
+  yield* self.gazer ? parallel<Frame>('race', legs, noticing(self, request, at)) : legs;
   return !walk.stalled;
 }
 
@@ -222,10 +222,12 @@ export function* bringing(self: Handed, request: Request, hand: string, thing: T
   // (the hand where it puts the thing there, as it holds it: its tip goes there, the chain bending as it may)
   const placed = self.track(thing.object).current, inverse = self.pose.rotation(bone).clone().invert();
   const inHand = { position: placed.position.clone().sub(self.pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(placed.quaternion) };
+  // (turned as `to` asks, if it does: else as it is held)
   const handAt = (f: Frame): Goal => {
     const at = to(f), turn = at.quaternion ?? self.track(thing.object).at(f.time).current.quaternion;
-    const quaternion = _hq.copy(turn).multiply(_iq.copy(inHand.quaternion).invert());
-    return { position: inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position) };
+    const quaternion = turn.clone().multiply(_iq.copy(inHand.quaternion).invert());
+    const position = inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position);
+    return at.quaternion ? { position, quaternion } : { position };
   };
   yield* tipping(self, request, hand, handAt);
   request.met();
@@ -255,7 +257,7 @@ function* nuzzling(self: Handed, request: Request, hand: string, target: (f: Fra
 }
 
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-const _hq = new Quaternion(), _iq = new Quaternion();
+const _iq = new Quaternion();
 
 /**
  * A creature's hands for the verbs: one at a time, each the tip of its chain — it walks up to stand with the grip or target in its reach,

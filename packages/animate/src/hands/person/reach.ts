@@ -9,10 +9,9 @@ import { during, type Request } from '../../kernel/requests';
 import { grasp, onBody, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { CALM, reaching } from './arms';
-import { ARM_REACH } from './bend';
-import { footing, walking } from './stand';
-import { looking, SHIFT } from '../../look/gaze';
-import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
+import { armReaches, footing, walking } from './stand';
+import { noticing } from '../../look/gaze';
+import { SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { LOAD_RESERVE } from './clearance';
 
@@ -163,8 +162,7 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
  * keep there. `false` if it can stand nowhere in reach.
  */
 export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: { speed?: number; accel?: number }) {
-  const most = ARM_REACH * person.proportions.armLength + person.proportions.shoulderHalfWidth;
-  const inReach = aims.every(({ side, target }) => person.pose.position(INDEX[`${side}UpperArm`]).distanceTo(target(person.frame).position) < most);
+  const inReach = aims.every(({ side, target }) => armReaches(person, target(person.frame).position, side, true));
   const plan = inReach ? 'there' : footing(person, { grips: aims.map(({ side, target }) => ({ side, at: target(person.frame).position.clone() })), mass: 0 });
   if (plan === 'nowhere') {
     request.fail();
@@ -189,7 +187,7 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
     if (!(yield* walking(request, plan, Math.max(0, lasts - NEAR)))) request.fail();
     stood = true;
   }, function* () {
-    yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(person, middle, SHIFT)), function* () {
+    yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
       yield* action<Frame>({ until: near });
       const eta = (f: Frame) => void (request.eta = Math.max(0, (Number.isNaN(setOff) ? (setOff = f.time) : setOff) + lasts - f.time));
       yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ update: eta, until: there }));

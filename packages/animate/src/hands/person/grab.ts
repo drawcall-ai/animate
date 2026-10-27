@@ -1,8 +1,8 @@
 import { Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { looking, SHIFT } from '../../look/gaze';
-import { headingOf, smoothstep, wrapAngle } from '../../kernel/math';
+import { inView, noticing } from '../../look/gaze';
+import { smoothstep } from '../../kernel/math';
 import type { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
 import { reaching } from './arms';
@@ -13,9 +13,6 @@ import { bringShoulder } from './bend';
 import { gripAt, reachFor, type Taking } from './reach';
 import { flat, footing, walking } from './stand';
 
-/** Horizontal view cone (rad, ~80°): neck and head turn ~75°, with the eyes taking the rest. Further aside, wait for the approach to turn
- * the body before looking. */
-const IN_VIEW = 1.4;
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
 const LOOKING = 0.6;
 /** Prepare the knees during the last landing (s before arrival). */
@@ -57,18 +54,13 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   const com = new Vector3(), ahead = new Vector3();
   let noticed = NaN, returning = false;
   const close = (f: Frame) => flat(f.prev.com(com), middle(f)) < CLOSE * person.scale;
-  const seen = (f: Frame) => {
-    const at = middle(f);
-    f.prev.com(com);
-    return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - person.locomotion.facing)) < IN_VIEW;
-  };
   const gaze = (f: Frame) => {
     if (Number.isNaN(noticed)) noticed = f.time;
     returning ||= close(f) || near();
     return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(person, f.prev, ahead);
   };
   const waitingHands = function* () {
-    yield* action<Frame>({ until: (f) => stood || (seen(f) && raising()) });
+    yield* action<Frame>({ until: (f) => stood || (inView(person, middle(f), f) && raising()) });
     // (the hands rising halfway toward what they take, before the body has come up to it)
     yield* parallel<Frame>('race', action<Frame>({ until: () => stood || near() }), () => parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked',
       reaching(person, take.side, (f) => ({ position: f.prev.position(INDEX[`${take.side}UpperArm`]).clone().lerp(gripAt(person, take, f, _grip), 0.5) }), { lead: false })))));
@@ -83,9 +75,8 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     });
     stood = true;
   }, function* () {
-    // (the eyes never borrowed toward what they cannot see; they leave it as the hands close on it)
-    yield* action<Frame>({ until: (f) => stood || seen(f) });
-    yield* parallel<Frame>('race', waitingHands, during(request, 'look', 'borrowed', looking(person, gaze, SHIFT)));
+    // (the eyes leave it as the hands close on it)
+    yield* parallel<Frame>('race', waitingHands, noticing(person, request, gaze, { seen: middle, anyway: () => stood }));
     held = true;
   });
   return request.outcome !== 'failed';

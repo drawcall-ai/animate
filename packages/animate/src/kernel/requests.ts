@@ -35,7 +35,7 @@ interface Filed {
 
 /**
  * A verb's request: from when its story starts it until its verb ends (its `finally`, which runs on cancel too). Its staging runs
- * every sub-step of the body it is filed with, before the body moves; it claims body parts, says when what it moves will arrive
+ * every sub-step of the body it is filed with, after its balance and before its parts move; it claims body parts, says when what it moves will arrive
  * (`eta`), and whether it has `met` its goal or `failed` (can never meet it). Newer requests take a part from older ones of the same
  * tier; asked beats borrowed; among borrowers of the legs, the first keeps them.
  */

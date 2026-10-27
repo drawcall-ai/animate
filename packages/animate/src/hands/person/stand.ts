@@ -46,6 +46,22 @@ type Stand =
 type Footing = 'there' | 'nowhere' | { walk: Walk; arrived: (f: Frame) => boolean };
 
 /**
+ * whether a hand reaches `at` from where the body stands: within the arm's reach (`ARM_REACH`) of its shoulder (`side`'s, else the
+ * shoulders' middle) — a `free` hand's up to a shoulder's half-width further, the trunk turning its shoulder toward it, which a hand
+ * placing what it holds cannot (the load keeps the trunk square)
+ */
+export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
+  const proportions = person.proportions;
+  return shoulderOf(person, side).distanceTo(at) < ARM_REACH * proportions.armLength + (free ? proportions.shoulderHalfWidth : 0);
+}
+
+function shoulderOf(person: Reacher, side?: Side): Vector3 {
+  return side
+    ? person.pose.position(INDEX[`${side}UpperArm`]).clone()
+    : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
+}
+
+/**
  * Where a person walks up to grips or a placing point: to stand facing them squarely with the grips' middle in comfortable reach — no
  * step if every grip is in comfortable reach of its shoulder already (a placing point: in the arm's reach), or it stands there already
  * (`there`). The last leg arrives clear of the support and, for a rigid two-hand
@@ -87,9 +103,6 @@ export function footing(person: Reacher, to: Stand): Footing {
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
   const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
   const ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up);
-  const shoulder = (side?: Side) => side
-    ? person.pose.position(INDEX[`${side}UpperArm`])
-    : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
   const middle = grips.reduce((sum, grip) => sum.add(grip.at), new Vector3()).divideScalar(grips.length);
   // (a point out of reach from anywhere it could stand, lowered and bowed its most, is a problem in the dev log, once: the body stays
   // standing where it is)
@@ -135,8 +148,8 @@ export function footing(person: Reacher, to: Stand): Footing {
   face = clearYaw;
   const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
   // (one hand reaches round to its grip as it stands; two take theirs facing them; what it holds it puts anywhere its arms reach)
-  if ((grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulder(side), at) < IN_REACH * proportions.armLength)) return 'there';
-  if (point && grips.every(({ side, at }) => shoulder(side).distanceTo(at) < reach)) return 'there';
+  if ((grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there';
+  if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there';
   // (standing where it would walk to already, as near as a walk there arrives)
   if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there';
   const rotation = (f: Frame) => {

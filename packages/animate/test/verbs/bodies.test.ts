@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { Body, carry, dog, grab, horse, lookAt, release, wait, walkTo } from '../../src/index';
@@ -38,10 +38,14 @@ describe('bodies together', () => {
     const room = roomOf(owner, labrador);
     const stick = box(room, new Vector3(0.3, 0.03, 3), { size: new Vector3(0.04, 0.04, 0.5), mass: 0.2, solid: false, name: 'stick' });
     empty(stick, 'middle', new Vector3()).userData.free = true;
+    // (brought to a place turned across the dog, the stick turns with it)
+    const across = empty(room, 'across', new Vector3(0, 0.55, -0.9));
+    across.rotation.y = Math.PI / 2;
     const steps: string[] = [];
     play(function* () {
       steps.push(`fetched ${yield* grab(labrador, stick, { jaw: 'middle' })}`);
-      steps.push(`brought ${yield* carry(labrador, stick, new Vector3(0, 0.55, -0.9))}`);
+      steps.push(`brought ${yield* carry(labrador, stick, across)}`);
+      expect(stick.getWorldQuaternion(new Quaternion()).angleTo(across.getWorldQuaternion(new Quaternion()))).toBeLessThan(0.1);
       steps.push(`taken ${yield* grab(owner, stick, { right: 'right' })}`);
       release(labrador, stick);
       steps.push(stick.parent === owner.bones.rightHand ? 'in the owner\'s hand' : 'elsewhere');

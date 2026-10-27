@@ -3,10 +3,13 @@ import type { Frame } from '../kernel/frame';
 import type { Self } from '../body/runtime';
 import type { Goal } from '../kernel/goal';
 import { bodyOf } from '../things/hold';
+import { resolve } from '../things/resolve';
+import { Carrier } from '../kernel/carrier';
 
 /**
  * Where a verb goes: a point (`Vector3`), a place that moves with its parent and sets the orientation too (an `Object3D`: an empty, a
- * bone), or either as it is at each of the body's sub-steps (a function of the body's time, s).
+ * bone), or either as it is at each of the body's sub-steps (a function of the body's time, s). An object is read eased across the
+ * update from where the app last left it; an object a function returns is read as the function leaves it, each sub-step.
  */
 export type Target = Vector3 | Object3D | ((time: number) => Vector3 | Object3D);
 
@@ -19,7 +22,15 @@ interface Found extends Goal {
 /** `target` as `self` finds it each sub-step (once a sub-step: read again in the same sub-step, as it was) */
 export function finder(self: Self, target: Target): (f: Frame) => Found {
   const found: Found = { position: new Vector3() };
-  const turn = new Quaternion(), velocity = new Vector3();
+  const turn = new Quaternion(), velocity = new Vector3(), placed = { position: new Vector3(), quaternion: new Quaternion() };
+  // (a function's object as it leaves it each sub-step, not eased across the update as the app moving it once an update would be)
+  let made: Carrier | null = null;
+  const fresh = (at: Object3D, time: number) => {
+    resolve(self, at, placed, true);
+    if (made) made.move(time, placed.position, placed.quaternion);
+    else (made = new Carrier(placed.position, placed.quaternion)).place(time, placed.position, placed.quaternion);
+    return made;
+  };
   let time = NaN;
   return (f) => {
     if (time === f.time) return found;
@@ -31,7 +42,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     }
     const on = bodyOf(at);
     if (on) self.meet(on);
-    const frame = self.track(at);
+    const frame = typeof target === 'function' ? fresh(at, f.time) : self.track(at);
     found.position.copy(frame.current.position);
     found.quaternion = turn.copy(frame.current.quaternion);
     found.velocity = frame.velocity(velocity);

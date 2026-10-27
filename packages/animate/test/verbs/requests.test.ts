@@ -1,4 +1,6 @@
-import { Vector3 } from 'three';
+import { Object3D, Vector3 } from 'three';
+import { finder } from '../../src/verbs/targets';
+import { selfOf } from '../../src/body/body';
 import { parallel, runTimeline } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { grab, lookAt, reach, wait, walkTo, watch } from '../../src/index';
@@ -108,6 +110,22 @@ describe('requests', () => {
       outcomes.push(yield* walkTo(body, new Vector3(0, 0, 9), { until: 0.5 }));
     }, [body], 10, () => outcomes.length === 3);
     expect(outcomes).toEqual([true, false, true]);
+  });
+});
+
+describe('targets', () => {
+  it("a function's object is found where it leaves it each sub-step, not eased across the update", () => {
+    const body = person(), room = roomOf(body), marker = new Object3D();
+    room.add(marker);
+    const find = finder(selfOf(body), (time) => {
+      marker.position.set(time, 1, 1);
+      return marker;
+    });
+    const off: number[] = [];
+    claim(body, 'look', (f) => void off.push(Math.abs(find(f).position.x - f.time)), 'borrowed');
+    body.update(dt);
+    body.update(4 * dt);
+    expect(Math.max(...off)).toBeLessThan(1e-9);
   });
 });
 

@@ -1,5 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
-import { clamp, wrapAngle, smoothstep } from '../kernel/math';
+import { clamp, headingOf, wrapAngle, smoothstep } from '../kernel/math';
+import { action } from '@pmndrs/timeline';
+import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import { follow, followRotation } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
@@ -20,6 +22,26 @@ export interface Looker {
   /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
   lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
+
+/** Horizontal view cone (rad, ~80° each side): neck and head turn ~75°, with the eyes taking the rest. */
+const IN_VIEW = 1.4;
+
+/** whether `point` is in view of the body as it faces (from where its weight was the sub-step before) */
+export function inView(self: Looker, point: Readonly<Vector3>, f: Frame): boolean {
+  const com = f.prev.com(_com);
+  return Math.abs(wrapAngle(headingOf(point.x - com.x, point.z - com.z) - self.locomotion.facing)) < IN_VIEW;
+}
+
+/**
+ * the eyes on `target` (borrowed by `request`, at a gaze shift's pace) from when `seen` (the target, unless given) is in view, or
+ * `anyway`: they never borrow toward what they cannot see, but wait for the body to turn to it
+ */
+export function* noticing(self: Looker, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean } = {}) {
+  yield* action<Frame>({ until: (f) => anyway?.() || inView(self, seen(f), f) });
+  yield* during(request, 'look', 'borrowed', looking(self, target, SHIFT));
+}
+
+const _com = new Vector3();
 
 /** the most a head turns to look about (rad/s², rad/s): a glance aside, at most */
 const GLANCE = { turnAccel: 40, turnSpeed: 6 };
