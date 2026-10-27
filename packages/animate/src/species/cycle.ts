@@ -29,9 +29,8 @@ function valueAt(keys: JointCycle['keys'], u: number): number {
   if (u0 > x) u0 -= 1;
   let u1 = at(i + 1)[0];
   while (u1 <= u0) u1 += 1;
-  const t = (x - u0) / (u1 - u0);
+  const t = (x - u0) / (u1 - u0), width = u1 - u0;
   const [p0, p1, p2, p3] = [at(i - 1)[1], at(i)[1], at(i + 1)[1], at(i + 2)[1]];
-  const width = u1 - u0;
   const before = (u0 - at(i - 1)[0] + 1) % 1, after = (at(i + 2)[0] - u1 + 2) % 1;
   // Non-uniform key spacing: scale the neighboring secants by this interval, preserving phase rates.
   const m0 = (p2 - p0) * width / (width + before), m1 = (p3 - p1) * width / (width + after);
@@ -39,9 +38,8 @@ function valueAt(keys: JointCycle['keys'], u: number): number {
 }
 
 /**
- * The cycle's phase for a leg `u` into its cycle (0 … 1) whose stance lasts `duty` of it: the
- * stance and the swing each stretched onto the cycle's own (a reference curve keeps its shape over
- * contact, whatever the speed's duty)
+ * The cycle's phase for a leg `u` into its cycle (0 … 1) whose stance lasts `duty` of it: the stance and the swing each stretched onto the
+ * cycle's own (a reference curve keeps its shape over contact, whatever the speed's duty)
  */
 function cyclePhase(u: number, duty: number, cycleDuty: number): number {
   const x = u - Math.floor(u);
@@ -49,12 +47,9 @@ function cyclePhase(u: number, duty: number, cycleDuty: number): number {
   return cycleDuty + ((x - duty) / (1 - duty)) * (1 - cycleDuty);
 }
 
-/** the cycle at leg phase `u` of a stride whose stance lasts `duty` (rad: its keys are degrees) */
-export const angleAt = (c: JointCycle, u: number, duty: number, blend = 0) => cycleAt(c, cyclePhase(u, duty, c.duty), blend);
-
-/** The reference at its own phase, independently of the contact schedule. */
-function cycleAt(c: JointCycle, phase: number, blend = 0): number {
-  const base = valueAt(c.keys, phase);
+/** the cycle at leg phase `u` of a stride whose stance lasts `duty`, its alternate's share `blend` (rad: its keys are degrees) */
+export function angleAt(c: JointCycle, u: number, duty: number, blend = 0): number {
+  const phase = cyclePhase(u, duty, c.duty), base = valueAt(c.keys, phase);
   if (!c.alternate || blend === 0) return base * DEG;
   return (base + (valueAt(c.alternate, phase) - base) * blend) * DEG;
 }

@@ -1,7 +1,7 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { SkinReport } from '@drawcall/rig';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
-import { STEP, type Frame } from '../kernel/frame';
+import { STEP, type Frame, type Step } from '../kernel/frame';
 import { Dev, type LogEntry } from '../kernel/dev';
 import { Skeleton } from '../kernel/skeleton';
 import { checkLimits } from '../kernel/limits';
@@ -10,7 +10,6 @@ import { Poise } from '../kernel/poise';
 import type { Go } from '../kernel/go';
 import { createLocomotion, type Locomotion } from '../legs/locomotion';
 import type { Root } from '../legs/legged';
-import type { Step } from '../kernel/frame';
 import type { Stepper } from '../legs/step/stepper';
 import type { AnySpecies, Gazer, Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
@@ -57,7 +56,6 @@ export interface SelfOptions {
 export class Self implements Holder {
   readonly skeleton: Skeleton;
   readonly scale: number;
-  /** how quick it is, all told (1: as tuned): its walks', reaches' and carries' paces */
   readonly tempo: number;
   readonly frame: Frame;
   /** the last final pose and the one before, as they were when its last update began: what others read while it is ahead of them */
@@ -112,14 +110,7 @@ export class Self implements Holder {
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     this.poses = [new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose)];
     this.before = [new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose)];
-    this.frame = {
-      dev,
-      dt: STEP,
-      time: 0,
-      prev2: this.poses[0],
-      prev: this.poses[1],
-      current: this.poses[2],
-    };
+    this.frame = { dev, dt: STEP, time: 0, prev2: this.poses[0], prev: this.poses[1], current: this.poses[2] };
     anchors.set(this.binding.object, { body: this, bone: -1 });
     this.skeleton.bones.forEach((bone, i) => {
       const node: Object3D | undefined = this.binding.bones[bone.name];
@@ -223,8 +214,7 @@ export class Self implements Holder {
 
   /** moves `node` itself from now on (a thing in both its hands), from where `carrier` has it */
   carry(node: Object3D, carrier: Carrier): void {
-    const mover = movers.get(node);
-    mover?.leave(node);
+    movers.get(node)?.leave(node);
     this.carried.set(node, carrier);
     movers.set(node, this);
   }
@@ -329,7 +319,6 @@ export class Self implements Holder {
   /** advances by `seconds`: every whole sub-step it covers, with what earlier updates left over */
   update(seconds: number): void {
     if (!(seconds >= 0 && Number.isFinite(seconds))) throw new Error(`cannot update by ${seconds} s`);
-    // (a frame of more than 0.1 s is taken as 0.1 s: a body does not run on through a stall)
     this.pending += Math.min(seconds, MOST);
     // (1e-9: 1/30 is a hair under two sub-steps of 1/60 in floating point)
     const steps = Math.floor(this.pending / STEP + 1e-9);
@@ -386,8 +375,7 @@ export class Self implements Holder {
   }
 
   private step(): void {
-    const { frame: f } = this;
-    const [prev2, prev, current] = this.poses;
+    const { frame: f } = this, [prev2, prev, current] = this.poses;
     current.copy(prev);
     if (f.dev && f.time > 0) {
       checkLimits(f.prev, f.dev, f.time);
@@ -429,8 +417,7 @@ export class Self implements Holder {
   }
 }
 
-/** a body's behaviours, in the order they run each sub-step: balance, the eyes when nothing asks for them, the free hands, a holding
- * hand's keep, the things it moves */
+/** a body's behaviours, in the order they run each sub-step: balance, the eyes when nothing asks, the free hands, a holding hand's keep, what it moves */
 export interface Behaviours {
   balance?: Step;
   gaze?: Step;
@@ -450,10 +437,7 @@ function massed(species: AnySpecies, mass: SelfOptions['mass'], dev?: Dev): Skel
   return new Skeleton(skeleton.bones.map((bone) => ({ ...bone, mass: bone.mass * share })), { limits: skeleton.limits.filter((limit) => limit !== undefined), chains });
 }
 
-/**
- * a body's mass from a closed mesh's volume, held within half and twice the species' own; an open mesh's, the species' own — development
- * says when it took either
- */
+/** a body's mass from a mesh's volume as `SelfOptions.mass` takes it */
 function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'volume'>, dev?: Dev): number {
   if (!report.closed || report.volume === null) {
     dev?.append(0, { check: "an open mesh's volume (its species' mass taken, kg)", value: species.mass, limit: 0, where: 'mass' });
@@ -490,9 +474,9 @@ function checkShear(binding: Binding, dev: Dev): void {
 }
 
 const IDENTITY = new Matrix4();
-/** the longest frame an update takes (s) */
+/** the longest frame an update takes (s): a body does not run on through a stall */
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
-const EMPTY: readonly LogEntry[] = Object.freeze([]);
 const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const EMPTY: readonly LogEntry[] = Object.freeze([]);

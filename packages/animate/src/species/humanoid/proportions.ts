@@ -5,10 +5,9 @@ import { SIDES, createRest, type Rest } from './bones';
 export const DEFAULT_HEIGHT = 1.75;
 
 /**
- * A body's measures: its T-pose skeleton (bone offsets in VRM normalized axes: +Y up,
- * facing +Z, left +X; metres), the landmarks that are not bones, and the measures derived
- * from both, given for the left side (the right mirrors x). Measured from a character
- * model's rest pose; the derived measures are computed once, from the rest.
+ * A body's measures: its T-pose skeleton (bone offsets in VRM normalized axes: +Y up, facing +Z, left +X; metres), the landmarks that are
+ * not bones, and the measures derived from both, given for the left side (the right mirrors x). Measured from a character model's rest
+ * pose; the derived measures are computed once, from the rest.
  */
 export interface Proportions extends Rest {
   /** floor to the top of the head, standing */
@@ -56,15 +55,12 @@ export interface Proportions extends Rest {
 const HEAD_HEIGHT = 0.878;
 
 /**
- * Proportions for a standing height, as fractions of it (Drillis & Contini 1966, as reproduced in
- * Winter's Biomechanics and Motor Control of Human Movement, Fig. 4.1): upper arm 0.186, forearm
- * 0.146, thigh 0.245, shank 0.246; the hip joint centres ~0.10 apart and the shoulder joints ~0.20
- * (not the full hip width 0.191 and biacromial width 0.259).
+ * Proportions for a standing height, as fractions of it (Drillis & Contini 1966, as reproduced in Winter's Biomechanics and Motor Control
+ * of Human Movement, Fig. 4.1): upper arm 0.186, forearm 0.146, thigh 0.245, shank 0.246; the hip joint centres ~0.10 apart and the
+ * shoulder joints ~0.20 (not the full hip width 0.191 and biacromial width 0.259).
  */
 export function proportionsFor(height: number): Proportions {
-  const H = height;
-  const r = createRest();
-  const o = r.offsets;
+  const H = height, r = createRest(), o = r.offsets;
   r.hips.set(0, 0.53 * H, 0);
   o.spine.set(0, 0.07 * H, -0.005 * H);
   o.chest.set(0, 0.1 * H, 0);
@@ -85,14 +81,11 @@ export function proportionsFor(height: number): Proportions {
 }
 
 /**
- * Proportions for a measured rest skeleton (derives the measures and landmarks). The landmarks are placed by the standing height,
- * estimated from the head bone's height unless given. A skeleton without toes (zero
- * offsets) gets them at the ball of the foot, on the floor.
+ * Proportions for a measured rest skeleton (derives the measures and landmarks). The landmarks are placed by the standing height, estimated
+ * from the head bone's height unless given. A skeleton without toes (zero offsets) gets them at the ball of the foot, on the floor.
  */
 export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Proportions {
-  const H = height;
-  const o = rest.offsets;
-  const ankle = ankleHeight(rest);
+  const H = height, o = rest.offsets, ankle = ankleHeight(rest);
   for (const n of SIDES) {
     const toes = o[`${n}Toes`];
     if (toes.lengthSq() === 0) toes.set(0, -ankle, 0.08 * H);
@@ -109,10 +102,7 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Pro
     bigToe: new Vector3(-0.012 * H, -0.85 * ankle - toes.y, 0.11 * H - toes.z),
     smallToe: new Vector3(0.022 * H, -0.88 * ankle - toes.y, 0.78 * 0.11 * H - toes.z),
   };
-  const thigh = o.leftLowerLeg.length();
-  const shin = o.leftFoot.length();
-  const upperArm = o.leftLowerArm.length();
-  const forearm = o.leftHand.length();
+  const thigh = o.leftLowerLeg.length(), shin = o.leftFoot.length(), upperArm = o.leftLowerArm.length(), forearm = o.leftHand.length();
   return {
     ...rest,
     height: H,
@@ -123,15 +113,11 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Pro
     sole,
     hipHeight: rest.hips.y,
     hipHalfWidth: Math.abs(o.leftUpperLeg.x),
-    thigh,
-    shin,
-    legLength: thigh + shin,
+    thigh, shin, legLength: thigh + shin,
     ankleHeight: ankle,
     heelBack: -sole.heel.z,
     toeFront: toes.z + sole.bigToe.z,
-    upperArm,
-    forearm,
-    armLength: upperArm + forearm,
+    upperArm, forearm, armLength: upperArm + forearm,
     shoulderHeight: rest.hips.y + o.spine.y + o.chest.y + o.leftShoulder.y + o.leftUpperArm.y,
     shoulderHalfWidth: Math.abs(o.leftShoulder.x + o.leftUpperArm.x),
     headCenter: new Vector3(0, 0.05 * H, 0.015 * H),
@@ -141,8 +127,7 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Pro
 }
 
 /** the default body's hip joint to ankle and upper-arm joint to wrist (m): its thigh and shank, its upper arm and forearm */
-const DEFAULT_LEG = (0.245 + 0.246) * DEFAULT_HEIGHT;
-const DEFAULT_ARM = (0.186 + 0.146) * DEFAULT_HEIGHT;
+const DEFAULT_LEG = (0.245 + 0.246) * DEFAULT_HEIGHT, DEFAULT_ARM = (0.186 + 0.146) * DEFAULT_HEIGHT;
 
 /** head bone origin above the floor, T-pose */
 const headHeight = (r: Rest) => r.hips.y + r.offsets.spine.y + r.offsets.chest.y + r.offsets.neck.y + r.offsets.head.y;

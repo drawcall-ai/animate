@@ -23,10 +23,6 @@ export function reach<S extends AnySpecies>(body: Body<S>, targets: Partial<Reco
   if (!named.length) throw new Error('reach: name a target for a hand');
   return verb(body, 'reach', (request) => function* () {
     const self = selfOf(body);
-    const aims = named.map(({ hand, target }) => {
-      const find = finder(self, target);
-      return { hand, target: find };
-    });
-    yield* self.handling.reach(request, aims, options);
+    yield* self.handling.reach(request, named.map(({ hand, target }) => ({ hand, target: finder(self, target) })), options);
   }, options.until);
 }

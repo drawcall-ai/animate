@@ -88,6 +88,18 @@ export interface Posture { prepare(f: Frame, legs: Striding, attention: Attentio
 /** A joint's range of motion, as `Limit` has it, for a bone named so. */
 export type Range = Omit<Limit, 'bone'>;
 
+/** `range` on the right side, from the left's: the reflection across x negates turns about y and z (and its neutral's) */
+export function mirrored(range: Range): Range {
+  const flip = (axis: number, [lo, hi]: [number, number]): [number, number] => axis === 0 ? [lo, hi] : [-hi, -lo];
+  const { axis, twist, swing, neutral } = range;
+  return {
+    axis,
+    twist: flip(axis, twist),
+    swing: [flip((axis + 1) % 3, swing[0]), flip((axis + 2) % 3, swing[1])],
+    neutral: neutral && new Quaternion(neutral.x, -neutral.y, -neutral.z, neutral.w),
+  };
+}
+
 /** A leg by its bones' names, as `LegChain` has it by their indices: each joint top first, the last the foot — which must keep flat on the
  * floor as the leg bends, or the legs reach no step — and its sole's `heel` and `toe` in the foot's frame. */
 export interface LegRole<Name extends string> {
@@ -132,19 +144,14 @@ export interface Tuning<Name extends string> {
  * Write the skeleton `as const` and the roles' names are checked.
  */
 export function species<const S extends readonly SkeletonBone[], Hand extends string = never>(
-  skeleton: S,
-  roles: Roles<BoneNames<S>, Hand>,
-  tuning: Tuning<BoneNames<S>> = {},
-): Species<BoneNames<S>, Hand> {
+  skeleton: S, roles: Roles<BoneNames<S>, Hand>, tuning: Tuning<BoneNames<S>> = {}): Species<BoneNames<S>, Hand> {
   return { ...build(skeleton, roles, tuning), bones: skeleton };
 }
 
 /** a species of `skeleton` as `species` makes it, but for its bones (the caller types them) */
 export function build<Hand extends string>(skeleton: readonly SkeletonBone[], roles: Roles<string, Hand>, tuning: Tuning<string>): Omit<Species<string, Hand>, 'bones'> {
-  const order = descendants(skeleton, roles.root);
-  const at = new Map(skeleton.map((bone) => [bone.name, new Vector3(...bone.position)]));
-  const point = (name: string) => need(at.get(name), name);
-  const names = order.map((bone) => bone.name);
+  const order = descendants(skeleton, roles.root), names = order.map((bone) => bone.name);
+  const at = new Map(skeleton.map((bone) => [bone.name, new Vector3(...bone.position)])), point = (name: string) => need(at.get(name), name);
   const index = (name: string) => {
     const i = names.indexOf(name);
     if (i < 0) throw new Error(`species: no moving bone "${name}" (the root's descendants: ${names.join(', ')})`);
@@ -165,12 +172,9 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
     return { name: bone.name, parent, offset, mass, com: centreOf(bone.name), snap: tuning.snaps?.[bone.name] };
   });
   const limits = Object.entries<Range | undefined>(tuning.limits ?? {}).flatMap(([name, range]) => range ? [{ ...range, bone: index(name) }] : []);
-  const chains: Record<string, readonly string[]> = {};
-  if (roles.gaze?.neck) chains.neck = roles.gaze.neck;
-  for (const [hand, chain] of Object.entries<readonly string[]>(roles.hands ?? {})) chains[hand] = chain;
+  const chains: Record<string, readonly string[]> = { ...(roles.gaze?.neck && { neck: roles.gaze.neck }), ...roles.hands };
   const built = new Skeleton(bones, { limits, chains });
-  const gaze = roles.gaze;
-  const eyes = gaze && { bone: built.index(gaze.eyes.bone), at: new Vector3(...gaze.eyes.at) };
+  const gaze = roles.gaze, eyes = gaze && { bone: built.index(gaze.eyes.bone), at: new Vector3(...gaze.eyes.at) };
   if (roles.legs && !tuning.gait) throw new Error('species: legs need a gait');
   const hands = new Map<Hand, string>();
   for (const hand in roles.hands) hands.set(hand, hand);

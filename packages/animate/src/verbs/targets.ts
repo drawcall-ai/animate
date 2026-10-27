@@ -21,8 +21,7 @@ interface Found extends Goal {
 
 /** `target` as `self` finds it each sub-step (once a sub-step: read again in the same sub-step, as it was) */
 export function finder(self: Self, target: Target): (f: Frame) => Found {
-  const found: Found = { position: new Vector3() };
-  const turn = new Quaternion(), velocity = new Vector3(), placed = { position: new Vector3(), quaternion: new Quaternion() };
+  const found: Found = { position: new Vector3() }, turn = new Quaternion(), velocity = new Vector3(), placed = { position: new Vector3(), quaternion: new Quaternion() };
   // (a function's object as it leaves it each sub-step, not eased across the update as the app moving it once an update would be)
   let made: Carrier | null = null;
   const fresh = (at: Object3D, time: number) => {
@@ -50,5 +49,3 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     return found;
   };
 }
-
-

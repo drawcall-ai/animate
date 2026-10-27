@@ -30,8 +30,7 @@ export function carry(body: Body, thing: Object3D, target: Target | readonly Tar
   if (!targets.length) throw new Error('carry: give a target');
   return verb(body, 'carry', (request) => function* () {
     const self = selfOf(body), carried = Thing.of(thing);
-    const hands = handsOn(self, carried);
-    if (!hands.length) throw new Error(`carry: no hand of the body holds "${thing.name}" (grab it first)`);
+    if (!handsOn(self, carried).length) throw new Error(`carry: no hand of the body holds "${thing.name}" (grab it first)`);
     const points = targets.map((each, k) => {
       const find = finder(self, each), last = k === targets.length - 1;
       // (only the last turns it)

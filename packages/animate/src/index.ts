@@ -3,11 +3,10 @@
 
 export { Body, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
 export type { Root } from './legs/legged';
-export type { Temperament } from './species/define';
 export { humanoid, type HumanoidBone } from './species/humanoid/humanoid';
 export { horse, type HorseBone } from './species/horse';
 export { dog, type DogBone } from './species/dog';
-export { species, type Species } from './species/define';
+export { species, type Species, type Temperament } from './species/define';
 export { walkTo, arriving, type WalkOptions } from './verbs/walk';
 export { lookAt, type LookOptions } from './verbs/look';
 export { track, type Tracked } from './verbs/track';

@@ -30,10 +30,8 @@ export class Binding<Name extends string = string> {
       return node ? [[bone.name, node]] : [];
     })) : this.bare();
     const byName: Readonly<Record<string, Object3D | undefined>> = found;
-    if (!named(found, species.bones)) {
-      const missing = species.bones.filter((bone) => !byName[bone.name]).map((bone) => bone.name);
-      throw new Error(`the model has no bone named ${missing.join(', ')} (rig it with this skeleton: skin(model, skeleton))`);
-    }
+    const missing = species.bones.filter((bone) => !byName[bone.name]).map((bone) => bone.name);
+    if (!named(found, species.bones)) throw new Error(`the model has no bone named ${missing.join(', ')} (rig it with this skeleton: skin(model, skeleton))`);
     this.bones = found;
     this.object.updateMatrixWorld(true);
     const inverse = new Matrix4().copy(this.object.matrixWorld).invert();
@@ -103,16 +101,15 @@ export class Binding<Name extends string = string> {
     const at = new Map(this.species.bones.map((bone) => [bone.name, new Vector3(...bone.position)]));
     const bones: Record<string, Object3D> = Object.fromEntries(this.species.bones.map((bone) => [bone.name, Object.assign(new Object3D(), { name: bone.name })]));
     for (const bone of this.species.bones) {
-      const node = bones[bone.name], position = at.get(bone.name);
-      if (!position) continue;
+      const node = bones[bone.name];
+      node.position.fromArray(bone.position);
       if (bone.parent === undefined) {
-        node.position.copy(position);
         this.object.add(node);
         continue;
       }
       const parent = at.get(bone.parent);
       if (!parent) throw new Error(`bone "${bone.name}" has no parent "${bone.parent}"`);
-      node.position.subVectors(position, parent);
+      node.position.sub(parent);
       bones[bone.parent].add(node);
     }
     return bones;
@@ -135,6 +132,5 @@ interface Moving {
   turn: Quaternion;
 }
 
-const UP = new Vector3(0, 1, 0);
-const IDENTITY = new Quaternion();
+const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion();
 const _back = new Quaternion(), _parent = new Quaternion(), _at = new Vector3();

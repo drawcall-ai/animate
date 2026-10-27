@@ -9,27 +9,9 @@ import { Vector3 } from 'three';
  * at identity), jaw/eyes (lookAt is the VRM's job), fingers (nothing drives them).
  */
 export const BONES = [
-  'hips',
-  'spine',
-  'chest',
-  'neck',
-  'head',
-  'leftShoulder',
-  'leftUpperArm',
-  'leftLowerArm',
-  'leftHand',
-  'rightShoulder',
-  'rightUpperArm',
-  'rightLowerArm',
-  'rightHand',
-  'leftUpperLeg',
-  'leftLowerLeg',
-  'leftFoot',
-  'leftToes',
-  'rightUpperLeg',
-  'rightLowerLeg',
-  'rightFoot',
-  'rightToes',
+  'hips', 'spine', 'chest', 'neck', 'head',
+  'leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand', 'rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand',
+  'leftUpperLeg', 'leftLowerLeg', 'leftFoot', 'leftToes', 'rightUpperLeg', 'rightLowerLeg', 'rightFoot', 'rightToes',
 ] as const;
 
 export type BoneName = (typeof BONES)[number];
@@ -47,31 +29,14 @@ export function sideOf(hand: string): Side {
 }
 
 /** One fresh value per bone. */
-export function perBone<V>(make: (b: BoneName) => V): Record<BoneName, V> {
-  return {
-    hips: make('hips'),
-    spine: make('spine'),
-    chest: make('chest'),
-    neck: make('neck'),
-    head: make('head'),
-    leftShoulder: make('leftShoulder'),
-    leftUpperArm: make('leftUpperArm'),
-    leftLowerArm: make('leftLowerArm'),
-    leftHand: make('leftHand'),
-    rightShoulder: make('rightShoulder'),
-    rightUpperArm: make('rightUpperArm'),
-    rightLowerArm: make('rightLowerArm'),
-    rightHand: make('rightHand'),
-    leftUpperLeg: make('leftUpperLeg'),
-    leftLowerLeg: make('leftLowerLeg'),
-    leftFoot: make('leftFoot'),
-    leftToes: make('leftToes'),
-    rightUpperLeg: make('rightUpperLeg'),
-    rightLowerLeg: make('rightLowerLeg'),
-    rightFoot: make('rightFoot'),
-    rightToes: make('rightToes'),
-  };
+export function perBone<V>(make: (bone: BoneName) => V): Record<BoneName, V> {
+  const values: Partial<Record<BoneName, V>> = {};
+  for (const bone of BONES) values[bone] = make(bone);
+  if (!complete(values)) throw new Error('a bone without a value');
+  return values;
 }
+
+const complete = <V>(values: Partial<Record<BoneName, V>>): values is Record<BoneName, V> => BONES.every((bone) => bone in values);
 
 /** each person's bone's index in the skeleton, by name */
 export const INDEX = perBone((b) => BONES.indexOf(b));
@@ -79,26 +44,11 @@ export const INDEX = perBone((b) => BONES.indexOf(b));
 export const CHILD_BONES = BONES.filter((b): b is ChildBone => b !== 'hips');
 
 export const PARENT: Record<ChildBone, BoneName> = {
-  spine: 'hips',
-  chest: 'spine',
-  neck: 'chest',
-  head: 'neck',
-  leftShoulder: 'chest',
-  leftUpperArm: 'leftShoulder',
-  leftLowerArm: 'leftUpperArm',
-  leftHand: 'leftLowerArm',
-  rightShoulder: 'chest',
-  rightUpperArm: 'rightShoulder',
-  rightLowerArm: 'rightUpperArm',
-  rightHand: 'rightLowerArm',
-  leftUpperLeg: 'hips',
-  leftLowerLeg: 'leftUpperLeg',
-  leftFoot: 'leftLowerLeg',
-  leftToes: 'leftFoot',
-  rightUpperLeg: 'hips',
-  rightLowerLeg: 'rightUpperLeg',
-  rightFoot: 'rightLowerLeg',
-  rightToes: 'rightFoot',
+  spine: 'hips', chest: 'spine', neck: 'chest', head: 'neck',
+  leftShoulder: 'chest', leftUpperArm: 'leftShoulder', leftLowerArm: 'leftUpperArm', leftHand: 'leftLowerArm',
+  rightShoulder: 'chest', rightUpperArm: 'rightShoulder', rightLowerArm: 'rightUpperArm', rightHand: 'rightLowerArm',
+  leftUpperLeg: 'hips', leftLowerLeg: 'leftUpperLeg', leftFoot: 'leftLowerLeg', leftToes: 'leftFoot',
+  rightUpperLeg: 'hips', rightLowerLeg: 'rightUpperLeg', rightFoot: 'rightLowerLeg', rightToes: 'rightFoot',
 };
 
 /**

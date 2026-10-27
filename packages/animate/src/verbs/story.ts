@@ -1,6 +1,5 @@
 import { action, type NonReuseableTimeline, type Timeline, type TimelineYield } from '@pmndrs/timeline';
-import type { Body } from '../body/body';
-import { selfOf } from '../body/body';
+import { selfOf, type Body } from '../body/body';
 import type { Problem } from '../kernel/dev';
 import type { Staging } from '../kernel/requests';
 import type { Self } from '../body/runtime';
@@ -33,8 +32,7 @@ export function verb(body: Body, name: string, staging: Staging, until?: Until, 
 }
 
 function* run(self: Self, name: string, site: string, staging: Staging, until: Until | undefined, aimer: boolean): Verb {
-  const request = self.file(name, site, staging, aimer);
-  const ends = endsOf(until);
+  const request = self.file(name, site, staging, aimer), ends = endsOf(until);
   let met = false;
   try {
     yield (_state, clock) => {
@@ -100,4 +98,3 @@ function siteOf(stack: string | undefined): string {
   }
   return '';
 }
-

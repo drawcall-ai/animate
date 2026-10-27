@@ -35,8 +35,7 @@ export function dog<const S extends readonly SkeletonBone[]>(skeleton: S & Havin
   if (!trunk) throw new Error('dog: the skeleton has no trunk');
   // (its size against the Labrador its numbers are for: the trunk's height)
   const size = trunk.position[1] / TRUNK;
-  const masses: Record<string, number> = { trunk: 15, pelvis: 4, neck: 2, head: 2.5, jaw: 0.3, tail: 0.3 };
-  const limits: Record<string, Range> = {};
+  const masses: Record<string, number> = { trunk: 15, pelvis: 4, neck: 2, head: 2.5, jaw: 0.3, tail: 0.3 }, limits: Record<string, Range> = {};
   const legs: LegRole<string>[] = LEGS.map((leg) => {
     const fore = leg.endsWith('Fore');
     for (let k = 0; k < 4; k++) {

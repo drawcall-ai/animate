@@ -63,14 +63,12 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
   }
 }
 
-
 /**
  * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there within 5 mm, else where it is; development says when it is
  * off or not alone there
  */
 function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Vector3>): void {
-  const f = self.frame;
-  const empty = self.track(onto).at(f.time).current.position;
+  const f = self.frame, empty = self.track(onto).at(f.time).current.position;
   const off = at.distanceTo(empty);
   if (f.dev && onto.children.some((child) => child !== thing.object && child.userData.mass !== undefined)) {
     f.dev.append(f.time, { check: 'put onto an empty another thing sits in', value: 1, limit: 0, where: `${thing.object.name} onto ${onto.name}` });
@@ -83,4 +81,3 @@ function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Vector3>): v
   }
   if (!bodyOf(thing.object)) thing.lifted = false;
 }
-

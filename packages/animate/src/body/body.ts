@@ -7,7 +7,7 @@ import { Self, type SelfOptions } from './runtime';
 import { Binding } from './model';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
-import type { Tier } from '../kernel/requests';
+import type { Channel, Tier } from '../kernel/requests';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
  * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
@@ -53,8 +53,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
   readonly bones: Readonly<Record<BoneOf<S>, Object3D>>;
 
   constructor(readonly species: S, options: BodyOptions = {}) {
-    const { avoid, ...rest } = options;
-    const binding = new Binding(species, rest.model);
+    const { avoid, ...rest } = options, binding = new Binding(species, rest.model);
     const self = species.person ? new Person(species, rest, binding) : new Self(species, rest, binding);
     selves.set(this, self);
     for (const body of avoid ?? []) self.near.add(selfOf(body));
@@ -64,8 +63,14 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** advances it by `seconds` (a frame's time; at most 0.1 s is taken): every whole 1/60 s sub-step it covers, the rest kept for the next */
   update(seconds: number): void {
-    const self = selfOf(this);
-    reading(self, () => self.update(seconds));
+    const self = selfOf(this), was = reader;
+    // (its reads of other bodies' state go by the rule `reader` gives)
+    reader = self;
+    try {
+      self.update(seconds);
+    } finally {
+      reader = was;
+    }
   }
 
   /** where it stands: its root over the floor (m) */
@@ -114,19 +119,15 @@ export class Body<S extends AnySpecies = AnySpecies> {
   /** what holds each of its parts now: the newest asked verb, else the first borrower */
   get owners(): Owners {
     const self = selfOf(this);
-    const goal = (channel: Parameters<Self['owner']>[0]): Owner | undefined => {
+    const owner = (channel: Channel): Owner | undefined => {
       const claim = self.owner(channel);
       return claim && { verb: claim.request.verb, site: claim.request.site, tier: claim.tier };
     };
-    return {
-      go: goal('go'),
-      look: goal('look'),
-      trunk: goal('trunk'),
-      hands: Object.fromEntries(Object.keys(self.hands).flatMap((hand) => {
-        const held = goal(`hand.${hand}`);
-        return held ? [[hand, held]] : [];
-      })),
-    };
+    const hands = Object.keys(self.hands).flatMap((hand) => {
+      const held = owner(`hand.${hand}`);
+      return held ? [[hand, held]] : [];
+    });
+    return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), hands: Object.fromEntries(hands) };
   }
 
   /** its last final pose: bone rotations and positions by index, its centre of mass, what its bones carry */
@@ -157,20 +158,8 @@ export function selfOf(body: Body): Self {
 /** the body updating now, if any: while it does, another body's state reads as it was before that body's own update this frame */
 let reader: Self | null = null;
 
-/** runs `update` as `self`'s update: its reads of other bodies' state go by the rule above */
-export function reading(self: Self, update: () => void): void {
-  const was = reader;
-  reader = self;
-  try {
-    update();
-  } finally {
-    reader = was;
-  }
-}
-
 /** `body`'s last final pose as the body updating now reads it */
 function read(body: Body): ReadonlyPose {
   const self = selfOf(body);
   return reader && reader !== self ? self.poseFor(reader) : self.pose;
 }
-

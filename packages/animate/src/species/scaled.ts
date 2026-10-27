@@ -1,6 +1,5 @@
 import { Vector3 } from 'three';
-import type { Gait } from './gait';
-import type { Carriage } from './gait';
+import type { Carriage, Gait } from './gait';
 import type { LegChain } from './leg';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton } from '../kernel/skeleton';
@@ -35,15 +34,14 @@ export function scaled<Bone extends string, Hand extends string>(species: Specie
 /** `eyes` reading each pose with points given in a bone's frame `size` times as far from it (a view made once a pose: a body's poses last) */
 function stretchedEyes(eyes: (pose: ReadonlyPose, out: Vector3) => Vector3, size: number): (pose: ReadonlyPose, out: Vector3) => Vector3 {
   const at = new Vector3(), views = new WeakMap<ReadonlyPose, ReadonlyPose>();
-  const view = (pose: ReadonlyPose): ReadonlyPose => {
-    let seen = views.get(pose);
-    if (!seen) {
-      const point = (bone: number, local: Vector3, out: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), out);
-      views.set(pose, seen = Object.create(pose, { point: { value: point } }) as ReadonlyPose);
+  return (pose, out) => {
+    let view = views.get(pose);
+    if (!view) {
+      const point = (bone: number, local: Vector3, into: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), into);
+      views.set(pose, view = Object.create(pose, { point: { value: point } }) as ReadonlyPose);
     }
-    return seen;
+    return eyes(view, out);
   };
-  return (pose, out) => eyes(view(pose), out);
 }
 
 function feet(chain: LegChain, size: number): LegChain {

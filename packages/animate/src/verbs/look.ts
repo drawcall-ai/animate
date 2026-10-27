@@ -15,9 +15,8 @@ export interface LookOptions {
 }
 
 /**
- * Looks at `target`: the eyes on it, the head turning most of the way (a person's neck within its range, the body bowing to see low
- * down; a creature's posture turning its head). An aimer, it keeps on until `until`. It asks for the eyes (and the trunk's turn with
- * `trunk`).
+ * Looks at `target`: the eyes on it, the head turning most of the way (a person's neck within its range, the body bowing to see low down; a
+ * creature's posture turning its head). An aimer, it keeps on until `until`. It asks for the eyes (and the trunk's turn with `trunk`).
  */
 export function lookAt(body: Body, target: Target, options: LookOptions = {}): Verb {
   return verb(body, 'lookAt', (request) => function* () {

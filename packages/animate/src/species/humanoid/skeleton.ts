@@ -35,9 +35,8 @@ for (const s of ['left', 'right'] as const) {
 }
 
 /**
- * The chains `solveChain` solves, each from its first joint to its tip: the arms from the
- * shoulder joint to the wrist and the legs from the hip to the ankle (limbs: two segments, bent
- * toward a pole), the spine from the lumbar joint to the base of the skull, the neck from its
+ * The chains `solveChain` solves, each from its first joint to its tip: the arms from the shoulder joint to the wrist and the legs from the
+ * hip to the ankle (limbs: two segments, bent toward a pole), the spine from the lumbar joint to the base of the skull, the neck from its
  * base to the base of the skull.
  */
 export const CHAINS = {
@@ -49,16 +48,13 @@ export const CHAINS = {
   neck: ['neck', 'head'],
 } satisfies Record<string, readonly BoneName[]>;
 
-
 /**
- * The body's skeleton: a bone per BONES entry (in its order, so `INDEX` finds them), each at its
- * rest offset from its parent; the hips' from the root, the ground point under them. `mass`
- * defaults to `massFor` the body's height.
+ * The body's skeleton: a bone per BONES entry (in its order, so `INDEX` finds them), each at its rest offset from its parent; the hips'
+ * from the root, the ground point under them. `mass` defaults to `massFor` the body's height.
  */
 export function skeletonOf(proportions: Proportions, mass = massFor(proportions.height)): BoneDef[] {
   return BONES.map((name) => {
-    const segment = SEGMENT[name];
-    const speed = snapSpeed(name);
+    const segment = SEGMENT[name], speed = snapSpeed(name);
     return {
       name,
       snap: { speed, accel: speed / 0.03 },
@@ -70,11 +66,7 @@ export function skeletonOf(proportions: Proportions, mass = massFor(proportions.
   });
 }
 
-/**
- * A snap heuristic: elite joint speeds divided by 30 ms, slightly shorter than a throw's
- * ~50 ms acceleration phase (Fleisig 1999). Reuses the former run judge's ceilings;
- * these are generous fault detectors, not clinical limits. Speeds below are in °/s.
- */
+/** A snap heuristic (°/s): elite joint speeds over 30 ms, a little under a throw's ~50 ms acceleration (Fleisig 1999); fault detectors, not clinical limits. */
 function snapSpeed(name: BoneName): number {
   if (/UpperArm/.test(name)) return 7500;
   if (/LowerArm/.test(name)) return 2900;

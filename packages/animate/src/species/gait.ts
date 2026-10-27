@@ -50,19 +50,13 @@ export interface Gait {
   readonly body?: Carriage | ((speed: number, froude: number) => Carriage);
 }
 
-interface Stride {
-  frequency: number;
-  duty: number;
-  referenceBlend?: number;
-}
-
-export function strideAt(gait: Gait, speed: number, leg: number): Stride {
-  speed = speedOf(speed);
+/** leg `leg`'s stride at `speed` (m/s; its slowest below `gait.slowest`): its cadence (1/s) and duty factor */
+export function strideAt(gait: Gait, speed: number, leg: number): { frequency: number; duty: number; referenceBlend?: number } {
+  // (only negative speed noise rounded off: a real reverse speed still fails)
+  speed = speed < 0 && speed > -1e-9 ? 0 : speed;
   if (!(speed >= 0 && Number.isFinite(speed))) throw new Error('leg speed must be finite and nonnegative');
-  const v = Math.max(gait.slowest, speed);
-  const froude = v * v / (GRAVITY * gait.height);
-  const frequency = gait.frequency(v, froude);
-  const duty = gait.contacts[leg].duty(v, froude);
+  const v = Math.max(gait.slowest, speed), froude = v * v / (GRAVITY * gait.height);
+  const frequency = gait.frequency(v, froude), duty = gait.contacts[leg].duty(v, froude);
   if (!(frequency > 0 && Number.isFinite(frequency) && duty > 0 && duty < 1)) throw new Error('a gait needs finite positive cadence and duty between 0 and 1');
   return { frequency, duty, referenceBlend: gait.referenceBlend };
 }
@@ -73,7 +67,3 @@ export function offsetAt(gait: Gait, speed: number, leg: number): number {
   if (!(value >= 0 && value < 1)) throw new Error('a gait offset must be in [0, 1)');
   return value;
 }
-
-/** Round only negative speed noise; real reverse speeds still fail validation. */
-const speedOf = (speed: number) => speed < 0 && speed > -1e-9 ? 0 : speed;
-

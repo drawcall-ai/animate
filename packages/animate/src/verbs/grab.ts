@@ -37,7 +37,6 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
 function checkScale(f: { time: number; dev?: { append(time: number, problem: { check: string; value: number; limit: number; where: string }): void } }, node: Object3D): void {
   if (!f.dev) return;
   node.updateWorldMatrix(true, false);
-  const scale = new Vector3().setFromMatrixScale(node.matrixWorld);
-  const spread = Math.max(scale.x, scale.y, scale.z) / Math.min(scale.x, scale.y, scale.z) - 1;
+  const scale = new Vector3().setFromMatrixScale(node.matrixWorld), spread = Math.max(scale.x, scale.y, scale.z) / Math.min(scale.x, scale.y, scale.z) - 1;
   if (spread > 1e-6) f.dev.append(f.time, { check: 'grip with a non-uniform world scale (spread)', value: spread, limit: 0, where: node.name });
 }

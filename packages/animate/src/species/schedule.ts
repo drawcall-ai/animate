@@ -1,6 +1,5 @@
 import { GRAVITY } from '../kernel/math';
-import type { Carriage } from './gait';
-import type { Gait } from './gait';
+import type { Carriage, Gait } from './gait';
 
 /**
  * A gait from a few numbers, dynamically similar across sizes (recalled: Alexander & Jayes 1983, stride
@@ -21,8 +20,7 @@ export function powerGait({ height, slowest, offsets, stride, stance, clearance 
   /** each foot's lift over the ground swinging (m) */
   clearance: readonly number[];
 }): Gait {
-  const frequency = (v: number, fr: number) => v / (height * stride * Math.pow(fr, 0.3));
-  const unit = Math.sqrt(height / GRAVITY);
+  const frequency = (v: number, fr: number) => v / (height * stride * Math.pow(fr, 0.3)), unit = Math.sqrt(height / GRAVITY);
   // Tuned numerical cap: leave a nonzero swing interval at the slowest cadence.
   return {
     height, slowest, frequency, clearance,

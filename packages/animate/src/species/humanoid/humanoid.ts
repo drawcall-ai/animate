@@ -1,9 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Skeleton } from '../../kernel/skeleton';
-import { needing, type BoneNames, type Gazer, type Having, type Species } from '../define';
-import { BONES, CHILD_BONES, PARENT, createRest, perBone, type BoneName, type ChildBone, type Side } from './bones';
-import { pointsOf } from './landmarks';
+import { needing, type BoneNames, type Having, type Species } from '../define';
+import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName, type ChildBone, type Side } from './bones';
 import { NECK_PITCH, ranges } from './limits';
 import { derive, type Proportions } from './proportions';
 import { CHAINS, massFor, skeletonOf } from './skeleton';
@@ -19,20 +18,20 @@ export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
  */
 export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & Having<S, HumanoidBone>): Species<BoneNames<S>, Side> {
   needing(skeleton, BONES.filter((bone) => bone !== 'leftToes' && bone !== 'rightToes'), 'humanoid');
-  const at = new Map(skeleton.map((bone) => [bone.name, new Vector3(...bone.position)]));
-  const parents = new Map(skeleton.map((bone) => [bone.name, bone.parent]));
+  const at = new Map(skeleton.map((bone) => [bone.name, new Vector3(...bone.position)])), parents = new Map(skeleton.map((bone) => [bone.name, bone.parent]));
   for (const bone of CHILD_BONES) {
     if (!at.has(bone)) continue;
     let up = parents.get(bone);
     while (up !== undefined && up !== PARENT[bone]) up = parents.get(up);
     if (up === undefined) throw new Error(`humanoid: "${bone}" does not hang from "${PARENT[bone]}"`);
   }
-  const { proportions, turns } = measure(perBone((bone) => at.get(bone) ?? null), crownOf(skeleton));
+  const { proportions, turns } = measure(perBone((bone) => at.get(bone) ?? null), crownOf(skeleton)), eyes = proportions.eyes.clone();
   return {
     bones: skeleton,
     skeleton: new Skeleton(skeletonOf(proportions), { limits: ranges(), chains: CHAINS }),
     turns: new Map(BONES.map((bone) => [bone, turns[bone]])),
-    gaze: humanGaze(proportions),
+    // (the neck chain turns the head, the eyes the rest; looking low, the body bows)
+    gaze: { neck: 'neck', eyes: (pose, out) => pose.point(INDEX.head, eyes, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180 },
     hands: new Map([['left', 'leftArm'], ['right', 'rightArm']]),
     inertia: INERTIA,
     scale: proportions.scale,
@@ -90,24 +89,12 @@ function measure(at: Record<BoneName, Vector3 | null>, height?: number): { propo
 const INERTIA = { ahead: 0.9, back: 0.3, roll: 0.6, most: 0.35, frequency: 0.8, damping: 0.7 };
 
 /**
- * How far the eyes turn in the head comfortably (rad): down, the preferred declination of the line
- * of sight below the head's (29° sitting upright, 34° over all postures, 38° for a near target: Hill
- * & Kroemer 1986, Human Factors 28:127); up and aside, where the eyes end a head-free gaze shift
- * (half the customary ocular motor range, 44° wide on average, and of the eye-only range, 36°:
- * Stahl 1999, Exp Brain Res 126:41; measured horizontally, taken for up as well)
+ * How far the eyes turn in the head comfortably (rad): down, the preferred declination of the line of sight below the head's (29° sitting
+ * upright, 34° over all postures, 38° for a near target: Hill & Kroemer 1986, Human Factors 28:127); up and aside, where the eyes end a
+ * head-free gaze shift (half the customary ocular motor range, 44° wide on average, and of the eye-only range, 36°: Stahl 1999, Exp Brain
+ * Res 126:41; measured horizontally, taken for up as well)
  */
 const EYES = { down: (30 * Math.PI) / 180, up: (20 * Math.PI) / 180, side: (20 * Math.PI) / 180 };
-
-/** a person's gaze: the neck chain turns the head, the eyes the rest; looking low, the body bows */
-function humanGaze(proportions: Proportions): Gazer {
-  const { eyes } = pointsOf(proportions);
-  return {
-    neck: 'neck',
-    eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),
-    range: EYES,
-    pitch: NECK_PITCH * Math.PI / 180,
-  };
-}
 
 function need<T>(value: T | null | undefined, what: string): T {
   if (value == null) throw new Error(`humanoid: the skeleton has no ${what}`);
