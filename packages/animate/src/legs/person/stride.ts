@@ -31,9 +31,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const at = (t: number) => from.clone().addScaledVector(lean, t);
     if (past(hull, at(1)) <= -LEAN.inside * s) return at(1);
     let [lo, hi] = [0, 1];
-    for (let k = 0; k < 12; k++) {
-      [lo, hi] = past(hull, at((lo + hi) / 2)) <= -LEAN.inside * s ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
-    }
+    for (let k = 0; k < 12; k++) [lo, hi] = past(hull, at((lo + hi) / 2)) <= -LEAN.inside * s ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
     return at(lo);
   };
   return drivenBy(person, (f, go, poise, stepper) => {

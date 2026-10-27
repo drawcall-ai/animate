@@ -36,14 +36,12 @@ export interface LegTarget {
 export class Solver {
   /** the bones, from the top joint's to the terminal's */
   readonly bones: readonly number[];
-  private readonly skeleton: Skeleton;
   readonly n: number;
   /** each coordinate's bone (an index into `bones`) and axis (local) */
   private readonly of: Int32Array;
   private readonly axes: Vector3[];
   /** each coordinate's range (rad, the rig's), and its reference's weight (1 / its span²) */
-  readonly lo: Float64Array;
-  readonly hi: Float64Array;
+  readonly lo: Float64Array; readonly hi: Float64Array;
   private readonly weight: Float64Array;
   private weightSum: number;
   private readonly prior: Float64Array;
@@ -54,19 +52,15 @@ export class Solver {
   rotationError = 0;
   private readonly offsets: Vector3[];
   /** the chain's base: its top bone's parent's world turn and the top joint's position */
-  private readonly baseTurn = new Quaternion();
-  private readonly basePosition = new Vector3();
+  private readonly baseTurn = new Quaternion(); private readonly basePosition = new Vector3();
   /** each coordinate's axis (world) and pivot, each bone's world turn and origin: the chain as `forward` last left it */
-  private readonly world: Vector3[];
-  private readonly at: Vector3[];
-  private readonly rotations: Quaternion[];
-  private readonly positions: Vector3[];
+  private readonly world: Vector3[]; private readonly at: Vector3[];
+  private readonly rotations: Quaternion[]; private readonly positions: Vector3[];
 
-  constructor(skeleton: Skeleton, joints: LegChain['joints']) {
+  constructor(private readonly skeleton: Skeleton, joints: LegChain['joints']) {
     const bones = joints.map((j) => j.bone);
     if (bones.length < 2 || bones.some((b, k) => !skeleton.bones[b] || (k > 0 && skeleton.bones[b].parent !== bones[k - 1]))) throw new Error('legs need connected chains of at least two bones');
     if (skeleton.bones[bones[0]].parent < 0) throw new Error('a leg cannot include the root');
-    this.skeleton = skeleton;
     this.bones = bones;
     const coordinates = joints.flatMap(({ axes }, k) => [...axes].map((axis) => ({ bone: k, axis: axisOf(axis) })));
     const n = (this.n = coordinates.length);
@@ -152,8 +146,7 @@ export class Solver {
     this.bound(q);
     const r = _r;
     const wp = this.stiffness(target, Math.sqrt(STIFF)), wr = this.stiffness(target, this.weightSum);
-    let cost = this.cost(target, r);
-    let damping = 1e-3;
+    let cost = this.cost(target, r), damping = 1e-3;
     for (let step = 0; step < steps; step++) {
       this.linearise(target, r);
       // H = Jᵀ W J + S, g = Jᵀ W r + S (q − ref).
@@ -234,14 +227,9 @@ export class Solver {
         return beyond(_l, limit);
       };
       if (excess(1) < 1e-10) continue;
-      let lo = 0;
-      let hi = 1;
+      let lo = 0, hi = 1;
       // 32 bisections leave less than a nanoradian at a full turn.
-      for (let step = 0; step < 32; step++) {
-        const mid = (lo + hi) / 2;
-        if (excess(mid) < 1e-10) lo = mid;
-        else hi = mid;
-      }
+      for (let step = 0; step < 32; step++) { const mid = (lo + hi) / 2; if (excess(mid) < 1e-10) lo = mid; else hi = mid; }
       for (let j = 0; j < this.n; j++) if (this.of[j] === k) q[j] *= lo;
     }
   }
@@ -310,8 +298,7 @@ export class Solver {
   private forward() {
     let j = 0;
     for (let k = 0; k < this.bones.length; k++) {
-      const R = this.rotations[k];
-      const P = this.positions[k];
+      const R = this.rotations[k], P = this.positions[k];
       if (k === 0) {
         R.copy(this.baseTurn);
         P.copy(this.basePosition);

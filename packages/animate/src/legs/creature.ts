@@ -25,8 +25,7 @@ export function creature(body: Legged): Step {
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);
   const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest));
   const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
-  const turn = Math.min(...posers.map((poser) => poser.turn));
-  const ball = Math.max(...posers.map((poser) => poser.ball));
+  const turn = Math.min(...posers.map((poser) => poser.turn)), ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);
   // (a leg that cannot hold its foot on the floor a little ahead or behind where it stands can never step: said at once, not as a stalled walk)
   if (!(record.travel.forward > 0)) throw new Error('creature: its legs reach no step from where they stand (can each foot keep flat on the floor as its leg bends?)');
@@ -166,8 +165,8 @@ function ease([x, v]: Eased, goal: number, dt: number): Eased {
   v += (EASING ** 2 * (goal - x) - 2 * EASING * v) * dt;
   return [x + v * dt, v];
 }
-const _p = new Vector3(), _at = new Vector3(), _left = new Vector3(), _bow = new Quaternion(), _q = new Quaternion();
-const _gap = new Vector3(), _to = new Vector3(), _yaw = new Quaternion();
+const _p = new Vector3(), _at = new Vector3(), _left = new Vector3(), _gap = new Vector3(), _to = new Vector3();
+const _bow = new Quaternion(), _q = new Quaternion(), _yaw = new Quaternion();
 
 /** the least distance between segments `a0`–`a1` and `b0`–`b1` (m) */
 function segmentGap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3): number {

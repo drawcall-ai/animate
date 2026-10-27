@@ -73,13 +73,11 @@ export class Walk {
     go.stance = way.stance;
     this.eta = etaOf(self, placeOf(self, f), go, yaw);
     const via = way.via ?? [];
-    if (this.leg < via.length) {
-      let previous: Readonly<Vector3> = go.to;
-      for (let i = this.leg + 1; i <= via.length; i++) {
-        const next = i < via.length ? via[i](f) : this.end;
-        this.eta += Math.hypot(next.x - previous.x, next.z - previous.z) / go.speed;
-        previous = next;
-      }
+    let previous: Readonly<Vector3> = go.to;
+    for (let i = this.leg + 1; i <= via.length; i++) {
+      const next = i < via.length ? via[i](f) : this.end;
+      this.eta += Math.hypot(next.x - previous.x, next.z - previous.z) / go.speed;
+      previous = next;
     }
     go.face = yaw === null ? undefined : { yaw };
     return go;

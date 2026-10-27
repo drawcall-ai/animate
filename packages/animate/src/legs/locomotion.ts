@@ -5,8 +5,7 @@ export interface Locomotion {
   /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
   phase: number;
   /** 0 standing … 1 walking, 0 walking … 1 running */
-  walk: number;
-  run: number;
+  walk: number; run: number;
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
   /** the heading it will walk with half a second ahead (rad), for the eyes to lead */
@@ -24,8 +23,7 @@ export interface Locomotion {
   /** seconds standing on planted feet since the current walk started; the base resets it on a new walk */
   planted: number;
   /** the pelvis's and the thorax's turn with the stride (rad, + to the left) */
-  pelvisYaw: number;
-  thoraxYaw: number;
+  pelvisYaw: number; thoraxYaw: number;
   /** the requested quiet stance displacement from the centred stance (m, world) */
   quiet: Vector3;
 }

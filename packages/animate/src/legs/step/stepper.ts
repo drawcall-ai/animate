@@ -216,10 +216,8 @@ export class Stepper extends Steps {
     const holding = r.forecast
       ? standing - (dropOf(st, body) + st.bob) * s * moving
       : Math.max(nominal(this, body) - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
-    const reaches = legs.map((leg) => {
-      const up = feet.legs[leg.i].up ?? 0;
-      return Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(this, leg)) ** 2 - (holding + up - feet.ankleHeight) ** 2)));
-    });
+    const reaches = legs.map((leg) =>
+      Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(this, leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - feet.ankleHeight) ** 2))));
     return { holding, reaches };
   }
 

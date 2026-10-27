@@ -10,9 +10,7 @@ export function quintic(x: number, v: number, a: number, x1: number, v1: number,
   if (T <= t) return [x1, v1, 0];
   const d = x1 - x;
   const c = [
-    x,
-    v,
-    a / 2,
+    x, v, a / 2,
     (20 * d - (12 * v + 8 * v1) * T - 3 * a * T * T) / (2 * T ** 3),
     (-30 * d + (16 * v + 14 * v1) * T + 3 * a * T * T) / (2 * T ** 4),
     (12 * d - (6 * v + 6 * v1) * T - a * T * T) / (2 * T ** 5),
@@ -189,10 +187,7 @@ export function liftLeg(steps: Steps, now: Now, leg: Leg, capture: boolean) {
   steps.owed[leg.i] = false;
   const turn = { x: leg.yaw, v: wrapAngle(yawOf(f.prev.rotation(bone)) - yawOf(f.prev2.rotation(bone))) / dt, a: 0 };
   const lift = (airborne ? st.lift.jump : lerp(st.lift.walk, st.lift.run, run) * (1 - st.crouch.lift * k)) * s;
-  leg.swing = {
-    capture, u: dt / T, age: dt, rest: T, T, x, v: velocity, a: new Vector3(), turn,
-    fromPitch: leg.pitch, toes, strike: 0, lift, run, rel: null,
-  };
+  leg.swing = { capture, u: dt / T, age: dt, rest: T, T, x, v: velocity, a: new Vector3(), turn, fromPitch: leg.pitch, toes, strike: 0, lift, run, rel: null };
   [leg.anchor, leg.yaw] = landing(steps, now, leg, T - dt);
   settle(steps, now, leg, leg.swing);
   steps.phase = 2 * Math.PI * st.offsets[leg.i];

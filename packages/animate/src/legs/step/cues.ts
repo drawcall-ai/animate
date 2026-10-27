@@ -224,11 +224,7 @@ function furthestOf(steps: Steps, now: Now, ahead: number): Leg[] {
 
 /** What prompts a foot to step this sub-step: the one that catches a fall, how far a foot may be turned off the facing (rad) and where
  * the body turns to (rad). */
-interface Cues {
-  catcher: Leg | undefined;
-  turn: number;
-  turningTo: number;
-}
+interface Cues { catcher: Leg | undefined; turn: number; turningTo: number }
 
 /** how soon after its offset comes round a gait's foot lifts, and how long it stands first (shares of a cycle) */
 const SLOT = 0.25;

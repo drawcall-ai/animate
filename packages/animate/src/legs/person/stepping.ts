@@ -6,8 +6,8 @@ import type { Stepping } from '../step/state';
 import { squatOf, STANDING_REACH } from './posture';
 import { defaultStance } from '../../species/humanoid/stance';
 
-/** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992). */
-// Tuned: below 0.5 m/s the stride shortens instead of its cadence slowing.
+/** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992); tuned: below 0.5 m/s the stride
+ * shortens instead of its cadence slowing. */
 export const humanGait = (proportions: Proportions): Gait => powerGait({ height: proportions.hipHeight, slowest: 0.5, offsets: [0, 0.5], stride: 2.49, stance: stanceOf(0.79, 1, proportions.hipHeight), clearance: [0.013, 0.013] });
 
 /**

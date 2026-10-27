@@ -152,11 +152,9 @@ export class ChainLeg {
   get turn() { return TWISTING * this.twist; }
   private readonly sole: Vector3[];
   /** where and how the foot was held planted last sub-step, if it was; whether it had just landed */
-  private held: { position: Vector3; rotation: Quaternion } | null = null;
-  private landed = false;
+  private held: { position: Vector3; rotation: Quaternion } | null = null; private landed = false;
   /** where its planted foot's heel, contact and toe were last sub-step, while it stands, and how far it has slipped since it landed */
-  private put: [Vector3, Vector3][] | null = null;
-  private slipped = 0;
+  private put: [Vector3, Vector3][] | null = null; private slipped = 0;
   /** its contact with the floor, in the foot's terms: under the middle of its sole */
   private readonly contact: Vector3;
   private posed = false;
@@ -192,8 +190,7 @@ export class ChainLeg {
   private lifting: Float64Array | null = null;
   private readonly target: LegTarget = { swing: null, position: new Vector3(), rotation: new Quaternion(), above: [] };
 
-  private readonly sign: number;
-  private readonly length: number;
+  private readonly sign: number; private readonly length: number;
 
   constructor(private readonly chain: LegChain, private readonly start: ReadonlyPose) {
     const top = chain.joints[0].bone, terminal = chain.joints[chain.joints.length - 1].bone;
@@ -231,8 +228,7 @@ export class ChainLeg {
     const flat = this.read(this.flat ??= this.tableAt(0), out, ahead);
     return flat > -Infinity && rolled > -Infinity ? flat + (rolled - flat) * share : share < 0.5 ? flat : rolled;
   };
-  private flat: Table | null = null;
-  private rolled: Table | null = null;
+  private flat: Table | null = null; private rolled: Table | null = null;
 
   /** its table at `pitch`: sampled once for every body of its skeleton standing as it does */
   private tableAt(pitch: number): Table {
@@ -314,8 +310,7 @@ export class ChainLeg {
     target.above = this.sole;
     target.position.copy(foot.ankle);
     // (a planted foot pivots on the floor about its contact as the body turns over it, heading the body's way — where its leg's reach
-    // is known — and never slides: its contact stays where it is put)
-    // (about the end of the sole it stands on: its middle flat, its toe rolled over it, its heel rolled back onto it)
+    // is known — and never slides: its contact stays where it is put — about the end of the sole it stands on, the lowest)
     const off = wrapAngle(foot.yaw - facing), lowest = (point: Vector3) => _v.copy(point).applyQuaternion(foot.foot).y;
     const pivot = [this.chain.heel, this.contact, this.chain.toe].reduce((best, point) => lowest(point) < lowest(best) - 1e-6 ? point : best, this.contact);
     const contact = _p.copy(pivot).applyQuaternion(foot.foot).add(foot.ankle);

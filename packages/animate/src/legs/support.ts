@@ -49,14 +49,11 @@ export function outside(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vect
 export function past(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
   if (hull.length === 0) throw new Error('no support to be outside of');
   let inside = hull.length >= 3;
-  let best = Infinity;
-  let nx = 0;
-  let nz = 0;
+  let best = Infinity, nx = 0, nz = 0;
   for (let i = 0; i < hull.length; i++) {
     const [ax, az] = hull[i];
     const [bx, bz] = hull[(i + 1) % hull.length];
-    const ex = bx - ax;
-    const ez = bz - az;
+    const ex = bx - ax, ez = bz - az;
     if (ex * (q.z - az) - ez * (q.x - ax) < 0) inside = false;
     const len2 = ex * ex + ez * ez;
     const t = len2 > 0 ? Math.max(0, Math.min(1, ((q.x - ax) * ex + (q.z - az) * ez) / len2)) : 0;

@@ -8,10 +8,8 @@ const FOOT_HALF_WIDTH = 0.04;
 
 /** the heel (on the sole) in the foot bone's frame */
 export const heelOf = (proportions: Proportions, out = new Vector3()) => out.copy(proportions.sole.heel);
-
 /** the ball of the foot (the toes bone's origin) in the foot bone's frame */
 export const ballOf = (proportions: Proportions, side: Side, out = new Vector3()) => out.copy(proportions.offsets[`${side}Toes`]);
-
 /** a foot heading `yaw`, pitched by `pitch` (+ toes up, − heel up), as a world rotation */
 export const footRotation = (yaw: number, pitch: number, out = new Quaternion()) => quatYXZ(yaw, -pitch, 0, out);
 

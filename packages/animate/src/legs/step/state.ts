@@ -39,11 +39,11 @@ export interface Steering {
 
 /**
  * A species' stepping, in metres of its default body (× `scale`) and seconds: each leg's place in the cycle (`offsets`, 0 … 1: a leg
- * follows the one just before it); the feet's `toeOut` (rad, × side);
- * the `cadence` (cycle 2 / (base + perSpeed v)); `duty` walking, side-stepping, running (`run`: between these speeds); the most `travel`
- * of a stance; the landing's `lead`; half the feet's spread (`width.stand` already scaled); the pelvis' `bob` and `drop`; the swing's
- * `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the most a planted foot rolls (`pitch`, rad) and the ankle bends
- * (`dorsiflexion`); the `crouch`; the leg's `reach` (× length, a swinging leg's easing off from `swingReach`); the sole's `clearance`.
+ * follows the one just before it); the feet's `toeOut` (rad, × side); the `cadence` (cycle 2 / (base + perSpeed v)); `duty` walking,
+ * side-stepping, running (`run`: between these speeds); the most `travel` of a stance; the landing's `lead`; half the feet's spread
+ * (`width.stand` already scaled); the pelvis' `bob` and `drop`; the swing's `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the
+ * most a planted foot rolls (`pitch`, rad) and the ankle bends (`dorsiflexion`); the `crouch`; the leg's `reach` (× length, a swinging
+ * leg's easing off from `swingReach`); the sole's `clearance`.
  */
 export interface Stepping {
   scale: number; offsets: readonly number[]; toeOut: number; cadence: { base: number; perSpeed: number; side?: number };
@@ -73,8 +73,7 @@ export interface Feet {
   /**
    * each leg's side (+1 left), its foot (and toes) and top bones; the leg across from it on its girdle (`partner`; default the one
    * before it in the gait); how far its top stands ahead of the root and out from it (m; default 0 and the hip's half width) and its home
-   * ahead of it (m; default as its top), how far its
-   * top joint is above the root standing (m; default 0) and the leg's length (m; default `length`)
+   * ahead of it (m; default as its top), how far its top joint is above the root standing (m; default 0) and the leg's length (m; default `length`)
    */
   legs: readonly {
     sign: 1 | -1; foot: number; toes?: number; top: number; partner?: number;

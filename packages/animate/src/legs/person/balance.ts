@@ -122,8 +122,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
   const life = new Quiet(options.seed ?? seedOf(proportions.height, standing[0].position.x, standing[0].position.z));
   const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
   const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
-  const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
-  const tilts = [new Quaternion(), new Quaternion()];
+  const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()], tilts = [new Quaternion(), new Quaternion()];
   let offsets: Vector3[] | null = null, pace: Vector3 | null = null, phase = 0;
   return (f) => {
     if (f.dev && f.time > f.dt) check(person, f, f.dev, stepper.legs);

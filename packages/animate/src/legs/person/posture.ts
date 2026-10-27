@@ -52,10 +52,8 @@ export const STANDING_REACH = 0.995;
  * bow leans it instead.
  */
 const LEAN = { walk: 0.14, run: 0.15 }, LEANING = { accel: 1, speed: 0.1 }, BOWED = 0.15, LOWERED = 0.05;
-
 /** Tuned: how far it walks (0 … 1), blended into and out of walking at 6/s, decaying exactly at a finite step `dt`. */
 export const walking = (walk: number, speed: number, dt: number) => walk + (smoothstep(0.08, 0.6, speed) - walk) * (1 - Math.exp(-dt * 6));
-
 /** the stride's phase (rad) run on at `rate` (rad/s) and pulled toward the feet's (`goal`) at `ENTRAIN` (1/s) */
 export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
 
@@ -210,8 +208,7 @@ export const MOST_BOW = 60 * Math.PI / 180;
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
 function loadLean(pose: ReadonlyPose, proportions: Proportions, forward: Readonly<Vector3>): number {
   const hips = pose.position(0);
-  let moment = 0;
-  let mass = 0;
+  let moment = 0, mass = 0;
   pose.skeleton.bones.forEach((bone, i) => {
     const load = pose.load(i);
     // The counter-moment comes from the trunk above the hips, not the whole body.
