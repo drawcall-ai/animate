@@ -42,9 +42,7 @@ it('lists each scenario once', () => {
 //   lance (a hand routes round what it reaches for, not round what the body already holds); the helm's rim 2.0–3.2 cm into the right
 //   forearm or hand as it is taken (5% taller, mirrored), 8.7–8.8 cm into the thorax taken turned half round (its grips then by the
 //   body), 6.2 cm into the head put on 20% quicker; further left, its straight steps 5.7 % unequal (max 5 %);
-// - the stroll 15% faster and on a 20% tighter arc: no steady strides on the bend to judge (0 and 1 of 3), and 15% faster the arm
-//   lags 0.10 of the stride (max 0.08);
-// - pickup-shelf with the box 5 cm higher: it stands with its heels 0.084 of its height apart (min 0.1);
+// - the stroll 15% faster: no steady strides on the bend to judge (0 of 3), and the arm lags 0.10 of the stride (max 0.08);
 // - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12) as the headset leans the
 //   chest 20–23° sideways, the arm kept clear of the thigh beside it (the bound is an upright stance's); further off, the head lags its
 //   course by 5 cm.
@@ -55,14 +53,13 @@ const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stan
   ', the helm turned half round on its stand: walked round to take it', ', mirrored, the helm turned half round: walked round the stand clear of it',
   ", the shield's wall turned 0.4 rad", ", the shield's wall turned −0.4 rad"].map((variation) => `knight-arming${variation}`);
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
-// the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seed 1 and the shield's wall
-// turned −0.4 rad at seeds 0–2, which pass; with the box behind (seed 1), the box raised onto the board by 15 s but the carry never ends
-// in the 17 s: its walk up to the shelf never reports it has arrived, so the raise holds on (no late carry is logged).
+// the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seeds 0–1 and the shield's wall
+// turned −0.4 rad at seeds 0–2, which pass.
 const OPEN: Open[] = [...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
-  ["knight-arming, the shield's wall turned −0.4 rad", [3]], ['knight-arming, the knight 5% taller', [0, 2, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
-  'pickup-shelf, the box 5 cm higher', 'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
+  ["knight-arming, the shield's wall turned −0.4 rad", [3]], ['knight-arming, the knight 5% taller', [2, 3]], 'stroll 15% faster',
+  'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],
-  ['stroll round a sharp 0.6 m turn', [2]], ['pickup-shelf, the box behind', [1]]];
+  ['stroll round a sharp 0.6 m turn', [2]]];
 // (and the known task-accuracy failures, `known()`, below)
 const KNOWN = known();
 const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);

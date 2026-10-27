@@ -26,8 +26,6 @@ const BODY_NAMES = BODIES.map(([on]) => on);
 //   where the chest changes its turn the rifle leaves the aim by that change, 2.33° in 6 rad/s sweeps reversing within 0.1 s (2° at
 //   most) and 3.18° in 3 rad/s ones reversing at once (0.05° at most shown); the library has no way for an app to move a thing on a body
 //   in step with it (as `drive` moves its root);
-// - a crouch key's first frame lets the pelvis down at 38.9 m/s² (35.53 s; the soldier's 37.5), the legs' easing holding 33.3 after: a
-//   0.25 s minimum-jerk crouch peaks at 34;
 // - the soldier at a sprint and sprinting off: its knees fold at up to 96 000°/s² (19.53 s and on, the check's 83 333), its stride read
 //   as 1.14 m (2× its legs is 1.92: a foot leaving the floor twice a stance) — the stepper's, not the arms'; its jumps' landings fold
 //   them at 91 000°/s² (44.98 s); its short arms hold the rifle at the hip just below the first-person view (the receiver at −1.013 of
@@ -41,7 +39,6 @@ const test = cases([
     `shows the rifle steady in the first-person view through fast turns aiming, walking${on}`,
     `reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept${on}`,
   ]),
-  ...['', ' on the soldier'].map((on) => `crouches smoothly, deep and slow${on}`),
   ...[' on the soldier', ' on the outlier'].flatMap((on) => [
     `ADS overrides held sprint and keeps both grips during the raise${on}`,
     `jumps from a walk and a sprint: quick take-off, a ballistic arc, momentum kept, the knees taking the landing${on}`,

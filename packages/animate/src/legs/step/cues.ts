@@ -116,8 +116,10 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   const { st, feet } = steps, s = st.scale, { r, airborne, air, vy, yaw, most } = now;
   // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
   if (airborne) return !leg.swing && air > 0;
+  // (a planned walk keeps its supporting foot down even when short of reach: the pelvis gives, not both feet at once)
+  if (other.swing && r.forecast && !steps.clocked) return false;
   if (reach(steps, now, leg) < nominal(steps, now) + Math.max(0, vy) * RISING - STEP.short * s) return true;
-  if (leg.landed || (other.swing && r.forecast && !steps.clocked)) return false;
+  if (leg.landed) return false;
   if (leg === cues.catcher) return true;
   return strayed(st, feet, leg, _v.subVectors(hipOf(steps, now, leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;
 }

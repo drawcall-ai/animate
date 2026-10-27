@@ -378,9 +378,9 @@ const SENSING = 0.3;
 const PAUSE = 0.5;
 /** Tuned: a landing is kept within the leg's reach with the pelvis let down `drop` (m) more, never nearer than `least` (m) */
 const LANDING = { drop: 0.06, least: 0.15 };
-/** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
- * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
-const CROUCHING = { accel: 90, speed: 7.5 };
+/** Tuned (shares of the crouch's depth /s², /s): the crouch leaves room for the pelvis's adjustment to its feet below a 0.25 s
+ * minimum-jerk crouch's peak (~34 m/s² at 0.37 m depth); at 90, the combined onset reached 39 m/s². */
+const CROUCHING = { accel: 60, speed: 7.5 };
 /** Tuned (m/s): stepping sideways this fast, a body steps at its side-stepping cadence (slower, toward it) */
 const SIDE_SPEED = 0.3;
 const ZERO = new Vector3();

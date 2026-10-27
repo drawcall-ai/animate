@@ -57,8 +57,12 @@ export function pivotLimit(steps: Steps, now: Now, leg: Leg): number {
 export function pointed(steps: Steps, now: Now, leg: Leg, pitch: number, at?: Vector3): number {
   const { st, feet } = steps;
   if (st.plantarflexion === undefined) return pitch;
-  const lean = at ? shankLean(steps, at, feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a), leg.yaw) : feet.lean(leg.i, now.f.prev, leg.yaw);
-  return Math.max(pitch, -st.plantarflexion - lean);
+  // (rolling moves the ankle and turns the shank: enforce the pointing limit at that new position too)
+  for (let pass = 0; pass < 3; pass++) {
+    const lean = at ? shankLean(steps, at, feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a), leg.yaw) : feet.lean(leg.i, now.f.prev, leg.yaw);
+    pitch = Math.max(pitch, -st.plantarflexion - lean);
+  }
+  return pitch;
 }
 
 export function aheadOf(steps: Steps, now: Now, leg: Leg): number {
