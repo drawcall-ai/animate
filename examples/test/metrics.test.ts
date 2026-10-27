@@ -39,10 +39,11 @@ it('lists each scenario once', () => {
 });
 
 // Open (expected to fail: each one fixed comes off the list), at life seed 0 unless seeds are given:
-// - knight-arming and every variation: the shield borne on the left forearm 2.6–4.6 cm into the right hand or forearm as it takes the
-//   lance (a hand routes round what it reaches for, not round what the body already holds); the helm's rim 2.0–3.2 cm into the right
-//   forearm or hand as it is taken (5% taller, mirrored), 8.7–8.8 cm into the thorax taken turned half round (its grips then by the
-//   body), 6.2 cm into the head put on 20% quicker; further left, its straight steps 5.7 % unequal (max 5 %);
+// - knight-arming variations: the shield borne on the left forearm 2.6–4.3 cm into the right hand or forearm as it takes the
+//   lance (a hand routes round what it reaches for, not round what the body already holds); the helm's rim 3.4 cm into the left
+//   forearm as it is taken mirrored, 8.7–8.8 cm into the thorax taken turned half round (its grips then by the
+//   body), 6.1 cm into the head put on 20% quicker; further left, its straight steps 5.7 % unequal (max 5 %);
+//   with the gear 10 cm lower, the shield reaches 43 mm into the right forearm at 52.48 s (was 32 mm into the right hand).
 // - the stroll 15% faster: no steady strides on the bend to judge (0 of 3), and the arm lags 0.10 of the stride (max 0.08);
 // - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12) as the headset leans the
 //   chest 20–23° sideways, the arm kept clear of the thigh beside it (the bound is an upright stance's); further off, the head lags its
@@ -56,6 +57,9 @@ const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stan
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
 // the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seeds 0–1 and the shield's wall
 // turned −0.4 rad at seeds 0–2, which pass.
+// The 5% taller knight's deepest contact is the helm rim 14 / 13 mm into the head (seeds 0 / 1, within the 15 mm bound),
+// and the shield 34 / 24 mm into the right hand (seeds 2 / 3, still open).
+// The box 5 cm higher still passes: held-wrist error 12 mm at 10.23 s, planted foothold extension 56 mm at 8.62 s (seed 0).
 // Waiting for settled feet before tiptoe leaves higher reach's right wrist 55.46 / 56.27 mm off its course at 12.15 s (seeds 0 / 2,
 // 50 mm bound). Both pass with that change reverted; seeds 1 and 3 pass with it. Retained for the pickup slide improvement.
 const OPEN: Open[] = [...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
