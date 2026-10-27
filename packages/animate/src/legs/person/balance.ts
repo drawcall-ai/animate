@@ -248,11 +248,12 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
         f.current.setLocal(INDEX[`${side}Toes`], toes);
       };
       place(pose.ankle);
-      // (a swinging foot the ankle's range turned off its plan — toes down past it, behind a crouch — lifted as far as that put it into the floor)
-      if (leg.swing) {
-        const ankle = f.current.position(INDEX[`${side}Foot`]);
-        const sunk = -feet.sole(i, ankle, f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
-        if (sunk > 0) place(_lift.copy(pose.ankle).setY(pose.ankle.y + sunk));
+      // (a swinging foot the ankle's range turned off its plan — toes down past it, behind a crouch — lifted as far as that put it into the
+      // floor, again as the lift turns the shank and the ankle's range with it)
+      for (let pass = 0, lift = 0; leg.swing && pass < 3; pass++) {
+        const sunk = -feet.sole(i, f.current.position(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
+        if (sunk <= 0) break;
+        place(_lift.copy(pose.ankle).setY(pose.ankle.y + (lift += sunk)));
       }
     });
     legs.forEach((leg, i) => upright.feet[i].anchor.copy(leg.anchor));
