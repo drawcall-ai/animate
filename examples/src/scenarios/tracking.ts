@@ -1,12 +1,12 @@
 import { Euler, Group, MathUtils, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { lookAt, reach, track } from '@drawcall/animate';
-import { route, scalar, type Way } from '../keys';
+import { lookAt, reach, track, wait, walkTo } from '@drawcall/animate';
+import { destination, route, scalar, type Way } from '../keys';
 import type { Person, Scenario } from '../scenario';
 import { ball, box } from '../things';
 
-// Keyframed trackers, as a VR headset and controllers record them: a hand, the head, or the head and both hands. Nobody scripts the
-// body: it comes along under them.
+// Keyframed trackers, as a VR headset and controllers record them: a hand, the head, or the head and both hands. The body
+// follows them; the reaching scene also leads its walk by the next recorded waypoint.
 
 /** the standing skull-centre height the head and controller tracks were recorded at (m) */
 const RECORDED = 1.6;
@@ -183,9 +183,6 @@ export function reaching(variation: Variation = {}): Scenario {
   ], variation, () => true);
   /** when the target stops far ahead (s) */
   const stops = ways[ways.length - 1][0] / pace;
-  const wrist = route(ways);
-  /** where the hand's target is at the body's `time` (into `out`) */
-  const target = (time: number, out: Vector3) => wrist(time * pace, out).applyAxisAngle(UP, turn);
   return {
     id: 'reach',
     title: 'Reaching around (one hand)',
@@ -196,20 +193,53 @@ export function reaching(variation: Variation = {}): Scenario {
       const person = cast.person();
       const scene = new Group();
       const marker = ball(scene, 'target', 0.035, new Vector3());
-      const followed = (time: number) => target(time, marker.position);
       let reached = false;
       return {
         scene,
         bodies: [person],
-        story: () => parallel('race',
-          function* () {
-            // (after the target until it stops far ahead, and on it there)
-            yield* reach(person, { right: followed }, { until: stops });
-            reached = yield* reach(person, { right: followed });
-          },
-          // (the eyes lead the hand: where it is going a moment on)
-          lookAt(person, (time) => target(time + GLANCE / pace, new Vector3())),
-        ),
+        story: function* () {
+          yield* wait(0.4 / pace);
+          const hanging = person.bones.rightHand.getWorldPosition(new Vector3()).applyAxisAngle(UP, -turn);
+          const wrist = route([[0.4, [hanging.x, hanging.y, hanging.z]], ...ways]);
+          const target = (time: number, out: Vector3) => wrist(time * pace, out).applyAxisAngle(UP, turn);
+          let time = 0;
+          const followed = (now: number) => {
+            time = now;
+            return target(now, marker.position);
+          };
+          const next = destination(ways), stand = person.position.clone().setY(0);
+          let facing = person.facing, turning = false;
+          const proportions = person.species.person;
+          if (!proportions) throw new Error('the reach recording needs a person');
+          // (the body anticipates the next recorded waypoint: turn toward it and step before the arm runs out of reach)
+          const comeAlong = (time: number) => {
+            const ahead = next(time * pace).applyAxisAngle(UP, turn);
+            const beside = new Vector3(-Math.cos(facing), 0, Math.sin(facing)).multiplyScalar(proportions.shoulderHalfWidth);
+            const shoulder = stand.clone().add(beside);
+            const toward = Math.atan2(ahead.x - shoulder.x, ahead.z - shoulder.z);
+            const off = Math.abs(Math.atan2(Math.sin(toward - facing), Math.cos(toward - facing)));
+            turning = off > (turning ? 0.3 : 0.7);
+            if (turning) facing = toward;
+            beside.set(-Math.cos(facing), 0, Math.sin(facing)).multiplyScalar(proportions.shoulderHalfWidth);
+            shoulder.copy(stand).add(beside);
+            if (Math.hypot(ahead.x - shoulder.x, ahead.z - shoulder.z) > 0.95 * proportions.armLength) {
+              const back = shoulder.sub(ahead).setY(0).normalize();
+              stand.copy(ahead).setY(0).addScaledVector(back, 0.55 * proportions.armLength).sub(beside);
+            }
+            return stand;
+          };
+          yield* parallel('race',
+            function* () {
+              // (follow the target until it stops far ahead, and the wrist is on it)
+              reached = yield* reach(person, { right: followed }, { speed: 2,
+                until: () => time >= stops && person.bones.rightHand.getWorldPosition(new Vector3()).distanceTo(marker.position) < 0.01 });
+            },
+            walkTo(person, comeAlong, { speed: 1.3 * pace, accel: 1.2 * pace ** 2, until: Infinity,
+              face: () => person.position.clone().add(new Vector3(Math.sin(facing), 0, Math.cos(facing))) }),
+            // (the eyes lead the hand: where it is going a moment on)
+            lookAt(person, (time) => target(time + GLANCE / pace, new Vector3())),
+          );
+        },
         // (the hand on the far target once it stopped there)
         done: () => reached,
       };

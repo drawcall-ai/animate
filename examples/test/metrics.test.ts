@@ -38,9 +38,6 @@ it('lists each scenario once', () => {
 });
 
 // Open (expected to fail: each one fixed comes off the list), at life seed 0 unless seeds are given:
-// - reach and its variations: the wrist lags its course by 0.12–0.26 m as the target swings round behind the body and the body steps
-//   round after it (7–12 s; 10 cm higher, 1.13 m at 2.7 s, its first target out of reach on tiptoe); turned 0.3 rad left, 6.6 cm past
-//   the reachable bound at 8.8 s; 10 cm to the left, 0.14 m off it held at 15.0 s and the eyes 0.33 s past their comfortable turn;
 // - knight-arming and every variation: the shield borne on the left forearm 2.6–4.6 cm into the right hand or forearm as it takes the
 //   lance (a hand routes round what it reaches for, not round what the body already holds); the helm's rim 2.0–3.2 cm into the right
 //   forearm or hand as it is taken (5% taller, mirrored), 8.7–8.8 cm into the thorax taken turned half round (its grips then by the
@@ -57,13 +54,11 @@ const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stan
   ', the helm turned a quarter on its stand', ', the helm turned a quarter the other way',
   ', the helm turned half round on its stand: walked round to take it', ', mirrored, the helm turned half round: walked round the stand clear of it',
   ", the shield's wall turned 0.4 rad", ", the shield's wall turned −0.4 rad"].map((variation) => `knight-arming${variation}`);
-const REACH = ['', ', the targets 10 cm to the left', ', the targets 10 cm nearer', ', the targets 10 cm to the right', ', the targets 10 cm higher',
-  ', the targets 10 cm lower', ', turned 0.3 rad right', ', turned 0.3 rad left', ', the hand 20% slower', ', the hand 20% faster'].map((variation) => `reach${variation}`);
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
 // the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seed 1 and the shield's wall
 // turned −0.4 rad at seeds 0–2, which pass; with the box behind (seed 1), the box raised onto the board by 15 s but the carry never ends
 // in the 17 s: its walk up to the shelf never reports it has arrived, so the raise holds on (no late carry is logged).
-const OPEN: Open[] = [...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
+const OPEN: Open[] = [...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
   ["knight-arming, the shield's wall turned −0.4 rad", [3]], ['knight-arming, the knight 5% taller', [0, 2, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
   'pickup-shelf, the box 5 cm higher', 'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],

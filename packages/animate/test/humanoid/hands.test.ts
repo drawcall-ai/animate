@@ -172,3 +172,15 @@ describe('a grip taken', () => {
     else expect(problems).toEqual([]);
   });
 });
+
+it('follows a smoothly moving point without treating every sample as a stationary reach', () => {
+  const body = person(), h = insides(body), point = new Vector3();
+  const target = (time: number) => point.set(-0.3 + 0.15 * Math.sin(6 * time), 1.2, 0.4);
+  let error = 0;
+  play(function* () {
+    yield* reach(body, { right: target }, { speed: 1, until: 5 });
+  }, [body], 5, (time) => {
+    if (time > 2) error = Math.max(error, h.pose.position(INDEX.rightHand).distanceTo(target(time)));
+  });
+  expect(error).toBeLessThan(0.03);
+});

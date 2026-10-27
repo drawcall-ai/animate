@@ -8,7 +8,7 @@ import { reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, onBody, worn } from '../../things/hold';
 import type { Hold } from '../../things/resolve';
-import { CALM, reaching } from './arms';
+import { CALM, HOLD, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
 import { noticing } from '../../look/gaze';
 import { SIDES, type Side } from '../../species/humanoid/bones';
@@ -163,12 +163,27 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
  * after them, and takes up one that comes in reach.
  */
 export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: Pace) {
+  aims = aims.map(({ side, target }) => {
+    const previous = new Vector3(), velocity = new Vector3();
+    let time = NaN;
+    return { side, target: (f: Frame) => {
+      const goal = target(f);
+      if (time !== f.time) {
+        velocity.subVectors(goal.position, previous).divideScalar(f.time - time);
+        // (as TrackedPoint: a goal faster than the hand's pace jumped, rather than moved)
+        if (!Number.isFinite(time) || velocity.length() > (pace.speed ?? CALM.speed)) velocity.set(0, 0, 0);
+        previous.copy(goal.position); time = f.time;
+      }
+      return { ...goal, velocity: goal.velocity ?? velocity };
+    } };
+  });
   const middle = (f: Frame) => aims.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(aims.length);
   const there = (f: Frame) => aims.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   const going = aims.map(({ side, target }) => {
     const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
     const { speed } = pace, accel = pace.accel ?? CALM.accel;
-    if (speed !== undefined) return { side, step: reaching(person, side, target, { accel, speed }), lasts: distance / speed + speed / accel };
+    // (at an explicit hand speed, its joints keep to the moving point as briskly as to a held grip)
+    if (speed !== undefined) return { side, step: reaching(person, side, target, { ...HOLD, accel, speed }), lasts: distance / speed + speed / accel };
     const seconds = reachTime(distance / person.scale, seedOf(side, Math.round(distance * 1000))) / person.tempo;
     return { side, step: reaching(person, side, target, { seconds }), lasts: seconds };
   });

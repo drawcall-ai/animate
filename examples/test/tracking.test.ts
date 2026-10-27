@@ -10,10 +10,8 @@ import { cases } from '../../packages/animate/test/open';
 
 // Open (expected to fail: each one fixed comes off the list), library defects:
 // - looking round, the body turning back from behind brings its left upper arm 1.0–1.1 cm into the trunk at 15 s (dev log, limit 1 cm);
-// - the reach's walk up to its far target sets off with the XCoM 11.1 cm outside the support at 13.7 s (dev log, limit 10 cm), at life seed 3.
 const test = cases([
   'looks around with an empty dev log',
-  ['reaches round with an empty dev log', [3]],
 ]);
 
 /** a person reaching its right hand to `target` (a function of its time) until `until` s */
@@ -49,8 +47,7 @@ test('tracked controllers rising from the floor to a cheer are followed', () => 
 });
 
 test('reaches a point 6 cm off the floor while it rests there', () => {
-  // (the target comes down to the floor by 6.9 s and rests there till 7.7 s: the body cannot know where it is going, so it steps up and
-  // squats as it comes, and the hand gets to it while it rests)
+  // (the recording reaches the floor by 6.9 s and rests there till 7.7 s; its anticipatory walk brings the body up to it)
   const sim = new Simulation(reaching());
   let nearest = Infinity;
   while (sim.t < 7.7) {
