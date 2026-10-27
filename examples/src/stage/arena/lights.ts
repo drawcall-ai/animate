@@ -1,4 +1,4 @@
-import { forwardOf } from '@drawcall/animate';
+import { forwardOf } from '../../math';
 import {
   AdditiveBlending,
   BoxGeometry,

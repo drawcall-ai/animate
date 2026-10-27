@@ -1,22 +1,22 @@
 // The benchmark, shared by node (node.ts) and the browser (page.ts): a crowd of the example
-// scenarios stepped at 60 Hz without rendering (the scenarios' direction runs inside the actors'
-// behaviours, so it is timed with them).
+// scenarios stepped at 60 Hz without rendering (each scenario's story steps with its bodies, so it
+// is timed with them).
 import { SCENARIOS } from '../src/scenarios';
-import { FIXED_DT } from '../src/scenario';
+import { FIXED_DT, type Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 
-/** Simulations of the example scenarios, cycled until they hold at least `n` characters. */
+/** Simulations of `scenarios` (default every example), cycled until they hold at least `n` bodies. */
 export class Crowd {
   readonly sims: Simulation[] = [];
-  readonly characters: number = 0;
+  readonly bodies: number = 0;
 
-  constructor(n: number) {
-    for (let i = 0; this.characters < n; i++) {
-      const sim = new Simulation(SCENARIOS[i % SCENARIOS.length]);
+  constructor(n: number, scenarios: readonly Scenario[] = SCENARIOS) {
+    for (let i = 0; this.bodies < n; i++) {
+      const sim = new Simulation(scenarios[i % scenarios.length]);
       // each lap of the scenarios starts further in, so the crowd doesn't move in lockstep
-      sim.advanceTo((Math.floor(i / SCENARIOS.length) * 2.7) % sim.scenario.duration);
+      sim.advanceTo((Math.floor(i / scenarios.length) * 2.7) % sim.scenario.duration);
       this.sims.push(sim);
-      this.characters += sim.actors.length;
+      this.bodies += sim.stage.bodies.length;
     }
   }
 
@@ -31,6 +31,16 @@ export class Crowd {
     this.restart();
     for (const sim of this.sims) sim.step();
   }
+}
+
+/** the scenarios named by `ids` (comma-separated), or every one */
+export function named(ids: string | null | undefined): readonly Scenario[] {
+  if (!ids) return SCENARIOS;
+  return ids.split(',').map((id) => {
+    const scenario = SCENARIOS.find((s) => s.id === id);
+    if (!scenario) throw new Error(`no scenario "${id}" (known: ${SCENARIOS.map((s) => s.id).join(', ')})`);
+    return scenario;
+  });
 }
 
 /** what the benchmark needs from its runtime */
@@ -52,20 +62,20 @@ export interface Stats {
 }
 
 export interface Result {
-  characters: number;
+  bodies: number;
   frames: number;
-  /** ms per frame, all characters */
+  /** ms per frame, all bodies */
   frame: Stats;
-  /** µs per character per tick, over all characters and by scenario */
-  perChar: Stats;
+  /** µs per body per tick, over all bodies and by scenario */
+  perBody: Stats;
   byScenario: Map<string, Stats>;
   /** heap growth per frame between collections (bytes; NaN where the heap can't be read) */
   alloc: number;
 }
 
-/** Times `n` characters for `seconds` after `warmup` seconds, then measures their allocation. */
-export async function measure(n: number, seconds: number, warmup: number, host: Host): Promise<Result> {
-  const crowd = new Crowd(n);
+/** Times `n` bodies of `scenarios` for `seconds` after `warmup` seconds, then measures their allocation. */
+export async function measure(n: number, seconds: number, warmup: number, host: Host, scenarios?: readonly Scenario[]): Promise<Result> {
+  const crowd = new Crowd(n, scenarios);
   for (let f = 0; f < warmup / FIXED_DT; f++) crowd.step();
 
   const frames = Math.round(seconds / FIXED_DT);
@@ -83,36 +93,37 @@ export async function measure(n: number, seconds: number, warmup: number, host: 
     if (f % 60 === 59) await host.pause?.();
   }
 
-  // µs per character: a simulation's time shared among its actors
-  const perChar = perSim.map((a, i) => a.map((ms) => (ms * 1000) / crowd.sims[i].actors.length));
+  // µs per body: a simulation's time shared among its bodies
+  const perBody = perSim.map((a, i) => a.map((ms) => (ms * 1000) / crowd.sims[i].stage.bodies.length));
   const byScenario = new Map<string, Stats>();
-  for (const s of new Set(crowd.sims.map((sim) => sim.scenario.id))) byScenario.set(s, stats(perChar.filter((_, i) => crowd.sims[i].scenario.id === s)));
-  return { characters: crowd.characters, frames, frame: stats([perFrame]), perChar: stats(perChar), byScenario, alloc: allocation(crowd, host) };
+  for (const s of new Set(crowd.sims.map((sim) => sim.scenario.id))) byScenario.set(s, stats(perBody.filter((_, i) => crowd.sims[i].scenario.id === s)));
+  return { bodies: crowd.bodies, frames, frame: stats([perFrame]), perBody: stats(perBody), byScenario, alloc: allocation(crowd, host) };
 }
 
-/** median heap growth per frame over short runs of the steps alone, keeping runs without a collection */
+/**
+ * heap growth per frame: each simulation's step measured alone, over 40 frames, its median over the steps no collection fell in, summed
+ * over the crowd (a whole frame of a large crowd allocates past the young generation: a collection falls in nearly every one)
+ */
 function allocation(crowd: Crowd, host: Host): number {
-  const grew: number[] = [];
-  for (let run = 0; run < 40; run++) {
-    host.collect?.();
-    let bytes = 0;
-    for (let f = 0; f < 10; f++) {
-      crowd.restart();
-      const h0 = host.heap();
-      if (h0 === null) return NaN;
-      for (const sim of crowd.sims) sim.step();
-      const h1 = host.heap() ?? NaN;
-      // (a collection in between: the run can't tell)
-      if (!(h1 >= h0)) {
-        bytes = NaN;
-        break;
-      }
-      bytes += h1 - h0;
-    }
-    if (!Number.isNaN(bytes)) grew.push(bytes / 10);
+  if (host.heap() === null) return NaN;
+  host.collect?.();
+  const grew = crowd.sims.map((): number[] => []);
+  for (let f = 0; f < 40; f++) {
+    crowd.restart();
+    crowd.sims.forEach((sim, i) => {
+      const before = host.heap() ?? NaN;
+      sim.step();
+      const after = host.heap() ?? NaN;
+      if (after >= before) grew[i].push(after - before);
+    });
   }
-  grew.sort((a, b) => a - b);
-  return grew.length ? grew[grew.length >> 1] : NaN;
+  return grew.reduce((sum, bytes) => sum + median(bytes), 0);
+}
+
+/** the middle of `values` (NaN if none) */
+function median(values: number[]): number {
+  values.sort((a, b) => a - b);
+  return values.length ? values[values.length >> 1] : NaN;
 }
 
 function stats(samples: Float64Array[]): Stats {
@@ -127,15 +138,15 @@ function stats(samples: Float64Array[]): Stats {
   return { mean: all.reduce((s, x) => s + x, 0) / all.length, p50: at(0.5), p95: at(0.95), p99: at(0.99), max: all[all.length - 1] };
 }
 
-/** The results as text tables: per crowd size, then µs per character by scenario. */
+/** The results as text tables: per crowd size, then µs per body by scenario. */
 export function report(results: Result[]): string {
   const pad = (cells: (string | number)[], width = 10) => cells.map((c) => String(c).padStart(width)).join('');
-  const lines = [pad(['chars', 'ms/frame', 'p50', 'p95', 'p99', 'max', 'µs/char', 'p99', 'KiB/frame'])];
+  const lines = [pad(['bodies', 'ms/frame', 'p50', 'p95', 'p99', 'max', 'µs/body', 'p99', 'KiB/frame'])];
   for (const r of results) {
     const f = r.frame;
-    lines.push(pad([r.characters, ...[f.mean, f.p50, f.p95, f.p99, f.max].map((v) => v.toFixed(3)), r.perChar.mean.toFixed(1), r.perChar.p99.toFixed(1), (r.alloc / 1024).toFixed(2)]));
+    lines.push(pad([r.bodies, ...[f.mean, f.p50, f.p95, f.p99, f.max].map((v) => v.toFixed(3)), r.perBody.mean.toFixed(1), r.perBody.p99.toFixed(1), (r.alloc / 1024).toFixed(2)]));
   }
-  lines.push('', `µs per character per tick, mean (p99)\n${'scenario'.padEnd(14)}${pad(results.map((r) => r.characters), 16)}`);
+  lines.push('', `µs per body per tick, mean (p99)\n${'scenario'.padEnd(14)}${pad(results.map((r) => r.bodies), 16)}`);
   for (const id of results[0]?.byScenario.keys() ?? []) {
     const cells = results.map((r) => {
       const s = r.byScenario.get(id);

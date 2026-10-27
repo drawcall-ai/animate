@@ -1,10 +1,7 @@
-import { Vector3, type Object3D } from 'three';
-import type { CharacterModel } from '@pmndrs/viverse';
+import { Vector3 } from 'three';
+import type { JointName, Joints } from '../joints';
 
-/**
- * OpenPose BODY_25 keypoints in order, as the nodes of a character model a Humanoid drives:
- * its VRM-named bones and the landmarks the Humanoid adds.
- */
+/** OpenPose BODY_25 keypoints in order, as a person's joints: its bones and its landmarks. */
 export const BODY25_KEYPOINTS = [
   'nose',
   'neck',
@@ -31,7 +28,7 @@ export const BODY25_KEYPOINTS = [
   'rightBigToe',
   'rightSmallToe',
   'rightHeel',
-] as const;
+] as const satisfies readonly JointName[];
 
 /** BODY_25 limb pairs in OpenPose render order. */
 export const BODY25_PAIRS: readonly [number, number][] = [
@@ -47,16 +44,9 @@ export const BODY25_COLORS: readonly [number, number, number][] = [
   [0, 255, 255],
 ];
 
-/** The model's BODY_25 keypoint nodes, in order. */
-export function keypointsOf(model: CharacterModel): Object3D[] {
-  return BODY25_KEYPOINTS.map((name) => {
-    const node = model.scene.getObjectByName(name);
-    if (!node) throw new Error(`character model has no ${name}: drive it with a Humanoid (the landmarks come with it); bones are read by their VRM names`);
-    return node;
-  });
+/** The person's BODY_25 keypoints as world [x, y, z] triples (as its scene graph's world matrices stand). */
+export function toBody25(joints: Joints): [number, number, number][] {
+  return BODY25_KEYPOINTS.map((name) => joints.at(name, _at).toArray());
 }
 
-/** The model's BODY_25 keypoints as world [x, y, z] triples. */
-export function toBody25(model: CharacterModel): [number, number, number][] {
-  return keypointsOf(model).map((node) => node.getWorldPosition(new Vector3()).toArray());
-}
+const _at = new Vector3();

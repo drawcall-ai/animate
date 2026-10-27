@@ -1,6 +1,6 @@
-// Browser benchmark (bench.html). Query: ?n=20,50,100&seconds=15&warmup=3
+// Browser benchmark (bench.html). Query: ?n=20,50,100&seconds=15&warmup=3&scenarios=stroll,dog-fetch
 // The report goes to the page and to `window.__bench` (read by scripts/bench.mjs).
-import { measure, report, type Host, type Result } from './measure';
+import { measure, named, report, type Host, type Result } from './measure';
 
 declare global {
   interface Window {
@@ -16,6 +16,7 @@ const q = new URLSearchParams(location.search);
 const sizes = (q.get('n') ?? '20,50,100').split(',').map(Number);
 const seconds = Number(q.get('seconds') ?? 15);
 const warmup = Number(q.get('warmup') ?? 3);
+const scenarios = named(q.get('scenarios'));
 const out = document.getElementById('out');
 if (!out) throw new Error('bench.html needs #out');
 
@@ -30,7 +31,7 @@ window.__bench = state;
 
 const results: Result[] = [];
 for (const n of sizes) {
-  results.push(await measure(n, seconds, warmup, host));
+  results.push(await measure(n, seconds, warmup, host, scenarios));
   state.report = `${report(results)}\n\ntimer resolution: ${timer}`;
   out.textContent = state.report + (results.length < sizes.length ? '\nrunning…' : '');
 }

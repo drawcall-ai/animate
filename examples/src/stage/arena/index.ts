@@ -1,5 +1,5 @@
 import { Color, FogExp2, Group, InstancedMesh, MeshBasicMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
-import { seeded } from '@drawcall/animate/rig';
+import { seeded } from '../../math';
 import { addBalconyLights, addCrowd } from './crowd';
 import { addJumbotron, addLights } from './lights';
 import { addRing } from './ring';
