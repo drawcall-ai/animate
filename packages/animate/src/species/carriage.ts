@@ -24,7 +24,7 @@ export interface CarriedBones {
 }
 
 /** What a species' own posture adds to the carriage (`Carried.write`), each in the bone's terms; `weight` scales the weight roll. */
-export interface Extras {
+interface Extras {
   lift?: number;
   weight?: number;
   pelvisRoll?: number;
@@ -53,7 +53,7 @@ export interface Striding {
 }
 
 /** The carriage of one body, a sub-step at a time: `step` reads the stride, then `write` poses the trunk, head and tail before the legs step. */
-export interface Carried {
+interface Carried {
   /** 0 standing … 1 at least at the gait's slowest pace, eased */
   readonly moving: number;
   /** the ground speed (m/s) and the fore and hind phases (rad), as `step` read them */
@@ -112,7 +112,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
     write(f, extras = {}) {
       const m = moving, t = f.time, b = body(), once = b.once ?? 0, x = phase - Math.PI * strideAt(gait, speed, 0).duty;
       const w = (c: number) => wave(once, x, c), nod = wave(once, phase, 0);
-      // Tuned: inherited drift frequencies .79/1.37/2.11 rad/s, not measured physiology.
+      // Tuned: drift frequencies .79/1.37/2.11 rad/s, not measured physiology.
       const drift = irregular(t, life.phase, 0.79, 1.37, 2.11) * (1 - m);
       const sway = Math.cos(hind - Math.PI * strideAt(gait, speed, 2).duty);
       // (on legs that hold the root's height, the withers rise to it at most: they only ever let it down)

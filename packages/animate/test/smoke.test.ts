@@ -4,6 +4,7 @@ import { skin } from '@drawcall/rig';
 import { expect, it } from 'vitest';
 import { Body, horse, humanoid, lookAt, walkTo } from '../src/index';
 import { dt } from './bodies';
+import { named } from './things';
 import { HORSE } from './skeletons/horse';
 import { PERSON } from './skeletons/person';
 
@@ -20,8 +21,8 @@ function capsule(a: Vector3, b: Vector3, radius: number): Mesh {
 function meshOf(skeleton: readonly { name: string; parent?: string; position: readonly number[] }[], radius: number): Group {
   const container = new Group(), at = new Map(skeleton.map((bone) => [bone.name, new Vector3(...bone.position)]));
   for (const bone of skeleton) {
-    const parent = bone.parent && at.get(bone.parent);
-    if (parent) container.add(capsule(parent, at.get(bone.name)!, radius));
+    const parent = bone.parent && at.get(bone.parent), end = at.get(bone.name);
+    if (parent && end) container.add(capsule(parent, end, radius));
   }
   return container;
 }
@@ -36,7 +37,7 @@ it('drives a person rigged with @drawcall/rig and a horse following it, on a tim
   scene.add(walker.object, mare.object);
   expect(personReport.bones.length).toBeGreaterThan(0);
   expect(personModel.getObjectsByProperty('isSkinnedMesh', true).length).toBeGreaterThan(0);
-  const foot = personModel.getObjectByName('leftFoot')!;
+  const foot = named(personModel, 'leftFoot');
   const before = foot.getWorldPosition(new Vector3());
   let done = false;
   const update = runTimeline(function* () {

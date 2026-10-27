@@ -99,7 +99,7 @@ export function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: 
 }
 
 /** `to` moved onto its own side of the other foot, as the body will face (`side`, its left) and as it faces now; how far it was across (m) */
-export function uncross(steps: Steps, now: Now, leg: Leg, to: Vector3, side: Vector3): number {
+function uncross(steps: Steps, now: Now, leg: Leg, to: Vector3, side: Vector3): number {
   const { st, legs, pair } = steps, s = st.scale, other = legs[pair[leg.i]];
   let across = 0;
   for (const axis of [side, leftOf(now.yaw, _m)]) {
@@ -200,7 +200,7 @@ export function liftLeg(steps: Steps, now: Now, leg: Leg, capture: boolean) {
 }
 
 /** A swing taken to the air mid-step: the step starts over as the leap's, from where the foot is, moving as it does. */
-export function relaunch(steps: Steps, { f, dt }: Now, leg: Leg, w: Swing) {
+function relaunch(steps: Steps, { f, dt }: Now, leg: Leg, w: Swing) {
   const { st } = steps, { foot: footBone, toes: toesBone } = steps.feet.legs[leg.i];
   const at = f.prev.position(footBone), was = f.prev2.position(footBone), hips = f.prev.position(0), hipsWas = f.prev2.position(0);
   w.rel = { x: hips.y - at.y, v: (hips.y - at.y - hipsWas.y + was.y) / dt, a: 0 };
@@ -285,7 +285,7 @@ const PUSHED = 0.5;
 /** a bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing */
 const BEND_SPAN = 0.1;
 
-/** Tuned (the old balance shuffled hip-wide steps): a walker's slow step lands at most `WIDE.stances` standing stances aside of the other
+/** Tuned: a walker's slow step lands at most `WIDE.stances` standing stances aside of the other
  * foot, as balance lets it (1.1: within the metrics' 0.15 H for a straight stop), its extrapolated centre of mass kept within `within` (m) */
 const WIDE = { stances: 1.1, within: 0.03 };
 

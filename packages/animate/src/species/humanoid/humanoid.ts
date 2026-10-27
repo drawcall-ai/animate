@@ -64,9 +64,9 @@ function measure(at: Record<BoneName, Vector3 | null>, height?: number): { propo
   rest.hips.copy(need(at.hips, 'hips'));
   const turns = perBone(() => new Quaternion());
   for (const bone of CHILD_BONES) {
-    const p = at[bone], offset = rest.offsets[bone];
-    if (!p) continue;
-    offset.subVectors(p, need(at[PARENT[bone]], PARENT[bone]));
+    const point = at[bone], offset = rest.offsets[bone];
+    if (!point) continue;
+    offset.subVectors(point, need(at[PARENT[bone]], PARENT[bone]));
     const axis = STRAIGHT[bone];
     if (!axis) continue;
     turns[PARENT[bone]].setFromUnitVectors(axis, offset.clone().normalize());
@@ -99,8 +99,8 @@ const INERTIA = { ahead: 0.9, back: 0.3, roll: 0.6, most: 0.35, frequency: 0.8, 
 const EYES = { down: (30 * Math.PI) / 180, up: (20 * Math.PI) / 180, side: (20 * Math.PI) / 180 };
 
 /** a person's gaze: the neck chain turns the head, the eyes the rest; looking low, the body bows */
-function humanGaze(p: Proportions): Gazer {
-  const { eyes } = pointsOf(p);
+function humanGaze(proportions: Proportions): Gazer {
+  const { eyes } = pointsOf(proportions);
   return {
     neck: 'neck',
     eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),

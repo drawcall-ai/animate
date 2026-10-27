@@ -136,9 +136,9 @@ export class Pose implements ReadonlyPose {
     this.positions[0].copy(this.root);
     this.rotations[0].copy(this.locals[0]);
     for (let i = 1; i < bones.length; i++) {
-      const p = bones[i].parent;
-      this.positions[i].copy(bones[i].offset).applyQuaternion(this.rotations[p]).add(this.positions[p]);
-      this.rotations[i].multiplyQuaternions(this.rotations[p], this.locals[i]);
+      const parent = bones[i].parent;
+      this.positions[i].copy(bones[i].offset).applyQuaternion(this.rotations[parent]).add(this.positions[parent]);
+      this.rotations[i].multiplyQuaternions(this.rotations[parent], this.locals[i]);
     }
   }
 }

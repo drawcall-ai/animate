@@ -25,7 +25,7 @@ export function cue(steps: Steps, now: Now): Cues {
  * crossing the other, else the one furthest from it; only one the others can stand for through its swing: a leading foot stepped on
  * again, the trailing one would be left a stance's most travel behind its hip.
  */
-export function catcherOf(steps: Steps, now: Now): Leg | undefined {
+function catcherOf(steps: Steps, now: Now): Leg | undefined {
   const { st, feet, legs } = steps, s = st.scale, { r, airborne, v, Tsw, most, dt } = now;
   const centre = r.xcom ? _centre.copy(r.xcom).setY(0) : xcomAhead(steps, now, 0, _centre), capture = st.capture;
   if (airborne || capture === undefined) return undefined;
@@ -112,7 +112,7 @@ export function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg):
 }
 
 /** whether a foot steps at once, the other in the air or not: about to be out of reach, under the body, catching a fall */
-export function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
+function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
   const { st, feet } = steps, s = st.scale, { r, airborne, air, vy, yaw, most } = now;
   // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
   if (airborne) return !leg.swing && air > 0;
@@ -134,7 +134,7 @@ export function yields(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg)
  * (the feet alternate, turning on the spot); one that will be nearer its home than the other a swing on (a gait's feet keep its order
  * instead). One that would have to cross the other closes beside it instead: left waiting, it would trail out of reach.
  */
-export function walkerYields(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
+function walkerYields(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
   const { v, across } = now;
   if (v > 0 && across * leg.sign < -SIDE && leg.lifted <= other.lifted) return true;
   if (v < SHUFFLING && leg.lifted < other.lifted && !other.landed && turnedOff(steps, now, cues, other)) return true;
@@ -143,7 +143,7 @@ export function walkerYields(steps: Steps, now: Now, cues: Cues, leg: Leg, other
 
 /** A followed foot — an unforeseen root's — lets the other step first if it would have to cross it, or will be nearer its home than the
  * other a swing on (a gait's feet keep its order: none waits on the one across its girdle). */
-export function followerYields(steps: Steps, now: Now, leg: Leg, other: Leg): boolean {
+function followerYields(steps: Steps, now: Now, leg: Leg, other: Leg): boolean {
   if (steps.clocked) return false;
   return landing(steps, now, leg, now.Tsw - now.dt)[2] > BLOCKED * steps.st.scale || behind(steps, now, other, leg);
 }
@@ -212,13 +212,13 @@ export function staggered(steps: Steps, now: Now, leg: Leg): boolean {
 }
 
 /** whether a foot is turned off the facing, and off where the body turns to */
-export function turnedOff(steps: Steps, now: Now, cues: Cues, leg: Leg): boolean {
+function turnedOff(steps: Steps, now: Now, cues: Cues, leg: Leg): boolean {
   const off = (facing: number) => Math.abs(wrapAngle(leg.yaw - facing - leg.sign * steps.st.toeOut)) > cues.turn;
   return off(now.yaw) && off(cues.turningTo);
 }
 
 /** the legs, the foot furthest from its home `ahead` s on first */
-export function furthestOf(steps: Steps, now: Now, ahead: number): Leg[] {
+function furthestOf(steps: Steps, now: Now, ahead: number): Leg[] {
   return [...steps.legs].sort((a, b) => offHome(steps, now, b, ahead) - offHome(steps, now, a, ahead));
 }
 

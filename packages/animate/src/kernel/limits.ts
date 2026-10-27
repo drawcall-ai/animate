@@ -48,7 +48,7 @@ export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = co
 }
 
 /** a rotation in a limit's coordinates: the swing's two components and the twist (rad), and their ranges */
-export interface Coordinates {
+interface Coordinates {
   value: [number, number, number];
   range: [[number, number], [number, number], [number, number]];
 }

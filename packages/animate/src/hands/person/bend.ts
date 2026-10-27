@@ -21,61 +21,61 @@ export const PROTRACTION = 0.035;
  * `held` m off its goal (reaching across it) turns it as far as brings the shoulder that far
  * forward, up to the thoracolumbar spine's active rotation (45°, AAOS; recalled). */
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9, held: Math.PI / 4 };
-export function twistToward(h: Reacher, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0) {
+export function twistToward(person: Reacher, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0) {
   const station = pose.com(_station);
-  const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - h.locomotion.facing);
+  const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - person.locomotion.facing);
   const distance = Math.hypot(point.x - station.x, point.z - station.z);
-  share *= smoothstep(h.proportions.shoulderHalfWidth, h.proportions.armLength, distance);
-  const turn = Math.max(Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start)), Math.min(TWIST.held, held / h.proportions.shoulderHalfWidth));
+  share *= smoothstep(person.proportions.shoulderHalfWidth, person.proportions.armLength, distance);
+  const turn = Math.max(Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start)), Math.min(TWIST.held, held / person.proportions.shoulderHalfWidth));
   const twist = Math.sign(bearing) * turn * share;
-  h.poise.add({ twist });
+  person.poise.add({ twist });
 }
 
 /** Tuned: a back bowed this share of what the load lets it is bowed its most */
 const BOWED = 0.95;
 
 /** Standing reach requests, closed against the solved shoulder and chest; `carried`: the hand's goal rides on the body itself. */
-export function bringShoulder(h: Reacher, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
-  const p = h.proportions;
-  const factor = loadFactor(Math.max(mass, heldMass(h)));
-  const low = hand.y < p.hipHeight;
+export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
+  const proportions = person.proportions;
+  const factor = loadFactor(Math.max(mass, heldMass(person)));
+  const low = hand.y < proportions.hipHeight;
   // Tuned load strategy, not an empirical dose-response: heavier low reaches trade bow for knees.
   const bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
-  if (low) h.poise.add({ bowLimit });
+  if (low) person.poise.add({ bowLimit });
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
-  if (low && factor > 1 && h.locomotion.moving) return;
+  if (low && factor > 1 && person.locomotion.moving) return;
   // Recalled: ≥10–15° knees under load. Tuned 30° ceiling
   // on each leg segment (knee flexion is their sum), scaled by the same load law.
-  if (low) h.poise.add({ lower: p.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
+  if (low) person.poise.add({ lower: proportions.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // (walking, the clavicle drawn toward the hand, `PROTRACTION`, takes up a small stride's deficit)
-  const allowance = h.locomotion.moving ? PROTRACTION * p.height : 0;
+  const allowance = person.locomotion.moving ? PROTRACTION * proportions.height : 0;
   // (judged from the shoulder as it stands upright, not as low as the reach has already let it down: a reach that lowers the body for
   // what it falls short of keeps asking while it is short standing, rather than letting go as soon as the lowering brings it in)
   // A body-attached goal falls with the shoulder, so lowering cannot close a standing-height deficit.
   // (before the legs' first sub-step, from the shoulder as it is)
-  const deficit = (h.stepper && !carried ? _upright.copy(shoulder).setY(p.shoulderHeight) : shoulder).distanceTo(hand) - p.armLength - allowance;
+  const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(proportions.shoulderHeight) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
   // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
-  const short = shoulder.distanceTo(hand) - ARM_REACH * p.armLength;
+  const short = shoulder.distanceTo(hand) - ARM_REACH * proportions.armLength;
   const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
-  if (!h.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
+  if (!person.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
     const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
-    if (toward.lengthSq() > 1e-12) h.poise.add({ lean: toward.setLength(short * share) });
+    if (toward.lengthSq() > 1e-12) person.poise.add({ lean: toward.setLength(short * share) });
   }
-  if (h.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
+  if (person.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back. Every reach is planned from the support station,
   // so that counter-shift cannot make a shoulder ask for still more bow.
   const from = _v.copy(hand).sub(f.prev.com(_station));
-  const ahead = from.dot(forwardOf(h.locomotion.facing, _forward));
-  const lateral = _v.subVectors(hand, shoulder).dot(_left.set(Math.cos(h.locomotion.facing), 0, -Math.sin(h.locomotion.facing)));
+  const ahead = from.dot(forwardOf(person.locomotion.facing, _forward));
+  const lateral = _v.subVectors(hand, shoulder).dot(_left.set(Math.cos(person.locomotion.facing), 0, -Math.sin(person.locomotion.facing)));
   // Tuned 2% reserve for the articulated shoulder arc: its single lever slightly
   // overestimates the reach available when the pelvis tucks in a deep squat.
-  const reach = 0.98 * ARM_REACH * p.armLength;
-  const { lower, bow } = handLowering(p, { ahead, lateral, height: hand.y, reach, bowLimit });
-  if (share > 0) h.poise.add({ lower: lower * share });
+  const reach = 0.98 * ARM_REACH * proportions.armLength;
+  const { lower, bow } = handLowering(proportions, { ahead, lateral, height: hand.y, reach, bowLimit });
+  if (share > 0) person.poise.add({ lower: lower * share });
   // The standing lever leaves a residual on hip-high grips (hands.test.ts).
-  const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (p.shoulderHeight - p.hipHeight) : 0;
+  const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (proportions.shoulderHeight - proportions.hipHeight) : 0;
   // Once bow is exhausted, close its unmet reach with the knees rather than
   // requesting the same saturated back angle forever.
   // (exhausted — below the hips by a quarter thigh, as far as the load lets it bow: a heavier reach that low has its knees take what its
@@ -83,29 +83,29 @@ export function bringShoulder(h: Reacher, f: Frame, side: Side, hand: Readonly<V
   // short-armed body is not left short, knees straight, because its back may bow no further — its knees take what the arm held out
   // (`ARM_REACH`) still falls short, less what the bow left to it will bring; not the planning reach's residual, the standing lever's
   // there, which an arm all but straight closes. A load already held goes where its course takes it: the knees do not chase it.)
-  const deep = hand.y < p.hipHeight - p.thigh / 4;
-  const span = p.shoulderHeight - p.hipHeight;
+  const deep = hand.y < proportions.hipHeight - proportions.thigh / 4;
+  const span = proportions.shoulderHeight - proportions.hipHeight;
   const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
     : Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * span;
-  if (low && overflow > 0) h.poise.add({ lower: Math.min(squatOf(p), lower + overflow) * share });
-  h.poise.add({ bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
+  if (low && overflow > 0) person.poise.add({ lower: Math.min(squatOf(proportions), lower + overflow) * share });
+  person.poise.add({ bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
 }
 
 /** Downward gaze recruits the same bow solver once neck and eye declination run out. */
-export function gazeAsks(h: Reacher, pose: ReadonlyPose, point: Readonly<Vector3>) {
-  twistToward(h, pose, point);
-  const p = h.proportions;
+export function gazeAsks(person: Reacher, pose: ReadonlyPose, point: Readonly<Vector3>) {
+  twistToward(person, pose, point);
+  const proportions = person.proportions;
   const hips = pose.position(0);
   const distance = Math.hypot(point.x - hips.x, point.z - hips.z);
   const neck = NECK_PITCH * Math.PI / 180;
   // Standing eye position with the neck at its comfortable downward stop. Its forward
   // sweep matters for nearby targets: measuring pitch at the upright eyes misses those.
-  const trunk = p.eyeHeight - p.hipHeight - p.offsets.head.y - p.eyes.y;
-  const eyeUp = trunk + p.offsets.head.y * Math.cos(neck / 2) + p.eyes.y * Math.cos(neck) - p.eyes.z * Math.sin(neck);
-  const eyeAhead = p.offsets.head.y * Math.sin(neck / 2) + p.eyes.y * Math.sin(neck) + p.eyes.z * Math.cos(neck);
-  const needed = Math.max(0, Math.atan2(eyeUp - (point.y - hips.y), distance - eyeAhead) - neck - h.gazer.range.down);
+  const trunk = proportions.eyeHeight - proportions.hipHeight - proportions.offsets.head.y - proportions.eyes.y;
+  const eyeUp = trunk + proportions.offsets.head.y * Math.cos(neck / 2) + proportions.eyes.y * Math.cos(neck) - proportions.eyes.z * Math.sin(neck);
+  const eyeAhead = proportions.offsets.head.y * Math.sin(neck / 2) + proportions.eyes.y * Math.sin(neck) + proportions.eyes.z * Math.cos(neck);
+  const needed = Math.max(0, Math.atan2(eyeUp - (point.y - hips.y), distance - eyeAhead) - neck - person.gazer.range.down);
   const bow = Math.max(0, Math.min(needed, MOST_BOW));
-  h.poise.add({ bow });
+  person.poise.add({ bow });
 }
 const _station = new Vector3(), _upright = new Vector3();
 const _v = new Vector3();

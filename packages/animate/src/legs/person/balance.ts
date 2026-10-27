@@ -34,12 +34,12 @@ import { defaultStance, standingFeet } from '../../species/humanoid/stance';
  * centre of mass is at 1.0 m/s by the first heel strike 0.96 s on, ~1 m/s², the trunk leaning ~7° over that step; read (Crenna, Cuong &
  * Brenière 2001, J Physiol, PMC2279001), stopping from a fast walk takes one stride in 98% of trials (30% from a natural one); recalled,
  * people brake about twice as hard as they speed up (the planner's `BRAKE_FACTOR` 2.2). Tuned: 1.5 and 3.3 — a player's 10 m/s² set-off
- * no longer throws the trunk 3° → 15° at ~100°/s, nor a stop back at ~45°/s; a planner's root, paced already, is carried as it goes.
+ * does not throw the trunk forward at ~100°/s, nor a stop back at ~45°/s; a planner's root, paced already, is carried as it goes.
  */
 const PACE = { push: 1.5, brake: 3.3 };
 /**
- * Tuned: the ankles' middle stands this far behind the centre of mass (m; the old balance stood it `OVER_ANKLES` ahead of them; walking,
- * less leaves the extrapolated centre of mass past the toes as the trailing foot lifts, more lowers the pelvis before contact)
+ * Tuned: the ankles' middle stands this far behind the centre of mass (m; walking, less leaves the extrapolated centre of mass past the
+ * toes as the trailing foot lifts, more lowers the pelvis before contact)
  */
 const OVER = 0.021;
 /**
@@ -48,11 +48,10 @@ const OVER = 0.021;
  */
 const CROUCH_LEAN = 0.3;
 /**
- * Tuned: walking, a body lets its pelvis down at most this share of a squat (the old balance's deepest dip walking, reaching low:
- * ~0.26 m); a deeper ask waits for it to slow
+ * Tuned: walking, a body lets its pelvis down at most this share of a squat (~0.26 m reaching low); a deeper ask waits for it to slow
  */
 const WALKING_CROUCH = 0.5;
-/** Inherited (the old balance): let down or up this far (m), the feet stay put but to catch a fall */
+/** Tuned: let down or up this far (m), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /**
  * Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing
@@ -67,9 +66,9 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
  * capsule carries them: a leap it asks is taken as soon as the feet can, and `airborne` says when it is in the air; the body over it is
  * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
-export function driven(h: PersonLegged, seed?: number): Step {
-  const root = drivenRoot(h);
-  return drivenBy(h, (f) => root(f), { seed });
+export function driven(person: PersonLegged, seed?: number): Step {
+  const root = drivenRoot(person);
+  return drivenBy(person, (f) => root(f), { seed });
 }
 
 /**
@@ -81,56 +80,56 @@ export function driven(h: PersonLegged, seed?: number): Step {
  * less as it holds still (`steady`).
  */
 export function drivenBy(
-  h: PersonLegged,
+  person: PersonLegged,
   rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering,
   options: { stance?: Partial<Stance>; seed?: number } = {},
 ): Step {
-  const p = h.proportions, s = p.scale;
-  const soles = SIDES.map((side, i) => [heelOf(p), ...[p.sole.bigToe, p.sole.smallToe]
-    .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(p, side)))]);
+  const proportions = person.proportions, s = proportions.scale;
+  const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
+    .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(proportions, side)))]);
   const feet: Feet = {
-    hip: p.hipHalfWidth,
-    length: p.legLength,
-    thigh: p.thigh,
-    shin: p.shin,
+    hip: proportions.hipHalfWidth,
+    length: proportions.legLength,
+    thigh: proportions.thigh,
+    shin: proportions.shin,
     fold: KNEE_FLEXION * Math.PI / 180,
-    ankleHeight: p.ankleHeight,
+    ankleHeight: proportions.ankleHeight,
     rotation: footRotation,
     legs: SIDES.map((side, i) => ({
       sign: i === 0 ? 1 : -1,
       foot: INDEX[`${side}Foot`],
       toes: INDEX[`${side}Toes`],
       top: INDEX[`${side}UpperLeg`],
-      up: p.offsets[`${side}UpperLeg`].y,
+      up: proportions.offsets[`${side}UpperLeg`].y,
     })),
-    ankle: (i, anchor, yaw, pitch, out) => ankleFor(p, SIDES[i], anchor, yaw, pitch, out),
+    ankle: (i, anchor, yaw, pitch, out) => ankleFor(proportions, SIDES[i], anchor, yaw, pitch, out),
     lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
     print: (i, anchor, yaw) => soles[i].map((point): [number, number] => {
       const at = point.clone().applyQuaternion(footRotation(yaw, 0)).add(anchor);
       return [at.x, at.z];
     }),
     sole: (i, ankle, foot, toes) => {
-      const ball = ballOf(p, SIDES[i], _b).applyQuaternion(foot).add(ankle);
+      const ball = ballOf(proportions, SIDES[i], _b).applyQuaternion(foot).add(ankle);
       const sign = i === 0 ? 1 : -1;
-      const heel = heelOf(p, _a).applyQuaternion(foot).y + ankle.y;
-      const tips = [p.sole.bigToe, p.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y);
+      const heel = heelOf(proportions, _a).applyQuaternion(foot).y + ankle.y;
+      const tips = [proportions.sole.bigToe, proportions.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y);
       return Math.min(heel, ...tips);
     },
   };
   // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
   // (the feet where they stand as it is made: in its stance under it)
-  const standing = standingFeet(p, h.pose.position(0).x, h.pose.position(0).z, h.yaw);
-  const stepperFor = (foreseen: boolean) => (h.stepper = new Stepper(humanStepping(p, foreseen), feet, standing, h.yaw));
+  const standing = standingFeet(proportions, person.pose.position(0).x, person.pose.position(0).z, person.yaw);
+  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen), feet, standing, person.yaw));
   let stepper = stepperFor(true), first = true;
-  const { toeOut, crouch: crouching } = humanStepping(p);
+  const { toeOut, crouch: crouching } = humanStepping(proportions);
   const poise = new Poise();
-  const base = { ...defaultStance(p), ...options.stance };
+  const base = { ...defaultStance(proportions), ...options.stance };
   const upright: Upright = {
-    p,
+    p: proportions,
     root: new Vector3(),
     velocity: new Vector3(),
     offset: new Vector3(),
-    yaw: h.yaw,
+    yaw: person.yaw,
     walk: 0,
     run: 0,
     moving: false,
@@ -141,17 +140,17 @@ export function drivenBy(
     pelvisRotation: new Quaternion(),
     held: false,
   };
-  const posture = new Posture(h.species.inertia);
-  const life = new Quiet(options.seed ?? seedOf(p.height, standing[0].position.x, standing[0].position.z));
+  const posture = new Posture(person.species.inertia);
+  const life = new Quiet(options.seed ?? seedOf(proportions.height, standing[0].position.x, standing[0].position.z));
   const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
   const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];
   const tilts = [new Quaternion(), new Quaternion()];
   let offsets: Vector3[] | null = null, pace: Vector3 | null = null, phase = 0;
   return (f) => {
-    if (f.dev && f.time > f.dt) check(h, f, f.dev, stepper.legs);
-    h.poise.pass(poise);
-    const dt = f.dt, go = h.going, root = rootOf(f, go, poise, stepper);
+    if (f.dev && f.time > f.dt) check(person, f, f.dev, stepper.legs);
+    person.poise.pass(poise);
+    const dt = f.dt, go = person.going, root = rootOf(f, go, poise, stepper);
     if (first && !root.forecast) stepper = stepperFor(false);
     first = false;
     // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
@@ -163,9 +162,9 @@ export function drivenBy(
     const speed = root.velocity.length();
     upright.stance = go?.stance ? { ...base, ...go.stance } : base;
     upright.walk = walking(upright.walk, speed, dt);
-    upright.moving = root.underway ?? h.locomotion.moving;
+    upright.moving = root.underway ?? person.locomotion.moving;
     upright.yaw = stepper.yaw;
-    upright.held = armsHeld(h);
+    upright.held = armsHeld(person);
     upright.root.copy(root.position);
     // (the trunk carries itself — leaning, running — at the pace its legs could have taken it to, within `PACE`: a player's quicker root
     // does not throw it; spawned on the move, at that pace)
@@ -180,7 +179,7 @@ export function drivenBy(
     // (its quiet life: motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
       f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
-    life.update(dt, life.quiet(go, poise, h), activity, poise.steady);
+    life.update(dt, life.quiet(go, poise, person), activity, poise.steady);
     // (let down, bowed and twisted at a squat's pace — or twisted at the rate asked, the trunk's joints pacing it within `TURN`: an aim
     // tracks a turning look)
     const twisting = poise.twistRate * dt;
@@ -236,7 +235,7 @@ export function drivenBy(
       crouch: Math.max(root.crouch ?? 0, Math.min(lowered, walkingMost)),
       tiptoe: Math.max(0, -requested.lower),
       still: !upright.moving && Math.abs(requested.lower) > LOWERED * s,
-      xcom: xcomOfPoses(f.prev, f.prev2, dt, p.legLength, new Vector3()),
+      xcom: xcomOfPoses(f.prev, f.prev2, dt, proportions.legLength, new Vector3()),
     });
     const { yaw, moving, run, legs } = stepper;
     // the pelvis turned with the stride over the stepper's facing; the lower back and thorax each take half the turn up to the chest
@@ -256,7 +255,7 @@ export function drivenBy(
       // out leaves no knee swung out with it — eased in over the swing's first `KNEE_EASE`, not snapped round as it lifts)
       const along = stepper.yaw + leg.sign * toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
       const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
-      const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(p.thigh).add(thigh);
+      const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(proportions.thigh).add(thigh);
       // The pole guides the free swing; the chain progressively takes the foot orientation needed for contact.
       const place = (at: Vector3) => {
         solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole });
@@ -288,7 +287,7 @@ export function drivenBy(
       }
     });
     legs.forEach((leg, i) => upright.feet[i].anchor.copy(leg.anchor));
-    const locomotion = h.locomotion, stepping = legs.some((leg) => leg.swing);
+    const locomotion = person.locomotion, stepping = legs.some((leg) => leg.swing);
     locomotion.phase = stepper.phase;
     locomotion.walk = moving;
     locomotion.run = run;
@@ -306,16 +305,16 @@ export function drivenBy(
 }
 
 /** Final-pose checks of the last sub-step, against the legs as they were posed then. */
-function check(h: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
-  const p = h.proportions, time = f.time - f.dt;
+function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
+  const proportions = person.proportions, time = f.time - f.dt;
   legs.forEach((leg, i) => {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];
     if (leg.swing) {
-      const sink = -Math.min(...solePoints(h.proportions, f.prev, side).map((at) => at.y));
+      const sink = -Math.min(...solePoints(person.proportions, f.prev, side).map((at) => at.y));
       if (sink > 0.002) dev.append(time, { check: 'driven swing sole sink (m)', value: sink, limit: 0.002, where: `${side}Foot` });
       return;
     }
-    const pivots = leg.pitch > 0 ? [heelOf(p)] : leg.pitch < 0 ? [ballOf(p, side)] : [heelOf(p), ballOf(p, side)];
+    const pivots = leg.pitch > 0 ? [heelOf(proportions)] : leg.pitch < 0 ? [ballOf(proportions, side)] : [heelOf(proportions), ballOf(proportions, side)];
     for (const pivot of pivots) {
       const at = f.prev.point(bone, pivot, new Vector3());
       const slide = at.distanceTo(pivot.clone().applyQuaternion(footRotation(leg.yaw, 0)).add(leg.anchor));
@@ -339,13 +338,13 @@ function check(h: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
     pointSegmentDistance(new Vector3().lerpVectors(left[0], left[1], k), right[0], right[1]),
     pointSegmentDistance(new Vector3().lerpVectors(right[0], right[1], k), left[0], left[1]),
   ]));
-  if (gap < LIMIT.across * p.scale) {
-    dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * p.scale - gap, limit: 0, where: 'legs' });
+  if (gap < LIMIT.across * proportions.scale) {
+    dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * proportions.scale - gap, limit: 0, where: 'legs' });
   }
   // Noted only: a driven body follows its input, not its balance.
-  const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(h.proportions, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
+  const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(person.proportions, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
   if (!support.length) return;
-  const xcom = xcomOfPoses(f.prev, f.prev2, f.dt, p.legLength, new Vector3());
+  const xcom = xcomOfPoses(f.prev, f.prev2, f.dt, proportions.legLength, new Vector3());
   const value = outside(hullOf(support), xcom);
   if (value > LIMIT.xcom) dev.note(time, { check: 'driven XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
 }

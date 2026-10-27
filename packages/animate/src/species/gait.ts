@@ -50,7 +50,7 @@ export interface Gait {
   readonly body?: Carriage | ((speed: number, froude: number) => Carriage);
 }
 
-export interface Stride {
+interface Stride {
   frequency: number;
   duty: number;
   referenceBlend?: number;

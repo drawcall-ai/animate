@@ -4,15 +4,15 @@ import type { Proportions } from './proportions';
 import type { Stance } from '../../kernel/go';
 
 /** feet about hip-width apart, turned out a little (heels 0.10–0.15 of the height apart, 0–12°) */
-export const defaultStance = (p: Proportions): Stance => ({ width: 0.065 * p.height, stagger: 0, crouch: 0, blade: 0, toeOut: 0.12 });
+export const defaultStance = (proportions: Proportions): Stance => ({ width: 0.065 * proportions.height, stagger: 0, crouch: 0, blade: 0, toeOut: 0.12 });
 
 /** the stance's flat-foot ankles [left, right] around the ground point (x, z) for a body facing `forward` (its `left`), `width` either side */
-export function stanceFeet(x: number, z: number, forward: Vector3, left: Vector3, p: Proportions, stance: Stance, out: [Vector3, Vector3], width = stance.width) {
+function stanceFeet(x: number, z: number, forward: Vector3, left: Vector3, proportions: Proportions, stance: Stance, out: [Vector3, Vector3], width = stance.width) {
   for (let s = 0; s < 2; s++) {
     const side = s === 0 ? 1 : -1;
     const across = side * width;
     const along = side * stance.stagger * 0.5;
-    out[s].set(x + left.x * across + forward.x * along, p.ankleHeight, z + left.z * across + forward.z * along);
+    out[s].set(x + left.x * across + forward.x * along, proportions.ankleHeight, z + left.z * across + forward.z * along);
   }
 }
 
@@ -20,12 +20,12 @@ export function stanceFeet(x: number, z: number, forward: Vector3, left: Vector3
 export const OVER_ANKLES = 0.03;
 
 /** the heading of a planted foot of `side` (1 left, −1 right) when the body faces `yaw` */
-export const footYaw = (yaw: number, side: 1 | -1, stance: Stance) => yaw + stance.blade + side * stance.toeOut;
+const footYaw = (yaw: number, side: 1 | -1, stance: Stance) => yaw + stance.blade + side * stance.toeOut;
 
 
 /** where a person of proportions `p` standing in its stance at the ground point (x, z) facing `yaw` has its feet: each ankle and heading */
-export function standingFeet(p: Proportions, x: number, z: number, yaw: number): { position: Vector3; yaw: number }[] {
-  const stance = defaultStance(p), ankles: [Vector3, Vector3] = [new Vector3(), new Vector3()];
-  stanceFeet(x, z, forwardOf(yaw), leftOf(yaw), p, stance, ankles);
+export function standingFeet(proportions: Proportions, x: number, z: number, yaw: number): { position: Vector3; yaw: number }[] {
+  const stance = defaultStance(proportions), ankles: [Vector3, Vector3] = [new Vector3(), new Vector3()];
+  stanceFeet(x, z, forwardOf(yaw), leftOf(yaw), proportions, stance, ankles);
   return ankles.map((position, s) => ({ position, yaw: footYaw(yaw, s === 0 ? 1 : -1, stance) }));
 }

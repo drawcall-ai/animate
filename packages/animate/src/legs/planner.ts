@@ -8,7 +8,7 @@ import { rootPlan, type RootState } from './root';
 import type { Steering } from './step/state';
 
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
-export interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number }
+interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number }
 
 /**
  * Pursues a goal under `Motion` limits (`rootPlan`: braking by v² = 2ad, turning no faster than a/v, the arrival turn begun

@@ -205,18 +205,6 @@ export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>): Step 
   };
 }
 
-/** how far (rad) a gazer's eyes are off `point` (world): the head's line off it, less what the eyes take of a gaze shift at most (`lookAt`) */
-export function gazeOff(gazer: Gazer, pose: ReadonlyPose, point: Readonly<Vector3>): number {
-  if (gazer.neck === undefined) throw new Error('gazeOff: the gaze has no neck');
-  const bones = pose.skeleton.chain(gazer.neck);
-  const head = pose.rotation(bones[bones.length - 1]);
-  const d = _d.subVectors(point, gazer.eyes(pose, _eyes)).applyQuaternion(_rel.copy(head).invert());
-  const off = Math.atan2(Math.hypot(d.x, d.y), d.z);
-  const side = Math.atan2(d.x, d.z) / gazer.range.side;
-  const pitch = Math.atan2(-d.y, Math.hypot(d.x, d.z));
-  const used = Math.hypot(side, pitch / (pitch > 0 ? gazer.range.down : gazer.range.up));
-  return used > 1 ? off * (1 - 1 / used) : 0;
-}
 
 /** how much of a gaze shift the eyes take (the head turns the rest: 70–80% of a large shift), and how much of their comfortable range at most */
 const EYES = 0.25;

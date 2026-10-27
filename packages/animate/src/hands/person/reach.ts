@@ -27,8 +27,8 @@ export interface Taking {
 }
 
 /** where a grip is in the world this sub-step, as `h` tracks its thing */
-export function gripAt(h: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
-  const frame = h.track(take.thing.object).at(f.time).current;
+export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
+  const frame = person.track(take.thing.object).at(f.time).current;
   return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
 }
 
@@ -39,12 +39,12 @@ export function gripAt(h: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Fram
  * round the outside of the thing it reaches into (a box's handle from outside). Hands not there within `REACHING` s are a problem in the
  * dev log, and they keep going: lateness never throws.
  */
-export function* reachFor(h: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
-  const began = h.frame.time;
-  const there = (f: Frame) => takes.every((take) => reached(f, h.hands[take.side], take.goal, h.track(take.thing.object)));
+export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
+  const began = person.frame.time;
+  const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
   // (hands at their grips already close at once)
-  if (takes.every((take) => h.pose.position(h.hands[take.side]).distanceTo(gripAt(h, take, h.frame)) <= REACHED.distance)) {
-    for (const take of takes) grasp(h, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
+  if (takes.every((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)) <= REACHED.distance)) {
+    for (const take of takes) grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
     return;
   }
   let late = false, ends = Infinity;
@@ -54,55 +54,55 @@ export function* reachFor(h: Reacher, request: Request, takes: readonly Taking[]
     if (!late && f.time - began > REACHING) {
       late = true;
       for (const take of takes) {
-        const value = f.prev.position(h.hands[take.side]).distanceTo(gripAt(h, take, f));
+        const value = f.prev.position(person.hands[take.side]).distanceTo(gripAt(person, take, f));
         f.dev?.append(f.time, { check: `late reach: grip distance after ${REACHING} s (m)`, value, limit: REACHED.distance, where: `${take.thing.object.name} ${take.side} ${take.grip}` });
       }
     }
     return false;
   };
   const plan = takes.map((take) => {
-    const frame = h.track(take.thing.object).current, seed = frame.position;
-    const from = h.pose.position(h.hands[take.side]).clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
+    const frame = person.track(take.thing.object).current, seed = frame.position;
+    const from = person.pose.position(person.hands[take.side]).clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
     // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly)
-    const route = onBody(h, take.thing) ? [] : outside(take.thing.bounds, take.goal.position, from, LOAD_RESERVE * h.scale);
+    const route = onBody(person, take.thing) ? [] : outside(take.thing.bounds, take.goal.position, from, LOAD_RESERVE * person.scale);
     const points = route.length ? route : [take.goal.position];
     let was = from;
     const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
     const distance = lengths.reduce((sum, length) => sum + length, 0);
-    const at = gripAt(h, take, h.frame);
+    const at = gripAt(person, take, person.frame);
     const { delay, slower } = takes.length > 1 && take.side !== LEADING ? following(seed, { [take.side]: take.grip }) : { delay: 0, slower: 0 };
-    const seconds = reachTime(distance / h.scale, seedOf(take.grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower) / h.tempo;
+    const seconds = reachTime(distance / person.scale, seedOf(take.grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower) / person.tempo;
     return { ...take, points, lengths, distance, route, delay, seconds };
   });
-  const arrived = until((f) => plan.every((p) => reached(f, h.hands[p.side], { position: p.points[p.points.length - 1] }, h.track(p.thing.object))));
+  const arrived = until((f) => plan.every((hand) => reached(f, person.hands[hand.side], { position: hand.points[hand.points.length - 1] }, person.track(hand.thing.object))));
   const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
   // (when the hands will be there: at a pace asked, as long as that pace takes the farthest)
-  const lasts = (p: (typeof plan)[number]) => motion ? p.distance / motion.speed + motion.speed / (motion.accel ?? CALM.accel) : Math.max(p.delay, finish - p.seconds) + p.seconds;
+  const lasts = (hand: (typeof plan)[number]) => motion ? hand.distance / motion.speed + motion.speed / (motion.accel ?? CALM.accel) : Math.max(hand.delay, finish - hand.seconds) + hand.seconds;
   ends = began + Math.max(...plan.map(lasts));
   request.eta = ends - began;
-  for (const take of takes) grasp(h, take.side, null);
-  yield* parallel<Frame>('all', ...plan.map((p) => function* () {
-    for (const [i, position] of p.points.entries()) {
-      const began = h.frame.time;
-      const seconds = p.distance > 0 ? p.seconds * p.lengths[i] / p.distance : p.seconds;
-      const after = i === 0 ? Math.max(p.delay, finish - p.seconds) : 0;
+  for (const take of takes) grasp(person, take.side, null);
+  yield* parallel<Frame>('all', ...plan.map((hand) => function* () {
+    for (const [i, position] of hand.points.entries()) {
+      const began = person.frame.time;
+      const seconds = hand.distance > 0 ? hand.seconds * hand.lengths[i] / hand.distance : hand.seconds;
+      const after = i === 0 ? Math.max(hand.delay, finish - hand.seconds) : 0;
       // (on the way round, already turning as it will hold it)
-      const goal = p.route.length ? { ...p.goal, position } : p.goal;
-      const ready = p.route.length
-        ? i === p.points.length - 1 ? arrived : until((f) => f.time >= began + seconds + after)
+      const goal = hand.route.length ? { ...hand.goal, position } : hand.goal;
+      const ready = hand.route.length
+        ? i === hand.points.length - 1 ? arrived : until((f) => f.time >= began + seconds + after)
         : until(there);
-      const on = h.track(p.thing.object);
+      const on = person.track(hand.thing.object);
       // (at a speed asked, the hand goes there at that pace, braking in; else in the time a calm reach that far takes)
       const pace = motion ? { accel: motion.accel ?? CALM.accel, speed: motion.speed } : { seconds, after };
-      yield* during(request, `hand.${p.side}`, 'asked', reaching(h, p.side, goal, { on, thing: p.thing, lead: !worn(p.thing), ...pace }), ready);
+      yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, goal, { on, thing: hand.thing, lead: !worn(hand.thing), ...pace }), ready);
     }
   }));
   // (both hands reach the outside staging points before closing on the actual grips)
   if (plan.some(({ route }) => route.length)) {
-    yield* parallel<Frame>('all', ...plan.map((p) => during(request, `hand.${p.side}`, 'asked',
-      reaching(h, p.side, p.goal, { on: h.track(p.thing.object), thing: p.thing, lead: !worn(p.thing) }), until(there))));
+    yield* parallel<Frame>('all', ...plan.map((hand) => during(request, `hand.${hand.side}`, 'asked',
+      reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), until(there))));
   }
-  for (const take of takes) grasp(h, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
+  for (const take of takes) grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
 }
 
 /** Route around the envelope to its nearest grip face; the final closure is separate. */
@@ -162,10 +162,10 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
  * as the walk will arrive within `NEAR` s, each in the time a calm reach that far takes or at the pace asked. Met once they are there; they
  * keep there. `false` if it can stand nowhere in reach.
  */
-export function* reachingTo(h: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: { speed?: number; accel?: number }) {
-  const most = ARM_REACH * h.proportions.armLength + h.proportions.shoulderHalfWidth;
-  const inReach = aims.every(({ side, target }) => h.pose.position(INDEX[`${side}UpperArm`]).distanceTo(target(h.frame).position) < most);
-  const plan = inReach ? 'there' : footing(h, { grips: aims.map(({ side, target }) => ({ side, at: target(h.frame).position.clone() })), mass: 0 });
+export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: { speed?: number; accel?: number }) {
+  const most = ARM_REACH * person.proportions.armLength + person.proportions.shoulderHalfWidth;
+  const inReach = aims.every(({ side, target }) => person.pose.position(INDEX[`${side}UpperArm`]).distanceTo(target(person.frame).position) < most);
+  const plan = inReach ? 'there' : footing(person, { grips: aims.map(({ side, target }) => ({ side, at: target(person.frame).position.clone() })), mass: 0 });
   if (plan === 'nowhere') {
     request.fail();
     return;
@@ -173,13 +173,13 @@ export function* reachingTo(h: Reacher, request: Request, aims: readonly { side:
   let stood = plan === 'there';
   const near = () => stood || (plan !== 'there' && plan.walk.eta <= NEAR);
   const middle = (f: Frame) => aims.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(aims.length);
-  const there = (f: Frame) => aims.every(({ side, target }) => reached(f, h.hands[side], target(f)));
+  const there = (f: Frame) => aims.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   const going = aims.map(({ side, target }) => {
-    const distance = h.pose.position(h.hands[side]).distanceTo(target(h.frame).position);
+    const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
     const { speed } = pace, accel = pace.accel ?? CALM.accel;
-    if (speed !== undefined) return { side, step: reaching(h, side, target, { accel, speed }), lasts: distance / speed + speed / accel };
-    const seconds = reachTime(distance / h.scale, seedOf(side, Math.round(distance * 1000))) / h.tempo;
-    return { side, step: reaching(h, side, target, { seconds }), lasts: seconds };
+    if (speed !== undefined) return { side, step: reaching(person, side, target, { accel, speed }), lasts: distance / speed + speed / accel };
+    const seconds = reachTime(distance / person.scale, seedOf(side, Math.round(distance * 1000))) / person.tempo;
+    return { side, step: reaching(person, side, target, { seconds }), lasts: seconds };
   });
   // (what it moves arrives once the farthest hand does: the hands set off `NEAR` s before a walk arrives)
   const lasts = Math.max(...going.map((hand) => hand.lasts));
@@ -189,7 +189,7 @@ export function* reachingTo(h: Reacher, request: Request, aims: readonly { side:
     if (!(yield* walking(request, plan, Math.max(0, lasts - NEAR)))) request.fail();
     stood = true;
   }, function* () {
-    yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(h, middle, SHIFT)), function* () {
+    yield* parallel<Frame>('race', during(request, 'look', 'borrowed', looking(person, middle, SHIFT)), function* () {
       yield* action<Frame>({ until: near });
       const eta = (f: Frame) => void (request.eta = Math.max(0, (Number.isNaN(setOff) ? (setOff = f.time) : setOff) + lasts - f.time));
       yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ update: eta, until: there }));

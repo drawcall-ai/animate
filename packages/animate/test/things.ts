@@ -38,3 +38,10 @@ export function roomOf(...bodies: Body[]): Group {
 
 /** where `object` is in the world */
 export const worldOf = (object: Object3D) => object.getWorldPosition(new Vector3());
+
+/** the descendant of `object` named `name` (throws: a test's scene without it is wrong) */
+export function named(object: Object3D, name: string): Object3D {
+  const found = object.getObjectByName(name);
+  if (!found) throw new Error(`"${object.name}" has nothing named "${name}"`);
+  return found;
+}

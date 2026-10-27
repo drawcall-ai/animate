@@ -12,7 +12,7 @@ export interface Pace {
 }
 
 /** A staging a hand works through for a request: it says when it has met its goal (`request.met`) or never can (`request.fail`). */
-export type Handwork = NonReuseableTimeline<Frame>;
+type Handwork = NonReuseableTimeline<Frame>;
 
 /**
  * What a body's hands do for the verbs, each a staging of the verb's request: take hold of a thing by its grips, bring what they hold to

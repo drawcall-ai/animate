@@ -29,7 +29,7 @@ export interface Limit {
   swing: [[number, number], [number, number]];
 }
 
-export interface SkeletonOptions {
+interface SkeletonOptions {
   /** at most one per bone */
   limits?: readonly Limit[];
   /**

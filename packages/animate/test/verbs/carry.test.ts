@@ -2,7 +2,7 @@ import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { carry, grab, release, wait, type Body } from '../../src/index';
 import { insides, person, play } from '../bodies';
-import { box, empty, roomOf, worldOf } from '../things';
+import { box, empty, roomOf, worldOf, named } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
@@ -28,7 +28,7 @@ function grips(body: Body, thing: Object3D) {
       for (const side of ['left', 'right'] as const) {
         const hold = h.holding[side];
         if (hold?.thing.object !== thing) continue;
-        most = Math.max(most, h.pose.position(h.hands[side]).distanceTo(worldOf(thing.getObjectByName(hold.grip)!)));
+        most = Math.max(most, h.pose.position(h.hands[side]).distanceTo(worldOf(named(thing, hold.grip))));
       }
     },
     get most() { return most; },

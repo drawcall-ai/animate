@@ -12,7 +12,7 @@ export type Target = Vector3 | Object3D | ((time: number) => Vector3 | Object3D)
 
 /** A target as a body finds it in a sub-step: where, turned how (an `Object3D`'s; none for a point), moving how fast (if known), and the
  * object it is, if it is one. */
-export interface Found extends Goal {
+interface Found extends Goal {
   object?: Object3D;
 }
 

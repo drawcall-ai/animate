@@ -192,7 +192,7 @@ export const SWEEPING = 4;
 export const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
 
 /** Tuned: the pelvis turns at most `PELVIS_TURN` (rad) from a planted foot's facing (the trunk and gaze take the rest) */
-export const PELVIS_TURN = (50 * Math.PI) / 180;
+const PELVIS_TURN = (50 * Math.PI) / 180;
 
 /** Tuned: the pelvis turns toward its facing at most at `TURN` (rad/s², rad/s) */
 export const TURN = { accel: 80, speed: 8 };
@@ -201,7 +201,7 @@ export const TURN = { accel: 80, speed: 8 };
 export const SHUFFLING = 0.6;
 
 /** Tuned: the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend */
-export const BEND = 0.15;
+const BEND = 0.15;
 
 /** Tuned: the feet let the pelvis down at most `LOWEST` (m: a foot past reach leaves the leg straight instead) */
 export const LOWEST = 0.12;

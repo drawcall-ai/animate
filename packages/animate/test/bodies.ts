@@ -1,4 +1,7 @@
+import { Quaternion, Vector3 } from 'three';
 import { runTimeline, type ReusableTimeline } from '@pmndrs/timeline';
+import type { ReadonlyPose } from '../src/kernel/pose';
+import type { Gazer } from '../src/species/define';
 import { Body, humanoid, type BodyOptions } from '../src/index';
 import { selfOf } from '../src/body/body';
 import { during, type Channel, type Tier } from '../src/kernel/requests';
@@ -67,4 +70,18 @@ export function scene(bodies: readonly Body[], story?: ReusableTimeline<unknown,
     step?.(undefined, dt);
     for (const body of bodies) body.update(dt);
   };
+}
+
+/** how far (rad) a gazer's eyes are off `point` (world): the head's line off it, less what the eyes take of a gaze shift at most (`lookAt`) */
+export function gazeOff(gazer: Gazer, pose: ReadonlyPose, point: Readonly<Vector3>): number {
+  const _d = new Vector3(), _eyes = new Vector3(), _rel = new Quaternion();
+  if (gazer.neck === undefined) throw new Error('gazeOff: the gaze has no neck');
+  const bones = pose.skeleton.chain(gazer.neck);
+  const head = pose.rotation(bones[bones.length - 1]);
+  const d = _d.subVectors(point, gazer.eyes(pose, _eyes)).applyQuaternion(_rel.copy(head).invert());
+  const off = Math.atan2(Math.hypot(d.x, d.y), d.z);
+  const side = Math.atan2(d.x, d.z) / gazer.range.side;
+  const pitch = Math.atan2(-d.y, Math.hypot(d.x, d.z));
+  const used = Math.hypot(side, pitch / (pitch > 0 ? gazer.range.down : gazer.range.up));
+  return used > 1 ? off * (1 - 1 / used) : 0;
 }

@@ -63,12 +63,12 @@ export function creature(body: Legged): Step {
     stride: { cycle: 1, stance: 0.5 },
     turn: { rate: 0, ahead: 0 },
     lean: inertia,
-    rest: (p: readonly number[]) => p.forEach((pitch, i) => { pitches[i] = pitch; }),
+    rest: (pitchesAsked: readonly number[]) => pitchesAsked.forEach((pitch, i) => { pitches[i] = pitch; }),
   } satisfies Striding;
   let facing = body.yaw;
   return (f) => {
     body.poise.pass(poise);
-    const g = body.locomotion, asked0 = body.going, face = asked0?.face;
+    const locomotion = body.locomotion, asked0 = body.going, face = asked0?.face;
     // (a goal nowhere — not a finite point — it does not go for: it stands)
     const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
     const go = finite ? asked0 : null;
@@ -104,8 +104,8 @@ export function creature(body: Legged): Step {
     // foot is, `LOCKING` /s, so a change of cadence does not jolt what rides on it)
     stepper.legs.forEach((leg, i) => {
       const at = leg.swing ? (stepper.Ts + leg.swing.u * (stepper.cycle - stepper.Ts)) / stepper.cycle : (leg.planted / stepper.cycle) % 1;
-      const p = phases[i], ahead = p.phase + f.dt / stepper.cycle, off = at - ahead - Math.round(at - ahead);
-      p.phase = f.time <= f.dt ? at : (((ahead + off * Math.min(1, LOCKING * f.dt)) % 1) + 1) % 1;
+      const stride = phases[i], ahead = stride.phase + f.dt / stepper.cycle, off = at - ahead - Math.round(at - ahead);
+      stride.phase = f.time <= f.dt ? at : (((ahead + off * Math.min(1, LOCKING * f.dt)) % 1) + 1) % 1;
     });
     legs.height = f.current.position(0).y;
     [legs.stride.cycle, legs.stride.stance, legs.held] = [stepper.cycle, stepper.Ts, stepper.held];
@@ -137,9 +137,9 @@ export function creature(body: Legged): Step {
       const u = leg.swing ? duty + leg.swing.u * (1 - duty) : Math.min(duty, leg.planted / stepper.cycle);
       posers[i].pose(f, foot, u, leg.swing ? leg.swing.u : null, gait, speed, walking, stepper.yaw, i);
     });
-    g.velocity.copy(r.velocity).setY(0);
-    [g.facing, g.moving, g.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
-    g.there = !!go && !go.velocity?.lengthSq() && !going;
+    locomotion.velocity.copy(r.velocity).setY(0);
+    [locomotion.facing, locomotion.moving, locomotion.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
+    locomotion.there = !!go && !go.velocity?.lengthSq() && !going;
   };
 }
 

@@ -14,26 +14,26 @@ import type { Reacher } from './reacher';
  * (toward the hand's rest beside its thigh), as near as its arm reaches — never folded on itself nor stretched out, the body not bowing
  * nor rising after it. Once they are there, or `LETTING_GO` s on, the free arms take them.
  */
-export function* backingOut(h: Reacher, request: Request, sides: readonly Side[]) {
-  const p = h.proportions, began = h.frame.time;
+export function* backingOut(person: Reacher, request: Request, sides: readonly Side[]) {
+  const proportions = person.proportions, began = person.frame.time;
   let targets: ((f: Frame) => Goal)[] | null = null;
   let time = NaN, goals: Goal[] = [];
   // (where each hand goes, from how it moved as it let go)
   const off = (f: Frame): Goal[] => {
     if (time === f.time) return goals;
     targets ??= sides.map((side) => {
-      const hand = f.prev.position(h.hands[side]);
+      const hand = f.prev.position(person.hands[side]);
       const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
       const sign = side === 'left' ? 1 : -1;
-      const at = shoulder.clone().add(new Vector3(sign * REST_ASIDE * p.scale, -REST_DOWN * p.armLength, REST_AHEAD * p.scale).applyQuaternion(_turned.setFromAxisAngle(UP, h.locomotion.facing)));
-      _v.subVectors(hand, f.prev2.position(h.hands[side])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
+      const at = shoulder.clone().add(new Vector3(sign * REST_ASIDE * proportions.scale, -REST_DOWN * proportions.armLength, REST_AHEAD * proportions.scale).applyQuaternion(_turned.setFromAxisAngle(UP, person.locomotion.facing)));
+      _v.subVectors(hand, f.prev2.position(person.hands[side])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
       at.addScaledVector(_v, FOLLOW_THROUGH);
-      clearArm(h, f, side, at);
+      clearArm(person, f, side, at);
       // (within what the arm reaches from its shoulder)
       const reach = at.sub(shoulder);
-      reach.setLength(Math.min(Math.max(reach.length(), FOLDED * p.armLength), ARM_REACH * p.armLength));
-      const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -h.locomotion.facing)).divideScalar(p.scale);
-      return movingPoint(h, INDEX.hips, () => ({ position: local }), () => new Quaternion().setFromAxisAngle(UP, h.locomotion.facing));
+      reach.setLength(Math.min(Math.max(reach.length(), FOLDED * proportions.armLength), ARM_REACH * proportions.armLength));
+      const local = reach.add(shoulder).sub(f.current.position(INDEX.hips)).applyQuaternion(_turned.setFromAxisAngle(UP, -person.locomotion.facing)).divideScalar(proportions.scale);
+      return movingPoint(person, INDEX.hips, () => ({ position: local }), () => new Quaternion().setFromAxisAngle(UP, person.locomotion.facing));
     });
     time = f.time;
     goals = targets.map((target) => {
@@ -42,8 +42,8 @@ export function* backingOut(h: Reacher, request: Request, sides: readonly Side[]
     });
     return goals;
   };
-  const done = (f: Frame) => f.time - began > LETTING_GO || sides.every((side, k) => reached(f, h.hands[side], off(f)[k]));
-  yield* parallel<Frame>('all', ...sides.map((side, k) => during(request, `hand.${side}`, 'borrowed', reaching(h, side, (f) => off(f)[k], { lead: false }), done)));
+  const done = (f: Frame) => f.time - began > LETTING_GO || sides.every((side, k) => reached(f, person.hands[side], off(f)[k]));
+  yield* parallel<Frame>('all', ...sides.map((side, k) => during(request, `hand.${side}`, 'borrowed', reaching(person, side, (f) => off(f)[k], { lead: false }), done)));
 }
 
 /** How long a hand’s own motion carries it on (s) and how far at most (m), and how long before the free arms take it (s) */

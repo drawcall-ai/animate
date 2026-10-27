@@ -13,7 +13,7 @@ export interface RootState {
 }
 
 /** a planned root: where it is (`RootState`) at a time (s) */
-export interface RootPlan { root(time: number): RootState }
+interface RootPlan { root(time: number): RootState }
 
 export function rootPlan(
   f: Frame,
@@ -80,7 +80,7 @@ export function rootPlan(
     const untilFacing = remaining === 0 ? 0 : Math.max(2 * Math.sqrt(remaining / turnAccel), remaining / turning);
     // Keep translating until the remaining turn can finish, rather than exhaust the approach first (derived).
     // (`travelFirst`: a goal far off the facing — further than it may face off its way, `sidelong`: near a still goal, any way — is
-    // walked to more and more slowly, then turned to first, as the old balance's carriage did)
+    // walked to more and more slowly, then turned to first)
     const sidelong = travelFirst ? lerp(Math.PI, SIDELONG, Math.max(smoothstep(ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance, distance), smoothstep(STILL, 2 * STILL, goalSpeed))) : Math.PI;
     const first = travelFirst ? 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], Math.abs(wrapAngle(heading - yawOf(from.quaternion))) - sidelong + SIDELONG) : 1;
     const closing = (arrival > 0 && untilFacing > 0 ? Math.min(speed, distance / untilFacing) : speed) * first;
@@ -124,13 +124,13 @@ export function rootPlan(
 /**
  * Tuned, for a body walking facing its way (`travelFirst`): how far into its arrival turn (share) it comes to hold the turn it has made
  * toward the asked facing; until this close (× its stride's mid-stance travel: ~0.45–1.1 m walking) it faces no further than `SIDELONG`
- * (rad) off the way it goes (the old balance's carriage turned to an asked facing only once near and slow)
+ * (rad) off the way it goes: it turns to an asked facing only once near and slow
  */
 const ARRIVING = 0.2, ARRIVAL_TURN = [1, 2.5] as const, SIDELONG = 0.3;
-/** Inherited (the old balance's carriage): a goal this far off the facing (rad) is walked to more and more slowly, then turned to first */
+/** Tuned: a goal this far off the facing (rad) is walked to more and more slowly, then turned to first */
 const TURN_FIRST = [0.6, 1.3] as const;
 /** Tuned: how near a half turn (rad) its way and the facing asked are each taken as about */
 const ABOUT = 0.35;
-/** Inherited (the old balance's carriage): a goal moving slower than this (m/s) is still: arrived at, it may be faced any way */
+/** Tuned: a goal moving slower than this (m/s) is still: arrived at, it may be faced any way */
 const STILL = 0.08;
 const UP = new Vector3(0, 1, 0);

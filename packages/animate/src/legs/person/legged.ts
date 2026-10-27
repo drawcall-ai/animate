@@ -9,7 +9,7 @@ export interface PersonLegged extends Legged {
 }
 
 /** how high the floor is under a person's feet (m): their ankles where they stand or land (as it is made, its own), less the ankle's height */
-export function floorUnder(h: Pick<PersonLegged, 'stepper' | 'pose' | 'proportions'>): number {
-  const [left, right] = h.stepper?.legs.map((leg) => leg.anchor.y) ?? [h.pose.position(INDEX.leftFoot).y, h.pose.position(INDEX.rightFoot).y];
-  return (left + right) / 2 - h.proportions.ankleHeight;
+export function floorUnder(person: Pick<PersonLegged, 'stepper' | 'pose' | 'proportions'>): number {
+  const [left, right] = person.stepper?.legs.map((leg) => leg.anchor.y) ?? [person.pose.position(INDEX.leftFoot).y, person.pose.position(INDEX.rightFoot).y];
+  return (left + right) / 2 - person.proportions.ankleHeight;
 }

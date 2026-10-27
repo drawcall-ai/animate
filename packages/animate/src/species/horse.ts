@@ -1,6 +1,6 @@
 // The horse: a ~500 kg warmblood of 1.60 m at the withers (16 hands), standing square at rest: +Y up, facing +Z, its left +X; the root
-// (the trunk) on the spine under the saddle. Recalled: all dimensions, masses and ROM below are the spike's approximate warmblood data;
-// sources accompany each block.
+// (the trunk) on the spine under the saddle. Recalled: all dimensions, masses and ROM below are approximate warmblood data; sources
+// accompany each block.
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
 import type { Frame } from '../kernel/frame';
@@ -105,7 +105,7 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
   const bones = { head: built.index('head'), neck: built.index('neck'), ears: [built.index('leftEar'), built.index('rightEar')] };
   const halter = HALTER.clone().multiplyScalar(size);
   const chains = made.legs?.chains ?? [];
-  return { ...made, bones: skeleton, scale: size, legs: made.legs && { ...made.legs, posture: (start, g, seed) => horseMotion(start, g, chains, bones, halter, seed) } };
+  return { ...made, bones: skeleton, scale: size, legs: made.legs && { ...made.legs, posture: (start, gait, seed) => horseMotion(start, gait, chains, bones, halter, seed) } };
 }
 
 /** every bone a horse's skeleton names */
@@ -227,7 +227,7 @@ const HORSE_TROT: Gait = {
 // Read: Back et al. 1995 fore/hind abstracts describe TROT at 4 m/s, not walk.
 // Recalled: Back et al. 1996 comparison: walk stance has less shoulder/stifle/hock flexion.
 // Read: Hodson 2001 abstract (doi:10.2746/042516401776767485): loading flexion <10%, stifle >28%, stifle/hock coupled.
-// Recalled: trot curves below and the 1996 excursion values retained from the spike.
+// Recalled: the trot curves below and the 1996 excursion values.
 // Read: Hodson et al. 2000 (doi:10.2746/042516400777032237): fore cannon vertical at 28% stride.
 // Tuned: walk keys implement those findings; they are not digitised paper data.
 const cycle = (keys: [number, number][], alternate?: [number, number][], alternateWeight = 1): JointCycle => ({ duty: 0.45, keys, alternate, alternateWeight });
@@ -317,7 +317,7 @@ function horseMotion(start: ReadonlyPose, gait: Gait, legs: readonly LegChain[],
       const attended = look && look.distanceTo(f.prev.position(headBone)) < 5 ? clamp(Math.atan2(_look.x, _look.z), -0.55, 0.55) : 0;
       const toward = Math.sign(_reaction.x);
       const distance = look ? look.distanceTo(f.prev.position(headBone)) : Infinity;
-      // Retained avoidance: 0.8 m / 0.3 m transition, 0.5 rad, 0.25 s response.
+      // Tuned avoidance: 0.8 m / 0.3 m transition, 0.5 rad, 0.25 s response.
       const away = look ? -Math.sign(_look.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3)) : 0;
       // Tuned gains (rad): neck .35/head .2 sum to 31.5° look-back (derived); ears −.3, pelvis .025, tail .2.
       // Derived: hip-axis roll within the skeleton's range shifts the croup up to 2.5 cm; rests take over.

@@ -6,13 +6,18 @@ import { selfOf } from '../../src/body/body';
 import type { Frame } from '../../src/kernel/frame';
 import { strideAt } from '../../src/species/gait';
 import { quintic } from '../../src/legs/step/swing';
-import { HORSE_WALK } from '../../src/species/horse';
 import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, person, scene } from '../bodies';
 import { HORSE } from '../skeletons/horse';
 
 const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);
+const WALK = gaitOf(MARE);
+/** a species' gait (throws for one without legs) */
+function gaitOf(kind: typeof MARE) {
+  if (!kind.legs) throw new Error('no legs');
+  return kind.legs.gait;
+}
 const HEAD = bone('head'), NECK = bone('neck'), PELVIS = bone('pelvis'), SPINE = bone('back'), TAIL = bone('tail'), EARS = [bone('leftEar'), bone('rightEar')];
 /** a halter's lead ring (m, head bone) */
 const HALTER = new Vector3(0, -0.3, 0.05);
@@ -89,8 +94,8 @@ it.each(OFFSETS)('checks %s touchdown after later pose writers, only with dev en
 });
 
 it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', () => {
-  expect(strideAt(HORSE_WALK, -8.9e-16, 0)).toEqual(strideAt(HORSE_WALK, 0, 0));
-  for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(HORSE_WALK, speed, 0)).toThrow('leg speed');
+  expect(strideAt(WALK, -8.9e-16, 0)).toEqual(strideAt(WALK, 0, 0));
+  for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(WALK, speed, 0)).toThrow('leg speed');
   // (and a body whose legs read such noise off a root standing still steps on, its log empty)
   const root = { position: new Vector3(0, 0, 0), velocity: new Vector3(0, 0, -8.9e-16), yaw: 0 };
   const body = new Body(MARE, { drive: () => root, dev: true });
@@ -220,7 +225,7 @@ it('brakes for a moving goal that crosses behind a travelling root', () => {
  * of its sole's ends is `UP` (m) off the floor.
  */
 function walked(story: (b: Body) => Verb, seconds: number, led?: { body: Body; story: ReusableTimeline<unknown, unknown> }) {
-  const UP = 0.005, chains = MARE.legs?.chains ?? [], offsets = HORSE_WALK.contacts.map((c) => typeof c.offset === 'number' ? c.offset : NaN);
+  const UP = 0.005, chains = MARE.legs?.chains ?? [], offsets = WALK.contacts.map((c) => typeof c.offset === 'number' ? c.offset : NaN);
   const body = new Body(MARE, { at: new Vector3(2.6, 0, -0.8), face: 0, dev: true });
   const step = scene([body], function* () { yield* story(body); }), lead = led && scene([led.body], led.story);
   const up = () => chains.map(({ joints, heel, toe }) => {

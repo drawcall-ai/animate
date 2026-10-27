@@ -22,15 +22,15 @@ export interface Tracked {
  */
 export function track(body: Body, tracked: Tracked, options: { until?: Until } = {}): Verb {
   return verb(body, 'track', (request) => function* () {
-    const h = personOf(selfOf(body)), branches = [];
+    const person = personOf(selfOf(body)), branches = [];
     if (tracked.head) {
-      const head = heading(h, finder(h, tracked.head));
+      const head = heading(person, finder(person, tracked.head));
       branches.push(during(request, 'go', 'asked', head.under), during(request, 'look', 'asked', head.look));
     }
     for (const side of ['left', 'right'] as const satisfies readonly Side[]) {
       const target = tracked[side];
       if (!target) continue;
-      branches.push(during(request, `hand.${side}`, 'asked', reaching(h, side, finder(h, target), { lead: false })));
+      branches.push(during(request, `hand.${side}`, 'asked', reaching(person, side, finder(person, target), { lead: false })));
     }
     yield* parallel('all', ...branches);
   }, options.until, true);

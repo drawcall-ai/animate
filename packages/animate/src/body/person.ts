@@ -42,10 +42,10 @@ export class Person extends Self {
   readonly proportions: Proportions;
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
-    const p = species.person;
-    if (!p || !species.gaze) throw new Error('a person is made of a humanoid species');
-    super(species, options, binding, (skeleton) => relaxed(p, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0));
-    this.proportions = p;
+    const proportions = species.person;
+    if (!proportions || !species.gaze) throw new Error('a person is made of a humanoid species');
+    super(species, options, binding, (skeleton) => relaxed(proportions, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0));
+    this.proportions = proportions;
   }
 
   /** a person's hands: both at once, the right leading */
@@ -92,8 +92,8 @@ export class Person extends Self {
  * where hand `side` is kept on the body while nothing asks for it: where it was relative to the root bone when it was last let be (a
  * mug held before the chest stays there as the body walks and turns)
  */
-function keptOnBody(h: Person, side: Side): (f: Frame) => Goal {
-  const bone = h.hands[side];
+function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
+  const bone = person.hands[side];
   let time = -Infinity;
   const kept = { position: new Vector3(), quaternion: new Quaternion() };
   return (f) => {
@@ -128,19 +128,19 @@ const GRIP_TAKEN = REACHED.distance + 0.02;
 const HELD = 0.05;
 
 /** where `hold`'s grip is as the body is posed now (read afresh: a thing hanging from a hand moves with it after the hands) */
-function gripIn(h: Person, hold: Hold): Vector3 {
-  const at = resolve(h, hold.thing.object, _placed);
+function gripIn(person: Person, hold: Hold): Vector3 {
+  const at = resolve(person, hold.thing.object, _placed);
   return _grip.copy(hold.goal.position).applyQuaternion(at.quaternion).add(at.position);
 }
 
 /** development: each grip a hand has just taken, its wrist as near it as a grip taken is */
-function checkTaking(h: Person, f: Frame, taking: Partial<Record<Side, readonly [Thing, string]>>): void {
+function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, readonly [Thing, string]>>): void {
   for (const side of SIDES) {
-    const hold = h.holding[side], was = taking[side];
+    const hold = person.holding[side], was = taking[side];
     taking[side] = hold ? [hold.thing, hold.grip] : undefined;
     if (!hold || (was?.[0] === hold.thing && was[1] === hold.grip)) continue;
-    const at = gripIn(h, hold);
-    const value = f.current.position(h.hands[side]).distanceTo(at);
+    const at = gripIn(person, hold);
+    const value = f.current.position(person.hands[side]).distanceTo(at);
     if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${hold.thing.object.name} ${side} ${hold.grip}` });
   }
 }
@@ -150,14 +150,14 @@ function checkTaking(h: Person, f: Frame, taking: Partial<Record<Side, readonly 
  * within `HELD` of its grip as the thing is fitted to the wrists (said once a hold: arms falling short of where a carry aims it draw the
  * wrists together, off the grips)
  */
-function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
+function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
-    const hold = h.holding[side];
+    const hold = person.holding[side];
     if (!hold) continue;
     if (!bodyOf(hold.thing.object)) continue;
     const carried = !worn(hold.thing);
-    const at = gripIn(h, hold);
-    const value = f.current.position(h.hands[side]).distanceTo(at), limit = carried ? HELD : REACHED.distance;
+    const at = gripIn(person, hold);
+    const value = f.current.position(person.hands[side]).distanceTo(at), limit = carried ? HELD : REACHED.distance;
     if (value <= limit || (carried && noted.has(hold))) continue;
     if (carried) noted.add(hold);
     f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${hold.thing.object.name} ${side}` });
@@ -168,18 +168,18 @@ function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
  * `pose` standing relaxed at `floor` facing `yaw`: the feet flat where the default stance puts them, the pelvis as high as they reach,
  * the legs solved down to them
  */
-function relaxed(p: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
+function relaxed(proportions: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
   for (const { bone, rotation } of relaxedPose()) pose.setLocal(bone, rotation);
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));
-  pose.setRoot(new Vector3(floor.x, p.hipHeight, floor.z));
+  pose.setRoot(new Vector3(floor.x, proportions.hipHeight, floor.z));
   pose.facing = yaw;
-  const feet = standingFeet(p, floor.x, floor.z, yaw);
+  const feet = standingFeet(proportions, floor.x, floor.z, yaw);
   // (no higher than the legs reach)
-  const reach = STANDING_REACH * p.legLength;
-  let y = p.hipHeight;
+  const reach = STANDING_REACH * proportions.legLength;
+  let y = proportions.hipHeight;
   SIDES.forEach((side, s) => {
     const hip = pose.position(INDEX[`${side}UpperLeg`]), ankle = feet[s].position;
-    y = Math.min(y, ankle.y + Math.sqrt(reach * reach - (hip.x - ankle.x) ** 2 - (hip.z - ankle.z) ** 2) + p.hipHeight - hip.y);
+    y = Math.min(y, ankle.y + Math.sqrt(reach * reach - (hip.x - ankle.x) ** 2 - (hip.z - ankle.z) ** 2) + proportions.hipHeight - hip.y);
   });
   pose.setRoot(new Vector3(floor.x, y, floor.z));
   SIDES.forEach((side, s) => {

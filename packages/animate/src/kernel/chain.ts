@@ -6,7 +6,7 @@ import type { Pose } from './pose';
 import type { Limit, Skeleton } from './skeleton';
 
 /** Where a chain is asked to go (world). */
-export interface ChainGoal {
+interface ChainGoal {
   /** the tip bone's origin and, if given, rotation */
   tip: Goal;
   /**

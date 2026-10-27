@@ -56,7 +56,7 @@ export function keeping(self: Handed): (f: Frame, hand: string) => void {
  * The hands' chains back to where balance has them, over `HANDING` s from where they are (with what they hold): each joint from where it
  * was toward balance's at a calm dip's pace, balance taking over as it gets there; `done` once it has.
  */
-export function handingBack(self: Handed, hands: readonly string[]) {
+function handingBack(self: Handed, hands: readonly string[]) {
   const bones = hands.flatMap((hand) => self.pose.skeleton.chain(chainOf(self, hand)));
   let began = NaN, dips: Quaternion[][] = [];
   return {
@@ -238,7 +238,7 @@ export function* bringing(self: Handed, request: Request, hand: string, thing: T
 }
 
 /** A creature's hand reaching `target` (a sub-step at a time), walking up first if it must: met once there, it stays there. */
-export function* nuzzling(self: Handed, request: Request, hand: string, target: (f: Frame) => Readonly<Vector3>) {
+function* nuzzling(self: Handed, request: Request, hand: string, target: (f: Frame) => Readonly<Vector3>) {
   const reach = reachOf(self, hand, target(self.frame), 'reach');
   if (!reach || !(yield* coming(self, request, target, reach))) {
     request.fail();
@@ -269,7 +269,7 @@ export function creatureHands(self: Handed): Handling {
   return {
     take: function* (request, thing, grips) {
       const { hand, grip } = grips[0];
-      one('grab', grips.map((g) => g.hand));
+      one('grab', grips.map((grip) => grip.hand));
       yield* taking(self, request, hand, thing, grip);
       request.met();
     },

@@ -21,15 +21,15 @@ import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
  */
-export function stride(h: PersonLegged, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
-  const p = h.proportions, s = p.scale, toeOut = defaultStance(p).toeOut;
+export function stride(person: PersonLegged, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
+  const proportions = person.proportions, s = proportions.scale, toeOut = defaultStance(proportions).toeOut;
   const stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, still: Vector3 | null = null;
   let moving = false, starting = false, seen = false, leaning = false;
   // (`from` shifted by `lean` as far as the planted feet hold it, `LEAN.inside` within their edge)
   const within = (from: Vector3, lean: Vector3 | null, stepper: Stepper) => {
     if (!lean) return from;
-    const hull = hullOf(stepper.legs.filter((leg) => !leg.swing).flatMap((leg) => footprint(p, leg.anchor, leg.yaw)));
+    const hull = hullOf(stepper.legs.filter((leg) => !leg.swing).flatMap((leg) => footprint(proportions, leg.anchor, leg.yaw)));
     if (hull.length < 3) return from;
     const at = (t: number) => from.clone().addScaledVector(lean, t);
     if (past(hull, at(1)) <= -LEAN.inside * s) return at(1);
@@ -39,12 +39,12 @@ export function stride(h: PersonLegged, options: { stance?: Partial<Stance>; see
     }
     return at(lo);
   };
-  return drivenBy(h, (f, go, poise, stepper) => {
+  return drivenBy(person, (f, go, poise, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
-    if (f.dev) checkSupport(h, f, f.dev);
+    if (f.dev) checkSupport(person, f, f.dev);
     const dt = f.dt, face = go?.face;
     if (!planner) {
-      planner = new Planner(f.prev.com(new Vector3()), h.yaw, humanGait(p), p.hipHalfWidth);
+      planner = new Planner(f.prev.com(new Vector3()), person.yaw, humanGait(proportions), proportions.hipHalfWidth);
       stop.copy(planner.root.position);
     }
     const plan = planner, root = plan.root.position;
@@ -61,8 +61,8 @@ export function stride(h: PersonLegged, options: { stance?: Partial<Stance>; see
     seen = !!go;
     // (where it rests: its weight shifted from there as a reach asks, back there after)
     still = moving ? null : leaning ? still : root.clone();
-    // (a walk is under way while the body turns to a facing asked too, as the old carriage had it: turning on the spot, a goal moving off
-    // is walked after at once, not once it is a start's distance away)
+    // (a walk is under way while the body turns to a facing asked too: turning on the spot, a goal moving off is walked after at once, not
+    // once it is a start's distance away)
     const unturned = face ? Math.abs(wrapAngle(face.yaw - plan.root.yaw)) : 0;
     const off = (still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced;
     if (!moving && off) [moving, starting, still, leaning] = [true, true, null, false];

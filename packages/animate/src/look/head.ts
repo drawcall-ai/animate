@@ -48,18 +48,18 @@ const UNDER = { speed: 1.0, accel: 1.2 };
  * turned further than the trunk and neck take, stands where the eyes are over it, bows and squats for a head lower than standing and goes
  * up on its toes for one higher.
  */
-export function heading(h: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
+export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
   const joints = SPINE.map(() => new TrackedRotation());
   const head = { position: new Vector3(), quaternion: new Quaternion() };
-  const under = new Under(h);
+  const under = new Under(person);
   /** the head's goal this sub-step, as the eyes are followed there */
   const follow = (f: Frame) => {
-    const goal = eyes(f), p = h.proportions;
+    const goal = eyes(f), proportions = person.proportions;
     const level = goal.quaternion ?? _level.setFromAxisAngle(UP, yawOf(f.current.local(0)));
     // (the eyes and the head's turn where they were, moved on)
-    at.follow(f.prev2.point(INDEX.head, p.eyes, _a), f.prev.point(INDEX.head, p.eyes, _b), goal.position, pace, f.dt, head.position);
+    at.follow(f.prev2.point(INDEX.head, proportions.eyes, _a), f.prev.point(INDEX.head, proportions.eyes, _b), goal.position, pace, f.dt, head.position);
     turned.follow(f.prev2.rotation(INDEX.head), f.prev.rotation(INDEX.head), level, { accel: pace.turnAccel ?? HEADSET.turnAccel, speed: pace.turnSpeed }, f.dt, head.quaternion);
     return goal;
   };
@@ -73,7 +73,7 @@ export function heading(h: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET
     look: (f) => {
       if (followed !== f.time) follow(f);
       const pose = f.current;
-      place(pose, h.proportions.eyes, head.position, head.quaternion);
+      place(pose, person.proportions.eyes, head.position, head.quaternion);
       SPINE.forEach((bone, k) => {
         const q = joints[k].follow(f.prev2.local(bone), f.prev.local(bone), pose.local(bone), JOINTS, f.dt, _q);
         const limit = pose.skeleton.limits[bone];
@@ -98,16 +98,16 @@ class Under {
   private off = 0;
   private height = NaN;
 
-  constructor(private readonly h: Led) {}
+  constructor(private readonly person: Led) {}
 
   /** the body bowed and let down for the eyes at `eyes`, the head facing `yaw`, and where its legs go under them */
   ask(f: Frame, eyes: Vector3, yaw: number): Go {
-    const { h, go, face } = this;
-    const p = h.proportions;
-    const facing = h.locomotion.facing;
+    const { person: person, go, face } = this;
+    const proportions = person.proportions;
+    const facing = person.locomotion.facing;
     const off = Math.abs(wrapAngle(yaw - facing));
     if (Number.isNaN(face.yaw)) face.yaw = facing;
-    if (this.turning && off < SQUARED && h.locomotion.settled) [this.turning, face.yaw] = [false, facing];
+    if (this.turning && off < SQUARED && person.locomotion.settled) [this.turning, face.yaw] = [false, facing];
     this.off = off > TURN ? this.off + f.dt : 0;
     if (this.off >= WAIT) this.turning = true;
     if (this.turning) face.yaw = yaw;
@@ -115,19 +115,19 @@ class Under {
     // own pace, so the pelvis lags one moving at v by about v² / 2a)
     const rising = Number.isNaN(this.height) ? 0 : (eyes.y - this.height) / f.dt;
     this.height = eyes.y;
-    const drop = p.eyeHeight - eyes.y - (rising * Math.abs(rising)) / (2 * LOWER.accel);
+    const drop = proportions.eyeHeight - eyes.y - (rising * Math.abs(rising)) / (2 * LOWER.accel);
     const fwd = forwardOf(yaw, _v);
     const com = f.prev.com(_c);
-    const { lower, bow } = lowering(p, { height: p.eyeHeight, ahead: ((eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z - EYES_AHEAD * p.scale) / BOW_AHEAD, drop });
+    const { lower, bow } = lowering(proportions, { height: proportions.eyeHeight, ahead: ((eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z - EYES_AHEAD * proportions.scale) / BOW_AHEAD, drop });
     // (standing where that bow puts the eyes: where it stands now, unless they are further ahead or
     // behind than it takes them; and how fast that moves: a head going off is stepped after as it goes)
     // The planner follows the carried posture's actual eye offset; the retiring balance keeps its standing estimate.
-    const spot = h.stepper
-      ? _spot.copy(eyes).sub(f.current.point(INDEX.head, p.eyes, _v)).add(f.current.com(_c)).setY(0)
-      : _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * p.scale - BOW_AHEAD * (p.eyeHeight - p.hipHeight) * Math.sin(bow)).setY(0);
+    const spot = person.stepper
+      ? _spot.copy(eyes).sub(f.current.point(INDEX.head, proportions.eyes, _v)).add(f.current.com(_c)).setY(0)
+      : _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * proportions.scale - BOW_AHEAD * (proportions.eyeHeight - proportions.hipHeight) * Math.sin(bow)).setY(0);
     if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
     go.to.copy(spot);
-    h.poise.add({ lower, bow });
+    person.poise.add({ lower, bow });
     return go;
   }
 }

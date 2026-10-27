@@ -7,17 +7,16 @@ import { forwardOf, leftOf } from '../../kernel/math';
 import { INDEX } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 
-// Inherited trunk capsule proxy from examples/test/clearance.ts: 6% of stature.
-// Uncalibrated; no verified anatomical source.
+/** Tuned, uncalibrated: the trunk as a capsule this thick (× stature) */
 export const BODY_RADIUS = 0.06;
-// Inherited 4 cm reserve, verified against mesh clearance; no empirical calibration recorded.
+/** Tuned (checked against a mesh's clearance): the room a load is kept from the body (m) */
 export const LOAD_RESERVE = 0.04;
 
 /** Clear a load position against the trunk and neck→head chain, in place; returns how far the neck and head moved it (m). */
-export function clearBody(h: Reacher, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Placement): number {
+export function clearBody(person: Reacher, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Placement): number {
   if (worn(item)) return 0;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
-  const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);
+  const forward = forwardOf(person.locomotion.facing, _forward), left = leftOf(person.locomotion.facing, _left);
   let back = Infinity, bottom = Infinity, top = -Infinity, near = Infinity, far = -Infinity;
   for (let i = 0; i < 2; i++) {
     const turn = i === 0 ? rotation : current.quaternion;
@@ -34,14 +33,14 @@ export function clearBody(h: Reacher, f: Frame, item: Thing, at: Vector3, rotati
   const pose = f.current;
   const hips = pose.position(0), neck = pose.position(INDEX.neck);
   // Read the last final gaze, carried with the chest, before this step's task gaze.
-  const head = f.prev.point(INDEX.head, h.proportions.headCenter, _head).sub(f.prev.position(INDEX.neck))
+  const head = f.prev.point(INDEX.head, person.proportions.headCenter, _head).sub(f.prev.position(INDEX.neck))
     .applyQuaternion(_inverse.copy(f.prev.rotation(INDEX.chest)).invert().premultiply(pose.rotation(INDEX.chest))).add(neck);
-  const radius = BODY_RADIUS * h.proportions.height;
+  const radius = BODY_RADIUS * person.proportions.height;
   let face = 0;
   for (let i = 0; i < 2; i++) {
     const start = i === 0 ? hips : neck, end = i === 0 ? neck : head;
     if (at.y + bottom > Math.max(start.y, end.y) + radius || at.y + top < Math.min(start.y, end.y) - radius) continue;
-    const padding = radius + LOAD_RESERVE * h.scale;
+    const padding = radius + LOAD_RESERVE * person.scale;
     const side = at.dot(left), a = start.dot(left), b = end.dot(left);
     if (side + near > Math.max(a, b) + padding || side + far < Math.min(a, b) - padding) continue;
     const span = end.y - start.y;

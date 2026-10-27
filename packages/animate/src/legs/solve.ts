@@ -307,10 +307,10 @@ export class Solver {
   private residual(target: LegTarget, r: Float64Array) {
     this.forward();
     const last = this.bones.length - 1;
-    const p = this.positions[last];
-    r[0] = p.x - target.position.x;
-    r[1] = p.y - target.position.y;
-    r[2] = p.z - target.position.z;
+    const tip = this.positions[last];
+    r[0] = tip.x - target.position.x;
+    r[1] = tip.y - target.position.y;
+    r[2] = tip.z - target.position.z;
     // (the turn's error as a rotation vector: R · R*⁻¹)
     const e = _e.copy(target.rotation).invert().premultiply(this.rotations[last]);
     if (e.w < 0) e.set(-e.x, -e.y, -e.z, -e.w);
@@ -325,10 +325,10 @@ export class Solver {
   private linearise(target: LegTarget, r: Float64Array) {
     const { n, J } = this;
     this.residual(target, r);
-    const p = this.positions[this.bones.length - 1];
+    const tip = this.positions[this.bones.length - 1];
     for (let j = 0; j < n; j++) {
       const w = this.world[j];
-      const arm = _v.subVectors(p, this.at[j]).cross(w).negate();
+      const arm = _v.subVectors(tip, this.at[j]).cross(w).negate();
       J[0 * n + j] = arm.x;
       J[1 * n + j] = arm.y;
       J[2 * n + j] = arm.z;

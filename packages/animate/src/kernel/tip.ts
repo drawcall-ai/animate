@@ -10,7 +10,7 @@ import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
 /** How a chain's tip goes to its target. */
-export interface TipOptions extends Motion {
+interface TipOptions extends Motion {
   /** where a two-segment chain's middle joint bends toward (world) */
   pole?: Live<Vector3>;
   /** the target is on this carrier, in its frame: the tip goes with it */

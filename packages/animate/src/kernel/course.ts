@@ -173,9 +173,9 @@ function curve(stops: readonly Placement[], seconds: number): Run {
       while (k < lengths.length - 1 && lengths[k] < want) k++;
       const span = lengths[k] - lengths[k - 1];
       const u = us[k - 1] + (span > 0 ? (us[k] - us[k - 1]) * Math.min(1, Math.max(0, (want - lengths[k - 1]) / span)) : 0);
-      const p = point(u, now);
-      out.position.set(p[0], p[1], p[2]);
-      return (out.quaternion.copy(q0).multiply(exp(p[3], p[4], p[5], _q)), out);
+      const at = point(u, now);
+      out.position.set(at[0], at[1], at[2]);
+      return (out.quaternion.copy(q0).multiply(exp(at[3], at[4], at[5], _q)), out);
     },
   };
 }

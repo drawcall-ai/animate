@@ -14,7 +14,7 @@ import type { Tier } from '../kernel/requests';
 export type BodyOptions = SelfOptions & { avoid?: Iterable<Body> };
 
 /** the names of a species' bones */
-export type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone : never;
+type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone : never;
 /** the names of a species' hands */
 export type HandOf<S extends AnySpecies> = S extends Species<string, infer Hand> ? Hand : never;
 

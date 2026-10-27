@@ -38,8 +38,8 @@ export class Quiet {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(go: Go | null, poise: Poise, h: PersonLegged): boolean {
-    return !go && !h.locomotion.moving && !h.holding.left && !h.holding.right && poise.lower === 0 && poise.bow === 0 && poise.steady === 0;
+  quiet(go: Go | null, poise: Poise, person: PersonLegged): boolean {
+    return !go && !person.locomotion.moving && !person.holding.left && !person.holding.right && poise.lower === 0 && poise.bow === 0 && poise.steady === 0;
   }
 
   /** `steady`: how still it holds itself (0 … 1: aiming) */
@@ -54,7 +54,7 @@ export class Quiet {
     // Seeded smooth drift: incommensurate components, 5–10 mm of quiet CoM travel.
     const noise = (a: number, b: number, c: number) => irregular(t, phase, a, b, c);
     this.drift.set(0.007 * noise(0.79, 1.37, 2.11), 0, 0.009 * noise(0.93, 1.61, 2.47)).multiplyScalar(this.amount);
-    // Recalled: breathing 12–20/min (retained brief, PMC5973601). Tuned: 1° active, 1.5° after 1–2 s quiet.
+    // Recalled: breathing 12–20/min (PMC5973601). Tuned: 1° active, 1.5° after 1–2 s quiet.
     this.breath = Math.sin(2 * Math.PI * 0.25 * t + phase) * (1 + 0.5 * smoothstep(1, 2, this.quietTime)) * Math.PI / 180 * this.amount;
   }
 }

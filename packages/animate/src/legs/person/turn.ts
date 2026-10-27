@@ -25,7 +25,7 @@ const HELD = { thorax: 1.4, pelvis: 1.6 };
 const ROLL = { walk: 0.55, run: 0.14 };
 
 /** neither arm free to swing: both hands hold something */
-export const armsHeld = (h: Pick<PersonLegged, 'holding'>) => !!h.holding.left && !!h.holding.right;
+export const armsHeld = (person: Pick<PersonLegged, 'holding'>) => !!person.holding.left && !!person.holding.right;
 
 export interface Turn {
   /** the pelvis's and the thorax's turn off the facing (rad, + to the left), the thorax's roll (rad) */

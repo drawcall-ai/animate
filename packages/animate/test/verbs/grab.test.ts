@@ -1,11 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { grab, wait } from '../../src/index';
-import { gazeOff } from '../../src/look/gaze';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
-import { insides, person, play, feetOf } from '../bodies';
-import { box, roomOf, worldOf } from '../things';
+import { insides, person, play, feetOf, gazeOff } from '../bodies';
+import { box, roomOf, worldOf, named } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
@@ -56,7 +55,7 @@ describe('grab, walking up', () => {
       walking ||= h.locomotion.velocity.length() > 0.5;
       // (judged until it stands: its eyes leave the load as its hands close on it)
       if (!Number.isNaN(stood)) return held;
-      if (gazeOff(h.gazer!, h.pose, worldOf(load)) >= 0.2) looking = NaN;
+      if (gazeOff(h.gazer, h.pose, worldOf(load)) >= 0.2) looking = NaN;
       else if (Number.isNaN(looking)) looking = time;
       const com = h.pose.com(new Vector3());
       feetOf(h).forEach((foot, s) => {
@@ -84,7 +83,7 @@ describe('grab, walking up', () => {
     play(function* () {
       held = yield* grab(body, load, BOTH);
     }, [body], 8, (time) => {
-      if (Number.isNaN(at.eyes) && gazeOff(h.gazer!, h.pose, worldOf(load)) < 0.2) at.eyes = time;
+      if (Number.isNaN(at.eyes) && gazeOff(h.gazer, h.pose, worldOf(load)) < 0.2) at.eyes = time;
       const hand = onHips(h, 'right');
       if (Number.isNaN(at.hands) && time > 0.5 && hand.distanceTo(was) * 60 > 0.15) at.hands = time;
       was.copy(hand);
@@ -145,7 +144,7 @@ describe('grab, from where it stands', () => {
     for (const at of [new Vector3(-0.1, 1.0, 0.45), new Vector3(-0.15, 0.3, 0.5), new Vector3(-0.3, 1.4, 0.3)]) {
       const body = person(), h = insides(body), room = roomOf(body);
       const thing = box(room, at, { mass: null, solid: false });
-      const grip = thing.getObjectByName('right')!;
+      const grip = named(thing, 'right');
       const off: number[] = [];
       play(function* () {
         yield* wait(1);
@@ -169,7 +168,7 @@ describe('grab, from where it stands', () => {
   it("turns the hand as its grip is turned, the hand bone's axes on the empty's", () => {
     const body = person(), room = roomOf(body);
     const handle = box(room, new Vector3(-0.2, 1.0, 0.35), { mass: null, solid: false, name: 'handle' });
-    const grip = handle.getObjectByName('right')!;
+    const grip = named(handle, 'right');
     // (turned as the hand hangs, then a quarter turn more about its forearm: a hand that must turn to take it)
     delete grip.userData.free;
     grip.quaternion.copy(body.bones.rightHand.getWorldQuaternion(new Quaternion())).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 0.8));
@@ -191,7 +190,7 @@ describe('grab, from where it stands', () => {
       held = yield* grab(body, thing, { right: 'right' });
     }, [body], 3, () => held);
     expect(held).toBe(true);
-    const grip = thing.getObjectByName('right')!;
+    const grip = named(thing, 'right');
     expect(h.pose.position(h.hands.right).distanceTo(worldOf(grip))).toBeLessThan(0.03);
     expect(h.holding.right?.grip).toBe('right');
   });

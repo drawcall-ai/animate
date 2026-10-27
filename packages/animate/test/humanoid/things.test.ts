@@ -2,7 +2,7 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { carry, grab, release, wait } from '../../src/index';
 import { insides, person, play, run, feetOf } from '../bodies';
-import { box, empty, roomOf, worldOf } from '../things';
+import { box, empty, roomOf, worldOf, named } from '../things';
 
 describe('what a body wears', () => {
   /** a body wearing 10 kg 30 cm out to its left at the chest, stood a while */
@@ -88,10 +88,10 @@ describe('a sword in a scabbard on the hips', () => {
     sword.name = 'sword';
     sword.userData.mass = 1.2;
     sword.position.set(0, 0.05, 0);
-    scabbard.getObjectByName('mouth')!.add(sword);
+    named(scabbard, 'mouth').add(sword);
     empty(sword, 'hilt', new Vector3(0, 0.1, 0)).userData.free = true;
     room.updateMatrixWorld(true);
-    return { body, room, scabbard, sword, mouth: scabbard.getObjectByName('mouth')!, out: scabbard.getObjectByName('out')! };
+    return { body, room, scabbard, sword, mouth: named(scabbard, 'mouth'), out: named(scabbard, 'out') };
   }
 
   it('draws it out the way its scabbard comes in, holds it before itself, and sheathes it again', () => {

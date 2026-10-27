@@ -56,22 +56,22 @@ function feet(chain: LegChain, size: number): LegChain {
 }
 
 /** the gait dynamically similar at `size`: read at the speed of the same Froude number */
-export function gaitAt(g: Gait, size: number): Gait {
+export function gaitAt(gait: Gait, size: number): Gait {
   const k = Math.sqrt(size), at = (v: number) => v / k;
   const offsetAt = (offset: Gait['contacts'][number]['offset']) => typeof offset === 'number' ? offset : (v: number, fr: number) => offset(at(v), fr);
   return {
-    ...g,
-    height: g.height * size,
-    slowest: g.slowest * k,
-    referenceSpeed: g.referenceSpeed === undefined ? undefined : g.referenceSpeed * k,
-    clearance: g.clearance.map((c) => c * size),
-    frequency: (v, fr) => g.frequency(at(v), fr) / k,
-    contacts: g.contacts.map((c) => ({
+    ...gait,
+    height: gait.height * size,
+    slowest: gait.slowest * k,
+    referenceSpeed: gait.referenceSpeed === undefined ? undefined : gait.referenceSpeed * k,
+    clearance: gait.clearance.map((c) => c * size),
+    frequency: (v, fr) => gait.frequency(at(v), fr) / k,
+    contacts: gait.contacts.map((c) => ({
       ...c,
       offset: offsetAt(c.offset),
       duty: (v: number, fr: number) => c.duty(at(v), fr),
     })),
-    body: typeof g.body === 'function' ? ((body) => (v: number, fr: number) => carriage(body(at(v), fr), size))(g.body) : g.body && carriage(g.body, size),
+    body: typeof gait.body === 'function' ? ((body) => (v: number, fr: number) => carriage(body(at(v), fr), size))(gait.body) : gait.body && carriage(gait.body, size),
   };
 }
 

@@ -27,7 +27,7 @@ export interface Claim {
 export type Staging = (request: Request) => ReusableTimeline<Frame>;
 
 /** the body a request is filed with, as a request sees it */
-export interface Filed {
+interface Filed {
   readonly time: number;
   claim(claim: Claim): void;
   unclaim(claim: Claim): void;

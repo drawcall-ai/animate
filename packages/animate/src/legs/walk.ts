@@ -91,10 +91,10 @@ export class Walk {
   arrived(f: Frame): boolean {
     const yaw = this.where(f);
     if (this.leg < (this.way.via?.length ?? 0)) return false;
-    const body = placeOf(this.self, f), g = this.self.locomotion;
-    const there = Math.hypot(body.x - this.go.to.x, body.z - this.go.to.z) < ARRIVED.distance * this.self.scale || g.there;
-    const turned = yaw === null || Math.abs(wrapAngle(yaw - g.facing)) < ARRIVED.yaw;
-    return there && turned && g.settled;
+    const body = placeOf(this.self, f), locomotion = this.self.locomotion;
+    const there = Math.hypot(body.x - this.go.to.x, body.z - this.go.to.z) < ARRIVED.distance * this.self.scale || locomotion.there;
+    const turned = yaw === null || Math.abs(wrapAngle(yaw - locomotion.facing)) < ARRIVED.yaw;
+    return there && turned && locomotion.settled;
   }
 
   /** where it goes this sub-step (`go.to`), and the facing it arrives with (null: none) */

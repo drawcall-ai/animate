@@ -32,9 +32,9 @@ const CLOSE = 1.6;
  * within the last second the hands (asked) rise toward them, and as it arrives they reach them, the body bowing and bending with the
  * reach; the hands close on them and the eyes leave. `false` if it can stand nowhere to take them.
  */
-export function* grabbing(h: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
-  const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(h, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
-  const plan = footing(h, { grips: takes.map((take) => ({ side: take.side, at: gripAt(h, take, h.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)) });
+export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
+  const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
+  const plan = footing(person, { grips: takes.map((take) => ({ side: take.side, at: gripAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)) });
   if (plan === 'nowhere') {
     request.fail();
     return false;
@@ -42,36 +42,36 @@ export function* grabbing(h: Reacher, request: Request, takes: readonly Taking[]
   let stood = plan === 'there';
   const walk: Walk | null = plan === 'there' ? null : plan.walk;
   // (the walk up ends within `seconds`: standing there already, once the body is at rest)
-  const walkEnds = (seconds: number) => () => walk ? walk.eta <= seconds : h.locomotion.settled;
+  const walkEnds = (seconds: number) => () => walk ? walk.eta <= seconds : person.locomotion.settled;
   const preparing = walkEnds(LOWERING), near = walkEnds(LOOKING), raising = walkEnds(1);
   // (the body bows and bends for the grips under their load: walking up, from the last landing on; from where it stands, as far as each
   // hand has come toward its grip, so that the hands lead it and it does not bow before they set off)
-  const from = takes.map((take) => h.pose.position(h.hands[take.side]).distanceTo(gripAt(h, take, h.frame)));
-  const share = (f: Frame, k: number) => walk ? 1 : smoothstep(0, 1, 1 - f.prev.position(h.hands[takes[k].side]).distanceTo(gripAt(h, takes[k], f, _grip)) / Math.max(from[k], 1e-6));
-  const hands = () => parallel<Frame>('race', function* () { yield* reachFor(h, request, takes, motion); }, function* () {
+  const from = takes.map((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)));
+  const share = (f: Frame, k: number) => walk ? 1 : smoothstep(0, 1, 1 - f.prev.position(person.hands[takes[k].side]).distanceTo(gripAt(person, takes[k], f, _grip)) / Math.max(from[k], 1e-6));
+  const hands = () => parallel<Frame>('race', function* () { yield* reachFor(person, request, takes, motion); }, function* () {
     yield* action<Frame>({ until: () => stood || preparing() });
     yield* during(request, 'trunk', 'borrowed', (f) => {
-      takes.forEach((take, k) => bringShoulder(h, f, take.side, gripAt(h, take, f, _grip), share(f, k), take.thing.mass));
+      takes.forEach((take, k) => bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass));
     });
   });
   const com = new Vector3(), ahead = new Vector3();
   let noticed = NaN, returning = false;
-  const close = (f: Frame) => flat(f.prev.com(com), middle(f)) < CLOSE * h.scale;
+  const close = (f: Frame) => flat(f.prev.com(com), middle(f)) < CLOSE * person.scale;
   const seen = (f: Frame) => {
     const at = middle(f);
     f.prev.com(com);
-    return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - h.locomotion.facing)) < IN_VIEW;
+    return Math.abs(wrapAngle(headingOf(at.x - com.x, at.z - com.z) - person.locomotion.facing)) < IN_VIEW;
   };
   const gaze = (f: Frame) => {
     if (Number.isNaN(noticed)) noticed = f.time;
     returning ||= close(f) || near();
-    return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(h, f.prev, ahead);
+    return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(person, f.prev, ahead);
   };
   const waitingHands = function* () {
     yield* action<Frame>({ until: (f) => stood || (seen(f) && raising()) });
     // (the hands rising halfway toward what they take, before the body has come up to it)
     yield* parallel<Frame>('race', action<Frame>({ until: () => stood || near() }), () => parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked',
-      reaching(h, take.side, (f) => ({ position: f.prev.position(INDEX[`${take.side}UpperArm`]).clone().lerp(gripAt(h, take, f, _grip), 0.5) }), { lead: false })))));
+      reaching(person, take.side, (f) => ({ position: f.prev.position(INDEX[`${take.side}UpperArm`]).clone().lerp(gripAt(person, take, f, _grip), 0.5) }), { lead: false })))));
     yield* hands();
   };
   let held = false;
@@ -85,7 +85,7 @@ export function* grabbing(h: Reacher, request: Request, takes: readonly Taking[]
   }, function* () {
     // (the eyes never borrowed toward what they cannot see; they leave it as the hands close on it)
     yield* action<Frame>({ until: (f) => stood || seen(f) });
-    yield* parallel<Frame>('race', waitingHands, during(request, 'look', 'borrowed', looking(h, gaze, SHIFT)));
+    yield* parallel<Frame>('race', waitingHands, during(request, 'look', 'borrowed', looking(person, gaze, SHIFT)));
     held = true;
   });
   return request.outcome !== 'failed';
