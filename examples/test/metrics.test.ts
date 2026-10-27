@@ -1,7 +1,7 @@
 // Scenario statistics and task accuracy under small changes. Run: pnpm metrics [-- -t <id>]
 import { Group, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
 import { knightArming } from '../src/scenarios/knight';
@@ -192,17 +192,31 @@ it('runs a scenario through the metrics: two people standing still, relaxed, eac
   expect(m.report).toContain('== still (30 frames)');
 });
 
-it('judges gait head roll only without a task-directed gaze', () => {
-  const free = new GaitKinematics(), tasked = new GaitKinematics();
+it('judges head roll while looking and outside samples borrowed by hand tasks', () => {
+  const free = new GaitKinematics(), looking = new GaitKinematics();
+  const borrowed = new GaitKinematics(), mixed = new GaitKinematics();
+  let sample = 0;
   for (const [frame] of frames(new Simulation(stroll({ radius: Infinity })))) {
     free.see(frame);
-    tasked.see({ ...frame, asked: new Map([...frame.asked, ['gaze', new Vector3(0, 0, 1)]]) });
+    const owners = vi.spyOn(frame.h.body, 'owners', 'get');
+    try {
+      owners.mockReturnValue({ hands: {}, look: { verb: 'lookAt', site: '', tier: 'asked' } });
+      looking.see({ ...frame, asked: new Map([...frame.asked, ['gaze', new Vector3(0, 0, 1)]]) });
+      owners.mockReturnValue({ hands: {}, look: { verb: 'grab', site: '', tier: 'borrowed' } });
+      borrowed.see(frame);
+      if (sample++ % 2 === 0) owners.mockReturnValue({ hands: {} });
+      mixed.see(frame);
+    } finally {
+      owners.mockRestore();
+    }
   }
-  const walking = free.summary(false, false), directed = tasked.summary(false, false);
-  expect(walking).not.toBeNull();
-  expect(directed).not.toBeNull();
-  if (!walking || !directed) throw new Error('no steady walking strides');
+  const walking = free.summary(false, false), directed = looking.summary(false, false);
+  const tasked = borrowed.summary(false, false), partial = mixed.summary(false, false);
+  if (!walking || !directed || !tasked || !partial) throw new Error('no steady walking strides');
   expect(Number.isFinite(walking.headRoll)).toBe(true);
-  expect(Number.isNaN(directed.headRoll)).toBe(true);
-  expect(directed.pelvisLat).toBe(walking.pelvisLat);
+  expect(directed.headRoll).toBe(walking.headRoll);
+  expect(Number.isNaN(tasked.headRoll)).toBe(true);
+  expect(Number.isFinite(partial.headRoll)).toBe(true);
+  expect(partial.headRoll).toBeLessThanOrEqual(walking.headRoll);
+  expect(tasked.pelvisLat).toBe(walking.pelvisLat);
 });

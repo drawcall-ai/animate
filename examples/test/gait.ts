@@ -51,6 +51,7 @@ interface Sample {
   feet: [Vector3, Vector3];
   /** the script asked the eyes somewhere, or a verb has them (a grab's eyes on its grip): the head is not left to go along with the thorax */
   gazed: boolean;
+  borrowedGaze: boolean;
   /** sagittal angles (+ = forward): left upper arm, right thigh — contralateral pair */
   arm: number;
   armFree: boolean;
@@ -201,6 +202,7 @@ export class GaitKinematics {
       planted: [h.feet[0].phase === 'planted', h.feet[1].phase === 'planted'],
       feet: [h.feet[0].position.clone(), h.feet[1].position.clone()],
       gazed: asked.has('gaze') || !!h.body.owners.look,
+      borrowedGaze: h.body.owners.look?.tier === 'borrowed',
       arm: sagittal(j('leftLowerArm').sub(j('leftUpperArm')), fwd),
       armFree: !tasked(frame, 'left'),
       thigh: sagittal(j('rightLowerLeg').sub(j('rightUpperLeg')), fwd),
@@ -271,6 +273,7 @@ export class GaitKinematics {
     const hl = centred(lateral((s) => s.head));
     const range = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
     const amp = (f: (s: Sample) => number) => (range(S.slice(a, b).map(f)) / 2) * DEG;
+    const headRoll = S.slice(a, b).filter((s) => !s.borrowedGaze).map((s) => s.headRoll);
     const ys = S.slice(a, b).map((s) => s.hips.y);
     // jerk: third differences at the sampling rate
     const dt = (S[b].t - S[a].t) / n;
@@ -362,8 +365,9 @@ export class GaitKinematics {
       thoraxToPelvisRoll: amp((s) => s.thoraxRoll - s.pelvisRoll),
       lean: amp((s) => s.lean),
       thoraxToPelvisYaw: amp((s) => s.thoraxYaw - s.pelvisYaw),
-      // A task-directed gaze shift is not gait-induced roll (e.g. looking down to stow a magazine while walking).
-      headRoll: S.slice(a, b).some((s) => s.gazed) ? NaN : amp((s) => s.headRoll),
+      // A hand task borrows gaze to find its grip; ordinary lookAt still asks for an upright head.
+      // Keep the rest of a mixed stride, but one sample cannot establish an amplitude.
+      headRoll: headRoll.length >= 2 ? range(headRoll) / 2 * DEG : NaN,
       headYaw: amp((s) => s.headYaw),
       counter: correlation(pr, tr),
       chestJerk: Math.sqrt(jerk / Math.max(1, cl.length - 3)),
