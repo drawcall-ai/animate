@@ -1,5 +1,5 @@
 import { Box3, Matrix4, Object3D, Vector3 } from 'three';
-import { selfOf, type Body, type HandOf } from '../body/body';
+import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
 import { attach, bodyOf, grasp, handsOn, take } from '../things/hold';
 import type { Self } from '../body/runtime';
@@ -19,7 +19,7 @@ const MID_AIR = { height: 0.02, speed: 0.2 };
  * one another thing already sits in.
  */
 export function release(body: Body, thing: Object3D, onto?: Object3D): void;
-export function release<S extends AnySpecies>(body: Body<S>, hands: Partial<Record<HandOf<S>, Object3D>>): void;
+export function release<S extends AnySpecies>(body: Body<S>, hands: ByHand<S, Object3D>): void;
 export function release(body: Body, which: Object3D | Partial<Record<string, Object3D>>, onto?: Object3D): void {
   const self = selfOf(body);
   if (which instanceof Object3D) {

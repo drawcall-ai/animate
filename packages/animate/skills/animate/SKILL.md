@@ -18,8 +18,8 @@ import { skin } from '@drawcall/rig';
 import { arriving, Body, carry, grab, humanoid, lookAt, release, wait, walkTo, watch } from '@drawcall/animate';
 
 const model = (await new GLTFLoader().loadAsync('person.glb')).scene;
-// one SkeletonBone per bone, written for this mesh (rig's skill says how); `as const` checks the bone names
-const skeleton = [/* { name: 'hips', position: [0, 0.95, 0] }, { name: 'spine', parent: 'hips', position: [0, 1.05, 0] }, … */] as const;
+// `skeleton`: one SkeletonBone per bone, written for this mesh `as const` (rig's skill says how), so `humanoid` checks it names every
+// HumanoidBone: [{ name: 'hips', position: [0, 0.95, 0] }, { name: 'spine', parent: 'hips', position: [0, 1.05, 0] }, …]
 await skin(model, skeleton);
 const person = new Body(humanoid(skeleton), { model, dev: true });
 scene.add(person.object); // under an untransformed parent; the body moves it

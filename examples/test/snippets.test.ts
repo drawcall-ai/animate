@@ -2,10 +2,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { expect } from 'vitest';
+import { expect, it } from 'vitest';
 import * as animate from '@drawcall/animate';
 import * as species from '@drawcall/animate/species';
-import { cases } from '../../packages/animate/test/open';
 
 // Every TypeScript block in the skill and the README compiles against the package as published: each is checked as a module of its
 // own, the package's exports it does not import in scope, and the scene's own things (a renderer, a clock, a model…) declared.
@@ -36,10 +35,6 @@ function source(code: string): string {
   ].join('\n');
 }
 
-// Open (expected to fail: fixed, it comes off the list): the skill's first block writes its skeleton as `[/* … */] as const`, an empty
-// tuple, which `humanoid` rejects as missing every bone ("Argument of type 'readonly []' is not assignable … missingBones").
-const test = cases(['SKILL.md#1 compiles']);
-
 /** each block's type errors, by block */
 function compiled(): Map<string, string[]> {
   const config = ts.readConfigFile(resolve(root, 'tsconfig.base.json'), ts.sys.readFile);
@@ -67,4 +62,4 @@ function compiled(): Map<string, string[]> {
 }
 
 const errors = compiled();
-for (const [name, found] of errors) test(`${name} compiles`, () => expect(found).toEqual([]), 120_000);
+for (const [name, found] of errors) it(`${name} compiles`, () => expect(found).toEqual([]), 120_000);

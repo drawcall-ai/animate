@@ -87,14 +87,18 @@ export function* watch(body: Body, label: string, check: () => Problem | null): 
 /** this library's files (its source, or the package it is built into), whose frames a call site skips */
 const LIBRARY = new URL('..', import.meta.url).href;
 
-/** where a story asked for a verb (`file:line`): the first frame of `stack` outside this library and the timeline runner */
+/** where a story asked for a verb (`file:line`): of the frames of `stack` outside this library and the timeline runner, the last before a
+ * generator's `next` (V8's and JavaScriptCore's frame for it): the story's, past any function wrapping the verb; else the first */
 function siteOf(stack: string | undefined): string {
+  let first = '', last = '';
   for (const line of (stack ?? '').split('\n').slice(1)) {
+    if (last && /\bnext(?: \(<anonymous>\)|@\[native code\])$/.test(line.trim())) return last;
     const match = /((?:file|https?):\/\/\S+?|\/\S+?):(\d+):\d+\)?$/.exec(line.trim());
     if (!match) continue;
     const file = match[1].startsWith('/') ? `file://${match[1]}` : match[1];
     if (file.startsWith(LIBRARY) || file.includes('/@pmndrs/timeline/')) continue;
-    return `${file.slice(file.lastIndexOf('/') + 1)}:${match[2]}`;
+    last = `${file.slice(file.lastIndexOf('/') + 1)}:${match[2]}`;
+    first ||= last;
   }
-  return '';
+  return first;
 }

@@ -269,9 +269,9 @@ it('a hand a body does not have fails to compile', () => {
   const asking = () => grab(body, toy, { rigth: 'ball' });
   expect(asking).toBeTypeOf('function');
 });
-// (a species of no hands takes any grips' names, as `{}` takes any object: the body throws for the hand it lacks)
-it('a horse has no hands to take things with: grab throws, naming the hand', () => {
+it('a horse has no hands to take things with: grab fails to compile, and throws naming the hand', () => {
   const mare = new Body(horse(HORSE)), toy = ballIn(roomWith(mare), around(0, 1.5, 0.04));
+  // @ts-expect-error: a horse has no hands
   expect(run(mare, () => grab(mare, toy, { jaw: 'ball' }), 1).error).toMatch('no hand "jaw"');
 });
 

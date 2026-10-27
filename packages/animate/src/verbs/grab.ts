@@ -1,5 +1,5 @@
 import { Vector3, type Object3D } from 'three';
-import { selfOf, type Body, type HandOf } from '../body/body';
+import { selfOf, type Body, type ByHand } from '../body/body';
 import { bodyOf } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
@@ -22,7 +22,7 @@ export interface GrabOptions {
  * no body) is lifted clear of what it rests on; anything else stays where it is, and the hands follow it. It returns `false` if no stand
  * reaches the grips.
  */
-export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: Partial<Record<HandOf<S>, string>>, options: GrabOptions = {}): Verb {
+export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
   if (!named.length) throw new Error('grab: name a grip for a hand');
   return verb(body, 'grab', (request) => function* () {

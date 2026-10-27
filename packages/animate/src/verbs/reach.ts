@@ -1,4 +1,4 @@
-import { selfOf, type Body, type HandOf } from '../body/body';
+import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
@@ -18,7 +18,7 @@ export interface ReachOptions {
  * reach them, else it walks up first (borrowed legs), its eyes on the targets (borrowed), the hands going as it arrives (asked), the body
  * turning, bowing, bending or rising on its toes for them. A mover, it ends once the hands are there and keeps them there. It returns `false` if it can stand nowhere in reach.
  */
-export function reach<S extends AnySpecies>(body: Body<S>, targets: Partial<Record<HandOf<S>, Target>>, options: ReachOptions = {}): Verb {
+export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Target>, options: ReachOptions = {}): Verb {
   const named = Object.entries<Target | undefined>(targets).flatMap(([hand, target]) => target === undefined ? [] : [{ hand, target }]);
   if (!named.length) throw new Error('reach: name a target for a hand');
   return verb(body, 'reach', (request) => function* () {

@@ -15,8 +15,8 @@ export type BodyOptions = SelfOptions & { avoid?: Iterable<Body> };
 
 /** the names of a species' bones */
 type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone : never;
-/** the names of a species' hands */
-export type HandOf<S extends AnySpecies> = S extends Species<string, infer Hand> ? Hand : never;
+/** something for some of a species' hands, by name; for a species without hands `never`, so a verb for hands is a type error */
+export type ByHand<S extends AnySpecies, T> = S extends Species<string, infer Hand> ? [Hand] extends [never] ? never : Partial<Record<Hand, T>> : never;
 
 /** What holds one of a body's parts: the verb, where the story asked for it and how firmly (borrowed: needed, not asked). */
 export interface Owner {
