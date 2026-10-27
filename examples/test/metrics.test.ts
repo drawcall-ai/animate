@@ -46,7 +46,6 @@ it('lists each scenario once', () => {
 //   further left, its straight steps 5.7 % unequal (max 5 %);
 // - the stroll 15% faster and on a 20% tighter arc: no steady strides on the bend to judge (0 and 1 of 3), and 15% faster the arm
 //   lags 0.10 of the stride (max 0.08);
-// - pickup-shelf with the box 5 cm higher: it stands with its heels 0.084 of its height apart (min 0.1);
 // - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12); further off, the head lags
 //   its course by 5 cm.
 const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stand, wall and rack 15 cm further right',
@@ -58,12 +57,12 @@ const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stan
 const REACH = ['', ', the targets 10 cm to the left', ', the targets 10 cm nearer', ', the targets 10 cm to the right', ', the targets 10 cm higher',
   ', the targets 10 cm lower', ', turned 0.3 rad right', ', turned 0.3 rad left', ', the hand 20% slower', ', the hand 20% faster'].map((variation) => `reach${variation}`);
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
-// the trunk pitching 26.6 °/s (max 26.1, seed 2); with the box 5 cm lower, the heels 0.076 of its height apart at rest (seed 3).
+// the trunk pitching 26.6 °/s (max 26.1, seed 2).
 const OPEN: Open[] = [...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad')),
   ["knight-arming, the shield's wall turned −0.4 rad", [0, 1, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
-  'pickup-shelf, the box 5 cm higher', 'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
+  'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],
-  ['stroll round a sharp 0.6 m turn', [2]], ['pickup-shelf, the box 5 cm lower', [3]]];
+  ['stroll round a sharp 0.6 m turn', [2]]];
 // (and the known task-accuracy failures, `known()`, below)
 const KNOWN = known();
 const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
