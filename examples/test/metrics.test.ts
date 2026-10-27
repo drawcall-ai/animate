@@ -39,11 +39,11 @@ it('lists each scenario once', () => {
 
 // Open on the core legs, the people's only legs since 2026-10-23 (expected to fail: each one fixed comes off the list):
 // reach-around's right wrist is 27 cm off its hold at 5.75 s (it turns round to the target behind it, the hand trailing the turn);
-// stable-morning's handler walks up to the saddle rack with a knee raised 1.2 cm into the rack's leg; the stroll 15% faster has no
+// the stroll 15% faster has no
 // steady strides on its bend to judge; looking around further off the head lags its course by 5 cm; the knight 5% shorter has its
 // right hand 2.5–2.8 cm into the shield on the wall: its free arm swings into the board as it walks up to it.
 // With the gaze followed in yaw and pitch (2026-10-23), the knight with its gear 10 cm lower has its wrist 14 cm off a grip it holds at 9.1 s.
-const OPEN: Open[] = ['reach-around', 'stable-morning', 'stroll 15% faster', 'look-around, looking down 10 cm further off',
+const OPEN: Open[] = ['reach-around', 'stroll 15% faster', 'look-around, looking down 10 cm further off',
   'knight-arming, the knight 5% shorter', ['knight-arming, the gear 10 cm lower', [0, 1]],
   // (open at other life seeds than 0)
   ['stroll on a 20% tighter arc', [1, 2, 3]], ['look-around, the headset 20% faster', [1, 2, 3]], ['look-around, the headset 20% slower', [1]],
