@@ -12,7 +12,7 @@ import { cases } from '../../packages/animate/test/open';
 // - stable-morning: the soldier's saddle 4.9 cm off its carry's end at 7.35 s, the outlier's 5.1 cm at 11.8 s and its right hand 2.1 cm
 //   into the trunk at 2.2 s; neither finishes;
 // - pickup-shelf: the soldier's left forearm 10.8 cm into the trunk at 3.3 s, its hands 9–10 cm short of the box at 6.65 s, its feet
-//   sliding up to 1.45 cm a frame while planted; unfinished;
+//   sliding up to 1.45 cm a frame while planted; unfinished; the outlier's hip at 3070 °/s (limit 2000) at 9.2 s;
 // - reach: the soldier's first target 0.45 m over its shoulders on tiptoe (limit 0.44), and its floor target 0.47–0.48 m below its
 //   shoulders lowered and bowed (limit 0.44) at 6.4–8.1 s, its planted feet sliding up to 2 cm a frame as its hand follows that point
 //   down (6.5–8.4 s), and a leg at 271 000 °/s² at 14.4 s;
@@ -25,12 +25,14 @@ import { cases } from '../../packages/animate/test/open';
 // - lift-heavy: the soldier's hands 11–12 cm short of the box at 4.05 s and its feet sliding up to 2.4 cm a frame, unfinished; the
 //   outlier's hands 0.39 m short at 4.05 s;
 // - stroll and look-around on the outlier: its planted right foot slides 5.2 mm a frame at 12.8 s; its left upper arm 1.06 cm into
-//   the trunk at 15.5 s.
+//   the trunk at 15.5 s;
+// - look-around on the soldier (seed 3): a turning step lands heel first at 8.43 s with the hip already past it, and the planted foot
+//   rolls from its strike onto its ball in two sub-steps to stay in reach (the hip at 3000 °/s, the ball sliding 3 mm).
 const test = cases([
-  ...['shooter', 'stable-morning', 'pickup-shelf', 'knight-arming', 'lift-heavy'].map((id) => `${id} on the soldier: final-pose dev checks`),
-  ...['shooter', 'stable-morning', 'knight-arming', 'lift-heavy'].map((id) => `${id} on the outlier: final-pose dev checks`),
+  ...['shooter', 'stable-morning', 'pickup-shelf', 'knight-arming', 'lift-heavy'].flatMap((id) => [`${id} on the soldier: final-pose dev checks`, `${id} on the outlier: final-pose dev checks`]),
   'reach on the soldier: final-pose dev checks', ['vr on the soldier: final-pose dev checks', [0, 1]], ['vr on the outlier: final-pose dev checks', [0]],
   'stroll on the outlier: final-pose dev checks', ['look-around on the outlier: final-pose dev checks', [0, 1, 2]],
+  ['look-around on the soldier: final-pose dev checks', [3]],
 ]);
 
 /** the scenarios with no people in them */

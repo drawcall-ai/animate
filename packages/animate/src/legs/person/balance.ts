@@ -164,9 +164,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       ? asked.twist[1] + clamp(poise.twist - asked.twist[1], -twisting, twisting)
       : follow(asked.twist[0], asked.twist[1], poise.twist, BOW, dt);
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
-    // (up on its toes only standing on both feet: a foot landing flat lets the pelvis down a tiptoe's height at once)
-    const lower = upright.moving || stepper.legs.some((leg) => leg.swing) ? Math.max(0, poise.lower) : poise.lower;
-    const requested = { lower: followed(asked.lower, lower, LOWER, dt), bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt), twist };
+    const requested = { lower: followed(asked.lower, poise.lower, LOWER, dt), bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt), twist };
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;
     // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts; running, the stance leg compresses toward
     // mid-stance, as the stepper lets the pelvis down)

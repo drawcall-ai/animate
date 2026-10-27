@@ -39,15 +39,13 @@ export class Planner {
     const facing = goal.yaw === undefined ? undefined : new Quaternion().setFromAxisAngle(UP, goal.yaw);
     const planned = (share: number) => rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance);
     const kept = (plan: ReturnType<typeof planned>) => holds((ahead) => { const root = plan(f.time + ahead); return { position: root.position, yaw: yawOf(root.quaternion) }; });
-    // (the largest share of its speed and turn the legs keep up with, to within `PRECISION` — sought down from whole in doubling steps, then
-    // halved: on a bend one just short of whole may keep up where a stop does not; none, it stands)
+    // (the largest share of its speed and turn the legs keep up with, found to within `PRECISION`: none, it stands)
     let plan = planned(1);
     this.root.turning = undefined;
     if (!kept(plan)) {
       // (the turn it is held back from, as it would be under way)
       this.root.turning = plan(f.time + PRESSING).angular;
       let [lo, hi] = [0, 1];
-      for (let short = PRECISION; short < 1 && lo === 0; short *= 2) [lo, hi] = kept(planned(1 - short)) ? [1 - short, hi] : [0, 1 - short];
       while (hi - lo > PRECISION) { const mid = (lo + hi) / 2; if (kept(planned(mid))) lo = mid; else hi = mid; }
       plan = planned(lo);
     }
