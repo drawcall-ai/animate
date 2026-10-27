@@ -31,10 +31,7 @@ export function inView(self: Looker, point: Readonly<Vector3>, f: Frame): boolea
   return Math.abs(wrapAngle(headingOf(point.x - com.x, point.z - com.z) - self.locomotion.facing)) < IN_VIEW;
 }
 
-/**
- * the eyes on `target` (borrowed by `request`, at a gaze shift's pace) from when `seen` (the target, unless given) is in view, or
- * `anyway`: they never borrow toward what they cannot see, but wait for the body to turn to it
- */
+/** Borrow gaze only once `seen` (default: target) is visible, unless `anyway` permits it sooner. */
 export function* noticing(self: Looker, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean } = {}) {
   yield* action<Frame>({ until: (f) => anyway?.() || inView(self, seen(f), f) });
   yield* during(request, 'look', 'borrowed', looking(self, target, SHIFT));
@@ -51,11 +48,7 @@ const GLANCE = { turnAccel: 40, turnSpeed: 6 };
  */
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
-/**
- * The body's eyes (`Species.gaze`) on `target` (world), every sub-step, endless: the head, upright (rest: facing +Z, +Y up), turns
- * most of the way and the eyes the rest (`EYES`); the neck's whole turn is followed from its history at the gaze shift's pace
- * (`headPace`), at most `motion`'s, and shared evenly over the neck chain's bones, each within its limit.
- */
+/** Keep the eyes on a world target, sharing the braked head turn evenly over the neck chain within joint limits; EYES takes the remainder. */
 export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, motion: HeadMotion = GLANCE): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');

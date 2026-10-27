@@ -2,11 +2,8 @@ import { Box3, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import type { Placement } from '../kernel/goal';
 import type { Holder } from './resolve';
 
-/**
- * Any `Object3D`, as a body moves it: its mass (`userData.mass`, kg: a thing without it is not meant to be lifted), its centre of mass
- * (`userData.centre`, its frame; default its origin) and its bounds — its own meshes in its own frame, not those of things attached to
- * it (a scabbard's not its sword's). It rests on what it is in (`supported`) until a body lifts it, and again once let go in the room.
- */
+/** Object mass (`userData.mass`, kg), centre (`userData.centre`, local; default origin), and bounds excluding attached things.
+ * Without mass it cannot be lifted. Support persists until lifting and resumes on release into the room. */
 export class Thing {
   readonly mass: number;
   readonly centre: Vector3;

@@ -8,10 +8,7 @@ import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
 
-/**
- * A person's hands for the verbs: both at once, the right leading — taking things walked up to with the eyes first and the hands rising
- * before it arrives, carrying them by their approaches (walking there with them at the body if it must), reaching, backing out.
- */
+/** Human hand staging; the right hand leads coordinated reaches. */
 export function personHands(person: Reacher): Handling {
   return {
     take: function* (request, thing, grips, pace) {

@@ -1,13 +1,7 @@
 import { Vector3 } from 'three';
 
-/**
- * The VRM 1.0 humanoid bones the body drives, parents before children: the skeleton's bones in
- * this order. Normalized convention: +Y up, the character faces +Z, its left is +X, and every
- * bone's rest rotation (T-pose) is identity.
- *
- * Left out on purpose: upperChest (no separate degree of freedom; a model that has one keeps it
- * at identity), jaw/eyes (lookAt is the VRM's job), fingers (nothing drives them).
- */
+/** Humanoid bone names in parent-first order. Rest convention: +Y up, +Z forward, left +X, identity T-pose rotations.
+ * No independent upperChest, jaw, eyes or finger motion. */
 export const BONES = [
   'hips', 'spine', 'chest', 'neck', 'head',
   'leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand', 'rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand',
@@ -51,10 +45,7 @@ export const PARENT: Record<ChildBone, BoneName> = {
   rightUpperLeg: 'hips', rightLowerLeg: 'rightUpperLeg', rightFoot: 'rightLowerLeg', rightToes: 'rightFoot',
 };
 
-/**
- * A body's normalized rest pose: where each bone's origin sits relative to its parent's origin
- * with every rotation at identity (T-pose), in metres.
- */
+/** Rest offsets in metres from each parent, at identity T-pose rotations. */
 export interface Rest {
   /** hips origin above the ground point between the feet */
   hips: Vector3;

@@ -35,13 +35,7 @@ const SPOT_RATE = 10;
 /** how fast the body walks round and over under a head (m/s, m/s²) */
 const UNDER = { speed: 1.0, accel: 1.2 };
 
-/**
- * The eyes (their midpoint) at `eyes`, the head turned as it says (default: level, facing as the pelvis does), a sub-step at a time
- * (`look`): the target moved on from where it was at a headset's pace (its own motion fed forward), the spine placed for it (`place`),
- * each joint braked. It writes the spine, chest, neck and head, so runs before the hands (they hang off the chest it places). With
- * `under` run before it, the body comes along (`bringingUnder`), bowing and squatting for a head lower than standing and going up on
- * its toes for one higher.
- */
+/** Follow tracked eyes and orientation. Run `under` before `look`, and both before the hands, which depend on the posed chest. */
 export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
@@ -73,9 +67,7 @@ export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HE
   };
 }
 
-/** The body brought under a led head, every sub-step, for the eyes at `eyes` and the head facing `yaw`: turned round after the head
- * once it is turned further than the trunk and neck take (TURN), and held facing as it was otherwise; bowed and let down as far as the
- * eyes go ahead and down (`lowering`); standing where that puts the eyes, walking there (its way fed forward) once it is far enough to. */
+/** Recruit turning beyond TURN and lowering beneath the tracked eyes; feed the moving support point forward to walking. */
 function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => Go {
   const face = { yaw: NaN };
   const go: Go & { velocity: Vector3 } = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER, face };
@@ -112,9 +104,7 @@ function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => G
 
 const SPINE = [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head];
 
-/** the spine (lumbar to skull) placed in `pose` so the eyes (`eyes`, in the head's frame) are at `at`, the head turned `q` (world), as
- * near as its joints' ranges allow: the turn and bend from the pelvis shared over its joints (SHARE); then, PASSES times, the lower
- * back and the thorax swing the head's origin over where it goes (half and the rest) and the neck and head turn it to `q` again */
+/** Share the target turn over SPINE, then alternate head-position and head-orientation solves within joint limits. */
 function place(pose: Pose, eyes: Vector3, at: Vector3, q: Quaternion) {
   const [spine, chest, neck, head] = SPINE;
   const rel = _rel.copy(pose.rotation(0)).invert().multiply(q);
@@ -139,7 +129,6 @@ function swing(pose: Pose, bone: number, to: Vector3, share: number) {
   setLimited(pose, bone, _local.copy(pose.rotation(bone)).premultiply(turn).premultiply(_parent.copy(pose.rotation(pose.skeleton.bones[bone].parent)).invert()));
 }
 
-/** `bone`'s rotation in its parent's frame set to `q`, within its range */
 function setLimited(pose: Pose, bone: number, q: Quaternion) {
   pose.setLocal(bone, limited(pose.skeleton, bone, q));
 }

@@ -47,12 +47,7 @@ export interface SelfOptions {
   dev?: boolean | { notes?: boolean };
 }
 
-/**
- * A body as it moves: its pose history, what its story asks of it (requests on its parts) and the behaviours that serve them. Each
- * 1/60 s sub-step, in this order: balance (the legs and the trunk over them, as walks and reaches asked a sub-step before), the requests'
- * staging, then for each part the request that has it — the legs, the eyes (else they look about), the trunk, each hand (else it keeps
- * hold, or hangs free) — and the things it moves; then the final pose becomes the history: current → prev → prev2.
- */
+/** Body state and arbitration. Each fixed sub-step applies balance, request staging, part claims, then carried things. */
 export class Self implements Holder {
   readonly skeleton: Skeleton;
   readonly scale: number;
@@ -177,10 +172,7 @@ export class Self implements Holder {
     return yawOf(this.pose.local(0));
   }
 
-  /**
-   * the pose `reader` reads this body by: its own as posed so far this sub-step (between sub-steps, its last); another's as it was before
-   * its update this frame, if it is ahead
-   */
+  /** Self reads the pose being written; a body ahead of another reader exposes its update-start pose. */
   poseFor(reader: Resolving): ReadonlyPose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
     return this.updates > reader.updates ? this.before[0] : this.frame.prev;
@@ -301,10 +293,7 @@ export class Self implements Holder {
     return claims?.[claims.length - 1];
   }
 
-  /**
-   * the step of the claim that has `channel` run, and what it asks returned; the legs' others tick too (a walk keeps its own count of
-   * how it is getting on), their asks unheard
-   */
+  /** Losing leg claims still tick for progress tracking; only the owner's result drives the body. */
   private run(channel: Channel, f: Frame): Go | void {
     const claims = this.claims.get(channel);
     if (!claims?.length) return;

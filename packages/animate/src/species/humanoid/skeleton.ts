@@ -34,11 +34,7 @@ for (const s of ['left', 'right'] as const) {
   SEGMENT[`${s}Foot`] = { mass: 0.0145, com: (proportions) => proportions.offsets[`${s}Toes`].clone().multiplyScalar(0.5) };
 }
 
-/**
- * The chains `solveChain` solves, each from its first joint to its tip: the arms from the shoulder joint to the wrist and the legs from the
- * hip to the ankle (limbs: two segments, bent toward a pole), the spine from the lumbar joint to the base of the skull, the neck from its
- * base to the base of the skull.
- */
+/** Named IK chains: two-segment limbs, lumbar-to-skull spine, and neck-base-to-skull neck. */
 export const CHAINS = {
   leftArm: ['leftUpperArm', 'leftLowerArm', 'leftHand'],
   rightArm: ['rightUpperArm', 'rightLowerArm', 'rightHand'],
@@ -48,10 +44,7 @@ export const CHAINS = {
   neck: ['neck', 'head'],
 } satisfies Record<string, readonly BoneName[]>;
 
-/**
- * The body's skeleton: a bone per BONES entry (in its order, so `INDEX` finds them), each at its rest offset from its parent; the hips'
- * from the root, the ground point under them. `mass` defaults to `massFor` the body's height.
- */
+/** Bones in BONES/INDEX order at rest offsets; mass defaults to massFor(height). */
 export function skeletonOf(proportions: Proportions, mass = massFor(proportions.height)): BoneDef[] {
   return BONES.map((name) => {
     const segment = SEGMENT[name], speed = snapSpeed(name);

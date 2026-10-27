@@ -9,11 +9,7 @@ import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 
-/**
- * Hands that let go backing out: each off what it held, carried on the way it was going (its follow-through) and toward its rest beside
- * the thigh, within what the arm reaches (never folded nor stretched out), the body not bowing nor rising after it. Once they are there,
- * or `LETTING_GO` s on, the free arms take them.
- */
+/** Release preserves follow-through within arm reach, without recruiting the trunk; idle arms resume on arrival or timeout. */
 export function* backingOut(person: Reacher, request: Request, sides: readonly Side[]) {
   const proportions = person.proportions, began = person.frame.time;
   let targets: ((f: Frame) => Goal)[] | null = null, time = NaN, goals: Goal[] = [];

@@ -4,7 +4,7 @@ import type { Carrier } from '../../kernel/carrier';
 import { followRotation } from '../../kernel/follow';
 import { Glide } from '../../kernel/glide';
 import { live, type Live, type Motion, type Placement, type Goal } from '../../kernel/goal';
-import { clampRotation } from '../../kernel/limits';
+import { limited } from '../../kernel/limits';
 import { ChainTip } from '../../kernel/tip';
 import { TrackedRotation } from '../../kernel/track';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
@@ -108,9 +108,7 @@ function set(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal:
   let joint = joints.get(bone);
   if (!joint) joints.set(bone, (joint = new TrackedRotation()));
   const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
-  const limit = f.current.skeleton.limits[bone];
-  if (limit) clampRotation(q, limit);
-  f.current.setLocal(bone, q);
+  f.current.setLocal(bone, limited(f.current.skeleton, bone, q));
 }
 
 /** Tuned: how briskly a holding hand keeps to its grip (m/s², m/s, rad/s², rad/s): far quicker than a reach, so it never trails it */
@@ -277,17 +275,12 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(proportions.offsets[`${side}UpperArm`]).normalize(), to);
   if (from) goal.slerpQuaternions(from.clavicle, _q.copy(goal), from.share);
-  const limit = pose.skeleton.limits[bone];
-  if (limit) clampRotation(goal, limit);
+  limited(pose.skeleton, bone, goal);
   const q = followRotation(f.prev2.local(bone), f.prev.local(bone), goal, CLAVICLE, f.dt, _r);
-  if (limit) clampRotation(q, limit);
-  pose.setLocal(bone, q);
+  pose.setLocal(bone, limited(pose.skeleton, bone, q));
 }
 
-/**
- * where the elbow bends toward (into `out`, world): a blend of where it goes for a hand hanging, forward, up, out and across, in the
- * chest's frame (up, the elbow out to the side: forward, the arm near straight overhead would swivel to and fro)
- */
+/** Blend elbow poles in the chest frame. Overhead, prefer outward: a forward pole makes a nearly straight arm swivel. */
 function elbowPole(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
   const sign = side === 'left' ? 1 : -1;
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);

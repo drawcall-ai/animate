@@ -66,10 +66,7 @@ function jointOf(bone: ChildBone): Joint {
 
 const rad = ([lo, hi]: [number, number]): [number, number] => [lo * DEG, hi * DEG];
 
-/**
- * The human ranges of motion of every joint but the root (the hips) as the skeleton's limits:
- * each bone's rotation in its parent's frame (swing–twist).
- */
+/** Parent-relative swing–twist limits for every joint except the root. */
 export function ranges(): Limit[] {
   return CHILD_BONES.map((bone) => {
     const { axis, twist, swing, neutral } = RANGES[jointOf(bone)];

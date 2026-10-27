@@ -28,11 +28,7 @@ import { stride } from '../legs/person/stride';
 import { hanging, handStep, HOLD } from '../hands/person/arms';
 import { lookAround } from '../look/around';
 
-/**
- * A person as it moves: a body whose balance walks and stands it on its legs (or keeps its legs under a root its app drives), whose
- * eyes look about when nothing asks for them, whose free arms hang and swing, and whose hands keep to what they hold. It starts standing
- * relaxed in its stance where it is put.
- */
+/** Humanoid balance, idle gaze and arms, and held-object fitting. */
 export class Person extends Self {
   declare readonly gazer: Gazer;
   /** what its hands carry this sub-step and along which aim: fitted to the wrists after the hands */
@@ -86,10 +82,7 @@ export class Person extends Self {
   }
 }
 
-/**
- * where hand `side` is kept on the body while nothing asks for it: where it was relative to the root bone when it was last let be (a
- * mug held before the chest stays there as the body walks and turns)
- */
+/** An idle holding hand keeps its last root-relative pose while the body walks and turns. */
 function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
   const bone = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
   let time = -Infinity;
@@ -106,7 +99,6 @@ function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
   };
 }
 
-/** `self` as the person it is */
 export function personOf(self: Self): Person {
   if (!(self instanceof Person)) throw new Error('not a person');
   return self;
@@ -138,11 +130,7 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
   }
 }
 
-/**
- * development: a hand on something worn (on a bone) keeps to its grip, one rigid owner moving it; one on what the body carries stays
- * within `HELD` of its grip as the thing is fitted to the wrists (said once a hold: arms falling short of where a carry aims it draw the
- * wrists together, off the grips)
- */
+/** Check final grip distance after fitting. Report carried-load separation once per hold. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
@@ -154,10 +142,7 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   }
 }
 
-/**
- * `pose` standing relaxed at `floor` facing `yaw`: the feet flat where the default stance puts them, the pelvis as high as they reach,
- * the legs solved down to them
- */
+/** Start relaxed at `floor`, facing `yaw`, with flat feet and the pelvis within standing reach. */
 function relaxed(proportions: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
   for (const { bone, rotation } of relaxedPose()) pose.setLocal(bone, rotation);
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));

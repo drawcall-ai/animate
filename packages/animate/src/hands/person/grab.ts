@@ -25,12 +25,7 @@ const REACHED_AFTER = 0.35;
 /** Two-step gaze horizon (read via summary); default-body distance proxy (m, derived). */
 const CLOSE = 1.6;
 
-/**
- * Taking hold of things, each step under way before the last is over: the body walks up to take them (borrowed legs); once they are in
- * view the eyes notice them (borrowed), follow the path during a long approach, and return to them within two steps of arriving;
- * within the last second the hands (asked) rise toward them, and as it arrives they reach them, the body bowing and bending with the
- * reach; the hands close on them and the eyes leave. `false` if it can stand nowhere to take them.
- */
+/** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
 export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);

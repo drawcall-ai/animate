@@ -54,12 +54,7 @@ export const SOLVED = (proportions: Proportions): Keeping => ({ depth: -AIR * pr
  * push, the joints turned toward it as little as clears the arm and within `NUDGE` — so the brakes' work is not undone in a jerk */
 export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: false, nudge: NUDGE };
 
-/**
- * Arm `side` as posed this sub-step, its wrist going to `tip` (world), kept out of its own trunk as `keeping` asks: left as it is if
- * it is clear, else re-solved — the joints within their ranges — to the goal pushed forward (the chest's) as little as lets an elbow
- * swivelled as little as needs clear it. Nowhere clear within the push allowed, it stays as it was: the dev check says so. Returns how
- * far the goal was pushed (m): what the trunk turning takes up.
- */
+/** Re-solve a colliding arm within joint limits, minimizing forward push and elbow swivel. Return push in metres; leave an infeasible pose for the dev check. */
 export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: { position: Vector3; quaternion?: Quaternion }, keeping: Keeping): number {
   const pose = f.current, chain = `${side}Arm`;
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = keeping.depth;
@@ -131,13 +126,7 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
   return hi;
 }
 
-/**
- * Wrist goal `wrist` (world) of arm `side`, moved in place out of the way of its own trunk as `pose` holds it, and an elbow for it into
- * `pole`: a hand across the midline goes round the front of the trunk, not the back — the further across, the further forward it is
- * kept (`BACK`) — and of the arms reaching it, or it pushed forward (the chest's) as little as needs, the one with the elbow swivelled
- * least from `near`, all three parts clear of the trunk by `AIR`. Returns how far it was pushed (m); clear nowhere within `PUSH` arm's
- * lengths further forward, -1, and it stays.
- */
+/** Clear the wrist and elbow with minimum swivel from `near`. Cross-body reaches stay in front; return forward push (m), or -1 without changing an infeasible goal. */
 export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height;
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
@@ -158,10 +147,7 @@ export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: S
   return pushed;
 }
 
-/**
- * The elbows an arm from `shoulder` reaching toward `wrist` (as far as it reaches, to `end`) may have, swivelled about the line
- * between them from `near` out each way in turn (`steps` of `SWIVEL.step` each way), given to `take` until it takes one: whether it did.
- */
+/** Search elbows about the shoulder–wrist axis, alternating sides from `near`; stop when `take` accepts one. */
 function swivels(proportions: Proportions, shoulder: Readonly<Vector3>, wrist: Readonly<Vector3>, near: Readonly<Vector3>, steps: number, take: (elbow: Vector3, end: Vector3) => boolean): boolean {
   const axis = _axis.subVectors(wrist, shoulder);
   const length = Math.min(axis.length(), 0.999 * (proportions.upperArm + proportions.forearm));
@@ -183,13 +169,7 @@ function swivels(proportions: Proportions, shoulder: Readonly<Vector3>, wrist: R
   return false;
 }
 
-/**
- * Where arm `side`'s hand, at `hand` (world), waits on its way to `goal` (world), into `out`; none (null) once it may set off straight
- * for it. A goal toward the other side behind the shoulder's front plane, out of reach further round than `SECTOR`, or across the midline
- * less far ahead than `BACK` asks waits for the body to turn, in front: the goal brought forward (the chest's) to `WAIT` of the arm's
- * length ahead of that plane, within reach. With the hand still behind that plane (a free arm on its backswing), a goal toward the other
- * side waits for it to come forward on its own side, as far. Either clear of the trunk, the elbow near `near`: people turn first.
- */
+/** Stage cross-body or rearward goals in front until the trunk turns. A hand on backswing first comes forward on its own side; return null when a direct reach is clear. */
 export function waitingFor(pose: ReadonlyPose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, goal: Readonly<Vector3>, near: Readonly<Vector3>, out: Vector3): Vector3 | null {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), turn = pose.rotation(INDEX.chest);
   const front = _wFront.set(0, 0, 1).applyQuaternion(turn), inside = _wIn.set(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(turn);

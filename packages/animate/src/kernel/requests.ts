@@ -2,20 +2,13 @@ import { TimelineRunner, action, type ReusableTimeline, type TimelineClock, type
 import type { Frame } from './frame';
 import type { Go } from './go';
 
-/**
- * What a body part is asked to do, and how firmly: `asked` by a verb for what it is about (a grab's hands, a walk's legs, a look's
- * eyes); `borrowed` by a verb for what it needs but nobody asked for (a grab's legs to come within reach, its trunk to bow, its eyes
- * to find the grip first). Below both, a body part keeps on with what it holds (`keep`) or, holding nothing, idles.
- */
+/** `asked` serves the verb directly; `borrowed` recruits supporting parts. Both override holding and idle behaviour. */
 export type Tier = 'borrowed' | 'asked';
 
 /** A body part a request takes: the legs (`go`, with the facing), the eyes (`look`), the trunk's turn (`trunk`), a hand by name. */
 export type Channel = 'go' | 'look' | 'trunk' | `hand.${string}`;
 
-/**
- * What a request does with a body part every sub-step it has it, at its tier: the legs' step returns where it asks them to go (and a
- * legs' claim another has still ticks, its ask unheard); the others pose what they move and ask the body's poise.
- */
+/** A claimed part poses the body; a leg claim returns its requested motion. */
 export interface Claim {
   readonly request: Request;
   readonly channel: Channel;
@@ -33,12 +26,7 @@ interface Filed {
   unclaim(claim: Claim): void;
 }
 
-/**
- * A verb's request: from when its story starts it until its verb ends (its `finally`, which runs on cancel too). Its staging runs
- * every sub-step of the body it is filed with, after its balance and before its parts move; it claims body parts, says when what it
- * moves will arrive (`eta`), and whether it has `met` its goal or `failed` (out of reach or a position or turn overdue). Newer requests take a part from older
- * ones of the same tier; asked beats borrowed; among borrowers of the legs, the first keeps them.
- */
+/** A story-owned request stages after balance and before part motion; cancellation releases its claims. Arbitration lives in `rank`. */
 export class Request {
   private static made = 0;
   /** newer requests have larger numbers */

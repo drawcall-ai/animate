@@ -6,10 +6,7 @@ import { spinOf } from './rotation';
 /** How a tracked goal is followed: `Motion`'s acceleration and speed; a goal moving faster than `speed` jumped (it is braked to, not followed). */
 type Pace = Pick<Motion, 'accel' | 'speed'>;
 
-/**
- * A goal point followed with its own velocity: it keeps where the goal was the sub-step before, so a goal moving smoothly is followed
- * without lag (`follow` with its velocity), a jump braked. A goal not seen before is taken as still. One per goal followed.
- */
+/** Follow finite-difference goal velocity without lag; brake jumps and treat the first sample as stationary. One sampler per goal. */
 export class TrackedPoint {
   private readonly sample = new PointVelocity();
 

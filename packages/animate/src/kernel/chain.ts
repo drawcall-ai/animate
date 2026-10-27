@@ -27,19 +27,8 @@ const FITS = 1e-9;
 /** the most bones a chain has */
 const LONGEST = 16;
 
-/**
- * Solves the skeleton's chain named `chain` for `goal` and writes its bones' rotations into `frame.current` (with `weight`: blended
- * over what is there). The tip goes to the goal's position as far as the chain reaches (straight toward it when it is out of reach)
- * and turns to its rotation; every bone stays within its limit.
- *
- * A two-segment chain (a limb) is solved in closed form: its middle joint bends as a hinge about the axis its limit allows the most
- * swing about (perpendicular to its segment plane without a limit), the first bone turns the limb onto the goal and toward the pole, then the
- * middle joint aims again from where the first bone's limit left it; the tip's turn about the middle bone is shared between the two.
- * The limb swivels about the line to the goal from the pole's side only as far as the limits need (with a tip rotation, the middle
- * joint's and the tip's too), and far round only for as much of their excess as it is worth (`SWIVEL`). As the middle joint bends as a
- * pure hinge, goals at the corners of its range — its small side play and its twist at once — can be missed by centimetres. Other
- * chains are solved by cyclic coordinate descent.
- */
+/** Solve within joint limits, blending writes by `weight`. Two-segment limbs use a hinge solve and the minimum swivel worth its
+ * limit improvement (SWIVEL); pure hinges can miss goals requiring simultaneous side play and twist. Other chains use cyclic coordinate descent. */
 export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
   const { position, quaternion } = goal.tip;
   const finite = finiteXYZ(position) && (!quaternion || (finiteXYZ(quaternion) && Number.isFinite(quaternion.w)))

@@ -15,10 +15,7 @@ const AHEAD = { stand: { height: 0.75, distance: 3 }, walk: { height: 0.35, dist
 /** standing still, a glance aside every so often (s apart, s held, rad aside at most and up or down at most) */
 const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
 
-/**
- * Where the eyes go when nothing else asks for them, a sub-step at a time: ahead (on the path, walking, the head carrying a share of the
- * thorax's swing), and, standing still for a while, a glance aside now and then (seeded: the same `seed`, the same glances).
- */
+/** Idle gaze follows the walking path; standing glances vary deterministically with `seed`. */
 export function lookAround(person: Walking, seed = 1): (f: Frame) => Vector3 {
   const rand = seeded(seed);
   const target = new Vector3();

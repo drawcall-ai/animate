@@ -4,11 +4,7 @@ import { SIDES, createRest, type Rest } from './bones';
 /** the standing height (m) the default proportions and every tuned distance are given for */
 export const DEFAULT_HEIGHT = 1.75;
 
-/**
- * A body's measures: its T-pose skeleton (bone offsets in VRM normalized axes: +Y up, facing +Z, left +X; metres), the landmarks that are
- * not bones, and the measures derived from both, given for the left side (the right mirrors x). Measured from a character model's rest
- * pose; the derived measures are computed once, from the rest.
- */
+/** Measures derived once from the rest skeleton (+Y up, +Z forward, left +X; metres), with left-side landmarks mirrored on the right. */
 export interface Proportions extends Rest {
   /** floor to the top of the head, standing */
   readonly height: number;
@@ -80,10 +76,7 @@ export function proportionsFor(height: number): Proportions {
   return derive(r, H);
 }
 
-/**
- * Proportions for a measured rest skeleton (derives the measures and landmarks). The landmarks are placed by the standing height, estimated
- * from the head bone's height unless given. A skeleton without toes (zero offsets) gets them at the ball of the foot, on the floor.
- */
+/** Derive measures from rest geometry; estimate height from the head unless given, and place missing toes at the ball of the foot. */
 export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Proportions {
   const H = height, o = rest.offsets, ankle = ankleHeight(rest);
   for (const n of SIDES) {

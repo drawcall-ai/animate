@@ -18,11 +18,7 @@ export function paceOf(pace: Pace, defaults: Required<Pace>): Required<Pace> {
 /** A staging a hand works through for a request: it says when it has met its goal (`request.met`) or never can (`request.fail`). */
 type Handwork = NonReuseableTimeline<Frame>;
 
-/**
- * What a body's hands do for the verbs, each a staging of the verb's request: take hold of a thing by its grips, bring what they hold to
- * where it goes, reach to targets taking nothing, and back out of what they let go. A person's two hands and a creature's one (a jaw)
- * each do it their way.
- */
+/** Species-specific hand staging for the shared verbs. */
 export interface Handling {
   /** each named hand takes hold of `thing` by its grip, the body walking up for them if it must; a loose thing with a mass is lifted clear */
   take(request: Request, thing: Thing, grips: readonly { hand: string; grip: string }[], pace: Pace): Handwork;

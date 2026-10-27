@@ -25,14 +25,8 @@ interface TipOptions extends Motion {
   clear?: (f: Frame, tip: { position: Vector3; quaternion?: Quaternion }, braked: boolean) => void;
 }
 
-/**
- * A chain's tip moved toward targets, a sub-step at a time (`to`): the tip moves on from its history (`follow`; a rotation needs
- * `turnAccel`, `followRotation`), out to all but the chain's full length; the chain is solved to it (`solveChain`); and, with
- * `turnAccel`, every joint of the chain is braked to it: each follows what the solve gives it, a joint the solve swivels faster than
- * `turnSpeed` braked, and stops at the end of its range. Its intended path continues while no later layer moved the tip after its
- * write; projection into reach and joint lag do not change that path's velocity. After another layer's intervention it sets off from
- * the actual tip. One per behaviour moving the chain (it keeps the joints' goals and the tip's path).
- */
+/** Follow a tip path, solve the chain, then brake its joints within limits. Projection and joint lag preserve intended velocity; another layer moving the tip restarts from the actual pose.
+ * Keep one ChainTip per behaviour: it owns the joint goals and path history. */
 export class ChainTip {
   private readonly joints = new Map<number, TrackedRotation>();
   /** each joint `clear` moved after its brakes in its last call, and its step then as the brakes are to read it (a rotation vector, its
@@ -128,12 +122,7 @@ export class ChainTip {
 
 type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
 
-/**
- * Bone `tip` of a body (its last poses `prev2`, `prev`, `dt` apart, before the sub-step at `time`) is on `target`: within REACHED's
- * distance and angle, and moving with it to within its speed. The last pose is a sub-step old, so it is judged against where the
- * target was then: on a carrier (in its frame), as the carrier was placed then and the sub-step before (`Carrier.at`); else moved back
- * by its velocity.
- */
+/** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative speed. */
 export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);

@@ -32,10 +32,7 @@ export type BoneNames<S extends readonly SkeletonBone[]> = S[number]['name'];
 export type Having<S extends readonly SkeletonBone[], Needed extends string> =
   [Exclude<Needed, BoneNames<S>>] extends [never] ? unknown : { missingBones: Exclude<Needed, BoneNames<S>> };
 
-/**
- * What kind of body it is: its skeleton as written (`bones`, the names `Bone`) and as it moves (`skeleton`: the bones its roles use,
- * each with its mass, centre, range and chains), how it looks about, the bones it holds things with (`Hand`: their names), its legs.
- */
+/** A rig skeleton and its motion roles: mass, joint ranges, gaze, hands and legs. */
 export interface Species<Bone extends string = string, Hand extends string = string> {
   /** species label in body errors; custom species may supply their own */
   readonly name?: string;
@@ -43,10 +40,7 @@ export interface Species<Bone extends string = string, Hand extends string = str
   readonly bones: readonly SkeletonBone<Bone>[];
   /** the bones that move, parents first, the species' root first: masses at `mass` kg in all, ranges, chains */
   readonly skeleton: Skeleton;
-  /**
-   * each moving bone's turn from how it moves at rest (its straight limbs: a T-pose) onto how the skeleton stands (an A-pose's arms
-   * down, a knee a little bent), by name; a bone not named stands as it moves (no turn)
-   */
+  /** Rest turns from solver geometry (straight limbs) to rig geometry (e.g. an A-pose); absent bones need no turn. */
   readonly turns: ReadonlyMap<string, Quaternion>;
   /** its neck and eyes, for `lookAt` and the gazes built on it */
   readonly gaze?: Gazer;
