@@ -125,22 +125,22 @@ describe('a body', () => {
     expect(total(open)).toBeCloseTo(humanoid(PERSON).mass, 6);
   });
 
-  it('reads another body as it was before its update this frame, whichever updates first', () => {
+  it.each([dt / 2, dt, 2 * dt, 6 * dt])('reads another body before its update, in either order at %s s per frame', (seconds) => {
     const first = person({ drive: (time) => ({ position: new Vector3(0.5 * time, 0, 0), velocity: new Vector3(0.5, 0, 0), yaw: 0 }) });
     const seen: number[] = [];
     const watcher = person({ at: new Vector3(0, 0, 2) });
     claim(watcher, 'look', () => { seen.push(first.position.x); });
     for (let k = 0; k < 30; k++) {
-      first.update(dt);
-      watcher.update(dt);
+      first.update(seconds);
+      watcher.update(seconds);
     }
     const reversed: number[] = [];
     const other = person({ drive: (time) => ({ position: new Vector3(0.5 * time, 0, 0), velocity: new Vector3(0.5, 0, 0), yaw: 0 }) });
     const second = person({ at: new Vector3(0, 0, 2) });
     claim(second, 'look', () => { reversed.push(other.position.x); });
     for (let k = 0; k < 30; k++) {
-      second.update(dt);
-      other.update(dt);
+      second.update(seconds);
+      other.update(seconds);
     }
     expect(reversed).toEqual(seen);
   });

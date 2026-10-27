@@ -26,7 +26,7 @@ export interface Steering {
   /** the extrapolated centre of mass on the floor now, if the body knows it better than its root's (a pose's: its centre of mass carried
    * on at its speed for √(l/g)) */
   xcom?: Vector3;
-  /** where it will be and face `ahead` s on, if it knows (a planner's root): a landing foresees that, not a straight run at its turning rate */
+  /** where it will be and face `ahead` s on, to read without changing it: a landing foresees that, not a straight run at its turning rate */
   forecast?: (ahead: number) => { position: Vector3; yaw: number };
   /** the turn (rad/s) it would make if its legs kept up, when they hold it back (a planner's): a gait's feet step to make way for it */
   turning?: number;

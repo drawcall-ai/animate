@@ -201,7 +201,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       position: root.position.clone().sub(behind),
       forecast: forecast && ((t) => {
         const at = forecast(t);
-        return { position: at.position.sub(behind), yaw: at.yaw };
+        return { position: at.position.clone().sub(behind), yaw: at.yaw };
       }),
       // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass.
       hips: offset.clone().add(behind),

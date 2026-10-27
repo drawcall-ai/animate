@@ -148,17 +148,18 @@ export class Solver {
     const wp = this.stiffness(target, Math.sqrt(STIFF)), wr = this.stiffness(target, this.weightSum);
     let cost = this.cost(target, r), damping = 1e-3;
     for (let step = 0; step < steps; step++) {
-      this.linearise(target, r);
+      this.linearise();
+      for (let m = 0; m < 6; m++) for (let i = 0; i < n; i++) _weighted[m * n + i] = (m < 3 ? wp : wr) * J[m * n + i];
       // H = Jᵀ W J + S, g = Jᵀ W r + S (q − ref).
       for (let i = 0; i < n; i++) {
         for (let k = i; k < n; k++) {
           let s = 0;
-          for (let m = 0; m < 6; m++) s += (m < 3 ? wp : wr) * J[m * n + i] * J[m * n + k];
+          for (let m = 0; m < 6; m++) s += _weighted[m * n + i] * J[m * n + k];
           H[i * n + k] = H[k * n + i] = s;
         }
         H[i * n + i] += weight[i];
         let s = weight[i] * (q[i] - (ref[i] + this.prior[i]) / 2);
-        for (let m = 0; m < 6; m++) s += (m < 3 ? wp : wr) * J[m * n + i] * r[m];
+        for (let m = 0; m < 6; m++) s += _weighted[m * n + i] * r[m];
         g[i] = s;
       }
       // the ground: each point below it pulled up, hard (its row: the height's rate per coordinate)
@@ -278,10 +279,9 @@ export class Solver {
     r[5] = e.z * k;
   }
 
-  /** the residual into `r` and the Jacobian into `J` at the coordinates now */
-  private linearise(target: LegTarget, r: Float64Array) {
+  /** the Jacobian at the coordinates `cost` last posed: the initial pose, then each accepted trial */
+  private linearise() {
     const n = this.n, J = _J;
-    this.residual(target, r);
     const tip = this.positions[this.bones.length - 1];
     for (let j = 0; j < n; j++) {
       const w = this.world[j];
@@ -349,20 +349,23 @@ const _q = new Quaternion(), _l = new Quaternion(), _e = new Quaternion(), _v = 
 const _r = new Float64Array(6), _was = new Float64Array(16);
 /** the solve's scratch, shared by every leg (a solve runs to its end before another starts): sized for `MOST` coordinates */
 const MOST = 16;
-const _H = new Float64Array(MOST * MOST), _J = new Float64Array(6 * MOST), _fixed = new Uint8Array(MOST);
+const _H = new Float64Array(MOST * MOST), _J = new Float64Array(6 * MOST), _weighted = new Float64Array(6 * MOST), _fixed = new Uint8Array(MOST);
 const [_g, _d, _trial, _tried, _diagonal, _row] = Array.from({ length: 6 }, () => new Float64Array(MOST));
 
 /** H d = −g over the free coordinates, the fixed ones stepped onto the bound they passed (1: the lower, 2: the upper) */
 function solveFree(H: Float64Array, g: Float64Array, fixed: Uint8Array, d: Float64Array, n: number, q: Float64Array, lb: Float64Array, ub: Float64Array) {
-  const free: number[] = [];
+  const free = _free;
+  let m = 0;
   for (let j = 0; j < n; j++) {
     if (fixed[j]) d[j] = (fixed[j] === 1 ? lb[j] : ub[j]) - q[j];
-    else free.push(j);
+    else free[m++] = j;
   }
-  const m = free.length;
   const A = _A;
   const b = _b;
-  for (let a = 0; a < m; a++) {
+  if (m === n) {
+    A.set(H);
+    for (let a = 0; a < n; a++) b[a] = -g[a];
+  } else for (let a = 0; a < m; a++) {
     let rhs = -g[free[a]];
     for (let j = 0; j < n; j++) if (fixed[j]) rhs -= H[free[a] * n + j] * d[j];
     b[a] = rhs;
@@ -389,4 +392,4 @@ function solveFree(H: Float64Array, g: Float64Array, fixed: Uint8Array, d: Float
   }
   for (let a = 0; a < m; a++) d[free[a]] = b[a];
 }
-const _A = new Float64Array(MOST * MOST), _b = new Float64Array(MOST);
+const _A = new Float64Array(MOST * MOST), _b = new Float64Array(MOST), _free = new Int32Array(MOST);

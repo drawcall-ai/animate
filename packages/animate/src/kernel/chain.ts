@@ -42,8 +42,9 @@ const LONGEST = 16;
  */
 export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
   const { position, quaternion } = goal.tip;
-  const numbers = [...position.toArray(), ...(quaternion?.toArray() ?? []), ...(goal.pole?.toArray() ?? []), goal.twist ?? 0];
-  if (!numbers.every(Number.isFinite)) throw new Error(`chain "${chain}": a goal that is not finite`);
+  const finite = finiteXYZ(position) && (!quaternion || (finiteXYZ(quaternion) && Number.isFinite(quaternion.w)))
+    && (!goal.pole || finiteXYZ(goal.pole)) && Number.isFinite(goal.twist ?? 0);
+  if (!finite) throw new Error(`chain "${chain}": a goal that is not finite`);
   const pose = frame.current;
   const { skeleton } = pose;
   const bones = skeleton.chain(chain);
@@ -330,6 +331,8 @@ const clampUnit = (x: number) => Math.min(1, Math.max(-1, x));
 function perpendicular(v: Vector3, out: Vector3): Vector3 {
   return Math.abs(v.x) < 0.9 * v.length() ? out.set(1, 0, 0).cross(v) : out.set(0, 1, 0).cross(v);
 }
+
+const finiteXYZ = (v: { x: number; y: number; z: number }) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
 
 const IDENTITY = new Quaternion(), _neutral = new Quaternion();
 const _local = Array.from({ length: LONGEST }, () => new Quaternion());

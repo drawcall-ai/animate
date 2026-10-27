@@ -59,8 +59,8 @@ export class Self implements Holder {
   readonly tempo: number;
   readonly frame: Frame;
   /** the last final pose and the one before, as they were when its last update began: what others read while it is ahead of them */
-  private readonly before: [Pose, Pose];
-  private poses: [Pose, Pose, Pose];
+  private readonly before: [ReadonlyPose, ReadonlyPose];
+  private readonly poses: Pose[];
   updates = 0;
   share = 0;
   readonly frames = new WeakMap<Object3D, Interpolated>();
@@ -108,8 +108,8 @@ export class Self implements Holder {
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
-    this.poses = [new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose)];
-    this.before = [new Pose(this.skeleton).copy(pose), new Pose(this.skeleton).copy(pose)];
+    this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
+    this.before = [this.poses[3], this.poses[4]];
     this.frame = { dev, dt: STEP, time: 0, prev2: this.poses[0], prev: this.poses[1], current: this.poses[2] };
     anchors.set(this.binding.object, { body: this, bone: -1 });
     this.skeleton.bones.forEach((bone, i) => {
@@ -328,8 +328,7 @@ export class Self implements Holder {
     // (1e-9: 1/30 is a hair under two sub-steps of 1/60 in floating point)
     const steps = Math.floor(this.pending / STEP + 1e-9);
     this.pending = Math.max(0, this.pending - steps * STEP);
-    this.before[0].copy(this.frame.prev);
-    this.before[1].copy(this.frame.prev2);
+    [this.before[0], this.before[1]] = [this.frame.prev, this.frame.prev2];
     for (const [node, carrier] of this.carried) {
       const before = this.movedBefore.get(node) ?? { position: new Vector3(), quaternion: new Quaternion() };
       before.position.copy(carrier.current.position);
@@ -377,7 +376,7 @@ export class Self implements Holder {
   }
 
   private step(): void {
-    const { frame: f } = this, [prev2, prev, current] = this.poses;
+    const { frame: f } = this, { prev, current } = f;
     current.copy(prev);
     if (f.dev && f.time > 0) {
       checkLimits(f.prev, f.dev, f.time);
@@ -415,8 +414,10 @@ export class Self implements Holder {
     }
     behaviours.things?.(f);
     current.forward();
-    this.poses = [prev, current, prev2];
-    [f.prev2, f.prev, f.current] = this.poses;
+    // (keep the two update-start poses intact, including across multiple sub-steps)
+    const next = this.poses.find((pose) => pose !== prev && pose !== current && !this.before.includes(pose));
+    if (!next) throw new Error('no writable pose outside the frame history');
+    [f.prev2, f.prev, f.current] = [prev, current, next];
   }
 }
 

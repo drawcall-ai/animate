@@ -28,7 +28,7 @@ export class Pose implements ReadonlyPose {
   private readonly rotations: Quaternion[];
   /** what each bone carries besides its segment: a mass (kg) at a point in its frame */
   private readonly loads: { mass: number; at: Vector3 }[];
-  private stale = true;
+  private stale = 0;
   facing = 0;
 
   constructor(readonly skeleton: Skeleton) {
@@ -96,14 +96,14 @@ export class Pose implements ReadonlyPose {
     checkWeight(weight);
     if (weight === 1) this.locals[bone].copy(q);
     else this.locals[bone].slerp(q, weight);
-    this.stale = true;
+    this.stale = Math.min(this.stale, bone);
   }
 
   setRoot(position: Readonly<Vector3>, weight = 1): void {
     checkWeight(weight);
     if (weight === 1) this.root.copy(position);
     else this.root.lerp(position, weight);
-    this.stale = true;
+    this.stale = 0;
   }
 
   copy(from: ReadonlyPose): this {
@@ -112,22 +112,25 @@ export class Pose implements ReadonlyPose {
     this.facing = from.facing;
     this.locals.forEach((q, i) => q.copy(from.local(i)));
     this.loads.forEach((_, i) => this.setLoad(i, from.load(i).mass, from.load(i).at));
-    this.stale = true;
+    this.stale = 0;
     return this;
   }
 
   /** brings the world transforms up to date (forward kinematics) */
   forward(): void {
-    if (!this.stale) return;
-    this.stale = false;
+    if (this.stale === Infinity) return;
     const { bones } = this.skeleton;
-    this.positions[0].copy(this.root);
-    this.rotations[0].copy(this.locals[0]);
-    for (let i = 1; i < bones.length; i++) {
+    if (this.stale === 0) {
+      this.positions[0].copy(this.root);
+      this.rotations[0].copy(this.locals[0]);
+    }
+    // (parents precede their children: no earlier transform depends on the first changed bone)
+    for (let i = Math.max(1, this.stale); i < bones.length; i++) {
       const parent = bones[i].parent;
       this.positions[i].copy(bones[i].offset).applyQuaternion(this.rotations[parent]).add(this.positions[parent]);
       this.rotations[i].multiplyQuaternions(this.rotations[parent], this.locals[i]);
     }
+    this.stale = Infinity;
   }
 }
 

@@ -27,8 +27,9 @@ export function cue(steps: Steps, now: Now): Cues {
  */
 function catcherOf(steps: Steps, now: Now): Leg | undefined {
   const { st, feet, legs } = steps, s = st.scale, { r, airborne, v, Tsw, most, dt } = now;
-  const centre = r.xcom ? _centre.copy(r.xcom).setY(0) : xcomAhead(steps, now, 0, _centre), capture = st.capture;
+  const capture = st.capture;
   if (airborne || capture === undefined) return undefined;
+  const centre = r.xcom ? _centre.copy(r.xcom).setY(0) : xcomAhead(steps, now, 0, _centre);
   const falling = outside(hullOf(legs.flatMap((leg) => feet.print(leg.i, leg.anchor, leg.yaw))), centre) > capture * s;
   if (!falling) return undefined;
   const crossing = (leg: Leg) => Number(landing(steps, now, leg, Tsw - dt)[2] > BLOCKED * s);
@@ -221,7 +222,8 @@ function turnedOff(steps: Steps, now: Now, cues: Cues, leg: Leg): boolean {
 
 /** the legs, the foot furthest from its home `ahead` s on first */
 function furthestOf(steps: Steps, now: Now, ahead: number): Leg[] {
-  return [...steps.legs].sort((a, b) => offHome(steps, now, b, ahead) - offHome(steps, now, a, ahead));
+  const distances = steps.legs.map((leg) => offHome(steps, now, leg, ahead));
+  return [...steps.legs].sort((a, b) => distances[b.i] - distances[a.i]);
 }
 
 /** What prompts a foot to step this sub-step: the one that catches a fall, how far a foot may be turned off the facing (rad) and where

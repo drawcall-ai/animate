@@ -52,7 +52,12 @@ export function grasp(self: Holder, hand: string, hold: Hold | null): void {
 
 /** what `self`'s hands hold, a two-handed thing once */
 export function held(self: Holder): Thing[] {
-  return [...new Set(Object.values(self.holding).flatMap((hold) => hold ? [hold.thing] : []))];
+  const things: Thing[] = [];
+  for (const hand in self.holding) {
+    const thing = self.holding[hand]?.thing;
+    if (thing && !things.includes(thing)) things.push(thing);
+  }
+  return things;
 }
 
 /** the weight `self`'s hands bear: what they hold off its support, a two-handed thing once (kg) */
@@ -198,6 +203,8 @@ const BEARING = { accel: 16, speed: 4 };
  */
 export function bear(self: Holder, f: Frame, worn: readonly Thing[], borne: Map<Thing, Bearing>): void {
   const things = new Set<Thing>([...worn, ...held(self), ...borne.keys()]);
+  // (a released bearing stays in this set for the sub-step that clears its loads)
+  if (things.size === 0) return;
   for (const thing of things) {
     if (thing.mass === 0) continue;
     const bones = bearers(self, thing);

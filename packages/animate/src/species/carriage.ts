@@ -206,13 +206,13 @@ function ride(out: Riding, gait: Gait, speed: number, stride: { cycle: number; s
   const { rise, pitch } = out;
   for (let k = 0; k < n; k++) {
     let up = 0, turning = 0;
-    levers.forEach((lever, i) => {
-      const s = since((k + 0.5) / n, i);
-      if (s >= duty) return;
+    for (let i = 0; i < levers.length; i++) {
+      const lever = levers[i], s = since((k + 0.5) / n, i);
+      if (s >= duty) continue;
       const push = (i < 2 ? foreShare : 1 - foreShare) / 2 * GRAVITY * Math.PI / (2 * duty) * Math.sin(Math.PI * s / duty);
       up += push; turning -= push * lever / k2;
-    });
-    [rise[k], pitch[k]] = [up - GRAVITY, turning];
+    }
+    rise[k] = up - GRAVITY; pitch[k] = turning;
   }
   // (the pushes' sum, sampled, lifting the weight just so: no drift over the stride)
   for (const a of [rise, pitch]) { const mean = a.reduce((sum, x) => sum + x, 0) / n; a.forEach((x, k) => { a[k] = x - mean; }); }
@@ -222,9 +222,9 @@ function ride(out: Riding, gait: Gait, speed: number, stride: { cycle: number; s
     for (let k = 0; k < n; k++) a[k] -= mean;
   }
   out.low = -Infinity;
-  for (let k = 0; k < n; k++) levers.forEach((lever, i) => {
-    if (since((k + 0.5) / n + EARLY, i) < duty + EARLY) out.low = Math.max(out.low, rise[k] - lever * Math.sin(pitch[k]));
-  });
+  for (let k = 0; k < n; k++) for (let i = 0; i < levers.length; i++) {
+    if (since((k + 0.5) / n + EARLY, i) < duty + EARLY) out.low = Math.max(out.low, rise[k] - levers[i] * Math.sin(pitch[k]));
+  }
 }
 /** Tuned: how early in a stride (cycles) a leg's landing may come and still find its top no higher than the legs hold it */
 const EARLY = 0.05;

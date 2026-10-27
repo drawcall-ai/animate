@@ -9,16 +9,14 @@ import { hipOf, homeOf, pace, shankLean, travelOf, widthAt, xcomAhead } from './
 export function quintic(x: number, v: number, a: number, x1: number, v1: number, T: number, t: number): [number, number, number] {
   if (T <= t) return [x1, v1, 0];
   const d = x1 - x;
-  const c = [
-    x, v, a / 2,
-    (20 * d - (12 * v + 8 * v1) * T - 3 * a * T * T) / (2 * T ** 3),
-    (-30 * d + (16 * v + 14 * v1) * T + 3 * a * T * T) / (2 * T ** 4),
-    (12 * d - (6 * v + 6 * v1) * T - a * T * T) / (2 * T ** 5),
-  ];
+  const c2 = a / 2;
+  const c3 = (20 * d - (12 * v + 8 * v1) * T - 3 * a * T * T) / (2 * T ** 3);
+  const c4 = (-30 * d + (16 * v + 14 * v1) * T + 3 * a * T * T) / (2 * T ** 4);
+  const c5 = (12 * d - (6 * v + 6 * v1) * T - a * T * T) / (2 * T ** 5);
   return [
-    c[0] + t * (c[1] + t * (c[2] + t * (c[3] + t * (c[4] + t * c[5])))),
-    c[1] + t * (2 * c[2] + t * (3 * c[3] + t * (4 * c[4] + t * 5 * c[5]))),
-    2 * c[2] + t * (6 * c[3] + t * (12 * c[4] + t * 20 * c[5])),
+    x + t * (v + t * (c2 + t * (c3 + t * (c4 + t * c5)))),
+    v + t * (2 * c2 + t * (3 * c3 + t * (4 * c4 + t * 5 * c5))),
+    2 * c2 + t * (6 * c3 + t * (12 * c4 + t * 20 * c5)),
   ];
 }
 
