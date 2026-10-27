@@ -145,10 +145,10 @@ export function footing(person: Reacher, to: Stand): Footing {
   const offset = body.clone().sub(there);
   const lateral = offset.dot(leftOf(face));
   const frontal = Math.abs(offset.dot(forwardOf(face)));
-  // A rigid two-hand destination fixes the load's facing; otherwise the last leg need only clear the support when the straight path
-  // passes through it.
+  // A rigid two-hand destination fixes the load's facing; otherwise route round support anywhere along the straight approach,
+  // including within ROUND of the destination.
   const entry = point && grips.length > 1 && Math.abs(lateral) > Math.max(ROUND * proportions.scale, ROUND_ASIDE * frontal);
-  const blocked = along > 0 && along < length - ROUND * proportions.scale && flat(nearest, middle) < ROUND * proportions.scale;
+  const blocked = along > 0 && along < length && flat(nearest, middle) < ROUND * proportions.scale;
   const via: ((f: Frame) => Vector3)[] = [];
   if (entry || blocked) {
     const yaw = entry ? face : headingOf(way.x, way.z);

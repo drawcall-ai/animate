@@ -51,9 +51,6 @@ const OPEN: Open[] = [
   ["look-around, turned 0.3 rad left", [0]],
   'knight-arming, the stand, wall and rack 15 cm further left',
   'knight-arming, 20% slower',
-  'knight-arming, the helm turned a quarter on its stand',
-  'knight-arming, the helm turned half round on its stand: walked round to take it',
-  'knight-arming, mirrored, the helm turned half round: walked round the stand clear of it',
   ["stroll round a sharp 0.6 m turn", [2]],
 ];
 // (and the known task-accuracy failures, `known()`, below)
