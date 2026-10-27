@@ -37,6 +37,8 @@ export type Having<S extends readonly SkeletonBone[], Needed extends string> =
  * each with its mass, centre, range and chains), how it looks about, the bones it holds things with (`Hand`: their names), its legs.
  */
 export interface Species<Bone extends string = string, Hand extends string = string> {
+  /** species label in body errors; custom species may supply their own */
+  readonly name?: string;
   /** the skeleton as written: every bone, by name, where it stands at rest (model space) */
   readonly bones: readonly SkeletonBone<Bone>[];
   /** the bones that move, parents first, the species' root first: masses at `mass` kg in all, ranges, chains */
@@ -72,6 +74,7 @@ export type AnySpecies = Species<string, string>;
 
 /** What a creature heeds as it stands and walks besides what it looks at: a tether it is tied by, a startle (a new point each time). */
 export interface Attention {
+  /** Horse head constraint while tied: a world anchor and positive length in metres; undefined when untied. Does not move its legs. */
   tether?: (time: number) => { position: Readonly<Vector3>; length: number } | undefined;
   startle?: (time: number) => Readonly<Vector3> | undefined;
 }

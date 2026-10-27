@@ -27,8 +27,17 @@ export function creature(body: Legged): Step {
   const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
   const turn = Math.min(...posers.map((poser) => poser.turn)), ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);
-  // (a leg that cannot hold its foot on the floor a little ahead or behind where it stands can never step: said at once, not as a stalled walk)
-  if (!(record.travel.forward > 0)) throw new Error('creature: its legs reach no step from where they stand (can each foot keep flat on the floor as its leg bends?)');
+  feet.legs.forEach((leg, i) => {
+    if ((leg.span?.(record.drop.walk) ?? 0) > 0) return;
+    const chain = kind.chains[i], name = (index: number) => skeleton.bones[index].name;
+    const top = name(leg.top), foot = name(leg.foot);
+    const joints = chain.joints.slice(1, -1).map(({ bone }) => name(bone)).join(', ');
+    const drop = rest.position(leg.top).y - rest.position(leg.foot).y - record.drop.walk;
+    throw new Error(`leg ${top} → ${foot}: joint ${top} stands too high for ${foot} to step with its sole flat within the joint ranges ` +
+      `(standing drop ${drop.toFixed(3)} m, including the gait's lowering). Lower ${top}'s skeleton position.y while keeping ${foot} on the floor; ` +
+      `reposition the intermediate joints (${joints}) in x/z to preserve segment lengths and leave a bent rest chain with spare reach; ` +
+      `see the skill's reference skeletons.`);
+  });
   const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone().setY(feet.ankleHeight), yaw: body.yaw }));
   const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw));
   const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));

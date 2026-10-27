@@ -135,7 +135,7 @@ export class Self implements Holder {
     return creatureHands(this);
   }
 
-  /** its behaviours (made on its first sub-step, once all it is has been made): a creature's legs and carriage, its jaw keeping hold */
+  /** its behaviours (made after construction, once all it is has been made): a creature's legs and carriage, its jaw keeping hold */
   protected behave(): Behaviours {
     return {
       balance: this.species.legs ? creature(this) : undefined,
@@ -145,6 +145,11 @@ export class Self implements Holder {
         bear(this, f, this.worn, this.borne);
       },
     };
+  }
+
+  /** Construct creature behaviours now so infeasible legs fail before the first update. */
+  initialize(): void {
+    this.behaviours = this.behave();
   }
 
   /** the weight its hands bear off their support (kg) */
@@ -339,9 +344,6 @@ export class Self implements Holder {
         this.share = (i + 1) / steps;
         this.step();
       }
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : String(cause);
-      throw new Error(`${this.frame.time.toFixed(3)} s, ${this.beat() || 'idle'}: ${message}`, { cause });
     } finally {
       this.stepping = false;
     }
@@ -370,7 +372,7 @@ export class Self implements Holder {
     dev.append(this.frame.time, { check: "the body's object is under a moved, turned or scaled parent: add it to the world's frame", value: 1, limit: 0, where: parent.name });
   }
 
-  private beat(): string {
+  beat(): string {
     return this.requests.map((request) => request.label).join(' ∥ ');
   }
 

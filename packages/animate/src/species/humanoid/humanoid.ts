@@ -27,6 +27,7 @@ export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & 
   }
   const { proportions, turns } = measure(perBone((bone) => at.get(bone) ?? null), crownOf(skeleton)), eyes = proportions.eyes.clone();
   return {
+    name: 'humanoid',
     bones: skeleton,
     skeleton: new Skeleton(skeletonOf(proportions), { limits: ranges(), chains: CHAINS }),
     turns: new Map(BONES.map((bone) => [bone, turns[bone]])),

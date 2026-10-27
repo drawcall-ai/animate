@@ -53,6 +53,8 @@ renderer.setAnimationLoop(() => {
 
 A body is a species of a skeleton: `humanoid(skeleton)`, `horse(skeleton)`, `dog(skeleton)` or `species(skeleton, roles, tuning)`, the skeleton being @drawcall/rig's `SkeletonBone[]` (see `node_modules/@drawcall/rig/skills/rig/SKILL.md` for writing one and rigging a mesh with `skin`). Skeleton positions are absolute in model space, including children; `parent` establishes hierarchy. With `model` the body drives the rig's bound bones by name; without it the body is bare, for tests and headless runs. The options and the state a body reports are documented on `BodyOptions` and `Body`.
 
+For bare bodies, copy a validated [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) or [lion](references/lion.ts) skeleton (the lion needs a custom species). These are complete starting points, also used by the examples; for a mesh, write the positions for that mesh. Creature legs need spare reach with the sole flat after the gait's lowering; a fully extended rest chain can leave none. `new Body` rejects a rig whose legs cannot do this.
+
 ## What a body does by itself, and what a story asks
 
 A person balances, breathes, sways, shifts its weight, swings its free arms and looks about by itself, seeded; a creature stands, glances and swishes its tail. Never author any of that: to stand a while, `wait`.
@@ -74,6 +76,10 @@ A thing moves with its scene-graph parent, and the verbs re-parent it:
 - What a body wears is whatever its bones carry in the scene graph: add a thing under `body.bones.hips` and the body bears its weight.
 
 `grab`, `reach` and `carry` stand where the grips are in comfortable reach, facing them squarely, or work from where the body stands when they are in reach. A `reach` given `until` follows a target that moves, turning and stepping after it. What you author is the scene: its places and empties, the order of beats, and the pauses.
+
+To lead a horse, take the rope with `grab`, then walk both bodies in parallel. Give the horse a moving scene empty in its lane beside and behind the leader, with `until` ending when the leader arrives; on a straight route, advance that empty only along the route, no earlier than its starting position. The empty's orientation keeps the horse facing along the lane. `life.tether` limits the horse's head reach while tied to a post; return `undefined` once untied. It does not make the horse follow. The rope's visible curve belongs to the scene.
+
+The built-in creatures have no sitting action or story-controlled posture; `wait` leaves a stopped dog standing.
 
 ## Gaze, tracking and players
 
@@ -98,4 +104,4 @@ const bird = species(BIRD, {
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Every sub-step then checks the final pose (joint ranges and speeds, planted feet, balance, the hands on what they hold) and the scene (a thing let go in mid-air, put onto an empty far off it or taken, re-parented under a hand by something else; a story that stopped stepping its verbs) and appends each problem to `body.log` with its time and the verbs running. Lateness never throws: a reach reports its unmet distance or angle. An unmet turn at the late-reach check ends the verb `false`; a late position-only reach or carry keeps going. A goal no stand reaches also ends `false` (given `until`, the verb keeps after it till then). A body throws only for misuse (a grip that does not exist, carrying what no hand holds, a hand it does not have), the error carrying the time and verbs. So test stories with dev on, and assert the outcomes, that the story finished and that `body.log` is empty. In headless tests, set a flag at the story's end, step the timeline before the bodies, and assert the flag after a bounded simulated duration. A scene's own expectations are `watch(body, label, check)` beside the story, as in the example.
+Develop with `{ dev: true }` on every body. Every sub-step then checks the final pose (joint ranges and speeds, planted feet, balance, the hands on what they hold) and the scene (a thing let go in mid-air, put onto an empty far off it or taken, re-parented under a hand by something else; a story that stopped stepping its verbs) and appends each problem to `body.log` with its time and the verbs running. Lateness never throws: a reach reports its unmet distance or angle. An unmet turn at the late-reach check ends the verb `false`; a late position-only reach or carry keeps going. A goal no stand reaches also ends `false` (given `until`, the verb keeps after it till then). Construction rejects infeasible creature leg geometry; updates throw for misuse or an impossible constraint (for example, a tether outside neck reach). Update errors name the species, `body.object.name` if set, the time and running verbs. So test stories with dev on, and assert the outcomes, that the story finished and that `body.log` is empty. In headless tests, set a flag at the story's end, step the timeline before the bodies, and assert the flag after a bounded simulated duration. A scene's own expectations are `watch(body, label, check)` beside the story, as in the example.

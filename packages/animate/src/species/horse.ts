@@ -87,7 +87,7 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
   const { skeleton: built } = made;
   const bones = { head: built.index('head'), neck: built.index('neck'), ears: [built.index('leftEar'), built.index('rightEar')] };
   const halter = HALTER.clone().multiplyScalar(size), chains = made.legs?.chains ?? [];
-  return { ...made, bones: skeleton, scale: size, legs: made.legs && { ...made.legs, posture: (start, gait, seed) => horseMotion(start, gait, chains, bones, halter, seed) } };
+  return { ...made, name: 'horse', bones: skeleton, scale: size, legs: made.legs && { ...made.legs, posture: (start, gait, seed) => horseMotion(start, gait, chains, bones, halter, seed) } };
 }
 
 /** every bone a horse's skeleton names */

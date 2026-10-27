@@ -97,7 +97,7 @@ describe('a species of your own', () => {
       heel: [0, -0.02, -0.02] as const, toe: [0, -0.02, 0.04] as const,
     });
     const stiff = species(STIFF, { legs: [stiffLeg('left'), stiffLeg('right')] }, { gait, masses: { body: 1 } });
-    expect(() => new Body(stiff).update(1 / 60)).toThrow('its legs reach no step from where they stand');
+    expect(() => new Body(stiff)).toThrow(/leg leftHip → leftFoot: joint leftHip.*sole flat.*leftKnee/);
   });
 
   it('takes a thing in one of its hands at a time', () => {

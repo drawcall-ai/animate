@@ -62,7 +62,7 @@ export function dog<const S extends readonly SkeletonBone[]>(skeleton: S & Havin
     limits,
     inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 1.15 / Math.sqrt(size), damping: 0.65 },
   });
-  return { ...made, bones: skeleton, scale: size };
+  return { ...made, name: 'dog', bones: skeleton, scale: size };
 }
 
 /** the trunk's height of the Labrador the dog's numbers are for (m) */

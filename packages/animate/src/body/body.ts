@@ -52,22 +52,29 @@ export class Body<S extends AnySpecies = AnySpecies> {
   /** its bones by name: the very bones its model was rigged with, or library objects in a bare body's place — parent empties to them */
   readonly bones: Readonly<Record<BoneOf<S>, Object3D>>;
 
+  /** Rejects creature legs that cannot step within their joint ranges with the sole on the floor. */
   constructor(readonly species: S, options: BodyOptions = {}) {
     const { avoid, ...rest } = options, binding = new Binding(species, rest.model);
     const self = species.person ? new Person(species, rest, binding) : new Self(species, rest, binding);
+    if (!species.person) self.initialize();
     selves.set(this, self);
     for (const body of avoid ?? []) self.near.add(selfOf(body));
     this.object = binding.object;
     this.bones = binding.bones;
   }
 
-  /** advances it by `seconds` (a frame's time; at most 0.1 s is taken): every whole 1/60 s sub-step it covers, the rest kept for the next */
+  /** Advances by `seconds` (at most 0.1 s), keeping incomplete 1/60 s sub-steps for next time.
+   * Errors include species, `object.name` when set, simulation time and running verbs, preserving the original error as `cause`. */
   update(seconds: number): void {
     const self = selfOf(this), was = reader;
     // (its reads of other bodies' state go by the rule `reader` gives)
     reader = self;
     try {
       self.update(seconds);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      const name = this.object.name ? ` "${this.object.name}"` : '';
+      throw new Error(`${this.species.name ?? 'custom species'}${name}, ${self.time.toFixed(3)} s, ${self.beat() || 'idle'}: ${message}`, { cause });
     } finally {
       reader = was;
     }
