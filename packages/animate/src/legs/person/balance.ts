@@ -1,6 +1,6 @@
 // A person's body over its root, whoever drives it: the core stepper keeps the legs under it; here the carriage, the leg chains and the human checks.
 import { Quaternion, Vector3 } from 'three';
-import type { Frame } from '../../kernel/frame';
+import type { Frame, Step } from '../../kernel/frame';
 import type { Dev } from '../../kernel/dev';
 import { solveChain } from '../../kernel/chain';
 import { follow } from '../../kernel/follow';
@@ -13,16 +13,14 @@ import { Poise } from '../../kernel/poise';
 import type { Go, Stance } from '../../kernel/go';
 import { seedOf } from '../../kernel/random';
 import { Quiet } from './quiet';
-import { ankleFor, ballOf, footRotation, heelOf } from './foot';
+import { ankleFor, ballOf, footprint, footRotation, heelOf } from './foot';
 import { kneePole, shankTilt } from './leg';
-import { BOW, PELVIS, TURN, followed } from './pace';
 import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './posture';
 import { armsHeld } from './turn';
-import { hullOf, outside, xcomOfPoses } from '../support';
+import { hullOf, outside, xcomOf, xcomOfPoses } from '../support';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { PersonLegged } from './legged';
-import type { Step } from '../../kernel/frame';
-import { drivenRoot } from '../driven';
+import { drivenRoot } from '../legged';
 import { solePoints } from '../../species/humanoid/landmarks';
 import { humanStepping } from './stepping';
 import { KNEE_FLEXION } from '../../species/humanoid/limits';
@@ -60,6 +58,10 @@ const LOWERED = 0.02;
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1 };
+/** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
+const BOW = { accel: 6, speed: 1.2 };
+/** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
+const PELVIS = { accel: 30 }, TURN = { accel: 60 };
 
 /**
  * Legs under a root the app drives (`drive`, read every sub-step; see `Stepper`) — its hips over the floor, as a game's character
@@ -323,8 +325,36 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
   if (value > LIMIT.xcom) dev.note(time, { check: 'driven XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
 }
 
+/** XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture). */
+export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
+  if (f.time <= f.dt) return;
+  const com = f.prev.com(new Vector3());
+  const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
+  const xcom = xcomOf(com, velocity, person.proportions.legLength, new Vector3());
+  const legs = person.stepper?.legs ?? [];
+  const support = legs.flatMap((leg, s) => {
+    if (leg.swing) return footprint(person.proportions, leg.anchor, leg.yaw);
+    const side = SIDES[s];
+    return solePoints(person.proportions, f.prev, side).map((at): [number, number] => [at.x, at.z]);
+  });
+  const hull = hullOf(support);
+  if (person.locomotion.settled && legs.every((leg) => !leg.swing) && Math.hypot(velocity.x, velocity.z) < 0.05) {
+    const value = outside(hull, com);
+    if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
+  }
+  const value = outside(hull, xcom);
+  if (value > 0.1) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: 0.1, where: 'hips' });
+}
+
 /** where the feet's middle stands from the centre of mass (`OVER` behind it, facing as the stepper does; × `scale`) */
 export const feetBehind = (stepper: Pick<Stepper, 'yaw'>, scale: number) => forwardOf(stepper.yaw).multiplyScalar(OVER * scale);
+
+/** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
+function followed(history: number[], goal: number, motion: { accel: number; speed: number }, dt: number): number {
+  const next = follow(history[0], history[1], goal, motion, dt);
+  [history[0], history[1]] = [history[1], next];
+  return next;
+}
 
 /** the crouch (0 … 1) that lets the pelvis down `share` of the stepper's depth (its `minimumJerk` easing undone) */
 function crouchFor(share: number): number {

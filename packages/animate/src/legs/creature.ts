@@ -1,18 +1,15 @@
 import { Quaternion, Vector3 } from 'three';
 import { forwardOf, leftOf, wrapAngle } from '../kernel/math';
-import type { Frame } from '../kernel/frame';
+import type { Frame, Step } from '../kernel/frame';
 import { Poise } from '../kernel/poise';
 import { Pose } from '../kernel/pose';
 import { carriage, type Striding } from '../species/carriage';
 import { seedOf } from '../kernel/random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
-import { Planner } from './planner';
+import { offTheWay, Planner, stanceYaw } from './planner';
 import { Stepper } from './step/stepper';
 import { type Steering } from './step/state';
-import type { Legged } from './legged';
-import { offTheWay, stanceYaw } from './walker';
-import type { Step } from '../kernel/frame';
-import { drivenRoot } from './driven';
+import { drivenRoot, type Legged } from './legged';
 import { strideAt } from '../species/gait';
 import { Inertia } from '../kernel/inertia';
 

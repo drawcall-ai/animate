@@ -1,16 +1,13 @@
 import { Vector3 } from 'three';
 import type { Step } from '../../kernel/frame';
-import { Planner } from '../planner';
+import { offTheWay, Planner, stanceYaw } from '../planner';
 import { forwardOf, wrapAngle } from '../../kernel/math';
 import type { Stance } from '../../kernel/go';
 import type { Stepper } from '../step/stepper';
 import { hullOf, past } from '../support';
 import { footprint } from './foot';
-import { GOAL_VELOCITY_RATE, JUMP_SPEED, START, STOP, START_GLIDE } from './pace';
-import { checkSupport } from './checks';
-import { drivenBy, feetBehind } from './balance';
+import { checkSupport, drivenBy, feetBehind } from './balance';
 import type { PersonLegged } from './legged';
-import { offTheWay, stanceYaw } from '../walker';
 import { humanGait } from './stepping';
 import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
 
@@ -107,6 +104,16 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
   }, options);
 }
 
+/** how quickly the goal's own velocity is picked up (1/s) */
+const GOAL_VELOCITY_RATE = 9;
+/** a goal moving faster than this (m/s) was re-planned, not carried: it jumped */
+const JUMP_SPEED = 4;
+/** a walk starts when the goal is this far (m, default body), turned (rad; a facing asked: `faced`, just past where it stops) or moving (m/s) */
+const START = { distance: 0.14, yaw: 0.45, faced: 0.12, speed: 0.25 };
+/** it stops once close, slow, the goal still and the facing reached */
+const STOP = { distance: 0.05, speed: 0.15, goalSpeed: 0.08, yaw: 0.1 };
+/** until the first foot is off the ground the body barely glides (m/s) */
+const START_GLIDE = 0.15;
 /**
  * Tuned: at rest, the weight shifts toward a reach this fast (m/s), its centre of mass kept this far within the feet's edge (m), and back
  * till this near where it rested (m)
