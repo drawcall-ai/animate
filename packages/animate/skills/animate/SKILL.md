@@ -7,9 +7,7 @@ description: Make three.js characters and creatures move procedurally, without a
 
 ## The model
 
-A story is any `function*` your app runs with `runTimeline` from @pmndrs/timeline. Verbs are generators: `yield* walkTo(body, target)` runs one to its end and returns `true` once its goal is
-met, `false` on failure (no stand reaches the grips, the walk stalled, a hand turn timed out). `parallel('all' | 'race', …)` runs verbs and generators at once; `wait(seconds | () =>
-boolean)` waits. Every verb but `release` takes `until` (seconds, a condition or `Infinity`), which ends it `true` whatever its goal. `release` is instant: call it without `yield*`.
+A story is any `function*` your app runs with `runTimeline` from @pmndrs/timeline. Verbs are generators: `yield* walkTo(body, target)` runs one to its end and returns `true` once its goal is met, `false` on failure (no stand reaches the grips, the walk stalled, a hand turn timed out). `parallel('all' | 'race', …)` runs verbs and generators at once; `wait(seconds | () => boolean)` waits. Every verb but `release` takes `until` (seconds, a condition or `Infinity`), which ends it `true` whatever its goal. `release` is instant: call it without `yield*`.
 
 The story decides once per frame; the motion runs in fixed 1/60 s sub-steps inside `body.update` and never waits on the story. Units are metres, seconds and radians; +Y is up, the floor is y = 0, a facing of 0 looks along +Z, with +X then the body's left. A target is a `Vector3` (a point), an `Object3D` (it moves with its parent and also sets the orientation: an empty, a bone, `body.bones.head`) or a function of the body's time returning either.
 
@@ -53,10 +51,7 @@ renderer.setAnimationLoop(() => {
 
 ## Bodies
 
-A body is a species of a skeleton: `humanoid(skeleton)`, `horse(skeleton)`, `dog(skeleton)` or `species(skeleton, roles, tuning)`, the skeleton being @drawcall/rig's `SkeletonBone[]` (see
-`node_modules/@drawcall/rig/skills/rig/SKILL.md` for writing one and rigging a mesh with `skin`). Skeleton positions are absolute in model space, including children; `parent` establishes
-hierarchy. With `model` the body drives the rig's bound bones by name; without it the body is bare, for tests and headless runs. The options and the state a body reports are documented on
-`BodyOptions` and `Body`.
+A body is a species of a skeleton: `humanoid(skeleton)`, `horse(skeleton)`, `dog(skeleton)` or `species(skeleton, roles, tuning)`, the skeleton being @drawcall/rig's `SkeletonBone[]` (see `node_modules/@drawcall/rig/skills/rig/SKILL.md` for writing one and rigging a mesh with `skin`). Skeleton positions are absolute in model space, including children; `parent` establishes hierarchy. With `model` the body drives the rig's bound bones by name; without it the body is bare, for tests and headless runs. The options and the state a body reports are documented on `BodyOptions` and `Body`.
 
 ## What a body does by itself, and what a story asks
 
@@ -68,20 +63,14 @@ People look at, turn to and reach for the next thing while still finishing the l
 
 ## Things
 
-A thing is any `Object3D`. `userData.mass` (kg) makes it movable, and the body slows and prepares for it: give the mass instead of slowing anything yourself. Grips are named empties under
-the thing (`{ right: 'handle' }`; the thing's own name is its origin).
-They set position only. For an authored hand turn (a pistol grip), set `userData.handTurn = true` and orient the empty as the hand bone;
-an axis `[x, y, z]` instead allows that turn to roll about that axis in the empty's frame. An empty that things are put onto or taken from may name its `userData.approach` (empties beside
-it, outermost first: a shelf's front edge, a scabbard's way out) and `userData.speed` (m/s on the last straight); `carry` comes in, and goes out, that way.
+A thing is any `Object3D`. `userData.mass` (kg) makes it movable, and the body slows and prepares for it: give the mass instead of slowing anything yourself. Grips are named empties under the thing (`{ right: 'handle' }`; the thing's own name is its origin). They set position only. For an authored hand turn (a pistol grip), set `userData.handTurn = true` and orient the empty as the hand bone; an axis `[x, y, z]` instead allows that turn to roll about that axis in the empty's frame. An empty that things are put onto or taken from may name its `userData.approach` (empties beside it, outermost first: a shelf's front edge, a scabbard's way out) and `userData.speed` (m/s on the last straight); `carry` comes in, and goes out, that way.
 
 Turn a place's empty so its +Z is the way the body should face as it sets the thing there; which grip each hand takes then picks the side it stands on. The body keeps clear of other bodies, never of props: where it stands is what the scene's places and empties say.
 
 A thing moves with its scene-graph parent, and the verbs re-parent it:
-- `grab` lifts a thing with mass unless it is under a body’s object or bones; a table parent does not fasten it. Otherwise the hands follow it where it is (a worn sword, a door handle).
-- `carry` moves what is held to a target or through a list of targets (off its hip or pouch first, out the way its empty's approach comes in, walking there if it must, in by the target's
-  approach) and keeps it there.
-- `release(body, thing, onto?)` attaches it onto the empty `onto` (exactly there within 5 mm), else to another body still holding it (a hand-over), else back to the parent it was taken from,
-  where it is. `release(body, { right: thing })` lets go with the hands named. The hands that let go back out of it, carrying on the way they were going.
+- `grab` lifts a thing with mass unless it is under a body's object or bones; a table parent does not fasten it. Otherwise the hands follow it where it is (a worn sword, a door handle).
+- `carry` moves what is held to a target or through a list of targets (off its hip or pouch first, out the way its empty's approach comes in, walking there if it must, in by the target's approach) and keeps it there.
+- `release(body, thing, onto?)` attaches it onto the empty `onto` (exactly there within 5 mm), else to another body still holding it (a hand-over), else back to the parent it was taken from, where it is. `release(body, { right: thing })` lets go with the hands named. The hands that let go back out of it, carrying on the way they were going.
 - What a body wears is whatever its bones carry in the scene graph: add a thing under `body.bones.hips` and the body bears its weight.
 
 `grab`, `reach` and `carry` stand where the grips are in comfortable reach, facing them squarely, or work from where the body stands when they are in reach. A `reach` given `until` follows a target that moves, turning and stepping after it. What you author is the scene: its places and empties, the order of beats, and the pauses.
@@ -92,9 +81,7 @@ A thing moves with its scene-graph parent, and the verbs re-parent it:
 
 ## Creatures of your own
 
-`species(skeleton, roles, tuning)` makes any creature from its skeleton: `roles` says what the bones do and `tuning` gives its numbers (both documented on `Roles` and `Tuning`);
-`@drawcall/animate/species` holds the gaits and parts a species needs. To bring a dog’s mouth to food, use `reach(pet, { jaw: point })`; `lookAt` directs gaze, not mouth contact.
-A creature's hand is the tip of its chain: `grab` walks it up until the grip is in reach and the chain takes it, one hand at a time.
+`species(skeleton, roles, tuning)` makes any creature from its skeleton: `roles` says what the bones do and `tuning` gives its numbers (both documented on `Roles` and `Tuning`); `@drawcall/animate/species` holds the gaits and parts a species needs. To bring a dog's mouth to food, use `reach(pet, { jaw: point })`; `lookAt` directs gaze, not mouth contact. A creature's hand is the tip of its chain: `grab` walks it up until the grip is in reach and the chain takes it, one hand at a time.
 
 ```ts
 const bird = species(BIRD, {
@@ -111,10 +98,4 @@ const bird = species(BIRD, {
 
 ## Checking
 
-Develop with `{ dev: true }` on every body. Every sub-step then checks the final pose (joint ranges and speeds, planted feet, balance, the hands on what they hold) and the scene (a thing let
-go in mid-air, put onto an empty far off it or taken, re-parented under a hand by something else; a story that stopped stepping its verbs) and appends each problem to `body.log` with its
-time and the verbs running. Lateness never throws: a reach reports its unmet distance or angle. An unmet turn at the late-reach check ends the verb `false`;
-a late position-only reach or carry keeps going. A goal no stand reaches also ends `false` (given `until`, the verb keeps after it till then). A body throws only for misuse (a grip that does
-not exist, carrying what no hand holds, a hand it does not have), the error carrying the time and verbs. So test stories with dev on, and assert the outcomes, that the story finished and
-that `body.log` is empty. In headless tests, set a flag at the story’s end, step the timeline before the bodies, and assert the flag after a bounded simulated duration.
-A scene's own expectations are `watch(body, label, check)` beside the story, as in the example.
+Develop with `{ dev: true }` on every body. Every sub-step then checks the final pose (joint ranges and speeds, planted feet, balance, the hands on what they hold) and the scene (a thing let go in mid-air, put onto an empty far off it or taken, re-parented under a hand by something else; a story that stopped stepping its verbs) and appends each problem to `body.log` with its time and the verbs running. Lateness never throws: a reach reports its unmet distance or angle. An unmet turn at the late-reach check ends the verb `false`; a late position-only reach or carry keeps going. A goal no stand reaches also ends `false` (given `until`, the verb keeps after it till then). A body throws only for misuse (a grip that does not exist, carrying what no hand holds, a hand it does not have), the error carrying the time and verbs. So test stories with dev on, and assert the outcomes, that the story finished and that `body.log` is empty. In headless tests, set a flag at the story's end, step the timeline before the bodies, and assert the flag after a bounded simulated duration. A scene's own expectations are `watch(body, label, check)` beside the story, as in the example.
