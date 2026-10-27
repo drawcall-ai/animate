@@ -43,7 +43,9 @@ export function* backingOut(person: Reacher, request: Request, sides: readonly S
     return goals;
   };
   const done = (f: Frame) => f.time - began > LETTING_GO || sides.every((side, k) => reached(f, person.hands[side], off(f)[k]));
-  yield* parallel<Frame>('all', ...sides.map((side, k) => during(request, `hand.${side}`, 'borrowed', reaching(person, side, (f) => off(f)[k], { lead: false }), done)));
+  // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over)
+  yield* parallel<Frame>('all', ...sides.map((side, k) => during(request, `hand.${side}`, 'borrowed', reaching(person, side, (f) => off(f)[k], { lead: false }),
+    (f) => done(f) || person.holding[side] !== null)));
 }
 
 /** How long a hand’s own motion carries it on (s) and how far at most (m), and how long before the free arms take it (s) */

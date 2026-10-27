@@ -19,13 +19,9 @@ const BODY_NAMES = BODIES.map(([on]) => on);
 
 // The shooter on every body: the default and the skeletons unlike it — the rifle, its grips, the reload and the dev log hold for any
 // body. The cases that do not hold yet are listed (expected to fail: each one fixed comes off the list), each with what fails, at seed 0:
-// - a hand's backing out of what it let go of comes back once a newer grab of that hand ends, though the hand now holds what it took
-//   (the last two cases below, bare: the rod's grip 0.40 m off the wrist holding it at 1.83 s): ending a reload, the left hand lets the
-//   magazine go into the well and takes the handguard, and once that grab ends it is backed out of the handguard it holds — 1.5 cm at
-//   5.62 s of a standing reload and on, 0.49 m off at 53.5 s of the demo (0.29–0.49 m on every body and variation);
-// - a carry into a pouch on the chest of a walking body never comes to rest there: within 0.8 mm of the pouch it is 'late' after 2 s
-//   (4.43 s, bare) and ends only once the walk stops — the reload while walking takes 3.75 s (3.77 the soldier's, 3.83 the outlier's), not
-//   2.8 at most;
+// - walking, as the left hand carries the spent magazine out of the well, the right forearm on the pistol grip rolls ~62° in one sub-step
+//   (3470–4020°/s at 49.88 s and 50.48 s of the demo, its hand and the rifle steady: the arm's elbow flipping in its solve), which the dev
+//   log of the clean run and of the reload while walking says;
 // - the rifle is held on the chest, placed there a frame before the body's update moves the chest — as the chest moved the frame before:
 //   where the chest changes its turn the rifle leaves the aim by that change, 2.33° in 6 rad/s sweeps reversing within 0.1 s (2° at
 //   most) and 3.18° in 3 rad/s ones reversing at once (0.05° at most shown); the library has no way for an app to move a thing on a body
@@ -43,7 +39,6 @@ const test = cases([
     `keeps the rifle on the aim through fast turns: standing and walking, at the hip and aiming${on}`,
     `shows the rifle steady in the first-person view through fast turns aiming, standing${on}`,
     `shows the rifle steady in the first-person view through fast turns aiming, walking${on}`,
-    `reloads standing upright: the magazine out, stowed, the full one in, the trunk within 3° of upright${on}`,
     `reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept${on}`,
   ]),
   ...['', ' on the soldier'].map((on) => `crouches smoothly, deep and slow${on}`),
@@ -53,8 +48,6 @@ const test = cases([
     `sprinting cancels a reload before the magazine is out, and the hand goes back to the handguard${on}`,
   ]),
   'sprints with the rifle, the trunk turning with the stride, both hands on their grips on the soldier',
-  'a hand that puts one thing down and takes another keeps to the grip it takes',
-  'a carry into a pouch on the chest comes to rest there while the body walks',
 ]);
 
 /** a run of the shooter on `skeleton`, development checks on, its people varied by `seed` (none: as written) */

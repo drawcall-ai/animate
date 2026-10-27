@@ -2,7 +2,7 @@ import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
-import { lerp } from '../../kernel/math';
+import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
@@ -14,7 +14,7 @@ import { noticing } from '../../look/gaze';
 import { SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import type { Pace } from '../handling';
-import { LOAD_RESERVE } from './clearance';
+import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 
 /** Tuned: a staging point outside a thing that the arm falls short of (a load capping the bow) is left this long (s) after its time is up,
  * the hand closing on its grip from as near as it got */
@@ -60,8 +60,14 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   const plan = takes.map((take) => {
     const frame = person.track(take.thing.object).current, seed = frame.position;
     const from = person.pose.position(person.hands[take.side]).clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
-    // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly)
-    const route = onBody(person, take.thing) ? [] : outside(take.thing.bounds, take.goal.position, from, LOAD_RESERVE * person.scale);
+    // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly; and a corner behind the hips as
+    // the body stands now, the way on from which passes them within twice the trunk's radius, is no way round it — tuned: a hand starting
+    // back at the side of a body still turning to the thing would come forward through the trunk)
+    const hips = person.pose.position(0), toward = _toward.subVectors(frame.position, hips).setY(0), trunk = 2 * BODY_RADIUS * person.proportions.height;
+    const world = (point: Vector3) => point.clone().applyQuaternion(frame.quaternion).add(frame.position);
+    const through = (corner: Vector3, next: Vector3) => world(corner).sub(hips).dot(toward) < 0 && pointSegmentDistance(hips, world(corner), world(next)) < trunk;
+    const route = (onBody(person, take.thing) ? [] : outside(take.thing.bounds, take.goal.position, from, LOAD_RESERVE * person.scale))
+      .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
     const points = route.length ? route : [take.goal.position];
     let was = from;
     const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
@@ -208,4 +214,4 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
 const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
-const _middle = new Vector3(), _turn = new Quaternion();
+const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3();

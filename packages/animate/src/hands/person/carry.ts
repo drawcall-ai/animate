@@ -6,9 +6,10 @@ import { movingPoint, type Live, type Motion, type Placement, type Goal } from '
 import { loadFactor } from '../../kernel/load';
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
 import { course, type Waypoint } from '../../kernel/course';
+import { follow } from '../../kernel/follow';
 import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
-import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
+import { carriedBy, handsOn, hangsFrom, heldMass, lift, supported } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { resolve } from '../../things/resolve';
 import type { Reacher } from './reacher';
@@ -47,6 +48,9 @@ interface Way {
   points: readonly ((f: Frame) => Goal)[];
   /** the mean speed (m/s) of its last straight, an approach's own; none: the carry's */
   last?: number;
+  /** whether it is kept clear of the body (`clearBody`): not on a way out of or into an empty on one of the body's bones by that
+   * empty's approach (a pouch, a scabbard, a helm's place on the head), which brings it out or in */
+  clear: boolean;
 }
 
 /**
@@ -73,7 +77,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, motion, resting, options.speed));
   else yield* transferring(person, request, thing, way, plan, motion, resting);
   request.met();
-  yield* holding(person, request, thing, new CarryAim(person, thing, motion), end);
+  yield* holding(person, request, thing, new CarryAim(person, thing, motion, way.clear), end);
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
@@ -100,11 +104,11 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
       if (!(yield* walking(request, plan))) request.fail();
       approached = true;
     }, function* () {
-      yield* travel(person, request, thing, [[LIFT, atBody]], motion, resting);
+      yield* travel(person, request, thing, [[LIFT, atBody]], motion, resting, way.clear);
       lifted = true;
-      yield* holding(person, request, thing, new CarryAim(person, thing, motion), walked, near);
-      yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), motion, false);
-      yield* holding(person, request, thing, new CarryAim(person, thing, motion), end, () => approached);
+      yield* holding(person, request, thing, new CarryAim(person, thing, motion, way.clear), walked, near);
+      yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), motion, false, way.clear);
+      yield* holding(person, request, thing, new CarryAim(person, thing, motion, way.clear), end, () => approached);
     });
   });
 }
@@ -114,8 +118,8 @@ function* along(person: Reacher, request: Request, thing: Thing, way: Way, motio
   const points = way.points;
   const straight = way.last !== undefined && points.length > 1;
   const first = straight ? points.slice(0, -1) : points;
-  yield* travel(person, request, thing, timed(person, thing, first, speed), motion, resting);
-  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed), motion, false);
+  yield* travel(person, request, thing, timed(person, thing, first, speed), motion, resting, way.clear);
+  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed), motion, false, way.clear);
 }
 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `ALONG.least` s */
@@ -161,21 +165,21 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
   const way: Waypoint[] = [[CLEAR.seconds / person.tempo, { position: up, quaternion }]];
   const out = Math.hypot(up.x - root.x, up.z - root.z), most = CLEAR.out * person.proportions.armLength;
   if (out > most) way.push([(out - most) / ALONG.speed / person.tempo, { position: new Vector3(root.x + (up.x - root.x) * most / out, up.y, root.z + (up.z - root.z) * most / out), quaternion }]);
-  yield* travel(person, request, thing, way, CARRYING, resting, CLEAR.near * person.scale);
+  yield* travel(person, request, thing, way, CARRYING, resting, true, CLEAR.near * person.scale);
 }
 
 /**
- * `thing` carried along `waypoints` (one smooth curve, see `course`), the hands asked, until it has come to rest at their end: slower by
- * its weight, one taken up off its support (`resting`) dipping a little as it rises, then recovering; still settling `RESTING` s after
- * the course is over, a problem in the dev log.
+ * `thing` carried along `waypoints` (one smooth curve, see `course`), kept `clear` of the body or not, the hands asked, until it has come
+ * to rest at their end: slower by its weight, one taken up off its support (`resting`) dipping a little as it rises, then recovering;
+ * still settling `RESTING` s after the course is over, a problem in the dev log.
  */
-function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], motion: Motion, resting: boolean, near = END.distance) {
+function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], motion: Motion, resting: boolean, clear: boolean, near = END.distance) {
   const carrier = person.track(thing.object);
   const sides = handsOn(person, thing).map(sideOf);
   const grips = Object.fromEntries(sides.map((side) => [side, person.holding[side]?.grip ?? '']));
   const lag = grips[LEADING] === undefined && person.holding[LEADING] ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
   const factor = loadFactor(thing.mass);
-  const aim = new CarryAim(person, thing, { ...motion, accel: motion.accel / factor });
+  const aim = new CarryAim(person, thing, { ...motion, accel: motion.accel / factor }, clear);
   const from = carrier.current.position.y;
   // (take-up and compliance belong to lifting off a support, not every carried waypoint; mass slows the lift's acceleration and path)
   const load = resting ? factor - 1 : 0;
@@ -269,9 +273,10 @@ function restingAt(near: number): (f: Frame, carrier: Carrier, at: Readonly<Vect
   return (f, carrier, at) => {
     end ??= new Carrier(new Vector3().copy(at));
     if (!end.moved(f.time)) end.move(f.time, at);
-    const velocity = _v.subVectors(end.prev.position, end.prev2.position).divideScalar(f.dt);
-    const off = carrier.velocity(new Vector3()).sub(velocity);
-    return carrier.current.position.distanceTo(end.prev.position) < near && off.length() < END.speed;
+    // (a thing its body moves is moved after the hands, so not yet this sub-step; one hanging from a hand is read where the hand is now)
+    const [thing, before] = carrier.moved(f.time) ? [carrier.prev, carrier.prev2] : [carrier.current, carrier.prev];
+    const off = _v.subVectors(thing.position, before.position).sub(_g.subVectors(end.prev.position, end.prev2.position)).divideScalar(f.dt);
+    return thing.position.distanceTo(end.prev.position) < near && off.length() < END.speed;
   };
 }
 
@@ -287,8 +292,11 @@ class CarryAim {
   private time = NaN;
   /** whether a goal moved clear of the head has been noted */
   private cleared = false;
+  /** whether it has set out, and how much of the push clear of the body it set out with it has not yet taken up, the two sub-steps before */
+  private setOut = false;
+  private readonly unpushed = [new Vector3(), new Vector3()];
 
-  constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion) {
+  constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: boolean) {
     const own = person.track(thing.object);
     this.nominal = new Carrier(own.current.position, own.current.quaternion);
     this.carrier = new Carrier(own.current.position, own.current.quaternion);
@@ -309,7 +317,7 @@ class CarryAim {
     const turned = this.rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion,
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned);
     // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front: noted once, so it is no silent change)
-    const moved = clearBody(person, f, thing, goal.position, turned, current);
+    const moved = this.clear ? clearBody(person, f, thing, goal.position, turned, current) : 0;
     if (moved > CLEARED * person.scale && !this.cleared && f.dev) {
       this.cleared = true;
       f.dev.note(f.time, { check: 'held goal moved clear of the head (m)', value: moved, limit: CLEARED * person.scale, where: thing.object.name });
@@ -317,8 +325,19 @@ class CarryAim {
     this.position.follow(aim.prev.position, aim.current.position, goal.position, motion, f.dt, this.at);
     // Constraint correction is not velocity to feed back into the intended path.
     aim.move(f.time, this.at, turned);
-    clearBody(person, f, thing, this.at, turned, current);
-    this.carrier.move(f.time, this.at, turned);
+    const aimed = _aimed.copy(this.at);
+    if (this.clear) clearBody(person, f, thing, this.at, turned, current);
+    // (a thing set out from against the body — taken there — is drawn off it at the aim's own pace, not snapped clear: the push it set
+    // out with is let go of from there to none)
+    const [prev2, prev] = this.unpushed;
+    if (!this.setOut) {
+      this.setOut = true;
+      prev.copy(prev2.subVectors(this.at, aimed));
+    }
+    const left = follow(prev2, prev, ZERO, motion, f.dt, _left);
+    prev2.copy(prev);
+    prev.copy(left);
+    this.carrier.move(f.time, this.at.sub(left), turned);
     return this.carrier;
   }
 }
@@ -376,7 +395,9 @@ export function wayOf(person: Reacher, thing: Thing, targets: readonly ((f: Fram
     if (distance < best) [best, nearest] = [distance, k];
   });
   const speed = end?.userData.speed;
-  return { points: points.slice(Math.min(nearest, points.length - 1)), last: typeof speed === 'number' && coming.length > 0 && nearest < points.length - 1 ? speed : undefined };
+  const last = typeof speed === 'number' && coming.length > 0 && nearest < points.length - 1 ? speed : undefined;
+  const worn = (empty: Object3D | null) => empty !== null && hangsFrom(person, empty) >= 0 && approachOf(empty).length > 0;
+  return { points: points.slice(Math.min(nearest, points.length - 1)), last, clear: !worn(seat) && !worn(end) };
 }
 
 /** the empties beside `empty` its approach names (`userData.approach`, outermost first) */
@@ -395,4 +416,4 @@ function approachOf(empty: Object3D): Object3D[] {
 /** Tuned carry staging (m at default stature): how far ahead of the hips a load is carried, clear of the thighs with room for two hands,
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
-const UP = new Vector3(0, 1, 0), _v = new Vector3(), _g = new Vector3();
+const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), _v = new Vector3(), _g = new Vector3(), _aimed = new Vector3(), _left = new Vector3();

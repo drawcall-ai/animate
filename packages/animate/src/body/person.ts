@@ -14,7 +14,7 @@ import { forwardOf } from '../kernel/math';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, checkParents, inHand, move, supported, worn } from '../things/hold';
+import { bear, bodyOf, checkParents, inHand, move, worn } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
@@ -68,10 +68,10 @@ export class Person extends Self {
         const side = sideOf(hand), hold = this.holding[side];
         if (!hold) return;
         const thing = hold.thing;
-        // (what hangs from the hand stays where the hand holds it on the body; what rests where it lies the body comes down to keep its
-        // hand on; what it carries in both, or another moves, the hands follow)
+        // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
+        // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
         if (inHand(this, thing)) handStep(this, f, side, held[side](f), { ...HOLD, lead: false }, arms[side]);
-        else handStep(this, f, side, hold.goal, { on: this.track(thing.object), thing, ...HOLD, lead: supported(thing) }, arms[side]);
+        else handStep(this, f, side, hold.goal, { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
         checkParents(this, f);

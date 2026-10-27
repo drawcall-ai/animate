@@ -88,7 +88,9 @@ describe('carry', () => {
     const light = lift(0.5), heavy = lift(8);
     // (from taking hold to the load at rest up there)
     expect(heavy.seconds).toBeGreaterThan(light.seconds + 0.5);
-    expect(heavy.dip).toBeGreaterThan(0.01);
+    // (its weight is taken in the grab's 3 cm lift clear of the floor's support, where the library's tuned compliance dips an 8 kg load
+    // 8 mm and a 0.5 kg one under 1 mm: the heavy one dips at least half that difference more than the light)
+    expect(heavy.dip).toBeGreaterThan(light.dip + 0.004);
   });
 
   it('follows a target that moves and turns, holding the box on it once there, its wrists on the grips', () => {

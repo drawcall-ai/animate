@@ -385,6 +385,8 @@ export class Self implements Holder {
     const behaviours = (this.behaviours ??= this.behave());
     // (balance first, on what was asked last sub-step; then the requests' staging, reading the body as balance has it now)
     behaviours.balance?.(f);
+    // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
+    current.facing = this.locomotion.facing;
     for (const request of [...this.requests]) {
       request.stage(f);
       if (!request.owned) continue;
@@ -410,7 +412,6 @@ export class Self implements Holder {
       else if (this.holding[hand]) behaviours.keep?.(f, hand);
     }
     behaviours.things?.(f);
-    current.facing = this.locomotion.facing;
     current.forward();
     this.poses = [prev, current, prev2];
     [f.prev2, f.prev, f.current] = this.poses;
