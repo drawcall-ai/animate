@@ -57,7 +57,6 @@ const test = cases([
   // its forearm into its trunk: 2.4 cm at 12.6 s (seed 1), 4.7 cm at 12.5 s (seed 3), 12.5 cm at 13.7 s (seed 1, its start varied #2).
   ['leads upright with the near hand forward, slack outside, and halts beyond the gate', [1, 3]],
   ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #0', [1, 3]],
-  ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #2', [1]],
   // The soldier (arms 0.46 m against the default's 0.60) lifts the 8 kg saddle off its rack and never draws it in: 4.9–5.4 cm off its
   // course's end after 2 s ('late carry' at 7.3–7.8 s), the grab never ends and the story stops there; it squats to the saddle
   // on its 0.88 m rack, its knees bent 62° as it takes hold (35° at most).

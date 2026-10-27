@@ -44,8 +44,7 @@ it('lists each scenario once', () => {
 // - knight-arming and every variation: the helm's rim 2.3–8.7 cm into the right forearm, the thorax or the head as it is taken
 //   (the helm's bounds kept small to put it on at all: knight/gear.ts), and the shield 2.3–4.7 cm into the right hand at the lance;
 //   further left, its straight steps 5.7 % unequal (max 5 %);
-// - the stroll 15% faster and on a 20% tighter arc: no steady strides on the bend to judge (0 and 1 of 3), and 15% faster the arm
-//   lags 0.10 of the stride (max 0.08);
+// - the stroll 15% faster: the arm lags 0.10 of the stride (max 0.08), straight and on the bend;
 // - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12); further off, the head lags
 //   its course by 5 cm.
 const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stand, wall and rack 15 cm further right',
@@ -59,7 +58,7 @@ const REACH = ['', ', the targets 10 cm to the left', ', the targets 10 cm neare
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
 // the trunk pitching 26.6 °/s (max 26.1, seed 2).
 const OPEN: Open[] = [...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad')),
-  ["knight-arming, the shield's wall turned −0.4 rad", [0, 1, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
+  ["knight-arming, the shield's wall turned −0.4 rad", [0, 1, 3]], 'stroll 15% faster',
   'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],
   ['stroll round a sharp 0.6 m turn', [2]]];
