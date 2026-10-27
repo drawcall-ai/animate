@@ -49,12 +49,8 @@ export function helm(): Group {
     ...[1, -1].map((z) => ({ name: 'helm rim', a: new Vector3(-0.08, rim, z * HELM.radius), b: new Vector3(0.08, rim, z * HELM.radius), radius: 0.01, touches: ['shoulders', 'leftUpperArm', 'rightUpperArm'] })),
   ]);
   cylinder(helm, 'helm top', 0.08, 0.04, new Vector3(0, HELM.height / 2 + 0.02, -0.01));
-  // (its cap and nasal a thing of their own, out of the helm's bounds: a carry keeps what it brings clear of the head by its bounds, and
-  // so would never bring a helm round it — the library defect this works round; its crown and rim still keep off the head as solids)
-  const shell = empty(helm, 'helm shell', new Vector3());
-  shell.userData.mass = 0;
-  cylinder(shell, 'helm cap', HELM.radius, HELM.height, new Vector3());
-  box(shell, 'helm nasal', new Vector3(0.02, 0.08, 0.01), new Vector3(0, rim - 0.03, HELM.radius + 0.005));
+  cylinder(helm, 'helm cap', HELM.radius, HELM.height, new Vector3());
+  box(helm, 'helm nasal', new Vector3(0.02, 0.08, 0.01), new Vector3(0, rim - 0.03, HELM.radius + 0.005));
   for (const [side, x] of [['left', 1], ['right', -1]] as const) {
     grip(helm, side, new Vector3(0.13 * x, -0.15, 0.16));
     grip(helm, `strap${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.09 * x, rim - 0.2, 0.2));
@@ -108,10 +104,7 @@ export function sword(): Group {
   box(sword, 'sword guard', new Vector3(0.2, 0.02, 0.025), new Vector3());
   cylinder(sword, 'sword grip', 0.014, 0.16, new Vector3(0, 0.1, 0));
   cylinder(sword, 'sword pommel', 0.022, 0.03, new Vector3(0, 0.19, 0));
-  // (its blade a thing of its own, out of the sword's bounds: a carry keeps what it brings clear of the trunk by its bounds, and so
-  // pushes a sword drawn part way, its blade still in the scabbard beside the hip, a blade's length out ahead — the library defect this
-  // works round)
-  box(sword, 'sword blade', new Vector3(0.045, 0.78, 0.006), new Vector3(0, -0.4, 0)).userData.mass = 0;
+  box(sword, 'sword blade', new Vector3(0.045, 0.78, 0.006), new Vector3(0, -0.4, 0));
   grip(sword, 'hilt', new Vector3(0, 0.09, 0));
   return sword;
 }

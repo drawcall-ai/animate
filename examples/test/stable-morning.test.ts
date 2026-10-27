@@ -54,9 +54,9 @@ const test = cases([
   // the 378°/s its 94° shift allows.
   `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back`,
   // At other life seeds, its right hand going for the knot behind its right shoulder (facing the horse after checking the fit) passes
-  // its forearm into its trunk: 2.4 cm at 12.6 s (seed 1), 4.7 cm at 12.5 s (seed 3), 12.5 cm at 13.7 s (seed 1, its start varied #2).
-  ['leads upright with the near hand forward, slack outside, and halts beyond the gate', [1, 3]],
-  ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #0', [1, 3]],
+  // its forearm into its trunk: 4.7 cm at 12.5 s (seed 3), 12.5 cm at 13.7 s (seed 1, its start varied #2).
+  ['leads upright with the near hand forward, slack outside, and halts beyond the gate', [3]],
+  ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #0', [3]],
   ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #2', [1]],
   // The soldier (arms 0.46 m against the default's 0.60) lifts the 8 kg saddle off its rack and never draws it in: 4.9–5.4 cm off its
   // course's end after 2 s ('late carry' at 7.3–7.8 s), the grab never ends and the story stops there; it squats to the saddle
@@ -330,17 +330,9 @@ for (const seed of [0, 1, 2]) test(`takes the slack across into its left hand in
 }, 30000);
 }
 
-// What the library does not do yet, as small scenes (expected to fail: each one fixed comes off the list).
-const library = cases([
-  // A hand on a grip on the head of a horse that watches the person: the head moves on as it looks, and the hand falls up to 2.9 cm off
-  // the grip ('held grip distance (m)', 238 times between 4.1 s and 8.0 s). (Led by such a grip after the knot was untied, the hand
-  // also never closed on it: the walk-up stood where the grip was in reach, the head turned 8 cm on, the grip ended 0.59 m from the
-  // shoulder, past the 0.58 m arm, and the grab never ended: 'late reach: grip distance after 4 s' 1.8 cm.)
-  'a person takes hold of the halter of a horse watching it',
-  // A carry onto a place on the carrier's own body as it walks never comes to rest there: the knot is kept 6.9 mm from its place (5 mm
-  // is near enough), moving against it with the stride, and 'late carry: course end distance after 2 s' is logged at 5.35 s.
-  'a person walking carries what it holds onto a place on its own body',
-]);
+// What the story leans on, as small scenes: a hand kept on a watching horse's halter, a carry onto the body as it walks (an open one is
+// listed here: expected to fail, it comes off the list once fixed).
+const library = cases([]);
 
 library('a person takes hold of the halter of a horse watching it', () => {
   const sim = new Simulation(scene((cast) => {

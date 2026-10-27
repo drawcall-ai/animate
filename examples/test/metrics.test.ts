@@ -38,13 +38,13 @@ it('lists each scenario once', () => {
 });
 
 // Open (expected to fail: each one fixed comes off the list), at life seed 0 unless seeds are given:
-// - shooter: its straight walking strides carry 0.342 of the thorax's turn in the head (min 0.35);
 // - reach and its variations: the wrist lags its course by 0.12–0.26 m as the target swings round behind the body and the body steps
 //   round after it (7–12 s; 10 cm higher, 1.13 m at 2.7 s, its first target out of reach on tiptoe); turned 0.3 rad left, 6.6 cm past
 //   the reachable bound at 8.8 s; 10 cm to the left, 0.14 m off it held at 15.0 s and the eyes 0.33 s past their comfortable turn;
-// - knight-arming and every variation: the helm's rim 2.3–8.7 cm into the right forearm, the thorax or the head as it is taken
-//   (the helm's bounds kept small to put it on at all: knight/gear.ts), and the shield 2.3–4.7 cm into the right hand at the lance;
-//   further left, its straight steps 5.7 % unequal (max 5 %);
+// - knight-arming and every variation: the shield borne on the left forearm 2.6–4.6 cm into the right hand or forearm as it takes the
+//   lance (a hand routes round what it reaches for, not round what the body already holds); the helm's rim 2.0–3.2 cm into the right
+//   forearm or hand as it is taken (5% taller, mirrored), 8.7–8.8 cm into the thorax taken turned half round (its grips then by the
+//   body), 6.2 cm into the head put on 20% quicker; further left, its straight steps 5.7 % unequal (max 5 %);
 // - the stroll 15% faster and on a 20% tighter arc: no steady strides on the bend to judge (0 and 1 of 3), and 15% faster the arm
 //   lags 0.10 of the stride (max 0.08);
 // - pickup-shelf with the box 5 cm higher: it stands with its heels 0.084 of its height apart (min 0.1);
@@ -59,12 +59,13 @@ const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stan
 const REACH = ['', ', the targets 10 cm to the left', ', the targets 10 cm nearer', ', the targets 10 cm to the right', ', the targets 10 cm higher',
   ', the targets 10 cm lower', ', turned 0.3 rad right', ', turned 0.3 rad left', ', the hand 20% slower', ', the hand 20% faster'].map((variation) => `reach${variation}`);
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
-// the trunk pitching 26.6 °/s (max 26.1, seed 2); with the box 5 cm lower, the heels 0.076 of its height apart at rest (seed 3).
-const OPEN: Open[] = ['shooter', ...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad')),
-  ["knight-arming, the shield's wall turned −0.4 rad", [0, 1, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
+// the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seed 1 and the shield's wall
+// turned −0.4 rad at seed 0, which pass.
+const OPEN: Open[] = [...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
+  ["knight-arming, the shield's wall turned −0.4 rad", [1, 2, 3]], ['knight-arming, the knight 5% taller', [0, 2, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
   'pickup-shelf, the box 5 cm higher', 'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],
-  ['stroll round a sharp 0.6 m turn', [2]], ['pickup-shelf, the box 5 cm lower', [3]]];
+  ['stroll round a sharp 0.6 m turn', [2]]];
 // (and the known task-accuracy failures, `known()`, below)
 const KNOWN = known();
 const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
