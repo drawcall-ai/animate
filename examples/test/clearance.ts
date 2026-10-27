@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { jointOf } from '../src/joints';
+import { jointOf } from './actor';
 import type { Frame } from './frame';
 
 /**
@@ -41,9 +41,7 @@ export class Clearance {
     if (solids.length === 0) return;
     this.frames++;
     const H = h.proportions.height;
-    const head = h.model.scene.getObjectByName('head');
-    if (!head) throw new Error('no head');
-    const skull = SKULL.centre.clone().multiplyScalar(H).applyQuaternion(head.getWorldQuaternion(new Quaternion())).add(head.getWorldPosition(new Vector3()));
+    const skull = h.point('head', SKULL.centre.clone().multiplyScalar(H));
     const hand = (s: 'left' | 'right') => {
       const wrist = jointOf(h, `${s}Hand`);
       return { name: `${s}Hand`, a: wrist, b: wrist.clone().sub(jointOf(h, `${s}LowerArm`)).setLength(HAND.length * H).add(wrist), r: HAND.radius * H };
@@ -51,7 +49,7 @@ export class Clearance {
     const parts = [...LIMBS.map(([name, from, to, r]) => ({ name, a: jointOf(h, from), b: jointOf(h, to), r: r * H })), hand('left'), hand('right'), { name: 'head', a: skull, b: skull, r: SKULL.radius * H }];
     for (const s of solids) {
       for (const p of parts) {
-        if (s.touches.includes(p.name) || (['left', 'right'] as const).some((side) => (p.name === `${side}Hand` || p.name === `${side}LowerArm`) && s.item && h.holding[side]?.item === s.item)) continue;
+        if (s.touches.includes(p.name) || (['left', 'right'] as const).some((side) => (p.name === `${side}Hand` || p.name === `${side}LowerArm`) && s.thing && h.holding[side]?.thing === s.thing)) continue;
         const depth = s.radius + p.r - segmentDistance(s.a, s.b, p.a, p.b);
         if (depth <= this.depth) continue;
         [this.depth, this.at, this.what] = [depth, t, `${s.name} into ${p.name}`];
@@ -98,9 +96,7 @@ const _q = new Vector3();
  */
 export function aroundTheTrunk(h: Frame['h'], side: 'left' | 'right', target: Vector3): number {
   const H = h.proportions.height;
-  const hips = h.model.scene.getObjectByName('hips');
-  if (!hips) throw new Error('no hips');
-  const front = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0).normalize();
+  const front = new Vector3(0, 0, 1).applyQuaternion(h.turn('hips')).setY(0).normalize();
   const shoulder = jointOf(h, `${side}UpperArm`), straight = shoulder.distanceTo(target);
   const forearm = LIMBS.find(([n]) => n === `${side}LowerArm`)?.[3] ?? 0;
   let most = 0;

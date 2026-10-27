@@ -1,26 +1,27 @@
-import type { Humanoid, Side } from '@drawcall/animate';
 import type { Solid } from '../src/scenario';
 import type { Simulation } from '../src/simulation';
+import { Actor, type Side } from './actor';
+import { askedOf } from './asking';
 
-/** a body as the metrics read it: its posed model, and what `balance` (its heading and ground velocity: `gait.facing`, `gait.velocity`), the hands (what they hold) and the weight of what it holds and wears report of it */
-export type Actor = Pick<Humanoid, 'model' | 'proportions' | 'feet' | 'locomotion' | 'holding' | 'borne' | 'worn'>;
-
-/** one actor after one step: what the script asked of it then (the first actor's) */
+/** one person after one frame: what the story asked of it then, and what must keep out of the first person's body */
 export interface Frame {
   t: number;
   h: Actor;
+  /** each goal asked by name ('gaze', 'head', 'leftWrist', 'rightWrist'), where it is (world) */
   asked: ReadonlyMap<string, unknown>;
-  /** what must keep out of the first actor's body (the items it handles), as they are then */
+  /** what must keep out of the first person's body (the things it handles), as they are then */
   solids: readonly Solid[];
 }
 
-/** every actor's frame after each fixed step, to the scenario's end */
+/** every person's frame after each frame of the run, to the scenario's end */
 export function* frames(sim: Simulation): Generator<Frame[]> {
+  const actors = sim.people.map((person) => new Actor(person));
   while (sim.t < sim.scenario.duration) {
     sim.step();
-    const asked = sim.stage.report.at(sim.t);
+    // (the scene's world matrices as a render would leave them: things and grips are read off them)
+    sim.stage.scene.updateMatrixWorld(true);
     const solids = sim.stage.solids?.() ?? [];
-    yield sim.actors.map((h) => ({ t: sim.t, h, asked, solids }));
+    yield actors.map((h) => ({ t: sim.t, h, asked: askedOf(h.body, h.insides.frame.time), solids }));
   }
 }
 
@@ -38,10 +39,10 @@ export class Peak {
   }
 }
 
-/** a hand is on something: it holds an item, or the script asked it somewhere (or tracks it) */
+/** a hand is on something: it holds a thing, a verb of the story has it, or the story asks it somewhere (or tracks it) */
 export const tasked = (frame: Frame, side?: Side): boolean => {
   const { h, asked } = frame;
   return side
-    ? !!h.holding[side] || asked.has(`${side}Hand`) || asked.has(`${side}Wrist`)
+    ? !!h.insides.holding[side] || !!h.body.owners.hands[side] || asked.has(`${side}Wrist`)
     : tasked(frame, 'left') || tasked(frame, 'right');
 };

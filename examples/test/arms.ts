@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { jointOf } from '../src/joints';
+import { jointOf } from './actor';
 import { FIXED_DT } from '../src/scenario';
 import { comOf } from './com';
 import { tasked, type Frame } from './frame';

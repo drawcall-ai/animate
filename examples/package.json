@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@drawcall/animate": "workspace:*",
+    "@drawcall/rig": "^0.3.0",
     "@pmndrs/timeline": "^0.4.0",
-    "@pmndrs/viverse": "^0.2.29",
     "three": "^0.180.0"
   },
   "devDependencies": {
