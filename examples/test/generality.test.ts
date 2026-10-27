@@ -257,10 +257,10 @@ it('a hand a body does not have fails to compile', () => {
   const asking = () => grab(body, toy, { rigth: 'ball' });
   expect(asking).toBeTypeOf('function');
 });
-it('a horse has no hands to take things with: grab fails to compile, and throws naming the hand', () => {
+it('a horse has a jaw but no human hands: grab rejects an absent hand', () => {
   const mare = new Body(horse(HORSE)), toy = ballIn(roomWith(mare), around(0, 1.5, 0.04));
-  // @ts-expect-error: a horse has no hands
-  expect(run(mare, () => grab(mare, toy, { jaw: 'ball' }), 1).error).toMatch('no hand "jaw"');
+  // @ts-expect-error: a horse has a jaw, not a right hand
+  expect(run(mare, () => grab(mare, toy, { right: 'ball' }), 1).error).toMatch('no hand "right"');
 });
 
 // (a creature carries as far as its hand can)
@@ -297,24 +297,27 @@ it('a dog asked to take a ball 1.5 m up, beyond its jaw, logs it once and stands
   expect(body.position.distanceTo(start)).toBeLessThan(0.05);
 });
 
-// (a story that can never finish says so: a walk or a carry no nearer its goal for a while logs it once and ends false)
-for (const [what, story] of [
-  ['a dog asked to put a ball down under its own chest', (body: Body) => function* () {
-    const toy = ballIn(roomWith(body), around(0, 1.5, 0.04));
+it('a dog puts a ball down under its chest without an unnecessary approach', () => {
+  const body = creature(dog(DOG)), toy = ballIn(roomWith(body), around(0, 1.5, 0.04));
+  let outcome: boolean | undefined;
+  expect(run(body, function* () {
     yield* grab(body, toy, { jaw: 'ball' });
-    return yield* carry(body, toy, () => body.position.setY(0.04));
-  }],
-  ['a dog asked to walk up to a goal that keeps ahead of it', (body: Body) => () => walkTo(body, () => body.position.add(new Vector3(0, 0, 1)))],
-] as const) {
-  it(`${what} logs that it stalled`, () => {
-    const body = creature(dog(DOG));
-    let outcome: unknown;
-    const result = run(body, function* () { outcome = yield* story(body)(); }, 30);
-    expect(outcome).toBe(false);
-    expect(result.log.length).toBe(1);
-    expect(result.log[0]).toMatch(/^stalled walk/);
-  });
-}
+    outcome = yield* carry(body, toy, () => body.position.setY(0.04));
+  }, 30)).toEqual(ok);
+  expect(outcome).toBe(true);
+});
+
+// (a walk no nearer its goal for a while logs it once and ends false)
+it('a dog asked to walk up to a goal that keeps ahead of it logs that it stalled', () => {
+  const body = creature(dog(DOG));
+  let outcome: boolean | undefined;
+  const result = run(body, function* () {
+    outcome = yield* walkTo(body, () => body.position.add(new Vector3(0, 0, 1)));
+  }, 30);
+  expect(outcome).toBe(false);
+  expect(result.log.length).toBe(1);
+  expect(result.log[0]).toMatch(/^stalled walk/);
+});
 
 // (a walk asked for what can be no walk throws, for any body: misuse, not lateness — a facing at once, a goal that is no point as it is read)
 for (const [name, make] of [['dog', () => creature(dog(DOG))], ['person', person]] as const) {

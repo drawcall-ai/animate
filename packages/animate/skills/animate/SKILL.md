@@ -62,7 +62,7 @@ if (giver.holds(box) || receiver.holds(box) || box.parent !== shelf) throw new E
 if (giver.log.length || receiver.log.length) throw new Error(JSON.stringify([...giver.log, ...receiver.log]));
 ```
 
-Race endless aimers such as `lookAt` or a sustained carry against the sequence that ends them. To anticipate the next task, start its preparation beside the current task with `parallel` and `arriving`; strict walk-then-look-then-reach sequences read as mechanical. Grab already overlaps its own walking, looking and reaching.
+Use `parallel('all', …)` when every branch must finish, and `'race'` to cancel the rest when one finishes. Race endless aimers such as `lookAt` or a sustained carry against the sequence that ends them. To anticipate the next task, start its preparation beside the current task with `parallel` and `arriving`; strict walk-then-look-then-reach sequences read as mechanical. Grab already overlaps its own walking, looking and reaching; low reaches and grabs recruit crouching automatically as needed.
 
 Each body part does one thing at a time. An asked verb beats a borrowed part; a newer asked verb overrides an older one until it ends. Thus a look beside a grab directs the eyes without interrupting the hands. Inspect `body.owners` when that composition surprises you.
 
@@ -78,10 +78,10 @@ To lead a horse, take the rope, then walk both bodies in parallel with the horse
 
 ## Players and custom species
 
-Use `track` for headset and controller targets, or a body's `drive` for a player-controlled root with procedural legs. Scripted hands and eyes can still act on that body. The built-in creatures have no sitting action; a stopped dog stands.
+Use `track` for headset and controller targets, or a body's `drive` for a player-controlled root with procedural legs. Scripted hands and eyes can still act on that body. The built-in creatures have no sitting or lying action; a stopped dog stands.
 
-For a custom creature, combine a skeleton with `species`, roles and tuning. Assign chains to the jobs they perform, then choose gait and mass distribution for that anatomy. The types at `@drawcall/animate/species` describe the inputs; its gait helpers compose footfall timing and carriage, and `swing` can supply tail life. A hand is a chain tip: use `reach` for mouth contact, not `lookAt`, which directs gaze. Creature hands operate one at a time. Leave spare leg reach with the sole flat after gait lowering; an extended rest chain may have no room to move.
+For a custom creature, combine a skeleton with `species`, roles and tuning. Assign chains to the jobs they perform, then choose gait and mass distribution for that anatomy. The types at `@drawcall/animate/species` describe the inputs; its gait helpers compose footfall timing and carriage, and `swing` can supply tail life. A hand is a chain tip: the horse and dog expose `jaw`; use `reach` for mouth contact, not `lookAt`, which directs gaze. Creature hands operate one at a time. Leave spare leg reach with the sole flat after gait lowering; an extended rest chain may have no room to move.
 
 ## Check the story
 
-Use dev-enabled bodies and inspect their logs and notes alongside verb outcomes. A late position-only reach can keep trying, so headless runs need a bounded duration and an explicit completion check, as above. Put scene-specific observations in `watch(body, …)` beside the story, raced against its completion. Check the final pose and actual object ownership rather than treating elapsed time as success.
+Use dev-enabled bodies and inspect their logs and notes alongside verb outcomes. An unreachable reach ends false; headless runs still need a bounded duration and an explicit completion check, as above. Put scene-specific observations in `watch(body, …)` beside the story, raced against its completion. Check the final pose and actual object ownership rather than treating elapsed time as success.

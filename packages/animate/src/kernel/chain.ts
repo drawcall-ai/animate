@@ -33,7 +33,7 @@ const LONGEST = 16;
  * and turns to its rotation; every bone stays within its limit.
  *
  * A two-segment chain (a limb) is solved in closed form: its middle joint bends as a hinge about the axis its limit allows the most
- * swing about (its present bend axis without a limit), the first bone turns the limb onto the goal and toward the pole, then the
+ * swing about (perpendicular to its segment plane without a limit), the first bone turns the limb onto the goal and toward the pole, then the
  * middle joint aims again from where the first bone's limit left it; the tip's turn about the middle bone is shared between the two.
  * The limb swivels about the line to the goal from the pole's side only as far as the limits need (with a tip rotation, the middle
  * joint's and the tip's too), and far round only for as much of their excess as it is worth (`SWIVEL`). As the middle joint bends as a
@@ -79,7 +79,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const { skeleton, bones, local, start } = c;
   const o1 = skeleton.bones[bones[1]].offset;
   const o2 = skeleton.bones[bones[2]].offset;
-  const hinge = hingeOf(skeleton.limits[bones[1]], local[1], o1);
+  const hinge = hingeOf(skeleton.limits[bones[1]], local[1], o1, o2);
   const { axis: h, neutral } = hinge;
   const v = _v.copy(o2).applyQuaternion(neutral);
   // |o1 + R(h, θ) v| = d: with the parts across h, o1⊥ · R(θ) v⊥ = |o1⊥| |v⊥| cos(φ0 + θ)
@@ -212,12 +212,13 @@ interface Hinge {
 }
 
 /** the hinge of a middle joint turned `q` now, `offset` from its parent: about the axis its limit allows the most swing about, or
- * without a limit about the axis it is bent about now */
-function hingeOf(limit: Limit | undefined, q: Quaternion, offset: Vector3): Hinge {
+ * without a limit perpendicular to its current segment plane */
+function hingeOf(limit: Limit | undefined, q: Quaternion, offset: Vector3, end: Vector3): Hinge {
   if (!limit) {
-    const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
-    const axis = angle > 1e-9 ? _h.set(q.x, q.y, q.z).multiplyScalar(Math.sign(q.w) || 1).normalize() : perpendicular(offset, _h).normalize();
-    return { axis, range: [-Math.PI, Math.PI], neutral: IDENTITY, now: angle > 1e-9 ? angle : 0 };
+    const neutral = _neutral.copy(q), axis = _h.crossVectors(offset, _v.copy(end).applyQuaternion(neutral));
+    // An unrestricted joint bends in the segments' current plane, not an arbitrary plane that can lock their extension.
+    if (axis.lengthSq() < 1e-18) perpendicular(offset, axis);
+    return { axis: axis.normalize(), range: [-Math.PI, Math.PI], neutral, now: 0 };
   }
   const { value } = coordinatesOf(q, limit, _coords);
   const wider = limit.swing[0][1] - limit.swing[0][0] >= limit.swing[1][1] - limit.swing[1][0] ? 0 : 1;
@@ -330,7 +331,7 @@ function perpendicular(v: Vector3, out: Vector3): Vector3 {
   return Math.abs(v.x) < 0.9 * v.length() ? out.set(1, 0, 0).cross(v) : out.set(0, 1, 0).cross(v);
 }
 
-const IDENTITY = new Quaternion();
+const IDENTITY = new Quaternion(), _neutral = new Quaternion();
 const _local = Array.from({ length: LONGEST }, () => new Quaternion());
 const _joints = Array.from({ length: LONGEST }, () => new Vector3());
 const _rotations = Array.from({ length: LONGEST }, () => new Quaternion());

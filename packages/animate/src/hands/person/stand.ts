@@ -83,7 +83,7 @@ export function footing(person: Reacher, to: Stand): Footing {
   const distance = !point && grips.length === 2 && height < proportions.hipHeight ? LOW_STAND / Math.sqrt(loadFactor('mass' in to ? to.mass : 0)) : WITHIN;
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
   const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
-  const ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up);
+  let ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up);
   const middle = grips.reduce((sum, grip) => sum.add(grip.at), new Vector3()).divideScalar(grips.length);
   const nowhere = (check: string, value: number, limit = reach) => {
     f0.dev?.append(f0.time, { check, value, limit, where: `${grips.length} grips` });
@@ -105,12 +105,19 @@ export function footing(person: Reacher, to: Stand): Footing {
       return Math.min(a.y, end.y) > proportions.hipHeight || pointSegmentDistance(there, a, end) >= feetOut + proportions.toeFront + SEGMENT_RADIUS;
     });
   });
-  // Check the actual stand before searching the nearest other facing (π/16).
+  // If a single hand's comfortable stand crowds another body, use its remaining reach before giving up.
   let clearYaw: number | undefined;
-  for (let i = 0; i <= 32 && clearYaw === undefined; i++) {
-    const yaw = face + Math.ceil(i / 2) * (i % 2 ? 1 : -1) * Math.PI / 16;
-    there.copy(at).addScaledVector(forwardOf(yaw), -ahead);
-    if (clear()) clearYaw = yaw;
+  const reserve = stoop(proportions, Math.max(0, standing - height));
+  const extended = Math.sqrt(Math.max(0, reach ** 2 - (height - standing + reserve.drop) ** 2)) + reserve.forward;
+  const distances = grips.length === 1 ? [ahead, Math.max(ahead, extended)] : [ahead];
+  for (const distance of distances) {
+    ahead = distance;
+    for (let i = 0; i <= 32 && clearYaw === undefined; i++) {
+      const yaw = face + Math.ceil(i / 2) * (i % 2 ? 1 : -1) * Math.PI / 16;
+      there.copy(at).addScaledVector(forwardOf(yaw), -ahead);
+      if (clear()) clearYaw = yaw;
+    }
+    if (clearYaw !== undefined) break;
   }
   if (clearYaw === undefined) return nowhere('approach: no stand clear of nearby low segments', 1, 0);
   face = clearYaw;

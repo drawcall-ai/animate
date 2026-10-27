@@ -32,6 +32,19 @@ describe('solveChain', () => {
     }
   });
 
+  it('extends a bent rest chain in its own plane, including after an unconstrained joint has turned', () => {
+    const skeleton = leg();
+    skeleton.bones[2].offset.set(0, .35, .57);
+    skeleton.bones[3].offset.set(0, -.4, .5);
+    const target = new Vector3(.1, -.1, .2);
+    for (const rotation of [turn(1, 0, 0, 0), turn(1, 1, 1, .6), turn(0, 1, 0, .6)]) {
+      const pose = new Pose(skeleton);
+      pose.setLocal(2, rotation);
+      solveChain({ current: pose }, 'leg', { tip: { position: target } });
+      expect(pose.position(3).distanceTo(target)).toBeLessThan(1e-9);
+    }
+  });
+
   it('points a limb straight at a goal out of reach', () => {
     const pose = solve(leg(), { tip: { position: new Vector3(0.1, 1, 2) }, pole: new Vector3(0, 1, 1) });
     expect(pose.position(3).distanceTo(new Vector3(0.1, 1, 0.85))).toBeLessThan(1e-9);

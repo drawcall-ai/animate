@@ -163,14 +163,14 @@ function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip
   return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned);
 }
 
-/** A late reach reports each unmet constraint, never a zero distance for a blocked turn. Returns whether the turn is unmet. */
+/** A late reach reports each unmet constraint, never a zero distance for a blocked turn. Returns whether position or turn is unmet. */
 export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier): boolean {
   const angle = angleOff(f, tip, target, on), position = on ? on.toWorld(target, _goal, f.time).position : target.position;
   const distance = f.prev.position(tip).distanceTo(position);
   for (const [name, value, limit] of [['distance (m)', distance, REACHED.distance], ['angle (rad)', angle, REACHED.angle]] as const) {
     if (value > limit) f.dev?.append(f.time, { check: `late reach: ${name} (${REACHING} s overdue)`, value, limit, where });
   }
-  return angle > REACHED.angle;
+  return distance > REACHED.distance || angle > REACHED.angle;
 }
 
 /** a world rotation in the frame a target is given in: on a carrier, its (as placed `current`) */

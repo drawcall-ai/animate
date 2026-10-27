@@ -12,6 +12,7 @@ const HORSE = [
   { name: 'pelvis', parent: 'back', position: [0, 1.4, -.65] },
   { name: 'neck', parent: 'trunk', position: [0, 1.55, .65] },
   { name: 'head', parent: 'neck', position: [0, 1.9, 1.1] },
+  { name: 'jaw', parent: 'head', position: [0, 1.53, 1.4] },
   { name: 'tail', parent: 'pelvis', position: [0, 1.4, -.85] },
   { name: 'leftEar', parent: 'head', position: [.1, 2.1, 1.1] },
   { name: 'rightEar', parent: 'head', position: [-.1, 2.1, 1.1] },

@@ -26,7 +26,7 @@ const HANDING = 0.6;
 const DIP = { accel: 4, speed: 1, turnAccel: 8, turnSpeed: 2 };
 /** Tuned: standing to take something, the share of the hand's chain it reaches out to, and the share of that reach along the floor the grip is ahead of the chain's base */
 const OUT = 0.9, AHEAD = 0.6;
-/** Tuned (m/s): how fast a creature lets itself further down while it falls short of what it reaches for low down */
+/** Correction speed (m/s) once the planned dip has arrived; never lower the body to chase a hand still on its way. */
 const PRESSING = 0.1;
 
 /** the chain hand `hand` reaches with */
@@ -64,7 +64,7 @@ function handingBack(self: Handed, request: Request, hands: readonly string[], u
   }, (f) => !Number.isNaN(began) && f.time - began >= HANDING);
 }
 
-/** Split low reach between bow and leg lowering; integrate remaining tip error from standing geometry. */
+/** Split low reach between bow and leg lowering from standing geometry, without chasing the tip while it is still approaching. */
 function stooping(self: Handed, bones: readonly number[]) {
   const legs = self.species.legs?.chains ?? [], tip = bones[bones.length - 1], length = chainLength(self, bones);
   const lowest = legs.length ? STOOPING.lowest * Math.min(...legs.map((leg) => chainLength(self, leg.joints.map(({ bone }) => bone)))) : 0;
@@ -77,9 +77,9 @@ function stooping(self: Handed, bones: readonly number[]) {
   let pressing = 0;
   return {
     most: (f: { prev: ReadonlyPose }) => bowed(f) + lowest,
-    to(f: Frame, goal: Readonly<Vector3>) {
+    to(f: Frame, goal: Readonly<Vector3>, arrived = true) {
       const short = standing - goal.y - OUT * length, most = bowed(f) + lowest;
-      pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(tip).y - goal.y - REACHED.distance) * PRESSING * f.dt));
+      if (arrived) pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(tip).y - goal.y - REACHED.distance) * PRESSING * f.dt));
       const drop = short > 0 ? Math.min(most, short + pressing) : 0, bow = drop * bowed(f) / most;
       if (drop > 0) self.poise.add({ bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });
     },
@@ -100,15 +100,16 @@ const dipping = (distance: number, pace: Required<Pace>) => distance / pace.spee
 /** Borrow walking to a stand within chain reach; fail unreachable heights and stalled walks. */
 function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Required<Pace>) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
+  if (!self.species.legs || self.drive) return { chain, bones, stoop };
   const at = point(self.frame), lowered = stoop.most(self.frame), base = self.pose.position(bones[0]), out = OUT * chainLength(self, bones);
   // (let down for a point below the base, never for one above it: it stoops only to reach down)
-  const below = base.y - at.y, drop = Math.max(-out, below > 0 ? below - lowered : below);
+  const below = base.y - at.y, drop = below > 0 ? Math.max(0, below - lowered) : below;
   if (drop > out || below < -out) {
     self.frame.dev?.append(self.frame.time, { check: 'out of reach: from the hand\'s base, up or down (m)', value: Math.abs(below), limit: out + lowered, where: `${where} ${chain}` });
     request.fail();
     return null;
   }
-  if (base.distanceTo(at) <= out) return { chain, bones, stoop };
+  if (Math.hypot(base.x - at.x, drop, base.z - at.z) <= out) return { chain, bones, stoop };
   const off = _v.subVectors(base, self.pose.position(0)).dot(forwardOf(self.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
   const after = dipping(out, pace), walk = new Walk(self, { to: point, within: off });
   const legs = during(request, 'go', 'borrowed', (f) => {
@@ -130,7 +131,7 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
   let late = false;
   return during(request, `hand.${hand}`, 'asked', (f) => {
     const target = goal(f);
-    stoop.to(f, on ? on.toWorld(target, _world, f.time).position : target.position);
+    stoop.to(f, on ? on.toWorld(target, _world, f.time).position : target.position, f.time >= ends);
     tip.to(f, target, { ...DIP, ...pace, on });
   }, (f) => {
     const target = goal(f), at = on ? on.toWorld(target, _world, f.time).position : target.position;
@@ -201,7 +202,11 @@ export function creatureHands(self: Handed): Handling {
     reach: function* (request, aims, pace) {
       const motion = paceOf(pace, DIP);
       const { hand, target } = only('reach', aims);
-      yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion);
+      try {
+        yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion);
+      } finally {
+        self.own('reach', '', (returning) => () => handingBack(self, returning, [hand], 'borrowed'));
+      }
     },
     backOut(hands) {
       self.own('release', '', (request) => () => handingBack(self, request, hands, 'borrowed'));

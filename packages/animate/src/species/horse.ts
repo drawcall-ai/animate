@@ -21,10 +21,10 @@ export type HorseBone = (typeof HORSE_BONES)[number];
 
 /**
  * A horse of a skeleton (as rigged with @drawcall/rig, `as const`), its bones named as `HorseBone`: its walk (or `'trot'`), its posture
- * over its legs as it heeds what it looks at, a tether and a startle. Its numbers are a warmblood's of 1.4 m to the trunk, made
- * dynamically similar to the skeleton's size.
+ * over its legs as it heeds what it looks at, a tether and a startle. Its mouth reaches and takes things as its one hand, `jaw`.
+ * Its numbers are a warmblood's of 1.4 m to the trunk, made dynamically similar to the skeleton's size.
  */
-export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Having<S, HorseBone>, gait: 'walk' | 'trot' = 'walk'): Species<BoneNames<S>, never> {
+export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Having<S, HorseBone>, gait: 'walk' | 'trot' = 'walk'): Species<BoneNames<S>, 'jaw'> {
   needing(skeleton, HORSE_BONES, 'horse');
   const at = (name: string) => {
     const bone = skeleton.find((b) => b.name === name);
@@ -70,8 +70,9 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
     return [name, { speed, accel: speed / 0.03 }];
   }));
   const reference = gait === 'trot' ? HORSE_TROT : HORSE_WALK;
-  const made = build<never>(skeleton, {
+  const made = build(skeleton, {
     root: 'trunk',
+    hands: { jaw: ['neck', 'head', 'jaw'] },
     legs,
     gaze: { eyes: { bone: 'head', at: EYES.clone().multiplyScalar(size).toArray() }, range: EYE_RANGE },
     carriage: HORSE_CARRIAGE,
@@ -91,7 +92,7 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
 }
 
 /** every bone a horse's skeleton names */
-const HORSE_BONES = ['trunk', 'back', 'pelvis', 'neck', 'head', 'tail', 'leftEar', 'rightEar',
+const HORSE_BONES = ['trunk', 'back', 'pelvis', 'neck', 'head', 'jaw', 'tail', 'leftEar', 'rightEar',
   ...(['left', 'right'] as const).flatMap((side) => (['Scapula', 'Humerus', 'Forearm', 'ForeCannon', 'ForePastern', 'ForeHoof', 'Femur', 'Gaskin', 'HindCannon', 'HindPastern', 'HindHoof'] as const)
     .map((part) => `${side}${part}` as const))] as const;
 
@@ -151,8 +152,10 @@ const RANGES: Record<string, Range> = {
   tail: range([-60, 60], [-60, 60], [-70, 70]),
   back: range([-8, 8], [-15, 15], [-10, 10]),
   pelvis: range([-8, 8], [-15, 15], [-10, 10]),
-  neck: range([-20, 20], [-40, 60], [-35, 35]),
-  head: range([-20, 20], [-40, 45], [-30, 30]),
+  // Aggregate cervical/poll ranges, tuned for this two-joint rig's grazing posture, not a single vertebra's ROM.
+  // Cervical flexion is distributed over the neck (read: Dunbar et al. 2008, PMC2768006; Clayton et al. 2010, doi:10.1111/j.2042-3306.2010.00196.x).
+  neck: range([-20, 20], [-40, 120], [-35, 35]),
+  head: range([-20, 20], [-60, 45], [-30, 30]),
   Scapula: range([-6, 6], [-19, 19], [-6, 6]),
   Humerus: range([-12, 12], [-45, 45], [-10, 10]),
   Forearm: range([-3, 3], [-90, 25], [-3, 3]),

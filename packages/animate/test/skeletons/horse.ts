@@ -6,6 +6,7 @@ export const HORSE = [
   { name: 'pelvis', parent: 'back', position: [0, 1.39, -0.57] },
   { name: 'neck', parent: 'trunk', position: [0, 1.34, 0.72] },
   { name: 'head', parent: 'neck', position: [0, 1.75, 1.2] },
+  { name: 'jaw', parent: 'head', position: [0, 1.38, 1.5] },
   { name: 'leftScapula', parent: 'trunk', position: [0.12, 1.44, 0.657] },
   { name: 'leftHumerus', parent: 'leftScapula', position: [0.17, 1.1, 0.857] },
   { name: 'leftForearm', parent: 'leftHumerus', position: [0.17, 0.889, 0.63] },

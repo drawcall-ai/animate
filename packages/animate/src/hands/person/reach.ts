@@ -172,6 +172,8 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   const lasts = Math.max(...going.map((hand) => hand.lasts));
   let setOff = NaN, late = false;
   const eta = (f: Frame) => {
+    // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach.
+    if (!person.locomotion.settled) setOff += f.dt;
     request.eta = Math.max(0, setOff + lasts - f.time);
     if (late || f.time <= setOff + lasts + REACHING) return;
     late = true;
