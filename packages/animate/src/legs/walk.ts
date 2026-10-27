@@ -52,9 +52,8 @@ export class Walk {
   private leg = 0;
   /** within reach, the way to the point is fixed once close: from where the body then stands it would drift as it settles off it */
   private fixed: number | null = null;
-  private best = Infinity;
-  private since = 0;
-  private nowhere = false;
+  /** the stall watch: the least left of the walk so far and since when; whether a goal that is no point was said */
+  private best = Infinity; private since = 0; private nowhere = false;
 
   constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;

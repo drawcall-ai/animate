@@ -24,9 +24,7 @@ const STEADY = 0.3;
 export class Quiet {
   readonly drift = new Vector3();
   breath = 0;
-  private time = 0;
-  private amount = 0;
-  private quietTime = 0;
+  private time = 0; private amount = 0; private quietTime = 0;
   private readonly rhythms: Rhythms<'weight'>;
 
   constructor(seed: number) {

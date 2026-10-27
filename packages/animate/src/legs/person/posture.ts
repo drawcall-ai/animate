@@ -60,40 +60,23 @@ export const walking = (walk: number, speed: number, dt: number) => walk + (smoo
 export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
 
 /** The trunk's posture for a sub-step: the chest's world rotation, the pelvis's and the thorax's turn with the stride. */
-export interface Trunk {
-  chest: Quaternion;
-  pelvisYaw: number;
-  thoraxYaw: number;
-}
+export interface Trunk { chest: Quaternion; pelvisYaw: number; thoraxYaw: number }
 
 /** The body upright over its legs: the root and the posture state the legs and `Posture` share. */
 export interface Upright {
-  p: Proportions;
-  root: Vector3;
+  p: Proportions; root: Vector3;
   /** the root's ground velocity (m/s) */
   velocity: Vector3;
-  offset: Vector3;
-  yaw: number;
-  walk: number;
-  run: number;
-  moving: boolean;
-  stance: Stance;
+  offset: Vector3; yaw: number; walk: number; run: number; moving: boolean; stance: Stance;
   /** where the feet stood or, swinging, were to land as the sub-step began */
   feet: readonly { readonly anchor: Vector3 }[];
-  pelvis: Vector3;
-  pelvisRotation: Quaternion;
+  pelvis: Vector3; pelvisRotation: Quaternion;
   /** neither arm free to swing: both hands hold something */
   held: boolean;
 }
 
 /** The stride as the feet have it: its phase (rad), the swing's bob and nod (0 … 1), a runner's compression, a foot's share of it standing. */
-interface Cycle {
-  phase: number;
-  bob: number;
-  nod: number;
-  compression: number;
-  stance: number;
-}
+interface Cycle { phase: number; bob: number; nod: number; compression: number; stance: number }
 
 /**
  * The walking body over its feet, posed each sub-step: the pelvis carried over the root (bobbing,
@@ -116,14 +99,7 @@ export class Posture {
   }
 
   /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(
-    f: Pick<Frame, 'prev' | 'dt'>,
-    upright: Upright,
-    asks: { lower: number; bow: number; twist: number },
-    out: Trunk,
-    life: Pick<Quiet, 'drift' | 'breath' | 'onto'>,
-    cycle: Cycle,
-  ) {
+  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
     const { lower, bow, twist } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;
@@ -189,10 +165,7 @@ export class Posture {
 const hingeOf = (proportions: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, squatOf(proportions), lower));
 
 /** Posture needed to bring a shoulder within hand reach. */
-export function handLowering(
-  proportions: Proportions,
-  request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number },
-): { lower: number; bow: number } {
+export function handLowering(proportions: Proportions, request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number }): { lower: number; bow: number } {
   const { ahead, lateral, height, reach, bowLimit } = request;
   const lever = bowLever(proportions, proportions.shoulderHeight);
   const plane = Math.sqrt(Math.max(0, reach ** 2 - lateral ** 2));

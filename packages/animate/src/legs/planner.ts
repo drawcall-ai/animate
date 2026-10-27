@@ -10,12 +10,8 @@ import type { Steering } from './step/state';
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
 interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number }
 
-interface RootState {
-  position: Vector3;
-  quaternion: Quaternion;
-  velocity: Vector3;
-  angular: number;
-}
+/** a root as planned: its point on the floor, its turn, its velocity (m/s) and turn rate (rad/s) */
+interface RootState { position: Vector3; quaternion: Quaternion; velocity: Vector3; angular: number }
 
 /**
  * Pursues a goal under `Motion` limits (`rootPlan`: braking by v² = 2ad, turning no faster than a/v, the arrival turn begun
@@ -73,18 +69,8 @@ export class Planner {
  * turning to an asked facing only once near and slow.
  */
 function rootPlan(
-  f: Frame,
-  goal: Readonly<Vector3>,
-  velocity: Vector3,
-  motion: Motion,
-  gait: Gait,
-  radius: number,
-  previous: RootState,
-  acceleration: number,
-  facing: Quaternion | undefined,
-  share: number,
-  goalTurn: number,
-  stanceYaw: number,
+  f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, previous: RootState, acceleration: number,
+  facing: Quaternion | undefined, share: number, goalTurn: number, stanceYaw: number,
 ): (time: number) => RootState {
   const accel = motion.accel;
   const speed = share === 0 ? 0 : (motion.speed ?? Infinity) * share;

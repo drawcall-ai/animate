@@ -80,11 +80,7 @@ export function driven(person: PersonLegged, seed?: number): Step {
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
  * less as it holds still (`steady`).
  */
-export function drivenBy(
-  person: PersonLegged,
-  rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering,
-  options: { stance?: Partial<Stance>; seed?: number } = {},
-): Step {
+export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
   const proportions = person.proportions, s = proportions.scale;
   const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
     .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(proportions, side)))]);
@@ -169,11 +165,7 @@ export function drivenBy(
       ? asked.twist[1] + clamp(poise.twist - asked.twist[1], -twisting, twisting)
       : follow(asked.twist[0], asked.twist[1], poise.twist, BOW, dt);
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
-    const requested = {
-      lower: followed(asked.lower, poise.lower, LOWER, dt),
-      bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt),
-      twist,
-    };
+    const requested = { lower: followed(asked.lower, poise.lower, LOWER, dt), bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt), twist };
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;
     // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts; running, the stance leg compresses toward
     // mid-stance, as the stepper lets the pelvis down)
@@ -183,13 +175,7 @@ export function drivenBy(
     // (crouched over a root at its hips — sitting back behind the feet, the mass not held over the root — the trunk bows over them by
     // `CROUCH_LEAN`, as the legs take the crouch)
     const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch;
-    const cycle = {
-      phase,
-      bob: swing ? Math.sin(Math.PI * swing.u) : 0,
-      nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1,
-      compression,
-      stance: stepper.Ts / stepper.cycle,
-    };
+    const cycle = { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle };
     posture.carry(f, upright, { ...requested, bow: requested.bow + stoop }, trunk, life, cycle);
     const offset = hips.follow(offsets[0], offsets[1], upright.pelvis.clone().sub(upright.root).setY(0), PELVIS, dt, new Vector3());
     [offsets[0], offsets[1]] = [offsets[1], offset];

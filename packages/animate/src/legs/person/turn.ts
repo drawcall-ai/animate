@@ -27,17 +27,12 @@ const ROLL = { walk: 0.55, run: 0.14 };
 /** neither arm free to swing: both hands hold something */
 export const armsHeld = (person: Pick<PersonLegged, 'holding'>) => !!person.holding.left && !!person.holding.right;
 
-export interface Turn {
-  /** the pelvis's and the thorax's turn off the facing (rad, + to the left), the thorax's roll (rad) */
-  pelvis: number;
-  thorax: number;
-  roll: number;
-}
+/** the pelvis's and the thorax's turn off the facing (rad, + to the left), the thorax's roll (rad) */
+export interface Turn { pelvis: number; thorax: number; roll: number }
 
 /**
  * The trunk's turn with the stride as the left foot leads the right by `ahead` (m along the facing, × `legs` — its legs over the default
- * body's;
- * − behind), `walk` (0 standing … 1 walking), `run` (0 walking … 1 running); `held`: neither arm free to swing.
+ * body's; − behind), `walk` (0 standing … 1 walking), `run` (0 walking … 1 running); `held`: neither arm free to swing.
  * Walking, the pelvis turns forward on the side of the leading foot, furthest as it lands, the thorax against it — its left forward as the
  * right foot leads, with the arm swinging forward on that side (read, Pontzer 2009: 149° apart at 1.5 m/s). Running, the pelvis turns the
  * other way (snippet, MacWilliams 2014: "pelvic rotation patterns in running were reversed compared with walking"): forward on the side
