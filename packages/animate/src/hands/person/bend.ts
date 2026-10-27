@@ -9,17 +9,15 @@ import { NECK_PITCH } from '../../species/humanoid/limits';
 import { heldMass } from '../../things/hold';
 import { loadFactor } from '../../kernel/load';
 
-
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 export const ARM_REACH = 0.95;
 /** how far the clavicle draws the shoulder joint toward a hand reaching out past 85% of the arm, at most (× height) */
 export const PROTRACTION = 0.035;
 
-/** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches
- * within lumbar rotation and leaves the neck to finish an over-shoulder look. Requests
- * combine by magnitude, so task order cannot cancel a stronger turn. A hand the trunk holds
- * `held` m off its goal (reaching across it) turns it as far as brings the shoulder that far
- * forward, up to the thoracolumbar spine's active rotation (45°, AAOS; recalled). */
+/** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches within lumbar rotation and leaves the neck
+ * to finish an over-shoulder look (requests combine by magnitude, so task order cannot cancel a stronger turn). A hand the trunk holds
+ * `held` m off its goal (reaching across it) turns it as far as brings the shoulder that far forward, up to the thoracolumbar spine's
+ * active rotation (45°, AAOS; recalled). */
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9, held: Math.PI / 4 };
 export function twistToward(person: Reacher, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0) {
   const station = pose.com(_station);
@@ -44,16 +42,13 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   if (low) person.poise.add({ bowLimit });
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
   if (low && factor > 1 && person.locomotion.moving) return;
-  // Recalled: ≥10–15° knees under load. Tuned 30° ceiling
-  // on each leg segment (knee flexion is their sum), scaled by the same load law.
+  // Recalled: ≥10–15° knees under load. Tuned 30° ceiling on each leg segment (knee flexion is their sum), scaled by the same load law.
   if (low) person.poise.add({ lower: proportions.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // (walking, the clavicle drawn toward the hand, `PROTRACTION`, takes up a small stride's deficit)
   const allowance = person.locomotion.moving ? PROTRACTION * proportions.height : 0;
-  // (judged from the shoulder as it stands upright, not as low as the reach has already let it down: a reach that lowers the body for
-  // what it falls short of keeps asking while it is short standing, rather than letting go as soon as the lowering brings it in)
-  // A body-attached goal falls with the shoulder, so lowering cannot close a standing-height deficit.
-  // (before the legs' first sub-step, from the shoulder as it is)
+  // (judged from the shoulder standing upright, not as low as the reach has let it down, so a lowering reach keeps asking while it is short
+  // standing — but from the shoulder as it is for a goal on the body, which falls with it, and before the legs' first sub-step)
   const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(proportions.shoulderHeight) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
   // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
@@ -64,25 +59,19 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
     if (toward.lengthSq() > 1e-12) person.poise.add({ lean: toward.setLength(short * share) });
   }
   if (person.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
-  // A bow moves the pelvis back. Every reach is planned from the support station,
-  // so that counter-shift cannot make a shoulder ask for still more bow.
+  // A bow moves the pelvis back: every reach is planned from the support station, so that shift cannot make a shoulder ask for more bow.
   const from = _v.copy(hand).sub(f.prev.com(_station));
   const ahead = from.dot(forwardOf(person.locomotion.facing, _forward));
   const lateral = _v.subVectors(hand, shoulder).dot(_left.set(Math.cos(person.locomotion.facing), 0, -Math.sin(person.locomotion.facing)));
-  // Tuned 2% reserve for the articulated shoulder arc: its single lever slightly
-  // overestimates the reach available when the pelvis tucks in a deep squat.
+  // Tuned 2% reserve for the articulated shoulder arc: its single lever overestimates the reach a deep squat's tucked pelvis leaves.
   const reach = 0.98 * ARM_REACH * proportions.armLength;
   const { lower, bow } = handLowering(proportions, { ahead, lateral, height: hand.y, reach, bowLimit });
   if (share > 0) person.poise.add({ lower: lower * share });
   // The standing lever leaves a residual on hip-high grips (hands.test.ts).
   const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (proportions.shoulderHeight - proportions.hipHeight) : 0;
-  // Once bow is exhausted, close its unmet reach with the knees rather than
-  // requesting the same saturated back angle forever.
-  // (exhausted — below the hips by a quarter thigh, as far as the load lets it bow: a heavier reach that low has its knees take what its
-  // back may not; hip-high, it bows its most first. Hip-high for a load to take (`mass`), its most is what that load lets it: a
-  // short-armed body is not left short, knees straight, because its back may bow no further — its knees take what the arm held out
-  // (`ARM_REACH`) still falls short, less what the bow left to it will bring; not the planning reach's residual, the standing lever's
-  // there, which an arm all but straight closes. A load already held goes where its course takes it: the knees do not chase it.)
+  // (the bow exhausted, the knees close the reach it leaves unmet: below the hips by a quarter thigh, past what the load lets it bow;
+  // hip-high, past its most — or, for a load to take (`mass`), what the arm held out still falls short less what the bow left will bring,
+  // so a short-armed body is not left short. A load already held goes where its course takes it: the knees do not chase it.)
   const deep = hand.y < proportions.hipHeight - proportions.thigh / 4;
   const span = proportions.shoulderHeight - proportions.hipHeight;
   const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
@@ -107,7 +96,4 @@ export function gazeAsks(person: Reacher, pose: ReadonlyPose, point: Readonly<Ve
   const bow = Math.max(0, Math.min(needed, MOST_BOW));
   person.poise.add({ bow });
 }
-const _station = new Vector3(), _upright = new Vector3();
-const _v = new Vector3();
-const _forward = new Vector3();
-const _left = new Vector3();
+const _station = new Vector3(), _upright = new Vector3(), _v = new Vector3(), _forward = new Vector3(), _left = new Vector3();

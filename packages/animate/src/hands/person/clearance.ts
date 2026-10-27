@@ -35,12 +35,11 @@ export function clearBody(person: Reacher, f: Frame, item: Thing, at: Vector3, r
   // Read the last final gaze, carried with the chest, before this step's task gaze.
   const head = f.prev.point(INDEX.head, person.proportions.headCenter, _head).sub(f.prev.position(INDEX.neck))
     .applyQuaternion(_inverse.copy(f.prev.rotation(INDEX.chest)).invert().premultiply(pose.rotation(INDEX.chest))).add(neck);
-  const radius = BODY_RADIUS * person.proportions.height;
+  const radius = BODY_RADIUS * person.proportions.height, padding = radius + LOAD_RESERVE * person.scale;
   let face = 0;
   for (let i = 0; i < 2; i++) {
     const start = i === 0 ? hips : neck, end = i === 0 ? neck : head;
     if (at.y + bottom > Math.max(start.y, end.y) + radius || at.y + top < Math.min(start.y, end.y) - radius) continue;
-    const padding = radius + LOAD_RESERVE * person.scale;
     const side = at.dot(left), a = start.dot(left), b = end.dot(left);
     if (side + near > Math.max(a, b) + padding || side + far < Math.min(a, b) - padding) continue;
     const span = end.y - start.y;
@@ -59,10 +58,5 @@ function extent(half: Vector3, axis: Vector3): number {
   return Math.abs(axis.x) * half.x + Math.abs(axis.y) * half.y + Math.abs(axis.z) * half.z;
 }
 
-const _head = new Vector3();
-const _center = new Vector3();
-const _half = new Vector3();
-const _forward = new Vector3();
-const _axis = new Vector3();
-const _left = new Vector3();
+const _head = new Vector3(), _center = new Vector3(), _half = new Vector3(), _forward = new Vector3(), _axis = new Vector3(), _left = new Vector3();
 const _inverse = new Quaternion();

@@ -45,18 +45,11 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   // hand has come toward its grip, so that the hands lead it and it does not bow before they set off)
   const from = takes.map((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)));
   const share = (f: Frame, k: number) => walk ? 1 : smoothstep(0, 1, 1 - f.prev.position(person.hands[takes[k].side]).distanceTo(gripAt(person, takes[k], f, _grip)) / Math.max(from[k], 1e-6));
-  const hands = () => parallel<Frame>('race', function* () { yield* reachFor(person, request, takes, motion); }, function* () {
-    yield* action<Frame>({ until: () => stood || preparing() });
-    yield* during(request, 'trunk', 'borrowed', (f) => {
-      takes.forEach((take, k) => bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass));
-    });
-  });
   const com = new Vector3(), ahead = new Vector3();
   let noticed = NaN, returning = false;
-  const close = (f: Frame) => flat(f.prev.com(com), middle(f)) < CLOSE * person.scale;
   const gaze = (f: Frame) => {
     if (Number.isNaN(noticed)) noticed = f.time;
-    returning ||= close(f) || near();
+    returning ||= flat(f.prev.com(com), middle(f)) < CLOSE * person.scale || near();
     return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(person, f.prev, ahead);
   };
   const waitingHands = function* () {
@@ -64,7 +57,12 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     // (the hands rising halfway toward what they take, before the body has come up to it)
     yield* parallel<Frame>('race', action<Frame>({ until: () => stood || near() }), () => parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked',
       reaching(person, take.side, (f) => ({ position: f.prev.position(INDEX[`${take.side}UpperArm`]).clone().lerp(gripAt(person, take, f, _grip), 0.5) }), { lead: false })))));
-    yield* hands();
+    yield* parallel<Frame>('race', reachFor(person, request, takes, motion), function* () {
+      yield* action<Frame>({ until: () => stood || preparing() });
+      yield* during(request, 'trunk', 'borrowed', (f) => {
+        takes.forEach((take, k) => bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass));
+      });
+    });
   };
   let held = false;
   yield* parallel<Frame>('all', function* () {

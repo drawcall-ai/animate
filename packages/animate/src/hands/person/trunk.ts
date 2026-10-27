@@ -43,17 +43,15 @@ interface Keeping {
   push: number;
   /** whether a hand across the midline is kept ahead of its shoulder as `BACK` asks */
   back: boolean;
-  /** the joints going only as far from where they were toward that re-solve as clears the arm, and no further in a sub-step than
-   * this share of each one's dev-checked acceleration moves it from rest: a nudge on braked joints (a re-solve from scratch would
-   * reset the forearm's roll and the elbow the brakes had carried — a jerk); none: the re-solve as it is */
+  /** the joints turned from where they were toward that re-solve only as far as clears the arm, no further in a sub-step than this share
+   * of each one's dev-checked acceleration moves it from rest (a re-solve from scratch would reset what the brakes carried: a jerk) */
   nudge?: number;
 }
 
 /** a reach as it is solved: clear by `AIR`, round the front, as far forward as it takes */
 export const SOLVED = (proportions: Proportions): Keeping => ({ depth: -AIR * proportions.height, swivel: SWIVEL.steps, push: PUSH, back: true });
-/** once its joints are braked to that, or a free arm as it swings: only nudged back within half the dev check's depth — a short
- * swivel or push, the joints turned toward it as little as clears the arm and within `NUDGE` — so the brakes' work is not undone in
- * one sub-step (a bigger correction would be a jerk of the joints); the rest of the way, the braked solve goes on clear of it */
+/** once its joints are braked to that, or a free arm as it swings: only nudged back within half the dev check's depth — a short swivel or
+ * push, the joints turned toward it as little as clears the arm and within `NUDGE` — so the brakes' work is not undone in a jerk */
 export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: false, nudge: NUDGE };
 
 /**
@@ -80,21 +78,11 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
       return armDepth(pose, proportions, side, upper, clear) <= clear;
     });
   };
-  // (the least push that fits: stepped out further and further till it does, then halved in on it)
-  let lo = least, hi = least;
-  for (let step = Math.max(AIR * proportions.height, 0.005); !fits(hi); step *= 2) {
-    if (hi > least + keeping.push * proportions.armLength) {
-      bones.forEach((bone, k) => pose.setLocal(bone, _was[k]));
-      return 0;
-    }
-    [lo, hi] = [hi, hi + step];
+  const pushed = leastPush(fits, least, Math.max(AIR * proportions.height, 0.005), keeping.push * proportions.armLength, 8, 1e-3);
+  if (pushed === null) {
+    bones.forEach((bone, k) => pose.setLocal(bone, _was[k]));
+    return 0;
   }
-  for (let k = 0; k < 8 && hi - lo > 1e-3; k++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) hi = mid;
-    else lo = mid;
-  }
-  fits(hi);
   const nudge = keeping.nudge;
   if (nudge !== undefined) {
     // (the joints turned from where they were toward the re-solve, each its share of the way: the least share that clears, halved in
@@ -124,6 +112,22 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
     }
     toward(inn);
   }
+  return pushed;
+}
+
+/** the least push from `least` that `fits` (left fitted): stepped out from `step`, doubling, then halved in on (`halvings`, to `within`); none past `most` */
+function leastPush(fits: (push: number) => boolean, least: number, step: number, most: number, halvings: number, within: number): number | null {
+  let lo = least, hi = least;
+  for (; !fits(hi); step *= 2) {
+    if (hi > least + most) return null;
+    [lo, hi] = [hi, hi + step];
+  }
+  for (let k = 0; k < halvings && hi - lo > within; k++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) hi = mid;
+    else lo = mid;
+  }
+  fits(hi);
   return hi;
 }
 
@@ -148,35 +152,17 @@ export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: S
       return true;
     });
   };
-  // (the least push that fits: stepped out further and further till it does, then halved in on it)
-  const lo0 = ahead(pose, proportions, side, wrist);
-  let lo = lo0, hi = lo;
-  for (let step = AIR * proportions.height; !fits(hi); step *= 2) {
-    if (hi > lo0 + PUSH * proportions.armLength) return -1;
-    [lo, hi] = [hi, hi + step];
-  }
-  for (let k = 0; k < 12 && hi - lo > 1e-4; k++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) hi = mid;
-    else lo = mid;
-  }
-  fits(hi);
+  const pushed = leastPush(fits, ahead(pose, proportions, side, wrist), AIR * proportions.height, PUSH * proportions.armLength, 12, 1e-4);
+  if (pushed === null) return -1;
   wrist.copy(_pushed);
-  return hi;
+  return pushed;
 }
 
 /**
  * The elbows an arm from `shoulder` reaching toward `wrist` (as far as it reaches, to `end`) may have, swivelled about the line
  * between them from `near` out each way in turn (`steps` of `SWIVEL.step` each way), given to `take` until it takes one: whether it did.
  */
-function swivels(
-  proportions: Proportions,
-  shoulder: Readonly<Vector3>,
-  wrist: Readonly<Vector3>,
-  near: Readonly<Vector3>,
-  steps: number,
-  take: (elbow: Vector3, end: Vector3) => boolean,
-): boolean {
+function swivels(proportions: Proportions, shoulder: Readonly<Vector3>, wrist: Readonly<Vector3>, near: Readonly<Vector3>, steps: number, take: (elbow: Vector3, end: Vector3) => boolean): boolean {
   const axis = _axis.subVectors(wrist, shoulder);
   const length = Math.min(axis.length(), 0.999 * (proportions.upperArm + proportions.forearm));
   axis.normalize();
@@ -199,21 +185,12 @@ function swivels(
 
 /**
  * Where arm `side`'s hand, at `hand` (world), waits on its way to `goal` (world), into `out`; none (null) once it may set off straight
- * for it. A goal toward the other side behind the shoulder's front plane, out of reach further round than `SECTOR`, or across the
- * midline less far ahead than `BACK` asks waits for the body to turn: the hand waits in front, the goal brought forward (the chest's) to
- * `WAIT` of the arm's length ahead of that plane, within reach. A goal toward the other side with the hand still behind that plane (a free arm on
- * its backswing) waits for the hand to come forward on its own side, `WAIT` ahead of the plane. Either clear of the trunk, the elbow
- * near `near`: people turn first, the hand coming round in front.
+ * for it. A goal toward the other side behind the shoulder's front plane, out of reach further round than `SECTOR`, or across the midline
+ * less far ahead than `BACK` asks waits for the body to turn, in front: the goal brought forward (the chest's) to `WAIT` of the arm's
+ * length ahead of that plane, within reach. With the hand still behind that plane (a free arm on its backswing), a goal toward the other
+ * side waits for it to come forward on its own side, as far. Either clear of the trunk, the elbow near `near`: people turn first.
  */
-export function waitingFor(
-  pose: ReadonlyPose,
-  proportions: Proportions,
-  side: Side,
-  hand: Readonly<Vector3>,
-  goal: Readonly<Vector3>,
-  near: Readonly<Vector3>,
-  out: Vector3,
-): Vector3 | null {
+export function waitingFor(pose: ReadonlyPose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, goal: Readonly<Vector3>, near: Readonly<Vector3>, out: Vector3): Vector3 | null {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), turn = pose.rotation(INDEX.chest);
   const front = _wFront.set(0, 0, 1).applyQuaternion(turn), inside = _wIn.set(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(turn);
   const before = _d.subVectors(goal, shoulder).dot(front), inward = _d.subVectors(goal, shoulder).dot(inside);
@@ -243,10 +220,7 @@ function ahead(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: 
   return Math.max(0, least - _d.subVectors(wrist, shoulder).dot(_front.set(0, 0, 1).applyQuaternion(turn)));
 }
 
-/**
- * how far arm `side`'s upper arm, forearm and hand are in the trunk as `pose` holds them, at their deepest (m; negative: clear by so
- * much), the upper arm's measured against `upper` as the others' against `clear`
- */
+/** how far arm `side`'s upper arm, forearm and hand are in the trunk at their deepest (`deepest`), the upper arm's against `upper` */
 function armDepth(pose: ReadonlyPose, proportions: Proportions, side: Side, upper: number, clear: number): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]);
   const elbow = pose.position(INDEX[`${side}LowerArm`]);
@@ -256,14 +230,12 @@ function armDepth(pose: ReadonlyPose, proportions: Proportions, side: Side, uppe
   return Math.max(upperArm, inTrunk(pose, proportions, elbow, wrist, ARM.fore), inTrunk(pose, proportions, wrist, hand, ARM.hand));
 }
 
-/**
- * how far (m) an arm part from `a` to `b`, `radius` round (× height), is in the trunk as `pose` holds it, at its deepest (negative: clear
- * of it by so much), and in which capsule
- */
+/** how far (m) an arm part from `a` to `b`, `radius` round (× height), is in the trunk as `pose` holds it (`deepest`'s depth) */
 function inTrunk(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): number {
   return deepest(pose, proportions, a, b, radius).depth;
 }
 
+/** how far an arm part is in the trunk at its deepest (m; negative: clear of it by so much), and in which capsule */
 function deepest(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): { depth: number; capsule: string } {
   let depth = -Infinity, capsule = '';
   for (const [from, to, r] of TRUNK) {
@@ -301,9 +273,8 @@ function segmentDistance(a: Readonly<Vector3>, b: Readonly<Vector3>, c: Readonly
 
 const DEGREE = Math.PI / 180;
 const unit = (x: number) => Math.min(1, Math.max(0, x));
-const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), _d = new Vector3(), _tip = new Vector3();
+const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), _d = new Vector3(), _tip = new Vector3(), _front = new Vector3();
 const _was = [new Quaternion(), new Quaternion(), new Quaternion()], _fit = [new Quaternion(), new Quaternion(), new Quaternion()], _blend = new Quaternion();
-const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3();
-const _front = new Vector3(), _goal = new Vector3(), _swivel = new Vector3(), _elbow = new Vector3(), _hand = new Vector3();
-const _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
+const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3(), _goal = new Vector3(), _swivel = new Vector3();
+const _elbow = new Vector3(), _hand = new Vector3(), _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
 const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3(), _sp = new Vector3(), _sq = new Vector3();

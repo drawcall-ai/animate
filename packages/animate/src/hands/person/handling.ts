@@ -1,6 +1,5 @@
 import type { Handling } from '../handling';
-import { goalOn } from '../../things/hold';
-import { bodyOf } from '../../things/hold';
+import { bodyOf, goalOn } from '../../things/hold';
 import { sideOf } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { grabbing } from './grab';

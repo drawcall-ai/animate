@@ -7,29 +7,25 @@ import { seeded, seedOf } from '../../kernel/random';
 import { reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, onBody, worn } from '../../things/hold';
-import type { Thing } from '../../things/thing';
+import type { Hold } from '../../things/resolve';
 import { CALM, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
 import { noticing } from '../../look/gaze';
 import { SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
+import type { Pace } from '../handling';
 import { LOAD_RESERVE } from './clearance';
-
-// The hands to their grips: each in a reach's time, the two not each other's mirror image.
 
 /** Tuned: a staging point outside a thing that the arm falls short of (a load capping the bow) is left this long (s) after its time is up,
  * the hand closing on its grip from as near as it got */
 const STAGING = 0.4;
 
-/** A hand's hold to take: the hand, the thing, the empty it takes it by and where the hand goes on it (in the thing's frame). */
-export interface Taking {
+/** A hand's hold to take: the hand, and the hold it takes. */
+export interface Taking extends Hold {
   side: Side;
-  thing: Thing;
-  grip: string;
-  goal: Goal;
 }
 
-/** where a grip is in the world this sub-step, as `h` tracks its thing */
+/** where a grip is in the world this sub-step, as the person tracks its thing */
 export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
   const frame = person.track(take.thing.object).at(f.time).current;
   return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
@@ -45,11 +41,9 @@ export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f:
 export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const began = person.frame.time;
   const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
+  const close = () => takes.forEach((take) => grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal }));
   // (hands at their grips already close at once)
-  if (takes.every((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)) <= REACHED.distance)) {
-    for (const take of takes) grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
-    return;
-  }
+  if (takes.every((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)) <= REACHED.distance)) return close();
   let late = false, ends = Infinity;
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
     request.eta = Math.max(0, ends - f.time);
@@ -105,7 +99,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     yield* parallel<Frame>('all', ...plan.map((hand) => during(request, `hand.${hand.side}`, 'asked',
       reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), until(there))));
   }
-  for (const take of takes) grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
+  close();
 }
 
 /** Route around the envelope to its nearest grip face; the final closure is separate. */
@@ -113,7 +107,13 @@ function outside(bounds: Box3, grip: Vector3, from: Vector3, reserve: number): V
   const size = bounds.getSize(new Vector3());
   if (size.x * size.y * size.z === 0) return [];
   const box = bounds.clone().expandByScalar(reserve);
-  const { axis, end } = face(bounds, grip), sign = end ? 1 : -1;
+  // (the face of the bounds nearest the grip)
+  let axis = 0, end = 0, gap = Infinity;
+  for (let i = 0; i < 3; i++) for (const side of [0, 1]) {
+    const distance = Math.abs(grip.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
+    if (distance < gap) [gap, axis, end] = [distance, i, side];
+  }
+  const sign = end ? 1 : -1;
   const edge = (end ? box.max : box.min).getComponent(axis);
   const outer = grip.clone().setComponent(axis, sign > 0 ? Math.max(grip.getComponent(axis), edge) : Math.min(grip.getComponent(axis), edge));
   // Keep the same reserve toward the starting height, rather than lowering to grip height before closure; the outside wrist still has
@@ -123,21 +123,12 @@ function outside(bounds: Box3, grip: Vector3, from: Vector3, reserve: number): V
   return [corner, outer];
 }
 
-function face(bounds: Box3, point: Vector3) {
-  let axis = 0, end = 0, gap = Infinity;
-  for (let i = 0; i < 3; i++) for (const side of [0, 1]) {
-    const distance = Math.abs(point.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
-    if (distance < gap) { gap = distance; axis = i; end = side; }
-  }
-  return { axis, end };
-}
-
 /**
  * how long a calm reach `distance` away to take something takes (s; m, default body): Fitts' law, MT = a + b · log2(2 D / W) (recalled,
  * not checked: a ~0.25 s, b ~0.15 s/bit at everyday precision, a grip ~4 cm wide), varied ±10% (seeded by `seed`) — a 50 cm reach ~0.95
  * s peaking ~1 m/s, a 10 cm one ~0.6 s
  */
-export function reachTime(distance: number, seed: number): number {
+function reachTime(distance: number, seed: number): number {
   const bits = Math.log2(Math.max(1, (2 * distance) / FITTS.width));
   return (FITTS.a + FITTS.b * bits) * (1 + FITTS.vary * (2 * seeded(seed)() - 1));
 }
@@ -146,11 +137,9 @@ const FITTS = { a: 0.25, b: 0.15, width: 0.04, vary: 0.1 };
 
 /** the hand that leads where both work (a right-handed body): the other goes a moment after it, a little slower */
 export const LEADING: Side = 'right';
-/**
- * how much later (s) and slower (share of its pace) the other hand goes: not the leading hand's mirror image. (Hands reaching together
+/** how much later (s) and slower (share of its pace) the other hand goes: not the leading hand's mirror image. (Hands reaching together
  * start within a few tens of ms of each other — Kelso, Southard & Goodman 1979, recalled, not checked; this is a little more, so the two
- * read apart.)
- */
+ * read apart.) */
 const FOLLOWING = { delay: [0.06, 0.12], slower: [0.05, 0.1] };
 
 /** how much later and slower the other hand goes for a thing `at` a place by its grips (seeded by them and where it is: the same each run) */
@@ -165,7 +154,7 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
  * as the walk will arrive within `NEAR` s, each in the time a calm reach that far takes or at the pace asked. Met once they are there; they
  * keep there. `false` if it can stand nowhere in reach.
  */
-export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: { speed?: number; accel?: number }) {
+export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: Pace) {
   const inReach = aims.every(({ side, target }) => armReaches(person, target(person.frame).position, side, true));
   const plan = inReach ? 'there' : footing(person, { grips: aims.map(({ side, target }) => ({ side, at: target(person.frame).position.clone() })), mass: 0 });
   if (plan === 'nowhere') {

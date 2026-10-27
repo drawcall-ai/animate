@@ -5,25 +5,26 @@ import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
 import { anchors, movers, resolve, type Hold, type Holder, type Resolving } from './resolve';
 import { Thing, type Grip } from './thing';
-import type { Placement } from '../kernel/goal';
-import type { Goal } from '../kernel/goal';
+import type { Goal, Placement } from '../kernel/goal';
+
+/** the nearest anchor among `object` and its ancestors: a body's object (bone −1) or moving bone */
+function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined {
+  for (let at: Object3D | null = object; at; at = at.parent) {
+    const anchor = anchors.get(at);
+    if (anchor) return anchor;
+  }
+  return undefined;
+}
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
 export function hangsFrom(self: Holder, object: Object3D): number {
-  for (let at: Object3D | null = object; at; at = at.parent) {
-    const anchor = anchors.get(at);
-    if (anchor) return anchor.body === self ? anchor.bone : NaN;
-  }
-  return NaN;
+  const anchor = anchorOf(object);
+  return anchor?.body === self ? anchor.bone : NaN;
 }
 
 /** the body `object` is on (attached under its object or a bone of it), if any */
 export function bodyOf(object: Object3D): Holder | null {
-  for (let at: Object3D | null = object; at; at = at.parent) {
-    const anchor = anchors.get(at);
-    if (anchor) return anchor.body;
-  }
-  return null;
+  return anchorOf(object)?.body ?? null;
 }
 
 /** whether `thing` is on `self`: attached under it, or in its hands */
@@ -31,10 +32,7 @@ export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
 }
 
-/**
- * where a hand bone goes on `grip` (in the thing's frame): on the empty, turned as it is — the hand bone's rest (`rest`, its scene frame
- * against its pose's) undone — or rolling about its free line, or turned as the hand comes
- */
+/** where a hand bone goes on `grip` (the thing's frame): on the empty turned as it is, its `rest` undone; or rolling about its free line; or turned as the hand comes */
 export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Goal {
   const position = grip.at.position.clone();
   if (grip.free === true) return { position };
@@ -67,10 +65,7 @@ export function handsOn(self: Holder, thing: Thing): string[] {
   return Object.keys(self.holding).filter((hand) => self.holding[hand]?.thing === thing);
 }
 
-/**
- * whether `thing` is worn: on a body (attached under its object or a bone of it), neither in both hands of a body that moves it nor
- * hanging from a hand that holds it
- */
+/** whether `thing` is worn: on a body (under its object or a bone), neither in both hands of a body that moves it nor hanging from a hand on it */
 export function worn(thing: Thing): boolean {
   const body = bodyOf(thing.object);
   return body !== null && !movers.has(thing.object) && !inHand(body, thing);
@@ -92,10 +87,7 @@ export function supported(thing: Thing): boolean {
   return !thing.lifted && !bodyOf(thing.object);
 }
 
-/**
- * `thing` attached under `parent` where it is — as `reader` finds both (a body re-parenting it mid-update, from its pose), else as the
- * scene shows them — and no longer moved by the body that moved it
- */
+/** `thing` attached under `parent` where it is (as `reader` finds both — a body re-parenting it mid-update — else as the scene has them), moved by no body */
 export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void {
   const object = thing.object, mover = movers.get(object);
   mover?.leave(object);
@@ -104,26 +96,35 @@ export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void
   parent.attach(object);
   thing.parent = parent;
   if (!reader) return;
-  const at = resolve(reader, object, _placed), frame = resolve(reader, parent, _frame), back = _back.copy(frame.quaternion).invert();
-  const scale = _scale.setFromMatrixScale(parent.matrixWorld).x;
-  object.position.copy(at.position).sub(frame.position).applyQuaternion(back).divideScalar(scale);
-  object.quaternion.copy(back).multiply(at.quaternion);
+  const at = resolve(reader, object, _placed);
+  placeUnder(reader, object, parent, at.position, at.quaternion);
 }
 
-/**
- * `thing` taken into `self`'s hands that hold it, where it is: held in one, attached under that hand's bone (it goes where the hand
- * goes); in both, attached under the root bone and moved by `self` itself (fitted to the wrists, `move`)
- */
+/** `object` written relative to `parent` to be at `position`, turned `quaternion` (world), as `reader` finds `parent` */
+function placeUnder(reader: Resolving, object: Object3D, parent: Object3D, position: Readonly<Vector3>, quaternion: Readonly<Quaternion>): void {
+  const frame = resolve(reader, parent, _frame), back = _back.copy(frame.quaternion).invert();
+  object.position.copy(position).sub(frame.position).applyQuaternion(back).divideScalar(_scale.setFromMatrixScale(parent.matrixWorld).x);
+  object.quaternion.copy(back).multiply(quaternion);
+}
+
+/** `thing` lifted into `self`'s hands (`take`), where it was taken from kept unless it was lifted already */
+export function lift(self: Holder, thing: Thing): void {
+  const parent = thing.object.parent;
+  if (parent && !thing.lifted) [thing.home, thing.taken] = [parent, self.track(thing.object).current.position.clone()];
+  thing.lifted = true;
+  take(self, thing);
+}
+
+/** `thing` taken into `self`'s hands on it, where it is: in one, attached under that hand's bone; in both, under the root bone and moved by `self` (`move`) */
 export function take(self: Holder, thing: Thing): void {
   const hands = handsOn(self, thing);
   if (!hands.length) throw new Error(`"${thing.object.name}" is in none of the body's hands`);
   if (carriedBy(self, thing)) return;
-  const bone = (index: number) => self.boneNode(index);
   if (hands.length === 1) {
-    attach(thing, bone(self.hands[hands[0]]), self);
+    attach(thing, self.boneNode(self.hands[hands[0]]), self);
     return;
   }
-  attach(thing, bone(0), self);
+  attach(thing, self.boneNode(0), self);
   const at = resolve(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
   const carrier = new Carrier(at.position, at.quaternion);
   // (standing there as of the sub-step before: `move` moves it on in this one)
@@ -142,28 +143,17 @@ export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier
     const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
     if (aim && hands.length === 2) fit(self, f, aim, hands, carrier);
     else along(f, carrier);
-    const parent = object.parent;
-    if (!parent) continue;
-    const frame = resolve(self, parent, _frame), back = _back.copy(frame.quaternion).invert();
-    object.position.copy(carrier.current.position).sub(frame.position).applyQuaternion(back).divideScalar(_scale.setFromMatrixScale(parent.matrixWorld).x);
-    object.quaternion.copy(back).multiply(carrier.current.quaternion);
+    if (object.parent) placeUnder(self, object, object.parent, carrier.current.position, carrier.current.quaternion);
   }
 }
 
-/**
- * a thing hanging from the one hand that holds it by a free grip, where a carry aims it: turned as the aim has it about its grip, which
- * stays on the wrist (the hand turning on it as it may)
- */
+/** a thing hanging from the one hand that holds it by a free grip, turned as a carry aims it about that grip, which stays on the wrist */
 function pivot(self: Holder, f: Frame, thing: Thing, aim: Carrier): void {
   const [hand, ...others] = handsOn(self, thing), hold = hand === undefined ? null : self.holding[hand];
-  if (!hold || others.length || hold.goal.quaternion !== undefined || !inHand(self, thing)) return;
-  const object = thing.object, parent = object.parent;
-  if (!parent) return;
+  const parent = thing.object.parent;
+  if (!hold || others.length || hold.goal.quaternion !== undefined || !inHand(self, thing) || !parent) return;
   const grip = _g1.copy(hold.goal.position).applyQuaternion(aim.current.quaternion);
-  const at = _at.copy(f.current.position(self.hands[hand])).sub(grip);
-  const frame = resolve(self, parent, _frame), back = _back.copy(frame.quaternion).invert();
-  object.position.copy(at).sub(frame.position).applyQuaternion(back).divideScalar(_scale.setFromMatrixScale(parent.matrixWorld).x);
-  object.quaternion.copy(back).multiply(aim.current.quaternion);
+  placeUnder(self, thing.object, parent, _at.copy(f.current.position(self.hands[hand])).sub(grip), aim.current.quaternion);
 }
 
 /** a carried thing nothing aims, moved with the root bone as it moved this sub-step */
@@ -218,11 +208,8 @@ export function bear(self: Holder, f: Frame, worn: readonly Thing[], borne: Map<
     [bearing.prev2, bearing.prev] = [bearing.prev, bearing.share];
     bearing.share = Math.min(1, Math.max(0, follow(bearing.prev2, bearing.prev, bones.length > 0 ? 1 : 0, BEARING, f.dt)));
     if (bones.length > 0) bearing.bones = bones;
-    if (bearing.share === 0 && bones.length === 0) {
-      borne.delete(thing);
-      continue;
-    }
-    bearing.kg = bearing.share * thing.mass;
+    if (bearing.share === 0 && bones.length === 0) borne.delete(thing);
+    else bearing.kg = bearing.share * thing.mass;
   }
   load(self, f.current, borne);
 }
@@ -254,11 +241,8 @@ export function load(self: Holder, pose: Pose, borne: ReadonlyMap<Thing, Bearing
   }
   for (let bone = 0; bone < pose.skeleton.bones.length; bone++) {
     const m = mass.get(bone) ?? 0, sum = moment.get(bone);
-    if (m === 0 || !sum) {
-      pose.setLoad(bone, 0, ZERO);
-      continue;
-    }
-    pose.setLoad(bone, m, sum.divideScalar(m).sub(pose.position(bone)).applyQuaternion(_q.copy(pose.rotation(bone)).invert()));
+    if (m === 0 || !sum) pose.setLoad(bone, 0, ZERO);
+    else pose.setLoad(bone, m, sum.divideScalar(m).sub(pose.position(bone)).applyQuaternion(_q.copy(pose.rotation(bone)).invert()));
   }
 }
 
@@ -287,9 +271,8 @@ export function wornOf(self: Holder): Thing[] {
   return worn;
 }
 
-const ZERO = new Vector3();
 const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const _scale = new Vector3();
+const ZERO = new Vector3(), _scale = new Vector3();
 const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
 const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();

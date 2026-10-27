@@ -2,9 +2,8 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Carrier } from '../kernel/carrier';
 import type { Frame } from '../kernel/frame';
-import type { Goal } from '../kernel/goal';
+import type { Goal, Placement } from '../kernel/goal';
 import type { Thing } from './thing';
-import type { Placement } from '../kernel/goal';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
@@ -30,10 +29,7 @@ export interface Hold {
   goal: Goal;
 }
 
-/**
- * A body as the things it holds see it: where it is in the scene (its object and each moving bone's node), its hands (each one's tip
- * bone, and what it holds), the things it moves itself and how it tracks the scene.
- */
+/** A body as the things it holds see it: its object and moving bones' nodes, its hands' tip bones and holds, what it moves and tracks. */
 export interface Holder extends Resolving {
   readonly frame: Frame;
   readonly object: Object3D;
@@ -103,15 +99,11 @@ function localOf(reader: Resolving, node: Object3D): Matrix4 {
   node.updateMatrix();
   let seen = reader.frames.get(node);
   if (!seen) reader.frames.set(node, (seen = { update: reader.updates, parent: node.parent, from: node.matrix.clone(), to: node.matrix.clone() }));
-  if (seen.parent !== node.parent) {
-    seen.from.copy(node.matrix);
+  const reparented = seen.parent !== node.parent;
+  if (reparented || seen.update !== reader.updates) {
+    seen.from.copy(!reparented && seen.update === reader.updates - 1 ? seen.to : node.matrix);
     seen.to.copy(node.matrix);
     seen.parent = node.parent;
-    seen.update = reader.updates;
-  }
-  if (seen.update !== reader.updates) {
-    seen.from.copy(seen.update === reader.updates - 1 ? seen.to : node.matrix);
-    seen.to.copy(node.matrix);
     seen.update = reader.updates;
   }
   if (seen.from.equals(seen.to)) return seen.to;

@@ -22,10 +22,7 @@ type Handwork = NonReuseableTimeline<Frame>;
 export interface Handling {
   /** each named hand takes hold of `thing` by its grip, the body walking up for them if it must; a loose thing with a mass is lifted clear */
   take(request: Request, thing: Thing, grips: readonly { hand: string; grip: string }[], pace: Pace): Handwork;
-  /**
-   * the hands holding `thing` bring it through `points` (each where it is a sub-step at a time; the last also sets its turn) — in to
-   * `end`, an empty, by its approach — and keep it there
-   */
+  /** the hands holding `thing` bring it through `points` (each a sub-step at a time; the last sets its turn), in to `end` (an empty) by its approach, and keep it there */
   bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, pace: Pace): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */
   reach(request: Request, aims: readonly { hand: string; target: (f: Frame) => Goal }[], pace: Pace): Handwork;

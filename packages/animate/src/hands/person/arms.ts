@@ -17,22 +17,16 @@ import { checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from '.
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 
-/**
- * how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm
- * behind it (share of a step; CMU mocap)
- */
+/** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm
+ * behind it (share of a step; CMU mocap) */
 const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
 /** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
 const ABDUCTION = (8 * Math.PI) / 180;
-/**
- * how far a hanging hand keeps out past the thigh beside it, from axis to axis (× height): the thigh's and the hand's thickness
- * (mid-thigh 0.034, hand 0.012) and a little air
- */
+/** how far a hanging hand keeps out past the thigh beside it, from axis to axis (× height): the thigh's and the hand's thickness
+ * (mid-thigh 0.034, hand 0.012) and a little air */
 const CLEAR = 0.055;
-/**
- * how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it
- * kinks; let go of, it comes down calmly
- */
+/** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it
+ * kinks; let go of, it comes down calmly */
 const SWING = { accel: 25, speed: 2.5 };
 /** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
 export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
@@ -40,10 +34,9 @@ export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satis
 const CLAVICLE = { accel: 30 };
 
 /**
- * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the
- * steps as a pendulum (the locomotion's stride), opposite the legs, wider and bent walking faster; the
- * clavicles and hands at rest. Endless; every joint follows its pose from its history, so an arm a
- * task let go of swings back into it. A hand holding any item follows its grip until release, including supported and worn items.
+ * Free arms: each hangs a little out from the side, the elbow a little bent, and swings with the steps as a pendulum (the locomotion's
+ * stride), opposite the legs, wider and bent walking faster; the clavicles and hands at rest. Endless; every joint follows its pose from
+ * its history, so an arm a task let go of swings back into it. A hand holding anything (supported and worn things too) is left to it.
  */
 export function hanging(person: Reacher): Step {
   const goals = new Map<number, TrackedRotation>();
@@ -63,20 +56,16 @@ export function hanging(person: Reacher): Step {
     SIDES.forEach((side, s) => {
       if (person.holding[side]) return;
       const sign = s === 0 ? 1 : -1;
-      // (the left arm in front as the left foot lifts, the right behind)
-      // (growing in as the walk does: setting off, the first steps barely swing them)
+      // (the left arm in front as the left foot lifts, the right behind; growing in as the walk does)
       const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) + 0.02) * locomotion.walk;
       const a = swing(lead);
       const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
       const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a));
-      // the arm hanging plumb from the shoulder (as it was last, whoever placed the chest after),
-      // out from the T-pose as far as keeps the hand clear of the thigh beside it (the hip's or
-      // the knee's, as the legs stand now; the arm's frame) — however the trunk bows, leans
-      // or twists — swung forward about that frame's left; the forearm forward
+      // the arm hanging plumb from the shoulder, out as far as keeps the hand clear of the thigh beside it (the hip's or the knee's, as
+      // the legs stand now) however the trunk bows, leans or twists, swung forward about that frame's left; the forearm forward
       set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
       const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
-      const hip = outward(f.current.position(INDEX[`${side}UpperLeg`])), knee = outward(f.current.position(INDEX[`${side}LowerLeg`]));
-      const thigh = Math.max(hip, knee);
+      const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
       const handY = f.current.position(INDEX[`${side}UpperArm`]).y - proportions.armLength;
       const rest = _w.copy(hips).addScaledVector(left, sign * (thigh + CLEAR * proportions.height)).setY(handY);
       clearArm(person, f, side, rest, yaw);
@@ -90,8 +79,7 @@ export function hanging(person: Reacher): Step {
       f.current.setLocal(limb[1], _q.setFromAxisAngle(Y, -sign * flex));
       f.current.setLocal(limb[2], IDENTITY);
       keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, { ...NUDGED, swivel: 0 });
-      const kept = limb.map((bone) => f.current.local(bone).clone());
-      limb.forEach((bone, k) => set(f, goals, bone, kept[k]));
+      for (const bone of limb) set(f, goals, bone, f.current.local(bone).clone());
     });
   };
 }
@@ -125,8 +113,7 @@ function set(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal:
   f.current.setLocal(bone, q);
 }
 
-/** Tuned: how briskly a holding hand keeps to its grip as the thing or the body moves (m/s², m/s, rad/s², rad/s): a firm hold, far
- * quicker than a reach, so it never trails what it holds */
+/** Tuned: how briskly a holding hand keeps to its grip (m/s², m/s, rad/s², rad/s): far quicker than a reach, so it never trails it */
 export const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };
 
 /** How a person's hand goes to its target. */
@@ -137,10 +124,8 @@ interface HandOptions extends Partial<Motion> {
   thing?: Thing;
   /** where the elbow bends toward (world; default as where the hand is asks: down and back hanging, out reaching across, …) */
   pole?: Live<Vector3>;
-  /**
-   * the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default
-   * true); false: the hand only follows (a tracked controller: the head leads)
-   */
+  /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default
+   * true); false: the hand only follows (a tracked controller: the head leads) */
   lead?: boolean;
   /** a reach that takes this long (s): the hand goes along a minimum-jerk path to the target (a bell of speed), then stays on it */
   seconds?: number;
@@ -152,22 +137,17 @@ interface HandOptions extends Partial<Motion> {
  * Hand `side`'s wrist (and, given its rotation, the hand) to `target`, a sub-step at a time: the hand moving on from its history at
  * `Motion`'s pace (calm by default) — or, given `seconds`, along a minimum-jerk path there in that time — its arm solved to it and
  * braked; the clavicle shrugging for a hand up high and drawn forward for one far out; the elbow swivelled as where the hand is asks.
- * Leading (by default), a target below what the arm reaches standing asks balance to bow and bend the knees for it, one above to go up
- * on the toes.
+ * Leading (by default), a target out of the arm's reach standing asks balance to bow and bend the knees, or go up on the toes, for it.
  */
 export function reaching(person: Reacher, side: Side, target: Live<Goal>, options: HandOptions = {}): Step {
-  const { seconds, after = 0 } = options;
-  const arm = new ChainTip(`${side}Arm`);
+  const seconds = options.seconds, arm = new ChainTip(`${side}Arm`), bone = INDEX[`${side}Hand`];
   // (gliding: set off once the hand need not wait for the body, in what is left of the reach's time — at least half of it)
-  let glide: Glide | null = null, waited = 0;
-  const bone = INDEX[`${side}Hand`];
-  let waiting = after;
-  // (waiting, the arm's joints kept as they were when it began, come to rest there: the hand
-  // stays where it is on the body, neither dropped to its hang nor taken up by the arm's solve)
+  let glide: Glide | null = null, waited = 0, waiting = options.after ?? 0;
+  // (waiting, the arm's joints kept as they were when it began: the hand neither dropped to its hang nor taken up by the arm's solve)
   let kept: [number, Quaternion][] | null = null;
   const joints = new Map<number, TrackedRotation>();
-  // (gliding: as the arm stood when the hand set off — where the elbow was from the shoulder, in the
-  // chest's frame; the clavicle — and how far the hand had to go)
+  // (gliding: as the arm stood when the hand set off — the elbow from the shoulder, in the chest's frame; the clavicle — and how far the
+  // hand had to go)
   let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
   return (f) => {
     const goal = live(target, f);
@@ -187,9 +167,8 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       for (const [b, q] of kept) set(f, joints, b, q);
       return;
     }
-    // (the hand gliding to the target from where it is and how it moves: on what the body itself wears or holds, in its
-    // frame — the body moves that, so its turning or speeding up never leaves the hand behind — else in the world, the
-    // target's own motion fed forward)
+    // (the hand gliding to the target from where it is and how it moves: on what the body itself wears or holds, in its frame — the body
+    // moves that, so its turning never leaves the hand behind — else in the world, the target's own motion fed forward)
     const on = options.on;
     const own = options.thing && onBody(person, options.thing) ? on : undefined;
     const placed = own?.at(f.time);
@@ -206,9 +185,8 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     const end = _end.copy(aim.position);
     const near = placed ? null : elbowPole(f, person.proportions, side, end, _spare);
     if (near) clearWrist(f.current, person.proportions, side, end, near, _spare);
-    // (a goal behind the shoulder or round across the body while the body turns to it, or the hand still behind its shoulder for a
-    // goal toward the other side: the hand waits in front, going round with the trunk, and sets off on its own way — the reach's
-    // time from then — once it may)
+    // (a goal behind the shoulder or round across the body while the body turns to it, or the hand behind its shoulder for one toward the
+    // other side: the hand waits in front, going round with the trunk, and sets off — the reach's time from then — once it may)
     const turning = near && !person.locomotion.settled && !start;
     const wait = turning ? waitingFor(f.current, person.proportions, side, f.prev.position(bone), aim.position, near, _wait) : null;
     if (wait) {
@@ -218,9 +196,8 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     }
     glide ??= new Glide(Math.max(seconds / 2, seconds - waited));
     glide.step(from, _m.subVectors(from, was).divideScalar(f.dt), end, aim.velocity ?? ZERO, f.dt, _glided);
-    // (the arm as it stood when the hand set off — its clavicle, where its elbow pointed — turning
-    // to what the reach wants as the hand goes: aimed at once where the hand goes, the solve would
-    // swing the arm round, drawing the hand back, before it sets off)
+    // (the arm as it stood when the hand set off turning to what the reach wants as the hand goes: aimed at once where the hand goes,
+    // the solve would swing the arm round, drawing the hand back, before it sets off)
     const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
     const chest = f.current.rotation(INDEX.chest);
     if (!start) {
@@ -232,9 +209,8 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       };
     }
     const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(aim.position) / start.off) : 1;
-    const elbow = start.elbow;
-    const bent = () => _bend.copy(elbow).applyQuaternion(chest).add(shoulder);
-    const pole = options.pole === undefined ? elbowPole(f, person.proportions, side, world.position, _pole).lerp(bent(), 1 - share) : live(options.pole, f);
+    const bent = _bend.copy(start.elbow).applyQuaternion(chest).add(shoulder);
+    const pole = options.pole === undefined ? elbowPole(f, person.proportions, side, world.position, _pole).lerp(bent, 1 - share) : live(options.pole, f);
     const glided = { ...aim, position: _glided.position, velocity: _glided.velocity };
     const toward = { at: world.position, center: on?.current.position, clavicle: start.clavicle, share };
     handStep(person, f, side, glided, { ...options, on: own, pole }, arm, toward);
@@ -249,7 +225,7 @@ interface Toward {
   share: number;
 }
 
-/** one sub-step of `handTo`, its arm's tip `arm` */
+/** one sub-step of `reaching`, its arm's tip `arm` */
 export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, options: HandOptions, arm: ChainTip, toward?: Toward) {
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
   if (options.thing && f.current.skeleton.chain(`${side}Arm`).includes(hangsFrom(person, options.thing.object))) return;
@@ -257,10 +233,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   const at = options.on ? options.on.toWorld(target, _target, f.time).position : target.position;
   shrug(f, proportions, side, toward?.at ?? at, toward);
   const pole = options.pole === undefined ? elbowPole(f, proportions, side, at, _pole) : live(options.pole, f);
-  // (gliding from where the hand is: an arm hanging all but straight is not drawn in at once)
-  // (a goal in the trunk's way moved round it before the hand sets off for it, so its path goes round too; and how far the trunk holds
-  // the hand off it)
-  // (the elbow as the reach would have it there)
+  // (a goal in the trunk's way moved round it, the elbow as the reach would have it there; and how far the trunk holds the hand off it)
   let held = Math.max(0, clearWrist(f.current, proportions, side, _cleared.copy(at), elbowPole(f, proportions, side, at, _spare), _spare));
   if (held > 0) {
     const shift = _cleared.sub(at);
@@ -291,10 +264,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   }
 }
 
-/**
- * the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward
- * toward one far out
- */
+/** the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward toward one far out */
 function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
   const pose = f.current;
   const bone = INDEX[`${side}Shoulder`];
@@ -323,9 +293,8 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
 }
 
 /**
- * where the elbow bends toward (into `out`, world): a blend of where it goes for a hand hanging,
- * forward, up, out and across, in the chest's frame (up, the elbow out to the side:
- * forward, the arm near straight overhead would swivel to and fro)
+ * where the elbow bends toward (into `out`, world): a blend of where it goes for a hand hanging, forward, up, out and across, in the
+ * chest's frame (up, the elbow out to the side: forward, the arm near straight overhead would swivel to and fro)
  */
 function elbowPole(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
   const sign = side === 'left' ? 1 : -1;
@@ -349,41 +318,15 @@ function toFrame(at: Placement, world: Vector3): Vector3 {
   return world.sub(at.position).applyQuaternion(_frame.copy(at.quaternion).invert());
 }
 
-
-
-
 /** an arm's joints, from the clavicle out */
 const ARM = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const;
-const X = new Vector3(1, 0, 0);
-const Y = new Vector3(0, 1, 0);
-const Z = new Vector3(0, 0, 1);
-const IDENTITY = new Quaternion();
-const _q = new Quaternion();
-const _p = new Quaternion();
-const _r = new Quaternion();
-const _h = new Quaternion();
-const _left = new Vector3();
-const _c = new Quaternion();
-const _g = new Quaternion();
-const _s = new Vector3();
-const _d = new Vector3();
-const _w = new Vector3();
-const _up = new Vector3();
-const _rest = new Vector3();
-const _pole = new Vector3();
-const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3();
-const _bend = new Vector3();
+const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 1), ONE = new Vector3(1, 1, 1), ZERO = new Vector3();
+const _q = new Quaternion(), _p = new Quaternion(), _r = new Quaternion(), _h = new Quaternion(), _c = new Quaternion(), _g = new Quaternion();
+const IDENTITY = new Quaternion(), _frame = new Quaternion();
+const _left = new Vector3(), _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
+const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3(), _bend = new Vector3(), _m = new Vector3();
+const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-const _m = new Vector3();
-const _axis = new Vector3();
-const _from = new Vector3();
-const _was = new Vector3();
-const _frame = new Quaternion();
 const _glided = { position: new Vector3(), velocity: new Vector3() };
-const _wait = new Vector3();
-const ZERO = new Vector3();
-
-const _box = new Box3();
-const _matrix = new Matrix4();
-const ONE = new Vector3(1, 1, 1);
+const _box = new Box3(), _matrix = new Matrix4();

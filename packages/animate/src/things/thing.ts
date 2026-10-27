@@ -1,5 +1,6 @@
 import { Box3, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import type { Placement } from '../kernel/goal';
+import type { Holder } from './resolve';
 
 /**
  * Any `Object3D`, as a body moves it: its mass (`userData.mass`, kg: a thing without it is not meant to be lifted), its centre of mass
@@ -65,11 +66,6 @@ export interface Grip {
 
 const things = new WeakMap<Object3D, Thing>();
 
-/** a body as a thing knows it holds it */
-export interface Holder {
-  readonly holding: Readonly<Record<string, { thing: Thing } | null>>;
-}
-
 /** the descendant of `root` named `name` (or `root`), not looking into things attached to it */
 function find(root: Object3D, name: string): Object3D | undefined {
   if (root.name === name) return root;
@@ -97,23 +93,22 @@ export function localOf(node: Object3D, ancestor: Object3D): Placement {
 /** a thing's own meshes in its frame, or the points of its empties and centre where it has none */
 function boundsOf(object: Object3D, centre: Vector3): Box3 {
   const box = new Box3(), points: Vector3[] = [centre.clone()];
+  const add = (mesh: Mesh, matrix: Matrix4) => {
+    mesh.geometry.computeBoundingBox();
+    const own = mesh.geometry.boundingBox;
+    if (own) box.union(own.clone().applyMatrix4(matrix));
+  };
   const visit = (node: Object3D, matrix: Matrix4) => {
     for (const child of node.children) {
       if (child.userData.mass !== undefined) continue;
       child.updateMatrix();
       const at = new Matrix4().multiplyMatrices(matrix, child.matrix);
-      if (child instanceof Mesh) {
-        child.geometry.computeBoundingBox();
-        const own = child.geometry.boundingBox;
-        if (own) box.union(own.clone().applyMatrix4(at));
-      } else points.push(new Vector3().setFromMatrixPosition(at));
+      if (child instanceof Mesh) add(child, at);
+      else points.push(new Vector3().setFromMatrixPosition(at));
       visit(child, at);
     }
   };
-  if (object instanceof Mesh) {
-    object.geometry.computeBoundingBox();
-    if (object.geometry.boundingBox) box.union(object.geometry.boundingBox);
-  }
+  if (object instanceof Mesh) add(object, new Matrix4());
   visit(object, new Matrix4());
   return box.isEmpty() ? box.setFromPoints(points) : box;
 }
