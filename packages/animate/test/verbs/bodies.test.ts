@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { Body, carry, dog, grab, horse, lookAt, release, wait, walkTo } from '../../src/index';
+import { Body, carry, dog, grab, horse, lookAt, reach, release, wait, walkTo } from '../../src/index';
 import { insides, person, play } from '../bodies';
 import { DOG } from '../skeletons/dog';
 import { HORSE } from '../skeletons/horse';
@@ -37,7 +37,7 @@ describe('bodies together', () => {
     const labrador = new Body(dog(DOG), { dev: true, at: new Vector3(0, 0, 0.5), face: Math.PI });
     const room = roomOf(owner, labrador);
     const stick = box(room, new Vector3(0.3, 0.03, 3), { size: new Vector3(0.04, 0.04, 0.5), mass: 0.2, solid: false, name: 'stick' });
-    empty(stick, 'middle', new Vector3()).userData.free = true;
+    empty(stick, 'middle', new Vector3());
     // (brought to a place turned across the dog, the stick turns with it)
     const across = empty(room, 'across', new Vector3(0, 0.55, -0.9));
     across.rotation.y = Math.PI / 2;
@@ -77,4 +77,19 @@ describe('bodies together', () => {
     expect(before.mare.equals(after.mare) && before.groom.equals(after.groom)).toBe(true);
     expect(after.mare.distanceTo(new Vector3(-2, 0, 0))).toBeGreaterThan(3);
   }, 20000);
+});
+
+it('a dog reaches an object’s orientation as well as its position', () => {
+  const pet = new Body(dog(DOG), { dev: true }), room = roomOf(pet);
+  const target = empty(room, 'mouth target', worldOf(pet.bones.jaw));
+  target.rotation.z = Math.PI;
+  let result: boolean | undefined;
+  let closest = Infinity;
+  play(function* () { result = yield* reach(pet, { jaw: target }); }, [pet], 10, () => {
+    closest = Math.min(closest, pet.bones.jaw.getWorldQuaternion(new Quaternion()).angleTo(target.getWorldQuaternion(new Quaternion())));
+    return result !== undefined;
+  });
+  expect(result).toBe(true);
+  expect(closest).toBeLessThan(0.05);
+  expect(pet.log).toEqual([]);
 });

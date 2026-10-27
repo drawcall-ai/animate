@@ -480,7 +480,7 @@ function play(duration: number, story: (person: Person) => Stage['story'], drive
 function bar(parent: Object3D, name: string, at: Vector3): Object3D {
   const thing = box(parent, name, new Vector3(0.03, 0.12, 0.03), at);
   thing.userData.mass = 0.5;
-  empty(thing, 'grip', new Vector3()).userData.free = true;
+  empty(thing, 'grip', new Vector3());
   return thing;
 }
 

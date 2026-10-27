@@ -22,8 +22,6 @@ export function dogFetch(): Scenario {
       const scene = new Group();
       const toy = ball(scene, 'ball', 0.04, BALL);
       toy.userData.mass = 0.06;
-      // (taken as the jaw comes: a ball has no one way to hold it)
-      toy.userData.free = true;
       let back = false;
       return {
         scene,

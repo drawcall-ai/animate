@@ -20,7 +20,8 @@ export interface GrabOptions {
  * origin): it walks up to stand in reach (borrowed legs), its eyes find the grips first (borrowed), its hands rise before it arrives and
  * reach them as it does (asked), the body bowing and bending as low as they are. A mover, it ends holding. A loose thing with a mass (on
  * no body) is lifted clear of what it rests on; anything else stays where it is, and the hands follow it. It returns `false` if no stand
- * reaches the grips.
+ * reaches the grips or the hand turn remains unmet after the planned reach plus four seconds. Grips set position only by default:
+ * `userData.handTurn = true` takes the empty’s orientation; an axis [x, y, z] allows roll about that line in its frame.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);

@@ -339,7 +339,7 @@ library('a person takes hold of the halter of a horse watching it', () => {
     const person = cast.person({ at: new Vector3(-0.5, 0, 3.3), face: -0.3 });
     const mare = cast.body(horse(HORSE), { at: TIED });
     const halter = empty(mare.bones.head, 'halter', new Vector3(0, -0.3, 0.05));
-    empty(halter, 'lead', new Vector3(0, -0.25, 0)).userData.free = [0, 1, 0];
+    empty(halter, 'lead', new Vector3(0, -0.25, 0)).userData.handTurn = [0, 1, 0];
     let held = false;
     return {
       bodies: [person, mare],
@@ -360,7 +360,6 @@ library('a person walking carries what it holds onto a place on its own body', (
     const person = cast.person();
     const knot = box(scene, 'knot', new Vector3(0.04, 0.04, 0.04), new Vector3(-0.25, 1, 0.35));
     knot.userData.mass = 0.2;
-    knot.userData.free = true;
     const held = empty(person.object, 'held', new Vector3(-0.45, 1.33, 0.3));
     let walked = false;
     return {

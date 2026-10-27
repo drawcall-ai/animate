@@ -35,9 +35,9 @@ export function onBody(self: Holder, thing: Thing): boolean {
 /** where a hand bone goes on `grip` (the thing's frame): on the empty turned as it is, its `rest` undone; or rolling about its free line; or turned as the hand comes */
 export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Goal {
   const position = grip.at.position.clone();
-  if (grip.free === true) return { position };
+  if (grip.turn === null) return { position };
   const quaternion = grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
-  return grip.free ? { position, quaternion, axis: grip.free.clone().applyQuaternion(grip.at.quaternion) } : { position, quaternion };
+  return grip.turn === true ? { position, quaternion } : { position, quaternion, axis: grip.turn.clone().applyQuaternion(grip.at.quaternion) };
 }
 
 /** hand `hand` of `self` holding `hold` (null: letting go), the thing's holders kept */

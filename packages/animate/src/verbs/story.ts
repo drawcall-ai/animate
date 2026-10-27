@@ -16,12 +16,12 @@ declare module '@pmndrs/timeline' {
 /** When something ends: after this many seconds of the story's time, once a condition holds, or never (`Infinity`). */
 export type Until = number | (() => boolean);
 
-/** A verb as a story runs it (`yield*`): it steps with the story, frame by frame, and ends `true` (met) or `false` (cannot be met). */
+/** A verb as a story runs it (`yield*`): it steps with the story, frame by frame, and ends `true` (met) or `false` (failed). */
 export type Verb = Generator<TimelineYield<unknown>, boolean, unknown>;
 
 /**
  * A verb's request on `body`, filed when the story reaches it and kept until it ends (its `finally` runs on a race's cancel too): ends
- * `true` once its staging has met its goal and `false` once it can never meet it — or, given `until`, `true` once that holds, whatever
+ * `true` once its staging has met its goal and `false` once that staging fails — or, given `until`, `true` once that holds, whatever
  * the goal. Each frame the story steps it renews the request. An aimer (it never meets a goal of its own) never ends without `until`. With
  * development on, the request is labelled by where the story asked for it (`file:line`, as the engine's stack shows it; a bundle's own
  * frames are not told apart from the library's).

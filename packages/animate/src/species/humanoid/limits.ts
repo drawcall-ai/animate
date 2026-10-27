@@ -13,7 +13,7 @@ export const NECK_PITCH = 60;
 /** Total cervical extension from the clinical range below (degrees). */
 const NECK_EXTENSION = 80;
 /** Total thoracolumbar flexion, shared by spine and chest (degrees). */
-const TRUNK_PITCH = 80;
+export const TRUNK_PITCH = 80;
 /** The knee's most flexion (degrees). */
 export const KNEE_FLEXION = 155;
 

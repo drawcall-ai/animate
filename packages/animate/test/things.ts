@@ -22,8 +22,8 @@ export function box(room: Object3D, at: Vector3, { size = new Vector3(0.3, 0.2, 
   object.position.copy(at);
   object.rotation.y = turn;
   // (taken as the hands come: a box's sides have no one way to hold them)
-  empty(object, 'left', new Vector3(size.x / 2, 0, 0)).userData.free = true;
-  empty(object, 'right', new Vector3(-size.x / 2, 0, 0)).userData.free = true;
+  empty(object, 'left', new Vector3(size.x / 2, 0, 0));
+  empty(object, 'right', new Vector3(-size.x / 2, 0, 0));
   room.add(object);
   room.updateMatrixWorld(true);
   return object;

@@ -2,10 +2,10 @@ import { Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { forwardOf, smoothstep, wrapAngle } from '../../kernel/math';
-import { handLowering, MOST_BOW, squatOf } from '../../legs/person/posture';
+import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../../legs/person/posture';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { NECK_PITCH } from '../../species/humanoid/limits';
+import { NECK_PITCH, TRUNK_PITCH } from '../../species/humanoid/limits';
 import { heldMass } from '../../things/hold';
 import { loadFactor } from '../../kernel/load';
 
@@ -38,7 +38,10 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   const factor = loadFactor(Math.max(mass, heldMass(person)));
   const low = hand.y < proportions.hipHeight;
   // Tuned load strategy, not an empirical dose-response: heavier low reaches trade bow for knees.
-  const bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
+  let bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
+  // A short arm can still miss the floor with the comfortable bow and a full squat: recruit the remaining trunk range.
+  const deeper = low && hand.y < shoulderHeight(proportions, squatOf(proportions), MOST_BOW) - proportions.armLength;
+  if (deeper) bowLimit = TRUNK_PITCH * Math.PI / 180 / factor ** 2;
   if (low) person.poise.add({ bowLimit });
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
   if (low && factor > 1 && person.locomotion.moving) return;

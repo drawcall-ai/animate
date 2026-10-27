@@ -44,24 +44,22 @@ export class Thing {
   }
 
   /**
-   * the empty named `name` under it (or itself, by its own name), where it is in its frame, and how free a hand holding it is: an empty's
-   * axes are those of the hand bone holding it, unless its `userData.free` says otherwise — `true`, the hand turns as its reach has it;
-   * an axis (`[x, y, z]`, the empty's frame), it may roll about that line (a bar, a rope). The subtrees of things attached to it are not
-   * searched (a rifle's `base` never finds a magazine's). Throws on a name it does not have.
+   * The named empty: position-only unless `userData.handTurn` is true (its axes are the hand bone's), or an axis
+   * ([x, y, z], the empty's frame) about which that turn may roll. Attached things' subtrees are not searched.
    */
   grip(name: string): Grip {
     const node = find(this.object, name);
     if (!node) throw new Error(`"${this.object.name}" has no empty named "${name}"`);
-    const free = node.userData.free;
-    return { node, at: localOf(node, this.object), free: free === true ? true : free === undefined ? null : vectorOf(free, `"${name}" userData.free`) };
+    const turn = node.userData.handTurn;
+    return { node, at: localOf(node, this.object), turn: turn === undefined ? null : turn === true ? true : vectorOf(turn, `"${name}" userData.handTurn`) };
   }
 }
 
-/** A grip on a thing: its empty, where it is in the thing's frame, and the line a hand may roll about on it (true: any turn; null: none). */
+/** A grip on a thing: its empty, where it is in the thing's frame, and its hand turn (null: unconstrained; true: the empty’s; a vector: free to roll about that axis). */
 export interface Grip {
   node: Object3D;
   at: Placement;
-  free: Vector3 | true | null;
+  turn: Vector3 | true | null;
 }
 
 const things = new WeakMap<Object3D, Thing>();

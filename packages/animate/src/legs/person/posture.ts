@@ -3,6 +3,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
 import type { Quiet } from './quiet';
+import { TRUNK_PITCH } from '../../species/humanoid/limits';
 import { INDEX } from '../../species/humanoid/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../../species/humanoid/proportions';
@@ -137,7 +138,8 @@ export class Posture {
     [this.leans[0], this.leans[1]] = [this.leans[1], pace];
     // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
     const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
-    const tilt = 0.5 * nod + hingeOf(proportions, lower) * bow + TILT * run;
+    // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
+    const tilt = 0.5 * nod + Math.max(hingeOf(proportions, lower) * bow, bow - TRUNK_PITCH * Math.PI / 180) + TILT * run;
     quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade, tilt, roll, upright.pelvisRotation);
     pelvis.y = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
@@ -161,6 +163,14 @@ export class Posture {
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
 const hingeOf = (proportions: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, squatOf(proportions), lower));
+
+/** Shoulder height at a given squat and bow, using the articulated trunk rather than a single lever. */
+export function shoulderHeight(proportions: Proportions, lower: number, bow: number): number {
+  const tilt = Math.max(hingeOf(proportions, lower) * bow, bow - TRUNK_PITCH * Math.PI / 180), offsets = proportions.offsets;
+  const height = (offset: Vector3, pitch: number) => offset.y * Math.cos(pitch) - offset.z * Math.sin(pitch);
+  return proportions.hipHeight - lower + height(offsets.spine, tilt) + height(offsets.chest, (tilt + bow) / 2)
+    + height(offsets.leftShoulder, bow) + height(offsets.leftUpperArm, bow);
+}
 
 /** Posture needed to bring a shoulder within hand reach. */
 export function handLowering(proportions: Proportions, request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number }): { lower: number; bow: number } {

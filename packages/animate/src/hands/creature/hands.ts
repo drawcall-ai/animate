@@ -3,7 +3,7 @@ import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import type { Carrier } from '../../kernel/carrier';
-import { ChainTip, reached } from '../../kernel/tip';
+import { ChainTip, lateReach, reached } from '../../kernel/tip';
 import { noticing } from '../../look/gaze';
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
@@ -139,7 +139,8 @@ function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Fra
 /** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */
 function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) => Goal, on?: Carrier) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new ChainTip(chain);
-  const began = self.frame.time;
+  const first = goal(self.frame), at = on ? on.toWorld(first, _world, self.frame.time).position : first.position;
+  const ends = self.frame.time + dipping(self.pose.position(bone).distanceTo(at));
   let late = false;
   return during(request, `hand.${hand}`, 'asked', (f) => {
     const target = goal(f);
@@ -149,9 +150,9 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
     const target = goal(f), at = on ? on.toWorld(target, _world, f.time).position : target.position;
     request.eta = dipping(f.prev.position(bone).distanceTo(at));
     if (reached(f, bone, target, on)) return true;
-    if (!late && f.time - began > REACHING) {
+    if (!late && f.time > ends + REACHING) {
       late = true;
-      f.dev?.append(f.time, { check: `late reach: distance after ${REACHING} s (m)`, value: f.prev.position(bone).distanceTo(at), limit: REACHED.distance, where: chain });
+      if (lateReach(f, bone, target, chain, on)) request.fail();
     }
     return false;
   });
@@ -209,7 +210,7 @@ export function creatureHands(self: Handed): Handling {
     },
     reach: function* (request, aims) {
       const { hand, target } = only('reach', aims);
-      yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => (f) => ({ position: target(f).position.clone() }));
+      yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target);
     },
     backOut(hands) {
       self.own('release', '', (request) => () => handingBack(self, request, hands, 'borrowed'));

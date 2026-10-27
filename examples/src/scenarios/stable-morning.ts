@@ -153,8 +153,8 @@ function saddleOn(scene: Group): Object3D {
   const saddle = box(scene, 'saddle', SEAT, RACK);
   saddle.userData.mass = MASS;
   for (const side of [-1, 1]) box(saddle, 'skirt', SKIRT, new Vector3(0, -0.13, side * 0.27));
-  empty(saddle, 'left', new Vector3(0.22, 0, 0)).userData.free = true;
-  empty(saddle, 'right', new Vector3(-0.22, 0, 0)).userData.free = true;
+  empty(saddle, 'left', new Vector3(0.22, 0, 0));
+  empty(saddle, 'right', new Vector3(-0.22, 0, 0));
   return saddle;
 }
 

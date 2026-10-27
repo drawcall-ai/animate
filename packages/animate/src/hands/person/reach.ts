@@ -1,10 +1,10 @@
 import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { REACHED, REACHING, type Goal } from '../../kernel/goal';
+import { REACHING, type Goal } from '../../kernel/goal';
 import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
-import { reached } from '../../kernel/tip';
+import { lateReach, reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, onBody, worn } from '../../things/hold';
 import type { Hold } from '../../things/resolve';
@@ -35,24 +35,23 @@ export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f:
  * The hands open, go to their grips together (already on them, they close at once) — one shared condition: each stays on its way until
  * every one is there, the body bowing and bending as low as they are — and close on them. Both going, the right hand leads and the left
  * sets off a moment after it, a little slower (`LEADING`, seeded by what it goes for), its arm kept as it is till then. A hand routes
- * round the outside of the thing it reaches into (a box's handle from outside). Hands not there within `REACHING` s are a problem in the
- * dev log, and they keep going: lateness never throws.
+ * round the outside of the thing it reaches into (a box's handle from outside). Hands still short `REACHING` s after their planned arrival are a problem in the
+ * dev log; an unmet turn fails the request, while a position-only reach keeps going. Lateness never throws.
  */
 export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const began = person.frame.time;
   const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
   const close = () => takes.forEach((take) => grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal }));
   // (hands at their grips already close at once)
-  if (takes.every((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)) <= REACHED.distance)) return close();
+  if (there(person.frame)) return close();
   let late = false, ends = Infinity;
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
     request.eta = Math.max(0, ends - f.time);
     if (ready(f)) return true;
-    if (!late && f.time - began > REACHING) {
+    if (!late && f.time > ends + REACHING) {
       late = true;
       for (const take of takes) {
-        const value = f.prev.position(person.hands[take.side]).distanceTo(gripAt(person, take, f));
-        f.dev?.append(f.time, { check: `late reach: grip distance after ${REACHING} s (m)`, value, limit: REACHED.distance, where: `${take.thing.object.name} ${take.side} ${take.grip}` });
+        if (lateReach(f, person.hands[take.side], take.goal, `${take.thing.object.name} ${take.side} ${take.grip}`, person.track(take.thing.object))) request.fail();
       }
     }
     return false;
@@ -189,8 +188,13 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   });
   // (what it moves arrives once the farthest hand does: the hands set off `NEAR` s before a walk arrives)
   const lasts = Math.max(...going.map((hand) => hand.lasts));
-  let setOff = NaN;
-  const eta = (f: Frame) => void (request.eta = Math.max(0, setOff + lasts - f.time));
+  let setOff = NaN, late = false;
+  const eta = (f: Frame) => {
+    request.eta = Math.max(0, setOff + lasts - f.time);
+    if (late || f.time <= setOff + lasts + REACHING) return;
+    late = true;
+    for (const { side, target } of aims) if (target(f).quaternion && lateReach(f, person.hands[side], target(f), side)) request.fail();
+  };
   yield* parallel<Frame>('all', function* () {
     for (;;) {
       const planned = aims.map(({ target }) => target(person.frame).position.clone());

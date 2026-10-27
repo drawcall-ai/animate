@@ -51,22 +51,20 @@ const ok = { done: true, error: '', log: [] };
 function ballIn(room: Object3D, at: Vector3) {
   const thing = ball(room, 'ball', 0.04, at);
   thing.userData.mass = 0.06;
-  thing.userData.free = true;
   return thing;
 }
 /** a cup of 0.3 kg standing in `room` at `at`, taken round its middle as the hand comes */
 function cupIn(room: Object3D, at: Vector3) {
   const thing = cylinder(room, 'cup', 0.04, 0.1, at);
   thing.userData.mass = 0.3;
-  thing.userData.free = true;
   return thing;
 }
 /** a 2 kg box in `room` at `at`, a grip on each side taken as the hands come */
 function boxIn(room: Object3D, at: Vector3) {
   const thing = box(room, 'box', new Vector3(0.3, 0.2, 0.2), at);
   thing.userData.mass = 2;
-  empty(thing, 'left', new Vector3(0.15, 0, 0)).userData.free = true;
-  empty(thing, 'right', new Vector3(-0.15, 0, 0)).userData.free = true;
+  empty(thing, 'left', new Vector3(0.15, 0, 0));
+  empty(thing, 'right', new Vector3(-0.15, 0, 0));
   return thing;
 }
 

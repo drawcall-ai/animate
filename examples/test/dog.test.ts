@@ -174,7 +174,6 @@ it.each([['the dog', DOG], ['a short-necked one', SHORT_NECKED]] as const)('%s l
   const room = new Group().add(labrador.object);
   const toy = ball(room, 'ball', 0.04, new Vector3(1.5, 0.04, 1.5));
   toy.userData.mass = 0.06;
-  toy.userData.free = true;
   const head = labrador.pose.skeleton.index('head'), was = labrador.pose.rotation(head).clone(), side = new Vector3();
   let taken = NaN, fastest = 0, roll = 0;
   play(function* () {

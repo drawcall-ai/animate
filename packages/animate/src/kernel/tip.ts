@@ -5,7 +5,7 @@ import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { limited } from './limits';
 import { exp, log } from './rotation';
-import { live, REACHED, type Live, type Motion, type Trail, type Placement, type Goal } from './goal';
+import { live, REACHED, REACHING, type Live, type Motion, type Trail, type Placement, type Goal } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
@@ -149,10 +149,26 @@ export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number
   const at = prev.position(tip);
   const moving = _v.subVectors(at, prev2.position(tip)).divideScalar(dt).sub(velocity);
   if (at.distanceTo(then) > REACHED.distance || moving.length() > REACHED.speed) return false;
-  if (!target.quaternion) return true;
+  return angleOff(f, tip, target, on) <= REACHED.angle;
+}
+
+/** The unmet turn, in radians, allowing the target’s free roll and using the last final pose. */
+function angleOff(f: Pick<Frame, 'prev' | 'time'>, tip: number, target: Goal, on?: Carrier): number {
+  if (!target.quaternion) return 0;
+  const placed = on?.at(f.time);
   // (in the frame the target is given in, rolled about its axis as near the tip as it may be)
-  const turned = near(prev.rotation(tip), placed && { current: placed.prev });
-  return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned) <= REACHED.angle;
+  const turned = near(f.prev.rotation(tip), placed && { current: placed.prev });
+  return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned);
+}
+
+/** A late reach reports each unmet constraint, never a zero distance for a blocked turn. Returns whether the turn is unmet. */
+export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier): boolean {
+  const angle = angleOff(f, tip, target, on), position = on ? on.toWorld(target, _goal, f.time).position : target.position;
+  const distance = f.prev.position(tip).distanceTo(position);
+  for (const [name, value, limit] of [['distance (m)', distance, REACHED.distance], ['angle (rad)', angle, REACHED.angle]] as const) {
+    if (value > limit) f.dev?.append(f.time, { check: `late reach: ${name} (${REACHING} s overdue)`, value, limit, where });
+  }
+  return angle > REACHED.angle;
 }
 
 /** a world rotation in the frame a target is given in: on a carrier, its (as placed `current`) */

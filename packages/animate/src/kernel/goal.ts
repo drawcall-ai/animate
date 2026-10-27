@@ -54,7 +54,7 @@ export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
   on?: Trail;
 };
 
-/** the longest a hand takes to get to its goal, unless told, before it is a problem in the dev log (s): a person's and another body's alike */
+/** how long after a hand's planned arrival an unmet turn fails its request and the unmet constraints are logged (s) */
 export const REACHING = 4;
 /** what reaching a goal allows: m, rad, m/s */
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };

@@ -42,8 +42,8 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
       parcel.rotation.y = 0.35 + around;
       parcel.userData.mass = MASS;
       // (taken as the hands come: the box's sides have no one way to hold them)
-      empty(parcel, 'left', new Vector3(size.x / 2 + 0.015, 0, 0)).userData.free = true;
-      empty(parcel, 'right', new Vector3(-size.x / 2 - 0.015, 0, 0)).userData.free = true;
+      empty(parcel, 'left', new Vector3(size.x / 2 + 0.015, 0, 0));
+      empty(parcel, 'right', new Vector3(-size.x / 2 - 0.015, 0, 0));
       const top = shelf(scene, SHELF.boards[3] - lower);
       // (its place on the top board, set there from in front over the board's front edge; +Z the way the body faces putting it there)
       const front = -SHELF.depth / 2;

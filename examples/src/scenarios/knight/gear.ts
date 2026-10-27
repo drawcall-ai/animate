@@ -25,11 +25,6 @@ function piece(name: string, mass: number, segments: Segment[] = [], centre?: Ve
   return group;
 }
 
-/** a grip of `parent` at `position`, the hand taking it turned as its arm brings it */
-function grip(parent: Object3D, name: string, position: Vector3): void {
-  empty(parent, name, position).userData.free = true;
-}
-
 /** `mesh` turned by Euler angles (rad) */
 const turned = (mesh: Mesh, x: number, y: number, z: number) => (mesh.rotation.set(x, y, z), mesh);
 
@@ -52,9 +47,9 @@ export function helm(): Group {
   cylinder(helm, 'helm cap', HELM.radius, HELM.height, new Vector3());
   box(helm, 'helm nasal', new Vector3(0.02, 0.08, 0.01), new Vector3(0, rim - 0.03, HELM.radius + 0.005));
   for (const [side, x] of [['left', 1], ['right', -1]] as const) {
-    grip(helm, side, new Vector3(0.13 * x, -0.15, 0.16));
-    grip(helm, `strap${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.09 * x, rim - 0.2, 0.2));
-    grip(helm, `chin${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.03 * x, rim - 0.22, 0.22));
+    empty(helm, side, new Vector3(0.13 * x, -0.15, 0.16));
+    empty(helm, `strap${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.09 * x, rim - 0.2, 0.2));
+    empty(helm, `chin${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.03 * x, rim - 0.22, 0.22));
   }
   return helm;
 }
@@ -68,8 +63,8 @@ export function gauntlet(side: 'left' | 'right'): Group {
   const gauntlet = piece(`${side} gauntlet`, 0.6);
   box(gauntlet, 'gauntlet fingers', new Vector3(0.17, 0.045, 0.1), new Vector3(0.085 * out, -0.005, 0.005));
   turned(cylinder(gauntlet, 'gauntlet cuff', 0.055, 0.12, new Vector3(-0.05 * out, 0, 0)), 0, 0, Math.PI / 2);
-  grip(gauntlet, 'inside', new Vector3());
-  grip(gauntlet, 'cuff', new Vector3(-0.08 * out, 0.065, 0));
+  empty(gauntlet, 'inside', new Vector3());
+  empty(gauntlet, 'cuff', new Vector3(-0.08 * out, 0.065, 0));
   return gauntlet;
 }
 
@@ -77,7 +72,7 @@ export function gauntlet(side: 'left' | 'right'): Group {
 export function beltEnd(which: 'buckle' | 'tongue'): Group {
   const end = piece(which, 0.2);
   box(end, `${which} plate`, which === 'buckle' ? new Vector3(0.05, 0.055, 0.012) : new Vector3(0.06, 0.04, 0.008), new Vector3());
-  grip(end, 'end', new Vector3());
+  empty(end, 'end', new Vector3());
   return end;
 }
 
@@ -92,7 +87,7 @@ const HAND_ZONE = 0.25;
 export function scabbard(): Group {
   const scabbard = piece('scabbard', 0.5, [{ name: 'scabbard', a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -SCABBARD, 0), radius: 0.022, touches: [] }], new Vector3(0, -SCABBARD / 2, 0));
   cylinder(scabbard, 'scabbard sheath', 0.022, SCABBARD, new Vector3(0, -SCABBARD / 2, 0));
-  grip(scabbard, 'throat', new Vector3(0, -0.06, 0.03));
+  empty(scabbard, 'throat', new Vector3(0, -0.06, 0.03));
   empty(scabbard, 'mouth', new Vector3()).userData.approach = ['drawn'];
   empty(scabbard, 'drawn', new Vector3(0, 0.3, 0));
   return scabbard;
@@ -105,7 +100,7 @@ export function sword(): Group {
   cylinder(sword, 'sword grip', 0.014, 0.16, new Vector3(0, 0.1, 0));
   cylinder(sword, 'sword pommel', 0.022, 0.03, new Vector3(0, 0.19, 0));
   box(sword, 'sword blade', new Vector3(0.045, 0.78, 0.006), new Vector3(0, -0.4, 0));
-  grip(sword, 'hilt', new Vector3(0, 0.09, 0));
+  empty(sword, 'hilt', new Vector3(0, 0.09, 0));
   return sword;
 }
 
@@ -121,9 +116,9 @@ export function shield(): Group {
   turned(box(shield, 'shield point', new Vector3(0.3, 0.26, 0.015), new Vector3(-0.15, -0.23, face)), 0, 0, 0.55);
   turned(box(shield, 'shield point', new Vector3(0.3, 0.26, 0.015), new Vector3(0.03, -0.23, face)), 0, 0, -0.55);
   box(shield, 'shield arm strap', new Vector3(0.03, 0.07, 0.012), new Vector3(-0.17, 0, 0.005));
-  grip(shield, 'edge', new Vector3(0.26, 0.04, face + 0.03));
-  grip(shield, 'enter', new Vector3(-0.3, 0, 0.02));
-  grip(shield, 'handle', new Vector3());
+  empty(shield, 'edge', new Vector3(0.26, 0.04, face + 0.03));
+  empty(shield, 'enter', new Vector3(-0.3, 0, 0.02));
+  empty(shield, 'handle', new Vector3());
   return shield;
 }
 
@@ -136,7 +131,7 @@ export function lance(): Group {
   const lance = piece('lance', 5, [{ name: 'lance', a: new Vector3(0, LANCE.tip - LANCE.length, 0), b: new Vector3(0, LANCE.tip, 0), radius: 0.025, touches: ['rightHand', 'rightLowerArm'] }], middle);
   cylinder(lance, 'lance shaft', 0.025, LANCE.length, middle);
   cylinder(lance, 'lance vamplate', 0.05, 0.14, new Vector3(0, 0.12, 0));
-  grip(lance, 'grip', new Vector3());
+  empty(lance, 'grip', new Vector3());
   return lance;
 }
 

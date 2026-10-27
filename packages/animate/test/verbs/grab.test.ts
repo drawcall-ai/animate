@@ -1,6 +1,6 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { grab, release, wait } from '../../src/index';
+import { grab, reach, release, wait } from '../../src/index';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
 import { insides, person, play, feetOf, gazeOff } from '../bodies';
@@ -170,7 +170,7 @@ describe('grab, from where it stands', () => {
     const handle = box(room, new Vector3(-0.2, 1.0, 0.35), { mass: null, solid: false, name: 'handle' });
     const grip = named(handle, 'right');
     // (turned as the hand hangs, then a quarter turn more about its forearm: a hand that must turn to take it)
-    delete grip.userData.free;
+    grip.userData.handTurn = true;
     grip.quaternion.copy(body.bones.rightHand.getWorldQuaternion(new Quaternion())).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 0.8));
     room.updateMatrixWorld(true);
     let held = false;
@@ -218,4 +218,24 @@ describe('grab, from where it stands', () => {
     expect([...parents.handle]).toEqual([room]);
     expect([...parents.pouch]).toEqual([body.bones.hips]);
   });
+});
+
+for (const verb of ['grab', 'reach'] as const) it(`${verb} fails an unreachable hand turn and reports its angular error`, () => {
+  for (const dev of [false, true]) {
+    const body = person({ dev }), room = roomOf(body);
+    const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
+    const grip = named(handle, 'right');
+    grip.userData.handTurn = true;
+    grip.rotation.z = Math.PI;
+    let result: boolean | undefined;
+    play(function* () {
+      result = yield* (verb === 'grab' ? grab(body, handle, { right: 'right' }) : reach(body, { right: grip }));
+    }, [body], 12, () => result !== undefined);
+    expect(result).toBe(false);
+    expect(body.holds(handle)).toBe(false);
+    const angles = body.log.filter(({ check }) => check.startsWith('late reach: angle'));
+    expect(angles).toHaveLength(dev ? 1 : 0);
+    if (dev) expect(angles[0].value).toBeGreaterThan(angles[0].limit);
+    expect(body.log.filter(({ check }) => check.startsWith('late reach: distance'))).toEqual([]);
+  }
 });

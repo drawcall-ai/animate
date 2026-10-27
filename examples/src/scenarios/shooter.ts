@@ -243,8 +243,10 @@ export function shooter(): Scenario {
 function rifleOn(mount: Object3D, arms: number): Object3D {
   const rifle = empty(mount, 'rifle', new Vector3());
   rifle.userData.mass = RIFLE.mass;
-  empty(rifle, 'pistol', new Vector3()).quaternion.setFromEuler(PISTOL_GRIP);
-  empty(rifle, 'foregrip', RIFLE.foregrip.clone().setZ(RIFLE.foregrip.z * arms)).userData.free = true;
+  const pistol = empty(rifle, 'pistol', new Vector3());
+  pistol.quaternion.setFromEuler(PISTOL_GRIP);
+  pistol.userData.handTurn = true;
+  empty(rifle, 'foregrip', RIFLE.foregrip.clone().setZ(RIFLE.foregrip.z * arms));
   box(rifle, 'receiver', new Vector3(0.065, 0.09, 0.42), new Vector3(0, 0.06, 0.12));
   box(rifle, 'stock', new Vector3(0.075, 0.16, 0.1), RIFLE.stock.clone().setZ(RIFLE.stock.z * arms));
   box(rifle, 'lower', new Vector3(0.12, 0.07, 0.2), new Vector3(-0.035, -0.005, -0.15));
@@ -263,7 +265,7 @@ function rifleOn(mount: Object3D, arms: number): Object3D {
 function magazineIn(place: Object3D, name: string): Object3D {
   const magazine = box(place, name, MAGAZINE.size, new Vector3());
   magazine.userData.mass = MAGAZINE.mass;
-  empty(magazine, 'base', MAGAZINE.base).userData.free = true;
+  empty(magazine, 'base', MAGAZINE.base);
   return magazine;
 }
 
