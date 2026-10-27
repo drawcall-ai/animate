@@ -4,44 +4,28 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
 import * as animate from '@drawcall/animate';
-import * as species from '@drawcall/animate/species';
+import * as three from 'three';
+import * as timeline from '@pmndrs/timeline';
+import { PERSON } from '../../packages/animate/skills/animate/references/person';
 
-// Every TypeScript block in the skill and the README compiles against the package as published: each is checked as a module of its
-// own, the package's exports it does not import in scope, and the scene's own things (a renderer, a clock, a model…) declared.
+// Skill blocks are standalone modules; only the README's surrounding application is declared.
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '../..');
 const DOCS = ['packages/animate/skills/animate/SKILL.md', 'README.md'];
-/** what a snippet takes from the app around it */
-const APP: Record<string, string> = {
-  scene: 'import("three").Scene', renderer: 'import("three").WebGLRenderer', clock: 'import("three").Clock', delta: 'number',
-  characterModel: 'import("three").Object3D', skeleton: 'typeof import("../src/skeletons").PERSON', BIRD: 'readonly import("@drawcall/rig").SkeletonBone<"body" | "neck" | "beak" | `${"left" | "right"}${"Hip" | "Knee" | "Ankle" | "Toe"}`>[]',
-};
+const APP = `declare const scene: import('three').Scene, characterModel: import('three').Object3D,
+  skeleton: typeof import('../src/skeletons').PERSON, delta: number;`;
 
-function blocks(): { name: string; code: string }[] {
+function blocks(): { name: string; code: string; doc: string }[] {
   return DOCS.flatMap((doc) => [...readFileSync(resolve(root, doc), 'utf8').matchAll(/```ts\n([\s\S]*?)```/g)]
-    .map((match, i) => ({ name: `${doc.split('/').pop()}#${i + 1}`, code: match[1] })));
-}
-
-function source(code: string): string {
-  const imported = new Set([...code.matchAll(/^import [^;]*\{([^}]*)\}/gm)].flatMap((match) => match[1].split(',').map((name) => name.trim().replace(/^type /, ''))));
-  const own = new Set([...code.matchAll(/(?:const|let|function)\s+(\w+)/g)].map((match) => match[1]));
-  const free = (names: string[]) => names.filter((name) => !imported.has(name) && !own.has(name));
-  const declared = Object.entries(APP).filter(([name]) => !own.has(name) && !imported.has(name)).map(([name, type]) => `${name}: ${type}`);
-  return [
-    `import { ${free(Object.keys(animate)).join(', ')} } from '@drawcall/animate';`,
-    `import { ${free(Object.keys(species).filter((name) => !(name in animate))).join(', ')} } from '@drawcall/animate/species';`,
-    declared.length ? `declare const ${declared.join(', ')};` : '',
-    code,
-    'export {};',
-  ].join('\n');
+    .map((match, i) => ({ name: `${doc.split('/').pop()}#${i + 1}`, code: match[1], doc })));
 }
 
 /** each block's type errors, by block */
 function compiled(): Map<string, string[]> {
   const config = ts.readConfigFile(resolve(root, 'tsconfig.base.json'), ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'examples'));
-  // (every snippet is given all the exports, most of which it does not use)
   const options = { ...parsed.options, noUnusedLocals: false, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 };
-  const files = new Map(blocks().map(({ name, code }, i) => [resolve(here, `__snippet${i + 1}.ts`), { name, text: source(code) }]));
+  const files = new Map(blocks().map(({ name, code, doc }, i) => [resolve(doc.endsWith('SKILL.md') ? resolve(root, dirname(doc)) : here, `__snippet${i + 1}.ts`),
+    { name, text: doc.endsWith('SKILL.md') ? code : `${APP}\n${code}` }]));
   const host = ts.createCompilerHost(options);
   const { getSourceFile, fileExists, readFile } = host;
   host.fileExists = (file) => files.has(file) || fileExists(file);
@@ -56,10 +40,24 @@ function compiled(): Map<string, string[]> {
     const file = d.file && files.get(d.file.fileName);
     if (!file || !d.file) continue;
     const { line } = d.file.getLineAndCharacterOfPosition(d.start ?? 0);
-    errors.get(file.name)?.push(`line ${line - 2}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`);
+    errors.get(file.name)?.push(`line ${line + 1}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`);
   }
   return errors;
 }
 
 const errors = compiled();
 for (const [name, found] of errors) it(`${name} compiles`, () => expect(found).toEqual([]), 120_000);
+
+it('runs the skill story headlessly to its checked ending', () => {
+  const main = blocks().find(({ doc }) => doc.endsWith('SKILL.md'));
+  if (!main) throw new Error('The animate skill has no runnable example');
+  const modules: Record<string, unknown> = {
+    three, '@pmndrs/timeline': timeline, '@drawcall/animate': animate, './references/person': { PERSON },
+  };
+  const require = (name: string) => {
+    if (!(name in modules)) throw new Error(`Snippet imports unsupported module ${name}`);
+    return modules[name];
+  };
+  const compiled = ts.transpileModule(main.code, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
+  new Function('require', 'exports', compiled.outputText)(require, {});
+}, 30000);
