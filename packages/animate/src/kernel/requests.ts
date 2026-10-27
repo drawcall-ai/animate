@@ -66,7 +66,7 @@ export class Request {
     return this.runner?.finished ?? false;
   }
 
-  /** how development and `goals` name it */
+  /** how development and `owners` name it */
   get label(): string {
     return this.site ? `${this.verb} (${this.site})` : this.verb;
   }

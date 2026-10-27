@@ -10,7 +10,7 @@ const ABDUCTION = 8 * DEG, ELBOW = 12 * DEG;
 const KNEE = 5 * DEG;
 
 /**
- * A relaxed standing pose: each bone's rotation in its parent's frame (VRM normalized; the trunk, head, hands and toes as in the T-pose),
+ * A relaxed standing pose: each bone's rotation in its parent's frame (+Y-up, +Z-forward; the trunk, head, hands and toes as in the T-pose),
  * all but the root's, whose rotation (in the world's) is the body's facing, not its posture. Signs by the right-hand rule about +x (left),
  * +y (up), +z (forward); the right side mirrors the left.
  */

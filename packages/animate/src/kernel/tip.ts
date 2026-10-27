@@ -126,13 +126,15 @@ export class ChainTip {
   }
 }
 
+type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
+
 /**
  * Bone `tip` of a body (its last poses `prev2`, `prev`, `dt` apart, before the sub-step at `time`) is on `target`: within REACHED's
  * distance and angle, and moving with it to within its speed. The last pose is a sub-step old, so it is judged against where the
  * target was then: on a carrier (in its frame), as the carrier was placed then and the sub-step before (`Carrier.at`); else moved back
  * by its velocity.
  */
-export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
+export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);
   const then = _then, velocity = _velocity, moved = target.velocity ?? ZERO;
@@ -153,7 +155,7 @@ export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number
 }
 
 /** The unmet turn, in radians, allowing the target’s free roll and using the last final pose. */
-function angleOff(f: Pick<Frame, 'prev' | 'time'>, tip: number, target: Goal, on?: Carrier): number {
+function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: Carrier): number {
   if (!target.quaternion) return 0;
   const placed = on?.at(f.time);
   // (in the frame the target is given in, rolled about its axis as near the tip as it may be)

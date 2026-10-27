@@ -18,7 +18,7 @@ export const dt = 1 / 60;
 export const person = (options: BodyOptions = {}, height = 1.75) => new Body(humanoid(height === 1.75 ? PERSON : scaled(height / 1.75)), options);
 
 /** the default person's skeleton, every position times `factor` */
-const scaled = (factor: number) => PERSON.map((bone) => ({ ...bone, position: bone.position.map((x) => x * factor) as [number, number, number] }));
+const scaled = (factor: number) => PERSON.map((bone) => ({ ...bone, position: [bone.position[0] * factor, bone.position[1] * factor, bone.position[2] * factor] as const }));
 
 /** a person's feet as its stepper has them: where each stands or lands, which way it points, planted or swinging */
 export const feetOf = (h: Person) => (h.stepper?.legs ?? []).map((leg) => ({ position: leg.anchor, yaw: leg.yaw, phase: leg.swing ? 'swing' : 'planted' }));

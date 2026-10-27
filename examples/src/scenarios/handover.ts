@@ -14,11 +14,11 @@ const OVERRIDE = { from: 4, seconds: 2 };
 /** how long before the hand the eyes go (s): they reach what the hand goes for first (Land & Hayhoe 2001) */
 const LEAD = 0.5;
 
-export const handOver: Scenario = {
+export const reachOverride: Scenario = {
   id: 'hand-over',
-  title: 'Layers: a hand handed over',
+  title: 'Reach override',
   description:
-    'The right hand rides a ball going round a circle, the eyes on it; from 4 s to 6 s a newer reach raises the hand instead, the eyes going there first and back first. Each hand-over is continuous: every verb takes the arm on from the motion it has.',
+    'The right hand rides a ball going round a circle, the eyes on it; from 4 s to 6 s a newer reach raises the hand instead, the eyes going there first and back first. Each override is continuous: every verb takes the arm on from the motion it has.',
   duration: 10,
   stage: (cast) => {
     const person = cast.person();

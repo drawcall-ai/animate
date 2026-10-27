@@ -38,7 +38,17 @@ function stretchedEyes(eyes: (pose: ReadonlyPose, out: Vector3) => Vector3, size
     let view = views.get(pose);
     if (!view) {
       const point = (bone: number, local: Vector3, into: Vector3) => pose.point(bone, at.copy(local).multiplyScalar(size), into);
-      views.set(pose, view = Object.create(pose, { point: { value: point } }) as ReadonlyPose);
+      view = {
+        skeleton: pose.skeleton,
+        get facing() { return pose.facing; },
+        local: (bone) => pose.local(bone),
+        position: (bone) => pose.position(bone),
+        rotation: (bone) => pose.rotation(bone),
+        point,
+        com: (into) => pose.com(into),
+        load: (bone) => pose.load(bone),
+      };
+      views.set(pose, view);
     }
     return eyes(view, out);
   };

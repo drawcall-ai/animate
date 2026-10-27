@@ -7,7 +7,6 @@ import { TrackedRotation } from '../../src/kernel/track';
 import { looking, SHIFT } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';
 import { ChainTip, reached } from '../../src/kernel/tip';
-import type { ReadonlyPose } from '../../src/kernel/pose';
 import { claim, dt } from '../bodies';
 import { turn } from './rigs';
 
@@ -156,7 +155,7 @@ describe('looking', () => {
 describe('reached', () => {
   it('counts a tip tracking a moving target exactly, judging the last pose against where the target was then', () => {
     const speed = 0.9;
-    const pose = (x: number) => ({ position: () => new Vector3(x, 0, 0) }) as unknown as ReadonlyPose;
+    const pose = (x: number) => ({ position: () => new Vector3(x, 0, 0), rotation: () => new Quaternion() });
     const target = { position: new Vector3(speed * 2 * dt, 0, 0), velocity: new Vector3(speed, 0, 0) };
     // the tip was on the target both earlier frames; now the target is a frame (1.5 cm) further on
     expect(reached({ prev2: pose(0), prev: pose(speed * dt), dt, time: 2 * dt }, 0, target)).toBe(true);
@@ -169,7 +168,7 @@ describe('reached', () => {
     const turned = (k: number) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 6 * k * dt);
     for (let k = 1; k <= 2; k++) on.move(k * dt, new Vector3(), turned(k));
     const grip = { position: new Vector3(0.5, 0, 0) };
-    const pose = (k: number) => ({ position: () => grip.position.clone().applyQuaternion(turned(k)) }) as unknown as ReadonlyPose;
+    const pose = (k: number) => ({ position: () => grip.position.clone().applyQuaternion(turned(k)), rotation: () => turned(k) });
     expect(reached({ prev2: pose(0), prev: pose(1), dt, time: 2 * dt }, 0, grip, on)).toBe(true);
   });
 });
