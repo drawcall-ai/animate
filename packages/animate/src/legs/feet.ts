@@ -6,8 +6,7 @@ import type { ReadonlyPose } from '../kernel/pose';
 import { angleAt, type JointCycle } from '../species/cycle';
 import { offsetAt, strideAt, type Gait } from '../species/gait';
 import type { LegChain } from '../species/leg';
-import { Solver, type LegTarget } from './solve';
-import { SINGULAR } from './cholesky';
+import { SINGULAR, Solver, type LegTarget } from './solve';
 import { GRAVITY, minimumJerk, wrapAngle } from '../kernel/math';
 import { followRotation } from '../kernel/follow';
 import { clampRotation } from '../kernel/limits';
@@ -186,16 +185,11 @@ export class ChainLeg {
       this.slipped += Math.min(...this.put.map(([point, at]) => f.prev.point(terminal, point, _v).distanceTo(at)));
       for (const [point, at] of this.put) f.prev.point(terminal, point, at);
     }
-    const slide = this.slipped;
-    if (slide > CONTACT.slide) dev.append(time, { check: 'leg contact slide (m)', value: slide, limit: CONTACT.slide, where });
+    if (this.slipped > CONTACT.slide) dev.append(time, { check: 'leg contact slide (m)', value: this.slipped, limit: CONTACT.slide, where });
     if (!this.landed) return;
-    const velocity = _v.subVectors(f.prev.position(terminal), f.prev2.position(terminal)).divideScalar(f.dt);
-    if (Math.abs(velocity.y) > TOUCHDOWN.down) {
-      dev.append(time, { check: 'leg touchdown vertical speed (m/s)', value: Math.abs(velocity.y), limit: TOUCHDOWN.down, where });
-    }
-    if (Math.hypot(velocity.x, velocity.z) > TOUCHDOWN.along) {
-      dev.append(time, { check: 'leg touchdown horizontal speed (m/s)', value: Math.hypot(velocity.x, velocity.z), limit: TOUCHDOWN.along, where });
-    }
+    const velocity = _v.subVectors(f.prev.position(terminal), f.prev2.position(terminal)).divideScalar(f.dt), along = Math.hypot(velocity.x, velocity.z);
+    if (Math.abs(velocity.y) > TOUCHDOWN.down) dev.append(time, { check: 'leg touchdown vertical speed (m/s)', value: Math.abs(velocity.y), limit: TOUCHDOWN.down, where });
+    if (along > TOUCHDOWN.along) dev.append(time, { check: 'leg touchdown horizontal speed (m/s)', value: along, limit: TOUCHDOWN.along, where });
   }
 
   /** the joints as the foot lifted, while it swings */
@@ -204,15 +198,11 @@ export class ChainLeg {
 
   private readonly sign: number;
   private readonly length: number;
-  private readonly skeleton: object;
-  private readonly restPose: ReadonlyPose;
 
-  constructor(private readonly chain: LegChain, start: ReadonlyPose) {
+  constructor(private readonly chain: LegChain, private readonly start: ReadonlyPose) {
     const top = chain.joints[0].bone, terminal = chain.joints[chain.joints.length - 1].bone;
     this.sign = start.position(terminal).x - start.position(0).x >= 0 ? 1 : -1;
     this.length = start.position(top).distanceTo(start.position(terminal));
-    this.skeleton = start.skeleton;
-    this.restPose = start;
     this.solver = new Solver(start.skeleton, chain.joints);
     this.cycles = chain.joints.flatMap(({ axes, cycle }) => [...axes].map((axis) => axis === 'x' ? cycle ?? null : null));
     this.rest = Float64Array.from(chain.joints.flatMap(({ bone, axes }) => {
@@ -250,7 +240,7 @@ export class ChainLeg {
 
   /** its table at `pitch`: sampled once for every body of its skeleton standing as it does */
   private tableAt(pitch: number): Table {
-    const skeleton = this.skeleton, tables = TABLES.get(skeleton) ?? new Map<string, Table>();
+    const skeleton = this.start.skeleton, tables = TABLES.get(skeleton) ?? new Map<string, Table>();
     TABLES.set(skeleton, tables);
     const key = `${this.solver.bones.join(',')}|${pitch}|${Array.from(this.rest).join(',')}`;
     let table = tables.get(key);
@@ -275,21 +265,21 @@ export class ChainLeg {
   /** its table at `pitch`, each point solved the first time it is read (its own solver: the leg's posing one keeps its references) */
   private sample(pitch: number): Table {
     const length = this.length, target: LegTarget = { swing: null, position: new Vector3(), rotation: new Quaternion(), above: [] };
-    const solver = new Solver(this.restPose.skeleton, this.chain.joints);
+    const solver = new Solver(this.start.skeleton, this.chain.joints);
     solver.q.set(this.rest);
     for (let j = 0; j < solver.n; j++) solver.setRef(j, this.rest[j]);
     const across = Array.from({ length: DEPTH.across }, (_, i) => length * (DEPTH.out[0] + (DEPTH.out[1] - DEPTH.out[0]) * i / (DEPTH.across - 1)));
     const along = Array.from({ length: DEPTH.along }, (_, k) => length * DEPTH.ahead * (2 * k / (DEPTH.along - 1) - 1));
-    const q = new Float64Array(solver.n), values = new Float64Array(DEPTH.across * DEPTH.along).fill(NaN);
+    const values = new Float64Array(DEPTH.across * DEPTH.along).fill(NaN);
     yawPitch(0, pitch, target.rotation);
     // (no further than its bones laid end to end: there it is not worth solving)
-    const most = this.chain.joints.reduce((sum, { bone }, j, joints) => j ? sum + this.restPose.position(bone).distanceTo(this.restPose.position(joints[j - 1].bone)) : 0, 0);
+    const most = this.chain.joints.reduce((sum, { bone }, j, joints) => j ? sum + this.start.position(bone).distanceTo(this.start.position(joints[j - 1].bone)) : 0, 0);
     const sign = this.sign, kept = Float64Array.from(this.rest);
     const reaches = (out: number, ahead: number, down: number) => {
       if (Math.hypot(out, down, ahead) > most) return false;
       target.position.set(sign * out, -down, ahead);
       // (a leg pulled straight is singular: there it reaches no further)
-      try { return solver.reach(IDENTITY, ZERO, target, q, undefined, DEPTH.iterations) < DEPTH.miss && solver.rotationError < DEPTH.turn; } catch (cause) {
+      try { return solver.reach(target, DEPTH.iterations) < DEPTH.miss && solver.rotationError < DEPTH.turn; } catch (cause) {
         if (!(cause instanceof Error && cause.message === SINGULAR)) throw cause;
         solver.q.set(kept);
         return false;
@@ -317,10 +307,8 @@ export class ChainLeg {
     const { solver, target, cycles, rest } = this, stride = strideAt(gait, speed, leg), blend = stride.referenceBlend ?? 0;
     // (lifted, the references take over from the leg as it stood over the first `TAKING` of the swing: it does not snap to them)
     const terminal = solver.bones[solver.bones.length - 1];
-    if (swing !== null && this.lifting === null) {
-      this.lifting = Float64Array.from(solver.q);
-    }
     if (swing === null) this.lifting = null;
+    else this.lifting ??= Float64Array.from(solver.q);
     const taken = swing === null ? 1 : minimumJerk(swing / TAKING);
     for (let j = 0; j < solver.n; j++) {
       const c = cycles[j], ref = (c ? angleAt(c, u, stride.duty, blend) * stepping : 0) + rest[j] * (1 - stepping);
@@ -342,8 +330,8 @@ export class ChainLeg {
     }
     // (planted, a contact missed by more than `CONTACT` is solved again from the references: the leg does not keep to a bend that cannot
     // hold it; a near miss it keeps, its joints not leaping)
-    const missed = solver.solve(f.current, target, solver.q, false);
-    if (missed > CONTACT.distance && swing === null) solver.solve(f.current, target, solver.q, true);
+    const missed = solver.solve(f.current, target, false);
+    if (missed > CONTACT.distance && swing === null) solver.solve(f.current, target, true);
     this.landed = this.held === null && swing === null && this.posed;
     this.posed = true;
     this.held = swing === null ? { position: target.position.clone(), rotation: target.rotation.clone() } : null;
@@ -367,7 +355,6 @@ export class ChainLeg {
       // (but never into the floor: there the solution stands)
       if (Math.min(...this.sole.map((point) => f.current.point(terminal, point, _v).y)) < 0) solver.bones.forEach((b, k) => f.current.setLocal(b, solved[k]));
     }
-
   }
 }
 
@@ -385,14 +372,14 @@ type Table = { across: number[]; along: number[]; at(i: number, k: number): numb
 /** a pure cache: each skeleton's legs' reach tables, by chain, pitch and standing — worked out once from its rest pose and ranges, never
  * changed, shared by every body of that skeleton */
 const TABLES = new WeakMap<object, Map<string, Table>>();
-const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), IDENTITY = new Quaternion();
-/**
- * Tuned: a leg's reach is sampled at `across` × `along` points, out from the body `out` × its standing length and ahead and behind
- * `ahead` × it; at each, how far down it reaches, between `down` × it, to within `steps` halvings; a foot reached within `miss` (m) and
- * `turn` (rad) of flat
- */
+const UP = new Vector3(0, 1, 0);
 /** Tuned: a leg is held this share of its length short of what its joints reach */
 const SPARE = 0.04;
+/**
+ * Tuned: a leg's reach is sampled at `across` × `along` points, out from the body `out` × its standing length and ahead and behind
+ * `ahead` × it; at each, how far down it reaches, to within `steps` halvings; a foot reached within `miss` (m) and `turn` (rad) of flat,
+ * in at most `iterations` solver steps
+ */
 const DEPTH = { across: 37, along: 13, out: [-0.4, 0.5], ahead: 0.6, steps: 7, miss: 1e-3, turn: 0.02, iterations: 6 };
 /** Tuned: the depths (× its standing length) a leg's reach is first looked for at, from the furthest */
 const DOWN = [1.1, 1, 0.9, 0.75, 0.6, 0.4];
