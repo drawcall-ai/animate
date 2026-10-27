@@ -87,9 +87,8 @@ export class Stepper extends Steps {
     if (!was || this.airborne) return;
     const name = (leg: Leg) => f.prev.skeleton.bones[feet.legs[leg.i].foot].name, now = this.now;
     const left = legs.filter((leg) => aloft[leg.i] && !was[leg.i]);
-    // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — never lifts a foot while the one whose
-    // footfall is half a cycle from it is in the air: a girdle's; a walk's stance cut short past half the cycle is a run's, and a pair a run
-    // lifted is not the walk's it slows into)
+    // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — lifts none while the one half a cycle
+    // from it, a girdle's, is in the air; a stance cut short past half the cycle is a run's, and a pair a run lifted not the walk's after)
     if (now && now.Ts / now.C >= 0.5 && isWalking(this)) for (const a of left) for (const b of legs) {
       const d = mod(this.footfalls[a.i] - this.footfalls[b.i]), value = Math.min(d, 1 - d);
       if (b === a || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
