@@ -1,9 +1,9 @@
 import { during } from '../kernel/requests';
 import { selfOf, type Body } from '../body/body';
 import type { Frame } from '../kernel/frame';
-import { headingOf } from '../kernel/math';
+import { headingOf, headingOfTurn } from '../kernel/math';
 import { Walk } from '../legs/walk';
-import { finder, headingOfTurn, type Target } from './targets';
+import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
 /** How a walk goes. */
@@ -39,9 +39,9 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
         return headingOf(at.x - from.x, at.z - from.z);
       }
       const turn = find(f).quaternion;
-      return turn && headingOfTurn(turn);
+      return turn ? headingOfTurn(turn) : null;
     };
-    const walk = new Walk(self, { to: (f) => find(f).position, face: yaw, velocity: (f) => find(f).object ? find(f).velocity : undefined, speed, accel }, until === undefined);
+    const walk = new Walk(self, { to: (f) => find(f).position, face: yaw, velocity: (f) => find(f).velocity, speed, accel }, until === undefined);
     const step = (f: Frame) => {
       const go = walk.step(f);
       request.eta = walk.eta;

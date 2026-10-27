@@ -19,18 +19,18 @@ export type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string>
 export type HandOf<S extends AnySpecies> = S extends Species<string, infer Hand> ? Hand : never;
 
 /** What holds one of a body's parts: the verb, where the story asked for it and how firmly (borrowed: needed, not asked). */
-export interface Goal {
+export interface Owner {
   verb: string;
   site: string;
   tier: Tier;
 }
 
 /** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's turn (`trunk`) and each hand. */
-export interface Goals {
-  go?: Goal;
-  look?: Goal;
-  trunk?: Goal;
-  hands: Partial<Record<string, Goal>>;
+export interface Owners {
+  go?: Owner;
+  look?: Owner;
+  trunk?: Owner;
+  hands: Partial<Record<string, Owner>>;
 }
 
 /** A foot as it stands or, swinging, where it lands. */
@@ -112,9 +112,9 @@ export class Body<S extends AnySpecies = AnySpecies> {
   }
 
   /** what holds each of its parts now: the newest asked verb, else the first borrower */
-  get goals(): Goals {
+  get owners(): Owners {
     const self = selfOf(this);
-    const goal = (channel: Parameters<Self['owner']>[0]): Goal | undefined => {
+    const goal = (channel: Parameters<Self['owner']>[0]): Owner | undefined => {
       const claim = self.owner(channel);
       return claim && { verb: claim.request.verb, site: claim.request.site, tier: claim.tier };
     };

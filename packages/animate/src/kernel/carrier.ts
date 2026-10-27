@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { STEP } from './frame';
-import type { Placed, Placement, Target } from './goal';
+import type { Trail, Placement, Goal } from './goal';
 import { spinOf } from './rotation';
 
 /**
@@ -8,10 +8,10 @@ import { spinOf } from './rotation';
  * last moved to, `prev` and `prev2` the two sub-steps before. It is moved once per sub-step: by the body that moves what it is, after
  * that body's hands, or as it is found the first time it is read in a sub-step. Read it at a sub-step's time (`at`).
  */
-export class Carrier implements Placed {
-  readonly prev2: Required<Placement>;
-  readonly prev: Required<Placement>;
-  readonly current: Required<Placement>;
+export class Carrier implements Trail {
+  readonly prev2: Placement;
+  readonly prev: Placement;
+  readonly current: Placement;
   /** the time it was last moved to (s) */
   private time = -Infinity;
   /** the body whose own bone carries its goal (`Target.carriedBy`), if one does: that body letting itself down carries it down too */
@@ -40,7 +40,7 @@ export class Carrier implements Placed {
    * where it is at `time` (s) and the two sub-steps before: its fields, but while the body that wears it is posing that
    * sub-step — the body moves what it wears after its behaviour — carried on as it last moved
    */
-  at(time: number): Placed {
+  at(time: number): Trail {
     // (not moved the sub-step before nor this one, it has stood still since it last moved: no motion carried over)
     if (this.dueAt !== time && time - this.time > 1.5 * STEP) return { prev2: this.current, prev: this.current, current: this.current };
     if (this.dueAt !== time || this.moved(time)) return this;
@@ -75,7 +75,7 @@ export class Carrier implements Placed {
   }
 
   /** `local` (in its frame) in the world as it is now — at `time` (s), if given (`at`) — into `out`: moving with it (v + ω × r) */
-  toWorld(local: Placement, out: Target & { velocity: Vector3; spin: Vector3 }, time?: number): Target & { velocity: Vector3; spin: Vector3 } {
+  toWorld(local: Goal, out: Goal & { velocity: Vector3; spin: Vector3 }, time?: number): Goal & { velocity: Vector3; spin: Vector3 } {
     const { prev, current: { position, quaternion } } = time === undefined ? this : this.at(time);
     const r = _r.copy(local.position).applyQuaternion(quaternion);
     out.position.copy(r).add(position);
@@ -87,7 +87,7 @@ export class Carrier implements Placed {
   }
 }
 
-function copy(to: Required<Placement>, from: Required<Placement>) {
+function copy(to: Placement, from: Placement) {
   to.position.copy(from.position);
   to.quaternion.copy(from.quaternion);
 }

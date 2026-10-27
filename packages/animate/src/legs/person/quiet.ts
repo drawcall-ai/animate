@@ -21,7 +21,7 @@ const WEIGHT: Rhythm = { first: [10, 20], every: [10, 30], hold: [20, 40], quiet
 const STEADY = 0.3;
 
 /** Quiet stance goals, owned by balance rather than added to a finished pose. */
-export class Life {
+export class Quiet {
   readonly drift = new Vector3();
   breath = 0;
   private time = 0;

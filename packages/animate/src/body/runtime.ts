@@ -9,7 +9,7 @@ import { SnapChecks } from '../kernel/rotation';
 import { Poise } from '../kernel/poise';
 import type { Go } from '../kernel/go';
 import { createLocomotion, type Locomotion } from '../legs/locomotion';
-import type { Driven } from '../legs/legged';
+import type { Root } from '../legs/legged';
 import type { Step } from '../kernel/frame';
 import type { Stepper } from '../legs/step/stepper';
 import type { AnySpecies, Gazer, Temperament } from '../species/define';
@@ -18,7 +18,8 @@ import { yawOf } from '../kernel/math';
 import { Binding } from './model';
 import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
-import type { Thing, Local } from '../things/thing';
+import type { Thing } from '../things/thing';
+import type { Placement } from '../kernel/goal';
 import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
 import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
@@ -31,7 +32,7 @@ export interface SelfOptions {
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
   /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
-  drive?: (time: number) => Driven;
+  drive?: (time: number) => Root;
   /** its quiet life: a seed that fixes its variation, what tethers it and what startles it */
   life?: Temperament;
   /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces */
@@ -78,7 +79,7 @@ export class Self implements Holder {
   /** each hand's tip bone, by name */
   readonly hands: Readonly<Record<string, number>>;
   readonly holding: Record<string, Hold | null>;
-  readonly drive?: (time: number) => Driven;
+  readonly drive?: (time: number) => Root;
   readonly life: Temperament;
   /** the bodies it keeps clear of: those it has dealt with, either way, and those it was told to avoid */
   readonly near = new Set<Self>();
@@ -105,7 +106,7 @@ export class Self implements Holder {
     this.gazer = species.gaze;
     this.drive = options.drive;
     this.life = options.life ?? {};
-    const pose = start?.(this.skeleton) ?? standing(this.skeleton, options.at, options.face);
+    const pose = start?.(this.skeleton) ?? restPose(this.skeleton, options.at, options.face);
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
@@ -199,7 +200,7 @@ export class Self implements Holder {
   }
 
   /** where it moves `node`, as `reader` reads it (`poseFor`): its own this sub-step; another's as it was before its update this frame */
-  movedFor(reader: Resolving, node: Object3D): Local | null {
+  movedFor(reader: Resolving, node: Object3D): Placement | null {
     const carrier = this.carried.get(node);
     if (!carrier) return null;
     if (reader === this) return carrier.at(this.frame.time).current;
@@ -207,7 +208,7 @@ export class Self implements Holder {
   }
 
   /** where it moved each thing it carries as its last update began: what others read while it is ahead of them */
-  private readonly movedBefore = new Map<Object3D, Local>();
+  private readonly movedBefore = new Map<Object3D, Placement>();
 
   restOf(bone: number): Readonly<Quaternion> {
     return this.binding.restOf(bone);
@@ -461,7 +462,7 @@ function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'vo
 }
 
 /** the skeleton's rest pose standing `at` facing `face` */
-function standing(skeleton: Skeleton, at?: Vector3, face = 0): Pose {
+function restPose(skeleton: Skeleton, at?: Vector3, face = 0): Pose {
   const pose = new Pose(skeleton), root = pose.position(0);
   pose.setRoot(new Vector3(at?.x ?? root.x, root.y + (at?.y ?? 0), at?.z ?? root.z));
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), face).multiply(pose.local(0)));
@@ -489,4 +490,4 @@ const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
 const EMPTY: readonly LogEntry[] = Object.freeze([]);
-const _local: Local = { position: new Vector3(), quaternion: new Quaternion() };
+const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };

@@ -3,7 +3,7 @@ import { selfOf, type Body } from '../body/body';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Frame } from '../kernel/frame';
-import type { Placement } from '../kernel/goal';
+import type { Goal } from '../kernel/goal';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
@@ -34,10 +34,8 @@ export function carry(body: Body, thing: Object3D, target: Target | readonly Tar
     if (!hands.length) throw new Error(`carry: no hand of the body holds "${thing.name}" (grab it first)`);
     const points = targets.map((each, k) => {
       const find = finder(self, each), last = k === targets.length - 1;
-      return (f: Frame): Placement => {
-        const found = find(f);
-        return { position: found.position, quaternion: last ? found.quaternion ?? undefined : undefined };
-      };
+      // (only the last turns it)
+      return (f: Frame): Goal => last ? find(f) : { position: find(f).position };
     });
     const last = targets[targets.length - 1];
     yield* self.handling.bring(request, carried, points, last instanceof Object3D ? last : null, options);

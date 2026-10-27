@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
-import type { Placement } from '../../kernel/goal';
+import type { Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../kernel/math';
 import { Walk } from '../../legs/walk';
@@ -35,15 +35,15 @@ const SEGMENT_RADIUS = 0.06;
 /** Tuned: both hands low down, how far (× the arm's length) beyond its toes the grips' middle is as it stands to take them, or to set down what they hold */
 const LOW_AHEAD = 0.3, LOW_SETTING = 0.2;
 /** Tuned: a placing point lower than this share of the arm's reach below the shoulders, the body lowers and bows for */
-const STOOPING = 0.7;
+const LOWERED_BELOW = 0.7;
 
 /** What a person stands to: grips to take (by the hand that takes each, where each is now, the heaviest load's mass), or a placing point. */
 export type Stand =
   | { grips: readonly { side: Side; at: Vector3 }[]; mass: number }
-  | { place: (f: Frame) => Placement; held: readonly { side: Side; at: Vector3 }[] };
+  | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[] };
 
 /** Where a person stands to take or put something: there already, nowhere it could, or a walk there and when it has arrived. */
-export type Standing = 'there' | 'nowhere' | { walk: Walk; arrived: (f: Frame) => boolean };
+export type Footing = 'there' | 'nowhere' | { walk: Walk; arrived: (f: Frame) => boolean };
 
 /**
  * Where a person walks up to grips or a placing point: to stand facing them squarely with the grips' middle in comfortable reach — no
@@ -57,7 +57,7 @@ export type Standing = 'there' | 'nowhere' | { walk: Walk; arrived: (f: Frame) =
  * (`nowhere`), and the body stands where it is — as a body its app drives always does. A placing
  * point that moves is followed, its translation and rotation, as it goes.
  */
-export function standing(h: Reacher, to: Stand): Standing {
+export function footing(h: Reacher, to: Stand): Footing {
   const f0 = h.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
   const grips: { side?: Side; at: Vector3 }[] = [];
@@ -76,7 +76,7 @@ export function standing(h: Reacher, to: Stand): Standing {
   const reach = ARM_REACH * p.armLength;
   // (a placing point low down the body lowers and bows for, as it does for a grip — as far as it must, at most squatting and bowing
   // its most: its shoulders that much lower and, bowed, that much further on)
-  const { drop, forward } = point ? stoop(p, Math.max(0, standing - height - STOOPING * reach)) : { drop: 0, forward: 0 };
+  const { drop, forward } = point ? stoop(p, Math.max(0, standing - height - LOWERED_BELOW * reach)) : { drop: 0, forward: 0 };
   // (and one above the shoulders it rises onto its toes for, as far as they lift it: `handLowering`'s)
   const shoulders = standing - drop + (point ? Math.min(TIPTOE * p.scale, Math.max(0, height - standing)) : 0);
   const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2)) + forward : Infinity;

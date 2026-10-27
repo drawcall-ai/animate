@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './frame';
-import { live, type Live, type Placement, type Target } from './goal';
+import { live, type Live, type Placement, type Goal } from './goal';
 import { exp, log } from './rotation';
 import { minimumJerk } from './math';
 
@@ -8,11 +8,11 @@ import { minimumJerk } from './math';
  * A goal may also read the fixed course start and the preceding place in that frame.
  * `still` pauses at the preceding place.
  */
-export type Waypoint = [seconds: number, to: Placement | ((f: Frame, start: Required<Placement>, last: Required<Placement>) => Placement)];
+export type Waypoint = [seconds: number, to: Goal | ((f: Frame, start: Placement, last: Placement) => Goal)];
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
 export interface Course {
-  to: (f: Frame) => Required<Placement> & Pick<Target, 'carriedBy'>;
+  to: (f: Frame) => Placement & Pick<Goal, 'carriedBy'>;
   over: (f: Frame) => boolean;
 }
 
@@ -26,14 +26,14 @@ export interface Course {
  * stops to reverse), it comes to rest there and sets off again.
  * It sets off `delay` s after it is first read.
  */
-export function course(item: { readonly current: Required<Placement> }, frame: Live<Placement>, waypoints: readonly Waypoint[], { scale = 1, pace = 1, delay = 0 } = {}): Course {
+export function course(item: { readonly current: Placement }, frame: Live<Placement>, waypoints: readonly Waypoint[], { scale = 1, pace = 1, delay = 0 } = {}): Course {
   let start = NaN;
   let runs: Run[] = [];
-  let from: Required<Placement> | undefined;
+  let from: Placement | undefined;
   const moving = waypoints.some(([, to]) => typeof to === 'function');
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  const to = (f: Frame): Required<Placement> & Pick<Target, 'carriedBy'> => {
-    const place: Target = live(frame, f);
+  const to = (f: Frame): Placement & Pick<Goal, 'carriedBy'> => {
+    const place: Goal = live(frame, f);
     const at = { position: place.position, quaternion: place.quaternion ?? IDENTITY };
     if (from === undefined) {
       start = f.time;
@@ -42,7 +42,7 @@ export function course(item: { readonly current: Required<Placement> }, frame: L
       from = { position: item.current.position.clone().sub(at.position).applyQuaternion(inverse).divideScalar(scale), quaternion: inverse.multiply(item.current.quaternion) };
     }
     if (!runs.length || moving) {
-      const stops: Required<Placement>[] = [from];
+      const stops: Placement[] = [from];
       for (const [, point] of waypoints) {
         const last = stops[stops.length - 1];
         const next = typeof point === 'function' ? point(f, from, last) : point;
@@ -64,12 +64,12 @@ export function course(item: { readonly current: Required<Placement> }, frame: L
 }
 
 /** a waypoint that stays where the one before ended: a moment held still */
-export const still = (_f: Frame, _start: Required<Placement>, last: Placement) => last;
+export const still = (_f: Frame, _start: Placement, last: Placement) => last;
 
 /** a stretch of a course gone without stopping: how long it takes (s), and where it is a share `s` of its length along */
 interface Run {
   seconds: number;
-  at: (s: number, out: Required<Placement>) => Required<Placement>;
+  at: (s: number, out: Placement) => Placement;
 }
 
 /** how far a turn counts as going along a course (m per rad): a hand turning what it holds about its grip moves its far side about so much */
@@ -78,7 +78,7 @@ const TURN = 0.1;
 const REVERSE = (3 * Math.PI) / 4;
 
 /** the course through `stops`, each waypoint taking `seconds`, cut into runs where it holds still or turns back on itself */
-function runsOf(stops: readonly Required<Placement>[], seconds: readonly number[]): Run[] {
+function runsOf(stops: readonly Placement[], seconds: readonly number[]): Run[] {
   const runs: Run[] = [];
   let first = 0;
   let time = 0;
@@ -102,17 +102,17 @@ function runsOf(stops: readonly Required<Placement>[], seconds: readonly number[
 }
 
 /** a run staying at `at` for `seconds` */
-function stay(at: Required<Placement>, seconds: number): Run {
+function stay(at: Placement, seconds: number): Run {
   return { seconds, at: (_, out) => (out.position.copy(at.position), out.quaternion.copy(at.quaternion), out) };
 }
 
 /** how long the way from `a` to `b` is (m): its way and its turn (`TURN`) */
-function lengthOf(a: Required<Placement>, b: Required<Placement>): number {
+function lengthOf(a: Placement, b: Placement): number {
   return a.position.distanceTo(b.position) + TURN * a.quaternion.angleTo(b.quaternion);
 }
 
 /** how sharply the way through `a`, `b`, `c` bends at `b` (rad; 0 straight on) */
-function bend(a: Required<Placement>, b: Required<Placement>, c: Required<Placement>): number {
+function bend(a: Placement, b: Placement, c: Placement): number {
   const into = _d.subVectors(b.position, a.position);
   const out = _e.subVectors(c.position, b.position);
   return into.lengthSq() > 1e-12 && out.lengthSq() > 1e-12 ? into.angleTo(out) : 0;
@@ -126,7 +126,7 @@ const SAMPLES = 24;
  * on the same knots, their rotations (as rotation vectors from the first), its ends extended by
  * reflection; `at` goes a share of its length (position and turn, `TURN`) along it
  */
-function curve(stops: readonly Required<Placement>[], seconds: number): Run {
+function curve(stops: readonly Placement[], seconds: number): Run {
   const q0 = stops[0].quaternion;
   const inverse = q0.clone().invert();
   // (each placement as six numbers: where, and its turn from the first — each rotation on the side of the last)
@@ -201,6 +201,6 @@ function barryGoldman(p: readonly number[][], knots: readonly number[], i: numbe
 const _d = new Vector3();
 const _e = new Vector3();
 const _q = new Quaternion();
-const _at: Required<Placement> = { position: new Vector3(), quaternion: new Quaternion() };
+const _at: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 
 const IDENTITY = new Quaternion();

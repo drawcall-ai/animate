@@ -19,7 +19,7 @@ describe('requests', () => {
         yield* lookAt(body, new Vector3(-2, 1.6, 1), { until: 1 });
       });
     }, [body], 10, () => {
-      const look = body.goals.look;
+      const look = body.owners.look;
       const now = look ? `${look.verb} ${look.tier}` : 'idle';
       if (looks[looks.length - 1] !== now) looks.push(now);
       return held;
@@ -40,7 +40,7 @@ describe('requests', () => {
       });
       done = true;
     }, [body], 4, () => {
-      const site = body.goals.look?.site ?? 'idle';
+      const site = body.owners.look?.site ?? 'idle';
       if (looks[looks.length - 1] !== site) looks.push(site);
       return done;
     });
@@ -80,7 +80,7 @@ describe('requests', () => {
         yield* reach(body, { left: new Vector3(-1.5, 1.2, -3) });
       });
     }, [body], 3, () => {
-      const go = body.goals.go;
+      const go = body.owners.go;
       if (go) legs.add(`${go.verb} ${go.tier}`);
     });
     expect([...legs]).toEqual(['grab borrowed']);
@@ -93,7 +93,7 @@ describe('requests', () => {
     let legs = false;
     play(function* () {
       yield* grab(body, load, { right: 'right' }, { until: 2 });
-    }, [body], 2, () => void (legs ||= body.goals.go !== undefined));
+    }, [body], 2, () => void (legs ||= body.owners.go !== undefined));
     expect(legs).toBe(false);
   });
 

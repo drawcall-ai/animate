@@ -59,3 +59,9 @@ export function pointSegmentDistance(point: Readonly<Vector3>, a: Readonly<Vecto
   const t = clamp(((point.x - a.x) * x + (point.z - a.z) * z) / (x * x + z * z || 1), 0, 1);
   return Math.hypot(point.x - a.x - t * x, point.z - a.z - t * z);
 }
+
+/** the facing (rad about +Y) an orientation's +Z points along */
+export function headingOfTurn(quaternion: Readonly<Quaternion>): number {
+  const forward = new Vector3(0, 0, 1).applyQuaternion(quaternion);
+  return headingOf(forward.x, forward.z);
+}

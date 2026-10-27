@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { movingPoint, type Target } from '../../kernel/goal';
+import { movingPoint, type Goal } from '../../kernel/goal';
 import { reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { clearArm, reaching } from './arms';
@@ -16,10 +16,10 @@ import type { Reacher } from './reacher';
  */
 export function* backingOut(h: Reacher, request: Request, sides: readonly Side[]) {
   const p = h.proportions, began = h.frame.time;
-  let targets: ((f: Frame) => Target)[] | null = null;
-  let time = NaN, goals: Target[] = [];
+  let targets: ((f: Frame) => Goal)[] | null = null;
+  let time = NaN, goals: Goal[] = [];
   // (where each hand goes, from how it moved as it let go)
-  const off = (f: Frame): Target[] => {
+  const off = (f: Frame): Goal[] => {
     if (time === f.time) return goals;
     targets ??= sides.map((side) => {
       const hand = f.prev.position(h.hands[side]);

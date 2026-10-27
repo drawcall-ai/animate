@@ -1,10 +1,5 @@
 import { Box3, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three';
-
-/** A place in a thing's frame: where, and turned how. */
-export interface Local {
-  position: Vector3;
-  quaternion: Quaternion;
-}
+import type { Placement } from '../kernel/goal';
 
 /**
  * Any `Object3D`, as a body moves it: its mass (`userData.mass`, kg: a thing without it is not meant to be lifted), its centre of mass
@@ -64,7 +59,7 @@ export class Thing {
 /** A grip on a thing: its empty, where it is in the thing's frame, and the line a hand may roll about on it (true: any turn; null: none). */
 export interface Grip {
   node: Object3D;
-  at: Local;
+  at: Placement;
   free: Vector3 | true | null;
 }
 
@@ -87,7 +82,7 @@ function find(root: Object3D, name: string): Object3D | undefined {
 }
 
 /** `node` in `ancestor`'s frame (its scale left out: a body's frames are metres) */
-export function localOf(node: Object3D, ancestor: Object3D): Local {
+export function localOf(node: Object3D, ancestor: Object3D): Placement {
   const matrix = new Matrix4();
   for (let at: Object3D | null = node; at && at !== ancestor; at = at.parent) {
     if (!at.parent) throw new Error(`"${node.name}" is not under "${ancestor.name}"`);

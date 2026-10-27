@@ -3,16 +3,6 @@ import type { Side } from '../../species/humanoid/bones';
 import { quatYXZ } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 
-/** planted: bearing weight on the floor; swing: stepping */
-export type FootPhase = 'planted' | 'swing';
-
-/** Where a foot stands or, swinging, lands: its flat-foot ankle and heading. */
-export interface Foot {
-  position: Vector3;
-  yaw: number;
-  phase: FootPhase;
-}
-
 /** half a foot's width at the toes (m, default body): how far past the ankle's line a foot holds the body sideways */
 const FOOT_HALF_WIDTH = 0.04;
 

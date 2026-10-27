@@ -11,7 +11,7 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { gripAt, reachFor, type Taking } from './reach';
-import { flat, standing, walking } from './stand';
+import { flat, footing, walking } from './stand';
 
 /** Horizontal view cone (rad, ~80°): neck and head turn ~75°, with the eyes taking the rest. Further aside, wait for the approach to turn
  * the body before looking. */
@@ -34,7 +34,7 @@ const CLOSE = 1.6;
  */
 export function* grabbing(h: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(h, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
-  const plan = standing(h, { grips: takes.map((take) => ({ side: take.side, at: gripAt(h, take, h.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)) });
+  const plan = footing(h, { grips: takes.map((take) => ({ side: take.side, at: gripAt(h, take, h.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)) });
   if (plan === 'nowhere') {
     request.fail();
     return false;

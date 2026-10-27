@@ -5,7 +5,7 @@ import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { clampRotation } from './limits';
 import { exp, log } from './rotation';
-import { live, REACHED, type Live, type Motion, type Placed, type Placement, type Target } from './goal';
+import { live, REACHED, type Live, type Motion, type Trail, type Placement, type Goal } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
@@ -50,7 +50,7 @@ export class ChainTip {
 
   constructor(readonly chain: string) {}
 
-  to(f: Frame, target: Target, options: TipOptions): void {
+  to(f: Frame, target: Goal, options: TipOptions): void {
     const { chain } = this;
     const { skeleton } = f.current;
     const bones = skeleton.chain(chain);
@@ -144,13 +144,13 @@ export class ChainTip {
  * against where the target was then: on a carrier (in its frame), as the carrier was placed then and the sub-step before
  * (`Carrier.at`); else moved back by its velocity.
  */
-export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number; time: number }, tip: number, target: Target, on?: Carrier): boolean {
+export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);
   const then = _then, velocity = _velocity, moved = target.velocity ?? ZERO;
   if (on && placed) {
     // (the target point as the carrier was placed `back` sub-steps before `time`)
-    const was = (back: number, at: Required<Placement>, out: Vector3) => out.copy(target.position).addScaledVector(moved, -back * dt).applyQuaternion(at.quaternion).add(at.position);
+    const was = (back: number, at: Placement, out: Vector3) => out.copy(target.position).addScaledVector(moved, -back * dt).applyQuaternion(at.quaternion).add(at.position);
     const goal = on.toWorld(target, _goal, f.time);
     then.copy(goal.position).addScaledVector(velocity.copy(moved).applyQuaternion(placed.current.quaternion).add(goal.velocity), -dt);
     velocity.subVectors(was(1, placed.prev, _was), was(2, placed.prev2, _was2)).divideScalar(dt);
@@ -168,7 +168,7 @@ export function reached(f: { prev2: ReadonlyPose; prev: ReadonlyPose; dt: number
 }
 
 /** a world rotation in the frame a target is given in: on a carrier, its (as placed `current`) */
-function near(world: Readonly<Quaternion>, on?: Pick<Placed, 'current'>): Quaternion {
+function near(world: Readonly<Quaternion>, on?: Pick<Trail, 'current'>): Quaternion {
   return on ? _near.copy(on.current.quaternion).invert().multiply(world) : _near.copy(world);
 }
 
@@ -200,4 +200,4 @@ const _velocity = new Vector3();
 const _then = new Vector3();
 const _was = new Vector3();
 const _was2 = new Vector3();
-const _goal: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _goal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

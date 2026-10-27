@@ -8,7 +8,7 @@ import { seedOf } from '../kernel/random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
 import { Planner } from './planner';
 import { Stepper } from './step/stepper';
-import { type RootGoal } from './step/state';
+import { type Steering } from './step/state';
 import type { Legged } from './legged';
 import { offTheWay, stanceYaw } from './walker';
 import type { Step } from '../kernel/frame';
@@ -91,7 +91,7 @@ export function creature(body: Legged): Step {
     const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
     const faced = face?.yaw ?? (to.distanceTo(root) > radius && offTheWay(heading, planner.root.yaw) ? heading : undefined);
     // (or where the scene drives it)
-    const r: RootGoal = driven ? driven(f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
+    const r: Steering = driven ? driven(f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
       { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));
     stepper.move(f, r);
     f.current.setLocal(0, _yaw.setFromAxisAngle(UP, stepper.yaw));

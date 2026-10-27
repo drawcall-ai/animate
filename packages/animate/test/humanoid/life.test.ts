@@ -2,7 +2,7 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { carry, grab, lookAt, reach, walkTo } from '../../src/index';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
-import { Life } from '../../src/legs/person/life';
+import { Quiet } from '../../src/legs/person/quiet';
 import { insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 
@@ -92,7 +92,7 @@ it('slows its walk under a load, counting a load held in both hands once', () =>
       yield* grab(body, load, both ? { left: 'left', right: 'right' } : { right: 'right' });
       yield* walkTo(body, new Vector3(0, 0, 3), { until: 0.3 });
     }, [body], 4, () => {
-      if (h.going && body.goals.go?.verb === 'walkTo') speed = h.going.speed;
+      if (h.going && body.owners.go?.verb === 'walkTo') speed = h.going.speed;
     });
     expect(body.log).toEqual([]);
     return speed;
@@ -124,7 +124,7 @@ it('keeps its sway and breathing after a loaded walk, without spontaneous weight
 
 it('seeds the side of its first weight shift and alternates the later ones, after activity too', () => {
   for (const seed of [0, 1, 42]) {
-    const life = new Life(seed);
+    const life = new Quiet(seed);
     const shifts: Side[] = [];
     let previous: Side | null = null;
     for (let step = 0; step < 6000; step++) {

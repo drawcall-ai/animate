@@ -55,7 +55,7 @@ describe('track', () => {
       play(function* () { yield* track(body, turn ? { left, right } : { left, right: right.position }); }, [body], 2.5);
       expect(h.pose.position(INDEX.leftHand).distanceTo(left.position)).toBeLessThan(0.01);
       expect(h.pose.position(INDEX.rightHand).distanceTo(right.position)).toBeLessThan(0.01);
-      expect(body.goals.hands.left).toMatchObject({ verb: 'track', tier: 'asked' });
+      expect(body.owners.hands.left).toMatchObject({ verb: 'track', tier: 'asked' });
       return h.pose.rotation(INDEX.rightHand).clone();
     };
     // (a controller turned a little from where the hand turns on its own: the hand turns with it)

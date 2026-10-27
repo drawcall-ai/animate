@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import type { Motion, Placement } from '../kernel/goal';
+import type { Goal, Motion } from '../kernel/goal';
 import { clampRotation } from '../kernel/limits';
 import type { Pose } from '../kernel/pose';
 import { TrackedPoint, TrackedRotation } from '../kernel/track';
@@ -48,7 +48,7 @@ const UNDER = { speed: 1.0, accel: 1.2 };
  * turned further than the trunk and neck take, stands where the eyes are over it, bows and squats for a head lower than standing and goes
  * up on its toes for one higher.
  */
-export function heading(h: Led, eyes: (f: Frame) => Placement, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
+export function heading(h: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
   const joints = SPINE.map(() => new TrackedRotation());

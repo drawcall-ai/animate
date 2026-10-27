@@ -2,8 +2,9 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Carrier } from '../kernel/carrier';
 import type { Frame } from '../kernel/frame';
-import type { Target } from '../kernel/goal';
-import type { Local, Thing } from './thing';
+import type { Goal } from '../kernel/goal';
+import type { Thing } from './thing';
+import type { Placement } from '../kernel/goal';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
@@ -16,7 +17,7 @@ export interface Resolving {
   readonly share: number;
   readonly frames: WeakMap<Object3D, Interpolated>;
   poseFor(reader: Resolving): ReadonlyPose;
-  movedFor(reader: Resolving, node: Object3D): Local | null;
+  movedFor(reader: Resolving, node: Object3D): Placement | null;
   /** a moving bone's rest frame in the scene (`turn⁻¹ · rest`), and its scale */
   restOf(bone: number): Readonly<Quaternion>;
   scaleOf(bone: number): number;
@@ -26,7 +27,7 @@ export interface Resolving {
 export interface Hold {
   thing: Thing;
   grip: string;
-  goal: Target;
+  goal: Goal;
 }
 
 /**
@@ -66,7 +67,7 @@ export interface Interpolated {
  * below it — each local the app moves eased from where it was at the reader's last update to where it is now across the update's
  * sub-steps, exact at its end. Scale is left out of the result (a body's frames are metres) but carried through the chain.
  */
-export function resolve(reader: Resolving, node: Object3D, out: Local): Local {
+export function resolve(reader: Resolving, node: Object3D, out: Placement): Placement {
   const chain = _chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
     const moved = movers.get(at)?.movedFor(reader, at);

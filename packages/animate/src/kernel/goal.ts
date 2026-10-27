@@ -15,18 +15,21 @@ const isRead = <T>(goal: Live<T>): goal is (f: Frame) => T => typeof goal === 'f
 /** Where something is, and turned how (world, or a carrier's frame). */
 export interface Placement {
   position: Vector3;
-  quaternion?: Quaternion;
+  quaternion: Quaternion;
 }
 
 /** Where a carrier is at a sub-step (`current`) and the two before. */
-export interface Placed {
-  readonly prev2: Required<Placement>;
-  readonly prev: Required<Placement>;
-  readonly current: Required<Placement>;
+export interface Trail {
+  readonly prev2: Placement;
+  readonly prev: Placement;
+  readonly current: Placement;
 }
 
 /** A placement to go to: its own velocity (m/s) and spin (rad/s) are followed without lag. */
-export interface Target extends Placement {
+export interface Goal {
+  position: Vector3;
+  /** how it is turned (none: as it comes) */
+  quaternion?: Quaternion;
   velocity?: Vector3;
   spin?: Vector3;
   /** the body whose bone carries it: that body letting itself down or bowing carries it down too */
@@ -48,7 +51,7 @@ export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
   /** the goal's own velocity (per s; for a rotation its angular velocity, rad/s), followed without lag (default still) */
   velocity?: V;
   /** the goal (and its velocity) is in this carrier's frame, placed so at the step's time and the two before (its `at`): the value is followed relative to it */
-  on?: Placed;
+  on?: Trail;
 };
 
 /** the longest a hand takes to get to its goal, unless told, before it is a problem in the dev log (s): a person's and another body's alike */
@@ -57,7 +60,7 @@ export const REACHING = 4;
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };
 
 /** a point moving with bone `bone` of a body (`offset` from it, turned by `turn`), its velocity read off where it was a sub-step before */
-export function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Placement, turn: () => Quaternion) {
+export function movingPoint(h: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Goal, turn: () => Quaternion) {
   let last: { time: number; position: Vector3 } | null = null;
   const velocity = new Vector3();
   return (f: Frame) => {

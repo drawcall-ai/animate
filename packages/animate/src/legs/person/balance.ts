@@ -7,12 +7,12 @@ import { follow } from '../../kernel/follow';
 import { clampRotation } from '../../kernel/limits';
 import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import { Stepper } from '../step/stepper';
-import { type Feet, type Leg, type RootGoal } from '../step/state';
+import { type Feet, type Leg, type Steering } from '../step/state';
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
 import { Poise } from '../../kernel/poise';
 import type { Go, Stance } from '../../kernel/go';
 import { seedOf } from '../../kernel/random';
-import { Life } from './life';
+import { Quiet } from './quiet';
 import { ankleFor, ballOf, footRotation, heelOf } from './foot';
 import { kneePole, shankTilt } from './leg';
 import { BOW, PELVIS, TURN, followed } from './pace';
@@ -73,16 +73,6 @@ export function driven(h: PersonLegged, seed?: number): Step {
 }
 
 /**
- * A person's root as the stepper takes it, at the hips (a scene's: the feet under them) or at the body's centre of mass (`centre`, a
- * planner's: the hips holding it there, the feet's middle `OVER` behind it); and whether a walk is under way on it (`underway`, a
- * planner's: from its start till it stops), else as the body moves.
- */
-export interface PersonRoot extends RootGoal {
-  centre?: boolean;
-  underway?: boolean;
-}
-
-/**
  * `driven`, the root read each sub-step from `rootOf` once what was asked is taken (a scene's; a planner's, toward where its legs are asked to go). Whoever
  * drives it, the body is carried over it one way, as `Posture` has it: the hips swaying and turning with the stride about the root
  * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
@@ -92,7 +82,7 @@ export interface PersonRoot extends RootGoal {
  */
 export function drivenBy(
   h: PersonLegged,
-  rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => PersonRoot,
+  rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering,
   options: { stance?: Partial<Stance>; seed?: number } = {},
 ): Step {
   const p = h.proportions, s = p.scale;
@@ -152,7 +142,7 @@ export function drivenBy(
     held: false,
   };
   const posture = new Posture(h.species.inertia);
-  const life = new Life(options.seed ?? seedOf(p.height, standing[0].position.x, standing[0].position.z));
+  const life = new Quiet(options.seed ?? seedOf(p.height, standing[0].position.x, standing[0].position.z));
   const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
   const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()];

@@ -1,17 +1,17 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import type { Body, Driven } from '../../src/index';
+import type { Body, Root } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/kernel/math';
 import type { Person } from '../../src/body/person';
 import { dt, insides, person, feetOf } from '../bodies';
 
 /** a driven root, as a player's controller writes it */
-type Root = Driven & { velocity: Vector3; crouch: number };
+type Driving = Root & { velocity: Vector3; crouch: number };
 
 /** A player-like root: velocity eased at 10 m/s², facing eased over 25 ms, as a game controller drives it. */
-function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: Root, h: Person, body: Body) => void) {
-  const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
+function drive(T: number, velocity: (t: number) => Vector3, yaw: (t: number) => number = () => 0, each?: (t: number, root: Driving, h: Person, body: Body) => void) {
+  const root: Driving = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 0 };
   const body = person({ drive: () => root, dev: true }), h = insides(body);
   let apart = 0, steps = 0;
   const phases = feetOf(h).map((foot) => foot.phase);
@@ -83,7 +83,7 @@ it.each([
 // the feet; holding still to aim, its breathing and sway keep 30% (Era et al. 1996, as `Life` has it) — the hips within that share of
 // quiet stance's ≤ 1 cm sway (Winter 1995), no weight shift)
 it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
-  const root: Driven = { position: new Vector3(), velocity: new Vector3(), yaw: 0, steady };
+  const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, steady };
   const body = person({ drive: () => root, life: { seed: 3 }, dev: true }), h = insides(body);
   let lowest = Infinity, highest = -Infinity, left = 0, right = 0, over = -Infinity;
   for (let t = dt; t <= 40; t += dt) {

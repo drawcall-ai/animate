@@ -2,7 +2,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
-import type { Life } from './life';
+import type { Quiet } from './quiet';
 import { INDEX } from '../../species/humanoid/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../../species/humanoid/proportions';
@@ -129,7 +129,7 @@ export class Posture {
     upright: Upright,
     asks: { lower: number; bow: number; twist: number },
     out: Trunk,
-    life: Pick<Life, 'drift' | 'breath' | 'onto'>,
+    life: Pick<Quiet, 'drift' | 'breath' | 'onto'>,
     cycle: Cycle,
     height: (standing: number, floor: number, tiptoe: number) => number,
   ) {

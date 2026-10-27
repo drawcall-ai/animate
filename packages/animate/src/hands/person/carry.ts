@@ -2,7 +2,7 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { Carrier } from '../../kernel/carrier';
-import { movingPoint, type Live, type Motion, type Placement, type Target } from '../../kernel/goal';
+import { movingPoint, type Live, type Motion, type Placement, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
 import { course, type Course, type Waypoint } from '../../kernel/course';
@@ -19,7 +19,7 @@ import { ARM_REACH, bringShoulder, PROTRACTION } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { BODY_RADIUS, clearBody, LOAD_RESERVE } from './clearance';
 import { following, LEADING } from './reach';
-import { standing, walking } from './stand';
+import { footing, walking } from './stand';
 
 // Carrying: the hands on a thing's grips, carrying it where it goes.
 
@@ -50,7 +50,7 @@ const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 /** A carry's way: its points (placements in the world, a sub-step at a time), the last one's orientation the thing takes. */
 export interface Way {
   /** the points it passes through, the last its end */
-  points: readonly ((f: Frame) => Placement)[];
+  points: readonly ((f: Frame) => Goal)[];
   /** the mean speed (m/s) of its last straight, an approach's own; none: the carry's */
   last?: number;
 }
@@ -72,7 +72,7 @@ export function* carrying(h: Reacher, request: Request, thing: Thing, way: Way, 
     if (!hold) throw new Error(`carry: the ${side} hand let go`);
     return { side, at: hold.goal.position };
   });
-  const plan = standing(h, { place: end, held });
+  const plan = footing(h, { place: end, held });
   if (plan === 'nowhere') {
     request.fail();
     return;
@@ -121,7 +121,7 @@ export function* carrying(h: Reacher, request: Request, thing: Thing, way: Way, 
 }
 
 /** the eyes on where the carry goes (borrowed), for as long as the carry runs */
-function aiming(h: Reacher, request: Request, thing: Thing, end: (f: Frame) => Placement) {
+function aiming(h: Reacher, request: Request, thing: Thing, end: (f: Frame) => Goal) {
   return during(request, 'look', 'borrowed', looking(h, (f) => end(f).position, SHIFT));
 }
 
@@ -135,7 +135,7 @@ function* along(h: Reacher, request: Request, thing: Thing, way: Way, motion: Mo
 }
 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `ALONG.least` s */
-function timed(h: Reacher, thing: Thing, points: readonly ((f: Frame) => Placement)[], speed: number): Waypoint[] {
+function timed(h: Reacher, thing: Thing, points: readonly ((f: Frame) => Goal)[], speed: number): Waypoint[] {
   const f = h.frame;
   let from = h.track(thing.object).current.position.clone();
   const lengths = points.map((point) => {
@@ -254,7 +254,7 @@ function planned(carrier: Carrier, waypoints: readonly Waypoint[], options: { pa
  * do), every sub-step until `until` (endless without), each hand asked: one hand goes where the thing, hanging from it, is to be; two go
  * to their grips on it, and after the hands the body fits it to them.
  */
-function holding(h: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Placement>, until?: (f: Frame) => boolean) {
+function holding(h: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Goal>, until?: (f: Frame) => boolean) {
   const sides = handsOn(h, thing).map(sideOf);
   const tips = new Map(sides.map((side) => [side, new ChainTip(`${side}Arm`)]));
   const single = sides.length === 1 ? inHandOf(h, sides[0], thing) : null;
@@ -286,7 +286,7 @@ function holding(h: Reacher, request: Request, thing: Thing, aim: CarryAim, to: 
  * where hand `side` goes for `thing`, which hangs from it, to be where a carrier has it: the thing's frame times where the hand bone is
  * in it (read once: hanging from the hand, it keeps its place on it), the hand bone's rest undone
  */
-function inHandOf(h: Reacher, side: Side, thing: Thing): (carrier: Carrier) => Target & { velocity: Vector3 } {
+function inHandOf(h: Reacher, side: Side, thing: Thing): (carrier: Carrier) => Goal & { velocity: Vector3 } {
   const bone = h.hands[side], node = h.boneNode(bone);
   const hand = resolve(h, node, { position: new Vector3(), quaternion: new Quaternion() });
   const at = resolve(h, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
@@ -342,11 +342,11 @@ class CarryAim {
     this.nominal.prev.quaternion.copy(own.prev.quaternion);
   }
 
-  read(f: Frame, to: Live<Placement>): Carrier {
+  read(f: Frame, to: Live<Goal>): Carrier {
     if (this.time === f.time) return this.carrier;
     this.time = f.time;
     const { nominal: aim, goal, h, thing, motion } = this, own = h.track(thing.object).at(f.time);
-    const target: Target = typeof to === 'function' ? to(f) : to;
+    const target: Goal = typeof to === 'function' ? to(f) : to;
     this.carrier.carriedBy = target.carriedBy;
     goal.position.copy(target.position);
     // (a goal that sets no turn keeps the one the aim set out with: the thing's own turn, a hand's lag in it, is not fed back)
@@ -371,7 +371,7 @@ class CarryAim {
 }
 
 /** A comfortable carry in front of the hips (beside one hip for a single hand), following the body: where a transfer carries its load. */
-export function carried(h: Reacher, side?: Side): (f: Frame) => Required<Placement> & { velocity: Vector3 } {
+export function carried(h: Reacher, side?: Side): (f: Frame) => Placement & { velocity: Vector3 } {
   const at = movingPoint(h, 0, () => {
     // Recalled load law: shorten the lever arm with squared pace effort (35 → 19 cm at 8 kg).
     const effort = loadFactor(heldMass(h));
@@ -414,7 +414,7 @@ function inReach(h: Reacher, thing: Thing): number {
  * approach comes (slowing to its `userData.speed` on the last straight), the last's orientation reached by the start of that straight;
  * leaving from the point of its way out nearest where the thing is.
  */
-export function wayOf(h: Reacher, thing: Thing, targets: readonly ((f: Frame) => Placement)[], end: Object3D | null): Way {
+export function wayOf(h: Reacher, thing: Thing, targets: readonly ((f: Frame) => Goal)[], end: Object3D | null): Way {
   const f = h.frame, at = h.track(thing.object).current.position.clone();
   const turn = (f: Frame) => targets[targets.length - 1](f).quaternion;
   const seat = thing.object.parent;

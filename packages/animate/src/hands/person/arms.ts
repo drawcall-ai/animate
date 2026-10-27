@@ -3,7 +3,7 @@ import type { Frame } from '../../kernel/frame';
 import type { Carrier } from '../../kernel/carrier';
 import { followRotation } from '../../kernel/follow';
 import { Glide } from '../../kernel/glide';
-import { live, type Live, type Motion, type Placement, type Target } from '../../kernel/goal';
+import { live, type Live, type Motion, type Placement, type Goal } from '../../kernel/goal';
 import { clampRotation } from '../../kernel/limits';
 import { ChainTip } from '../../kernel/tip';
 import { TrackedRotation } from '../../kernel/track';
@@ -155,7 +155,7 @@ export interface HandOptions extends Partial<Motion> {
  * Leading (by default), a target below what the arm reaches standing asks balance to bow and bend the knees for it, one above to go up
  * on the toes.
  */
-export function reaching(h: Reacher, side: Side, target: Live<Target>, options: HandOptions = {}): Step {
+export function reaching(h: Reacher, side: Side, target: Live<Goal>, options: HandOptions = {}): Step {
   const { seconds, after = 0 } = options;
   const arm = new ChainTip(`${side}Arm`);
   // (gliding: set off once the hand need not wait for the body, in what is left of the reach's time — at least half of it)
@@ -250,7 +250,7 @@ interface Toward {
 }
 
 /** one sub-step of `handTo`, its arm's tip `arm` */
-export function handStep(h: Reacher, f: Frame, side: Side, target: Target, options: HandOptions, arm: ChainTip, toward?: Toward) {
+export function handStep(h: Reacher, f: Frame, side: Side, target: Goal, options: HandOptions, arm: ChainTip, toward?: Toward) {
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
   if (options.thing && f.current.skeleton.chain(`${side}Arm`).includes(hangsFrom(h, options.thing.object))) return;
   const p = h.proportions;
@@ -345,7 +345,7 @@ function elbowPole(f: Frame, p: Proportions, side: Side, hand: Readonly<Vector3>
 }
 
 /** `world` into the frame of a carrier placed `at` */
-function toFrame(at: Required<Placement>, world: Vector3): Vector3 {
+function toFrame(at: Placement, world: Vector3): Vector3 {
   return world.sub(at.position).applyQuaternion(_frame.copy(at.quaternion).invert());
 }
 
@@ -373,8 +373,8 @@ const _rest = new Vector3();
 const _pole = new Vector3();
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3();
 const _bend = new Vector3();
-const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-const _target: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _m = new Vector3();
 const _axis = new Vector3();
 const _from = new Vector3();

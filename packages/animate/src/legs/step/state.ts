@@ -7,18 +7,14 @@ import { type Spot } from '../support';
 import { type Gait } from '../../species/gait';
 
 /**
- * The root a scene drives: its point on the floor, its velocity over it (m/s), its facing (rad about +Y), how far it crouches
- * (0 standing … 1 a deep crouch).
+ * The root the stepper steps under, a sub-step at a time: its point on the floor, its velocity over it (m/s), its facing (rad about +Y),
+ * how far it crouches (0 standing … 1 a deep crouch) — a scene's — and what a planner or a walker knows more of the body over it.
  */
-export interface DrivenRoot {
+export interface Steering {
   position: Vector3;
   velocity: Vector3;
   yaw: number;
   crouch?: number;
-}
-
-/** A root as the stepper takes it: a scene's (`DrivenRoot`), or the planner's and a walker's, who know more of the body over it. */
-export interface RootGoal extends DrivenRoot {
   /** where the hips are over the floor from the root, if not over it (m): swaying, sitting back or leaning over the toes from it; by
    * default the hips are the root */
   hips?: Vector3;
@@ -37,6 +33,11 @@ export interface RootGoal extends DrivenRoot {
   forecast?: (ahead: number) => { position: Vector3; yaw: number };
   /** the turn (rad/s) it would make if its legs kept up, when they hold it back (a planner's): a gait's feet step to make way for it */
   turning?: number;
+  /** a person's: the root at its centre of mass, the hips holding it there and the feet's middle a little behind it (a planner's); else at
+   * the hips, the feet under them (a scene's) */
+  centre?: boolean;
+  /** a person's: whether a walk is under way on it (a planner's, from its start till it stops); none, as the body moves */
+  underway?: boolean;
 }
 
 /**
@@ -117,9 +118,9 @@ export type Leap = {
 };
 
 /** The root as a sub-step reads it, and the pelvis' own rise and fall over it. */
-export interface Root {
+export interface Reading {
   f: Frame;
-  r: RootGoal;
+  r: Steering;
   dt: number;
   /** its speed over the floor (m/s) and how far it runs (0 … 1) */
   v: number;
@@ -156,7 +157,7 @@ export interface Timing {
 }
 
 /** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), its standing height (m). */
-export interface Body extends Root, Timing {
+export interface Body extends Reading, Timing {
   yaw: number;
   width: number;
   moving: number;
@@ -226,7 +227,7 @@ export function strayed(st: Stepping, feet: Feet, leg: Leg, inward: number): boo
 }
 
 /** how far the pelvis is let down moving (× scale): walking, side-stepping, running */
-export const dropOf = (st: Stepping, { across, run }: Timing & Root) => lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run);
+export const dropOf = (st: Stepping, { across, run }: Timing & Reading) => lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run);
 
 /** how long a swing has left (s) */
 export const remaining = (w: Swing) => (1 - w.u) * w.T;

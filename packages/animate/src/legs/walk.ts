@@ -19,7 +19,7 @@ const TURNING = 2;
 const SETTING_OFF = 0.5;
 
 /** Where a walk goes, a sub-step at a time. */
-export interface Way {
+export interface Route {
   /** where to go, on the floor (default: where it stands when it sets off: a turn in place) */
   to?: (f: Frame) => Readonly<Vector3>;
   /** the facing to arrive with (rad; null: the way it arrives, or toward `to` with `within`) */
@@ -57,7 +57,7 @@ export class Walk {
   private since = 0;
   private nowhere = false;
 
-  constructor(private readonly self: Legged, private readonly way: Way, private readonly arrives = true) {
+  constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;
   }
 

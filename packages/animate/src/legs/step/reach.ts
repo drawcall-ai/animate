@@ -2,7 +2,7 @@
 import { Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep } from '../../kernel/math';
 import { xcomOf } from '../support';
-import { ROLL, _a, _b, _f, _l, _m, _o, _v, _x, dropOf, rollOf, type Body, type Leg, type Now, type Root, type Steps, type Timing } from './state';
+import { ROLL, _a, _b, _f, _l, _m, _o, _v, _x, dropOf, rollOf, type Body, type Leg, type Now, type Reading, type Steps, type Timing } from './state';
 
 /** the place of a leg's hip, the pelvis turned with the stride */
 export function hipOf(steps: Steps, now: Now, leg: Leg): Vector3 {
@@ -105,19 +105,19 @@ export function xcomAhead(steps: Steps, now: Body, ahead: number, out: Vector3):
 }
 
 /** where the root will be `ahead` s on, its speed changing as it does now: how far a hard stop or turn leaves a landing */
-export function travelOf(steps: Steps, { r, accel }: Root, ahead: number, out: Vector3): Vector3 {
+export function travelOf(steps: Steps, { r, accel }: Reading, ahead: number, out: Vector3): Vector3 {
   if (r.forecast) return out.copy(r.forecast(ahead).position);
   return out.copy(r.position).addScaledVector(r.velocity, ahead).addScaledVector(accel, ahead * ahead / 2);
 }
 
 /** and its velocity then: a walker's as foreseen, braking where it brakes; else run on at its acceleration */
-export function pace(steps: Steps, { r, accel, dt }: Root, ahead: number, out: Vector3): Vector3 {
+export function pace(steps: Steps, { r, accel, dt }: Reading, ahead: number, out: Vector3): Vector3 {
   if (r.forecast) return out.subVectors(r.forecast(ahead + dt).position, r.forecast(ahead).position).divideScalar(dt).setY(0);
   return out.copy(r.velocity).addScaledVector(accel, ahead).setY(0);
 }
 
 /** half the feet's spread at `speed` (m): side-stepping, the feet open wider and close in to the narrowest: their travel never crosses */
-export function widthAt(steps: Steps, { across, Ts, crouch }: Root & Timing, speed: number): number {
+export function widthAt(steps: Steps, { across, Ts, crouch }: Reading & Timing, speed: number): number {
   const { st } = steps, s = st.scale, { width } = st;
   const gait = lerp(lerp(width.stand, width.walk * s, smoothstep(0, 1, speed)), width.run * s, smoothstep(st.run[0], st.run[1], speed));
   return Math.max(gait, (width.narrowest * s + Math.abs(across) * speed * Ts) / 2) + st.crouch.wider * s * crouch;

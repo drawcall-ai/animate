@@ -1,8 +1,6 @@
 import { parallel } from '@pmndrs/timeline';
 import { during } from '../kernel/requests';
 import { selfOf, type Body } from '../body/body';
-import type { Frame } from '../kernel/frame';
-import type { Target as Goal } from '../kernel/goal';
 import { personOf } from '../body/person';
 import { heading } from '../look/head';
 import { reaching } from '../hands/person/arms';
@@ -26,22 +24,13 @@ export function track(body: Body, tracked: Tracked, options: { until?: Until } =
   return verb(body, 'track', (request) => function* () {
     const h = personOf(selfOf(body)), branches = [];
     if (tracked.head) {
-      const find = finder(h, tracked.head);
-      const head = heading(h, (f) => {
-        const found = find(f);
-        return { position: found.position, quaternion: found.quaternion ?? undefined };
-      });
+      const head = heading(h, finder(h, tracked.head));
       branches.push(during(request, 'go', 'asked', head.under), during(request, 'look', 'asked', head.look));
     }
     for (const side of ['left', 'right'] as const satisfies readonly Side[]) {
       const target = tracked[side];
       if (!target) continue;
-      const find = finder(h, target);
-      const goal = (f: Frame): Goal => {
-        const found = find(f);
-        return { position: found.position, quaternion: found.quaternion ?? undefined, velocity: found.velocity };
-      };
-      branches.push(during(request, `hand.${side}`, 'asked', reaching(h, side, goal, { lead: false })));
+      branches.push(during(request, `hand.${side}`, 'asked', reaching(h, side, finder(h, target), { lead: false })));
     }
     yield* parallel('all', ...branches);
   }, options.until, true);

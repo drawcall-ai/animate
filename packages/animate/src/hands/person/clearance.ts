@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
-import type { Local, Thing } from '../../things/thing';
+import type { Thing } from '../../things/thing';
+import type { Placement } from '../../kernel/goal';
 import { worn } from '../../things/hold';
 import { forwardOf, leftOf } from '../../kernel/math';
 import { INDEX } from '../../species/humanoid/bones';
@@ -13,7 +14,7 @@ export const BODY_RADIUS = 0.06;
 export const LOAD_RESERVE = 0.04;
 
 /** Clear a load position against the trunk and neck→head chain, in place; returns how far the neck and head moved it (m). */
-export function clearBody(h: Reacher, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Local): number {
+export function clearBody(h: Reacher, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Placement): number {
   if (worn(item)) return 0;
   const center = item.bounds.getCenter(_center), half = item.bounds.getSize(_half).multiplyScalar(0.5);
   const forward = forwardOf(h.locomotion.facing, _forward), left = leftOf(h.locomotion.facing, _left);

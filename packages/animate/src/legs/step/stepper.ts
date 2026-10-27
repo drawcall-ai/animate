@@ -8,7 +8,7 @@ import { follow } from '../../kernel/follow';
 import { clamp, forwardOf, leftOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../../kernel/math';
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
-import { AIMED, LOWEST, PASSING, SETTLE, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN, _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _pivot, _w, _x, dropOf, mod, remaining, strayed, type Body, type FootPose, type Leg, type Now, type Root, type RootGoal, Steps, _over, type Timing } from './state';
+import { AIMED, LOWEST, PASSING, SETTLE, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN, _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _pivot, _w, _x, dropOf, mod, remaining, strayed, type Body, type FootPose, type Leg, type Now, type Reading, type Steering, Steps, _over, type Timing } from './state';
 import { lengthOf, nominal, pace, widthAt } from './reach';
 import { landing, quintic, settle, swingOn } from './swing';
 import { cue, exclusive, inTurn, isWalking, keepTime, liftFeet, together, wants } from './cues';
@@ -38,7 +38,7 @@ export class Stepper extends Steps {
    * once the hips are placed. A sub-step reads the root, times the stance, faces the pelvis; carries the swings on, cues and clocks the
    * steps and lifts the feet that are due; then places the pelvis as high as the feet let it.
    */
-  move(f: Frame, r: RootGoal) {
+  move(f: Frame, r: Steering) {
     const { st, legs } = this, s = st.scale;
     const root = this.read(f, r);
     const timing = this.timing(root);
@@ -97,7 +97,7 @@ export class Stepper extends Steps {
   }
 
   /** The root read for this sub-step: the crouch eased in, the leap moved on, the root's speed, acceleration and turn. */
-  private read(f: Frame, r: RootGoal): Root {
+  private read(f: Frame, r: Steering): Reading {
     const { st, jumping: jump, yaws, heights, velocity } = this, s = st.scale, dt = f.dt;
     // (first moved: standing where it is, moving as the root already does — a body spawned on the move gets no jolt)
     if (Number.isNaN(this.stand)) { this.stand = heights[0] = heights[1] = f.prev.position(0).y; velocity.copy(r.velocity); }
@@ -130,7 +130,7 @@ export class Stepper extends Steps {
   }
 
   /** The stance's duration (quicker turning), its travel kept within reach in the direction of travel. */
-  private timing(root: Root): Timing {
+  private timing(root: Reading): Timing {
     const { st, yaws } = this, s = st.scale, { r, v, run, crouch: k, pressed, wanted } = root;
     const forward = forwardOf(yaws[1]), left = leftOf(yaws[1]);
     // (a gait's cadence as fast as it will be going by mid-stance: setting off, it steps as quickly as it is about to go, not as it stood)
@@ -162,7 +162,7 @@ export class Stepper extends Steps {
   }
 
   /** The pelvis' facing: the root's, within reach of the feet's (as they stand or will land). */
-  private face({ f, r, dt, wanted }: Root): number {
+  private face({ f, r, dt, wanted }: Reading): number {
     const { st, feet, legs, yaws, pair } = this, s = st.scale, toeOut = st.toeOut;
     let low = -Infinity, high = Infinity;
     for (const leg of legs) {
@@ -198,7 +198,7 @@ export class Stepper extends Steps {
    * The pelvis facing `yaw`, toward `goal`, as a walker's — a foreseen root's — turns it: never past the feet's reach of it (`low` …
    * `high`), braking into the limit; past it in the way the root turns, or turned up to `PAUSE` s ago, never turning back: it waits for it.
    */
-  private foresee(r: RootGoal, dt: number, yaw: number, goal: number, low: number, high: number): number {
+  private foresee(r: Steering, dt: number, yaw: number, goal: number, low: number, high: number): number {
     const { yaws } = this;
     if (!r.forecast || this.clocked) return yaw;
     if (low <= high) yaw = clamp(yaw, low, high);

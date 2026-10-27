@@ -1,7 +1,7 @@
 import { Box3, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { REACHED, REACHING, type Target } from '../../kernel/goal';
+import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { lerp } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { reached } from '../../kernel/tip';
@@ -10,7 +10,7 @@ import { grasp, onBody, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { CALM, reaching } from './arms';
 import { ARM_REACH } from './bend';
-import { standing, walking } from './stand';
+import { footing, walking } from './stand';
 import { looking, SHIFT } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
@@ -23,7 +23,7 @@ export interface Taking {
   side: Side;
   thing: Thing;
   grip: string;
-  goal: Target;
+  goal: Goal;
 }
 
 /** where a grip is in the world this sub-step, as `h` tracks its thing */
@@ -162,10 +162,10 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
  * as the walk will arrive within `NEAR` s, each in the time a calm reach that far takes or at the pace asked. Met once they are there; they
  * keep there. `false` if it can stand nowhere in reach.
  */
-export function* reachingTo(h: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Target }[], pace: { speed?: number; accel?: number }) {
+export function* reachingTo(h: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: { speed?: number; accel?: number }) {
   const most = ARM_REACH * h.proportions.armLength + h.proportions.shoulderHalfWidth;
   const inReach = aims.every(({ side, target }) => h.pose.position(INDEX[`${side}UpperArm`]).distanceTo(target(h.frame).position) < most);
-  const plan = inReach ? 'there' : standing(h, { grips: aims.map(({ side, target }) => ({ side, at: target(h.frame).position.clone() })), mass: 0 });
+  const plan = inReach ? 'there' : footing(h, { grips: aims.map(({ side, target }) => ({ side, at: target(h.frame).position.clone() })), mass: 0 });
   if (plan === 'nowhere') {
     request.fail();
     return;

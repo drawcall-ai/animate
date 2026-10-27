@@ -68,7 +68,7 @@ export function followRotation(prev2: Quaternion, prev: Quaternion, target: Quat
 }
 
 /** `world` into the frame of a carrier placed `at` */
-function toLocal(at: Required<Placement>, world: Vector3): Vector3 {
+function toLocal(at: Placement, world: Vector3): Vector3 {
   return world.sub(at.position).applyQuaternion(_r.copy(at.quaternion).invert());
 }
 

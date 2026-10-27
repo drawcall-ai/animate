@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { REACHED, REACHING, type Placement, type Target } from '../../kernel/goal';
+import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import type { Carrier } from '../../kernel/carrier';
 import { ChainTip, reached } from '../../kernel/tip';
 import { looking } from '../../look/gaze';
@@ -159,7 +159,7 @@ function* coming(self: Handed, request: Request, at: (f: Frame) => Readonly<Vect
 }
 
 /** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */
-function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) => Target, on?: Carrier) {
+function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) => Goal, on?: Carrier) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new ChainTip(chain);
   const began = self.frame.time;
   let late = false;
@@ -208,7 +208,7 @@ export function* taking(self: Handed, request: Request, hand: string, thing: Thi
  * A creature's hand bringing what it holds to `to` (its placement, a sub-step at a time) at a calm dip's pace, the hand asked: it walks
  * up first (borrowed) if `to` is beyond its reach; met once there, it keeps it there. `false` if `to` is out of its reach from anywhere.
  */
-export function* bringing(self: Handed, request: Request, hand: string, thing: Thing, to: (f: Frame) => Placement) {
+export function* bringing(self: Handed, request: Request, hand: string, thing: Thing, to: (f: Frame) => Goal) {
   const reach = reachOf(self, hand, to(self.frame).position, thing.object.name);
   if (!reach) {
     request.fail();
@@ -222,7 +222,7 @@ export function* bringing(self: Handed, request: Request, hand: string, thing: T
   // (the hand where it puts the thing there, as it holds it: its tip goes there, the chain bending as it may)
   const placed = self.track(thing.object).current, inverse = self.pose.rotation(bone).clone().invert();
   const inHand = { position: placed.position.clone().sub(self.pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(placed.quaternion) };
-  const handAt = (f: Frame): Target => {
+  const handAt = (f: Frame): Goal => {
     const at = to(f), turn = at.quaternion ?? self.track(thing.object).at(f.time).current.quaternion;
     const quaternion = _hq.copy(turn).multiply(_iq.copy(inHand.quaternion).invert());
     return { position: inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position) };
@@ -254,7 +254,7 @@ export function* nuzzling(self: Handed, request: Request, hand: string, target: 
   });
 }
 
-const _world: Target & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _hq = new Quaternion(), _iq = new Quaternion();
 
 /**

@@ -4,8 +4,9 @@ import type { Pose } from '../kernel/pose';
 import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
 import { anchors, movers, resolve, type Hold, type Holder, type Resolving } from './resolve';
-import { Thing, type Grip, type Local } from './thing';
-import type { Target } from '../kernel/goal';
+import { Thing, type Grip } from './thing';
+import type { Placement } from '../kernel/goal';
+import type { Goal } from '../kernel/goal';
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
 export function hangsFrom(self: Holder, object: Object3D): number {
@@ -34,7 +35,7 @@ export function onBody(self: Holder, thing: Thing): boolean {
  * where a hand bone goes on `grip` (in the thing's frame): on the empty, turned as it is — the hand bone's rest (`rest`, its scene frame
  * against its pose's) undone — or rolling about its free line, or turned as the hand comes
  */
-export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Target {
+export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Goal {
   const position = grip.at.position.clone();
   if (grip.free === true) return { position };
   const quaternion = grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
@@ -287,7 +288,7 @@ export function wornOf(self: Holder): Thing[] {
 }
 
 const ZERO = new Vector3();
-const _frame: Local = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Local = { position: new Vector3(), quaternion: new Quaternion() };
+const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const _scale = new Vector3();
 const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();

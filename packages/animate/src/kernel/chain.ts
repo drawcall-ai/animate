@@ -1,6 +1,6 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { wrapAngle } from './math';
-import type { Placement } from './goal';
+import type { Goal } from './goal';
 import { clampRotation, coordinates, coordinatesOf } from './limits';
 import type { Pose } from './pose';
 import type { Limit, Skeleton } from './skeleton';
@@ -8,7 +8,7 @@ import type { Limit, Skeleton } from './skeleton';
 /** Where a chain is asked to go (world). */
 export interface ChainGoal {
   /** the tip bone's origin and, if given, rotation */
-  tip: Placement;
+  tip: Goal;
   /**
    * a point the middle joint of a two-segment chain bends toward (default: its bend stays turned
    * as it is now). The limb turns to it at once: move a pole that changes like any goal (`follow`).

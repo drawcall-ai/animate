@@ -1,8 +1,8 @@
 // The story surface: bodies of a species, and the verbs that move them.
 // What a species of your own needs is in '@drawcall/animate/species'.
 
-export { Body, type BodyOptions, type Foot, type Goal, type Goals } from './body/body';
-export type { Driven } from './legs/legged';
+export { Body, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
+export type { Root } from './legs/legged';
 export type { Temperament } from './species/define';
 export { humanoid, type HumanoidBone } from './species/humanoid/humanoid';
 export { horse, type HorseBone } from './species/horse';

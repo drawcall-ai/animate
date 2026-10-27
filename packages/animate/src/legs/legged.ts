@@ -7,7 +7,7 @@ import type { Locomotion } from './locomotion';
 import type { Stepper } from './step/stepper';
 
 /** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
-export interface Driven {
+export interface Root {
   /** its point on the floor (m) */
   position: Vector3;
   /** its velocity over the floor (m/s); default read off its moves */
@@ -34,7 +34,7 @@ export interface Legged {
   readonly scale: number;
   readonly tempo: number;
   readonly life: Temperament;
-  readonly drive?: (time: number) => Driven;
+  readonly drive?: (time: number) => Root;
   /** its stepping legs, made with its balance */
   stepper: Stepper | null;
   readonly poise: Poise;

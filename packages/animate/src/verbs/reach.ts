@@ -1,6 +1,4 @@
 import { selfOf, type Body, type HandOf } from '../body/body';
-import type { Frame } from '../kernel/frame';
-import type { Target as Goal } from '../kernel/goal';
 import type { AnySpecies } from '../species/define';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
@@ -27,10 +25,7 @@ export function reach<S extends AnySpecies>(body: Body<S>, targets: Partial<Reco
     const self = selfOf(body);
     const aims = named.map(({ hand, target }) => {
       const find = finder(self, target);
-      return { hand, target: (f: Frame): Goal => {
-        const found = find(f);
-        return { position: found.position, quaternion: found.quaternion ?? undefined, velocity: found.velocity };
-      } };
+      return { hand, target: find };
     });
     yield* self.handling.reach(request, aims, options);
   }, options.until);

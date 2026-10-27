@@ -8,7 +8,7 @@ import { looking } from '../look/gaze';
 import type { Gazer } from '../species/define';
 import type { Carrier } from '../kernel/carrier';
 import { solveChain } from '../kernel/chain';
-import { REACHED, type Target } from '../kernel/goal';
+import { REACHED, type Goal } from '../kernel/goal';
 import { ChainTip } from '../kernel/tip';
 import { forwardOf } from '../kernel/math';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
@@ -44,7 +44,7 @@ export class Person extends Self {
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const p = species.person;
     if (!p || !species.gaze) throw new Error('a person is made of a humanoid species');
-    super(species, options, binding, (skeleton) => standing(p, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0));
+    super(species, options, binding, (skeleton) => relaxed(p, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0));
     this.proportions = p;
   }
 
@@ -92,7 +92,7 @@ export class Person extends Self {
  * where hand `side` is kept on the body while nothing asks for it: where it was relative to the root bone when it was last let be (a
  * mug held before the chest stays there as the body walks and turns)
  */
-function keptOnBody(h: Person, side: Side): (f: Frame) => Target {
+function keptOnBody(h: Person, side: Side): (f: Frame) => Goal {
   const bone = h.hands[side];
   let time = -Infinity;
   const kept = { position: new Vector3(), quaternion: new Quaternion() };
@@ -168,7 +168,7 @@ function checkHeld(h: Person, f: Frame, noted: WeakSet<object>): void {
  * `pose` standing relaxed at `floor` facing `yaw`: the feet flat where the default stance puts them, the pelvis as high as they reach,
  * the legs solved down to them
  */
-function standing(p: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
+function relaxed(p: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
   for (const { bone, rotation } of relaxedPose()) pose.setLocal(bone, rotation);
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));
   pose.setRoot(new Vector3(floor.x, p.hipHeight, floor.z));

@@ -1,7 +1,7 @@
 import type { Object3D } from 'three';
 import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
-import type { Placement, Target } from '../kernel/goal';
+import type { Goal } from '../kernel/goal';
 import type { Request } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 
@@ -26,9 +26,9 @@ export interface Handling {
    * the hands holding `thing` bring it through `points` (each where it is a sub-step at a time; the last also sets its turn) — in to
    * `end`, an empty, by its approach — and keep it there
    */
-  bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Placement)[], end: Object3D | null, pace: Pace): Handwork;
+  bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, pace: Pace): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */
-  reach(request: Request, aims: readonly { hand: string; target: (f: Frame) => Target }[], pace: Pace): Handwork;
+  reach(request: Request, aims: readonly { hand: string; target: (f: Frame) => Goal }[], pace: Pace): Handwork;
   /** `hands`, having let go, back out of what they held: a request of the body's own */
   backOut(hands: readonly string[]): void;
 }
