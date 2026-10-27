@@ -5,7 +5,8 @@ import type { Body } from '@drawcall/animate';
 import { selfOf } from '../../packages/animate/src/body/body';
 import { personOf, type Person as Insides } from '../../packages/animate/src/body/person';
 import { INDEX, type BoneName } from '../../packages/animate/src/species/humanoid/bones';
-import { pointsOf } from '../../packages/animate/src/species/humanoid/landmarks';
+import { palmOf } from '../../packages/animate/src/species/humanoid/landmarks';
+import type { Proportions } from '../../packages/animate/src/species/humanoid/proportions';
 import type { Person } from '../src/scenario';
 
 export type Side = 'left' | 'right';
@@ -27,7 +28,7 @@ export interface Foot {
 /** A person read for the metrics: its bones and landmarks (world), its walk, its feet and what its hands hold and its body bears. */
 export class Actor {
   readonly insides: Insides;
-  private readonly points: ReturnType<typeof pointsOf>;
+  private readonly points: Record<string, { bone: BoneName; at: Vector3 }>;
 
   constructor(readonly body: Person) {
     this.insides = personOf(selfOf(body as Body));
@@ -67,9 +68,9 @@ export class Actor {
   joint(name: string, out = new Vector3()): Vector3 {
     const pose = this.body.pose;
     if (name in INDEX) return out.copy(pose.position(INDEX[name as BoneName]));
-    const point = this.points[name as keyof typeof this.points];
+    const point = this.points[name];
     if (!point) throw new Error(`a person has no ${name}`);
-    return pose.point(point.bone, point.at, out);
+    return pose.point(INDEX[point.bone], point.at, out);
   }
 
   /** a bone's turn (world; identity standing in the T-pose facing +Z) */
@@ -81,6 +82,30 @@ export class Actor {
   point(name: BoneName, local: Vector3, out = new Vector3()): Vector3 {
     return this.body.pose.point(INDEX[name], local, out);
   }
+}
+
+/** The named points that are not bone origins (OpenPose BODY_25 needs them), each fixed in a bone's frame; the right mirrors the left's x. */
+function pointsOf(proportions: Proportions): Record<string, { bone: BoneName; at: Vector3 }> {
+  const { head, sole, eyes } = proportions, mirror = (at: Vector3) => new Vector3(-at.x, at.y, at.z);
+  return {
+    nose: { bone: 'head', at: head.nose },
+    headTop: { bone: 'head', at: head.top },
+    eyes: { bone: 'head', at: eyes },
+    leftEye: { bone: 'head', at: head.eye },
+    rightEye: { bone: 'head', at: mirror(head.eye) },
+    leftEar: { bone: 'head', at: head.ear },
+    rightEar: { bone: 'head', at: mirror(head.ear) },
+    leftHeel: { bone: 'leftFoot', at: sole.heel },
+    rightHeel: { bone: 'rightFoot', at: mirror(sole.heel) },
+    leftBigToe: { bone: 'leftToes', at: sole.bigToe },
+    rightBigToe: { bone: 'rightToes', at: mirror(sole.bigToe) },
+    leftSmallToe: { bone: 'leftToes', at: sole.smallToe },
+    rightSmallToe: { bone: 'rightToes', at: mirror(sole.smallToe) },
+    leftWrist: { bone: 'leftHand', at: new Vector3() },
+    rightWrist: { bone: 'rightHand', at: new Vector3() },
+    leftPalm: { bone: 'leftHand', at: palmOf(proportions, 'left') },
+    rightPalm: { bone: 'rightHand', at: palmOf(proportions, 'right') },
+  };
 }
 
 /** the world position of `name`, a bone or landmark of `h` */
