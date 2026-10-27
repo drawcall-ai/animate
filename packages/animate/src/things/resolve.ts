@@ -9,7 +9,7 @@ import type { Thing } from './thing';
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
  * another body's as it was before that body's update this frame — its bones as they stand in the scene, and where a thing it moves
  * itself is, read the same way (its own this sub-step: its moves come after its hands). As a reader: how many updates it has finished,
- * the share of the update's time its sub-step has reached, and the local transforms it has seen.
+ * the share of the update's time its sub-step has reached, and the transforms it has seen.
  */
 export interface Resolving {
   readonly updates: number;
@@ -49,7 +49,7 @@ export const anchors = new WeakMap<Object3D, { body: Holder; bone: number }>();
 /** the body that moves each thing it carries in both hands itself (one hand's hangs from that hand's bone) */
 export const movers = new WeakMap<Object3D, Holder>();
 
-/** a node's local transform from one update to the next, the update it was last read in, and under which parent */
+/** a node's matrix from one update to the next, the update it was last read in, and its parent frame (null for world) */
 export interface Interpolated {
   update: number;
   parent: Object3D | null;
@@ -62,7 +62,7 @@ export interface Interpolated {
  * (a body's object or moving bone, from that body's pose; a thing a body moves, from where it moves it), times the local chain
  * below it — each local the app moves eased from where it was at the reader's last update to where it is now across the update's
  * sub-steps, exact at its end, or as it is now if `fresh` (the app moves it every sub-step). Scale is left out of the result (a body's
- * frames are metres) but carried through the chain.
+ * frames are metres) but carried through the chain. An app-owned world matrix (`matrixWorldAutoUpdate = false`) ends the chain.
  */
 export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh = false): Placement {
   const chain = _chain.identity();
@@ -77,8 +77,8 @@ export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh
       chain.premultiply(frameOf(anchor.body.poseFor(reader), anchor.body, anchor.bone));
       break;
     }
-    if (fresh) at.updateMatrix();
-    chain.premultiply(fresh ? at.matrix : localOf(reader, at));
+    chain.premultiply(matrixOf(reader, at, fresh));
+    if (!at.matrixWorldAutoUpdate) break;
   }
   chain.decompose(out.position, out.quaternion, _scale);
   return out;
@@ -94,23 +94,23 @@ function frameOf(pose: ReadonlyPose, body: Resolving, bone: number): Matrix4 {
   return _anchor.compose(pose.position(bone), _q.copy(pose.rotation(bone)).multiply(body.restOf(bone)), _s.set(scale, scale, scale));
 }
 
-/** `node`'s local transform, eased across the reader's update if the app moved it since the last (not if it re-parented it: a new frame) */
-function localOf(reader: Resolving, node: Object3D): Matrix4 {
-  node.updateMatrix();
+/** The app's matrix (local, or world if it owns that), eased across the update unless its frame changed; fresh reads are exact. */
+function matrixOf(reader: Resolving, node: Object3D, fresh = false): Matrix4 {
+  if (node.matrixAutoUpdate) node.updateMatrix();
+  const parent = node.matrixWorldAutoUpdate ? node.parent : null, matrix = node.matrixWorldAutoUpdate ? node.matrix : node.matrixWorld;
+  if (fresh) return matrix;
   let seen = reader.frames.get(node);
-  if (!seen) reader.frames.set(node, (seen = { update: reader.updates, parent: node.parent, from: node.matrix.clone(), to: node.matrix.clone() }));
-  const reparented = seen.parent !== node.parent;
-  if (reparented || seen.update !== reader.updates) {
-    seen.from.copy(!reparented && seen.update === reader.updates - 1 ? seen.to : node.matrix);
-    seen.to.copy(node.matrix);
-    seen.parent = node.parent;
+  if (!seen) reader.frames.set(node, (seen = { update: reader.updates, parent, from: matrix.clone(), to: matrix.clone() }));
+  if (seen.parent !== parent || seen.update !== reader.updates) {
+    seen.from.copy(seen.parent === parent && seen.update === reader.updates - 1 ? seen.to : matrix);
+    seen.to.copy(matrix);
+    seen.parent = parent;
     seen.update = reader.updates;
   }
   if (seen.from.equals(seen.to)) return seen.to;
   seen.from.decompose(_a, _qa, _sa);
   seen.to.decompose(_b, _qb, _sb);
-  const t = reader.share;
-  return _local.compose(_a.lerp(_b, t), _qa.slerp(_qb, t), _sa.lerp(_sb, t));
+  return _local.compose(_a.lerp(_b, reader.share), _qa.slerp(_qb, reader.share), _sa.lerp(_sb, reader.share));
 }
 
 const UP = new Vector3(0, 1, 0), ONE = new Vector3(1, 1, 1);

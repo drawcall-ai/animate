@@ -6,7 +6,7 @@ import { isPerson, type Simulation } from './simulation';
 /** the height the camera looks at over a person's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
 const FOCUS_HEIGHT = 0.54;
 
-/** The run's scene graph as a step left it: every node under the scene, its parent and its local position and rotation. */
+/** The run's scene graph as a step left it: every node under the scene, its parent and its position and rotation (world for an app-owned world matrix). */
 class Snapshot {
   readonly nodes: Object3D[] = [];
   readonly parents: (Object3D | null)[] = [];
@@ -23,12 +23,13 @@ class Snapshot {
       if (node === scene) return;
       this.index.set(node, this.nodes.length);
       this.nodes.push(node);
-      this.parents.push(node.parent);
+      this.parents.push(node.matrixWorldAutoUpdate ? node.parent : null);
     });
     if (this.values.length < 7 * this.nodes.length) this.values = new Float64Array(7 * this.nodes.length * 2);
     this.nodes.forEach((node, i) => {
-      node.position.toArray(this.values, 7 * i);
-      node.quaternion.toArray(this.values, 7 * i + 3);
+      if (!node.matrixWorldAutoUpdate) node.matrixWorld.decompose(_p, _q, _s);
+      (node.matrixWorldAutoUpdate ? node.position : _p).toArray(this.values, 7 * i);
+      (node.matrixWorldAutoUpdate ? node.quaternion : _q).toArray(this.values, 7 * i + 3);
     });
   }
 
@@ -37,6 +38,7 @@ class Snapshot {
     this.nodes.forEach((node, i) => {
       node.position.fromArray(this.values, 7 * i);
       node.quaternion.fromArray(this.values, 7 * i + 3);
+      if (!node.matrixWorldAutoUpdate) node.matrixWorld.compose(node.position, node.quaternion, _s.setFromMatrixScale(node.matrixWorld));
     });
   }
 }
@@ -44,7 +46,7 @@ class Snapshot {
 /**
  * A simulation shown at display rate. The sim runs at a fixed 60 Hz; displays often refresh faster (120 Hz), so what's shown is
  * interpolated between the last two steps — otherwise the bodies move only on some frames while the camera glides every frame, which
- * reads as stutter ("Fix Your Timestep"). What is shown is the run's scene graph: each node's local position and rotation blended
+ * reads as stutter ("Fix Your Timestep"). What is shown is the run's scene graph: each node's position and rotation blended in the frame its matrix uses
  * between the two steps while its parent stayed the same (a thing taken into a hand or set down shows where it is now). Each step starts
  * from the exact state the last one left, so the simulation is the same however it is shown.
  */
@@ -87,6 +89,7 @@ export class Playback {
       const j = 7 * was;
       node.position.set(a[j] + (b[k] - a[j]) * alpha, a[j + 1] + (b[k + 1] - a[j + 1]) * alpha, a[j + 2] + (b[k + 2] - a[j + 2]) * alpha);
       node.quaternion.fromArray(a, j + 3).slerp(_q.fromArray(b, k + 3), alpha);
+      if (!node.matrixWorldAutoUpdate) node.matrixWorld.compose(node.position, node.quaternion, _s.setFromMatrixScale(node.matrixWorld));
     });
     const focus = this.previousFocus.clone().lerp(this.focus(), alpha);
     const [from, to] = [this.previousLook, this.currentLook];
@@ -151,4 +154,4 @@ export class Playback {
   }
 }
 
-const _q = new Quaternion();
+const _q = new Quaternion(), _p = new Vector3(), _s = new Vector3();

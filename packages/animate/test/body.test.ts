@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { bone, type SkeletonBone } from '@drawcall/rig';
 import { Body, dog, horse, humanoid } from '../src/index';
 import { BONES, INDEX } from '../src/species/humanoid/bones';
-import { claim, dt, person, run } from './bodies';
+import { claim, dt, insides, person, run } from './bodies';
 import { rng } from './random';
+import { resolve } from '../src/things/resolve';
 import { PERSON } from './skeletons/person';
 import { HORSE } from './skeletons/horse';
 import { DOG } from './skeletons/dog';
@@ -23,6 +24,20 @@ describe('a body', () => {
     }
     run(fixed, 2);
     for (let bone = 0; bone < fixed.pose.skeleton.bones.length; bone++) expect(jittered.pose.local(bone).angleTo(fixed.pose.local(bone))).toBeLessThan(1e-6);
+  });
+
+  it('reads an app-owned world matrix under a moving bone, interpolating it across sub-steps', () => {
+    const body = person(), mount = new Group(), target = new Group(), samples: number[][] = [];
+    body.bones.chest.add(mount);
+    mount.add(target);
+    mount.matrixWorldAutoUpdate = target.matrixAutoUpdate = false;
+    target.matrix.makeTranslation(0.1, 0, 0);
+    claim(body, 'trunk', (f) => f.current.setLocal(INDEX.chest, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time)));
+    claim(body, 'hand.right', () => { samples.push(resolve(insides(body), target, { position: new Vector3(), quaternion: new Quaternion() }).position.toArray()); });
+    body.update(dt);
+    mount.matrixWorld.makeTranslation(2, 1, 3);
+    body.update(2 * dt);
+    expect(samples).toEqual([[0.1, 0, 0], [1.1, 0.5, 1.5], [2.1, 1, 3]]);
   });
 
   it('takes at most 0.1 s of a frame: a stall is not run through', () => {

@@ -92,11 +92,11 @@ export function shooter(): Scenario {
       const arms = proportions.arms;
 
       const eye = onBone(person, person.bones.head, 'right eye', new Vector3(-proportions.head.eye.x, proportions.head.eye.y, proportions.head.eye.z));
-      // (where the aim holds the rifle, on the chest: the scene moves it, the hands hold it there; where the chest was a frame before, and
-      // how this frame's update will carry it)
+      // (the chest bears the rifle, but the aim places it in the world: its world matrix stays where the app puts it as the chest turns)
       const chest = person.bones.chest, mount = empty(chest, 'aim', new Vector3());
       chest.updateWorldMatrix(true, false);
       const chestBefore = chest.matrixWorld.clone(), carried = new Matrix4();
+      mount.matrixWorldAutoUpdate = false;
       const rifle = rifleOn(mount, arms);
       const well = rifle.getObjectByName('well')!, flash = rifle.getObjectByName('flash')!;
       const pouches = POUCHES.map((at, i) => {
@@ -145,7 +145,7 @@ export function shooter(): Scenario {
         root.steady = smooth(aiming);
       };
 
-      /** the rifle where the aim holds it: in the look's frame from the eye, as the poses' weights have it, kicked by a shot; on the chest as this frame's update will place it */
+      /** the rifle where the aim holds it: in the look's frame from the eye, as the poses' weights have it, kicked by a shot; the chest's turn does not alter that world placement */
       const hold = () => {
         const kick = Math.sin(Math.PI * Math.min(1, (time - lastShot) / RECOIL.seconds)) ** 2, breath = atEase() ? Math.sin(2 * Math.PI * BREATH.rate * time) : 0;
         const blend = (pose: 'at' | 'turn') => new Vector3().lerpVectors(HIP[pose], AIMED[pose], smooth(aiming))
@@ -153,8 +153,7 @@ export function shooter(): Scenario {
         const at = blend('at').multiplyScalar(arms).add(new Vector3(0, breath * BREATH.drift - RIFLE.sight.y, -kick * RECOIL.back));
         const turn = blend('turn').add(new Vector3(kick * RECOIL.up, 0, breath * BREATH.roll));
         const turned = view().multiply(new Quaternion().setFromEuler(new Euler(turn.x, turn.y, turn.z)));
-        const placed = new Matrix4().compose(at.applyQuaternion(view()).add(look.eye), turned, ONE);
-        placed.premultiply(carried.clone().multiply(chest.matrixWorld).invert()).decompose(mount.position, mount.quaternion, mount.scale);
+        mount.matrixWorld.compose(at.applyQuaternion(view()).add(look.eye), turned, ONE);
       };
 
       /**
