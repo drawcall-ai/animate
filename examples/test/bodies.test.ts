@@ -12,7 +12,9 @@ import { cases } from '../../packages/animate/test/open';
 // - stable-morning: the soldier's saddle 4.9 cm off its carry's end at 7.35 s, the outlier's 5.1 cm at 11.8 s and its right hand 2.1 cm
 //   into the trunk at 2.2 s; neither finishes;
 // - pickup-shelf: the soldier's left forearm 10.8 cm into the trunk at 3.3 s, its hands 9–10 cm short of the box at 6.65 s, its feet
-//   sliding up to 1.45 cm a frame while planted; unfinished; the outlier's hip at 3070 °/s (limit 2000) at 9.2 s;
+//   sliding up to 1.45 cm a frame while planted; unfinished; the outlier still fails at all seeds 0–3 with the same hip-rate defect:
+//   2810–3040 °/s (limit 2000) at 9.13–9.97 s, leg acceleration up to 335 000 °/s² and planted feet sliding 2.9–4.6 mm a frame.
+//   Also its released right forearm 1.1–1.2 cm into the trunk at 10.55–11.35 s (seeds 0–2), and crossed legs by 9.8 mm (seed 3);
 // - reach: the soldier's first target 0.45 m over its shoulders on tiptoe (limit 0.44), and its floor target 0.47–0.48 m below its
 //   shoulders lowered and bowed (limit 0.44) at 6.4–8.1 s, its planted feet sliding up to 2 cm a frame as its hand follows that point
 //   down (6.5–8.4 s), and a leg at 271 000 °/s² at 14.4 s;

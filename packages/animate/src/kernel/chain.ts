@@ -167,7 +167,9 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   }
 
   // the tip's turn about the middle bone, shared between the middle bone and the tip
-  shared(r0, local[1], a, quaternion, limits, twist);
+  // A contact re-solve keeps the braked twist too; searching it again can jump between wrist-limit solutions.
+  if (!swivels && twist !== undefined) _twisted.copy(local[1]).multiply(_q2.setFromAxisAngle(a, twist));
+  else shared(r0, local[1], a, quaternion, limits, twist);
   limited(skeleton, bones[1], local[1].copy(_twisted));
   limited(skeleton, bones[2], local[2].copy(r0).multiply(local[1]).invert().multiply(quaternion));
 }

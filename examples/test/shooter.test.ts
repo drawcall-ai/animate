@@ -19,9 +19,7 @@ const BODY_NAMES = BODIES.map(([on]) => on);
 
 // The shooter on every body: the default and the skeletons unlike it — the rifle, its grips, the reload and the dev log hold for any
 // body. The cases that do not hold yet are listed (expected to fail: each one fixed comes off the list), each with what fails, at seed 0:
-// - walking, as the left hand carries the spent magazine out of the well, the right forearm on the pistol grip rolls ~62° in one sub-step
-//   (3470–4020°/s at 49.88 s and 50.48 s of the demo, its hand and the rifle steady: the arm's elbow flipping in its solve), which the dev
-//   log of the clean run and of the reload while walking says;
+// - the default body's variation #2 still has its right foot at 95 205°/s² (limit 83 333) at 23.65 s;
 // - the rifle is held on the chest, placed there a frame before the body's update moves the chest — as the chest moved the frame before:
 //   where the chest changes its turn the rifle leaves the aim by that change, 2.33° in 6 rad/s sweeps reversing within 0.1 s (2° at
 //   most) and 3.18° in 3 rad/s ones reversing at once (0.05° at most shown); the library has no way for an app to move a thing on a body
@@ -32,13 +30,14 @@ const BODY_NAMES = BODIES.map(([on]) => on);
 //   the half-height, varied #1) and sprinting 0.197 m below the eye (#2; 0.2 at least);
 // - the outlier's knees, sprinting off and landing a jump: 95 600°/s² (21.20 s), 95 500 (44.52 s), 94 600 (30.77 s).
 const test = cases([
-  ...BODY_NAMES.flatMap((on) => [0, 1, 2].map((seed) => `keeps both grips, steady sights and final-pose checks clean${on} #${seed}`)),
+  'keeps both grips, steady sights and final-pose checks clean #2',
+  ...BODY_NAMES.filter(Boolean).flatMap((on) => [0, 1, 2].map((seed) => `keeps both grips, steady sights and final-pose checks clean${on} #${seed}`)),
   ...BODY_NAMES.flatMap((on) => [
     `keeps the rifle on the aim through fast turns: standing and walking, at the hip and aiming${on}`,
     `shows the rifle steady in the first-person view through fast turns aiming, standing${on}`,
     `shows the rifle steady in the first-person view through fast turns aiming, walking${on}`,
-    `reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept${on}`,
   ]),
+  ...BODY_NAMES.filter(Boolean).map((on) => `reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept${on}`),
   ...[' on the soldier', ' on the outlier'].flatMap((on) => [
     `ADS overrides held sprint and keeps both grips during the raise${on}`,
     `jumps from a walk and a sprint: quick take-off, a ballistic arc, momentum kept, the knees taking the landing${on}`,

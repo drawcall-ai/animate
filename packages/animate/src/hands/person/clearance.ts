@@ -39,7 +39,10 @@ export function clearBody(person: Reacher, f: Frame, item: Thing, at: Vector3, r
   let face = 0;
   for (let i = 0; i < 2; i++) {
     const start = i === 0 ? hips : neck, end = i === 0 ? neck : head;
-    if (at.y + bottom > Math.max(start.y, end.y) + radius || at.y + top < Math.min(start.y, end.y) - radius) continue;
+    const beyond = Math.max(0, Math.min(start.y, end.y) - at.y - top, at.y + bottom - Math.max(start.y, end.y));
+    // (rounded caps: a rising load meets the capsule continuously, not its full width in one sub-step)
+    if (beyond >= padding) continue;
+    const rim = Math.sqrt(padding ** 2 - beyond ** 2);
     const side = at.dot(left), a = start.dot(left), b = end.dot(left);
     if (side + near > Math.max(a, b) + padding || side + far < Math.min(a, b) - padding) continue;
     const span = end.y - start.y;
@@ -47,7 +50,7 @@ export function clearBody(person: Reacher, f: Frame, item: Thing, at: Vector3, r
     const high = span === 0 ? 1 : Math.max(0, Math.min(1, (at.y + top + radius - start.y) / span));
     const from = start.dot(forward), along = end.dot(forward) - from;
     const front = Math.max(from + along * low, from + along * high);
-    const push = Math.max(0, front + padding - at.dot(forward) - back);
+    const push = Math.max(0, front + rim - at.dot(forward) - back);
     at.addScaledVector(forward, push);
     if (i === 1) face = push;
   }
