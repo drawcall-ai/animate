@@ -139,7 +139,7 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
     // the upper body rides the pelvis's sway, no wider, and stays near vertical over it
     gait('chest lateral p2p (m)', g.chestLat, 'max', g.pelvisLat + 0.005);
     gait('trunk lateral lean (°)', g.lean, 'max', 2.5);
-    gait('head roll (°)', g.headRoll, 'max', 2);
+    if (!Number.isNaN(g.headRoll)) gait('head roll (°)', g.headRoll, 'max', 2);
     // smooth: one sway per stride, over the stance foot at mid-stance, no jitter
     gait('chest sway beyond the stride frequency', g.chestResidual, 'max', 0.4);
     // the steps alike: left and right as long, on a curve too

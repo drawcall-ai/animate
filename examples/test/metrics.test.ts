@@ -11,6 +11,7 @@ import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
 import { frames } from './frame';
+import { GaitKinematics } from './gait';
 import { cases, type Open } from '../../packages/animate/test/open';
 
 /** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
@@ -189,4 +190,19 @@ it('runs a scenario through the metrics: two people standing still, relaxed, eac
   expect(seen.length).toBe(2 * 30);
   expect(seen.every((x, i) => Math.abs(x - (i % 2 === 0 ? 1 : -1)) < 0.05)).toBe(true);
   expect(m.report).toContain('== still (30 frames)');
+});
+
+it('judges gait head roll only without a task-directed gaze', () => {
+  const free = new GaitKinematics(), tasked = new GaitKinematics();
+  for (const [frame] of frames(new Simulation(stroll({ radius: Infinity })))) {
+    free.see(frame);
+    tasked.see({ ...frame, asked: new Map([...frame.asked, ['gaze', new Vector3(0, 0, 1)]]) });
+  }
+  const walking = free.summary(false, false), directed = tasked.summary(false, false);
+  expect(walking).not.toBeNull();
+  expect(directed).not.toBeNull();
+  if (!walking || !directed) throw new Error('no steady walking strides');
+  expect(Number.isFinite(walking.headRoll)).toBe(true);
+  expect(Number.isNaN(directed.headRoll)).toBe(true);
+  expect(directed.pelvisLat).toBe(walking.pelvisLat);
 });

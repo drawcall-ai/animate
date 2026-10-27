@@ -220,6 +220,21 @@ for (const [on, skeleton] of BODIES) {
     expect(sight).toBeLessThan(0.002);
   });
 
+  test(`keeps the head level while aiming, including walking, firing and fast turns${on}`, () => {
+    const { sim, actor, player } = staged(skeleton);
+    let roll = 0, aimed = 0;
+    while (sim.t < sim.scenario.duration) {
+      sim.step();
+      if (!player.input.ads) continue;
+      const eyes = actor.joint('leftEye').sub(actor.joint('rightEye'));
+      roll = Math.max(roll, Math.abs(Math.atan2(eyes.y, Math.hypot(eyes.x, eyes.z))));
+      aimed++;
+    }
+    expect(aimed).toBeGreaterThan(600);
+    // The aim asks for a level look; judge every aimed frame, independently of gait stride selection.
+    expect(roll * 180 / Math.PI).toBeLessThanOrEqual(2);
+  });
+
   // (standing at ease the rifle breathes with the body; the sights up, it is held still in the aim and the body's breathing fades)
   test(`stands alive at ease and holds still aiming${on}`, () => {
     const { sim, person, player, rifle } = staged(skeleton);

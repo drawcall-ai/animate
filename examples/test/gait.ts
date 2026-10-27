@@ -362,7 +362,8 @@ export class GaitKinematics {
       thoraxToPelvisRoll: amp((s) => s.thoraxRoll - s.pelvisRoll),
       lean: amp((s) => s.lean),
       thoraxToPelvisYaw: amp((s) => s.thoraxYaw - s.pelvisYaw),
-      headRoll: amp((s) => s.headRoll),
+      // A task-directed gaze shift is not gait-induced roll (e.g. looking down to stow a magazine while walking).
+      headRoll: S.slice(a, b).some((s) => s.gazed) ? NaN : amp((s) => s.headRoll),
       headYaw: amp((s) => s.headYaw),
       counter: correlation(pr, tr),
       chestJerk: Math.sqrt(jerk / Math.max(1, cl.length - 3)),
