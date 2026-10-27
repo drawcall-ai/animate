@@ -56,11 +56,9 @@ const person = (brake: number) => { const body: Body = new Body(humanoid(PERSON)
 const horseOn = (gait: 'walk' | 'trot', route: Route) => { const body: Body = new Body(horse(HORSE, gait), { dev: true, drive: scripted(route, () => body) }); return body; };
 /**
  * Open: a person's leg joints at 1.3 m/s reach a p99 of ~610 °/s (~600 stopping hard) against a ceiling of 500 (the gait's swing is
- * 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise. A horse walking a
- * 3 m bend at 1.6 m/s, stopping over 2 s from 10 s, has both hind hooves in the air together for 5 sub-steps, 10.45–10.52 s (development's
- * "walk pair in the air together (cycle apart)": half a cycle apart, against 0.4): a walk's hinds are never up together.
+ * 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise.
  */
-const test = cases(['a person walking', 'a person stopping hard', 'a horse walking a 3 m turn']
+const test = cases(['a person walking', 'a person stopping hard']
   .map((name) => `${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`));
 for (const [name, make] of [['a person walking', () => person(3)], ['a person stopping hard', () => person(0.5)], ['a horse walking', () => horseOn('walk', { pace: 1.6 })],
   ['a horse trotting, braking in 2 s', () => horseOn('trot', { pace: 3.7 })], ['a horse trotting, braking in 3 s', () => horseOn('trot', { pace: 3.7, brake: 3 })],

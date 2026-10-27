@@ -116,10 +116,10 @@ export class Walk {
     return this.leg < via.length ? null : yaw;
   }
 
-  /** a walk no nearer its goal for `STALL.seconds` has stalled: a problem in the dev log, once */
+  /** a walk no nearer its goal for `STALL.seconds` — nor turned nearer its facing, or with none asked the way to its goal — has stalled: a problem in the dev log, once */
   private watch(f: Frame, yaw: number | null): void {
-    const { self, go } = this, body = placeOf(self, f);
-    const left = Math.hypot(body.x - go.to.x, body.z - go.to.z) + (yaw === null ? 0 : Math.abs(wrapAngle(yaw - self.locomotion.facing)) * STALL.turn * self.scale);
+    const { self, go } = this, body = placeOf(self, f), facing = yaw ?? headingOf(go.to.x - body.x, go.to.z - body.z);
+    const left = Math.hypot(body.x - go.to.x, body.z - go.to.z) + Math.abs(wrapAngle(facing - self.locomotion.facing)) * STALL.turn * self.scale;
     if (!Number.isFinite(left)) this.since = f.time;
     else if (left < this.best - STALL.nearer * self.scale) [this.best, this.since] = [left, f.time];
     else if (f.time - this.since > STALL.seconds) {

@@ -195,10 +195,11 @@ export function creatureHands(self: Handed): Handling {
     },
     bring: function* (request, thing, points) {
       const to = points[points.length - 1];
-      // (the hand where it puts the thing there, as it holds it — read once it has walked up — turned as `to` asks, if it does)
+      // (the hand where it puts the thing there, as it holds it — read once it has walked up, the hand and the thing off the one pose they
+      // are found by — turned as `to` asks, if it does)
       yield* holdingOn(self, request, handsOn(self, thing)[0], thing.object.name, (f) => to(f).position, (bone) => {
-        const placed = self.track(thing.object).current, inverse = self.pose.rotation(bone).clone().invert();
-        const inHand = { position: placed.position.clone().sub(self.pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(placed.quaternion) };
+        const placed = self.track(thing.object).current, pose = self.poseFor(self), inverse = pose.rotation(bone).clone().invert();
+        const inHand = { position: placed.position.clone().sub(pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(placed.quaternion) };
         return (f) => {
           const at = to(f), turn = at.quaternion ?? self.track(thing.object).at(f.time).current.quaternion;
           const quaternion = turn.clone().multiply(_iq.copy(inHand.quaternion).invert());

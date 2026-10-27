@@ -73,8 +73,8 @@ export class Stepper extends Steps {
 
   /**
    * Development check of the last final pose (`f.prev`): a gait's feet leave the floor one by one, in its order — only those whose
-   * footfalls it has within `TOGETHER` of a cycle (a trot's diagonals) together; a leap's all at once — and, walking, two whose turns are a
-   * swing or more apart (a girdle's) are never in the air together.
+   * footfalls it has within `TOGETHER` of a cycle (a trot's diagonals) together; a leap's all at once — and, walking, none lifts while one
+   * whose turn is a swing or more from it (a girdle's) is in the air.
    */
   check(f: Frame) {
     if (!f.dev || !this.clocked) return;
@@ -86,14 +86,15 @@ export class Stepper extends Steps {
     this.aloft = aloft;
     if (!was || this.airborne) return;
     const name = (leg: Leg) => f.prev.skeleton.bones[feet.legs[leg.i].foot].name, now = this.now;
-    // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — never has two whose footfalls are half
-    // a cycle apart in the air together: a girdle's; a walk's stance cut short past half the cycle is a run's)
-    if (now && now.Ts / now.C >= 0.5 && isWalking(this)) for (const a of legs) for (const b of legs) {
+    const left = legs.filter((leg) => aloft[leg.i] && !was[leg.i]);
+    // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — never lifts a foot while the one whose
+    // footfall is half a cycle from it is in the air: a girdle's; a walk's stance cut short past half the cycle is a run's, and a pair a run
+    // lifted is not the walk's it slows into)
+    if (now && now.Ts / now.C >= 0.5 && isWalking(this)) for (const a of left) for (const b of legs) {
       const d = mod(this.footfalls[a.i] - this.footfalls[b.i]), value = Math.min(d, 1 - d);
-      if (b.i <= a.i || !aloft[a.i] || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
+      if (b === a || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
       f.dev.append(f.time - f.dt, { check: 'walk pair in the air together (cycle apart)', value, limit: 0.5 - TOGETHER, where: `${name(a)} with ${name(b)}` });
     }
-    const left = legs.filter((leg) => aloft[leg.i] && !was[leg.i]);
     for (const a of left) for (const b of left) {
       if (b.i <= a.i || together(this, a, b)) continue;
       const apart = this.footfalls[a.i] - this.footfalls[b.i], value = Math.abs(apart - Math.round(apart));

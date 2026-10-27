@@ -14,17 +14,10 @@ const check = cases([
   // (asked a goal 0.5 m behind it, facing on, it turns round to walk there (to 156° by 4.5 s, ~45°/s) rather than keep its facing, and
   // its walk ends false at 6.03 s, 0.28 m short: "stalled walk", a radian of facing left counting as 0.3 m)
   'a dog walks 0.5 m back, keeping its facing',
-  // (its walk ended at 4 s and 4.09 m out at 1.3 m/s, it coasts on to 4.81 m by 5.0 s and turns round on the spot over 5.0–9.5 s
-  // (~40°/s): back to no nearer than it set off from by 10.02 s, its walk back ends false, "stalled walk", 4.4 m short)
-  'a horse walks back to where it stood after a walk its until ended at 4 s',
-  // (carrying the ball onto an empty on the floor 1 m to its side, it stands 0.42 m off it at (0.72, 0.32) facing it, lets itself down
-  // from 0.45 m to 0.18 m and holds the ball 0.14 m short of the empty from 11 s on, its carry neither ending nor failing; its right fore
-  // paw sinks below the floor from 12.18 s ("leg ground", 0.8 mm then 5 mm). Onto an empty 2.5 m ahead it puts it down)
+  // (carrying the ball onto an empty on the floor 1 m to its side, its jaw turns the ball 150° to the empty's turn and its carry ends
+  // as the jaw is within a reach's 1 cm of where it puts it, the ball 9 mm off the empty at 13.55 s: "put onto an empty this far off it",
+  // against 5 mm — a person's carry ends within 5 mm)
   'a dog takes a ball, puts it down 1 m off, takes it again and puts it back',
-  // (it stands 0.31 m short of the step, its jaw still from 8 s 0.09 mm from where its carry asks it, the ball held 0.2 m off the step
-  // at (−0.06, 0.26, 2.31): "late reach" at 11.17 s, given as that 0.09 mm against 0.01 m; the carry then ends true at 15.7 s, and the
-  // release logs the ball put onto the step 0.198 m off it)
-  'a dog carries a ball onto a step 0.3 m up, 2.5 m ahead',
 ]);
 
 type Story = NonReuseableTimeline<unknown, unknown>;
