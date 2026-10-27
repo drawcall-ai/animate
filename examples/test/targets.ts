@@ -1,5 +1,5 @@
-import { Quaternion, Vector3 } from 'three';
-import { eyesOf, jointOf } from '../src/joints';
+import { Vector3 } from 'three';
+import { eyesOf, jointOf } from './actor';
 import { Peak, type Frame } from './frame';
 import { aroundTheTrunk } from './clearance';
 
@@ -63,9 +63,8 @@ export class Targets {
       // (a target that jumps is a new one, settled on afresh; one moving smoothly is followed and judged)
       if (!this.goal || this.goal.target.distanceTo(gaze) > JUMP) this.goal = { target: gaze.clone(), since: t };
       else this.goal.target.copy(gaze);
-      const head = h.model.scene.getObjectByName('head');
-      if (!head) throw new Error('no head');
-      const forward = new Vector3(0, 0, 1).applyQuaternion(head.getWorldQuaternion(new Quaternion()));
+      const head = h.turn('head');
+      const forward = new Vector3(0, 0, 1).applyQuaternion(head);
       // (judged unless truly behind the body: behind the frontal plane through the hips — a bowed body's
       // own buckle, below and behind its eyes, is judged)
       const toward = gaze.clone().sub(eyesOf(h));
@@ -75,7 +74,7 @@ export class Targets {
         this.judged++;
         const off = (forward.angleTo(toward) * 180) / Math.PI;
         this.headOffPeak.see(off, t);
-        const beyond = beyondEyes(toward.applyQuaternion(head.getWorldQuaternion(new Quaternion()).invert()), off);
+        const beyond = beyondEyes(toward.applyQuaternion(head.invert()), off);
         this.gazePeak.see(beyond, t);
         this.eyesPeak.see(off, t);
         // (how long on end the target lies past the comfortable turn by more than `PAST`: a brief eccentric glance as the head comes
@@ -108,11 +107,8 @@ export class Targets {
       this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm), aroundTheTrunk(h, s, reached));
     }
     for (const s of ['left', 'right'] as const) {
-      const held = h.holding[s];
-      if (!held) continue;
-      const g = held.item.grips[held.grip];
-      if (!g) throw new Error(`the item has no grip "${held.grip}"`);
-      const grip = g.position.clone().applyQuaternion(held.item.current.quaternion).add(held.item.current.position);
+      const grip = h.holding[s]?.grip;
+      if (!grip) continue;
       if (jointOf(h, `${s}UpperArm`).distanceTo(grip) >= h.proportions.armLength + 0.35) continue;
       this.wristPeak.see(jointOf(h, `${s}Hand`, _v).distanceTo(grip), t);
     }
@@ -154,10 +150,8 @@ export class Targets {
 
 /** whether `point` is in front of the frontal plane through the hips */
 function ahead(h: Frame['h'], point: Vector3): boolean {
-  const hips = h.model.scene.getObjectByName('hips');
-  if (!hips) throw new Error('no hips');
-  const facing = new Vector3(0, 0, 1).applyQuaternion(hips.getWorldQuaternion(new Quaternion())).setY(0);
-  return point.clone().sub(hips.getWorldPosition(new Vector3())).dot(facing) > 0;
+  const facing = new Vector3(0, 0, 1).applyQuaternion(h.turn('hips')).setY(0);
+  return point.clone().sub(h.joint('hips')).dot(facing) > 0;
 }
 
 /** where a goal asked is: a point, or a placement's */

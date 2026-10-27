@@ -1,7 +1,6 @@
-import { wrapAngle } from '@drawcall/animate';
 import { MathUtils, Quaternion, Vector3, type PerspectiveCamera } from 'three';
-import { Spring } from '../math';
-import { eyesOf, jointOf, type Posed } from '../joints';
+import { Spring, wrapAngle } from '../math';
+import type { Joints } from '../joints';
 
 /** a camera placement: where it is, what it looks at, its vertical field of view (°) */
 export interface CameraPose {
@@ -40,19 +39,19 @@ export class CinematicCamera {
   /** true while the camera is inside/near fighter 0's head: hide that head (as FPS games do) */
   hideOwnHead = false;
 
-  apply(camera: PerspectiveCamera, t: number, dt: number, [a, b]: readonly Posed[], third: CameraPose) {
+  apply(camera: PerspectiveCamera, t: number, dt: number, [a, b]: readonly Joints[], third: CameraPose) {
     // the skull's middle, between its base and its top
-    const center = jointOf(a, 'head').lerp(jointOf(a, 'headTop'), 0.5);
+    const center = a.at('head').lerp(a.at('headTop'), 0.5);
     const h0 = this.head.step(center, 8, dt);
-    const nose = jointOf(a, 'nose');
+    const nose = a.at('nose');
     const fwd = nose.clone().sub(center).setY(0).normalize();
     // the real eyes (the own head is hidden up close), so the guard sits a natural distance away
-    const eye = this.eye.step(eyesOf(a).addScaledVector(fwd, 0.01), 22, dt);
+    const eye = this.eye.step(a.eyes().addScaledVector(fwd, 0.01), 22, dt);
     // where the head points, pulled toward the opponent's chest (brings the guard into frame)
     const gazeTarget = center
       .clone()
       .addScaledVector(nose.sub(center).normalize(), 4)
-      .lerp(jointOf(b, 'neck').setY(jointOf(b, 'neck').y - 0.3), 0.6);
+      .lerp(b.at('neck').setY(b.at('neck').y - 0.3), 0.6);
     const gaze = this.gaze.step(gazeTarget, 9, dt);
 
     let pos: Vector3, look: Vector3, fov: number;

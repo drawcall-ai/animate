@@ -1,8 +1,8 @@
 // Renders contact sheets (rows = times, columns = camera views) for review.
 // usage: node scripts/capture.mjs [--examples a,b] [--times 1,2,3 | --frames 6] [--views front,side,three,top]
 //        [--size 360] [--mode 3d|2d] [--trail <seconds>] [--zoom k] [--turn rad] [--cols N] [--each] [--out captures]
-//        [--body mannequin|openpose]  (the actors as viverse's mannequin under thin skeletons, or as OpenPose skeletons;
-//                                    default: each example's own)
+//        [--body soldier|person|outlier]  (the skeleton people stand on where an example names none: the soldier wears its
+//                                         model, the others are drawn as OpenPose skeletons; default soldier)
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -42,7 +42,8 @@ try {
   const page = await browser.newPage({ viewport: { width: size, height: size } });
   const failed = pageError(page);
   const ready = () => Promise.race([page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 }), failed]);
-  await page.goto(`${BASE}?capture=1&t=0`);
+  // (the first example asked for, if any: another may not load)
+  await page.goto(`${BASE}?capture=1&t=0&example=${args.examples?.split(',')[0] ?? ''}`);
   await ready();
   const durations = await page.evaluate(async () => {
     const m = await import('/src/scenarios/index.ts');

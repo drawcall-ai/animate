@@ -22,9 +22,6 @@ const { values: args } = parseArgs({
     stills: { type: 'string' },
     cam: { type: 'string' },
     blur: { type: 'string', default: '1' },
-    legs: { type: 'string' },
-    radius: { type: 'string' },
-    face: { type: 'string' },
   },
 });
 const [w, h] = args.size.split('x').map(Number);
@@ -35,9 +32,6 @@ const blur = stills ? 1 : Math.max(1, Number(args.blur));
 const query = new URLSearchParams({ example: args.example, video: '1' });
 if (args.cam) query.set('cam', args.cam);
 if (args.view) query.set('view', args.view);
-if (args.legs) query.set('legs', args.legs);
-if (args.radius) query.set('radius', args.radius);
-if (args.face) query.set('face', args.face);
 mkdirSync(dirname(out), { recursive: true });
 
 await using server = await devServer();

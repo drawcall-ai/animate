@@ -1,274 +1,217 @@
-import { Box3, Euler, Quaternion, Vector3 } from 'three';
-import { Item, type BoneName, type Placement, type Proportions, type Side, type Target } from '@drawcall/animate';
-import type { Prop, Solid } from '../../scenario';
+// The knight's gear: each piece a group of meshes with its mass (userData.mass, kg) and its grips (named empties), and the segments
+// of it that must keep out of the body (for the metrics' clearance). Each piece's frame is described on it.
+import { BufferGeometry, Group, Line, LineBasicMaterial, Object3D, Vector3, type Mesh } from 'three';
+import type { Solid } from '../../scenario';
+import { box, cylinder, empty } from '../../things';
 
-// The knight's gear: each piece an item (its frame, its grips, its mass), how it is drawn (boxes
-// and cylinders in its frame) and the solids that must keep out of the body.
-
-/** a shape of an item's drawing, in its frame (a cylinder's axis along +Y turned by `turn`) */
-type Part = { kind: 'box'; at: Vector3; size: Vector3; turn?: Euler } | { kind: 'cylinder'; at: Vector3; radius: number; length: number; turn?: Euler };
-
-/** A piece of gear: its item, drawing and solids. */
-export interface Gear {
-  item: Item;
-  parts: readonly Part[];
-  /** in its frame */
-  solids: readonly Solid[];
+/** a segment of a piece, in its frame, that keeps out of the body but its parts `touches` (and the hands holding the piece) */
+interface Segment {
+  name: string;
+  a: Vector3;
+  b: Vector3;
+  radius: number;
+  touches: readonly string[];
 }
 
-/** a piece of gear at `at`: its grips, mass (kg) and centre of mass (in its frame, default its origin), drawing and solids */
-const piece = (at: Placement, grips: Record<string, Target>, mass: number, parts: Part[], solids: Solid[] = [], centre?: Vector3, bounds?: Box3): Gear => ({
-  item: new Item(at.position.clone(), at.quaternion?.clone() ?? new Quaternion(), grips, { mass, centre, bounds }),
-  parts,
-  solids,
-});
+const SEGMENTS = new WeakMap<Object3D, readonly Segment[]>();
 
-/**
- * A bascinet (~2.5 kg): a round-topped cap over the skull down to below the ears, open at the face
- * (a nasal before the nose), its frame the head's when worn (origin at its middle, +Z where the face
- * is); held low on its sides toward the front (the wrists out before the cheeks: further back, the arms would fold past their range); its chin strap's ends at the
- * cheeks (`strapLeft`, `strapRight`), buckled under the chin (`chinLeft`, `chinRight`). Its crown
- * and rim keep off the head.
- */
-export function helmet(at: Placement): Gear {
-  const rim = -HELM.height / 2;
-  const grips = {
-    // (the hands turned as the arms bring them: a palm set flat on it turns the wrist past its range over the head)
-    left: { position: new Vector3(0.13, -0.15, 0.16) },
-    right: { position: new Vector3(-0.13, -0.15, 0.16) },
-    // (the chin strap: its ends hanging by the jaw, buckled under the chin — the wrists below and
-    // before them, the fingers up at the strap)
-    strapLeft: { position: new Vector3(0.09, rim - 0.2, 0.2) },
-    strapRight: { position: new Vector3(-0.09, rim - 0.2, 0.2) },
-    chinLeft: { position: new Vector3(0.03, rim - 0.22, 0.22) },
-    chinRight: { position: new Vector3(-0.03, rim - 0.22, 0.22) },
-  };
-  return piece(at, grips, 2.5, [
-    { kind: 'cylinder', at: new Vector3(0, 0, 0), radius: HELM.radius, length: HELM.height },
-    { kind: 'cylinder', at: new Vector3(0, HELM.height / 2 + 0.02, -0.01), radius: 0.08, length: 0.04 },
-    { kind: 'box', at: new Vector3(0, rim - 0.03, HELM.radius + 0.005), size: new Vector3(0.02, 0.08, 0.01) }, // the nasal
-  ], [
-    { a: new Vector3(-0.08, HELM.height / 2, 0), b: new Vector3(0.08, HELM.height / 2, 0), radius: 0.01, touches: [], name: 'helm crown' },
-    // (its rim at the brow and behind the head: over the shoulders, where it and its mail rest on them, it may touch the upper arms)
-    ...[1, -1].map((z) => ({ a: new Vector3(-0.08, rim, z * HELM.radius), b: new Vector3(0.08, rim, z * HELM.radius), radius: 0.01, touches: ['shoulders', 'leftUpperArm', 'rightUpperArm'], name: 'helm rim' })),
-  ], undefined, new Box3(
-    new Vector3(-HELM.radius, rim - 0.03 - 0.08 / 2, -HELM.radius),
-    new Vector3(HELM.radius, HELM.height / 2 + 0.02 + 0.04 / 2, HELM.radius + 0.005 + 0.01 / 2),
-  ));
+/** a piece of gear named `name` of `mass` (kg; its centre of mass at `centre`, its frame), keeping `segments` out of the body */
+function piece(name: string, mass: number, segments: Segment[] = [], centre?: Vector3): Group {
+  const group = new Group();
+  group.name = name;
+  group.userData.mass = mass;
+  if (centre) group.userData.centre = centre.toArray();
+  SEGMENTS.set(group, segments);
+  return group;
 }
+
+/** a grip of `parent` at `position`, the hand taking it turned as its arm brings it */
+function grip(parent: Object3D, name: string, position: Vector3): void {
+  empty(parent, name, position).userData.free = true;
+}
+
+/** `mesh` turned by Euler angles (rad) */
+const turned = (mesh: Mesh, x: number, y: number, z: number) => (mesh.rotation.set(x, y, z), mesh);
 
 /** the bascinet's radius and height (m) */
 const HELM = { radius: 0.12, height: 0.22 };
 
 /**
- * A gauntlet (~0.6 kg) for hand `side`: its frame the hand's when worn (origin at the wrist,
- * fingers along +x for the left hand, −x for the right; palm −y). Grips: `inside`, where the wrist
- * ends up in it (turned as the hand is); `mouth`, the wrist before the cuff, hand in line to slide
- * in; `cuff`, the top of the cuff, where the other hand holds it open.
+ * A bascinet (2.5 kg): a round-topped cap over the skull down below the ears, open at the face, a nasal before the nose; its frame the
+ * head's when worn (origin at its middle, +Z where the face is). Held low on its sides, toward the front (`left`, `right`: worn, the wrists by the cheeks); its chin
+ * strap's ends hang by the jaw (`strapLeft`, `strapRight`) and are buckled under the chin (`chinLeft`, `chinRight`). Its crown and rim
+ * keep off the head (the rim may rest on the shoulders and upper arms).
  */
-export function gauntlet(side: Side, at: Placement): Gear {
-  const s = side === 'left' ? 1 : -1;
-  const level = new Quaternion();
-  return piece(
-    at,
-    {
-      inside: { position: new Vector3(), quaternion: level },
-      mouth: { position: new Vector3(-0.17 * s, 0, 0), quaternion: level },
-      cuff: { position: new Vector3(-0.08 * s, 0.065, 0) },
-    },
-    0.6,
-    [
-      { kind: 'box', at: new Vector3(0.085 * s, -0.005, 0.005), size: new Vector3(0.17, 0.045, 0.1) },
-      { kind: 'cylinder', at: new Vector3(-0.05 * s, 0, 0), radius: 0.055, length: 0.12, turn: new Euler(0, 0, Math.PI / 2) },
-    ],
-  );
+export function helm(): Group {
+  const rim = -HELM.height / 2;
+  const helm = piece('helm', 2.5, [
+    { name: 'helm crown', a: new Vector3(-0.08, HELM.height / 2, 0), b: new Vector3(0.08, HELM.height / 2, 0), radius: 0.01, touches: [] },
+    ...[1, -1].map((z) => ({ name: 'helm rim', a: new Vector3(-0.08, rim, z * HELM.radius), b: new Vector3(0.08, rim, z * HELM.radius), radius: 0.01, touches: ['shoulders', 'leftUpperArm', 'rightUpperArm'] })),
+  ]);
+  cylinder(helm, 'helm top', 0.08, 0.04, new Vector3(0, HELM.height / 2 + 0.02, -0.01));
+  // (its cap and nasal a thing of their own, out of the helm's bounds: a carry keeps what it brings clear of the head by its bounds, and
+  // so would never bring a helm round it — the library defect this works round; its crown and rim still keep off the head as solids)
+  const shell = empty(helm, 'helm shell', new Vector3());
+  shell.userData.mass = 0;
+  cylinder(shell, 'helm cap', HELM.radius, HELM.height, new Vector3());
+  box(shell, 'helm nasal', new Vector3(0.02, 0.08, 0.01), new Vector3(0, rim - 0.03, HELM.radius + 0.005));
+  for (const [side, x] of [['left', 1], ['right', -1]] as const) {
+    grip(helm, side, new Vector3(0.13 * x, -0.15, 0.16));
+    grip(helm, `strap${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.09 * x, rim - 0.2, 0.2));
+    grip(helm, `chin${side === 'left' ? 'Left' : 'Right'}`, new Vector3(0.03 * x, rim - 0.22, 0.22));
+  }
+  return helm;
 }
 
 /**
- * The sword belt's two ends (~0.4 kg the belt): the buckle end (the left hand's) and the tongue end
- * (the right's), each held at its own origin by grip `end`; the strap between them is drawn
- * (`strap`). Worn, both sit on the hips.
+ * A gauntlet (0.6 kg) for hand `side`: its frame the hand's when worn (origin at the wrist). Grips: `inside`, the wrist in it (the hand turned as
+ * the arm brings it); `cuff`, the top of the cuff, where the other hand holds it open.
  */
-export function beltEnd(which: 'buckle' | 'tongue', at: Placement): Gear {
-  const parts: Part[] =
-    which === 'buckle'
-      ? [{ kind: 'box', at: new Vector3(), size: new Vector3(0.05, 0.055, 0.012) }]
-      : [{ kind: 'box', at: new Vector3(), size: new Vector3(0.06, 0.04, 0.008) }];
-  return piece(at, { end: { position: new Vector3() } }, 0.2, parts);
+export function gauntlet(side: 'left' | 'right'): Group {
+  const out = side === 'left' ? 1 : -1;
+  const gauntlet = piece(`${side} gauntlet`, 0.6);
+  box(gauntlet, 'gauntlet fingers', new Vector3(0.17, 0.045, 0.1), new Vector3(0.085 * out, -0.005, 0.005));
+  turned(cylinder(gauntlet, 'gauntlet cuff', 0.055, 0.12, new Vector3(-0.05 * out, 0, 0)), 0, 0, Math.PI / 2);
+  grip(gauntlet, 'inside', new Vector3());
+  grip(gauntlet, 'cuff', new Vector3(-0.08 * out, 0.065, 0));
+  return gauntlet;
 }
 
-/** the belt strap's length between its ends (m): round the hips, and the overlap */
-export const STRAP = 1.1;
-
-/**
- * A scabbard (~0.5 kg): origin at its throat, +y out of it (where the hilt comes out), 0.85 m long
- * down −y, +x its outer side worn. Held by its throat (`throat`, from outside), or, worn, grasped
- * below its locket (`below`: the left hand's from its outer side, to tilt it and present the hilt).
- * Keeps out of the body below where the hands hold it.
- */
-export function scabbard(at: Placement): Gear {
-  return piece(
-    at,
-    { throat: { position: new Vector3(0, -0.06, 0.03) }, below: { position: new Vector3(0.045, -0.05, -0.02) } },
-    0.5,
-    [{ kind: 'cylinder', at: new Vector3(0, -SCABBARD / 2, 0), radius: 0.022, length: SCABBARD }],
-    [{ a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -SCABBARD, 0), radius: 0.022, touches: [], name: 'scabbard' }],
-    new Vector3(0, -SCABBARD / 2, 0),
-  );
+/** an end of the sword belt (0.2 kg): the buckle (the left hand's) or the tongue (the right's), held by `end` at its origin */
+export function beltEnd(which: 'buckle' | 'tongue'): Group {
+  const end = piece(which, 0.2);
+  box(end, `${which} plate`, which === 'buckle' ? new Vector3(0.05, 0.055, 0.012) : new Vector3(0.06, 0.04, 0.008), new Vector3());
+  grip(end, 'end', new Vector3());
+  return end;
 }
 
 const SCABBARD = 0.85;
-/** how far down from its throat a hand and forearm hold the scabbard (steadying it, drawing): its solid starts below */
+/** how far down from its throat the hands and forearms hold a scabbard (steadying it, drawing): its segments start below */
 const HAND_ZONE = 0.25;
 
-/** An arming sword (~1.2 kg): origin at its cross-guard, the hilt up +y (held at `hilt`), the 0.78 m blade down −y. Its blade keeps out of the body below where the hands hold the scabbard, but the left hand and forearm there it is drawn past. */
-export function sword(at: Placement): Gear {
-  return piece(at, { hilt: { position: new Vector3(0, 0.09, 0) } }, 1.2, [
-    { kind: 'box', at: new Vector3(0, 0, 0), size: new Vector3(0.2, 0.02, 0.025) },
-    { kind: 'cylinder', at: new Vector3(0, 0.1, 0), radius: 0.014, length: 0.16 },
-    { kind: 'cylinder', at: new Vector3(0, 0.19, 0), radius: 0.022, length: 0.03 },
-    { kind: 'box', at: new Vector3(0, -0.4, 0), size: new Vector3(0.045, 0.78, 0.006) },
-  ], [{ a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -0.78, 0), radius: 0.02, touches: ['leftHand', 'leftLowerArm'], name: 'blade' }], new Vector3(0, -0.12, 0));
+/**
+ * A scabbard (0.5 kg): origin at its throat, +Y out of it, 0.85 m long down −Y, +X its outer side worn. Held by its throat (`throat`);
+ * its `mouth`, where the sword's cross-guard sits sheathed, comes in from `drawn`, the sword drawn 30 cm.
+ */
+export function scabbard(): Group {
+  const scabbard = piece('scabbard', 0.5, [{ name: 'scabbard', a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -SCABBARD, 0), radius: 0.022, touches: [] }], new Vector3(0, -SCABBARD / 2, 0));
+  cylinder(scabbard, 'scabbard sheath', 0.022, SCABBARD, new Vector3(0, -SCABBARD / 2, 0));
+  grip(scabbard, 'throat', new Vector3(0, -0.06, 0.03));
+  empty(scabbard, 'mouth', new Vector3()).userData.approach = ['drawn'];
+  empty(scabbard, 'drawn', new Vector3(0, 0.3, 0));
+  return scabbard;
+}
+
+/** An arming sword (1.2 kg): origin at its cross-guard, the hilt up +Y (held at `hilt`), the 0.78 m blade down −Y. */
+export function sword(): Group {
+  const sword = piece('sword', 1.2, [{ name: 'blade', a: new Vector3(0, -HAND_ZONE, 0), b: new Vector3(0, -0.78, 0), radius: 0.02, touches: ['leftHand', 'leftLowerArm'] }], new Vector3(0, -0.12, 0));
+  box(sword, 'sword guard', new Vector3(0.2, 0.02, 0.025), new Vector3());
+  cylinder(sword, 'sword grip', 0.014, 0.16, new Vector3(0, 0.1, 0));
+  cylinder(sword, 'sword pommel', 0.022, 0.03, new Vector3(0, 0.19, 0));
+  // (its blade a thing of its own, out of the sword's bounds: a carry keeps what it brings clear of the trunk by its bounds, and so
+  // pushes a sword drawn part way, its blade still in the scabbard beside the hip, a blade's length out ahead — the library defect this
+  // works round)
+  box(sword, 'sword blade', new Vector3(0.045, 0.78, 0.006), new Vector3(0, -0.4, 0)).userData.mass = 0;
+  grip(sword, 'hilt', new Vector3(0, 0.09, 0));
+  return sword;
 }
 
 /**
- * A heater shield (~3.5 kg, 0.5 × 0.7 m): origin at the hand grip on its back, +x along the forearm
- * through its enarmes (the arm strap 17 cm back toward the elbow), +y its top, +z out of its back
- * (toward the arm), its face 5 cm out the other way. Grips: `edge` (its forward edge, from behind),
- * `enter` (the wrist before the strap, in line) and `grip` (the fist round the handle, thumb up).
- * Its face keeps out of the body but the arm it is on (its top edge, where the other hand holds it, left out).
+ * A heater shield (3.5 kg, 0.5 × 0.7 m): origin at the handle on its back, +X along the forearm, +Y its top, +Z out of its back (toward
+ * the arm), its face 5 cm the other way. Grips: `edge` (its forward edge, from behind), `enter` (the fist before the arm strap) and
+ * `handle`, the fist turned as the arm brings it. Its face keeps out of the body but the arm it is on.
  */
-export function shield(at: Placement): Gear {
-  const fist = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
+export function shield(): Group {
   const face = -0.05;
-  return piece(
-    at,
-    {
-      // The wrist stays outside the panel while the fingers reach round its edge.
-      edge: { position: new Vector3(0.26, 0.04, face + 0.03) },
-      enter: { position: new Vector3(-0.3, 0, 0.02), quaternion: fist },
-      grip: { position: new Vector3(), quaternion: fist },
-    },
-    3.5,
-    [
-      { kind: 'box', at: new Vector3(-0.06, 0.08, face), size: new Vector3(0.5, 0.42, 0.015) },
-      { kind: 'box', at: new Vector3(-0.15, -0.23, face), size: new Vector3(0.3, 0.26, 0.015), turn: new Euler(0, 0, 0.55) },
-      { kind: 'box', at: new Vector3(0.03, -0.23, face), size: new Vector3(0.3, 0.26, 0.015), turn: new Euler(0, 0, -0.55) },
-      { kind: 'box', at: new Vector3(-0.17, 0, 0.005), size: new Vector3(0.03, 0.07, 0.012) }, // the arm strap
-    ],
-    [-0.12, 0.03, 0.18].map((y) => ({ a: new Vector3(-0.28, y, face), b: new Vector3(0.16, y, face), radius: 0.01, touches: ['leftLowerArm', 'leftHand'], name: 'shield' })),
-    new Vector3(-0.06, 0.04, face),
-  );
+  const shield = piece('shield', 3.5, [-0.12, 0.03, 0.18].map((y) => ({ name: 'shield', a: new Vector3(-0.28, y, face), b: new Vector3(0.16, y, face), radius: 0.01, touches: ['leftLowerArm', 'leftHand'] })), new Vector3(-0.06, 0.04, face));
+  box(shield, 'shield top', new Vector3(0.5, 0.42, 0.015), new Vector3(-0.06, 0.08, face));
+  turned(box(shield, 'shield point', new Vector3(0.3, 0.26, 0.015), new Vector3(-0.15, -0.23, face)), 0, 0, 0.55);
+  turned(box(shield, 'shield point', new Vector3(0.3, 0.26, 0.015), new Vector3(0.03, -0.23, face)), 0, 0, -0.55);
+  box(shield, 'shield arm strap', new Vector3(0.03, 0.07, 0.012), new Vector3(-0.17, 0, 0.005));
+  grip(shield, 'edge', new Vector3(0.26, 0.04, face + 0.03));
+  grip(shield, 'enter', new Vector3(-0.3, 0, 0.02));
+  grip(shield, 'handle', new Vector3());
+  return shield;
 }
 
-/** A lance (~5 kg, 3.6 m): origin at its grip (1.15 m up from its butt: borne upright, the butt just off the ground), +y up the shaft to its tip. Its shaft keeps out of the body but the hand round it (and the forearm's end at the wrist). */
-export function lance(at: Placement): Gear {
-  return piece(at, { grip: { position: new Vector3() } }, 5, [
-    { kind: 'cylinder', at: new Vector3(0, LANCE.tip - LANCE.length / 2, 0), radius: 0.025, length: LANCE.length },
-    { kind: 'cylinder', at: new Vector3(0, 0.12, 0), radius: 0.05, length: 0.14 }, // the vamplate
-  ], [{ a: new Vector3(0, LANCE.tip - LANCE.length, 0), b: new Vector3(0, LANCE.tip, 0), radius: 0.025, touches: ['rightHand', 'rightLowerArm'], name: 'lance' }], new Vector3(0, LANCE.tip - LANCE.length / 2, 0));
+/** the lance's length and its tip above its grip (m) */
+const LANCE = { length: 3.6, tip: 2.45 };
+
+/** A lance (5 kg, 3.6 m): origin at its grip (1.15 m up from its butt), +Y up the shaft. Its shaft keeps out of the body but the hand round it. */
+export function lance(): Group {
+  const middle = new Vector3(0, LANCE.tip - LANCE.length / 2, 0);
+  const lance = piece('lance', 5, [{ name: 'lance', a: new Vector3(0, LANCE.tip - LANCE.length, 0), b: new Vector3(0, LANCE.tip, 0), radius: 0.025, touches: ['rightHand', 'rightLowerArm'] }], middle);
+  cylinder(lance, 'lance shaft', 0.025, LANCE.length, middle);
+  cylinder(lance, 'lance vamplate', 0.05, 0.14, new Vector3(0, 0.12, 0));
+  grip(lance, 'grip', new Vector3());
+  return lance;
+}
+
+/** the segments of `pieces` that keep out of the body, where they are now (world) */
+export function solidsOf(pieces: readonly Object3D[]): Solid[] {
+  return pieces.flatMap((thing) => (SEGMENTS.get(thing) ?? []).map((segment) => ({ ...segment, thing, a: thing.localToWorld(segment.a.clone()), b: thing.localToWorld(segment.b.clone()) })));
 }
 
 /**
- * The harness he stands in before he arms (a squire's work: its straps are behind him): a cuirass
- * and its fauld, arm and leg harness, sabatons, ~23 kg in all — a complete 15th-century field
- * harness weighs 25–30 kg with its helm and gauntlets (Williams, The Knight and the Blast
- * Furnace, 2003; the Wallace Collection's A21 ~27 kg). Each piece on its bone (in its frame at
- * rest, the body's proportions `p`), drawn as a plate round it; none keeps out of the body (it
- * is on it).
+ * The harness he stands in before he arms (a squire's work), ~23 kg: a cuirass and its fauld, arm and leg harness, sabatons — a
+ * complete 15th-century field harness weighs 25–30 kg with its helm and gauntlets (Williams, The Knight and the Blast Furnace, 2003).
+ * Each plate under its bone (the bones' frames at rest those of a T-pose, scaled by `scale`): worn, so borne.
  */
-export function harness(p: Proportions): { bone: BoneName; gear: Gear }[] {
-  const along = (length: number, radius: number, axis: 'x' | 'y' | '-x' | '-y', mass: number): Gear => {
-    const dir = { x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), '-x': new Vector3(-1, 0, 0), '-y': new Vector3(0, -1, 0) }[axis];
-    const middle = dir.multiplyScalar(length / 2);
-    const turn = axis === 'x' || axis === '-x' ? new Euler(0, 0, Math.PI / 2) : undefined;
-    return piece({ position: new Vector3() }, {}, mass, [{ kind: 'cylinder', at: middle, radius, length: length * 0.8, turn }], [], middle);
+export function harness(bones: Readonly<Record<string, Object3D>>, scale: number): void {
+  const plate = (bone: string, size: Vector3, at: Vector3, mass: number) => {
+    box(bones[bone], `${bone} plate`, size.multiplyScalar(scale), at.multiplyScalar(scale)).userData.mass = mass;
   };
-  const plate = (at: Vector3, size: Vector3, mass: number): Gear => piece({ position: new Vector3() }, {}, mass, [{ kind: 'box', at, size }], [], at);
-  const H = p.height;
-  return [
-    { bone: 'chest', gear: plate(new Vector3(0, 0.05 * H, 0.005 * H), new Vector3(0.2 * H, 0.17 * H, 0.14 * H), 8) },
-    { bone: 'hips', gear: plate(new Vector3(0, 0.02 * H, 0.005 * H), new Vector3(0.21 * H, 0.06 * H, 0.15 * H), 3) },
-    ...(['left', 'right'] as const).flatMap((side) => {
-      const out = side === 'left' ? 'x' : '-x';
-      return [
-        { bone: `${side}UpperArm` as const, gear: along(p.upperArm, 0.034 * H, out, 1.2) },
-        { bone: `${side}LowerArm` as const, gear: along(p.forearm, 0.028 * H, out, 0.8) },
-        { bone: `${side}UpperLeg` as const, gear: along(p.thigh, 0.045 * H, '-y', 2) },
-        { bone: `${side}LowerLeg` as const, gear: along(p.shin, 0.035 * H, '-y', 1.5) },
-        { bone: `${side}Foot` as const, gear: plate(new Vector3(0, -0.01 * H, 0.04 * H), new Vector3(0.06 * H, 0.04 * H, 0.14 * H), 0.5) },
-      ];
-    }),
-  ];
+  plate('chest', new Vector3(0.35, 0.3, 0.25), new Vector3(0, 0.09, 0.01), 8);
+  plate('hips', new Vector3(0.37, 0.1, 0.26), new Vector3(0, 0.035, 0.01), 3);
+  for (const [side, out] of [['left', 1], ['right', -1]] as const) {
+    plate(`${side}UpperArm`, new Vector3(0.26, 0.06, 0.06), new Vector3(0.16 * out, 0, 0), 1.2);
+    plate(`${side}LowerArm`, new Vector3(0.2, 0.05, 0.05), new Vector3(0.13 * out, 0, 0), 0.8);
+    plate(`${side}UpperLeg`, new Vector3(0.08, 0.34, 0.08), new Vector3(0, -0.21, 0), 2);
+    plate(`${side}LowerLeg`, new Vector3(0.06, 0.34, 0.06), new Vector3(0, -0.21, 0), 1.5);
+    plate(`${side}Foot`, new Vector3(0.1, 0.07, 0.24), new Vector3(0, -0.02, 0.07), 0.5);
+  }
 }
 
-/** the lance's length and its tip above the grip (m) */
-export const LANCE = { length: 3.6, tip: 2.45 };
+/** the belt strap's length between its ends (m): round the hips, and the overlap */
+const STRAP = 1.1;
+/** the half-width and half-depth of the hips where the belt goes round them (m, the default body) */
+const WAIST = { width: 0.19, depth: 0.14 };
 
 /**
- * The belt's strap drawn between its ends `buckle` and `tongue` (world): sagging between them
- * (lying out flat on `rest`'s level, `away`, while they lie there), and, as they come round the
- * hips (`hips`: the pelvis' middle at the belt's height, facing `yaw`), round the back of them.
+ * The belt's strap drawn between its ends (a line redrawn before each render): sagging between them, or, as they come round the
+ * hips (`hips`, a bone; `facing`, the way the body faces), round the back of them.
  */
-export function strap(buckle: Vector3, tongue: Vector3, hips: Vector3, yaw: number, rest: { height: number; away: Vector3 }): Prop[] {
-  const N = 16;
-  // (lying or hanging: a parabola as long as the strap, out flat on the table, else down)
-  const chord = buckle.distanceTo(tongue);
-  const depth = Math.sqrt((3 * chord * Math.max(0, STRAP - chord)) / 8);
-  const lifted = smooth(0.02, 0.12, Math.min(buckle.y, tongue.y) - rest.height);
-  const down = new Vector3(0, -1, 0).lerp(rest.away, 1 - lifted).normalize();
-  const sag = (k: number) => buckle.clone().lerp(tongue, k).addScaledVector(down, 4 * depth * k * (1 - k));
-  // (round the hips: from each end onto the ellipse, then round the back between them)
-  const left = new Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-  const ahead = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-  const angle = (end: Vector3) => Math.atan2(end.clone().sub(hips).dot(ahead) / WAIST.depth, end.clone().sub(hips).dot(left) / WAIST.width);
-  const from = angle(buckle);
-  let to = angle(tongue);
-  while (to > from - 0.2) to -= 2 * Math.PI;
-  const round = (k: number) => {
-    const end = k < 0.5 ? buckle : tongue;
-    const a = from + (to - from) * k;
-    const onHips = hips.clone().addScaledVector(left, WAIST.width * Math.cos(a)).addScaledVector(ahead, WAIST.depth * Math.sin(a));
-    onHips.y = buckle.y + (tongue.y - buckle.y) * k;
-    // (the ends themselves where they are)
-    const edge = Math.min(k, 1 - k) * N;
-    return edge < 1 ? end.clone().lerp(onHips, edge) : onHips;
+export function strap(buckle: Object3D, tongue: Object3D, hips: Object3D, facing: () => number): Line {
+  const points = Array.from({ length: 17 }, () => new Vector3());
+  const line = new Line(new BufferGeometry().setFromPoints(points), new LineBasicMaterial({ color: 0x5a3a22 }));
+  line.name = 'belt strap';
+  line.frustumCulled = false;
+  const from = new Vector3(), to = new Vector3(), middle = new Vector3();
+  line.onBeforeRender = () => {
+    buckle.getWorldPosition(from);
+    tongue.getWorldPosition(to);
+    hips.getWorldPosition(middle);
+    const yaw = facing(), left = new Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), ahead = new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const angle = (end: Vector3) => Math.atan2(end.clone().sub(middle).dot(ahead) / WAIST.depth, end.clone().sub(middle).dot(left) / WAIST.width);
+    const start = angle(from);
+    let end = angle(to);
+    while (end > start - 0.2) end -= 2 * Math.PI;
+    // (round the hips once both ends are by them, else hanging between them)
+    const off = (end: Vector3) => Math.max(Math.hypot(end.x - middle.x, end.z - middle.z) - WAIST.width, Math.abs(end.y - middle.y) - 0.1);
+    const round = Math.max(off(from), off(to)) < 0.08;
+    const chord = from.distanceTo(to), sag = Math.sqrt((3 * chord * Math.max(0, STRAP - chord)) / 8);
+    points.forEach((point, i) => {
+      const k = i / (points.length - 1);
+      if (round) {
+        const a = start + (end - start) * k;
+        point.copy(middle).addScaledVector(left, WAIST.width * Math.cos(a)).addScaledVector(ahead, WAIST.depth * Math.sin(a)).setY(from.y + (to.y - from.y) * k);
+      } else point.copy(from).lerp(to, k).y -= 4 * sag * k * (1 - k);
+    });
+    if (round) {
+      points[0].copy(from);
+      points[points.length - 1].copy(to);
+    }
+    line.geometry.setFromPoints(points);
   };
-  const near = Math.max(...[buckle, tongue].map((e) => Math.hypot(e.x - hips.x, e.z - hips.z) - Math.max(WAIST.width, WAIST.depth)));
-  const high = Math.max(...[buckle, tongue].map((e) => Math.abs(e.y - hips.y)));
-  const w = (1 - smooth(0.05, 0.2, near)) * (1 - smooth(0.08, 0.2, high));
-  const points = Array.from({ length: N + 1 }, (_, i) => sag(i / N).lerp(round(i / N), w));
-  return points.slice(1).map((b, i): Prop => {
-    const a = points[i];
-    const along = b.clone().sub(a);
-    return { kind: 'cylinder', position: a.clone().add(b).multiplyScalar(0.5), radius: 0.01, length: along.length(), quaternion: new Quaternion().setFromUnitVectors(UP, along.normalize()) };
-  });
-}
-
-/** the half-width and half-depth of the hips where the belt goes round them (m, default body) */
-export const WAIST = { width: 0.19, depth: 0.14 };
-const UP = new Vector3(0, 1, 0);
-
-/** 0 below `a`, 1 above `b`, smooth between */
-function smooth(a: number, b: number, x: number): number {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-}
-
-/** `gear` drawn where its item is now */
-export function drawn(gear: Gear): Prop[] {
-  const { position, quaternion } = gear.item.current;
-  return gear.parts.map((part) => {
-    const at = part.at.clone().applyQuaternion(quaternion).add(position);
-    const turned = quaternion.clone();
-    if (part.turn) turned.multiply(new Quaternion().setFromEuler(part.turn));
-    return part.kind === 'box' ? { kind: 'box', position: at, size: part.size, quaternion: turned } : { kind: 'cylinder', position: at, radius: part.radius, length: part.length, quaternion: turned };
-  });
-}
-
-/** `gear`'s solids where its item is now (world) */
-export function solidsOf(gear: Gear): Solid[] {
-  const { position, quaternion } = gear.item.current;
-  const world = (v: Vector3) => v.clone().applyQuaternion(quaternion).add(position);
-  return gear.solids.map((s) => ({ ...s, a: world(s.a), b: world(s.b), item: gear.item }));
+  return line;
 }

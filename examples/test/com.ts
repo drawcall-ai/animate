@@ -1,7 +1,6 @@
 import { Vector3 } from 'three';
-import { massFor } from '../../packages/animate/src/humanoid/skeleton';
-import { jointOf } from '../src/joints';
-import type { Actor } from './frame';
+import { massFor } from '../../packages/animate/src/species/humanoid/skeleton';
+import { jointOf, type Actor } from './actor';
 
 /** the body's joints by name */
 type Joints = (name: string) => Vector3;
@@ -34,10 +33,7 @@ const SEGMENTS: [mass: number, at: (j: Joints, skull: Vector3) => Vector3][] = [
 export function comOf(h: Actor): Vector3 {
   const j: Joints = (name) => jointOf(h, name);
   const hips = j('hips');
-  // (the OpenPose skeleton's bone frames are the normalized ones the proportions are given in)
-  const head = h.model.scene.getObjectByName('head');
-  if (!head) throw new Error('no head');
-  const skull = head.localToWorld(h.proportions.headCenter.clone());
+  const skull = h.point('head', h.proportions.headCenter);
   const sum = new Vector3();
   const offset = new Vector3();
   let total = 0;
@@ -46,8 +42,7 @@ export function comOf(h: Actor): Vector3 {
     sum.addScaledVector(offset.subVectors(at(j, skull), hips), share * body);
     total += share * body;
   }
-  for (const [item, { kg }] of h.borne) {
-    const centre = item.centre.clone().applyQuaternion(item.current.quaternion).add(item.current.position);
+  for (const { centre, kg } of h.borne) {
     sum.addScaledVector(offset.subVectors(centre, hips), kg);
     total += kg;
   }

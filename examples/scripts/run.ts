@@ -1,34 +1,18 @@
-import { DEFAULT_HEIGHT, type LogEntry } from '@drawcall/animate';
-import { seeded } from '@drawcall/animate/rig';
-import type { CharacterModel } from '@pmndrs/viverse';
-import type { Role, Scenario } from '../src/scenario';
+import type { LogEntry } from '@drawcall/animate';
+import type { CastOptions, Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
+export { seeded } from '../src/math';
 
-/** Run with in-code checks (the actors `model`'s, default the default body); one extra step lets observers read the last final pose. */
-export function run(sc: Scenario, model?: (role: Role) => CharacterModel): LogEntry[] {
-  const sim = new Simulation(sc, model, true);
-  while (sim.t < sc.duration) sim.step();
-  sim.step();
-  const extra = sim.stage.bodies?.flatMap((b, i) => b.log.map((entry) => ({ ...entry, where: `body ${i}: ${entry.where}` }))) ?? [];
-  if (!sim.stage.done()) extra.push({ time: sim.t, beat: '', check: `${sc.id}: scenario unfinished`, value: 1, limit: 0, where: sim.actors.length ? `actor 0: ${sc.id}` : sc.id });
-  return [...extra, ...sim.actors.flatMap((h, i) => h.log.map((entry) => ({ ...entry, where: `actor ${i}: ${entry.where}` })))];
+/** A scenario run to its end with development checks on every body: each body's log (by its index), and whether the run finished. */
+export function run(scenario: Scenario, cast: CastOptions = {}): LogEntry[] {
+  const sim = new Simulation(scenario, { ...cast, dev: true });
+  while (sim.t < scenario.duration) sim.step();
+  const log = sim.stage.bodies.flatMap((body, i) => body.log.map((entry) => ({ ...entry, where: `body ${i}: ${entry.where}` })));
+  if (!sim.stage.done()) log.push({ time: sim.t, check: `${scenario.id}: scenario unfinished`, value: 1, limit: 0, where: scenario.id });
+  return log;
 }
 
-/** a seeded variation of `sc`: each actor starting up to 10 cm off, turned up to 0.15 rad and up to 4% taller or shorter — what no script may hang on */
-export function vary(sc: Scenario, seed: number): Scenario {
-  const random = seeded(seed);
-  const jitter = (range: number) => (random() * 2 - 1) * range;
-  return {
-    ...sc,
-    actors: sc.actors.map((r) => ({
-      position: { x: (r.position?.x ?? 0) + jitter(0.1), z: (r.position?.z ?? 0) + jitter(0.1) },
-      yaw: (r.yaw ?? 0) + jitter(0.15),
-      height: (r.height ?? DEFAULT_HEIGHT) * (1 + jitter(0.04)),
-    })),
-  };
-}
-
-/** 2026-10-15: VR still misses underHead's 3 cm / settled / facing completion condition. */
+/** VR's side-step is known not to finish: the body turns to walk rather than strafe, and comes under the head late. */
 export function knownFailure(entry: LogEntry): boolean {
-  return entry.check === 'vr: scenario unfinished' && entry.where === 'actor 0: vr';
+  return entry.check === 'vr: scenario unfinished';
 }

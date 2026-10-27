@@ -1,7 +1,6 @@
-import { forwardOf, leftOf } from '@drawcall/animate';
 import type { Look } from '../scenario';
 import { Vector3, type Box3, type PerspectiveCamera } from 'three';
-import { Spring } from '../math';
+import { forwardOf, leftOf, Spring } from '../math';
 
 /** `orbit` = free (OrbitControls); the others are fixed shots relative to the body's facing */
 export type View = 'orbit' | 'front' | 'side' | 'back' | 'three' | 'top' | 'first' | 'third';

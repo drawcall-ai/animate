@@ -1,8 +1,7 @@
-import { forwardOf, leftOf, wrapAngle } from '@drawcall/animate';
 import { Vector3 } from 'three';
-import { jointOf } from '../src/joints';
+import { forwardOf, jointOf, leftOf, wrapAngle, type Actor } from './actor';
 import { comOf } from './com';
-import { Peak, type Frame, type Actor } from './frame';
+import { Peak, type Frame } from './frame';
 
 
 /** Foot geometry regressions that a joint-local range check cannot express. */
@@ -103,7 +102,7 @@ export class Landings {
       // (its kind: turning — the body turned over the swing, or the foot landing turned against the other — side-stepping or lifting, else straight)
       const turned = Math.abs(wrapAngle(h.locomotion.facing - track[0].facing)) > TURNED || Math.abs(wrapAngle(f.yaw - other.yaw)) > TURNED + 0.24;
       const v = h.locomotion.velocity, sideways = Math.hypot(v.x, v.z) > 0.05 && Math.abs(v.dot(leftOf(h.locomotion.facing))) > ACROSS * Math.hypot(v.x, v.z);
-      const lifting = Object.values(h.holding).some((held) => held && held.item.mass > 0);
+      const lifting = Object.values(h.holding).some((held) => held && held.mass > 0);
       // (a step of several kinds gets the largest bound among them: a turning side-step is a side-step too)
       const bound = Math.max(SLOW_WIDTH.straight, turned ? SLOW_WIDTH.turning : 0, lifting ? SLOW_WIDTH.wide : 0, sideways ? SLOW_WIDTH.sideways : 0);
       this.wide.see(across / (bound * h.proportions.height), t);

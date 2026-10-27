@@ -1,6 +1,6 @@
 import { CanvasTexture, SRGBColorSpace, type Texture } from 'three';
 import { context2d } from '../../dom';
-import { seeded } from '@drawcall/animate/rig';
+import { seeded } from '../../math';
 import { APRON, FLOOR, HALF } from './layout';
 
 function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): Texture {

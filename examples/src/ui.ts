@@ -6,7 +6,7 @@ import { SCENARIOS } from './scenarios';
 /** what the side panel sets */
 export interface Settings {
   view: View;
-  /** 2D: the poses drawn as flat OpenPose over the scene, instead of the 3D skeletons */
+  /** 2D: the people drawn as flat OpenPose over the scene, instead of the 3D bodies */
   flat: boolean;
   playing: boolean;
 }
@@ -54,7 +54,7 @@ export class Panel {
     this.setPlaying(settings.playing);
     this.play.onclick = () => this.setPlaying(!settings.playing);
     const mode = byId('mode', HTMLButtonElement);
-    const showMode = () => (mode.textContent = settings.flat ? '3D skeleton' : '2D OpenPose');
+    const showMode = () => (mode.textContent = settings.flat ? '3D bodies' : '2D OpenPose');
     showMode();
     mode.onclick = () => {
       settings.flat = !settings.flat;

@@ -1,5 +1,10 @@
 import { Vector3 } from 'three';
-import { minimumJerk } from '@drawcall/animate/rig';
+
+/** a minimum-jerk ease from 0 to 1 over `s` 0 … 1 (held at either end beyond) */
+export function minimumJerk(share: number): number {
+  const done = Math.min(1, Math.max(0, share));
+  return done ** 3 * (10 - 15 * done + 6 * done ** 2);
+}
 
 /** A key: a value at a time (s). */
 export type Key<T> = [time: number, value: T];
