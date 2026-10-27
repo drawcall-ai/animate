@@ -6,7 +6,7 @@ import { Quaternion, Vector3 } from 'three';
 import { wrapAngle, yawOf } from '../kernel/math';
 import { beyond, clampRotation } from '../kernel/limits';
 import type { Pose } from '../kernel/pose';
-import type { Skeleton } from '../kernel/skeleton';
+import type { Limit, Skeleton } from '../kernel/skeleton';
 import type { LegChain } from '../species/leg';
 
 /** A joint's axes, as a chain names them: y turns it, z swings it aside, x bends it (+ its far end forward) — Euler products, for their
@@ -220,18 +220,19 @@ export class Solver {
     for (let j = 0; j < this.n; j++) q[j] = Math.min(this.hi[j], Math.max(this.lo[j], q[j]));
     for (let k = 0; k < this.bones.length; k++) {
       const limit = this.skeleton.limits[this.bones[k]];
-      if (!limit) continue;
-      const excess = (scale: number) => {
-        _l.identity();
-        for (let j = 0; j < this.n; j++) if (this.of[j] === k) _l.multiply(_q.setFromAxisAngle(this.axes[j], q[j] * scale));
-        return beyond(_l, limit);
-      };
-      if (excess(1) < 1e-10) continue;
+      if (!limit || this.excess(q, k, 1, limit) < 1e-10) continue;
       let lo = 0, hi = 1;
       // 32 bisections leave less than a nanoradian at a full turn.
-      for (let step = 0; step < 32; step++) { const mid = (lo + hi) / 2; if (excess(mid) < 1e-10) lo = mid; else hi = mid; }
+      for (let step = 0; step < 32; step++) { const mid = (lo + hi) / 2; if (this.excess(q, k, mid, limit) < 1e-10) lo = mid; else hi = mid; }
       for (let j = 0; j < this.n; j++) if (this.of[j] === k) q[j] *= lo;
     }
+  }
+
+  /** how far bone `k` turned by its coordinates `q`, each × `scale`, is past `limit` */
+  private excess(q: Float64Array, k: number, scale: number, limit: Limit): number {
+    _l.identity();
+    for (let j = 0; j < this.n; j++) if (this.of[j] === k) _l.multiply(_q.setFromAxisAngle(this.axes[j], q[j] * scale));
+    return beyond(_l, limit);
   }
 
   /** Tuned sqrt(STIFF): geometric midpoint of unit reference and contact stiffness.

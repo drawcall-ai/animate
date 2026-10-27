@@ -45,6 +45,7 @@ export class Binding<Name extends string = string> {
       const between = new Quaternion();
       for (let at = node.parent; at && at !== this.object; at = at.parent) {
         const k = nodes.indexOf(at);
+        if (k >= i) throw new Error(`bone "${bone.name}" hangs in the model from "${skeleton.bones[k].name}", which the skeleton has after it`);
         if (k >= 0) { anchor = k; break; }
         between.premultiply(at.quaternion);
       }
@@ -80,18 +81,18 @@ export class Binding<Name extends string = string> {
     const back = _back.copy(object.quaternion).invert();
     this.moving.forEach((moving, i) => {
       if (!moving) return;
-      // (its rotation in the body's frame, then in its parent node's)
-      const turned = this.turned(i, pose, back);
-      const parent = moving.anchor < 0 ? _parent.copy(moving.between) : _parent.copy(this.turned(moving.anchor, pose, back)).multiply(moving.between);
+      // (its rotation in the body's frame, then in its parent node's: the bone it hangs from comes before it, worked out already)
+      const turned = this.turned(i).copy(back).multiply(pose.rotation(i)).multiply(moving.turn), parent = _parent.copy(moving.between);
+      if (moving.anchor >= 0) parent.premultiply(this.turned(moving.anchor));
       moving.node.quaternion.copy(parent.invert().multiply(turned));
     });
     const at = _at.copy(root).sub(object.position).applyQuaternion(back);
     this.root.node.position.copy(at.applyMatrix4(this.rootFrame));
   }
 
-  /** bone `i`'s rotation in the body's frame (`back`: the body's facing undone) */
-  private turned(i: number, pose: ReadonlyPose, back: Quaternion): Quaternion {
-    return (this.cache[i] ??= new Quaternion()).copy(back).multiply(pose.rotation(i)).multiply(this.restOf(i));
+  /** moving bone `i`'s rotation in the body's frame, as `write` last worked it out */
+  private turned(i: number): Quaternion {
+    return (this.cache[i] ??= new Quaternion());
   }
 
   private readonly cache: Quaternion[] = [];

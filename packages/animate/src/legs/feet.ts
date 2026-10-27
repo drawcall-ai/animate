@@ -230,13 +230,13 @@ export class ChainLeg {
   };
   private flat: Table | null = null; private rolled: Table | null = null;
 
-  /** its table at `pitch`: sampled once for every body of its skeleton standing as it does */
+  /** its table at `pitch`: sampled once for every leg of its bones, ranges and standing, whatever body or species made it */
   private tableAt(pitch: number): Table {
-    const skeleton = this.start.skeleton, tables = TABLES.get(skeleton) ?? new Map<string, Table>();
-    TABLES.set(skeleton, tables);
-    const key = `${this.solver.bones.join(',')}|${pitch}|${Array.from(this.rest).join(',')}`;
-    let table = tables.get(key);
-    if (!table) tables.set(key, table = this.sample(pitch));
+    const { bones, limits } = this.start.skeleton;
+    const joints = this.chain.joints.map(({ bone, axes }) => `${axes}:${bones[bone].offset.toArray()}:${JSON.stringify(limits[bone])}`);
+    const key = `${joints.join(';')}|${pitch}|${this.sign}|${this.length}|${Array.from(this.rest)}`;
+    let table = TABLES.get(key);
+    if (!table) TABLES.set(key, table = this.sample(pitch));
     return table;
   }
 
@@ -248,10 +248,10 @@ export class ChainLeg {
     // stride's foot lands)
     if (i < 0 || i >= DEPTH.across - 1) return -Infinity;
     if (k < 0 || k >= DEPTH.along - 1) return Math.sqrt(Math.max(0, (STRAIGHTER * this.length) ** 2 - out * out - ahead * ahead));
-    const [u, w] = [x - i, z - k], at = (a: number, b: number) => t.at(a, b);
-    if (!(at(i, k) > -Infinity && at(i, k + 1) > -Infinity && at(i + 1, k) > -Infinity && at(i + 1, k + 1) > -Infinity)) return -Infinity;
+    const u = x - i, w = z - k;
+    if (!(t.at(i, k) > -Infinity && t.at(i, k + 1) > -Infinity && t.at(i + 1, k) > -Infinity && t.at(i + 1, k + 1) > -Infinity)) return -Infinity;
     // (kept `SPARE` short of it: a leg at the very edge of its ranges has no give for the rest of the body's motion)
-    return (at(i, k) * (1 - w) + at(i, k + 1) * w) * (1 - u) + (at(i + 1, k) * (1 - w) + at(i + 1, k + 1) * w) * u - SPARE * this.length;
+    return (t.at(i, k) * (1 - w) + t.at(i, k + 1) * w) * (1 - u) + (t.at(i + 1, k) * (1 - w) + t.at(i + 1, k + 1) * w) * u - SPARE * this.length;
   }
 
   /** its table at `pitch`, each point solved the first time it is read (its own solver: the leg's posing one keeps its references) */
@@ -360,9 +360,9 @@ const DEG = Math.PI / 180;
 /** Tuned: how far through its swing the braked joints start handing over to the solution, by its landing */
 const BRAKING = 0.6;
 type Table = { across: number[]; along: number[]; at(i: number, k: number): number };
-/** a pure cache: each skeleton's legs' reach tables, by chain, pitch and standing — worked out once from its rest pose and ranges, never
- * changed, shared by every body of that skeleton */
-const TABLES = new WeakMap<object, Map<string, Table>>();
+/** a pure cache: the legs' reach tables, by their bones, ranges, pitch and standing — worked out once, never changed, shared by every
+ * leg built so (each `horse(skeleton)` builds its own skeleton, so a table keyed by it would be sampled again for every body) */
+const TABLES = new Map<string, Table>();
 const UP = new Vector3(0, 1, 0);
 /** Tuned: a leg is held this share of its length short of what its joints reach */
 const SPARE = 0.04;
