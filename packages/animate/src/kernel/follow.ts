@@ -3,17 +3,14 @@ import type { FollowOptions, Placement } from './goal';
 import { exp, log } from './rotation';
 
 /**
- * The next value of something moving toward `target` from its history (`prev2`, `prev`) over
- * `dt`, as fast as `options` allow: it closes in at most at `speed`, and no faster than it can
- * still brake to the goal in steps of `dt` at `accel`, and its velocity changes
- * by at most `accel · dt` per step, braking toward the goal before anything else. So it hands
- * over continuously from any motion it has; given the goal's velocity, it follows a steadily
- * moving goal exactly; and it never passes a still goal it moves straight at (or starts still
- * for) unless it is too fast to brake in time. Velocity across the line to the goal turns with
- * what is left of the acceleration and can carry it past the goal, by up to about
- * 1.25 · v⊥² / accel. The history is read as taken `dt` apart: step it evenly (a body's
- * sub-steps are). On a carrier (`on`), the goal is in its frame and the history is read in its
- * frame as it was then: the value moves with the carrier, and toward the goal on it.
+ * The next value of something moving toward `target` from its history (`prev2`, `prev`) over `dt`, as fast as `options` allow: it
+ * closes in at most at `speed`, and no faster than it can still brake to the goal in steps of `dt` at `accel`, and its velocity
+ * changes by at most `accel · dt` per step, braking toward the goal before anything else. So it hands over continuously from any
+ * motion it has; given the goal's velocity, it follows a steadily moving goal exactly; and it never passes a still goal it moves
+ * straight at (or starts still for) unless it is too fast to brake in time. Velocity across the line to the goal turns with what is
+ * left of the acceleration and can carry it past the goal, by up to about 1.25 · v⊥² / accel. The history is read as taken `dt` apart:
+ * step it evenly (a body's sub-steps are). On a carrier (`on`), the goal is in its frame and the history is read in its frame as it
+ * was then: the value moves with the carrier, and toward the goal on it.
  */
 export function follow(prev2: number, prev: number, target: number, options: Omit<FollowOptions<number>, 'on'>, dt: number): number;
 export function follow(prev2: Vector3, prev: Vector3, target: Vector3, options: FollowOptions<Vector3>, dt: number, out?: Vector3): Vector3;
@@ -43,10 +40,9 @@ export function follow(
 }
 
 /**
- * `follow` for a rotation: velocities are angular velocities and steps rotation vectors
- * (`next = exp(ω·dt) · prev`) in the frame the quaternions are in — the world for world
- * rotations, the parent's for a bone's local ones. A step of more than half a turn per `dt` is
- * read the short way round.
+ * `follow` for a rotation: velocities are angular velocities and steps rotation vectors (`next = exp(ω·dt) · prev`) in the frame the
+ * quaternions are in — the world for world rotations, the parent's for a bone's local ones. A step of more than half a turn per `dt`
+ * is read the short way round.
  */
 export function followRotation(prev2: Quaternion, prev: Quaternion, target: Quaternion, options: FollowOptions<Vector3>, dt: number, out = new Quaternion()): Quaternion {
   const { on } = options;
@@ -95,12 +91,9 @@ function step(velocity: Vector3, gap: Vector3, goal: Vector3, { accel: a, speed 
   velocity.add(change);
 }
 
-/**
- * The fastest speed from which steps of `dt`, slowing by `a · dt` each, stop within `d`: with
- * K = d / (a·dt²) and n = ⌊(√(8K + 1) − 1) / 2⌋ steps after this one, a·dt · (K / (n + 1) + n / 2).
- * Where it stops exactly after whole steps it is √(a²dt²/4 + 2ad) − a·dt/2; between those, that
- * formula would overshoot by up to a·dt²/8. Near the goal (n = 0) it is d / dt: arriving.
- */
+/** The fastest speed from which steps of `dt`, slowing by `a · dt` each, stop within `d`: with K = d / (a·dt²) and
+ * n = ⌊(√(8K + 1) − 1) / 2⌋ steps after this one, a·dt · (K / (n + 1) + n / 2). Where it stops exactly after whole steps it is
+ * √(a²dt²/4 + 2ad) − a·dt/2; between those, that formula would overshoot by up to a·dt²/8. Near the goal (n = 0) it is d / dt: arriving. */
 function brakingSpeed(d: number, a: number, dt: number): number {
   const k = d / (a * dt * dt);
   const n = Math.floor((Math.sqrt(8 * k + 1) - 1) / 2);
@@ -112,13 +105,5 @@ function vector(v: number | Vector3, out: Vector3): Vector3 {
 }
 
 const ZERO = new Vector3();
-const _u = new Vector3();
-const _p = new Vector3();
-const _g = new Vector3();
-const _v = new Vector3();
-const _a = new Vector3();
-const _d = new Vector3();
-const _q = new Quaternion();
-const _r = new Quaternion();
-const _p2 = new Quaternion();
-const _p3 = new Quaternion();
+const [_u, _p, _g, _v, _a, _d] = Array.from({ length: 6 }, () => new Vector3());
+const [_q, _r, _p2, _p3] = Array.from({ length: 4 }, () => new Quaternion());

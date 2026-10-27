@@ -1,4 +1,3 @@
-// Leaf helpers.
 import { Euler, Quaternion, Vector3 } from 'three';
 
 /** standard gravity (m/s²) */

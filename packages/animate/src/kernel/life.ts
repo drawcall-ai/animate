@@ -2,10 +2,9 @@ import { seeded } from './random';
 import { lerp } from './math';
 
 /**
- * One kind of change in a body's quiet life: every `every` s (seeded; the first after `first`) it turns to a new
- * aim (`pick`, from the last one), held `hold` s if given and then let go to 0 until the next; followed at `rate`
- * (1/s), or at once without one. With `quiet`, it changes only while the body is quiet: any activity puts the
- * next change `quiet` s off and lets the aim go.
+ * One kind of change in a body's quiet life: every `every` s (seeded; the first after `first`) it turns to a new aim (`pick`, from the
+ * last one), held `hold` s if given and then let go to 0 until the next; followed at `rate` (1/s), or at once without one. With
+ * `quiet`, it changes only while the body is quiet: any activity puts the next change `quiet` s off and lets the aim go.
  */
 export interface Rhythm {
   every: readonly [number, number];

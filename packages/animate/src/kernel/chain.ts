@@ -1,7 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { wrapAngle } from './math';
 import type { Goal } from './goal';
-import { clampRotation, coordinates, coordinatesOf } from './limits';
+import { coordinates, coordinatesOf, limited } from './limits';
 import type { Pose } from './pose';
 import type { Limit, Skeleton } from './skeleton';
 
@@ -9,10 +9,8 @@ import type { Limit, Skeleton } from './skeleton';
 interface ChainGoal {
   /** the tip bone's origin and, if given, rotation */
   tip: Goal;
-  /**
-   * a point the middle joint of a two-segment chain bends toward (default: its bend stays turned
-   * as it is now). The limb turns to it at once: move a pole that changes like any goal (`follow`).
-   */
+  /** a point the middle joint of a two-segment chain bends toward (default: its bend stays turned as it is now). The limb turns to it
+   * at once: move a pole that changes like any goal (`follow`). */
   pole?: Vector3;
   /** preferred middle-joint twist about its distal segment (rad); default: half the tip's twist */
   twist?: number;
@@ -30,31 +28,22 @@ const FITS = 1e-9;
 const LONGEST = 16;
 
 /**
- * Solves the skeleton's chain named `chain` for `goal` and writes its bones' rotations into
- * `frame.current` (with `weight`: blended over what is there). The tip goes to the goal's
- * position as far as the chain reaches (straight toward it when it is out of reach) and turns to
- * its rotation; every bone stays within its limit.
+ * Solves the skeleton's chain named `chain` for `goal` and writes its bones' rotations into `frame.current` (with `weight`: blended
+ * over what is there). The tip goes to the goal's position as far as the chain reaches (straight toward it when it is out of reach)
+ * and turns to its rotation; every bone stays within its limit.
  *
- * A two-segment chain (a limb) is solved in closed form: its middle joint bends as a hinge about
- * the axis its limit allows the most swing about (its present bend axis without a limit), the
- * first bone turns the limb onto the goal and toward the pole, then the middle joint aims again
- * from where the first bone's limit left it; the tip's turn about the middle bone is shared
- * between the two. The limb swivels about the line to the goal from the pole's side only as far
- * as the limits need (with a tip rotation, the middle joint's and the tip's too), and far round
- * only for as much of their excess as it is worth (`SWIVEL`). As the middle
- * joint bends as a pure hinge, goals at the corners of its range — its small side play and its
- * twist at once — can be missed by centimetres. Other chains are solved by cyclic coordinate
- * descent.
+ * A two-segment chain (a limb) is solved in closed form: its middle joint bends as a hinge about the axis its limit allows the most
+ * swing about (its present bend axis without a limit), the first bone turns the limb onto the goal and toward the pole, then the
+ * middle joint aims again from where the first bone's limit left it; the tip's turn about the middle bone is shared between the two.
+ * The limb swivels about the line to the goal from the pole's side only as far as the limits need (with a tip rotation, the middle
+ * joint's and the tip's too), and far round only for as much of their excess as it is worth (`SWIVEL`). As the middle joint bends as a
+ * pure hinge, goals at the corners of its range — its small side play and its twist at once — can be missed by centimetres. Other
+ * chains are solved by cyclic coordinate descent.
  */
 export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
-  const { position: at, quaternion: turned } = goal.tip;
-  const finite = (...xs: number[]) => xs.every(Number.isFinite);
-  const tipFinite = finite(at.x, at.y, at.z) && (!turned || finite(turned.x, turned.y, turned.z, turned.w));
-  const poleFinite = !goal.pole || finite(goal.pole.x, goal.pole.y, goal.pole.z);
-  const twistFinite = goal.twist === undefined || finite(goal.twist);
-  if (!tipFinite || !poleFinite || !twistFinite) {
-    throw new Error(`chain "${chain}": a goal that is not finite`);
-  }
+  const { position, quaternion } = goal.tip;
+  const numbers = [...position.toArray(), ...(quaternion?.toArray() ?? []), ...(goal.pole?.toArray() ?? []), goal.twist ?? 0];
+  if (!numbers.every(Number.isFinite)) throw new Error(`chain "${chain}": a goal that is not finite`);
   const pose = frame.current;
   const { skeleton } = pose;
   const bones = skeleton.chain(chain);
@@ -62,7 +51,6 @@ export function solveChain(frame: { current: Pose }, chain: string, goal: ChainG
   const parent = skeleton.bones[bones[0]].parent;
   const c: Solving = { skeleton, bones, base: parent >= 0 ? _base.copy(pose.rotation(parent)) : _base.identity(), start: _start.copy(pose.position(bones[0])), local: _local };
   bones.forEach((b, k) => _local[k].copy(pose.local(b)));
-  const { position, quaternion } = goal.tip;
   if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true);
   else {
     if (goal.twist !== undefined) throw new Error(`chain "${chain}": a preferred twist applies only to a two-segment chain`);
@@ -135,8 +123,8 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     const world = _qw.setFromRotationMatrix(_m.makeBasis(T, n, _e.crossVectors(T, n)));
     const own = _ql.setFromRotationMatrix(_m.makeBasis(pn, hl, _e.crossVectors(pn, hl)));
     r0.copy(world).multiply(own.invert());
-    // swivelled about the line to the target as little as the limits need: the first joint's, and
-    // with a tip rotation the middle joint's and the tip's as they would share its twist
+    // swivelled about the line to the target as little as the limits need: the first joint's, and with a tip rotation the middle
+    // joint's and the tip's as they would share its twist
     const bent = _bent.setFromAxisAngle(h, bend).multiply(neutral);
     const swivelled = (angle: number) => local[0].copy(c.base).invert().multiply(_q.setFromAxisAngle(T, angle)).multiply(r0);
     // (the first joint's limit before the tip's turn: it keeps the tip on the goal)
@@ -221,10 +209,8 @@ interface Hinge {
   now: number;
 }
 
-/**
- * the hinge of a middle joint turned `q` now, `offset` from its parent: about the axis its limit
- * allows the most swing about, or without a limit about the axis it is bent about now
- */
+/** the hinge of a middle joint turned `q` now, `offset` from its parent: about the axis its limit allows the most swing about, or
+ * without a limit about the axis it is bent about now */
 function hingeOf(limit: Limit | undefined, q: Quaternion, offset: Vector3): Hinge {
   if (!limit) {
     const angle = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
@@ -244,11 +230,9 @@ function nearest(a: number, b: number, hinge: Hinge): number {
   return Math.abs(a - hinge.now) <= Math.abs(b - hinge.now) ? a : b;
 }
 
-/**
- * the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) is least, `start` if it is
- * (all but) 0 there: sampled, then refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than
- * it must), and `f` there. An x whose `part` alone is no less than the least yet is passed over without its `rest`: `f` there is no less.
- */
+/** the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) is least, `start` if it is (all
+ * but) 0 there: sampled, then refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than it
+ * must), and `f` there. An x whose `part` alone is no less than the least yet is passed over without its `rest`: `f` there is no less. */
 function least(part: (x: number) => number, rest: () => number, lo: number, hi: number, start: number): [x: number, f: number] {
   start = Math.min(hi, Math.max(lo, start));
   const near = (x: number) => NEAREST * Math.abs(x - start);
@@ -279,13 +263,11 @@ const SETTLED = 1e-4;
 /** how much `least` holds each radian away from its start against what it minimises: next to nothing (ties broken toward the start) */
 const NEAREST = 1e-3;
 
-/**
- * Tuned: what a limb's swivel off the pole's side costs against the joints' excess it saves, × its square (rad): a small one, as a goal
+/** Tuned: what a limb's swivel off the pole's side costs against the joints' excess it saves, × its square (rad): a small one, as a goal
  * moves on, next to nothing; one far round only for what it is worth — a radian's swivel for 0.05 rad (3°) of a wrist's excess saved,
  * half a turn for half a radian. Free, a swivel far round was taken for the last fraction of a degree a wrist is passed by (a rifle's
  * grip turning it just past its range swivelled the elbow 86° for 0.5°) and given back as the goal moved on: braked toward each in
- * turn, the arm trembled.
- */
+ * turn, the arm trembled. */
 const SWIVEL = 0.05;
 
 const clampBend = (x: number, { range: [lo, hi] }: Hinge) => Math.min(hi, Math.max(lo, x));
@@ -325,11 +307,6 @@ function joints(c: Solving) {
   for (let k = 1; k < c.bones.length; k++) _joints[k].copy(c.skeleton.bones[c.bones[k]].offset).applyQuaternion(_rotations[k - 1]).add(_joints[k - 1]);
 }
 
-function limited(skeleton: Skeleton, bone: number, q: Quaternion) {
-  const limit = skeleton.limits[bone];
-  if (limit) clampRotation(q, limit);
-}
-
 /** how far (rad, summed over its coordinates) `q` is outside `limit` */
 function excess(q: Quaternion, limit: Limit | undefined): number {
   if (!limit) return 0;
@@ -357,9 +334,5 @@ const _joints = Array.from({ length: LONGEST }, () => new Vector3());
 const _rotations = Array.from({ length: LONGEST }, () => new Quaternion());
 const _coords = coordinates();
 const _m = new Matrix4();
-const _base = new Quaternion();
-const _start = new Vector3();
-const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s] = Array.from({ length: 12 }, () => new Vector3());
-const _pole = new Vector3();
-const _axis = new Vector3();
-const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept, _fixed] = Array.from({ length: 12 }, () => new Quaternion());
+const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s, _start, _pole, _axis] = Array.from({ length: 15 }, () => new Vector3());
+const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept, _fixed, _base] = Array.from({ length: 13 }, () => new Quaternion());

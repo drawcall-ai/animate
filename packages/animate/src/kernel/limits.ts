@@ -1,16 +1,14 @@
 import { clamp, smoothstep } from './math';
 import { Quaternion } from 'three';
-import type { Limit } from './skeleton';
+import type { Limit, Skeleton } from './skeleton';
 import type { ReadonlyPose } from './pose';
 import type { Dev } from './dev';
 
 /**
- * Where `q`, a bone's rotation in its parent's frame, is in `limit`'s coordinates: its rotation
- * off the limit's neutral (`q · neutral⁻¹`) split into a swing of the limit's axis and a twist
- * about it (Baerlocher & Boulic 2001) — the swing's rotation vector components and the twist's
- * angle — and the ranges they are held to there (the twist's opening up as the swing nears the
- * turn opposite the axis, where the twist is undefined: held there, it would flip the bone round
- * as the swing passes it). Into `out`.
+ * Where `q`, a bone's rotation in its parent's frame, is in `limit`'s coordinates: its rotation off the limit's neutral
+ * (`q · neutral⁻¹`) split into a swing of the limit's axis and a twist about it (Baerlocher & Boulic 2001) — the swing's rotation vector
+ * components and the twist's angle — and the ranges they are held to there (the twist's opening up as the swing nears the turn
+ * opposite the axis, where the twist is undefined: held there, it would flip the bone round as the swing passes it). Into `out`.
  */
 export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = coordinates()): Coordinates {
   // (q · neutral⁻¹ written out as three's product has it, term for term: it runs in every limb's searches)
@@ -87,6 +85,13 @@ export function clampRotation(q: Quaternion, limit: Limit): boolean {
   return true;
 }
 
+/** `q`, `bone`'s rotation in its parent's frame, clamped into its limit if it has one */
+export function limited(skeleton: Skeleton, bone: number, q: Quaternion): Quaternion {
+  const limit = skeleton.limits[bone];
+  if (limit) clampRotation(q, limit);
+  return q;
+}
+
 /** how far (rad) `q` is beyond `limit`: the angle to its clamp (0 within it) */
 export function beyond(q: Quaternion, limit: Limit): number {
   const r = _beyond.copy(q);
@@ -98,7 +103,7 @@ export function beyond(q: Quaternion, limit: Limit): number {
 /** the swing (rad) from which the twist's range opens up, to all of it at the opposite turn */
 const TWIST_FADE = 0.75 * Math.PI;
 
-const _c = coordinates(), _abc = [0, 0, 0], _beyond = new Quaternion();
+const _c = coordinates(), _abc = [0, 0, 0], _beyond = new Quaternion(), _checked = new Quaternion();
 
 /** Range checks read the completed pose, including writes after a solve. Half a degree allows numerical settling. */
 export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {
@@ -108,4 +113,3 @@ export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {
     if (value > 0.5) dev.append(time, { check: 'joint range (°)', value, limit: 0.5, where: pose.skeleton.bones[bone].name });
   });
 }
-const _checked = new Quaternion();

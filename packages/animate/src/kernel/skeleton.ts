@@ -16,9 +16,8 @@ export interface BoneDef {
 }
 
 /**
- * A joint's range of motion as swing and twist (rad) in its parent's frame, measured off
- * `neutral` (the bone's rotation `q · neutral⁻¹`): the twist about `axis`, the swing's two
- * components about the next two axes in turn (x: y, z; y: z, x; z: x, y).
+ * A joint's range of motion as swing and twist (rad) in its parent's frame, measured off `neutral` (the bone's rotation
+ * `q · neutral⁻¹`): the twist about `axis`, the swing's two components about the next two axes in turn (x: y, z; y: z, x; z: x, y).
  */
 export interface Limit {
   bone: number;
@@ -32,17 +31,14 @@ export interface Limit {
 interface SkeletonOptions {
   /** at most one per bone */
   limits?: readonly Limit[];
-  /**
-   * named chains of bones for `solveChain`, each from its first joint down to its tip, every bone
-   * the child of the one before (an arm: upper arm, forearm, hand)
-   */
+  /** named chains of bones for `solveChain`, each from its first joint down to its tip, every bone the child of the one before (an arm:
+   * upper arm, forearm, hand) */
   chains?: Record<string, readonly string[]>;
 }
 
 /** A rig: bones in order, parents before children, bone 0 the only root; its joint limits and named chains. */
 export class Skeleton {
   readonly bones: readonly BoneDef[];
-  /** each bone's limit, if it has one */
   readonly limits: readonly (Limit | undefined)[];
   private readonly byName = new Map<string, number>();
   private readonly chains = new Map<string, readonly number[]>();
@@ -69,9 +65,9 @@ export class Skeleton {
     for (const [name, names] of Object.entries(chains)) {
       const chain = names.map((n) => this.index(n));
       if (chain.length < 2) throw new Error(`chain "${name}" needs at least two bones`);
-      chain.forEach((b, k) => {
-        if (k > 0 && bones[b].parent !== chain[k - 1]) throw new Error(`chain "${name}": "${bones[b].name}" is not the child of "${names[k - 1]}"`);
-      });
+      for (let k = 1; k < chain.length; k++) {
+        if (bones[chain[k]].parent !== chain[k - 1]) throw new Error(`chain "${name}": "${bones[chain[k]].name}" is not the child of "${names[k - 1]}"`);
+      }
       this.chains.set(name, chain);
     }
   }
@@ -83,7 +79,6 @@ export class Skeleton {
     return i;
   }
 
-  /** the names of its chains */
   chainNames(): string[] {
     return [...this.chains.keys()];
   }

@@ -36,10 +36,8 @@ export class Carrier implements Trail {
     this.time = time;
   }
 
-  /**
-   * where it is at `time` (s) and the two sub-steps before: its fields, but while the body that wears it is posing that
-   * sub-step — the body moves what it wears after its behaviour — carried on as it last moved
-   */
+  /** where it is at `time` (s) and the two sub-steps before: its fields, but while the body that wears it is posing that sub-step — the
+   * body moves what it wears after its behaviour — carried on as it last moved */
   at(time: number): Trail {
     // (not moved the sub-step before nor this one, it has stood still since it last moved: no motion carried over)
     if (this.dueAt !== time && time - this.time > 1.5 * STEP) return { prev2: this.current, prev: this.current, current: this.current };
@@ -65,13 +63,9 @@ export class Carrier implements Trail {
     copy(this.prev2, this.current);
   }
 
-  /** its velocity (m/s) and spin (rad/s) over the last sub-step */
+  /** its velocity (m/s) over the last sub-step */
   velocity(out: Vector3): Vector3 {
     return out.subVectors(this.current.position, this.prev.position).divideScalar(STEP);
-  }
-
-  spin(out: Vector3): Vector3 {
-    return spinOf(this.prev.quaternion, this.current.quaternion, STEP, out);
   }
 
   /** `local` (in its frame) in the world as it is now — at `time` (s), if given (`at`) — into `out`: moving with it (v + ω × r) */
@@ -92,5 +86,4 @@ function copy(to: Placement, from: Placement) {
   to.quaternion.copy(from.quaternion);
 }
 
-const _r = new Vector3();
-const _v = new Vector3();
+const [_r, _v] = [new Vector3(), new Vector3()];

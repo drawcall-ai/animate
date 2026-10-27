@@ -23,9 +23,7 @@ export function lookAround(person: Walking, seed = 1): (f: Frame) => Vector3 {
   const rand = seeded(seed);
   const target = new Vector3();
   let next = lerp(GLANCES.every[0], GLANCES.every[1], rand());
-  let until = 0;
-  let aside = 0;
-  let up = 0;
+  let until = 0, aside = 0, up = 0;
   const proportions = person.proportions;
   return (f) => {
     const locomotion = person.locomotion;
@@ -55,6 +53,5 @@ export function pathAhead(person: Walking, pose: ReadonlyPose, out: Vector3): Ve
     .addScaledVector(forwardOf(person.locomotion.facingAhead ?? person.locomotion.facing, _v), AHEAD.walk.distance);
 }
 
-const _com = new Vector3();
-const _v = new Vector3();
+const [_com, _v] = [new Vector3(), new Vector3()];
 

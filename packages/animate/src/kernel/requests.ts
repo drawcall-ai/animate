@@ -35,9 +35,9 @@ interface Filed {
 
 /**
  * A verb's request: from when its story starts it until its verb ends (its `finally`, which runs on cancel too). Its staging runs
- * every sub-step of the body it is filed with, after its balance and before its parts move; it claims body parts, says when what it moves will arrive
- * (`eta`), and whether it has `met` its goal or `failed` (can never meet it). Newer requests take a part from older ones of the same
- * tier; asked beats borrowed; among borrowers of the legs, the first keeps them.
+ * every sub-step of the body it is filed with, after its balance and before its parts move; it claims body parts, says when what it
+ * moves will arrive (`eta`), and whether it has `met` its goal or `failed` (can never meet it). Newer requests take a part from older
+ * ones of the same tier; asked beats borrowed; among borrowers of the legs, the first keeps them.
  */
 export class Request {
   private static made = 0;
@@ -56,15 +56,12 @@ export class Request {
   private readonly claims = new Set<Claim>();
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
 
-  /**
-   * `aimer`: it keeps on at its goal (a look, a tracked pose) rather than moving something somewhere: no arrival to foresee, it ends only
-   * when its story says
-   */
+  /** `aimer`: it keeps on at its goal (a look, a tracked pose) rather than moving something somewhere: no arrival to foresee, it ends only
+   * when its story says */
   constructor(readonly body: Filed, readonly verb: string, readonly site: string, private readonly staging: Staging, readonly aimer = false) {
     this.renewed = body.time;
   }
 
-  /** whether its staging has ended */
   get finished(): boolean {
     return this.runner?.finished ?? false;
   }
@@ -89,8 +86,7 @@ export class Request {
     this.claims.add(claim);
     this.body.claim(claim);
     return () => {
-      if (!this.claims.delete(claim)) return;
-      this.body.unclaim(claim);
+      if (this.claims.delete(claim)) this.body.unclaim(claim);
     };
   }
 

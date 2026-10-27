@@ -1,45 +1,36 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './frame';
-import { live, type Live, type Placement, type Goal } from './goal';
+import type { Placement, Goal } from './goal';
 import { exp, log } from './rotation';
 import { minimumJerk } from './math';
 
-/** A waypoint's duration (s) and place in the course's frame, read every sub-step.
- * A goal may also read the fixed course start and the preceding place in that frame.
- * `still` pauses at the preceding place.
- */
+/** A waypoint's duration (s) and place (world), read every sub-step. A goal may also read the fixed course start and the preceding
+ * place. `still` pauses at the preceding place. */
 export type Waypoint = [seconds: number, to: Goal | ((f: Frame, start: Placement, last: Placement) => Goal)];
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
 export interface Course {
-  to: (f: Frame) => Placement & Pick<Goal, 'carriedBy'>;
+  to: (f: Frame) => Placement;
   over: (f: Frame) => boolean;
 }
 
 /**
- * A course through `frame` (a moving frame: a placement with no scale of its own) from where `item`
- * is when it is first read, through its waypoints' placements (distances × `scale`) as one smooth curve
- * (centripetal Catmull–Rom, the rotation turned along it), timed by one minimum-jerk profile over
- * its whole length that takes as long as its waypoints together, `pace` times as fast as they say: it
- * passes its placements on the way without stopping and comes to rest only at the end — and where
- * a waypoint holds still (`still`) or the way turns back on itself (by more than 135°: the hand
- * stops to reverse), it comes to rest there and sets off again.
- * It sets off `delay` s after it is first read.
+ * A course (world) from where `item` is when it is first read, through its waypoints' placements as one smooth curve (centripetal
+ * Catmull–Rom, the rotation turned along it), timed by one minimum-jerk profile over its whole length that takes as long as its
+ * waypoints together, `pace` times as fast as they say: it passes its placements on the way without stopping and comes to rest only
+ * at the end — and where a waypoint holds still (`still`) or the way turns back on itself (by more than 135°: the hand stops to
+ * reverse), it comes to rest there and sets off again. It sets off `delay` s after it is first read.
  */
-export function course(item: { readonly current: Placement }, frame: Live<Placement>, waypoints: readonly Waypoint[], { scale = 1, pace = 1, delay = 0 } = {}): Course {
+export function course(item: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0 } = {}): Course {
   let start = NaN;
   let runs: Run[] = [];
   let from: Placement | undefined;
   const moving = waypoints.some(([, to]) => typeof to === 'function');
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  const to = (f: Frame): Placement & Pick<Goal, 'carriedBy'> => {
-    const place: Goal = live(frame, f);
-    const at = { position: place.position, quaternion: place.quaternion ?? IDENTITY };
+  const to = (f: Frame): Placement => {
     if (from === undefined) {
       start = f.time;
-      const inverse = at.quaternion.clone().invert();
-      // (where it sets out from, in the frame unscaled: the waypoints' placements are scaled)
-      from = { position: item.current.position.clone().sub(at.position).applyQuaternion(inverse).divideScalar(scale), quaternion: inverse.multiply(item.current.quaternion) };
+      from = { position: item.current.position.clone(), quaternion: item.current.quaternion.clone() };
     }
     if (!runs.length || moving) {
       const stops: Placement[] = [from];
@@ -54,11 +45,7 @@ export function course(item: { readonly current: Placement }, frame: Live<Placem
     let i = 0;
     while (i < runs.length - 1 && t > runs[i].seconds) t -= runs[i++].seconds;
     const { position, quaternion } = runs[i].at(minimumJerk(t / runs[i].seconds), _at);
-    return {
-      position: position.multiplyScalar(scale).applyQuaternion(at.quaternion).add(at.position).clone(),
-      quaternion: at.quaternion.clone().multiply(quaternion),
-      carriedBy: place.carriedBy,
-    };
+    return { position: position.clone(), quaternion: quaternion.clone() };
   };
   return { to, over: (f) => !Number.isNaN(start) && f.time - start >= delay + total };
 }
@@ -88,15 +75,10 @@ function runsOf(stops: readonly Placement[], seconds: readonly number[]): Run[] 
     const held = lengthOf(stops[i], stops[i + 1]) < 1e-6;
     const next = !end && lengthOf(stops[i + 1], stops[i + 2]) < 1e-6;
     const back = !end && !next && !held && bend(stops[i], stops[i + 1], stops[i + 2]) > REVERSE;
-    if (held) {
-      runs.push(stay(stops[i], time));
-      first = i + 1;
-      time = 0;
-    } else if (end || next || back) {
-      runs.push(curve(stops.slice(first, i + 2), time));
-      first = i + 1;
-      time = 0;
-    }
+    if (!held && !end && !next && !back) continue;
+    runs.push(held ? stay(stops[i], time) : curve(stops.slice(first, i + 2), time));
+    first = i + 1;
+    time = 0;
   }
   return runs;
 }
@@ -121,11 +103,9 @@ function bend(a: Placement, b: Placement, c: Placement): number {
 /** samples per span to measure a curve's length by */
 const SAMPLES = 24;
 
-/**
- * a run through `stops` in `seconds`: a centripetal Catmull–Rom curve through their positions and,
- * on the same knots, their rotations (as rotation vectors from the first), its ends extended by
- * reflection; `at` goes a share of its length (position and turn, `TURN`) along it
- */
+/** a run through `stops` in `seconds`: a centripetal Catmull–Rom curve through their positions and, on the same knots, their rotations
+ * (as rotation vectors from the first), its ends extended by reflection; `at` goes a share of its length (position and turn, `TURN`)
+ * along it */
 function curve(stops: readonly Placement[], seconds: number): Run {
   const q0 = stops[0].quaternion;
   const inverse = q0.clone().invert();
@@ -198,9 +178,7 @@ function barryGoldman(p: readonly number[][], knots: readonly number[], i: numbe
   return out;
 }
 
-const _d = new Vector3();
-const _e = new Vector3();
+const [_d, _e] = [new Vector3(), new Vector3()];
 const _q = new Quaternion();
 const _at: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 
-const IDENTITY = new Quaternion();

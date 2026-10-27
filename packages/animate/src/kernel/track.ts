@@ -7,9 +7,8 @@ import { spinOf } from './rotation';
 type Pace = Pick<Motion, 'accel' | 'speed'>;
 
 /**
- * A goal point followed with its own velocity: it keeps where the goal was the sub-step before, so
- * a goal moving smoothly is followed without lag (`follow` with its velocity), a jump braked. A
- * goal not seen before is taken as still. One per goal followed.
+ * A goal point followed with its own velocity: it keeps where the goal was the sub-step before, so a goal moving smoothly is followed
+ * without lag (`follow` with its velocity), a jump braked. A goal not seen before is taken as still. One per goal followed.
  */
 export class TrackedPoint {
   private last: Vector3 | null = null;
@@ -20,7 +19,7 @@ export class TrackedPoint {
     const velocity = _v.subVectors(goal, last).divideScalar(dt);
     if (velocity.length() > (pace.speed ?? Infinity)) velocity.set(0, 0, 0);
     last.copy(goal);
-    return follow(_a.copy(prev2), _b.copy(prev), _g.copy(goal), { ...pace, velocity }, dt, out);
+    return follow(prev2, prev, goal, { ...pace, velocity }, dt, out);
   }
 }
 
@@ -30,17 +29,11 @@ export class TrackedRotation {
 
   follow(prev2: Readonly<Quaternion>, prev: Readonly<Quaternion>, goal: Readonly<Quaternion>, pace: Pace, dt: number, out: Quaternion): Quaternion {
     const last = (this.last ??= goal.clone());
-    const velocity = spinOf(last, _q.copy(goal), dt, _v);
+    const velocity = spinOf(last, goal, dt, _v);
     if (velocity.length() > (pace.speed ?? Infinity)) velocity.set(0, 0, 0);
     last.copy(goal);
-    return followRotation(_p.copy(prev2), _r.copy(prev), _q.copy(goal), { ...pace, velocity }, dt, out);
+    return followRotation(prev2, prev, goal, { ...pace, velocity }, dt, out);
   }
 }
 
 const _v = new Vector3();
-const _a = new Vector3();
-const _b = new Vector3();
-const _g = new Vector3();
-const _q = new Quaternion();
-const _p = new Quaternion();
-const _r = new Quaternion();

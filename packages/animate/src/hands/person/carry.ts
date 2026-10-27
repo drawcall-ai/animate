@@ -231,7 +231,7 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
 
 /** the course a carrier goes along, and how long it has left (s) */
 function planned(carrier: Carrier, waypoints: readonly Waypoint[], options: { pace: number; delay: number }): Course & { left: (f: Frame) => number } {
-  const made = course(carrier, WORLD, waypoints, options), total = waypoints.reduce((sum, [seconds]) => sum + seconds / options.pace, 0);
+  const made = course(carrier, waypoints, options), total = waypoints.reduce((sum, [seconds]) => sum + seconds / options.pace, 0);
   let start = NaN;
   return {
     to: (f) => {
@@ -446,5 +446,4 @@ const CARRY_BESIDE = 0.22;
 const CARRY_AHEAD = 0.35;
 // Tuned lift staging: carry 12 cm above standing hip height, independent of the pelvis's squat.
 const CARRY_HEIGHT = 0.12;
-const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 const _v = new Vector3(), _g = new Vector3();

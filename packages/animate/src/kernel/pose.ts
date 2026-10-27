@@ -15,12 +15,11 @@ export interface ReadonlyPose {
 }
 
 /**
- * A skeleton's pose: the root's world position and each bone's rotation in its parent's frame
- * (the root's in the world's). The world transforms follow by forward kinematics, recomputed
- * when read after a write. Writes take a weight: 1 sets the value, less blends toward it from
- * what is there (slerp for rotations, lerp for the root's position) — in a body's frame, from
- * what the layers before wrote this sub-step, or else from the last pose (so a weighted write
- * alone each sub-step eases toward its value at a rate that depends on the sub-step).
+ * A skeleton's pose: the root's world position and each bone's rotation in its parent's frame (the root's in the world's). The world
+ * transforms follow by forward kinematics, recomputed when read after a write. Writes take a weight: 1 sets the value, less blends
+ * toward it from what is there (slerp for rotations, lerp for the root's position) — in a body's frame, from what the layers before
+ * wrote this sub-step, or else from the last pose (so a weighted write alone each sub-step eases toward its value at a rate that
+ * depends on the sub-step).
  */
 export class Pose implements ReadonlyPose {
   private readonly root = new Vector3();
@@ -100,14 +99,6 @@ export class Pose implements ReadonlyPose {
     this.stale = true;
   }
 
-  /** writes `bone`'s rotation in the world, its parent's as it is */
-  setRotation(bone: number, q: Readonly<Quaternion>, weight = 1): void {
-    const parent = this.skeleton.bones[bone].parent;
-    if (parent < 0) return this.setLocal(bone, q, weight);
-    this.setLocal(bone, _q.copy(this.rotation(parent)).invert().multiply(q), weight);
-  }
-
-  /** writes the root's world position */
   setRoot(position: Readonly<Vector3>, weight = 1): void {
     checkWeight(weight);
     if (weight === 1) this.root.copy(position);
@@ -120,10 +111,7 @@ export class Pose implements ReadonlyPose {
     this.root.copy(from.position(0));
     this.facing = from.facing;
     this.locals.forEach((q, i) => q.copy(from.local(i)));
-    this.loads.forEach((_, i) => {
-      const l = from.load(i);
-      this.setLoad(i, l.mass, l.at);
-    });
+    this.loads.forEach((_, i) => this.setLoad(i, from.load(i).mass, from.load(i).at));
     this.stale = true;
     return this;
   }
@@ -148,4 +136,3 @@ function checkWeight(weight: number) {
 }
 
 const _v = new Vector3();
-const _q = new Quaternion();

@@ -5,7 +5,6 @@ import { STEP, type Frame } from '../../src/kernel/frame';
 import { Pose } from '../../src/kernel/pose';
 import { leg } from './rigs';
 
-const WORLD = { position: new Vector3(), quaternion: new Quaternion() };
 
 /** a frame at each sub-step from 1/60 s on, for what reads only its time */
 function frames(): (time: number) => Frame {
@@ -16,7 +15,7 @@ function frames(): (time: number) => Frame {
 /** where a thing carried along `waypoints` from the origin is at each sub-step, and when its course is over */
 function sampled(waypoints: Waypoint[], seconds: number) {
   const thing = { current: { position: new Vector3(), quaternion: new Quaternion() } };
-  const made = course(thing, WORLD, waypoints), at = frames();
+  const made = course(thing, waypoints), at = frames();
   const path: { t: number; position: Vector3; quaternion: Quaternion; over: boolean }[] = [];
   for (let k = 1; k <= Math.round(seconds / STEP); k++) {
     const f = at(k * STEP);
@@ -69,7 +68,7 @@ describe('course', () => {
   it('reads a live endpoint throughout its travel and after it is over', () => {
     const thing = { current: { position: new Vector3(), quaternion: new Quaternion() } };
     let reads = 0;
-    const made = course(thing, WORLD, [[1, (f) => { reads++; return { position: new Vector3(f.time, 0, 0) }; }]]), at = frames();
+    const made = course(thing, [[1, (f) => { reads++; return { position: new Vector3(f.time, 0, 0) }; }]]), at = frames();
     for (let k = 1; k <= 120; k++) {
       const f = at(k * STEP), placed = made.to(f);
       if (f.time > 1.1) expect(placed.position.x).toBeCloseTo(f.time, 8);

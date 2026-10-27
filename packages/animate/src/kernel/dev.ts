@@ -1,10 +1,7 @@
 /** A development problem: what was checked, what was seen and what is allowed (in the check's units), and where. */
 export interface Problem {
-  /** what was expected, and its units */
   check: string;
-  /** what was seen */
   value: number;
-  /** what is allowed */
   limit: number;
   /** the bone, thing or other place the problem is at */
   where: string;
