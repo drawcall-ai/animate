@@ -88,7 +88,8 @@ export interface Posture { prepare(f: Frame, legs: Striding, attention: Attentio
 /** A joint's range of motion, as `Limit` has it, for a bone named so. */
 export type Range = Omit<Limit, 'bone'>;
 
-/** A leg by its bones' names, as `LegChain` has it by their indices: each joint top first, the last the foot. */
+/** A leg by its bones' names, as `LegChain` has it by their indices: each joint top first, the last the foot — which must keep flat on the
+ * floor as the leg bends, or the legs reach no step — and its sole's `heel` and `toe` in the foot's frame. */
 export interface LegRole<Name extends string> {
   joints: readonly { bone: Name; axes: string; cycle?: JointCycle }[];
   heel: Vec3;
@@ -113,7 +114,8 @@ export interface Roles<Name extends string, Hand extends string> {
 
 /**
  * A species' numbers: its legs' `gait`; each bone's mass (kg; a bone not named has none) and where it centres (an offset from its joint, or
- * a share of the way to another bone's joint; default its joint); each joint's range; the trunk's `inertia`; development snap ceilings.
+ * a share of the way to another bone's joint; default its joint); each joint's range (default free, ±π); the trunk's `inertia`; development
+ * snap ceilings.
  */
 export interface Tuning<Name extends string> {
   gait?: Gait;

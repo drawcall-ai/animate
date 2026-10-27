@@ -10,7 +10,7 @@ import { Thing } from '../things/thing';
 import type { Tier } from '../kernel/requests';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
- * set works for a crowd). */
+ * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
 export type BodyOptions = SelfOptions & { avoid?: Iterable<Body> };
 
 /** the names of a species' bones */

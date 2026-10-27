@@ -14,7 +14,7 @@ export interface Root {
   velocity?: Vector3;
   /** its facing (rad about +Y; 0 faces +Z) */
   yaw: number;
-  /** how far it crouches (0 standing … 1 a deep crouch) */
+  /** how far it crouches (0 standing … 1 a deep crouch): a key's 0 or 1 as it is, the legs ease it */
   crouch?: number;
   /** how still it holds itself (0 at ease … 1 aiming): its breathing and sway fade by it */
   steady?: number;

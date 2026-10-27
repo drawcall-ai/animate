@@ -7,7 +7,6 @@ npm install @drawcall/animate @drawcall/rig @pmndrs/timeline three
 ```
 
 ```ts
-import { Vector3 } from 'three';
 import { runTimeline } from '@pmndrs/timeline';
 import { skin } from '@drawcall/rig';
 import { Body, carry, grab, humanoid, release } from '@drawcall/animate';
@@ -17,10 +16,11 @@ const person = new Body(humanoid(skeleton), { model: characterModel });
 scene.add(person.object);
 
 const cup = scene.getObjectByName('cup')!; // userData.mass = 0.3, an empty named 'handle' under it
+const tableTop = scene.getObjectByName('tableTop')!; // an empty: +Z the way the person faces putting the cup there
 const updateStory = runTimeline(function* () {
   yield* grab(person, cup, { right: 'handle' }); // walks up, looks, reaches
-  yield* carry(person, cup, new Vector3(0, 1.1, -2)); // walks there with it
-  release(person, cup);
+  yield* carry(person, cup, tableTop); // walks there with it, and sets it down
+  release(person, cup, tableTop); // the cup now sits on the table top
 });
 
 // every frame
@@ -30,4 +30,4 @@ person.update(delta);
 
 The package ships its usage guide as a skill: `packages/animate/skills/animate/SKILL.md`.
 
-`packages/animate` is the package. `examples` is the examples app (`pnpm dev`), with its scenes' checks (`pnpm run-scene <id>`) and capture tooling; it still uses the pre-v10 API and is being ported.
+`packages/animate` is the package; `examples` is the examples app (`pnpm dev`).
