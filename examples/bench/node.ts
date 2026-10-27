@@ -28,3 +28,28 @@ console.log(`node ${process.version}, ${args.seconds} s per crowd after ${args.w
 console.log(report(results));
 if (args['alloc-sites']) await allocationSites(new Crowd(sizes[0], scenarios));
 
+/** where the steady state allocates: sampled allocations (collected ones included) by function */
+async function allocationSites(crowd: Crowd) {
+  for (let f = 0; f < 180; f++) crowd.step();
+  const session = new Session();
+  session.connect();
+  await session.post('HeapProfiler.startSampling', {
+    samplingInterval: 256,
+    includeObjectsCollectedByMajorGC: true,
+    includeObjectsCollectedByMinorGC: true,
+  });
+  for (let f = 0; f < 600; f++) crowd.step();
+  const { profile } = await session.post('HeapProfiler.stopSampling');
+  session.disconnect();
+  type Node = (typeof profile)['head'];
+  const sites = new Map<string, number>();
+  const walk = (node: Node) => {
+    const cf = node.callFrame;
+    const key = `${cf.functionName || '(anonymous)'} ${cf.url.split('/').pop()}:${cf.lineNumber + 1}`;
+    if (node.selfSize) sites.set(key, (sites.get(key) ?? 0) + node.selfSize);
+    node.children.forEach(walk);
+  };
+  walk(profile.head);
+  console.log(`\nallocation sites, scenario scripts included (bytes per frame, ${crowd.bodies} bodies, sampled)`);
+  for (const [k, v] of [...sites].sort((a, b) => b[1] - a[1]).slice(0, 20)) console.log(`${(v / 600).toFixed(0).padStart(8)}  ${k}`);
+}

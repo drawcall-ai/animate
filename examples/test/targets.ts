@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { eyesOf, jointOf } from './actor';
 import { Peak, type Frame } from './frame';
 import { aroundTheTrunk } from './clearance';

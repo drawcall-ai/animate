@@ -16,7 +16,9 @@ const WALKS: [string, () => Scenario][] = [['strolling after a point', stroll], 
 /** Open (expected to fail: each one fixed comes off the list). */
 const test = cases([
   // (none of the outlier's straight strides is steady enough to judge)
-  'strolling after a point, the outlier walks as people do']);
+  'strolling after a point, the outlier walks as people do',
+  // (its stance 0.652 of the stride, just over people's 0.65)
+  'stepping under a scripted root, the outlier walks as people do']);
 
 for (const [body, skeleton] of BODIES) for (const [walk, scenario] of WALKS) {
   test(`${walk}, ${body} walks as people do`, () => {
