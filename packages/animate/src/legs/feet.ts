@@ -21,7 +21,7 @@ const yawPitch = (yaw: number, pitch: number, out: Quaternion) => out.setFromEul
  * side and the leg across its girdle (the nearest on the other side), its home under it, the leg's length as it stands; planted, a foot rolls
  * about its heel or toe; its print is the sole between them.
  */
-export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths?: readonly ((out: number, ahead: number, pitch?: number) => number)[]): Feet {
+export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths: readonly ((out: number, ahead: number, pitch?: number) => number)[]): Feet {
   const root = rest.position(0), turn = _q.copy(rest.rotation(0)).invert();
   const local = (bone: number) => rest.position(bone).clone().sub(root).applyQuaternion(turn);
   const legs = chains.map((chain) => {
@@ -40,12 +40,12 @@ export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths?:
     legs: partnered.map((leg, i) => ({
       ...leg,
       partner: leg.partner < 0 ? undefined : leg.partner,
-      depth: depths?.[i],
-      stray: depths && strayOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand),
-      span: depths && ((drop: number) => {
+      depth: depths[i],
+      stray: strayOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand),
+      span: (drop: number) => {
         const rocker = Math.min(0, ...chains[i].rocker.map(([, pitch]) => pitch)) * Math.PI / 180;
         return spanOf(depths[i], leg.out, leg.home - leg.ahead, leg.stand - drop, rocker);
-      }),
+      },
     })),
     hip: Math.max(...legs.map((leg) => leg.hip)), length, thigh: length / 2, shin: length / 2, ankleHeight,
     // (a hoof or paw has no knee of its own to fold under it, nor a shank to lean past an ankle's bend)
@@ -97,22 +97,20 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
 
 /**
  * A four-legged species' stepping, from its gait and feet: the gait's offsets, cadence and duty; a stance travelling at most
- * `SPANNING` of how far its legs reach fore and aft (else `TRAVEL` of the leg's length) let down on them as the gait has it (`drop`) —
- * running (the gait's `run`), let down further and reaching as far as they reach so; feet landing a little ahead (`LEAD` of the stance), as wide apart as they stand; a swing lifting
+ * `SPANNING` of how far its legs reach fore and aft let down on them as the gait has it (`drop`) — running (the gait's `run`), let down
+ * further and reaching as far as they reach so; feet landing a little ahead (`LEAD` of the stance), as wide apart as they stand; a swing lifting
  * `LIFT` × the gait's clearance at its height; the legs reaching `REACH` of their length; a foot landing turned from the body no
- * further than `twist` (rad: as far as its legs stand turned, `ChainLeg.turn`, else `TWIST`), the body turning on over a planted one
+ * further than `twist` (rad: as far as its legs stand turned, `ChainLeg.turn`), the body turning on over a planted one
  * as its foot pivots; behind, rolling over its toe as far as `ball` (rad, − toes down: its rocker's breakover) as the leg needs. No heel
  * strike or crouch: a hoof or paw lands flat.
  */
-export function steppingOf(gait: Gait, feet: Feet, twist = TWIST, ball = 0): Stepping {
+export function steppingOf(gait: Gait, feet: Feet, twist: number, ball: number): Stepping {
   const scale = 1, width = feet.hip, length = feet.length, clearance = Math.max(...gait.clearance);
   const run = gait.run;
   const lowered = (gait.drop ?? 0) * length;
   const drop = lowered + (run?.drop ?? 0) * length;
   const speedAt = (froude: number) => Math.sqrt(froude * GRAVITY * gait.height);
-  const spans = feet.legs.map((leg) => leg.span);
-  const travelAt = (drop: number) =>
-    spans.every((span) => span !== undefined) ? SPANNING * Math.min(...spans.map((span) => span?.(drop) ?? Infinity)) : TRAVEL * length;
+  const travelAt = (drop: number) => SPANNING * Math.min(...feet.legs.map((leg) => leg.span?.(drop) ?? Infinity));
   const travel = travelAt(lowered);
   return {
     scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: { base: 1, perSpeed: 0 }, duty: { walk: 0.6, side: 0.6, run: 0.6 },
@@ -124,8 +122,8 @@ export function steppingOf(gait: Gait, feet: Feet, twist = TWIST, ball = 0): Ste
   };
 }
 
-/** Tuned: a stance travels at most this share of the leg's length; a foot lands this share of a stance ahead; a swing lifts this × the clearance; a leg reaches this share of its length */
-const TRAVEL = 0.5, LEAD = 0.55, LIFT = 2.5, REACH = 0.99;
+/** Tuned: a foot lands this share of a stance ahead; a swing lifts this × the clearance; a leg reaches this share of its length */
+const LEAD = 0.55, LIFT = 2.5, REACH = 0.99;
 /** Tuned: a stance travels at most this share of how far its legs reach fore and aft, walking: the rest is the landing's spare */
 const SPANNING = 0.65;
 /** Tuned: a planted foot strays across at most this share of how far its leg reaches either way at its standing height */
@@ -138,8 +136,6 @@ const SWING_REACH = 1.2;
 const STRAIGHTER = 1.04;
 /** Tuned: the share of a swing over which the stride's references take over from the leg as it lifted */
 const TAKING = 0.3;
-/** Tuned: a four-legged body turns at most this far (rad) from a planted foot, the foot pivoting on the floor for what its leg does not twist */
-const TWIST = 0.5;
 /** a speed (m/s) no creature runs at: it never runs as a person does (its gait has its own) */
 const NEVER = 1e3;
 

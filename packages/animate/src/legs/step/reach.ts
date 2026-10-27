@@ -30,7 +30,7 @@ export function lengthOf(steps: Steps, leg: Leg): number { return steps.feet.leg
 export function homeOf(steps: Steps, leg: Leg): number { return steps.feet.legs[leg.i].home ?? steps.feet.legs[leg.i].ahead ?? 0; }
 
 /** a foot's home `ahead` s on: under its hip as the root goes, the stance's width out */
-export function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Vector3 {
+function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Vector3 {
   const { r, yaw, width, sitting } = now;
   const root = r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead);
   return root.addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forwardOf(yaw), sitting + homeOf(steps, leg)).setY(steps.feet.ankleHeight);
@@ -42,7 +42,7 @@ export function offHome(steps: Steps, now: Now, leg: Leg, ahead: number): number
 }
 
 /** a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends */
-export function rolled(steps: Steps, now: Now, leg: Leg): number {
+function rolled(steps: Steps, now: Now, leg: Leg): number {
   const s = steps.st.scale, limit = pivotLimit(steps, now, leg);
   return lerp(rollOf(leg), limit, Math.max(Number(now.tiptoe > 0), smoothstep(PIVOT * s, 2 * PIVOT * s, Math.abs(aheadOf(steps, now, leg)))));
 }

@@ -85,7 +85,7 @@ export function liftFeet(steps: Steps, now: Now, cues: Cues) {
 }
 
 /** whether `leg` lifts now, `other` the leg across from it */
-export function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
+function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
   const { legs } = steps, { r, dt, airborne, C, Ts } = now;
   const urgent = isUrgent(steps, now, cues, leg, other);
   if (airborne && !urgent) return false;
@@ -123,7 +123,7 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
 }
 
 /** whether a foot that would step lets `other`, standing, step first: the two ways of stepping part here */
-export function yields(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
+function yields(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
   if (other.swing) return false;
   return now.r.forecast ? walkerYields(steps, now, cues, leg, other) : followerYields(steps, now, leg, other);
 }
@@ -149,7 +149,7 @@ function followerYields(steps: Steps, now: Now, leg: Leg, other: Leg): boolean {
 }
 
 /** whether `other` will be further from its home than `leg` a swing on, by more than a step */
-export function behind(steps: Steps, now: Now, other: Leg, leg: Leg): boolean {
+function behind(steps: Steps, now: Now, other: Leg, leg: Leg): boolean {
   const then = now.lead + now.Tsw;
   return offHome(steps, now, other, then) > offHome(steps, now, leg, then) + STEP.distance * steps.st.scale;
 }
@@ -176,7 +176,7 @@ export function wants(steps: Steps, now: Now, cues: Cues, leg: Leg): boolean {
  * whether a foot is due: moving, its share of a cycle after the leg before it lifted (the steps stay even); standing, after a moment; a
  * gait's by its clock, walking or turning: within `SLOT` of a cycle after its offset comes round
  */
-export function due(steps: Steps, now: Now, leg: Leg): boolean {
+function due(steps: Steps, now: Now, leg: Leg): boolean {
   const { C, Ts, moving } = now;
   if (steps.clocked) return inTurn(steps, leg) || steps.owed[leg.i] || (leg.planted >= C * DUE && steps.since >= DUE);
   if (moving > 0) return steps.legs[steps.before[leg.i]].lifted >= C * steps.gap[leg.i] || leg.planted >= Ts * DUE;
@@ -201,12 +201,12 @@ export function together(steps: Steps, a: Leg, b: Leg): boolean {
 }
 
 /** whether a foot has stood `SLOT` of a cycle, or half the gait's stance if that is shorter (a gallop's) */
-export function stood(steps: Steps, now: Now, leg: Leg): boolean {
+function stood(steps: Steps, now: Now, leg: Leg): boolean {
   return leg.planted >= Math.min(SLOT, now.duty / 2) * now.C;
 }
 
 /** whether a foot stands staggered fore and aft of the one across from it */
-export function staggered(steps: Steps, now: Now, leg: Leg): boolean {
+function staggered(steps: Steps, now: Now, leg: Leg): boolean {
   const other = steps.legs[steps.pair[leg.i]];
   return Math.abs(_b.subVectors(other.anchor, leg.anchor).dot(forwardOf(now.yaw, _f))) > STAGGERED * steps.st.scale;
 }
@@ -232,25 +232,18 @@ interface Cues {
 
 /** how soon after its offset comes round a gait's foot lifts, and how long it stands first (shares of a cycle) */
 const SLOT = 0.25;
-
 /** how much further behind than its stance takes it a gait's foot falls before it steps out of turn (share of a stance's travel) */
 const BEHIND = 0.5;
-
 /** Tuned: moving, a foot lifts whatever the others do once it has stood `DUE` stances or is `DUE` stances' travel off its home */
 const DUE = 1.5;
-
 /** Tuned: a step that would end `BLOCKED` (m) across the other foot waits for the other to step first (a walker's — a foreseen root's —
  * instead closes beside it) */
 const BLOCKED = 0.05;
-
 /** Tuned: a walker opens a side-step with the foot on the side it goes, moving more than `SIDE` of its speed sideways */
 const SIDE = 0.5;
-
 /** Tuned: still, the feet step only to even out feet `STAGGERED` (m) apart fore and aft */
 const STAGGERED = 0.08;
-
 /** Tuned: a gait's footfalls shift toward another gait's at most this share of a cycle a cycle: a change of gait over a stride or two */
 const SHIFT = 0.5;
-
 /** Tuned: a root rising (getting up from a landing) asks `RISING` s sooner for a foot out of reach: it steps before its leg goes straight */
 const RISING = 0.5;

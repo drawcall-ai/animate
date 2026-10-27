@@ -357,38 +357,27 @@ export class Stepper extends Steps {
 
 /** Tuned: how far ahead (s) a gait's cadence takes the speed it will be going */
 const PACING = 0.4;
-
 /** Derived: a walk's swing quickened by a turn is at most this share of its stance — its feet half a cycle apart on a girdle never in the
  * air together (Hildebrand's walk: more than half a cycle on the floor), the one landing `SETTLING` of a cycle before the other lifts */
 const PAIRED = (0.5 - SETTLING) / (0.5 + SETTLING);
-
 /** Tuned: walking, a planted foot is kept within reach toward its own turn this share of a cycle at most: the planner holds the root for
  * it rather than the foot stepping out of turn, and not so long the walk holds back a cycle for a foot that is nearly due */
 const AWAIT = 0.1;
-
 /** Tuned: a sole this far (m) above the floor in a final pose has left it (planted, it stands within 0.1 mm of it) */
 const LIFTED = 0.005;
-
 /** Tuned: a landing foresees at most `SPIN` (rad/s) of the root's turn */
 const SPIN = 1.5;
-
 /** Tuned: turning steps as quick as walking `TURNING` m/s per rad/s turned or rad behind */
 const TURNING = 0.5;
-
 /** Tuned: a walker's pelvis never turns back past its root against the way the root turns `SENSING` s on */
 const SENSING = 0.3;
-
 /** Tuned: nor for `PAUSE` s after it stops turning */
 const PAUSE = 0.5;
-
 /** Tuned: a landing is kept within the leg's reach with the pelvis let down `drop` (m) more, never nearer than `least` (m) */
 const LANDING = { drop: 0.06, least: 0.15 };
-
 /** Tuned (shares of the crouch's depth /s², /s): how fast the legs take a crouch and rise from it — as a 0.25 s minimum-jerk crouch at its
  * peak, whatever the root asks (a crouch key pressed: a step) — so the feet keep to the floor as the pelvis drops and rises */
 const CROUCHING = { accel: 90, speed: 7.5 };
-
 /** Tuned (m/s): stepping sideways this fast, a body steps at its side-stepping cadence (slower, toward it) */
 const SIDE_SPEED = 0.3;
-
 const ZERO = new Vector3();

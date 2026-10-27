@@ -8,7 +8,7 @@ import type { Leap } from './state';
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
  * `down` s, as deep as `depth` × the fall's speed × `down` (half that running), rising over `up` s.
  */
-export const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3 };
+const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3 };
 
 /**
  * A leap asked (`asked`, its take-off speed) moved on `dt`: dipping, then in the air (landing on a sub-step), the knees taking it, rising

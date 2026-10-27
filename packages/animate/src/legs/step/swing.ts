@@ -73,7 +73,7 @@ export function bend(steps: Steps, forecast: (ahead: number) => { position: Vect
  * A landing `to` kept in balance: a step whose landing would leave the extrapolated centre of mass as it will be past the feet lands under
  * it instead, just to its side; and no further from it as it is now than the other foot and it hold it: a first step is a short one.
  */
-export function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3, turned: number, side: Vector3, speed: number) {
+function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3, turned: number, side: Vector3, speed: number) {
   const { st, feet, legs, pair } = steps, s = st.scale, { r, airborne } = now, capture = st.capture;
   if (capture === undefined || airborne) return;
   const other = legs[pair[leg.i]];
@@ -266,27 +266,19 @@ export function swingPose(steps: Steps, now: Now, leg: Leg, w: Swing, flying: nu
 
 /** Tuned: a root foreseen to move less than this (m) by a landing is all but standing */
 const SETTLED_ROOT = 0.05;
-
 /** Tuned: a walker's foot closing beside the other needs no gap from it once `SPAN` (m) or more ahead or behind */
 const SPAN = 0.25;
-
 /** Tuned: a walker's foot lands flat but `BACKSTEP` (m) or more behind its hip */
 const BACKSTEP = 0.1;
-
 /** Tuned: a swing's duration grows with the gait's at most `PACE` (s/s) */
 const PACE = 1;
-
 /** Tuned: landing a leap, the foot comes down at `TOUCH` of the body's fall */
 const TOUCH = 0.85;
-
 /** Recalled (Perry 1992): the push-off peaks just after toe-off, gone by mid-swing; tuned: it eases in and out over the first `PUSHED` of a swing */
 const PUSHED = 0.5;
-
 /** a bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing */
 const BEND_SPAN = 0.1;
-
 /** Tuned: a walker's slow step lands at most `WIDE.stances` standing stances aside of the other
  * foot, as balance lets it (1.1: within the metrics' 0.15 H for a straight stop), its extrapolated centre of mass kept within `within` (m) */
 const WIDE = { stances: 1.1, within: 0.03 };
-
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion();

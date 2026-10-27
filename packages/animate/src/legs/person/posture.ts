@@ -11,9 +11,7 @@ import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../kernel/inertia';
 import { follow } from '../../kernel/follow';
 /** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
-const LIST = 0.05;
-const SWAY = 0.0085;
-const RUN_SWAY = 0.008;
+const LIST = 0.05, SWAY = 0.0085, RUN_SWAY = 0.008;
 /** the walking pelvis's dip in double support below mid-stance (× height, of the default body's: × its legs; Orendurff 2004) */
 const BOB = 0.016;
 /** the trunk pitches forward at each double support and back over mid-stance (rad; CMU mocap); running, forward as the stance leg compresses */
@@ -30,8 +28,6 @@ const NOD_SHIFT = 0.1;
 const ENTRAIN = 4;
 /** how far the pelvis goes up for a body asked onto its toes, at most (m, default body) */
 export const TIPTOE = 0.07;
-/** the most a trailing foot's reach lowers the pelvis (× height, of the default body's: × its legs): one left behind further is lifted instead */
-const MOST_DROP = 0.035;
 /** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest */
 const HINGE = 0.6;
 // Tuned quiet shift: unload one knee while keeping both soles planted.
@@ -45,8 +41,6 @@ const FOLD = (({ thigh, shin, legLength }) => {
 })(proportionsFor(DEFAULT_HEIGHT));
 /** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
 export const LOWER = { accel: 3, speed: 0.6 };
-/** Walking planted reach (× leg length): a soft knee under load. */
-export const REACH = 0.975;
 /** Standing planted reach (× leg length): nearly extended, without a singular knee. */
 export const STANDING_REACH = 0.995;
 
@@ -108,8 +102,6 @@ interface Cycle {
  * the body's `inertia` has it.
  */
 export class Posture {
-  /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
-  phase = 0;
   /** a runner's leg compression through stance (0 … 1) */
   private comp = 0;
   private readonly weight = new Vector3();
@@ -131,24 +123,16 @@ export class Posture {
     out: Trunk,
     life: Pick<Quiet, 'drift' | 'breath' | 'onto'>,
     cycle: Cycle,
-    height: (standing: number, floor: number, tiptoe: number) => number,
   ) {
-    const { lower, bow, twist } = asks;
-    const { onto } = life;
-    const { p: proportions } = upright;
+    const { lower, bow, twist } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;
-    const dt = f.dt;
-    const walk = upright.walk;
-    const run = upright.run;
-    const fwd = forwardOf(upright.yaw, _f);
-    const left = leftOf(upright.yaw, _l);
+    const fwd = forwardOf(upright.yaw, _f), left = leftOf(upright.yaw, _l);
 
     // the pelvis and the thorax turned with the stride, the thorax rolling with its turn
     const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
     const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, proportions.legs, walk, run, upright.held, this.turn);
-    const { bob, nod: nodPhase, compression: comp } = cycle;
-    const stride = this.phase = cycle.phase;
+    const { bob, nod: nodPhase, compression: comp, phase: stride } = cycle;
     let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
     // (over the stance foot at its mid-stance: walking a quarter stride on from the other's lift, as a walk has it; running, its stance
     // short, half the swing on — π(1 − stance share))
@@ -181,8 +165,7 @@ export class Posture {
     const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
     const tilt = 0.5 * nod + hingeOf(proportions, lower) * bow + TILT * run;
     quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade, tilt, roll, upright.pelvisRotation);
-    const standing = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
-    pelvis.y = height(standing, standing - MOST_DROP * L, smoothstep(0, TIPTOE * proportions.scale, -lower));
+    pelvis.y = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
     // nodding and bowing
@@ -200,7 +183,6 @@ export class Posture {
     // Under-relax the pose-to-CoM feedback rather than apply the full knee response again.
     return (this.offset ??= offset.clone()).lerp(offset, 0.95);
   }
-
 }
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
@@ -270,12 +252,4 @@ function loadLean(pose: ReadonlyPose, proportions: Proportions, forward: Readonl
   // capped at 10.3 degrees; the study is not an 8 kg dose-response law.
   return clamp(Math.atan2(moment, mass * (proportions.eyeHeight - proportions.hipHeight) * 0.8), -0.18, 0.18);
 }
-
-
-
-const UP = new Vector3(0, 1, 0);
-const _twist = new Quaternion();
-const _f = new Vector3();
-const _l = new Vector3();
-const _v = new Vector3();
-const _o = new Vector3();
+const UP = new Vector3(0, 1, 0), _twist = new Quaternion(), _f = new Vector3(), _l = new Vector3(), _v = new Vector3(), _o = new Vector3();

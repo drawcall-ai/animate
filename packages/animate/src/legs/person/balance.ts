@@ -67,8 +67,7 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
  * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
 export function driven(person: PersonLegged, seed?: number): Step {
-  const root = drivenRoot(person);
-  return drivenBy(person, (f) => root(f), { seed });
+  return drivenBy(person, drivenRoot(person), { seed });
 }
 
 /**
@@ -88,19 +87,10 @@ export function drivenBy(
   const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
     .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(proportions, side)))]);
   const feet: Feet = {
-    hip: proportions.hipHalfWidth,
-    length: proportions.legLength,
-    thigh: proportions.thigh,
-    shin: proportions.shin,
-    fold: KNEE_FLEXION * Math.PI / 180,
-    ankleHeight: proportions.ankleHeight,
-    rotation: footRotation,
+    hip: proportions.hipHalfWidth, length: proportions.legLength, thigh: proportions.thigh, shin: proportions.shin,
+    fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: proportions.ankleHeight, rotation: footRotation,
     legs: SIDES.map((side, i) => ({
-      sign: i === 0 ? 1 : -1,
-      foot: INDEX[`${side}Foot`],
-      toes: INDEX[`${side}Toes`],
-      top: INDEX[`${side}UpperLeg`],
-      up: proportions.offsets[`${side}UpperLeg`].y,
+      sign: i === 0 ? 1 : -1, foot: INDEX[`${side}Foot`], toes: INDEX[`${side}Toes`], top: INDEX[`${side}UpperLeg`], up: proportions.offsets[`${side}UpperLeg`].y,
     })),
     ankle: (i, anchor, yaw, pitch, out) => ankleFor(proportions, SIDES[i], anchor, yaw, pitch, out),
     lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
@@ -125,20 +115,10 @@ export function drivenBy(
   const poise = new Poise();
   const base = { ...defaultStance(proportions), ...options.stance };
   const upright: Upright = {
-    p: proportions,
-    root: new Vector3(),
-    velocity: new Vector3(),
-    offset: new Vector3(),
-    yaw: person.yaw,
-    walk: 0,
-    run: 0,
-    moving: false,
-    stance: base,
+    p: proportions, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: person.yaw, walk: 0, run: 0, moving: false, stance: base,
     // (where the feet stood as the sub-step began: the posture shifts the weight between them)
     feet: standing.map((foot) => ({ anchor: foot.position.clone() })),
-    pelvis: new Vector3(),
-    pelvisRotation: new Quaternion(),
-    held: false,
+    pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false,
   };
   const posture = new Posture(person.species.inertia);
   const life = new Quiet(options.seed ?? seedOf(proportions.height, standing[0].position.x, standing[0].position.z));
@@ -208,7 +188,7 @@ export function drivenBy(
       compression,
       stance: stepper.Ts / stepper.cycle,
     };
-    posture.carry(f, upright, { ...requested, bow: requested.bow + stoop }, trunk, life, cycle, (height) => height);
+    posture.carry(f, upright, { ...requested, bow: requested.bow + stoop }, trunk, life, cycle);
     const offset = hips.follow(offsets[0], offsets[1], upright.pelvis.clone().sub(upright.root).setY(0), PELVIS, dt, new Vector3());
     [offsets[0], offsets[1]] = [offsets[1], offset];
     // (the pelvis's turn with the stride followed off the facing; running, the legs are told of it before they reach from its hips —
@@ -323,12 +303,8 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
       const was = f.prev2.point(bone, pivot, new Vector3());
       const vertical = Math.abs(at.y - was.y) / f.dt, horizontal = Math.hypot(at.x - was.x, at.z - was.z) / f.dt;
       // (landing a leap the foot comes down with the body, the knees taking up the fall after: only its horizontal speed is bounded)
-      if (vertical > LIMIT.vertical && !leg.leapt) {
-        dev.append(time, { check: 'driven touchdown vertical speed (m/s)', value: vertical, limit: LIMIT.vertical, where: `${side}Foot` });
-      }
-      if (horizontal > LIMIT.horizontal) {
-        dev.append(time, { check: 'driven touchdown horizontal speed (m/s)', value: horizontal, limit: LIMIT.horizontal, where: `${side}Foot` });
-      }
+      if (vertical > LIMIT.vertical && !leg.leapt) dev.append(time, { check: 'driven touchdown vertical speed (m/s)', value: vertical, limit: LIMIT.vertical, where: `${side}Foot` });
+      if (horizontal > LIMIT.horizontal) dev.append(time, { check: 'driven touchdown horizontal speed (m/s)', value: horizontal, limit: LIMIT.horizontal, where: `${side}Foot` });
     }
   });
   // (the shanks never closer than their thickness: legs that cross pass through each other)
@@ -338,9 +314,7 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
     pointSegmentDistance(new Vector3().lerpVectors(left[0], left[1], k), right[0], right[1]),
     pointSegmentDistance(new Vector3().lerpVectors(right[0], right[1], k), left[0], left[1]),
   ]));
-  if (gap < LIMIT.across * proportions.scale) {
-    dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * proportions.scale - gap, limit: 0, where: 'legs' });
-  }
+  if (gap < LIMIT.across * proportions.scale) dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * proportions.scale - gap, limit: 0, where: 'legs' });
   // Noted only: a driven body follows its input, not its balance.
   const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(person.proportions, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
   if (!support.length) return;
