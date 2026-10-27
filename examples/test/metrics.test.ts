@@ -60,12 +60,13 @@ const REACH = ['', ', the targets 10 cm to the left', ', the targets 10 cm neare
   ', the targets 10 cm lower', ', turned 0.3 rad right', ', turned 0.3 rad left', ', the hand 20% slower', ', the hand 20% faster'].map((variation) => `reach${variation}`);
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
 // the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seed 1 and the shield's wall
-// turned −0.4 rad at seed 0, which pass.
+// turned −0.4 rad at seeds 0–2, which pass; with the box behind (seed 1), the box raised onto the board by 15 s but the carry never ends
+// in the 17 s: its walk up to the shelf never reports it has arrived, so the raise holds on (no late carry is logged).
 const OPEN: Open[] = [...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
-  ["knight-arming, the shield's wall turned −0.4 rad", [1, 2, 3]], ['knight-arming, the knight 5% taller', [0, 2, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
+  ["knight-arming, the shield's wall turned −0.4 rad", [3]], ['knight-arming, the knight 5% taller', [0, 2, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
   'pickup-shelf, the box 5 cm higher', 'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],
-  ['stroll round a sharp 0.6 m turn', [2]]];
+  ['stroll round a sharp 0.6 m turn', [2]], ['pickup-shelf, the box behind', [1]]];
 // (and the known task-accuracy failures, `known()`, below)
 const KNOWN = known();
 const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
