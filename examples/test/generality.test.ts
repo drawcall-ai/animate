@@ -21,9 +21,6 @@ const check = cases([
   // from 0.45 m to 0.18 m and holds the ball 0.14 m short of the empty from 11 s on, its carry neither ending nor failing; its right fore
   // paw sinks below the floor from 12.18 s ("leg ground", 0.8 mm then 5 mm). Onto an empty 2.5 m ahead it puts it down)
   'a dog takes a ball, puts it down 1 m off, takes it again and puts it back',
-  // (its jaw's goal already in reach — resting 2.4 cm from a still point — it walks up 0.14 m first, borrowing the legs for 1.25 s, its
-  // jaw carried off to 9 cm; the point moving 10 cm side to side, it never ends that walk-up in 3 s, the jaw never asked: 4–31 cm off it)
-  'a dog follows a point on a moving cart with its jaw',
   // (it stands 0.31 m short of the step, its jaw still from 8 s 0.09 mm from where its carry asks it, the ball held 0.2 m off the step
   // at (−0.06, 0.26, 2.31): "late reach" at 11.17 s, given as that 0.09 mm against 0.01 m; the carry then ends true at 15.7 s, and the
   // release logs the ball put onto the step 0.198 m off it)

@@ -1,4 +1,4 @@
-import { Box3, Vector3 } from 'three';
+import { Box3, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
@@ -150,19 +150,13 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 
 /**
  * Hands to targets, taking nothing: from where the body stands if the arms reach them (the trunk turning — a shoulder up to its
- * half-width nearer — and bowing for them), else it walks up first (borrowed legs); the eyes on them (borrowed); the hands going (asked)
- * as the walk will arrive within `NEAR` s, each in the time a calm reach that far takes or at the pace asked. Met once they are there; they
- * keep there. `false` if it can stand nowhere in reach.
+ * half-width nearer — and bowing for them), else it walks up first (borrowed legs) as to put something there; the eyes on them
+ * (borrowed) till the hands are there; the hands going (asked) as the walk will arrive within `NEAR` s, each in the time a calm reach
+ * that far takes or at the pace asked, and on them from then on. Met once they are there; `false` if it can stand nowhere in reach or
+ * its walk stalls. Targets moved on `MOVED` from where it planned for them are planned for again: a following reach turns and steps
+ * after them, and takes up one that comes in reach.
  */
 export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: Pace) {
-  const inReach = aims.every(({ side, target }) => armReaches(person, target(person.frame).position, side, true));
-  const plan = inReach ? 'there' : footing(person, { grips: aims.map(({ side, target }) => ({ side, at: target(person.frame).position.clone() })), mass: 0 });
-  if (plan === 'nowhere') {
-    request.fail();
-    return;
-  }
-  let stood = plan === 'there';
-  const near = () => stood || (plan !== 'there' && plan.walk.eta <= NEAR);
   const middle = (f: Frame) => aims.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(aims.length);
   const there = (f: Frame) => aims.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   const going = aims.map(({ side, target }) => {
@@ -175,23 +169,43 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   // (what it moves arrives once the farthest hand does: the hands set off `NEAR` s before a walk arrives)
   const lasts = Math.max(...going.map((hand) => hand.lasts));
   let setOff = NaN;
+  const eta = (f: Frame) => void (request.eta = Math.max(0, setOff + lasts - f.time));
   yield* parallel<Frame>('all', function* () {
-    if (plan === 'there') return;
-    if (!(yield* walking(request, plan, Math.max(0, lasts - NEAR)))) request.fail();
-    stood = true;
+    for (;;) {
+      const planned = aims.map(({ target }) => target(person.frame).position.clone());
+      const moved = (f: Frame) => aims.some(({ target }, i) => target(f).position.distanceTo(planned[i]) > MOVED * person.scale);
+      // (out of the arms' reach, walked up to as to put what the hands hold there: their targets' middle followed as it goes)
+      const inReach = aims.every(({ side }, i) => armReaches(person, planned[i], side, true));
+      const held = aims.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
+      const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held });
+      let stalled = plan === 'nowhere', arrived = false;
+      // (the hands set off once, as the plan stands or its walk will arrive within `NEAR` s)
+      const setsOff = (f: Frame) => {
+        if (Number.isNaN(setOff) && (plan === 'there' || (plan !== 'nowhere' && plan.walk.eta <= NEAR))) setOff = f.time;
+        return !Number.isNaN(setOff);
+      };
+      if (plan !== 'nowhere') yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
+        yield* parallel<Frame>('all', action<Frame>({ until: setsOff }), function* () {
+          if (plan === 'there') return;
+          yield* parallel<Frame>('race', function* () {
+            stalled = !(yield* walking(request, plan, Math.max(0, lasts - NEAR)));
+          }, action<Frame>({ until: moved }));
+        });
+        if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = there(f)) });
+      });
+      if (stalled) request.fail();
+      if (arrived) request.met();
+      // (there, it keeps its hands there till its story moves on or the targets do)
+      if (stalled || arrived) yield* action<Frame>({ until: moved });
+    }
   }, function* () {
-    yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
-      yield* action<Frame>({ until: near });
-      const eta = (f: Frame) => void (request.eta = Math.max(0, (Number.isNaN(setOff) ? (setOff = f.time) : setOff) + lasts - f.time));
-      yield* parallel<Frame>('race', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)), action<Frame>({ update: eta, until: there }));
-    });
+    yield* action<Frame>({ until: () => !Number.isNaN(setOff) });
+    yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
   });
-  if (request.outcome === 'failed') return;
-  request.met();
-  // (there, it keeps its hands there till its story moves on)
-  yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
 }
 
 /** the hands set off once the walk will arrive within this (s) */
 const NEAR = 0.6;
-const _middle = new Vector3();
+/** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
+const MOVED = 0.1;
+const _middle = new Vector3(), _turn = new Quaternion();

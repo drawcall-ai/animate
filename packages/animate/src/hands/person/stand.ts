@@ -50,12 +50,12 @@ type Footing = 'there' | 'nowhere' | WalkUp;
 
 /**
  * whether a hand reaches `at` from where the body stands: within the arm's reach (`ARM_REACH`) of its shoulder (`side`'s, else the
- * shoulders' middle) — a `free` hand's up to a shoulder's half-width further, the trunk turning its shoulder toward it, which a hand
- * placing what it holds cannot (the load keeps the trunk square)
+ * shoulders' middle) as high as it stands upright, not as low as a bow or squat has it now — a `free` hand's up to a shoulder's
+ * half-width further, the trunk turning its shoulder toward it, which a hand placing what it holds cannot (the load keeps the trunk square)
  */
 export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
-  const proportions = person.proportions;
-  return shoulderOf(person, side).distanceTo(at) < ARM_REACH * proportions.armLength + (free ? proportions.shoulderHalfWidth : 0);
+  const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight);
+  return shoulder.distanceTo(at) < ARM_REACH * proportions.armLength + (free ? proportions.shoulderHalfWidth : 0);
 }
 
 function shoulderOf(person: Reacher, side?: Side): Vector3 {
@@ -137,8 +137,10 @@ export function footing(person: Reacher, to: Stand): Footing {
   if (clearYaw === undefined) return nowhere('approach: no stand clear of nearby low segments', 1, 0);
   face = clearYaw;
   const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
-  // (one hand reaches round to its grip as it stands; two take theirs facing them; what it holds it puts anywhere its arms reach)
-  if ((grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there';
+  // (one hand reaches round to its grip as it stands; two take theirs facing them — no further out than it would stand to them, so not
+  // past what a bow or squat reaches low down; what it holds it puts anywhere its arms reach)
+  const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
+  if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there';
   if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there';
   // (standing where it would walk to already, as near as a walk there arrives)
   if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there';

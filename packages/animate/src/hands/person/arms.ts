@@ -184,7 +184,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     // (gliding round the trunk to a goal in its way: to where it is moved clear of it, the elbow as the reach would have it there)
     const end = _end.copy(aim.position);
     const near = placed ? null : elbowPole(f, person.proportions, side, end, _spare);
-    if (near) clearWrist(f.current, person.proportions, side, end, near, _spare);
+    const held = near ? Math.max(0, clearWrist(f.current, person.proportions, side, end, near, _spare)) : 0;
     // (a goal behind the shoulder or round across the body while the body turns to it, or the hand behind its shoulder for one toward the
     // other side: the hand waits in front, going round with the trunk, and sets off — the reach's time from then — once it may)
     const turning = near && !person.locomotion.settled && !start;
@@ -212,17 +212,19 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     const bent = _bend.copy(start.elbow).applyQuaternion(chest).add(shoulder);
     const pole = options.pole === undefined ? elbowPole(f, person.proportions, side, world.position, _pole).lerp(bent, 1 - share) : live(options.pole, f);
     const glided = { ...aim, position: _glided.position, velocity: _glided.velocity };
-    const toward = { at: world.position, center: on?.current.position, clavicle: start.clavicle, share };
+    const toward = { at: world.position, center: on?.current.position, clavicle: start.clavicle, share, held };
     handStep(person, f, side, glided, { ...options, on: own, pole }, arm, toward);
   };
 }
 
-/** where a hand's shoulder and body go while it glides or waits: toward `at` (or `center`), the clavicle from `clavicle` by `share` */
+/** where a hand's shoulder and body go while it glides or waits: toward `at` (or `center`), the clavicle from `clavicle` by `share`;
+ * the trunk turning as far as it holds the hand off `at` (`held`, m: the glide's end moved round it) */
 interface Toward {
   at: Readonly<Vector3>;
   center?: Readonly<Vector3>;
   clavicle: Readonly<Quaternion>;
   share: number;
+  held?: number;
 }
 
 /** one sub-step of `reaching`, its arm's tip `arm` */
@@ -234,7 +236,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   shrug(f, proportions, side, toward?.at ?? at, toward);
   const pole = options.pole === undefined ? elbowPole(f, proportions, side, at, _pole) : live(options.pole, f);
   // (a goal in the trunk's way moved round it, the elbow as the reach would have it there; and how far the trunk holds the hand off it)
-  let held = Math.max(0, clearWrist(f.current, proportions, side, _cleared.copy(at), elbowPole(f, proportions, side, at, _spare), _spare));
+  let held = Math.max(toward?.held ?? 0, clearWrist(f.current, proportions, side, _cleared.copy(at), elbowPole(f, proportions, side, at, _spare), _spare));
   if (held > 0) {
     const shift = _cleared.sub(at);
     const on = options.on;

@@ -106,9 +106,10 @@ const _v = new Vector3(), _t = new Vector3();
 const dipping = (distance: number) => distance / DIP.speed + DIP.speed / DIP.accel;
 
 /**
- * A creature walking up (borrowed legs) to stand with `point` in `hand`'s reach, its eyes on it on the way (borrowed) if it has eyes, what
- * it moves arriving as the hand then gets there (at most its chain's reach, at a calm dip's pace): the hand's chain and the stoop it
- * reaches with. From nowhere it could stand (a problem in the dev log), or with a walk that stalls, none: the request failed.
+ * A creature walking up (borrowed legs) to stand with `point` in `hand`'s reach, unless it is in reach already, its eyes on it on the way
+ * (borrowed) if it has eyes, what it moves arriving as the hand then gets there (at most its chain's reach, at a calm dip's pace): the
+ * hand's chain and the stoop it reaches with. From nowhere it could stand (a problem in the dev log), or with a walk that stalls, none:
+ * the request failed.
  */
 function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
@@ -120,6 +121,7 @@ function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Fra
     request.fail();
     return null;
   }
+  if (base.distanceTo(at) <= out) return { chain, bones, stoop };
   // (it stands as far ahead of the root as puts the point in reach of the chain's base as it stands now)
   const off = _v.subVectors(base, self.pose.position(0)).dot(forwardOf(self.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
   const after = dipping(out), walk = new Walk(self, { to: point, within: off });
