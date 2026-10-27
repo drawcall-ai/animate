@@ -45,8 +45,9 @@ it('lists each scenario once', () => {
 //   (the helm's bounds kept small to put it on at all: knight/gear.ts), and the shield 2.3–4.7 cm into the right hand at the lance;
 //   further left, its straight steps 5.7 % unequal (max 5 %);
 // - the stroll 15% faster: the arm lags 0.10 of the stride (max 0.08), straight and on the bend;
-// - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12); further off, the head lags
-//   its course by 5 cm.
+// - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12) as the headset leans the
+//   chest 20–23° sideways, the arm kept clear of the thigh beside it (the bound is an upright stance's); further off, the head lags its
+//   course by 5 cm.
 const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stand, wall and rack 15 cm further right',
   ', the stand, wall and rack 15 cm further on', ', the stand, wall and rack 15 cm nearer', ', the gear 10 cm higher', ', the gear 10 cm lower',
   ', the knight 5% taller', ', the knight 5% shorter', ', 20% quicker', ', 20% slower', ', the stand, wall and rack on the other sides',
