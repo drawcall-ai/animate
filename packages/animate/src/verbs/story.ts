@@ -5,6 +5,7 @@ import type { Problem } from '../kernel/dev';
 import type { Staging } from '../kernel/requests';
 import type { Self } from '../body/runtime';
 
+// (to be proposed upstream to @pmndrs/timeline: its `parallel` asks its timelines for `void`, which a verb's outcome is not)
 declare module '@pmndrs/timeline' {
   /**
    * `parallel` runs verbs as they are: their outcome is what a `yield*` of one returns, and `parallel` discards what its timelines
@@ -22,17 +23,16 @@ export type Verb = Generator<TimelineYield<unknown>, boolean, unknown>;
 /**
  * A verb's request on `body`, filed when the story reaches it and kept until it ends (its `finally` runs on a race's cancel too): ends
  * `true` once its staging has met its goal — or, given `until`, once that holds, whatever the goal — and `false` once it can never meet
- * it. Each frame the story steps it renews the request. An aimer (it never meets a goal of its own) asked without `until` in a sequence
- * never ends, and what follows it never runs: development says so.
+ * it. Each frame the story steps it renews the request. An aimer (it never meets a goal of its own) never ends without `until`. With
+ * development on, the request is labelled by where the story asked for it (`file:line`, as the engine's stack shows it; a bundle's own
+ * frames are not told apart from the library's).
  */
 export function verb(body: Body, name: string, staging: Staging, until?: Until, aimer = false): Verb {
-  return run(selfOf(body), name, siteOf(new Error().stack), staging, until, aimer);
+  const self = selfOf(body);
+  return run(self, name, self.frame.dev ? siteOf(new Error().stack) : '', staging, until, aimer);
 }
 
 function* run(self: Self, name: string, site: string, staging: Staging, until: Until | undefined, aimer: boolean): Verb {
-  if (aimer && until === undefined && self.frame.dev && delegated(new Error().stack)) {
-    self.frame.dev.append(self.frame.time, { check: `${name} without until in a sequence: it never ends, and what follows it never runs`, value: 1, limit: 0, where: site });
-  }
   const request = self.file(name, site, staging, aimer);
   const ends = endsOf(until);
   let met = false;
@@ -71,16 +71,16 @@ export function* wait(until: Until): Generator<TimelineYield<unknown>, true, unk
 }
 
 /**
- * A scene's own expectation, checked every frame the story steps it, never ending (run it beside the story in a `parallel`): a problem it
- * returns goes into the log of the body it names (with development on), its check prefixed by `label`.
+ * A scene's own expectation of `body`, checked every frame the story steps it, never ending (run it beside the story in a `parallel`):
+ * a problem it returns goes into the body's log, its check prefixed by `label`. With development off it is not checked at all.
  */
-export function* watch(label: string, check: () => (Problem & { body: Body }) | null): Generator<TimelineYield<unknown>, never, unknown> {
+export function* watch(body: Body, label: string, check: () => Problem | null): Generator<TimelineYield<unknown>, never, unknown> {
+  const dev = selfOf(body).frame.dev;
   yield* action({
     update: () => {
-      const found = check();
-      if (!found) return;
-      const { body, ...problem } = found, self = selfOf(body);
-      self.frame.dev?.append(self.frame.time, { ...problem, check: `${label}: ${problem.check}` });
+      const found = dev && check();
+      if (!dev || !found) return;
+      dev.append(selfOf(body).frame.time, { ...found, check: `${label}: ${found.check}` });
     },
   });
   throw new Error('watch: a watch never ends');
@@ -101,9 +101,3 @@ function siteOf(stack: string | undefined): string {
   return '';
 }
 
-/** whether the generator whose first run took `stack` was delegated to by another (`yield*` in a sequence), not run by a runner of its own */
-function delegated(stack: string | undefined): boolean {
-  const lines = (stack ?? '').split('\n');
-  // ([0] the message, [1] this generator, [2] its `.next`, [3] what resumed it: a delegating generator has its own `.next` below it)
-  return /\.next \(<anonymous>\)/.test(lines[4] ?? '');
-}

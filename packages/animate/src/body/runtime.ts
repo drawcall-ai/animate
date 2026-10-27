@@ -81,7 +81,7 @@ export class Self implements Holder {
   readonly holding: Record<string, Hold | null>;
   readonly drive?: (time: number) => Root;
   readonly life: Temperament;
-  /** the bodies it keeps clear of: those it has dealt with, either way, and those it was told to avoid */
+  /** the bodies it keeps clear of: those it has dealt with (`meet`), either way, and those it was told to avoid */
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
@@ -187,16 +187,19 @@ export class Self implements Holder {
    */
   poseFor(reader: Resolving): ReadonlyPose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
-    if (reader instanceof Self) {
-      this.near.add(reader);
-      reader.near.add(this);
-    }
     return this.updates > reader.updates ? this.before[0] : this.frame.prev;
   }
 
   /** its final poses as `reader` reads them (`poseFor`): the last and the one before */
   posesFor(reader: Resolving): readonly [ReadonlyPose, ReadonlyPose] {
     return this.updates > reader.updates ? [this.before[0], this.before[1]] : [this.frame.prev, this.frame.prev2];
+  }
+
+  /** it deals with the body `other` is (a target on it, a thing in its hands): each keeps clear of the other from now on */
+  meet(other: Holder): void {
+    if (!(other instanceof Self) || other === this) return;
+    this.near.add(other);
+    other.near.add(this);
   }
 
   /** where it moves `node`, as `reader` reads it (`poseFor`): its own this sub-step; another's as it was before its update this frame */

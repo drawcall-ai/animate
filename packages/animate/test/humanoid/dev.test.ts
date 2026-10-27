@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { lookAt, wait, watch } from '../../src/index';
+import { lookAt, watch } from '../../src/index';
 import { selfOf } from '../../src/body/body';
 import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
@@ -20,7 +20,7 @@ it('checks a planted foot in the final pose after a later writer moved it, namin
 it.each([false, true])('logs what a scene watches into the body it names, only with dev on (%s)', (dev) => {
   const body = person({ dev });
   play(function* () {
-    yield* watch('scene', () => ({ body, check: 'too far', value: body.position.z, limit: -1, where: 'root' }));
+    yield* watch(body, 'scene', () => ({ check: 'too far', value: body.position.z, limit: -1, where: 'root' }));
   }, [body], 3 * dt);
   const watched = body.log.filter((entry) => entry.check === 'scene: too far');
   expect(watched.length).toBe(dev ? 3 : 0);
@@ -74,14 +74,3 @@ it('says when a request goes unrenewed for a second: its story stopped stepping'
   expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/not renewed/), where: expect.stringMatching(/^lookAt/) }));
 });
 
-it('says when an aimer without until stands in a sequence: what follows it never runs', () => {
-  const body = person({ dev: true });
-  let after = false;
-  play(function* () {
-    yield* lookAt(body, new Vector3(1, 1.5, 2));
-    after = true;
-    yield* wait(1);
-  }, [body], 0.5);
-  expect(after).toBe(false);
-  expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/lookAt without until in a sequence/), where: expect.stringMatching(/dev\.test\.ts:\d+/) }));
-});

@@ -30,7 +30,8 @@ describe('requests', () => {
   });
 
   it('the newest asked request takes a part, and the one it overrode takes it back when it ends', () => {
-    const body = person();
+    // (development on: each request labelled by where its story asked for it)
+    const body = person({ dev: true });
     const looks: string[] = [];
     let done = false;
     play(function* () {
@@ -114,23 +115,24 @@ describe('development', () => {
   it('a watch puts what it finds into the log of the body it names, under its label', () => {
     const body = person({ dev: true });
     play(function* () {
-      yield* parallel('race', wait(0.1), watch('stays home', () => ({ body, check: 'away (m)', value: 1, limit: 0, where: 'hips' })));
+      yield* parallel('race', wait(0.1), watch(body, 'stays home', () => ({ check: 'away (m)', value: 1, limit: 0, where: 'hips' })));
     }, [body], 0.2);
     expect(body.log[0]).toMatchObject({ check: 'stays home: away (m)', where: 'hips' });
+    // (with development off, not even checked)
+    const quiet = person();
+    let checked = false;
+    play(function* () {
+      yield* parallel('race', wait(0.1), watch(quiet, 'stays home', () => (checked = true, null)));
+    }, [quiet], 0.2);
+    expect(checked).toBe(false);
   });
 
-  it('says when an aimer without until stands in a sequence, and when a story stops stepping its verbs', () => {
-    const body = person({ dev: true });
-    play(function* () {
-      yield* lookAt(body, new Vector3(0, 1.6, 2));
-      yield* wait(1);
-    }, [body], 0.5);
-    expect(body.log.map(({ check }) => check)).toEqual(['lookAt without until in a sequence: it never ends, and what follows it never runs']);
+  it('says when a story stops stepping its verbs', () => {
     // (a story stepped once, then never again: its request goes stale)
-    const other = person({ dev: true });
-    const step = runTimeline(function* () { yield* lookAt(other, new Vector3(0, 1.6, 2), { until: 5 }); });
+    const body = person({ dev: true });
+    const step = runTimeline(function* () { yield* lookAt(body, new Vector3(0, 1.6, 2), { until: 5 }); });
     step(undefined, dt);
-    for (let t = 0; t < 1.5; t += dt) other.update(dt);
-    expect(other.log.map(({ check }) => check)).toEqual(['request not renewed for 1 s: its story stopped stepping (s)']);
+    for (let t = 0; t < 1.5; t += dt) body.update(dt);
+    expect(body.log.map(({ check }) => check)).toEqual(['request not renewed for 1 s: its story stopped stepping (s)']);
   });
 });

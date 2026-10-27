@@ -1,5 +1,6 @@
 import { Vector3, type Object3D } from 'three';
 import { selfOf, type Body, type HandOf } from '../body/body';
+import { bodyOf } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Until, type Verb } from './story';
@@ -25,7 +26,8 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
   if (!named.length) throw new Error('grab: name a grip for a hand');
   return verb(body, 'grab', (request) => function* () {
-    const self = selfOf(body), held = Thing.of(thing);
+    const self = selfOf(body), held = Thing.of(thing), on = bodyOf(thing);
+    if (on) self.meet(on);
     for (const { grip } of named) checkScale(self.frame, held.grip(grip).node);
     yield* self.handling.take(request, held, named, options);
   }, options.until);
