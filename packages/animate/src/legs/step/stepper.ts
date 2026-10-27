@@ -8,7 +8,12 @@ import { follow } from '../../kernel/follow';
 import { clamp, forwardOf, leftOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../../kernel/math';
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
-import { AIMED, LOWEST, PASSING, SETTLE, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN, _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _pivot, _w, _x, dropOf, mod, remaining, strayed, type Body, type FootPose, type Leg, type Now, type Reading, type Steering, Steps, _over, type Timing } from './state';
+import {
+  AIMED, LOWEST, PASSING, SETTLE, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
+  _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
+  dropOf, mod, remaining, strayed, Steps,
+  type Body, type FootPose, type Leg, type Now, type Reading, type Steering, type Timing,
+} from './state';
 import { lengthOf, nominal, pace, widthAt } from './reach';
 import { landing, quintic, settle, swingOn } from './swing';
 import { cue, exclusive, inTurn, isWalking, keepTime, liftFeet, together, wants } from './cues';
