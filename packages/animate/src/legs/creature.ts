@@ -31,6 +31,8 @@ export function creature(body: Legged): Step {
   const turn = Math.min(...posers.map((poser) => poser.turn));
   const ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);
+  // (a leg that cannot hold its foot on the floor a little ahead or behind where it stands can never step: said at once, not as a stalled walk)
+  if (!(record.travel.forward > 0)) throw new Error('creature: its legs reach no step from where they stand (can each foot keep flat on the floor as its leg bends?)');
   const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone().setY(feet.ankleHeight), yaw: body.yaw }));
   const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw));
   const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));

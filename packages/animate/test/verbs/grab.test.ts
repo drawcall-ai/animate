@@ -1,6 +1,6 @@
-import { Quaternion, Vector3 } from 'three';
+import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { grab, wait } from '../../src/index';
+import { grab, release, wait } from '../../src/index';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
 import { insides, person, play, feetOf, gazeOff } from '../bodies';
@@ -193,5 +193,29 @@ describe('grab, from where it stands', () => {
     const grip = named(thing, 'right');
     expect(h.pose.position(h.hands.right).distanceTo(worldOf(grip))).toBeLessThan(0.03);
     expect(h.holding.right?.grip).toBe('right');
+  });
+
+  it('leaves a thing with no mass, or one on a body, where it is: the hand follows it', () => {
+    const body = person(), room = roomOf(body);
+    const handle = box(room, new Vector3(-0.15, 1.0, 0.4), { mass: null, solid: false, name: 'handle' });
+    const pouch = box(room, new Vector3(0, 0, 0), { mass: 0.5, solid: false, name: 'pouch' });
+    body.bones.hips.add(pouch);
+    pouch.position.set(-0.15, 0, 0.12);
+    const parents = { handle: new Set<Object3D | null>(), pouch: new Set<Object3D | null>() };
+    const held = { handle: false, pouch: false };
+    let taking: 'handle' | 'pouch' | null = 'handle';
+    play(function* () {
+      held.handle = yield* grab(body, handle, { right: 'right' });
+      release(body, handle);
+      taking = 'pouch';
+      held.pouch = yield* grab(body, pouch, { right: 'right' });
+      taking = null;
+    }, [body], 8, () => {
+      if (taking) parents[taking].add(taking === 'handle' ? handle.parent : pouch.parent);
+      return !taking;
+    });
+    expect(held).toEqual({ handle: true, pouch: true });
+    expect([...parents.handle]).toEqual([room]);
+    expect([...parents.pouch]).toEqual([body.bones.hips]);
   });
 });

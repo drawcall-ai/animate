@@ -17,13 +17,15 @@ it('checks a planted foot in the final pose after a later writer moved it, namin
   expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/planted .*slide/), where: 'leftFoot', time: dt, beat: 'test', value: expect.closeTo(0.04, 3) }));
 });
 
-it.each([false, true])('logs what a scene watches into the body it names, only with dev on (%s)', (dev) => {
+it.each([false, true])('logs what a scene watches into the body it names, under its label, only with dev on (%s)', (dev) => {
   const body = person({ dev });
+  let checked = 0;
   play(function* () {
-    yield* watch(body, 'scene', () => ({ check: 'too far', value: body.position.z, limit: -1, where: 'root' }));
+    yield* watch(body, 'scene', () => (checked++, { check: 'too far', value: body.position.z, limit: -1, where: 'root' }));
   }, [body], 3 * dt);
-  const watched = body.log.filter((entry) => entry.check === 'scene: too far');
-  expect(watched.length).toBe(dev ? 3 : 0);
+  const watched = body.log.filter((entry) => entry.check === 'scene: too far' && entry.where === 'root');
+  // (with development off, not even checked)
+  expect([watched.length, checked]).toEqual(dev ? [3, 3] : [0, 0]);
 });
 
 it('catches a later joint writer and a snap from final rotations', () => {

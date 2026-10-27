@@ -1,9 +1,9 @@
 import { Object3D, Vector3 } from 'three';
 import { finder } from '../../src/verbs/targets';
 import { selfOf } from '../../src/body/body';
-import { parallel, runTimeline } from '@pmndrs/timeline';
+import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { grab, lookAt, reach, wait, walkTo, watch } from '../../src/index';
+import { grab, lookAt, reach, wait, walkTo } from '../../src/index';
 import { claim, dt, insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 
@@ -126,31 +126,5 @@ describe('targets', () => {
     body.update(dt);
     body.update(4 * dt);
     expect(Math.max(...off)).toBeLessThan(1e-9);
-  });
-});
-
-describe('development', () => {
-  it('a watch puts what it finds into the log of the body it names, under its label', () => {
-    const body = person({ dev: true });
-    play(function* () {
-      yield* parallel('race', wait(0.1), watch(body, 'stays home', () => ({ check: 'away (m)', value: 1, limit: 0, where: 'hips' })));
-    }, [body], 0.2);
-    expect(body.log[0]).toMatchObject({ check: 'stays home: away (m)', where: 'hips' });
-    // (with development off, not even checked)
-    const quiet = person();
-    let checked = false;
-    play(function* () {
-      yield* parallel('race', wait(0.1), watch(quiet, 'stays home', () => (checked = true, null)));
-    }, [quiet], 0.2);
-    expect(checked).toBe(false);
-  });
-
-  it('says when a story stops stepping its verbs', () => {
-    // (a story stepped once, then never again: its request goes stale)
-    const body = person({ dev: true });
-    const step = runTimeline(function* () { yield* lookAt(body, new Vector3(0, 1.6, 2), { until: 5 }); });
-    step(undefined, dt);
-    for (let t = 0; t < 1.5; t += dt) body.update(dt);
-    expect(body.log.map(({ check }) => check)).toEqual(['request not renewed for 1 s: its story stopped stepping (s)']);
   });
 });

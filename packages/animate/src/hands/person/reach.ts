@@ -17,6 +17,10 @@ import { LOAD_RESERVE } from './clearance';
 
 // The hands to their grips: each in a reach's time, the two not each other's mirror image.
 
+/** Tuned: a staging point outside a thing that the arm falls short of (a load capping the bow) is left this long (s) after its time is up,
+ * the hand closing on its grip from as near as it got */
+const STAGING = 0.4;
+
 /** A hand's hold to take: the hand, the thing, the empty it takes it by and where the hand goes on it (in the thing's frame). */
 export interface Taking {
   side: Side;
@@ -73,7 +77,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const seconds = reachTime(distance / person.scale, seedOf(take.grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower) / person.tempo;
     return { ...take, points, lengths, distance, route, delay, seconds };
   });
-  const arrived = until((f) => plan.every((hand) => reached(f, person.hands[hand.side], { position: hand.points[hand.points.length - 1] }, person.track(hand.thing.object))));
+  const staged = (f: Frame) => plan.every((hand) => reached(f, person.hands[hand.side], { position: hand.points[hand.points.length - 1] }, person.track(hand.thing.object)));
   const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
   // (when the hands will be there: at a pace asked, as long as that pace takes the farthest)
   const lasts = (hand: (typeof plan)[number]) => motion ? hand.distance / motion.speed + motion.speed / (motion.accel ?? CALM.accel) : Math.max(hand.delay, finish - hand.seconds) + hand.seconds;
@@ -88,7 +92,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
       // (on the way round, already turning as it will hold it)
       const goal = hand.route.length ? { ...hand.goal, position } : hand.goal;
       const ready = hand.route.length
-        ? i === hand.points.length - 1 ? arrived : until((f) => f.time >= began + seconds + after)
+        ? until((f) => (i === hand.points.length - 1 && staged(f)) || f.time >= began + seconds + after + (i === hand.points.length - 1 ? STAGING : 0))
         : until(there);
       const on = person.track(hand.thing.object);
       // (at a speed asked, the hand goes there at that pace, braking in; else in the time a calm reach that far takes)
