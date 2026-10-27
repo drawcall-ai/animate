@@ -157,14 +157,13 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
       f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
     life.update(dt, life.quiet(go, poise, person), activity, poise.steady);
-    // (let down, bowed and twisted at a squat's pace — or twisted at the rate asked, the trunk's joints pacing it within `TURN`: an aim
-    // tracks a turning look)
+    // (lowered and bowed at a squat's pace, twisted at the asked rate; tiptoe waits for settled feet so landing cannot drop the pelvis)
     const twisting = poise.twistRate * dt;
     const twist = twisting > 0
       ? asked.twist[1] + clamp(poise.twist - asked.twist[1], -twisting, twisting)
       : follow(asked.twist[0], asked.twist[1], poise.twist, BOW, dt);
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
-    const requested = { lower: followed(asked.lower, poise.lower, LOWER, dt), bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt), twist };
+    const requested = { lower: followed(asked.lower, poise.lower < 0 && !stepper.settled ? 0 : poise.lower, LOWER, dt), bow: followed(asked.bow, Math.min(poise.bow, poise.bowLimit), BOW, dt), twist };
     const swing = stepper.legs.find((leg) => leg.swing)?.swing;
     // (the stride's phase pulled into step with the feet's, never jumping as a foot lifts; running, the stance leg compresses toward
     // mid-stance, as the stepper lets the pelvis down)

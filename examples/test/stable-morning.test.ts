@@ -54,7 +54,7 @@ const test = cases([
   // the 378°/s its 94° shift allows.
   `turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back`,
   // At other life seeds, its right hand going for the knot behind its right shoulder (facing the horse after checking the fit) passes
-  // its forearm into its trunk: 4.7 cm at 12.5 s (seed 3), 3.1 cm at 12.7 s (seed 2, its start varied #2).
+  // its forearm into its trunk: 2.0 cm at 12.63 s (seed 3), 3.1 cm at 12.7 s (seed 2, varied #2).
   ['leads upright with the near hand forward, slack outside, and halts beyond the gate', [3]],
   ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #0', [3]],
   ['takes the slack across into its left hand in front of the hip, the 2.4 m rope keeping its length #2', [2]],

@@ -12,26 +12,25 @@ import { cases } from '../../packages/animate/test/open';
 // - stable-morning: the soldier's saddle 4.9 cm off its carry's end at 7.35 s, the outlier's 5.1 cm at 11.8 s and its right hand 2.1 cm
 //   into the trunk at 2.2 s; neither finishes;
 // - pickup-shelf: the soldier's left forearm 10.8 cm into the trunk at 3.3 s, its hands 9–10 cm short of the box at 6.65 s, its feet
-//   sliding up to 1.45 cm a frame while planted; unfinished; the outlier still fails at all seeds 0–3 with the same hip-rate defect:
-//   2810–3040 °/s (limit 2000) at 9.13–9.97 s, leg acceleration up to 335 000 °/s² and planted feet sliding 2.9–4.6 mm a frame.
-//   Also its released right forearm 1.1–1.2 cm into the trunk at 10.55–11.35 s (seeds 0–2), and crossed legs by 9.8 mm (seed 3);
+//   sliding up to 1.45 cm a frame while planted; unfinished. The outlier's hip rate drops from 2810–3058 to 573–574 °/s (seeds 0, 3); its
+//   released right forearm still enters the trunk by 1.4 cm (seed 3).
 // - reach: the soldier's first target 0.45 m over its shoulders on tiptoe (limit 0.44), and its floor target 0.47–0.48 m below its
 //   shoulders lowered and bowed (limit 0.44) at 6.4–8.1 s, its planted feet sliding up to 2 cm a frame as its hand follows that point
 //   down (6.5–8.4 s), and a leg at 271 000 °/s² at 14.4 s;
-// - vr: the side-step's end with the XCoM 11.4 cm (the soldier, seeds 0 and 1) and 19.9 cm (the outlier, seed 0) outside the support at
-//   12.8–12.9 s, the body leaning after the head and controllers 0.5 m out to its side on its trailing foot (the known unfinished
-//   side-step: the body turns to walk rather than strafe);
+// - vr: the side-step's end with the XCoM over 10 cm (the soldier, seeds 0–1, at 13.17–13.18 s for seed 0) and 19.9 cm
+//   (the outlier, seed 0, at 12.8–12.9 s) outside support, the body leaning after the head and controllers 0.5 m out to its side on its
+//   trailing foot (the known unfinished side-step: the body turns to walk rather than strafe);
 // - knight-arming: the soldier's left leg at 5180 °/s and 449 000 °/s² from 1.15 s, its feet sliding 1.1 cm a frame, the belt's ends
 //   put 4.1 and 5.6 cm off their places at 9.5 s; the outlier's hand 3.9 cm short of the buckle at 4.05 s and the helm's carry
 //   7.9 mm off at 63 s, unfinished;
 // - lift-heavy: the soldier's hands 11–12 cm short of the box at 4.05 s and its feet sliding up to 2.4 cm a frame, unfinished; the
 //   outlier's hands 0.39 m short at 4.05 s;
 // - stroll and look-around on the outlier: its planted right foot slides 5.2 mm a frame at 12.8 s; its left upper arm 1.06 cm into
-//   the trunk at 15.5 s;
-// - look-around on the soldier (seed 3): a turning step lands heel first at 8.43 s with the hip already past it, and the planted foot
-//   rolls from its strike onto its ball in two sub-steps to stay in reach (the hip at 3000 °/s, the ball sliding 3 mm).
+//   the trunk at 15.5 s (at seed 1, its left upper arm enters the trunk at 14.95 s);
+// - look-around on the soldier (seed 3): left-leg speed and acceleration and planted left-foot slide exceed their bounds at 8.45 s.
 const test = cases([
-  ...['shooter', 'stable-morning', 'pickup-shelf', 'knight-arming', 'lift-heavy'].flatMap((id) => [`${id} on the soldier: final-pose dev checks`, `${id} on the outlier: final-pose dev checks`]),
+  ...['shooter', 'stable-morning', 'knight-arming', 'lift-heavy'].flatMap((id) => [`${id} on the soldier: final-pose dev checks`, `${id} on the outlier: final-pose dev checks`]),
+  'pickup-shelf on the soldier: final-pose dev checks', ['pickup-shelf on the outlier: final-pose dev checks', [3]],
   'reach on the soldier: final-pose dev checks', ['vr on the soldier: final-pose dev checks', [0, 1]], ['vr on the outlier: final-pose dev checks', [0]],
   'stroll on the outlier: final-pose dev checks', ['look-around on the outlier: final-pose dev checks', [0, 1, 2]],
   ['look-around on the soldier: final-pose dev checks', [3]],
