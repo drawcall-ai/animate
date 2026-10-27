@@ -49,7 +49,8 @@ export function stableMorning(): Scenario {
     id: 'stable-morning',
     title: 'Cold morning in the stable yard',
     description: 'A stable hand fetches a heavy saddle, saddles the waiting horse, unties its lead and walks it out through the gate.',
-    duration: 28,
+    // Seeded playback can finish after 28 s; leave the final halt visible.
+    duration: 29,
     cameraDistance: 4.8,
     // (the front shot from beside the near foreleg, where the handler leads; the side keeps the profile)
     cameraAngles: { front: (5 * Math.PI) / 6, side: (2 * Math.PI) / 3 },

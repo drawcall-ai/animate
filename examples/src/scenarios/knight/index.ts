@@ -48,7 +48,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
     id: 'knight-arming',
     title: 'A knight arming',
     description:
-      'In his armoury a knight in harness buckles on his sword belt, hangs his sword on it and checks it draws, puts on his helm and buckles its strap, pulls on his gauntlets, takes his shield onto his left arm and his lance in his right hand, and walks out into the yard, looking round.',
+      'In his armoury a knight in harness buckles on his sword belt, hangs his sword on it and checks it draws, puts on his helm and buckles its strap, ' +
+      'pulls on his gauntlets, takes his shield onto his left arm and his lance in his right hand, and walks out into the yard, looking round.',
     duration: 50 + 24 / pace,
     cameraDistance: 4.2,
     stage: (cast) => {
@@ -73,7 +74,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       // the gear where it lies: the belt's ends and the gauntlets on the table (fingers away, each on the side of the hand that takes
       // it), the sword sheathed in its scabbard leaning on the table's edge, the helm on its stand (its face away from him), the shield
       // on its peg (its back to the room), the lance upright in its rack
-      const gear = { buckle: beltEnd('buckle'), tongue: beltEnd('tongue'), scabbard: scabbard(), sword: sword(), helm: helm(), shield: shield(), lance: lance(), left: gauntlet('left'), right: gauntlet('right') };
+      const gear = { buckle: beltEnd('buckle'), tongue: beltEnd('tongue'), scabbard: scabbard(), sword: sword(),
+        helm: helm(), shield: shield(), lance: lance(), left: gauntlet('left'), right: gauntlet('right') };
       lay(scene, gear.buckle, new Vector3(0.25, top + 0.006, 0.66));
       lay(scene, gear.tongue, new Vector3(-0.2, top + 0.004, 0.66));
       lay(scene, gear.left, new Vector3(-0.45, top + 0.03, 0.68), -Math.PI / 2);
@@ -96,7 +98,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       const places = {
         // the belt's ends lifted out before him, round the hips (the strap behind them) and drawn round to the belly, buckled there
         buckleRound: [at(before, 'buckle out', 0.3, HIPS + 0.14, 0.34), at(before, 'buckle round', 0.26, HIPS + 0.07, -0.05), at(before, 'buckle before', 0.17, HIPS + 0.06, 0.22)],
-        tongueRound: [at(before, 'tongue out', -0.3, HIPS + 0.14, 0.34), at(before, 'tongue round', -0.26, HIPS + 0.07, -0.05), at(before, 'tongue before', -0.17, HIPS + 0.06, 0.22), at(hips, 'tongue through', 0.01, 0.07, 0.175)],
+        tongueRound: [at(before, 'tongue out', -0.3, HIPS + 0.14, 0.34), at(before, 'tongue round', -0.26, HIPS + 0.07, -0.05),
+          at(before, 'tongue before', -0.17, HIPS + 0.06, 0.22), at(hips, 'tongue through', 0.01, 0.07, 0.175)],
         belt: at(before, 'the belt before him', 0, HIPS, 0.45),
         buckled: at(hips, 'buckled', 0.035, 0.07, 0.165),
         tongued: at(hips, 'tongued', -0.05, 0.07, 0.16),
@@ -107,7 +110,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
         presented: at(before, 'presented', 0.2, HIPS + 0.06, 0.22, new Euler(1.0, 0, 0.1, 'YXZ')),
         // the helm before his face (a look into it), raised over his head and lowered onto it, round the skull; the eyes ahead and down
         faced: at(before, 'helm before the face', 0, 1.68, 0.3),
-        raised: at(before, 'helm raised', 0, 1.96, 0.26),
+        // The grips sit another 16 cm forward: lift overhead within a short arm's reach.
+        raised: at(before, 'helm raised', 0, 1.96, 0.16),
         helmed: at(knight.bones.head, 'helmed', 0, 0.15, 0.02),
         bowed: at(before, 'bowed', 0, HIPS + 0.15, 1.6),
         level: at(before, 'level', 0, 1.6, 3),
@@ -228,7 +232,8 @@ function seat(furniture: Object3D, name: string, position: Vector3, out: Vector3
 /** the table */
 function armoury(scene: Group, top: number): void {
   box(scene, 'table top', new Vector3(TABLE.width, 0.04, TABLE.depth), new Vector3(0, top - 0.02, TABLE.z));
-  for (const x of [-1, 1]) for (const z of [-1, 1]) box(scene, 'table leg', new Vector3(0.05, top - 0.04, 0.05), new Vector3(x * (TABLE.width / 2 - 0.05), (top - 0.04) / 2, TABLE.z + z * (TABLE.depth / 2 - 0.05)));
+  for (const x of [-1, 1]) for (const z of [-1, 1])
+    box(scene, 'table leg', new Vector3(0.05, top - 0.04, 0.05), new Vector3(x * (TABLE.width / 2 - 0.05), (top - 0.04) / 2, TABLE.z + z * (TABLE.depth / 2 - 0.05)));
 }
 
 /** the helm's stand, the shield's wall and its peg, the lance's rack (each in its own frame: left +X, up +Y, away +Z of one facing it) */

@@ -76,18 +76,22 @@ export function hanging(person: Reacher): Step {
       f.current.setLocal(limb[2], IDENTITY);
       keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, { ...NUDGED, swivel: 0 });
       for (const bone of limb) set(f, goals, bone, f.current.local(bone).clone());
+      // A hand returning from a task above the hips must stay clear as its braked joints descend with the turning trunk.
+      if (person.holding[SIDES[1 - s]] || f.current.position(limb[2]).y > hips.y) {
+        keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, NUDGED);
+      }
     });
   };
 }
 
 /** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh, judged facing `yaw` (default: the pelvis's). */
-export function clearArm(person: Reacher, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0))): Vector3 {
+export function clearArm(person: Reacher, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0)), obstacles: readonly Thing[] = person.worn): Vector3 {
   const sign = side === 'left' ? 1 : -1, hips = f.current.position(0);
   const inverse = _r.setFromAxisAngle(Y, -yaw);
   const local = _rest.subVectors(at, hips).applyQuaternion(inverse);
   const pad = CLEAR * person.proportions.height;
   let out = sign * local.x;
-  for (const thing of person.worn) {
+  for (const thing of obstacles) {
     if (f.current.skeleton.chain(`${side}Arm`).includes(hangsFrom(person, thing.object))) continue;
     const placed = person.track(thing.object).at(f.time).current;
     const position = _d.subVectors(placed.position, hips).applyQuaternion(inverse);
@@ -153,6 +157,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       waiting -= f.dt;
       kept ??= ARM.map((b) => [INDEX[`${side}${b}`], f.prev.local(INDEX[`${side}${b}`]).clone()]);
       for (const [b, q] of kept) set(f, joints, b, q);
+      keepArmOut(f, person.proportions, side, { position: f.current.position(bone).clone() }, NUDGED);
       return;
     }
     // (the hand gliding to the target from where it is and how it moves: on what the body itself wears or holds, in its frame — the body
@@ -248,7 +253,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     const mass = options.on && options.thing ? options.thing.mass : 0, carried = target.carriedBy === person || options.on?.carriedBy === person;
     bringShoulder(person, f, side, toward?.at ?? at, toward?.share ?? 1, mass, carried);
     const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
-    twistToward(person, f.current, goal, toward?.share ?? 1, held);
+    twistToward(person, f.current, goal, toward?.share ?? 1, held, carried);
   }
 }
 

@@ -2,7 +2,7 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Self } from '../body/runtime';
 import type { Goal } from '../kernel/goal';
-import { bodyOf } from '../things/hold';
+import { bodyOf, hangsFrom } from '../things/hold';
 import { resolve } from '../things/resolve';
 import { Carrier } from '../kernel/carrier';
 
@@ -37,7 +37,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     const at = typeof target === 'function' ? target(f.time) : target;
     if (at instanceof Vector3) {
       if (![at.x, at.y, at.z].every(Number.isFinite)) throw new Error(`a target that is no point: (${at.x}, ${at.y}, ${at.z})`);
-      return Object.assign(found, { position: found.position.copy(at), quaternion: undefined, velocity: undefined, object: undefined });
+      return Object.assign(found, { position: found.position.copy(at), quaternion: undefined, velocity: undefined, object: undefined, carriedBy: undefined });
     }
     const on = bodyOf(at);
     if (on) self.meet(on);
@@ -46,6 +46,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     found.quaternion = turn.copy(frame.current.quaternion);
     found.velocity = frame.velocity(velocity);
     found.object = at;
+    found.carriedBy = on && hangsFrom(on, at) >= 0 ? on : undefined;
     return found;
   };
 }

@@ -67,6 +67,7 @@ export class Person extends Self {
       keep: (f, hand) => {
         const side = sideOf(hand), hold = this.holding[side];
         if (!hold) return;
+        if (hold.keep) return hold.keep(f);
         const thing = hold.thing;
         // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
         // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)

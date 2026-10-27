@@ -183,6 +183,14 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     const tilt = rotation.follow(tilts[0], tilts[1], square, TURN, dt, new Quaternion());
     [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
     stepper.turn = yawOf(tilt) * upright.run;
+    // Rotate the hip offsets below the pelvis with its bow; lateral spacing and gait yaw remain the stepper's.
+    feet.legs.forEach((leg, i) => {
+      const hip = proportions.offsets[`${SIDES[i]}UpperLeg`].clone().setX(0).applyQuaternion(tilt)
+        .applyAxisAngle(UP, -stepper.turn);
+      leg.hip = (proportions.offsets[`${SIDES[i]}UpperLeg`].x + hip.x) * leg.sign;
+      leg.up = hip.y;
+      leg.ahead = hip.z;
+    });
     // (the stepper given the feet's middle — a centre of mass's `behind` it, the hips that far ahead of it again; let down as asked or
     // as the root crouches it, the feet staying put; balance read off the body as it last stood, as the checks read it)
     const behind = root.centre ? feetBehind(stepper, s) : ZERO, forecast = root.forecast;

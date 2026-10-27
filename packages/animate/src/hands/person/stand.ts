@@ -64,6 +64,7 @@ function shoulderOf(person: Reacher, side?: Side): Vector3 {
 export function footing(person: Reacher, to: Stand): Footing {
   const f0 = person.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
+  if (start?.carriedBy === person) return 'there';
   const grips: { side?: Side; at: Vector3 }[] = [];
   if (!point) grips.push(...to.grips.map((grip) => ({ side: grip.side, at: grip.at.clone() })));
   else if (start) {

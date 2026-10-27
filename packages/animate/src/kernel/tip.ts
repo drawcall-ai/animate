@@ -114,7 +114,7 @@ export class ChainTip {
     this.nudged.clear();
     if (options.clear && turnAccel !== undefined) {
       const braked = bones.map((b) => f.current.local(b).clone());
-      options.clear(f, { position: _braked.copy(f.current.position(tip)), quaternion: _turned.copy(f.current.rotation(tip)) }, true);
+      options.clear(f, { position: _braked.copy(f.current.position(tip)), quaternion: quaternion && _turned.copy(f.current.rotation(tip)) }, true);
       // (a joint nudged was put there, not swung: the brakes read it as going on as they had it go — the nudge read as its motion,
       // they would carry it on at the nudge's speed, far beyond what they stop soon, flinging the limb on)
       bones.forEach((b, k) => {

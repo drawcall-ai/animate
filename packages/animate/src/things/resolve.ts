@@ -27,6 +27,7 @@ export interface Hold {
   thing: Thing;
   grip: string;
   goal: Goal;
+  keep?: (f: Frame) => void;
 }
 
 /** A body as the things it holds see it: its object and moving bones' nodes, its hands' tip bones and holds, what it moves and tracks. */

@@ -65,6 +65,21 @@ describe('course', () => {
     expect(path.find((p) => Math.abs(p.t - 1.4) < STEP / 2)?.position.x).toBeCloseTo(0.1, 2);
   });
 
+  it('keeps insertion on a moving and turning approach axis', () => {
+    const on = (f: Frame) => ({ position: new Vector3(f.time, 0, 0),
+      quaternion: new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), f.time / 2) });
+    const thing = { current: { position: new Vector3(0, 1, 0), quaternion: new Quaternion() } };
+    const path = course(thing, [[1, on]], { on }), at = frames();
+    for (let k = 0; k <= 60; k++) {
+      const f = at(k * STEP), anchor = on(f), goal = path.to(f);
+      const local = goal.position.sub(anchor.position).applyQuaternion(anchor.quaternion.clone().invert());
+      expect(Math.hypot(local.x, local.z)).toBeLessThan(1e-9);
+      expect(local.y).toBeGreaterThanOrEqual(-1e-9);
+      expect(local.y).toBeLessThanOrEqual(1 + 1e-9);
+    }
+    expect(path.to(at(1)).position.distanceTo(on(at(1)).position)).toBeLessThan(1e-9);
+  });
+
   it('reads a live endpoint throughout its travel and after it is over', () => {
     const thing = { current: { position: new Vector3(), quaternion: new Quaternion() } };
     let reads = 0;

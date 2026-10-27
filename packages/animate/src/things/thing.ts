@@ -11,6 +11,7 @@ export class Thing {
   readonly mass: number;
   readonly centre: Vector3;
   readonly bounds: Box3;
+  readonly parts: readonly Box3[];
   /** lifted by a body since it last rested in the room */
   lifted = false;
   /** the parent it was lifted from, and where it was then (world): where a release with nowhere else to go puts it */
@@ -28,7 +29,8 @@ export class Thing {
     }
     this.mass = mass ?? 0;
     this.centre = vectorOf(centre, `"${object.name}" userData.centre`);
-    this.bounds = boundsOf(object, this.centre);
+    this.parts = boundsOf(object, this.centre);
+    this.bounds = this.parts.reduce((box, part) => box.union(part), new Box3());
   }
 
   /** `object` as a thing (one record per object) */
@@ -89,12 +91,12 @@ export function localOf(node: Object3D, ancestor: Object3D): Placement {
 }
 
 /** a thing's own meshes in its frame, or the points of its empties and centre where it has none */
-function boundsOf(object: Object3D, centre: Vector3): Box3 {
-  const box = new Box3(), points: Vector3[] = [centre.clone()];
+function boundsOf(object: Object3D, centre: Vector3): Box3[] {
+  const boxes: Box3[] = [], points: Vector3[] = [centre.clone()];
   const add = (mesh: Mesh, matrix: Matrix4) => {
     mesh.geometry.computeBoundingBox();
     const own = mesh.geometry.boundingBox;
-    if (own) box.union(own.clone().applyMatrix4(matrix));
+    if (own && !own.isEmpty()) boxes.push(own.clone().applyMatrix4(matrix));
   };
   const visit = (node: Object3D, matrix: Matrix4) => {
     for (const child of node.children) {
@@ -108,7 +110,7 @@ function boundsOf(object: Object3D, centre: Vector3): Box3 {
   };
   if (object instanceof Mesh) add(object, new Matrix4());
   visit(object, new Matrix4());
-  return box.isEmpty() ? box.setFromPoints(points) : box;
+  return boxes.length ? boxes : [new Box3().setFromPoints(points)];
 }
 
 function vectorOf(value: unknown, what: string): Vector3 {

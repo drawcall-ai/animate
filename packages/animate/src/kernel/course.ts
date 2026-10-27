@@ -10,7 +10,7 @@ export type Waypoint = [seconds: number, to: Goal | ((f: Frame, start: Placement
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
 export interface Course {
-  to: (f: Frame) => Placement;
+  to: (f: Frame) => Placement & Goal;
   over: (f: Frame) => boolean;
 }
 
@@ -20,23 +20,37 @@ export interface Course {
  * waypoints together, `pace` times as fast as they say: it passes its placements on the way without stopping and comes to rest only
  * at the end — and where a waypoint holds still (`still`) or the way turns back on itself (by more than 135°: the hand stops to
  * reverse), it comes to rest there and sets off again. It sets off `delay` s after it is first read.
+ * With `on`, its starting placement follows that moving approach frame throughout the course.
  */
-export function course(item: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0 } = {}): Course {
+export function course(item: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0, on }: { pace?: number; delay?: number; on?: (f: Frame) => Goal } = {}): Course {
   let start = NaN;
   let runs: Run[] = [];
-  let from: Placement | undefined;
-  const moving = waypoints.some(([, to]) => typeof to === 'function');
+  let from: Placement | undefined, carriedBy: object | undefined;
+  let relative: Placement | undefined;
+  const moving = on !== undefined || waypoints.some(([, to]) => typeof to === 'function');
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  const to = (f: Frame): Placement => {
+  const to = (f: Frame): Placement & Goal => {
+    const anchor = on?.(f), turn = anchor?.quaternion ?? IDENTITY;
     if (from === undefined) {
       start = f.time;
       from = { position: item.current.position.clone(), quaternion: item.current.quaternion.clone() };
+      if (anchor) {
+        const inverse = turn.clone().invert();
+        relative = { position: from.position.clone().sub(anchor.position).applyQuaternion(inverse),
+          quaternion: inverse.multiply(from.quaternion) };
+      }
+    }
+    // An insertion starts on its moving approach, not at the world position that approach occupied at take-off.
+    if (anchor && relative) {
+      from.position.copy(relative.position).applyQuaternion(turn).add(anchor.position);
+      from.quaternion.copy(turn).multiply(relative.quaternion);
     }
     if (!runs.length || moving) {
       const stops: Placement[] = [from];
       for (const [, point] of waypoints) {
         const last = stops[stops.length - 1];
         const next = typeof point === 'function' ? point(f, from, last) : point;
+        carriedBy = next.carriedBy;
         stops.push({ position: next.position.clone(), quaternion: (next.quaternion ?? last.quaternion).clone() });
       }
       runs = runsOf(stops, waypoints.map(([seconds]) => seconds / pace));
@@ -45,7 +59,7 @@ export function course(item: { readonly current: Placement }, waypoints: readonl
     let i = 0;
     while (i < runs.length - 1 && t > runs[i].seconds) t -= runs[i++].seconds;
     const { position, quaternion } = runs[i].at(minimumJerk(t / runs[i].seconds), _at);
-    return { position: position.clone(), quaternion: quaternion.clone() };
+    return { position: position.clone(), quaternion: quaternion.clone(), carriedBy };
   };
   return { to, over: (f) => !Number.isNaN(start) && f.time - start >= delay + total };
 }
@@ -179,6 +193,6 @@ function barryGoldman(p: readonly number[][], knots: readonly number[], i: numbe
 }
 
 const [_d, _e] = [new Vector3(), new Vector3()];
-const _q = new Quaternion();
+const _q = new Quaternion(), IDENTITY = new Quaternion();
 const _at: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 

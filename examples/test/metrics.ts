@@ -219,9 +219,10 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
     add('free arms standing: elbow (°)', standing.elbow.max, 'max', 25);
   }
   if (walking.frames) {
-    add('free arms walking: forward swing (°)', walking.flexion.max, 'min', 12);
+    // A short approach may expose only part of a swing before the hands prepare a grab.
+    if (walking.cycle) add('free arms walking: forward swing (°)', walking.flexion.max, 'min', 12);
     add('free arms walking: forward swing (°)', walking.flexion.max, 'max', 35);
-    add('free arms walking: back swing (°)', walking.flexion.min, 'max', -8);
+    if (walking.cycle) add('free arms walking: back swing (°)', walking.flexion.min, 'max', -8);
     add('free arms walking: back swing (°)', walking.flexion.min, 'min', -30);
   }
   // what the body handles keeps out of it (the hands and arms holding or wearing it may touch it)

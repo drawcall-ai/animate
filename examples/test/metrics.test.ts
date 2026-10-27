@@ -29,8 +29,8 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   if (sc.id === 'pickup-shelf') options.wrist = 0.04;
   if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
   expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
-  const fails = checks(m, options).filter(failed).map((c) => `${c.what}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
-  expect(fails).toEqual([]);
+  const fails = checks(m, options).filter(failed).map((c) => `${c.what}${c.where ? ` (${c.where})` : ''}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
+  expect(fails, fails.join('\n')).toEqual([]);
 }
 
 it('lists each scenario once', () => {
@@ -38,35 +38,24 @@ it('lists each scenario once', () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
-// Open (expected to fail: each one fixed comes off the list), at life seed 0 unless seeds are given:
-// - knight-arming variations: the shield borne on the left forearm 2.6–4.3 cm into the right hand or forearm as it takes the
-//   lance (a hand routes round what it reaches for, not round what the body already holds); the helm's rim 3.4 cm into the left
-//   forearm as it is taken mirrored, 8.7–8.8 cm into the thorax taken turned half round (its grips then by the
-//   body), 6.1 cm into the head put on 20% quicker; further left, its straight steps 5.7 % unequal (max 5 %);
-//   with the gear 10 cm lower, the shield reaches 43 mm into the right forearm at 52.48 s (was 32 mm into the right hand).
-// - the stroll 15% faster: no steady strides on the bend to judge (0 of 3), and the arm lags 0.10 of the stride (max 0.08);
-// - look-around 20% faster, 10 cm nearer and turned 0.3 rad left: a free arm hangs out 12.7–13.5° (max 12) as the headset leans the
-//   chest 20–23° sideways, the arm kept clear of the thigh beside it (the bound is an upright stance's); further off, the head lags its
-//   course by 5 cm.
-const KNIGHT = ['', ', the stand, wall and rack 15 cm further left', ', the stand, wall and rack 15 cm further right',
-  ', the stand, wall and rack 15 cm further on', ', the stand, wall and rack 15 cm nearer', ', the gear 10 cm higher', ', the gear 10 cm lower',
-  ', the knight 5% taller', ', the knight 5% shorter', ', 20% quicker', ', 20% slower', ', the stand, wall and rack on the other sides',
-  ', the helm turned a quarter on its stand', ', the helm turned a quarter the other way',
-  ', the helm turned half round on its stand: walked round to take it', ', mirrored, the helm turned half round: walked round the stand clear of it',
-  ", the shield's wall turned 0.4 rad", ", the shield's wall turned −0.4 rad"].map((variation) => `knight-arming${variation}`);
-// At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
-// the trunk pitching 26.6 °/s (max 26.1, seed 2); the knight's clearance as above, but for 5% taller at seeds 0–1 and the shield's wall
-// turned −0.4 rad at seeds 0–2, which pass.
-// The 5% taller knight's deepest contact is the helm rim 14 / 13 mm into the head (seeds 0 / 1, within the 15 mm bound),
-// and the shield 34 / 24 mm into the right hand (seeds 2 / 3, still open).
-// The box 5 cm higher still passes: held-wrist error 12 mm at 10.23 s, planted foothold extension 56 mm at 8.62 s (seed 0).
-// Waiting for settled feet before tiptoe leaves higher reach's right wrist 55.46 / 56.27 mm off its course at 12.15 s (seeds 0 / 2,
-// 50 mm bound). Both pass with that change reverted; seeds 1 and 3 pass with it. Retained for the pickup slide improvement.
-const OPEN: Open[] = [...KNIGHT.filter((name) => !name.endsWith('−0.4 rad') && !name.endsWith('5% taller')),
-  ["knight-arming, the shield's wall turned −0.4 rad", [3]], ['knight-arming, the knight 5% taller', [2, 3]], 'stroll 15% faster',
-  'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
-  'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],
-  ['stroll round a sharp 0.6 m turn', [2]], ['reach, the targets 10 cm higher', [0, 2]]];
+// Expected failures still present at the listed life seeds. Finished viewer stories are guarded separately in viewer.test.ts.
+// Upstream tiptoe settlement retains the higher target's 55–56 mm wrist error (50 mm bound).
+// The upstream forward-shifted knight remains open at seed 2: helm rim 23.2 mm into the forearm (15 mm bound).
+const OPEN: Open[] = [
+  ['knight-arming, the stand, wall and rack 15 cm further on', [2]],
+  ['reach, the targets 10 cm higher', [0, 2]],
+  'stroll 15% faster',
+  'look-around, the headset 20% faster',
+  ["look-around, looking down 10 cm nearer", [0]],
+  'look-around, looking down 10 cm further off',
+  ["look-around, turned 0.3 rad left", [0]],
+  'knight-arming, the stand, wall and rack 15 cm further left',
+  'knight-arming, 20% slower',
+  'knight-arming, the helm turned a quarter on its stand',
+  'knight-arming, the helm turned half round on its stand: walked round to take it',
+  'knight-arming, mirrored, the helm turned half round: walked round the stand clear of it',
+  ["stroll round a sharp 0.6 m turn", [2]],
+];
 // (and the known task-accuracy failures, `known()`, below)
 const KNOWN = known();
 const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
