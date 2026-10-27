@@ -56,12 +56,7 @@ export function creature(body: Legged): Step {
   };
   const inertia = body.species.inertia && new Inertia(body.species.inertia);
   const legs = {
-    legs: phases,
-    height: start.y,
-    held: start.y,
-    stride: { cycle: 1, stance: 0.5 },
-    turn: { rate: 0, ahead: 0 },
-    lean: inertia,
+    legs: phases, height: start.y, held: start.y, stride: { cycle: 1, stance: 0.5 }, turn: { rate: 0, ahead: 0 }, lean: inertia,
     rest: (pitchesAsked: readonly number[]) => pitchesAsked.forEach((pitch, i) => { pitches[i] = pitch; }),
   } satisfies Striding;
   let facing = body.yaw;
@@ -111,8 +106,8 @@ export function creature(body: Legged): Step {
     posture?.prepare(f, legs, attention, body.look);
     if (carried) { carried.step(f, legs); carried.write(f); }
     // (let down and bowed as a task asks: the body lower on its legs, its front tipped down about its hind girdle — eased there and back)
-    lowering = ease(lowering, Math.max(0, Math.min(poise.lower, LOWEST * feet.length)), f.dt);
-    bowing = ease(bowing, Math.max(0, Math.min(poise.bow, poise.bowLimit, MOST_BOW)), f.dt);
+    lowering = ease(lowering, Math.max(0, Math.min(poise.lower, STOOPING.lowest * feet.length)), f.dt);
+    bowing = ease(bowing, Math.max(0, Math.min(poise.bow, poise.bowLimit, STOOPING.bow)), f.dt);
     if (lowering[0] > 1e-6 || bowing[0] > 1e-6) {
       const behind = Math.min(...feet.legs.map((leg) => leg.ahead ?? 0)), pivot = _p.set(0, 0, 0);
       const hinds = feet.legs.filter((leg) => (leg.ahead ?? 0) <= behind + 1e-6);
@@ -163,7 +158,6 @@ const LOCKING = 6;
 const UP = new Vector3(0, 1, 0);
 /** Tuned: the most a creature lets its body down (× its legs' length) and bows its front (rad), as a task asks */
 export const STOOPING = { lowest: 0.3, bow: 0.5 };
-const LOWEST = STOOPING.lowest, MOST_BOW = STOOPING.bow;
 /** Tuned (1/s): how quickly it lets itself down or bows and comes back up: critically damped */
 const EASING = 6;
 type Eased = [value: number, rate: number];

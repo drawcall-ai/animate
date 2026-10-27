@@ -27,9 +27,7 @@ export function ankleFor(proportions: Proportions, side: Side, anchor: Readonly<
 
 /** the corners of a flat foot's footprint on the floor (x, z): the heel, the toe edge's two ends */
 export function footprint(proportions: Proportions, ankle: Readonly<Vector3>, yaw: number): [number, number][] {
-  const fx = Math.sin(yaw);
-  const fz = Math.cos(yaw);
-  const w = FOOT_HALF_WIDTH * proportions.scale;
+  const fx = Math.sin(yaw), fz = Math.cos(yaw), w = FOOT_HALF_WIDTH * proportions.scale;
   return [
     [ankle.x - fx * proportions.heelBack, ankle.z - fz * proportions.heelBack],
     [ankle.x + fx * proportions.toeFront + fz * w, ankle.z + fz * proportions.toeFront - fx * w],
@@ -37,6 +35,4 @@ export function footprint(proportions: Proportions, ankle: Readonly<Vector3>, ya
   ];
 }
 
-const _pivot = new Vector3();
-const _world = new Vector3();
-const _q = new Quaternion();
+const _pivot = new Vector3(), _world = new Vector3(), _q = new Quaternion();

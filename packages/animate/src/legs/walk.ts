@@ -15,8 +15,7 @@ const CLOSE = 1;
  * counting as `turn` m) for this long (s) — longer than a creature takes to come round on an arc to a goal behind it */
 const STALL = { nearer: 0.02, turn: 0.3, seconds: 6 };
 /** about how fast the body turns (rad/s), and its minimum estimated starting pace (m/s) */
-const TURNING = 2;
-const SETTING_OFF = 0.5;
+const TURNING = 2, SETTING_OFF = 0.5;
 
 /** Where a walk goes, a sub-step at a time. */
 export interface Route {

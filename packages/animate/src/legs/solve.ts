@@ -357,13 +357,8 @@ function rangeOf(skeleton: Skeleton, bone: number, axis: Vector3): [number, numb
   return [lo, hi];
 }
 
-const _q = new Quaternion();
-const _l = new Quaternion();
-const _e = new Quaternion();
-const _v = new Vector3();
-const _p = new Vector3();
-const _r = new Float64Array(6);
-const _was = new Float64Array(16);
+const _q = new Quaternion(), _l = new Quaternion(), _e = new Quaternion(), _v = new Vector3(), _p = new Vector3();
+const _r = new Float64Array(6), _was = new Float64Array(16);
 /** the solve's scratch, shared by every leg (a solve runs to its end before another starts): sized for `MOST` coordinates */
 const MOST = 16;
 const _H = new Float64Array(MOST * MOST), _J = new Float64Array(6 * MOST), _fixed = new Uint8Array(MOST);

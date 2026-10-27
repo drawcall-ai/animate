@@ -11,10 +11,7 @@ import { type Gait } from '../../species/gait';
  * how far it crouches (0 standing … 1 a deep crouch) — a scene's — and what a planner or a walker knows more of the body over it.
  */
 export interface Steering {
-  position: Vector3;
-  velocity: Vector3;
-  yaw: number;
-  crouch?: number;
+  position: Vector3; velocity: Vector3; yaw: number; crouch?: number;
   /** where the hips are over the floor from the root, if not over it (m): swaying, sitting back or leaning over the toes from it; by
    * default the hips are the root */
   hips?: Vector3;
@@ -119,58 +116,35 @@ export type Leap = {
 
 /** The root as a sub-step reads it, and the pelvis' own rise and fall over it. */
 export interface Reading {
-  f: Frame;
-  r: Steering;
-  dt: number;
+  f: Frame; r: Steering; dt: number;
   /** its speed over the floor (m/s) and how far it runs (0 … 1) */
-  v: number;
-  run: number;
+  v: number; run: number;
   /** how fast its velocity changes (m/s²) */
   accel: Vector3;
   /** how far down the legs have it crouched (0 … 1), the hips sitting back by it (m), how far up on its toes (m) */
-  crouch: number;
-  sitting: number;
-  tiptoe: number;
+  crouch: number; sitting: number; tiptoe: number;
   /** the pelvis' rise (m) and its speed (m/s): a leap's; in the air, the time (s) left till it lands */
-  rise: number;
-  vy: number;
-  airborne: boolean;
-  air: number;
+  rise: number; vy: number; airborne: boolean; air: number;
   /** the facing it asks (rad, unwrapped near the pelvis'), its turn rate (rad/s), the turn a gait's feet step for and whether it is held back */
-  wanted: number;
-  spin: number;
-  pressed: number;
-  held: boolean;
+  wanted: number; spin: number; pressed: number; held: boolean;
 }
 
 /** A sub-step's stepping time: the cycle and its stance and swing (s), how far a stance travels (m) and a landing leads (s). */
 export interface Timing {
   /** the speed the cadence steps for (m/s), and how much of the root's motion is sideways (−1 … 1, + to the left) */
-  pacing: number;
-  across: number;
-  C: number;
-  duty: number;
-  Ts: number;
-  Tsw: number;
-  most: number;
-  lead: number;
+  pacing: number; across: number;
+  C: number; duty: number; Ts: number; Tsw: number; most: number; lead: number;
 }
 
 /** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), its standing height (m). */
 export interface Body extends Reading, Timing {
-  yaw: number;
-  width: number;
-  moving: number;
-  standing: number;
+  yaw: number; width: number; moving: number; standing: number;
   /** where the centre of mass is over the floor from the root (m) */
   over: Vector3;
 }
 
 /** A sub-step as its phases share it: the body, and the height a landing must hold the hip at (m) and how far out each foot may land so (m). */
-export interface Now extends Body {
-  holding: number;
-  reaches: number[];
-}
+export interface Now extends Body { holding: number; reaches: number[] }
 
 /** the fewest feet a gait's body leaves on the floor */
 export const STANDING = 2;
@@ -243,14 +217,7 @@ export class Steps {
   readonly legs: Leg[];
   /** the pelvis' facing (rad), how far it walks and runs (0 … 1), the gait's phase (rad), the stance's and cycle's durations (s); still
    * and squared up; off the floor (a leap's flight) */
-  yaw: number;
-  moving = 0;
-  run = 0;
-  phase = 0;
-  Ts = 1;
-  cycle = 2;
-  settled = true;
-  airborne = false;
+  yaw: number; moving = 0; run = 0; phase = 0; Ts = 1; cycle = 2; settled = true; airborne = false;
   /** the pelvis' height its planted feet alone hold it at (m): its swinging ones not holding it down — what a running body's ride is let down from */
   held = 0;
   /** how far down it is crouched (0 … 1): the root's `crouch`, eased in and out no faster than legs bend and straighten */
@@ -261,21 +228,13 @@ export class Steps {
   /** the pelvis' turn motion, its velocity the root's turn rate this sub-step */
   readonly turning = { ...TURN, velocity: 0 };
   /** each leg's one before it in the gait and its share of a cycle after it; the leg across its girdle and its share after that */
-  readonly before: number[];
-  readonly gap: number[];
-  readonly pair: number[];
-  readonly apart: number[];
+  readonly before: number[]; readonly gap: number[];
+  readonly pair: number[]; readonly apart: number[];
   /** the pelvis' last two facings (rad) */
   readonly yaws: number[];
-  asked: number | undefined;
-  stand = NaN;
-  last: number;
-  rootYaw: number;
+  asked: number | undefined; stand = NaN; last: number; rootYaw: number;
   readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
-  low = NaN;
-  most = Infinity;
-  sense = 0;
-  paused = 0;
+  low = NaN; most = Infinity; sense = 0; paused = 0;
   readonly hips = new Vector3();
   /** a gait's clock (cycles, 0 … 1): with a `gait`, each foot lifts in its turn as it passes the foot's offset */
   clock = 0;

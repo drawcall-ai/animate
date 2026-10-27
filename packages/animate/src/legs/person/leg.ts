@@ -28,9 +28,4 @@ export function kneePole(side: Side, yaw: number, facing: number, hip: Vector3, 
   return out.applyQuaternion(_arc.setFromUnitVectors(DOWN, _v.set(0, -Math.sqrt(1 - abducted * abducted), 0).addScaledVector(outward, abducted))).normalize();
 }
 
-const UP = new Vector3(0, 1, 0);
-const DOWN = new Vector3(0, -1, 0);
-const _leg = new Vector3();
-const _out = new Vector3();
-const _arc = new Quaternion();
-const _v = new Vector3();
+const UP = new Vector3(0, 1, 0), DOWN = new Vector3(0, -1, 0), _leg = new Vector3(), _out = new Vector3(), _arc = new Quaternion(), _v = new Vector3();
