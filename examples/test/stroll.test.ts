@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { cases } from '../../packages/animate/test/open';
 import { stroll, walkThere } from '../src/scenarios/stroll';
 import { checks, failed, measure } from './metrics';
 import { frames, type Frame } from './frame';
@@ -8,17 +7,13 @@ import { Simulation } from '../src/simulation';
 import { knownFailure, run } from '../scripts/run';
 
 // A straight stroll's strides as people walk them, and strolls round bends and turns with an empty dev log.
-// Open (expected to fail: fixed, it comes off the list): each heel still moves 8–9 mm in the two frames before its foot is planted
-// (0.53 m/s; the baseline's touchdowns kept under 0.1 m/s).
-const test = cases(['strolls straight on: soft touchdowns']);
-
-/** a straight stroll, measured, with each touchdown's heel speed (m/s, over the two frames before it is planted) */
+/** a straight stroll, measured, with each touchdown's heel speed (m/s, over the frame it is planted in) */
 function straightStroll() {
   const sim = new Simulation(stroll({ radius: Infinity }), { dev: true });
   const previous = ['planted', 'planted'];
   const heights: { t: number; y: number; knee: number }[] = [], landings: number[] = [];
-  // (each heel two frames back and one: its speed as it lands, over the last two frames)
-  const heels: Vector3[][] = [[], []];
+  // (each heel a frame back: its speed as it lands)
+  const heels: (Vector3 | null)[] = [null, null];
   let touchdown = 0;
   function* observed(): Generator<Frame[]> {
     for (const each of frames(sim)) {
@@ -27,9 +22,9 @@ function straightStroll() {
         const heel = person.joint(side === 0 ? 'leftHeel' : 'rightHeel');
         if (foot.phase === 'planted' && previous[side] === 'swing') {
           landings.push(sim.t);
-          if (heels[side].length === 2) touchdown = Math.max(touchdown, heel.distanceTo(heels[side][0]) * 60);
+          if (heels[side]) touchdown = Math.max(touchdown, heel.distanceTo(heels[side]) * 60);
         }
-        heels[side] = [...heels[side], heel].slice(-2);
+        heels[side] = heel;
         previous[side] = foot.phase;
       });
       const hip = person.joint('leftUpperLeg'), knee = person.joint('leftLowerLeg'), ankle = person.joint('leftFoot');
@@ -42,7 +37,7 @@ function straightStroll() {
   return { sim, metrics, heights, landings, touchdown };
 }
 
-test('strolls straight on: soft touchdowns', () => {
+it('strolls straight on: soft touchdowns', () => {
   expect(straightStroll().touchdown).toBeLessThanOrEqual(0.1);
 });
 

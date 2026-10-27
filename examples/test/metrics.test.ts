@@ -38,7 +38,6 @@ it('lists each scenario once', () => {
 });
 
 // Open (expected to fail: each one fixed comes off the list), at life seed 0 unless seeds are given:
-// - shooter: its straight walking strides carry 0.342 of the thorax's turn in the head (min 0.35);
 // - reach and its variations: the wrist lags its course by 0.12–0.26 m as the target swings round behind the body and the body steps
 //   round after it (7–12 s; 10 cm higher, 1.13 m at 2.7 s, its first target out of reach on tiptoe); turned 0.3 rad left, 6.6 cm past
 //   the reachable bound at 8.8 s; 10 cm to the left, 0.14 m off it held at 15.0 s and the eyes 0.33 s past their comfortable turn;
@@ -60,7 +59,7 @@ const REACH = ['', ', the targets 10 cm to the left', ', the targets 10 cm neare
   ', the targets 10 cm lower', ', turned 0.3 rad right', ', turned 0.3 rad left', ', the hand 20% slower', ', the hand 20% faster'].map((variation) => `reach${variation}`);
 // At other seeds: stable-morning's knee 1.8 cm into the saddle rack at 4.1 s (seed 2); the stroll round a sharp turn stopping with
 // the trunk pitching 26.6 °/s (max 26.1, seed 2); with the box 5 cm lower, the heels 0.076 of its height apart at rest (seed 3).
-const OPEN: Open[] = ['shooter', ...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad')),
+const OPEN: Open[] = [...REACH, ...KNIGHT.filter((name) => !name.endsWith('−0.4 rad')),
   ["knight-arming, the shield's wall turned −0.4 rad", [0, 1, 3]], 'stroll 15% faster', 'stroll on a 20% tighter arc',
   'pickup-shelf, the box 5 cm higher', 'look-around, the headset 20% faster', ['look-around, looking down 10 cm nearer', [0]],
   'look-around, looking down 10 cm further off', ['look-around, turned 0.3 rad left', [0]], ['stable-morning', [2]],

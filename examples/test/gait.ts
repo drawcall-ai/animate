@@ -49,7 +49,7 @@ interface Sample {
   planted: [boolean, boolean];
   /** where the feet are planted or landing [left, right] */
   feet: [Vector3, Vector3];
-  /** the script asked the eyes somewhere: the head is not left to go along with the thorax */
+  /** the script asked the eyes somewhere, or a verb has them (a grab's eyes on its grip): the head is not left to go along with the thorax */
   gazed: boolean;
   /** sagittal angles (+ = forward): left upper arm, right thigh — contralateral pair */
   arm: number;
@@ -200,7 +200,7 @@ export class GaitKinematics {
       headYaw: head.yaw,
       planted: [h.feet[0].phase === 'planted', h.feet[1].phase === 'planted'],
       feet: [h.feet[0].position.clone(), h.feet[1].position.clone()],
-      gazed: asked.has('gaze'),
+      gazed: asked.has('gaze') || !!h.body.owners.look,
       arm: sagittal(j('leftLowerArm').sub(j('leftUpperArm')), fwd),
       armFree: !tasked(frame, 'left'),
       thigh: sagittal(j('rightLowerLeg').sub(j('rightUpperLeg')), fwd),
