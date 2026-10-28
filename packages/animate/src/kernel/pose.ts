@@ -2,20 +2,10 @@ import { Quaternion, Vector3 } from 'three';
 import type { Skeleton } from './skeleton';
 
 /** A pose to read: by bone index, the transforms of `Pose`. */
-export interface ReadonlyPose {
-  readonly skeleton: Skeleton;
-  /** the way the body faces (rad about +Y; 0 faces +Z): its stance's, which the root's own turn sways about */
-  readonly facing: number;
-  local(bone: number): Readonly<Quaternion>;
-  position(bone: number): Readonly<Vector3>;
-  rotation(bone: number): Readonly<Quaternion>;
-  point(bone: number, at: Vector3, out: Vector3): Vector3;
-  com(out: Vector3): Vector3;
-  load(bone: number): Readonly<{ mass: number; at: Readonly<Vector3> }>;
-}
+export type ReadonlyPose = Readonly<Pick<Pose, 'skeleton' | 'facing' | 'local' | 'position' | 'rotation' | 'point' | 'com' | 'load'>>;
 
 /** Root world position and parent-relative bone rotations (the root rotation is world-relative), with lazy forward kinematics. Weighted writes blend from the current pose, so repeated blends depend on the sub-step. */
-export class Pose implements ReadonlyPose {
+export class Pose {
   private readonly root = new Vector3();
   private readonly locals: Quaternion[];
   private readonly positions: Vector3[];
@@ -23,6 +13,7 @@ export class Pose implements ReadonlyPose {
   /** what each bone carries besides its segment: a mass (kg) at a point in its frame */
   private readonly loads: { mass: number; at: Vector3 }[];
   private stale = 0;
+  /** the way the body faces (rad about +Y; 0 faces +Z): its stance's, which the root's own turn sways about */
   facing = 0;
 
   constructor(readonly skeleton: Skeleton) {
