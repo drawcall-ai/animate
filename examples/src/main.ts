@@ -1,7 +1,6 @@
-import { Group, Vector3 } from 'three';
+import { Group } from 'three';
 import { Figures, Wardrobe } from './stage/bodies';
 import { Framing, placeCamera, PlayerCamera, VIEWS } from './stage/camera';
-import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
 import { FIXED_DT, type Look, type Scenario } from './scenario';
@@ -78,8 +77,6 @@ function show() {
   shown.clear();
   shown.add(run.scene);
   figures.cast(run.bodies);
-  stage.setEnvironment(s);
-  figures.castShadows(!!stage.env);
   framing.set(playback.blend(1).focus, facing());
   panel.select(s);
   if (settings.view === 'orbit') startOrbit();
@@ -113,7 +110,6 @@ function sync(alpha = 1, dt = 1 / 60) {
   const s = sim.scenario;
   const between = playback.blend(alpha);
   shownLook = between.look;
-  stage.env?.update(sim.t);
   const still = capture && !video;
   if (still) framing.set(between.focus, facing());
   else framing.follow(between.focus, playback.velocity, facing(), dt);
@@ -163,41 +159,20 @@ else if (capture) captureStill();
 else playLive();
 
 function recordVideo() {
-  // cam=cinematic: a scripted third → first person camera
-  const cinematic = params.get('cam') === 'cinematic' ? new CinematicCamera() : null;
-  // (the cinematic camera starts from the normal shot: keep that shot's own camera state
-  // separate, so taking the camera over doesn't disturb the orbit it blends from)
-  let orbit: Vector3 | null = null;
-  let t = 0;
   let acc = 0;
-  const render = (dt: number) => {
-    const camera = stage.camera;
-    if (cinematic && orbit) {
-      camera.position.copy(orbit);
-      camera.fov = FOV;
-    }
-    aim(dt);
-    if (cinematic) {
-      orbit = camera.position.clone();
-      const look = settings.view === 'orbit' ? stage.controls.target.clone() : framing.focus.clone();
-      stage.scene.updateMatrixWorld();
-      cinematic.apply(camera, t, dt, figures.joints, { pos: camera.position.clone(), look, fov: FOV });
-      headHidden = cinematic.hideOwnHead;
-    }
-    draw();
-  };
   window.__frame = (dt: number) => {
-    t += dt;
     acc += dt;
     while (acc >= FIXED_DT - 1e-9) {
       acc -= FIXED_DT;
       playback.step();
     }
     sync(Math.max(0, acc) / FIXED_DT, dt);
-    render(dt);
+    aim(dt);
+    draw();
     return playback.sim.t < playback.sim.scenario.duration;
   };
-  render(1 / 60);
+  aim();
+  draw();
   window.__ready = true;
 }
 

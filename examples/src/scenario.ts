@@ -67,10 +67,6 @@ export interface Scenario {
   cameraDistance?: number;
   /** World yaw of a fixed shot, overriding its usual body-relative bearing. */
   cameraAngles?: Partial<Record<'front' | 'side', number>>;
-  /** false: no plain grid (the scenario draws its own ground) */
-  grid?: false;
-  /** surroundings drawn instead of the plain grid; `center` = where the ring is centred */
-  environment?: { kind: 'boxing-arena'; center: [number, number, number] };
 }
 
 /** A player's part in a run: its controls this frame, what it is doing, and where it looks from. */

@@ -1,4 +1,4 @@
-import { Bone, BufferAttribute, BufferGeometry, Group, LineBasicMaterial, LineSegments, Mesh, Vector3, type Object3D } from 'three';
+import { Bone, BufferAttribute, BufferGeometry, Group, LineBasicMaterial, LineSegments, Vector3, type Object3D } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RigLoader, type SkeletonBone } from '@drawcall/rig';
 import type { Body } from '@drawcall/animate';
@@ -60,13 +60,6 @@ export class Figures {
       const joints = this.joints.find((j) => j.body === body);
       this.group.add(joints ? new OpenPoseSkeleton(joints) : new BoneLines(body));
     }
-  }
-
-  /** every body's meshes and figure cast shadows (in lit surroundings) */
-  castShadows(on: boolean) {
-    for (const root of [this.group, ...this.bodies.map((body) => body.object)]) root.traverse((node) => {
-      if (node instanceof Mesh) node.castShadow = on;
-    });
   }
 
   /** the bodies and figures hidden (the 2D overlay draws the people instead) */
