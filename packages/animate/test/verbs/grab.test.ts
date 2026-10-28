@@ -5,6 +5,7 @@ import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
 import { insides, person, play, feetOf, gazeOff } from '../bodies';
 import { box, roomOf, worldOf, named } from '../things';
+import { handSpeeds } from '../hands';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
@@ -19,22 +20,17 @@ const onHips = (h: Person, side: Side) =>
 function reachFrom(at: Vector3, sides: readonly Side[] = ['right']): { speed: Record<Side, number[]>; took: number } {
   const body = person(), h = insides(body), room = roomOf(body);
   const thing = box(room, at, { mass: null, solid: false });
-  const speed: Record<Side, number[]> = { left: [], right: [] };
-  const was = { left: new Vector3(), right: new Vector3() };
   let going = false, took = NaN;
+  const hands = handSpeeds(h, () => going);
   play(function* () {
     yield* wait(1);
     going = true;
     yield* grab(body, thing, Object.fromEntries(sides.map((side) => [side, side])));
   }, [body], 4, (time) => {
     if (Number.isNaN(took) && body.holds(thing)) took = time - 1;
-    for (const side of ['left', 'right'] as const) {
-      const hand = h.pose.position(h.hands[side]);
-      if (going) speed[side].push(hand.distanceTo(was[side]) * 60);
-      was[side].copy(hand);
-    }
+    hands.sample();
   });
-  return { speed, took };
+  return { speed: hands.speed, took };
 }
 
 /** when a hand has gone `distance` (s) */

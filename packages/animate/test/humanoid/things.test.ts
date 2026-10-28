@@ -17,17 +17,13 @@ describe('what a body wears', () => {
     return { body, h, load };
   };
 
-  it('counts what it wears in its centre of mass, where it is worn', () => {
+  it('counts worn mass at its location and balances it over planted feet', () => {
     const { h, load } = loaded();
     const pose = h.pose;
     const segments = pose.skeleton.bones.reduce((sum, bone, i) => sum.addScaledVector(pose.point(i, bone.com, new Vector3()), bone.mass), new Vector3());
     const mass = pose.skeleton.bones.reduce((sum, bone) => sum + bone.mass, 0);
     expect(pose.com(new Vector3()).distanceTo(segments.addScaledVector(worldOf(load), 10).divideScalar(mass + 10))).toBeLessThan(1e-6);
     expect(h.borne.get([...h.borne.keys()][0])?.kg).toBeCloseTo(10, 6);
-  });
-
-  it('stands its loaded centre of mass over its feet', () => {
-    const { h } = loaded();
     const feet = feetOf(h)[0].position.clone().add(feetOf(h)[1].position).multiplyScalar(0.5);
     expect(Math.abs(h.pose.com(new Vector3()).x - feet.x)).toBeLessThan(0.02);
   });

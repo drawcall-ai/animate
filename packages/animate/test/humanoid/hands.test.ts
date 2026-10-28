@@ -8,26 +8,11 @@ import { grasp } from '../../src/things/hold';
 import { Thing } from '../../src/things/thing';
 import { pointSegmentDistance } from '../../src/kernel/math';
 import type { Person } from '../../src/body/person';
+import { handSpeeds } from '../hands';
 import { dt, feetOf, insides, person, play, run } from '../bodies';
 import { box, empty, roomOf, worldOf } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
-
-/** each hand's speed (m/s) each frame from when `going()` turns true */
-function handSpeeds(h: Person, going: () => boolean) {
-  const speed: Record<Side, number[]> = { left: [], right: [] };
-  const was = { left: new Vector3(), right: new Vector3() };
-  return {
-    speed,
-    sample() {
-      for (const side of ['left', 'right'] as const) {
-        const hand = h.pose.position(h.hands[side]);
-        if (going()) speed[side].push(hand.distanceTo(was[side]) / dt);
-        was[side].copy(hand);
-      }
-    },
-  };
-}
 
 /** a knee's bend (rad): π less the angle at it */
 function knee(h: Person, side: Side): number {
