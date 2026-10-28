@@ -13,11 +13,11 @@ The closing scene of *Star Wars: A New Hope* (1977), built with @drawcall/animat
 
 ## Layout
 
-[src/hall.ts](src/hall.ts) holds the hall's dimensions, the stepped floor heights (`floorAt`) and named placement empties (`createMarks`). The doors are at the origin, the aisle runs along +Z to the steps, and the dais is 1 m high.
+[src/hall.ts](src/hall.ts) holds the hall's dimensions, the stepped floor heights (`floorAt`) and named placement empties (`createMarks`). The doors are at the origin, the aisle runs along +Z to the steps, and the dais is 1 m high. `createHall` builds the textured chamber around them: 30 m walls, high windows, a beamed ceiling and the open doors (textures in public/models/hall-*). The viewer opens on the wide shot from the doors down the aisle.
 
 ## Code
 
-- [src/cast.ts](src/cast.ts) creates the named characters. Until a character has its own rigged model, it wears the soldier model.
+- [src/cast.ts](src/cast.ts) creates the named characters, each on the skeleton measured for its own model ([src/skeletons/](src/skeletons/), models under `public/models/`). R2-D2 is still a stand-in; `trooper.glb` is a light model (6k triangles) for the ranks.
 - [src/models.ts](src/models.ts) lists each skeleton with the model measured for it.
 - [src/beats/](src/beats/): each module exports one `beat` (see [src/beats/index.ts](src/beats/index.ts)) that the viewer lists and the headless test plays.
 - [src/play.ts](src/play.ts) sets up a beat and steps its story and bodies at 60 Hz.

@@ -1,4 +1,4 @@
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
+import { AdditiveBlending, BoxGeometry, DoubleSide, Group, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, RepeatWrapping, SRGBColorSpace, type Texture, TextureLoader, Vector3 } from 'three';
 
 // The Grand Audience Chamber of the Massassi temple on Yavin 4 (A New Hope, final scene), laid out in metres.
 // The doors are at the origin and the hall runs along +Z to the dais; +Y is up and +X is the left of someone walking in.
@@ -64,25 +64,160 @@ const MARKS = [
   ['artoo', [-3.4, DAIS.height, DAIS.top + 0.7], TOWARD_DOORS],
 ] as const satisfies readonly (readonly [string, readonly [number, number, number], number])[];
 
-/** A stand-in hall (floor, steps, dais, pillars) until the environment model exists; the floor tops match `floorAt`. */
-export function createPlaceholderHall(): Group {
+/** the walls and pillars that stand around the floor, the high windows along the side walls and the doors (m) */
+const WALLS = {
+  height: 30,
+  thickness: 1,
+  /** the open band in each side wall, between the pillars, that daylight comes in through */
+  windows: { bottom: 22, top: 27 },
+  /** the doorway at z = 0; its two leaves stand open into the hall, clear of the aisle and in front of the troop blocks */
+  door: { width: 8, height: 14 },
+  pillar: { size: 1.4, spacing: 6 },
+};
+/** the width of the steps and the dais (m); the troop blocks stand on the floor either side of them */
+const DAIS_WIDTH = 16;
+/** the world size (m) one copy of a stone texture covers */
+const TILE = 4;
+
+/** the direction toward the sun: daylight comes in through the high windows on the +x wall, slightly from the doors' end */
+export const SUN = new Vector3(0.35, 1, -0.25).normalize();
+
+/**
+ * The chamber: a sandstone floor, steps up to the dais (their tops match `floorAt`), 30 m stone walls with a doorway at z = 0
+ * and its doors standing open, pillars along the side walls with banners between them, high windows under a beamed ceiling,
+ * and faint shafts of daylight from the windows. Only the floor, steps, pillars and doors cast shadows: the walls and the ceiling
+ * would put the whole floor in shade, where the real hall is lit by its many openings.
+ * Textures load in the background; the hall is usable at once.
+ */
+export function createHall(): Group {
   const hall = new Group();
   hall.name = 'hall';
-  const stone = new MeshStandardMaterial({ color: 0x8a7f6f, roughness: 0.9 });
-  const add = (size: Vector3, centre: Vector3) => {
-    const block = new Mesh(new BoxGeometry(size.x, size.y, size.z), stone);
+  const floor = stoneMaterial('/models/hall-floor');
+  floor.color.set(0xd6cdbf); // a little darker than the texture, which washes out under the sun
+  const stone = stoneMaterial('/models/hall-stone');
+  const add = (material: Material, size: Vector3, centre: Vector3, castShadow = true) => {
+    const block = new Mesh(boxWithTiledUvs(size), material);
     block.position.copy(centre);
-    block.receiveShadow = block.castShadow = true;
+    block.receiveShadow = true;
+    block.castShadow = castShadow;
     hall.add(block);
+    return block;
   };
-  add(new Vector3(HALL.width, 0.1, HALL.length), new Vector3(0, -0.05, HALL.length / 2));
+  const { width, length } = HALL;
+  const { height, thickness, windows, door, pillar } = WALLS;
+  add(floor, new Vector3(width, 0.1, length), new Vector3(0, -0.05, length / 2));
+  // each step is a slab from its riser to the back wall, so the top one is the dais
   const { start, count, rise, tread } = HALL.steps;
   for (let step = 1; step <= count; step++) {
-    const front = start + (step - 1) * tread, back = HALL.length;
-    add(new Vector3(12, rise, back - front), new Vector3(0, (step - 0.5) * rise, (front + back) / 2));
+    const front = start + (step - 1) * tread;
+    add(floor, new Vector3(DAIS_WIDTH, rise, length - front), new Vector3(0, (step - 0.5) * rise, (front + length) / 2));
   }
-  for (const side of [-1, 1]) for (let z = 4; z < HALL.length; z += 6) add(new Vector3(1.2, 14, 1.2), new Vector3(side * (HALL.width / 2 - 1), 7, z));
+  // the side walls below and above their window band, the back wall, and the front wall beside and above the doorway
+  for (const side of [-1, 1]) {
+    const x = side * (width + thickness) / 2;
+    add(stone, new Vector3(thickness, windows.bottom, length), new Vector3(x, windows.bottom / 2, length / 2), false);
+    add(stone, new Vector3(thickness, height - windows.top, length), new Vector3(x, (height + windows.top) / 2, length / 2), false);
+  }
+  add(stone, new Vector3(width, height, thickness), new Vector3(0, height / 2, length + thickness / 2), false);
+  const beside = (width - door.width) / 2;
+  for (const side of [-1, 1]) add(stone, new Vector3(beside, height, thickness), new Vector3(side * (door.width + beside) / 2, height / 2, -thickness / 2), false);
+  add(stone, new Vector3(door.width, height - door.height, thickness), new Vector3(0, (height + door.height) / 2, -thickness / 2), false);
+  // the ceiling, with a beam across the hall at each pair of pillars
+  add(stone, new Vector3(width + 2 * thickness, thickness, length + 2 * thickness), new Vector3(0, height + thickness / 2, length / 2), false);
+  for (let z = pillar.spacing / 2; z < length; z += pillar.spacing) add(stone, new Vector3(width, 1.2, 1), new Vector3(0, height - 0.6, z), false);
+  // the two door leaves, hinged at the doorway's edges and swung 95 degrees into the hall (their free edges lean away from the aisle)
+  const doorStone = stone.clone();
+  doorStone.color.set(0x9a8a74);
+  for (const side of [-1, 1]) {
+    const leaf = add(doorStone, new Vector3(door.width / 2, door.height, 0.3), new Vector3(side * door.width / 4, door.height / 2, 0.15));
+    const hinge = new Group();
+    hinge.position.set(side * door.width / 2, 0, 0);
+    hinge.rotation.y = side * (95 * Math.PI) / 180;
+    leaf.position.x -= hinge.position.x;
+    hinge.add(leaf);
+    hall.add(hinge);
+  }
+  // daylight beyond the doorway and the windows: unlit, unfogged bright planes
+  const daylight = new MeshBasicMaterial({ color: 0xfff1d8, fog: false });
+  const outside = new Mesh(new PlaneGeometry(door.width * 3, door.height * 2), daylight);
+  outside.position.set(0, door.height / 2, -12);
+  hall.add(outside);
+  for (const side of [-1, 1]) {
+    const sky = new Mesh(new PlaneGeometry(length, windows.top - windows.bottom + 2), daylight);
+    sky.position.set(side * (width / 2 + thickness + 1), (windows.bottom + windows.top) / 2, length / 2);
+    sky.rotation.y = -side * Math.PI / 2;
+    hall.add(sky);
+  }
+  // pillars against the side walls, with a banner on the wall between each pair
+  const banner = new MeshStandardMaterial({ map: colorTexture('/models/hall-banner.jpg'), roughness: 0.95, side: DoubleSide });
+  const bannerSize = { width: 3, height: 9 }; // the banner image is 1:3
+  const shaft = new MeshBasicMaterial({ color: 0xffdca8, transparent: true, opacity: 0.045, blending: AdditiveBlending, depthWrite: false, side: DoubleSide });
+  const shaftLength = (windows.bottom + windows.top) / 2 / SUN.y;
+  for (const side of [-1, 1]) {
+    const wallX = side * (width / 2 - pillar.size / 2);
+    for (let z = pillar.spacing / 2; z < length; z += pillar.spacing) {
+      add(stone, new Vector3(pillar.size, height, pillar.size), new Vector3(wallX, height / 2, z));
+      if (z + pillar.spacing >= length) continue;
+      const between = z + pillar.spacing / 2;
+      const cloth = new Mesh(new PlaneGeometry(bannerSize.width, bannerSize.height), banner);
+      cloth.position.set(side * (width / 2 - 0.05), 13, between);
+      cloth.rotation.y = -side * Math.PI / 2; // facing into the hall
+      hall.add(cloth);
+      if (side < 0) continue;
+      // a shaft of hazy light from this window to the floor, along the sunlight
+      const beam = new Mesh(new BoxGeometry(2, shaftLength, pillar.spacing - pillar.size), shaft);
+      const opening = new Vector3(width / 2, (windows.bottom + windows.top) / 2, between);
+      beam.position.copy(opening).addScaledVector(SUN, -shaftLength / 2);
+      beam.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), SUN);
+      hall.add(beam);
+    }
+  }
+  // three larger banners on the back wall above the dais
+  for (const x of [-6, 0, 6]) {
+    const cloth = new Mesh(new PlaneGeometry(bannerSize.width * 1.3, bannerSize.height * 1.3), banner);
+    cloth.position.set(x, DAIS.height + 9, length - 0.05);
+    cloth.rotation.y = Math.PI; // facing the doors
+    hall.add(cloth);
+  }
   return hall;
+}
+
+/** a rough, non-metallic PBR stone from a folder holding basecolor.jpg, normal.jpg and roughness.jpg, tiling every TILE metres */
+function stoneMaterial(folder: string): MeshStandardMaterial {
+  const tiled = (texture: Texture) => {
+    texture.wrapS = texture.wrapT = RepeatWrapping;
+    texture.anisotropy = 8;
+    return texture;
+  };
+  return new MeshStandardMaterial({
+    map: tiled(colorTexture(`${folder}/basecolor.jpg`)),
+    normalMap: tiled(loader.load(`${folder}/normal.jpg`)),
+    roughnessMap: tiled(loader.load(`${folder}/roughness.jpg`)),
+    metalness: 0,
+  });
+}
+
+const loader = new TextureLoader();
+function colorTexture(url: string): Texture {
+  const texture = loader.load(url);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * A box whose texture coordinates are in TILE-metre units on every face, so the texture keeps one scale on blocks of any size
+ * (a plain BoxGeometry stretches one copy of the texture over each face).
+ */
+function boxWithTiledUvs(size: Vector3): BoxGeometry {
+  const box = new BoxGeometry(size.x, size.y, size.z);
+  const uv = box.getAttribute('uv');
+  // BoxGeometry's faces, 4 vertices each, in order +x, -x, +y, -y, +z, -z, and the extents their u and v run across
+  const faceExtents = [[size.z, size.y], [size.z, size.y], [size.x, size.z], [size.x, size.z], [size.x, size.y], [size.x, size.y]];
+  for (let vertex = 0; vertex < uv.count; vertex++) {
+    const [across, up] = faceExtents[Math.floor(vertex / 4)];
+    uv.setXY(vertex, (uv.getX(vertex) * across) / TILE, (uv.getY(vertex) * up) / TILE);
+  }
+  return box;
 }
 
 /** the hall's placement empties, by name */

@@ -1,0 +1,124 @@
+import { Object3D, Vector3 } from 'three';
+import { parallel } from '@pmndrs/timeline';
+import { lookAt, reach, wait, type Body, type Until, type Verb } from '@drawcall/animate';
+import { IDLE, rockingOf, type Rocking } from './artoo';
+
+// R2-D2 and C-3PO beside Leia's party through the ceremony. Each mood is a story piece that ends on `until`; `droidsLife` runs a list of
+// cues, so the scene that composes the ceremony says what the droids attend to and when.
+//
+// The bodies stand on y = 0 while the scene raises them onto the dais (see floor.ts), so every world point they are asked to look at
+// goes through `seen`, which lowers it by the body's raise.
+
+/** a world point as `body` must be asked to aim at it (the floor's `seenBy`) */
+export type Seen = (body: Body, point: Vector3) => Vector3;
+
+/** what the droids attend to: a fixed point, or a thing that moves (a hero's head bone, a medal) */
+export type Focus = Vector3 | Object3D;
+
+/** `focus` as `body` sees it, each sub-step */
+function seenFocus(body: Body, focus: Focus, seen: Seen): () => Vector3 {
+  return () => seen(body, focus instanceof Vector3 ? focus.clone() : focus.getWorldPosition(new Vector3()));
+}
+
+/** a point in `body`'s own frame: `x` to its left, `y` up from its floor, `z` ahead (m) */
+function besides(body: Body, x: number, y: number, z: number): Vector3 {
+  const f = body.facing;
+  return new Vector3(body.position.x + x * Math.cos(f) + z * Math.sin(f), y, body.position.z - x * Math.sin(f) + z * Math.cos(f));
+}
+
+/** R2 excited: rocking quicker and wider, as far as its feet stay planted */
+const EXCITED: Rocking = { sway: 0.009, turn: 0.08, rate: 1.3 };
+
+/** sets R2's rocking for as long as the story runs this, then lets it settle back to its idle */
+function* rocking(artoo: Body, aim: Rocking): Verb {
+  const rock = rockingOf(artoo);
+  Object.assign(rock, aim);
+  try {
+    return yield* wait(Infinity);
+  } finally {
+    Object.assign(rock, IDLE);
+  }
+}
+
+/** R2 watches `focus`: its dome turns to follow it, rocking gently */
+export function* artooWatch(artoo: Body, focus: Focus, seen: Seen, until: Until): Verb {
+  yield* parallel('race', wait(until), lookAt(artoo, seenFocus(artoo, focus, seen)));
+  return true;
+}
+
+/**
+ * R2 cheers at `focus`: its dome on it, it rocks quickly from side to side and bobs, its barrel tipping forward and back on its axle
+ * (a look with the trunk, switching between low and high points toward the focus at `bobs` a second: the only way the library pitches
+ * a creature's body).
+ */
+export function* artooCheer(artoo: Body, focus: Focus, seen: Seen, until: Until, { bobs = 0.8 } = {}): Verb {
+  const toward = seenFocus(artoo, focus, seen);
+  const at = new Vector3();
+  const bob = (time: number) => {
+    const point = toward();
+    at.subVectors(point, artoo.position).setY(0).normalize().multiplyScalar(3).add(artoo.position);
+    return at.setY(Math.sin(2 * Math.PI * bobs * time) > 0 ? -2.5 : 1.5);
+  };
+  yield* parallel('race', wait(until), rocking(artoo, EXCITED), lookAt(artoo, bob, { trunk: true }));
+  return true;
+}
+
+/** a small seeded random sequence in [0, 1) (C-3PO's fussing varies but plays the same every run) */
+function seeded(seed: number): () => number {
+  let s = seed;
+  return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+}
+
+/** C-3PO's hands held before his waist, elbows bent: his stiff resting pose */
+const held = (threepio: Body, side: 1 | -1) => besides(threepio, 0.16 * side, 1.22, 0.22);
+
+/**
+ * C-3PO's small, precise fussing: hands held before him, now and then one lifts a little and turns out (a protocol droid's aside) or
+ * both come up together, then settle back. Never ends: race it.
+ */
+export function* threepioFuss(threepio: Body, seed = 3): Verb {
+  const rand = seeded(seed);
+  for (;;) {
+    yield* reach(threepio, { left: held(threepio, 1), right: held(threepio, -1) }, { until: 1.4 + 1.8 * rand() });
+    const pick = rand();
+    if (pick < 0.4) yield* reach(threepio, { right: besides(threepio, -0.2, 1.36, 0.3) }, { until: 0.7 });
+    else if (pick < 0.8) yield* reach(threepio, { left: besides(threepio, 0.2, 1.36, 0.3) }, { until: 0.7 });
+    else yield* reach(threepio, { left: besides(threepio, 0.1, 1.32, 0.3), right: besides(threepio, -0.1, 1.32, 0.3) }, { until: 0.9 });
+  }
+}
+
+/** C-3PO watches `focus`: his head turns to it, stiff and upright, fussing with his hands */
+export function* threepioWatch(threepio: Body, focus: Focus, seen: Seen, until: Until, seed?: number): Verb {
+  yield* parallel('race', wait(until), lookAt(threepio, seenFocus(threepio, focus, seen)), threepioFuss(threepio, seed));
+  return true;
+}
+
+/** C-3PO startled by `focus` (Chewbacca's roar): his head goes to it and his hands fly up before his chest, then he watches it warily */
+export function* threepioStartle(threepio: Body, focus: Focus, seen: Seen, until: Until): Verb {
+  const hands = { left: besides(threepio, 0.14, 1.42, 0.2), right: besides(threepio, -0.14, 1.42, 0.2) };
+  yield* parallel('race', wait(until), lookAt(threepio, seenFocus(threepio, focus, seen)), function* () {
+    yield* reach(threepio, hands, { until: 1.6, speed: 1.6 });
+    yield* threepioFuss(threepio, 11);
+  });
+  return true;
+}
+
+/** what the droids do for one stretch of the ceremony: what they attend to, how, and until when */
+export interface Cue {
+  focus: Focus;
+  until: Until;
+  artoo: 'watch' | 'cheer';
+  threepio: 'watch' | 'startle';
+}
+
+/** runs `cues` in order: R2 and C-3PO each attend to the cue's focus as it says, until the cue ends */
+export function* droidsLife(artoo: Body, threepio: Body, seen: Seen, cues: readonly Cue[]): Verb {
+  for (const [i, cue] of cues.entries()) {
+    yield* parallel(
+      'all',
+      cue.artoo === 'cheer' ? artooCheer(artoo, cue.focus, seen, cue.until) : artooWatch(artoo, cue.focus, seen, cue.until),
+      cue.threepio === 'startle' ? threepioStartle(threepio, cue.focus, seen, cue.until) : threepioWatch(threepio, cue.focus, seen, cue.until, i + 1),
+    );
+  }
+  return true;
+}

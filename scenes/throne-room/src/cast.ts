@@ -2,6 +2,13 @@ import type { Object3D } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, humanoid } from '@drawcall/animate';
 import { SOLDIER } from './skeletons/soldier';
+import { LUKE } from './skeletons/luke';
+import { HAN } from './skeletons/han';
+import { CHEWBACCA } from './skeletons/chewbacca';
+import { LEIA } from './skeletons/leia';
+import { THREEPIO } from './skeletons/threepio';
+import { MEDAL_BEARER } from './skeletons/bearer';
+import { DODONNA } from './skeletons/dodonna';
 import type { Marks } from './hall';
 import { createArtoo } from './droids/artoo';
 
@@ -24,21 +31,21 @@ export interface Cast {
 }
 
 /**
- * Every character standing at its mark. Until each has its own model and skeleton, they all wear the soldier.
- * The owner of a character replaces its line here (its skeleton, species and options).
+ * Every character standing at its mark, each on the skeleton measured for its own model (see models.ts).
+ * R2-D2 is still a scaled person; the owner of a character replaces its line here (its skeleton, species and options).
  */
 export function createCast(marks: Marks, dress: Dress = () => undefined, starts: Partial<Record<keyof Cast, keyof Marks>> = {}, dev = true): Cast {
   const at = (name: keyof Cast, fallback: keyof Marks) => marks[starts[name] ?? fallback];
-  const person = (mark: Object3D, skeleton: readonly SkeletonBone[] = SOLDIER) =>
+  const person = (mark: Object3D, skeleton: readonly SkeletonBone[]) =>
     new Body(humanoid(skeleton as typeof SOLDIER), { at: mark.position.clone(), face: mark.rotation.y, model: dress(skeleton), dev });
   return {
-    luke: person(at('luke', 'lukeEnter')),
-    han: person(at('han', 'hanEnter')),
-    chewbacca: person(at('chewbacca', 'chewbaccaEnter')),
-    leia: person(at('leia', 'leia')),
-    medalBearer: person(at('medalBearer', 'medalBearer')),
-    dodonna: person(at('dodonna', 'dodonna')),
-    threepio: person(at('threepio', 'threepio')),
+    luke: person(at('luke', 'lukeEnter'), LUKE),
+    han: person(at('han', 'hanEnter'), HAN),
+    chewbacca: person(at('chewbacca', 'chewbaccaEnter'), CHEWBACCA),
+    leia: person(at('leia', 'leia'), LEIA),
+    medalBearer: person(at('medalBearer', 'medalBearer'), MEDAL_BEARER),
+    dodonna: person(at('dodonna', 'dodonna'), DODONNA),
+    threepio: person(at('threepio', 'threepio'), THREEPIO),
     artoo: createArtoo(at('artoo', 'artoo'), dress, dev),
   };
 }
