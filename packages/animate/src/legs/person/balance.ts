@@ -49,6 +49,11 @@ const CROUCH_LEAN = 0.3;
  * Tuned: walking, a body lets its pelvis down at most this share of a squat (~0.26 m reaching low); a deeper ask waits for it to slow
  */
 const WALKING_CROUCH = 0.5;
+/**
+ * Tuned (rad): walking, a story's posture bows the trunk at most this far (deeper, a 1.3 m/s walk's extrapolated centre of mass
+ * leaves its feet by over 0.1 m at a 0.7 bow); it bows deeper as the walk slows, all of it standing
+ */
+const WALKING_BOW = 0.5;
 /** Tuned: let down or up this far (m), the feet stay put but to catch a fall */
 const LOWERED = 0.02;
 /**
@@ -166,7 +171,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
     const requested = {
       lower: followed(asked.lower, lower < 0 && !stepper.settled ? 0 : lower, LOWER, dt),
-      bow: followed(asked.bow, Math.min(poise.bow + posed.bow, poise.bowLimit), BOW, dt),
+      bow: followed(asked.bow, Math.min(poise.bow + Math.min(posed.bow, WALKING_BOW + Math.PI * (1 - smoothstep(0.2, 0.8, speed))), poise.bowLimit), BOW, dt),
       lean: followed(asked.lean, posed.lean, BOW, dt),
       twist,
     };

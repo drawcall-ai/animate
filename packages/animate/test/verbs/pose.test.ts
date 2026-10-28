@@ -81,13 +81,15 @@ describe('pose', () => {
     expect([...bowed.log, ...leaning.log]).toEqual([]);
   });
 
-  it('poses a person over a walk: it walks on, bowed and its head tilted, in balance', () => {
+  // (walking, a bow deeper than 0.5 is held to it: deeper, the walk's extrapolated centre of mass leaves its feet; an arch is added onto
+  // the walk's own forward lean, ~0.14 at the chest, which a bow forward gives up)
+  it.each([[0.3, 0.25], [-0.3, -0.15], [0.8, 0.45]])('poses a person over a walk: bowed %s rad and its head tilted, it walks on in balance', (bow, least) => {
     const body = person({ dev: true }), h = insides(body);
     let arrived = false, pitch = 0, roll = 0, worst = -Infinity;
     play(function* () {
       yield* parallel('race', function* () {
         arrived = yield* walkTo(body, new Vector3(0, 0, 3));
-      }, pose(body, { bow: 0.3, head: { roll: 0.25 } }));
+      }, pose(body, { bow, head: { roll: 0.25 } }));
     }, [body], 12, (t) => {
       if (t > 1.5 && t < 2.5) [pitch, roll] = [chestPitch(body), headRoll(body)];
       worst = Math.max(worst, xcomOutside(body, h));
@@ -96,7 +98,8 @@ describe('pose', () => {
     expect(arrived).toBe(true);
     // (bowed, its hips stand back of its centre of mass: that is what arrives)
     expect(body.pose.com(new Vector3()).z).toBeCloseTo(3, 1);
-    expect(pitch).toBeGreaterThan(0.25);
+    expect(Math.abs(pitch)).toBeGreaterThan(Math.abs(least));
+    expect(Math.sign(pitch)).toBe(Math.sign(bow));
     expect(roll).toBeGreaterThan(0.2);
     // (its extrapolated centre of mass stays within its feet or close: the walk's own check, 0.1 m out, finds nothing)
     expect(worst).toBeLessThan(0.1);

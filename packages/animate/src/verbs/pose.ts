@@ -14,8 +14,9 @@ export interface PoseOptions {
  * Poses `body` as `posture` has it, over whatever else it does (standing, walking, reaching, looking): a bow, a back arched with the chest
  * lifting, a turn or a sideways lean of the trunk, a nod or a tilt of the head. Each angle is added onto what the body's own tasks ask (a
  * reach's bow, a look's head), eased in at the pace of a squat for the trunk and a nod for the head, held in balance and within the
- * joints, and eased back out once the pose ends — so a nod is a short pose, and poses one after another flow into each other. A creature
- * takes the trunk's as its body turns about its legs, as far as they let it. An aimer, it keeps on until `until`. It asks for the
+ * joints, and eased back out once the pose ends — so a nod is a short pose, and poses one after another flow into each other. A walking
+ * person bows at most 0.5 rad. A creature takes the trunk's as its whole body turns over its planted legs, at most 0.25 rad of bow and
+ * 0.15 of twist or lean; combined, they can still ask more than a big creature's legs follow. An aimer, it keeps on until `until`. It asks for the
  * trunk's posture with a trunk field and for the head's turn with `head` — not for the eyes: a look beside it keeps them, and the head
  * turns over where they look.
  */
