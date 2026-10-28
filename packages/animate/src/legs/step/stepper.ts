@@ -9,7 +9,7 @@ import { clamp, forwardOf, leftOf, lerp, minimumJerk, smoothstep, wrapAngle } fr
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
 import {
-  AIMED, LOWEST, PASSING, SETTLE, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
+  AIMED, LOWEST, PASSING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
   _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
   dropOf, mod, remaining, strayed, Steps,
   type Body, type FootPose, type Leg, type Now, type Reading, type Steering, type Timing,
@@ -64,7 +64,7 @@ export class Stepper extends Steps {
     const stepping = legs.some((leg) => leg.swing);
     this.phase += Math.PI * now.dt / (now.C / 2) * Number(stepping);
     [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, now.moving, run, now.Ts, now.C];
-    const still = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > 0.4);
+    const still = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > SETTLED_AFTER);
     this.settled = still && legs.every((leg) => !wants(this, now, cues, leg));
     // (a gait's body as low as its running lets it down)
     const drop = this.clocked ? lerp(st.drop.walk, st.drop.run, run) : 0;

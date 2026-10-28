@@ -49,6 +49,27 @@ it('arriving reads what the body moves toward: its walk while it walks, its rest
   expect(seen).toEqual([true, false, false, true]);
 });
 
+// (a walk ends once there, turned and settled: its feet squared and held still; `arriving` foresees that end, not the moment it is there)
+it.each([
+  ['a walk', new Vector3(0, 0, 3), undefined],
+  ['a walk ending turned', new Vector3(0, 0, 3), Math.PI / 2],
+  ['a small turn in place', new Vector3(), Math.PI / 6],
+  ['a quarter turn in place', new Vector3(), Math.PI / 2],
+] as const)('arriving foresees when %s ends', (_, to, face) => {
+  const body = person(), soon = arriving(body, 0.4);
+  let foreseen = NaN, ended = NaN, time = 0;
+  play(function* () {
+    yield* walkTo(body, to, face === undefined ? {} : { face });
+    ended = time;
+  }, [body], 10, (t) => {
+    time = t;
+    if (Number.isNaN(foreseen) && soon()) foreseen = t;
+    return !Number.isNaN(ended);
+  });
+  expect(ended - foreseen).toBeGreaterThan(0.4 - 0.25);
+  expect(ended - foreseen).toBeLessThan(0.4 + 0.25);
+});
+
 it('arriving foresees every mover: a reach before its hands get there, a grab while it walks up; what the body does itself after a release holds it up not', () => {
   const body = person(), h = insides(body), room = roomOf(body);
   const near = box(room, new Vector3(-0.2, 1.1, 0.4), { mass: 1, solid: false, name: 'near' });

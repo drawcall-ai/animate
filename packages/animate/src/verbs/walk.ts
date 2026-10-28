@@ -44,7 +44,7 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
     const walk = new Walk(self, { to: (f) => find(f).position, face: yaw, velocity: (f) => find(f).velocity, speed, accel }, until === undefined);
     const step = (f: Frame) => {
       const go = walk.step(f);
-      request.eta = walk.eta;
+      request.eta = walk.ends;
       return go;
     };
     // (given `until`, it follows its target, however it moves, until then)
