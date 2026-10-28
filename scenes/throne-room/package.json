@@ -1,0 +1,25 @@
+{
+  "name": "throne-room",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@drawcall/animate": "workspace:*",
+    "@drawcall/rig": "^0.5.0",
+    "@pmndrs/timeline": "^0.4.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitecache": "^0.1.1",
+    "vitest": "^3.2.7"
+  }
+}

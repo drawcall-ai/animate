@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - examples
+  - scenes/*
 
 # Seeded motion and floating-point metrics must use the same runtime in every checkout.
 useNodeVersion: 22.18.0
