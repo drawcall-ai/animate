@@ -1,27 +1,27 @@
 import { Euler, Vector3 } from 'three';
-import { parallel } from '@pmndrs/timeline';
+import { runTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { createSkeletonModel, Humanoid, INDEX, walkTo, type DrivenRoot, type Frame } from '../../src';
-import { idle } from '../../src/humanoid/idle';
+import { Body, humanoid, walkTo } from '../../src/index';
+import { INDEX } from '../../src/species/humanoid/bones';
+import { dt, insides, person } from '../bodies';
+import { PERSON } from '../skeletons/person';
 
-const dt = 1 / 60, DEG = Math.PI / 180;
+const DEG = Math.PI / 180;
 /** half a step walking at 1.3 m/s (sub-steps: ~0.47 s a step, ~2.1 steps/s) */
 const STEP = 15;
 
 /** a person walking 5 m ahead from standing and stopping there: its chest's pitch (rad, + forward) and its ground speed each sub-step */
 function walk(leaning: boolean) {
-  const h = new Humanoid(createSkeletonModel(), (b) => function* () {
-    yield* parallel<Frame>('all', idle(b), walkTo(b, { to: new Vector3(0, 0, 5) }));
-  }, { idle: false, dev: true });
-  // (its trunk read off its species as its base sets out, on the first update)
-  if (!leaning) delete h.species.inertia;
+  const species = humanoid(PERSON), body = new Body(leaning ? species : { ...species, inertia: undefined }, { dev: true }), h = insides(body);
+  const story = runTimeline(function* () { yield* walkTo(body, new Vector3(0, 0, 5)); });
   const pitch: number[] = [], speed: number[] = [];
   for (let t = 0; t < 8; t += dt) {
-    h.update(dt);
+    story(undefined, dt);
+    body.update(dt);
     pitch.push(new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x);
     speed.push(h.locomotion.velocity.z);
   }
-  return { pitch, speed, log: h.log };
+  return { pitch, speed, log: body.log };
 }
 
 // (setting off, the trunk leans into the walk's first steps about as far as atan(a / g): ~7° at ~1 m/s² — read: Leteneur et al. 2013,
@@ -57,8 +57,8 @@ it('leans into setting off and back from stopping, as far as people do, swings a
 
 /** a player's body set off to 1.4 m/s at 10 m/s², as a game controller does, walked and stopped as quickly: its trunk's pitch each sub-step (rad, + forward, hips → neck) */
 function setOff() {
-  const root: DrivenRoot = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = new Humanoid(createSkeletonModel(), (b) => idle(b, { root }), { idle: false, dev: true });
+  const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const h = person({ drive: () => root, dev: true });
   const pitch: number[] = [];
   for (let t = dt; t < 6; t += dt) {
     root.velocity.z += Math.max(-10 * dt, Math.min(10 * dt, (t > 1 && t < 3.5 ? 1.4 : 0) - root.velocity.z));

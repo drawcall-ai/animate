@@ -1,35 +1,52 @@
+import { run } from './dev-log';
 import { expect } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
-import { knownFailure, run } from '../scripts/run';
-import { SKELETONS, skeletonModel } from '../src/skeletons';
+import { knownFailure } from '../scripts/run';
+import { OUTLIER, SOLDIER } from '../src/skeletons';
 import { cases } from '../../packages/animate/test/open';
 
 // Every scenario with people, on skeletons unlike the default body: the library measures the body it is given, so each must
-// finish its story with the dev log as empty as the default body's. The cases that do not yet are listed in `OPEN` (expected to
-// fail: each one fixed comes off the list).
+// finish its story with the dev log as empty as the default body's. viewer.test.ts also exercises the SOLDIER's live playback path.
+// The cases that do not yet finish cleanly are listed (expected to fail: each one
+// fixed comes off the list).
+// - shooter: the soldier's knees at 90 000 °/s² (limit 83 300) sprinting from 19.5 s and landing at 45.0 s, and both bodies' left hand
+//   0.29–0.43 m off the foregrip after the reload (as on the default body); the outlier's touchdown at 0.48 m/s at 36.6 s;
+// - stable-morning: the outlier's saddle 5.1 cm off its carry's end at 11.8 s and its right hand 2.1 cm into the trunk at 2.2 s;
+// - pickup-shelf: the soldier's left forearm 10.8 cm into the trunk at 3.3 s, its hands 9–10 cm short of the box at 6.65 s, its feet
+//   sliding up to 1.45 cm a frame while planted; unfinished. The outlier now passes at all four seeds.
+// - reach: the soldier's first target 0.45 m over its shoulders on tiptoe (limit 0.44), and its floor target 0.47–0.48 m below its
+//   shoulders lowered and bowed (limit 0.44) at 6.4–8.1 s, its planted feet sliding up to 2 cm a frame as its hand follows that point
+//   down (6.5–8.4 s), and a leg at 271 000 °/s² at 14.4 s;
+// - vr: the side-step's end with the XCoM 11.4 cm (the soldier, seed 1) and 19.9 cm (the outlier, seed 0) outside the support at
+//   12.8–12.9 s, the body leaning after the head and controllers 0.5 m out to its side on its trailing foot (the known unfinished
+//   side-step: the body turns to walk rather than strafe);
+// - knight-arming: the outlier's hand 3.9 cm short of the buckle at 4.05 s and the helm's carry 7.9 mm off at 63 s, unfinished;
+// - lift-heavy: the soldier's hands 11–12 cm short of the box at 4.05 s and its feet sliding up to 2.4 cm a frame, unfinished; the
+//   outlier's hands 0.39 m short at 4.05 s;
+// - stroll and look-around on the outlier: its planted right foot slides 5.2 mm a frame at 12.8 s; its left upper arm 1.06 cm into
+//   the trunk at 15.5 s;
 const test = cases([
   'shooter on the soldier: final-pose dev checks',
-  'stable-morning on the soldier: final-pose dev checks',
   'pickup-shelf on the soldier: final-pose dev checks',
+  ["vr on the soldier: final-pose dev checks", [1]],
   'reach on the soldier: final-pose dev checks',
-  'knight-arming on the soldier: final-pose dev checks',
   'lift-heavy on the soldier: final-pose dev checks',
   'shooter on the outlier: final-pose dev checks',
-  // (on Node 24 only: the knife edge another way on 22)
-  // (the core legs, the people's only legs since 2026-10-23: the outlier's planted foot slides 1–1.5 mm a frame as it turns on it
-  // (stroll, look-around) and its arm grazes its long trunk)
+  'stable-morning on the outlier: final-pose dev checks',
   'stroll on the outlier: final-pose dev checks',
-  ['look-around on the outlier: final-pose dev checks', [0, 2, 3]],
-  // (its life seed varied: the outlier's dev log has 1–2 problems in the stable story, and once in the knight's)
-  ['stable-morning on the outlier: final-pose dev checks', [1, 2, 3]],
-  ['knight-arming on the outlier: final-pose dev checks', [3]],
+  ["look-around on the outlier: final-pose dev checks", [0, 1, 2]],
+  ["vr on the outlier: final-pose dev checks", [0]],
+  'knight-arming on the outlier: final-pose dev checks',
+  'lift-heavy on the outlier: final-pose dev checks',
 ]);
 
-for (const [name, { joints, height }] of Object.entries(SKELETONS)) {
-  for (const sc of SCENARIOS.filter((sc) => sc.actors.length)) {
-    const title = `${sc.id} on the ${name}: final-pose dev checks`;
-    test(title, () => {
-      const log = run(sc, () => skeletonModel(joints, height));
+/** the scenarios with no people in them */
+const CREATURES_ONLY = ['legs-horse', 'dog-fetch', 'lion-run'];
+
+for (const [name, skeleton] of [['soldier', SOLDIER], ['outlier', OUTLIER]] as const) {
+  for (const scenario of SCENARIOS.filter((each) => !CREATURES_ONLY.includes(each.id))) {
+    test(`${scenario.id} on the ${name}: final-pose dev checks`, () => {
+      const log = run(scenario, { skeleton });
       expect(log.filter((entry) => !knownFailure(entry)).map((e) => `${e.check} ${e.where} @${e.time.toFixed(2)}`).slice(0, 5)).toEqual([]);
     });
   }

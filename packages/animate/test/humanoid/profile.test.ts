@@ -1,10 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { beyond } from '../../src/core/limits';
-import { BONES, CHILD_BONES, INDEX } from '../../src/humanoid/bones';
-import { ranges } from '../../src/humanoid/profile/limits';
-import { relaxedPose } from '../../src/humanoid/profile/relaxed';
-import { rng, turnUpTo } from './fixtures';
+import { beyond } from '../../src/kernel/limits';
+import { BONES, CHILD_BONES, INDEX } from '../../src/species/humanoid/bones';
+import { ranges } from '../../src/species/humanoid/limits';
+import { relaxedPose } from '../../src/species/humanoid/relaxed';
+import { rng, turnUpTo } from '../random';
 
 const DEG = Math.PI / 180;
 

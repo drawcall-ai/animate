@@ -1,74 +1,115 @@
-import { AnimationMixer, Mesh, type Scene } from 'three';
+import { Bone, BufferAttribute, BufferGeometry, Group, LineBasicMaterial, LineSegments, Mesh, Vector3, type Object3D } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import type { CharacterModel } from '@pmndrs/viverse';
-import type { Posed } from '../joints';
+import { RigLoader, type SkeletonBone } from '@drawcall/rig';
+import type { Body } from '@drawcall/animate';
+import { Joints } from '../joints';
 import { OpenPoseSkeleton } from '../openpose';
-import type { Skin } from './skin';
+import { isPerson } from '../simulation';
 
 /** the BODY_25 keypoints of the head: nose, eyes, ears */
 const HEAD_KEYPOINTS = [0, 15, 16, 17, 18];
 
-/**
- * Another instance of viverse's `character` (its scene cloned with the hidden rest copy, bones
- * rebound; geometry and materials shared), under a thin OpenPose skeleton when `overlay` (a mannequin's).
- */
-export function instance(character: CharacterModel, overlay: boolean): CharacterModel {
-  const scene = clone(character.scene);
-  const model = { scene, mixer: new AnimationMixer(scene), currentAnimations: new Map(), height: character.height };
-  if (overlay) scene.add(new OpenPoseSkeleton(model, { opacity: 0.55, limbRadius: 0.012, jointRadius: 0.014 }));
-  return model;
+/** The rigged models bodies wear, each loaded and skinned once (by @drawcall/rig, on the skeleton measured on it), by that skeleton. */
+export class Wardrobe {
+  private constructor(private readonly models: ReadonlyMap<readonly SkeletonBone[], Object3D>) {}
+
+  /** loads fresh models in parallel, reusing cached weights for unchanged meshes and skeletons */
+  static async load(models: readonly (readonly [skeleton: readonly SkeletonBone[], url: string])[]): Promise<Wardrobe> {
+    const loader = new RigLoader();
+    const rigged = await Promise.all(models.map(async ([skeleton, url]) => {
+      const { scene: model } = await loader.loadAsync({ url, skeleton, source: { url, dependencyUrls: [] } });
+      // (a skinned mesh's bounds are its rest pose's, at the origin: a body that has walked away would be culled)
+      model.traverse((node) => (node.frustumCulled = false));
+      return [skeleton, model] as const;
+    }));
+    return new Wardrobe(new Map(rigged));
+  }
+
+  /** a copy of the model rigged on `skeleton` (its meshes bound to bones of its own), or none: the body goes bare */
+  dress = (skeleton: readonly SkeletonBone[]): Object3D | undefined => {
+    const model = this.models.get(skeleton);
+    return model && clone(model);
+  };
 }
 
-/** the OpenPose skeletons drawn over a model */
-const skeletonsOf = (model: CharacterModel) => model.scene.children.filter((c) => c instanceof OpenPoseSkeleton);
+/** whether `body` wears a rigged model (its bones are a rig's, not a bare body's empties) */
+const dressed = (body: Body) => Object.values<Object3D>(body.bones).some((node) => node instanceof Bone);
 
-/** The actors' character models in the scene. */
-export class Bodies {
-  private models: CharacterModel[] = [];
-  private skins: Skin[] = [];
+/**
+ * How the app draws a run's bodies besides the models they wear: a bare person as an OpenPose skeleton over its joints, a bare
+ * creature as lines from each bone to its parent, and every person's joints for the 2D OpenPose overlay.
+ */
+export class Figures {
+  /** the figures, drawn after the run's scene (they follow its bodies' world matrices) */
+  readonly group = new Group();
+  /** each person's joints, people in order */
+  joints: Joints[] = [];
+  private bodies: readonly Body[] = [];
 
-  constructor(private readonly scene: Scene) {}
-
-  /** replaces the bodies with the actors' and the skins the other bodies wear */
-  cast(actors: readonly Posed[], skins: readonly (Skin | null)[] = []) {
-    for (const s of this.skins) this.scene.remove(s.scene);
-    this.skins = skins.filter((s) => s !== null);
-    if (this.skins.length) this.scene.add(...this.skins.map((s) => s.scene));
-    for (const m of this.models) {
-      this.scene.remove(m.scene);
-      // (a mannequin's mesh is shared with the loaded character: only the skeletons are its own)
-      for (const s of skeletonsOf(m)) s.dispose();
+  /** replaces the figures with those of `bodies`, as they stand now (before their first update or right after one) */
+  cast(bodies: readonly Body[]) {
+    for (const figure of this.group.children) {
+      if (figure instanceof OpenPoseSkeleton) figure.dispose();
+      if (figure instanceof BoneLines) figure.geometry.dispose();
     }
-    this.models = actors.map((a) => a.model);
-    this.scene.add(...this.models.map((m) => m.scene));
+    this.group.clear();
+    this.bodies = bodies;
+    this.joints = bodies.filter(isPerson).map((person) => new Joints(person));
+    for (const body of bodies) {
+      if (dressed(body)) continue;
+      const joints = this.joints.find((j) => j.body === body);
+      this.group.add(joints ? new OpenPoseSkeleton(joints) : new BoneLines(body));
+    }
   }
 
-  /** the models (to project them) */
-  get all(): readonly CharacterModel[] {
-    return this.models;
-  }
-
-  /** the skeletons ground themselves with contact shadows (in lit surroundings) */
+  /** every body's meshes and figure cast shadows (in lit surroundings) */
   castShadows(on: boolean) {
-    for (const m of this.models) for (const s of skeletonsOf(m)) s.traverse((o) => (o.castShadow = on));
-    for (const m of [...this.models, ...this.skins]) m.scene.traverse((o) => {
-      if (o instanceof Mesh) o.castShadow = on;
+    for (const root of [this.group, ...this.bodies.map((body) => body.object)]) root.traverse((node) => {
+      if (node instanceof Mesh) node.castShadow = on;
     });
   }
 
-  /** the bodies hidden (the 2D overlay draws the poses instead) */
+  /** the bodies and figures hidden (the 2D overlay draws the people instead) */
   set hidden(hidden: boolean) {
-    for (const m of [...this.models, ...this.skins]) m.scene.visible = !hidden;
+    this.group.visible = !hidden;
+    for (const body of this.bodies) body.object.visible = !hidden;
   }
 
-  /** hides the first actor's head (a camera inside it, as FPS games do) */
+  /** hides the first person's head or shows it again (a camera inside it, as FPS games do): only around a render, never while the run steps */
   hideHead(hide: boolean) {
-    const first = this.models[0];
+    const first = this.joints[0];
     if (!first) return;
-    const skeletons = skeletonsOf(first);
-    for (const s of skeletons) s.setHidden(hide ? HEAD_KEYPOINTS : []);
-    // (a skinned body's head collapses into its neck, as an FPS body's is: the camera is not inside it)
-    const head = skeletons.length ? null : first.scene.getObjectByName('head');
-    if (head) head.scale.setScalar(hide ? 1e-3 : 1);
+    const figure = this.group.children.find((f) => f instanceof OpenPoseSkeleton && f.joints === first);
+    if (figure instanceof OpenPoseSkeleton) figure.setHidden(hide ? HEAD_KEYPOINTS : []);
+    // (a rigged head collapses into its neck, as an FPS body's does: the camera is not inside it)
+    else first.body.bones.head.scale.setScalar(hide ? 1e-3 : 1);
   }
 }
+
+/** A bare body drawn as a line from each of its bones to its parent's, following them whenever the scene's world matrices update. */
+class BoneLines extends LineSegments<BufferGeometry, LineBasicMaterial> {
+  private readonly pairs: [Object3D, Object3D][];
+
+  constructor(body: Body) {
+    const nodes: Readonly<Record<string, Object3D>> = body.bones;
+    const pairs = body.species.bones.flatMap((bone): [Object3D, Object3D][] => (bone.parent ? [[nodes[bone.parent], nodes[bone.name]]] : []));
+    const geometry = new BufferGeometry().setAttribute('position', new BufferAttribute(new Float32Array(pairs.length * 6), 3));
+    super(geometry, LINE);
+    this.pairs = pairs;
+    // (its points are world positions, its bounds wherever the body has gone)
+    this.frustumCulled = false;
+  }
+
+  override updateMatrixWorld(force?: boolean) {
+    const positions = this.geometry.getAttribute('position');
+    this.pairs.forEach(([parent, child], i) => {
+      positions.setXYZ(2 * i, ..._at.setFromMatrixPosition(parent.matrixWorld).toArray());
+      positions.setXYZ(2 * i + 1, ..._at.setFromMatrixPosition(child.matrixWorld).toArray());
+    });
+    positions.needsUpdate = true;
+    super.updateMatrixWorld(force);
+  }
+}
+
+const LINE = new LineBasicMaterial({ color: 0xdba66b });
+const _at = new Vector3();

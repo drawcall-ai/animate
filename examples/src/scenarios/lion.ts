@@ -1,36 +1,29 @@
-import { Vector3 } from 'three';
-import { Body, carriages, footfalls, powerGait, Skeleton, swing, walkTo, type Species } from '@drawcall/animate';
-import { Report } from '../report';
+import { Group, Vector3 } from 'three';
+import { action, parallel } from '@pmndrs/timeline';
+import { carriages, footfalls, powerGait, species, swing, walkTo, type Range } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-import { skeletonProps } from '../stage/props';
+import { LION } from '../skeletons';
+import { ball } from '../things';
 
-// A lion, as data only: ~190 kg, 1.0 m at the withers, standing square (+Y up, facing +Z, its left +X).
-const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
-/** each bone: its name, its parent's, where its joint is standing square (world), its mass (kg) */
-const joints: [string, string, Vector3, number][] = [['trunk', '', v(0, 0.97, 0.2), 60], ['spine', 'trunk', v(0, 0.97, -0.15), 30],
-  ['pelvis', 'spine', v(0, 0.95, -0.42), 22], ['neck', 'trunk', v(0, 0.95, 0.55), 12], ['head', 'neck', v(0, 1.15, 0.86), 16],
-  ['jaw', 'head', v(0, 1.0, 1.1), 2], ['tail', 'pelvis', v(0, 0.97, -0.62), 2], ['tailTip', 'tail', v(0, 0.45, -1.2), 1]];
-const legs = ['leftFore', 'rightFore', 'leftHind', 'rightHind'];
-for (const leg of legs) {
-  // (top, elbow or stifle, wrist or hock, paw: the elbow bends back, the stifle forward, the hock high and back as a cat's)
-  const x = leg.startsWith('left') ? 0.15 : -0.15, fore = leg.endsWith('Fore');
-  (fore ? [v(x, 0.95, 0.45), v(x, 0.6, 0.27), v(x, 0.22, 0.42), v(x, 0.06, 0.5)] : [v(x, 0.93, -0.5), v(x, 0.62, -0.27), v(x, 0.3, -0.68), v(x, 0.06, -0.56)])
-    .forEach((at, k) => joints.push([`${leg}${k}`, k ? `${leg}${k - 1}` : fore ? 'trunk' : 'pelvis', at, 8 / (k + 1)]));
-}
+type LionBone = (typeof LION)[number]['name'];
+
+const DEG = Math.PI / 180;
+/** its legs, as a species lists them: fore-left, fore-right, hind-left, hind-right; each with its top, elbow or stifle, wrist or hock, paw */
+const LEGS = ['leftFore', 'rightFore', 'leftHind', 'rightHind'] as const;
+const JOINTS = [0, 1, 2, 3] as const;
 // each leg joint's range (°): sideways, fore and aft (+ its end back), twist — top, elbow or stifle, wrist or hock, paw
-const RANGES: Record<string, number[][]> = { Fore: [[25, -90, 100, 20], [5, -110, 45, 5], [5, -10, 120, 5], [15, -70, 90, 10]],
-  Hind: [[25, -80, 80, 20], [5, -40, 110, 5], [5, -110, 30, 5], [15, -70, 90, 10]] };
-const deg = Math.PI / 180;
-const at = (name: string) => joints.find(([n]) => n === name)![2];
-const skeleton = new Skeleton(joints.map(([name, parent, joint, mass]) => ({ name, parent: joints.findIndex(([n]) => n === parent), offset: parent ? joint.clone().sub(at(parent)) : joint, mass, com: v(0, 0, 0) })), {
-  chains: { neck: ['neck', 'head'], mouth: ['neck', 'head', 'jaw'] },
-  limits: joints.flatMap(([name], bone) => {
-    const [, end, k] = /^(?:left|right)(Fore|Hind)(\d)$/.exec(name) ?? [];
-    if (!end) return [];
-    const [z, back, forth, twist] = RANGES[end][Number(k)];
-    return [{ bone, axis: 1 as const, swing: [[-z * deg, z * deg], [back * deg, forth * deg]] as [[number, number], [number, number]], twist: [-twist * deg, twist * deg] as [number, number] }];
-  }),
-});
+const RANGES = {
+  Fore: [[25, -90, 100, 20], [5, -110, 45, 5], [5, -10, 120, 5], [15, -70, 90, 10]],
+  Hind: [[25, -80, 80, 20], [5, -40, 110, 5], [5, -110, 30, 5], [15, -70, 90, 10]],
+} as const;
+/** each bone's mass (kg): ~190 kg in all */
+const MASSES: Partial<Record<LionBone, number>> = { trunk: 60, spine: 30, pelvis: 22, neck: 12, head: 16, jaw: 2, tail: 2, tailTip: 1 };
+const LIMITS: Partial<Record<LionBone, Range>> = {};
+for (const leg of LEGS) for (const joint of JOINTS) {
+  const [sideways, back, forth, twist] = RANGES[leg.endsWith('Fore') ? 'Fore' : 'Hind'][joint];
+  MASSES[`${leg}${joint}`] = 8 / (joint + 1);
+  LIMITS[`${leg}${joint}`] = { axis: 1, swing: [[-sideways * DEG, sideways * DEG], [back * DEG, forth * DEG]], twist: [-twist * DEG, twist * DEG] };
+}
 
 // footfalls (fore-left, fore-right, hind-left, hind-right): a lateral-sequence walk, a trot, a rotary gallop leading with the left fore —
 // the right fore down first, then the left, the gathered flight, the left hind, the right hind, the extended flight [read: Hudson, Corr &
@@ -50,61 +43,70 @@ const TROTTING = { ...WALKING, withers: 0, croup: [0, 0], bounce: 1 } as const;
 const GALLOPING = { withers: 0, croup: [0, 0], spine: 12, spinePhase: 4.1, roll: 1, yaw: 1, headPitch: 0, headRise: 0, headWithers: 0.1, once: 1, tail: 0.8, bounce: 1 } as const;
 
 /**
- * The lion: it walks, trots from a Froude number of 0.6 and gallops from 3 (walk–trot ~0.5, trot–gallop 2–3 [recalled: Alexander &
- * Jayes 1983]; 4.7 m/s here against 5.4 m/s from Heglund, Taylor & McMahon 1974's 1.535 M^0.24 for 190 kg [recalled]), its gait's
- * stride and stance as `powerGait` scales them: at 14 m/s (a lion's 98th-percentile speed 13.9 m/s [snippet: Wilson et al. 2018, Nature
- * 554:183]) ~3 strides a second, each paw down a fifth of it [read: Hudson et al. 2012, a cheetah's 2.4–3.2 Hz at 9–17 m/s and duty
- * falling with speed], with two flights a stride. Galloping it runs lower on its legs (`run`), so they reach further fore and aft.
+ * A lion of ~190 kg, 1.0 m at the withers: it walks, trots from a Froude number of 0.6 and gallops from 3 (walk–trot ~0.5, trot–gallop
+ * 2–3 [recalled: Alexander & Jayes 1983]; 4.7 m/s here against 5.4 m/s from Heglund, Taylor & McMahon 1974's 1.535 M^0.24 for 190 kg
+ * [recalled]), its gait's stride and stance as `powerGait` scales them: at 14 m/s (a lion's 98th-percentile speed 13.9 m/s [snippet:
+ * Wilson et al. 2018, Nature 554:183]) ~3 strides a second, each paw down a fifth of it [read: Hudson et al. 2012, a cheetah's 2.4–3.2 Hz
+ * at 9–17 m/s and duty falling with speed], with two flights a stride. Galloping it runs lower on its legs (`run`), so they reach further
+ * fore and aft. It pitches head-end down into its acceleration as a dog does (read: Walter & Carrier 2009, J Exp Biol 212:1930), its
+ * trunk's response a dog's made dynamically similar on its 0.92 m legs.
  */
-export const LION: Species<'jaw'> = {
-  skeleton,
-  gaze: { neck: 'neck', eyes: (pose, out) => pose.point(skeleton.index('head'), v(0, -0.05, 0.2), out), range: { down: 0.4, up: 0.3, side: 0.5 } },
-  hands: { jaw: 'mouth' },
-  // (it pitches head-end down into its acceleration as the dog does (read: Walter & Carrier 2009, see `DOG`), its response the dog's made
-  // dynamically similar on its 0.92 m legs)
-  inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 0.79, damping: 0.65 },
-  legs: {
-    chains: legs.map((leg) => ({ joints: [0, 1, 2, 3].map((k) => ({ bone: skeleton.index(`${leg}${k}`), axes: ['yzx', 'x', 'x', 'zx'][k] })),
-      heel: v(0, -0.06, -0.04), toe: v(0, -0.06, 0.08), toeOut: 0, rocker: [[0, 0], [1, 0]] })),
-    gait: {
-      ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT], [2, TROT], [3, GALLOP]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
-      run: { froude: [1, 3], drop: 0.15 },
-      body: carriages([[0.3, WALKING], [0.6, TROTTING], [2, TROTTING], [3, GALLOPING]]),
-    },
-    carriage: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
-      life: [['tail', { every: [3, 7], rate: 1, pick: swing }]] },
+export const LION_SPECIES = species(LION, {
+  gaze: { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, -0.05, 0.2] }, range: { down: 0.4, up: 0.3, side: 0.5 } },
+  hands: { jaw: ['neck', 'head', 'jaw'] },
+  legs: LEGS.map((leg) => ({
+    joints: JOINTS.map((joint) => ({ bone: `${leg}${joint}` as const, axes: ['yzx', 'x', 'x', 'zx'][joint] })),
+    heel: [0, -0.06, -0.04],
+    toe: [0, -0.06, 0.08],
+  })),
+  carriage: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
+    life: [['tail', { every: [3, 7], rate: 1, pick: swing }]] },
+}, {
+  gait: {
+    ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT], [2, TROT], [3, GALLOP]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
+    run: { froude: [1, 3], drop: 0.15 },
+    body: carriages([[0.3, WALKING], [0.6, TROTTING], [2, TROTTING], [3, GALLOPING]]),
   },
-};
+  masses: MASSES,
+  limits: LIMITS,
+  inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 0.79, damping: 0.65 },
+});
 
-/** the prey's lead on the lion as the chase starts (m), its pace then and once it breaks away (m/s) */
-const PREY = { lead: 22, pace: 9, escape: 16 };
+/**
+ * where the prey stands as the lion sets off (m); how near the lion walks before it trots, and comes before the prey bolts and before it
+ * breaks away (m); the prey's pace bolting and breaking away (m/s)
+ */
+const PREY = { at: new Vector3(0, 0.3, 42), trots: 36, bolts: 22, breaks: 4, pace: 9, escape: 16 };
 
+/** A lion stalks its prey, runs it down at a gallop, and gives up as it breaks away. */
 export function lionRun(): Scenario {
   return {
-    id: 'lion-run', title: 'A lion runs down its prey', duration: 34, actors: [], skins: ['models/lion.glb'], cameraDistance: 4.5, cameraAngles: { side: Math.PI / 2 },
-    description: 'A lion made of data only walks, trots and breaks into a full rotary gallop after its prey down a long field, then gives up the chase as it breaks away, slows and stops.',
-    stage: (dev = false) => {
-      // (the prey: off at its pace as the chase starts, breaking away once the lion is near; where it is at a time)
-      let chase = Infinity, escape = Infinity, from = 0, stopped = false;
-      const prey = (t: number) => v(0, 0.3, from + PREY.pace * Math.max(0, Math.min(t, escape) - chase) + PREY.escape * Math.max(0, t - escape));
-      const pace = (t: number) => v(0, 0, t < chase ? 0 : t < escape ? PREY.pace : PREY.escape);
-      const ahead = (lion: Body, m: number) => v(0, 0, lion.pose.position(0).z + m);
-      const lion = new Body(LION, (lion) => function* () {
-        const z = () => lion.pose.position(0).z, far = v(0, 0, 1e3);
-        yield* walkTo(lion, { to: far, speed: 1.3, accel: 1.2, until: () => z() > 6 })();
-        yield* walkTo(lion, { to: far, speed: 3.5, accel: 2, until: () => z() > 20 })();
-        [chase, from] = [lion.frame.time, z() + PREY.lead];
-        yield* walkTo(lion, { to: (f) => prey(f.time).setY(0), velocity: (f) => pace(f.time), speed: 14, accel: 3, until: (f) => prey(f.time).z - z() < 4 })();
-        escape = lion.frame.time;
-        // (it gives up: slows over as far as it takes to stop from its gallop, and stands)
-        yield* walkTo(lion, { to: ahead(lion, 36), accel: 3, speed: 4 })();
-        stopped = true;
-      }, { dev });
+    id: 'lion-run',
+    title: 'A lion runs down its prey',
+    description: 'A lion walks and trots toward its prey down a long field; as it bolts, the lion breaks into a full rotary gallop after it, then gives up the chase as it breaks away, slows and stops.',
+    duration: 34,
+    cameraDistance: 4.5,
+    cameraAngles: { side: Math.PI / 2 },
+    stage: (cast) => {
+      const lion = cast.body(LION_SPECIES);
+      const scene = new Group();
+      const prey = ball(scene, 'prey', 0.3, PREY.at);
+      const gap = () => prey.position.z - lion.position.z;
+      let pace = 0, stopped = false;
       return {
-        report: new Report(), bodies: [lion],
-        props: (t) => [...skeletonProps(lion.pose, 0.03), { kind: 'ball', position: prey(t < chase ? chase : t), radius: 0.3 }],
+        scene,
+        bodies: [lion],
+        // (the prey runs at its pace as the lion walks, trots and gallops after it)
+        story: () => parallel('all', action({ update: (_, clock) => void (prey.position.z += pace * clock.delta) }), function* () {
+          yield* walkTo(lion, prey, { speed: 1.3, accel: 1.2, until: () => gap() < PREY.trots });
+          yield* walkTo(lion, prey, { speed: 3.5, accel: 2, until: () => gap() < PREY.bolts });
+          pace = PREY.pace;
+          yield* walkTo(lion, prey, { speed: 14, accel: 3, until: () => gap() < PREY.breaks });
+          pace = PREY.escape;
+          // (it gives up: slows over as far as it takes to stop from its gallop, and stands)
+          stopped = yield* walkTo(lion, lion.position.add(new Vector3(0, 0, 36)), { speed: 4, accel: 3 });
+        }),
         done: () => stopped,
-        script: () => { throw new Error('the lion scenario has no humanoids'); },
       };
     },
   };

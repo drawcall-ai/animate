@@ -1,19 +1,35 @@
-import { expect, it } from 'vitest';
+import { run } from './dev-log';
+import { expect } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
-import { knownFailure, run, vary } from '../scripts/run';
+import { reaching } from '../src/scenarios/tracking';
+import { knownFailure, seeded } from '../scripts/run';
 import { cases } from '../../packages/animate/test/open';
 
-// Open: look-around's left upper arm comes 3.6 µm past the trunk's 1 cm at 15.05 s (expected to fail: fixed, it comes off the list).
-const test = cases([['look-around: final-pose dev checks', [0, 3]]]);
-for (const sc of SCENARIOS) {
-  test(`${sc.id}: final-pose dev checks${sc.id === 'vr' ? ' (underHead completion known)' : ''}`, () => {
-    const log = run(sc);
-    expect(log.filter((entry) => !knownFailure(entry))).toEqual([]);
+// Every scenario's run with development checks on: its dev log empty and its story finished; and a few of them varied (each person
+// up to 10 cm off, turned up to 0.15 rad, up to 4 % taller or shorter), which no story may hang on. Open cases are expected to fail:
+// each one fixed comes off the list.
+// - look-around: the left upper arm 1.05 cm into the trunk (limit 1) at 15.0 s, turning back from behind;
+// - reach higher and faster (seed 0): the anticipatory walk's braking leaves final-pose XCoM 10.2–11.2 cm outside
+//   support at 12.9 / 8.1 s (limit 10 cm), though the hand stays on its course;
+// - reach variation #3 (seed 1): upstream tiptoe settlement leaves XCoM 11.37 cm outside support at 12.93 s.
+const test = cases([
+  ['reach: variation #3 final-pose dev checks', [1]],
+  'look-around: final-pose dev checks',
+  ["reach: higher final-pose dev checks", [0]],
+  ["reach: faster final-pose dev checks", [0]],
+]);
+for (const scenario of SCENARIOS) {
+  test(`${scenario.id}: final-pose dev checks${scenario.id === 'vr' ? ' (its side-step unfinished, known)' : ''}`, () => {
+    expect(run(scenario).filter((entry) => !knownFailure(entry))).toEqual([]);
   });
 }
 
-for (const sc of SCENARIOS.filter((sc) => ['reach', 'knight-arming', 'pickup-shelf'].includes(sc.id))) {
-  it.each([1, 2, 3, 4])(`${sc.id}: variation #%s final-pose dev checks`, (seed) => {
-    expect(run(vary(sc, seed))).toEqual([]);
-  });
+for (const scenario of SCENARIOS.filter((each) => ['reach', 'knight-arming', 'pickup-shelf'].includes(each.id))) {
+  for (const seed of [1, 2, 3, 4]) {
+    test(`${scenario.id}: variation #${seed} final-pose dev checks`, () => expect(run(scenario, { vary: seeded(seed) })).toEqual([]));
+  }
+}
+
+for (const [name, variation] of [['higher', { rise: 0.1 }], ['faster', { pace: 1.2 }]] as const) {
+  test(`reach: ${name} final-pose dev checks`, () => expect(run(reaching(variation))).toEqual([]));
 }

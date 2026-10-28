@@ -1,22 +1,36 @@
 import { expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
-import { action, parallel } from '@pmndrs/timeline';
-import { Body, type Frame } from '../../src/core/body';
-import { strideAt, type Gait } from '../../src/core/legs/gait';
-import { quintic } from '../../src/core/legs/swing';
-import { HORSE_WALK, HORSE_TROT, horse, horseLegs, horseLeadPoint } from '../../src/horse/legs';
-import { horseMotion } from '../../src/horse/legs';
-import { idle } from '../../src/humanoid/idle';
-import { walkTo } from '../../src/core/walk';
-import type { Species } from '../../src/core/species';
-import type { Attention as HorseAttention } from '../../src/core/species';
-import { SKELETON, LEGS, HEAD, NECK, PELVIS, SPINE, EARS, TAIL, HALTER } from '../../src/horse/skeleton';
-import { Pose } from '../../src/core/pose';
-import type { Stepper } from '../../src/core/legs/stepper';
-import type { DrivenRoot } from '../../src/core/legs/stepper';
-import { Humanoid } from '../../src/humanoid/humanoid';
-import { createSkeletonModel } from '../../src/humanoid/model';
-import { INDEX } from '../../src/humanoid/bones';
+import type { ReusableTimeline } from '@pmndrs/timeline';
+import { Body, horse, walkTo, wait, type Temperament, type Verb } from '../../src/index';
+import { selfOf } from '../../src/body/body';
+import type { Frame } from '../../src/kernel/frame';
+import { strideAt } from '../../src/species/gait';
+import { quintic } from '../../src/legs/step/swing';
+import { Pose } from '../../src/kernel/pose';
+import { INDEX } from '../../src/species/humanoid/bones';
+import { claim, person, scene } from '../bodies';
+import { HORSE } from '../skeletons/horse';
+
+const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);
+const WALK = gaitOf(MARE);
+/** a species' gait (throws for one without legs) */
+function gaitOf(kind: typeof MARE) {
+  if (!kind.legs) throw new Error('no legs');
+  return kind.legs.gait;
+}
+const HEAD = bone('head'), NECK = bone('neck'), PELVIS = bone('pelvis'), SPINE = bone('back'), TAIL = bone('tail'), EARS = [bone('leftEar'), bone('rightEar')];
+/** a halter's lead ring (m, head bone) */
+const HALTER = new Vector3(0, -0.3, 0.05);
+/** each leg's bones and its sole's ends, in fore-left, fore-right, hind-left, hind-right order */
+const LEGS = (['leftFore', 'rightFore', 'leftHind', 'rightHind'] as const).map((name, i) => {
+  const fore = name.endsWith('Fore'), side = name.startsWith('left') ? 'left' : 'right', chain = MARE.legs?.chains[i];
+  if (!chain) throw new Error('no leg');
+  return {
+    scapula: fore ? bone(`${side}Scapula`) : undefined, upper: bone(fore ? `${side}Humerus` : `${side}Femur`),
+    cannon: bone(fore ? `${side}ForeCannon` : `${side}HindCannon`), pastern: bone(fore ? `${side}ForePastern` : `${side}HindPastern`),
+    hoof: bone(fore ? `${side}ForeHoof` : `${side}HindHoof`), heel: chain.heel, toe: chain.toe,
+  };
+});
 
 it('a Cartesian swing has a bell-shaped speed peaking halfway and zero contact acceleration', () => {
   for (const T of [0.08, 0.2, 0.6]) {
@@ -36,22 +50,22 @@ it('a swing ends on the stance rate rather than at rest', () => {
   expect(end[2]).toBeCloseTo(0, 2);
 });
 
-/** a horse standing, or walking straight on at `speed`, its root and pose then written over by `later` (a later writer) */
+/** a horse standing, or walking straight on at `speed`, its root and pose then written over by `later` (a later writer); and its frame */
 function writtenOver(dev: boolean, speed: number, later: (f: Frame, body: Body) => void) {
-  const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 20), speed, accel: 0.65 })] : []),
-    action<Frame>({ update: (f) => later(f, body) }))), { idle: false, pose: new Pose(SKELETON), dev });
-  return body;
+  const body: Body = new Body(MARE, { dev });
+  claim(body, 'trunk', (f) => later(f, body));
+  return { body, step: scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 20), { speed, accel: 0.65 }); } : undefined) };
 }
 
 it('leg contact checks read the final pose after a later writer, and disappear with dev off', () => {
-  const joints = horseLegs()[0].joints, terminal = joints[joints.length - 1].bone;
+  const terminal = LEGS[0].hoof;
   const run = (dev: boolean) => {
-    const body = writtenOver(dev, 0, (f) => {
+    const { body, step } = writtenOver(dev, 0, (f) => {
       if (f.time <= 0.05) return;
       f.current.setLocal(terminal, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.3));
       f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.01, -0.01, 0)));
     });
-    for (let k = 0; k < 10; k++) body.update(1 / 60);
+    for (let k = 0; k < 10; k++) step();
     return body.log;
   };
   const checks = run(true).map((entry) => entry.check);
@@ -61,16 +75,17 @@ it('leg contact checks read the final pose after a later writer, and disappear w
   expect(run(false)).toEqual([]);
 });
 
-it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const)('checks %s touchdown after later pose writers, only with dev enabled', (axis, offset, limit) => {
+const OFFSETS = [['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3(0.03, 0, 0), 1]] as const;
+it.each(OFFSETS)('checks %s touchdown after later pose writers, only with dev enabled', (axis, offset, limit) => {
   const run = (dev: boolean) => {
     let landed = -1;
-    const body = writtenOver(dev, 0.95, (f, b) => {
-      if (landed < 0 && (b.stepper as Stepper | null)?.legs.some((leg) => !leg.swing && leg.planted === 0 && leg.landed)) {
+    const { body, step } = writtenOver(dev, 0.95, (f, b) => {
+      if (landed < 0 && selfOf(b).stepper?.legs.some((leg) => !leg.swing && leg.planted === 0 && leg.landed)) {
         landed = f.time;
         f.current.setRoot(f.current.position(0).clone().add(offset));
       }
     });
-    for (let tick = 0; tick < 240 && (landed < 0 || body.frame.time <= landed + 1 / 60); tick++) body.update(1 / 60);
+    for (let tick = 0; tick < 240 && (landed < 0 || selfOf(body).frame.time <= landed + 1 / 60); tick++) step();
     expect(landed).toBeGreaterThan(0);
     return body.log.filter((entry) => entry.check === `leg touchdown ${axis} speed (m/s)`);
   };
@@ -79,21 +94,21 @@ it.each([['vertical', new Vector3(0, -0.01, 0), 0.1], ['horizontal', new Vector3
 });
 
 it('rounds tiny negative speed noise but rejects reverse and nonfinite speed', () => {
-  expect(strideAt(HORSE_WALK, -8.9e-16, 0)).toEqual(strideAt(HORSE_WALK, 0, 0));
-  for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(HORSE_WALK, speed, 0)).toThrow('leg speed');
+  expect(strideAt(WALK, -8.9e-16, 0)).toEqual(strideAt(WALK, 0, 0));
+  for (const speed of [-1e-9, -0.1, NaN, Infinity]) expect(() => strideAt(WALK, speed, 0)).toThrow('leg speed');
   // (and a body whose legs read such noise off a root standing still steps on, its log empty)
-  const root = { position: new Vector3(), velocity: new Vector3(0, 0, -8.9e-16), yaw: 0 };
-  const body = new Body(horse(), undefined, { pose: new Pose(SKELETON), idle: { root }, dev: true });
+  const root = { position: new Vector3(0, 0, 0), velocity: new Vector3(0, 0, -8.9e-16), yaw: 0 };
+  const body = new Body(MARE, { drive: () => root, dev: true });
   for (let tick = 0; tick < 60; tick++) body.update(1 / 60);
   expect(body.log).toEqual([]);
 });
 
 it('follows a moving goal with supported contacts and a root that turns toward its path', () => {
-  const base = horse();
   let turned = 0;
-  const body: Body = new Body(base, () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => new Vector3(0.05, 0, 2 + 0.75 * f.time), velocity: () => new Vector3(0, 0, 0.75), speed: 0.95, accel: 0.65, until: () => false }),
-    action<Frame>({ update: (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); } }))), { idle: false, pose: new Pose(SKELETON), dev: true });
-  for (let tick = 0; tick < 8 * 60; tick++) body.update(1 / 60);
+  const body: Body = new Body(MARE, { dev: true });
+  claim(body, 'trunk', (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); });
+  const step = scene([body], function* () { yield* walkTo(body, (time) => new Vector3(0.05, 0, 2 + 0.75 * time), { speed: 0.95, accel: 0.65, until: Infinity }); });
+  for (let tick = 0; tick < 8 * 60; tick++) step();
   expect(body.pose.position(0).z).toBeGreaterThan(4);
   expect(turned).toBeGreaterThan(0.01);
   expect(turned).toBeLessThan(0.2);
@@ -104,7 +119,7 @@ it('follows a moving goal with supported contacts and a root that turns toward i
 // croup 136 cm in Icelandic horses (read: Acta Vet Scand 2025, PMC12180175) — and its face sloping 45–75° below horizontal, between a
 // nasal plane held extended (~51°) and neutral (~72°) (read: Go et al. 2014, BMC Vet Res 10:118))
 it('stands with its neck rising to a poll above its withers, its croup a little below them and its face sloping down', () => {
-  const pose = new Pose(SKELETON), withers = pose.position(LEGS[0].scapula!).y, deg = 180 / Math.PI;
+  const pose = new Pose(SKELETON), withers = pose.position(LEGS[0].scapula ?? 0).y, deg = 180 / Math.PI;
   const neck = pose.position(HEAD).clone().sub(pose.position(NECK)), face = new Vector3(0, -0.37, 0.3);
   expect(Math.atan2(neck.y, neck.z) * deg).toBeGreaterThan(30);
   expect(Math.atan2(neck.y, neck.z) * deg).toBeLessThan(50);
@@ -126,16 +141,16 @@ it('back flexion pivots about the hips without translating their attachments', (
 });
 
 it('a slow horse walk supports on an extended carpus, folds in swing and visibly nods', () => {
-  const { body, planted: down, phase } = movingHorse(HORSE_WALK, 0.95, {}, 42, () => null, 0.65);
+  const { body, step, planted: down, phase } = movingHorse('walk', 0.95, {}, 42, () => null, 0.65);
   const support: number[] = [], swing: number[] = [], poll: number[] = [];
   const hoofPitch: number[] = [], hindHock: number[] = [], column: number[] = [];
   const planted = [true, true, true, true];
   const contact = [0, 0], horizontal = [0, 0];
   for (let tick = 0; tick < 480; tick++) {
-    body.update(1 / 60);
+    step();
     LEGS.forEach((leg, i) => {
       if (down(i) && !planted[i]) {
-        const velocity = body.pose.position(leg.hoof).clone().sub(body.frame.prev2.position(leg.hoof)).multiplyScalar(60);
+        const velocity = body.pose.position(leg.hoof).clone().sub(selfOf(body).frame.prev2.position(leg.hoof)).multiplyScalar(60);
         contact[i < 2 ? 0 : 1] = Math.max(contact[i < 2 ? 0 : 1], Math.abs(velocity.y));
         horizontal[i < 2 ? 0 : 1] = Math.max(horizontal[i < 2 ? 0 : 1], velocity.setY(0).length());
       }
@@ -178,38 +193,128 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
 
 it.each([[0.4, 0], [0.2, -1], [0, -2], [1, 2], [-1, 2]])('supports ordinary goals (%s, %s), then follows their next position', (x, z) => {
   let goal = new Vector3(x, 0, z);
-  const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: () => goal, speed: 0.95, accel: 0.65, until: () => false }))), { idle: false, pose: new Pose(SKELETON), dev: true });
+  const body: Body = new Body(MARE, { dev: true });
+  const step = scene([body], function* () { yield* walkTo(body, () => goal, { speed: 0.95, accel: 0.65, until: Infinity }); });
   const start = body.pose.position(0).clone();
-  for (let tick = 0; tick < 120; tick++) body.update(1 / 60);
+  for (let tick = 0; tick < 120; tick++) step();
   // (a goal behind it turned to on the spot, the root staying put; one beside it within reach stepped toward)
   if (z < 0) expect(body.pose.position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
   goal = new Vector3(0, 0, 3);
   // (the next one ahead it then walks on to: after a turn on the forehand back round — 4–5 hind steps, ~2 s — and 3 m)
-  for (let tick = 0; tick < (z < 0 ? 5.5 : 4) * 60; tick++) body.update(1 / 60);
+  for (let tick = 0; tick < (z < 0 ? 5.5 : 4) * 60; tick++) step();
   expect(body.pose.position(0).z).toBeGreaterThan(1);
   expect(body.log).toEqual([]);
 });
 
 it('brakes for a moving goal that crosses behind a travelling root', () => {
-  const body: Body = new Body(horse(), () => (() => parallel<Frame>('all', idle(body), walkTo(body, { to: (f: Frame) => f.time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(f.time), 0, -2), speed: 0.95, accel: 0.65, until: () => false }))), { idle: false, pose: new Pose(SKELETON), dev: true });
-  for (let tick = 0; tick < 480; tick++) body.update(1 / 60);
+  const body: Body = new Body(MARE, { dev: true });
+  const step = scene([body], function* () {
+    yield* walkTo(body, (time) => time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(time), 0, -2), { speed: 0.95, accel: 0.65, until: Infinity });
+  });
+  for (let tick = 0; tick < 480; tick++) step();
   expect(body.pose.position(0).z).toBeGreaterThan(0.5);
   expect(body.pose.position(0).z).toBeLessThan(3);
   expect(body.log).toEqual([]);
 });
 
+/**
+ * A horse walking as `story` has it for `seconds` (a person `led` along beside it, if any), read off its final poses: the sub-steps two
+ * hooves left the floor together that its walk sets apart — every two of its footfalls are a quarter of a cycle or more apart (Hildebrand's
+ * lateral sequence) — the sub-steps two were in the air together that its walk has half a cycle apart (a girdle's: a walk is more than
+ * half a cycle on the floor, so they never are), those all four were up, and how long it took to turn 162°. A hoof is up once the lowest
+ * of its sole's ends is `UP` (m) off the floor.
+ */
+function walked(story: (b: Body) => Verb, seconds: number, led?: { body: Body; story: ReusableTimeline<unknown, unknown> }) {
+  const UP = 0.005, chains = MARE.legs?.chains ?? [], offsets = WALK.contacts.map((c) => typeof c.offset === 'number' ? c.offset : NaN);
+  const body = new Body(MARE, { at: new Vector3(2.6, 0, -0.8), face: 0, dev: true });
+  const step = scene([body], function* () { yield* story(body); }), lead = led && scene([led.body], led.story);
+  const up = () => chains.map(({ joints, heel, toe }) => {
+    const bone = joints[joints.length - 1].bone;
+    return Math.min(...[heel, toe].map((end) => body.pose.point(bone, end, new Vector3()).y)) > UP;
+  });
+  const apart = (a: number, b: number) => { const d = Math.abs(offsets[a] - offsets[b]); return Math.min(d, 1 - d); };
+  const together: string[] = [], paired: string[] = [];
+  let was = up(), all = 0, turned = 0, yaw = 0, turnedBy = NaN;
+  for (let tick = 0; tick < seconds * 60; tick++) {
+    lead?.();
+    step();
+    const now = up(), left = now.flatMap((u, i) => u && !was[i] ? [i] : []), at = `@${selfOf(body).frame.time.toFixed(2)}`;
+    for (const a of left) for (const b of left) if (a < b && apart(a, b) >= 0.25) together.push(`${a}+${b} ${at}`);
+    for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) if (now[a] && now[b] && apart(a, b) >= 0.5) paired.push(`${a}+${b} ${at}`);
+    if (now.every(Boolean)) all++;
+    was = now;
+    const facing = selfOf(body).yaw;
+    turned += Math.atan2(Math.sin(facing - yaw), Math.cos(facing - yaw));
+    yaw = facing;
+    if (Number.isNaN(turnedBy) && Math.abs(turned) >= 0.9 * Math.PI) turnedBy = selfOf(body).frame.time;
+  }
+  return { steps: { together, paired, all, log: body.log }, turnedBy };
+}
+const after = (goal: (time: number) => Vector3) => (b: Body) => walkTo(b, goal, { until: Infinity });
+const clean = { together: [], paired: [], all: 0, log: [] };
 
-function movingHorse(gait: Gait, speed: number, attention: HorseAttention = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
-  const base = horse(), species: Species = { ...base, legs: { ...base.legs!, gait, posture: (start) => horseMotion(start, gait, seed) } };
-  const body: Body = new Body(species, () => (() => parallel<Frame>('all', idle(body, { attention }),
-    action<Frame>({ update: () => { const at = look(); if (at) body.asks.look = at; } }),
-    ...(speed ? [walkTo(body, { to: new Vector3(0, 0, 200), speed, accel })] : []))), { idle: false, pose: new Pose(SKELETON), dev: true });
-  const planted = (i: number) => !(body.stepper as Stepper).legs[i].swing;
-  const phase = (i: number) => {
-    const stepper = body.stepper as Stepper, leg = stepper.legs[i];
-    return leg.swing ? (stepper.Ts + leg.swing.u * (stepper.cycle - stepper.Ts)) / stepper.cycle : (leg.planted / stepper.cycle) % 1;
+// (setting off from standing, a walk's first foot steps alone and the rest follow it in their turn — the clock starts at the feet as they
+// stand, none of them overdue for having stood: Hildebrand's lateral sequence from the first footfall on — whether its goal is ahead,
+// beside or behind it — its forefeet, and its hind feet, never in the air together)
+it.each([['ahead', 2.6, 6], ['beside', 6, -0.8], ['behind', 0, -4], ['ahead and aside', 4.9, 1.6]] as const)('sets off for a goal %s one hoof at a time', (_, x, z) => {
+  expect(walked(after(() => new Vector3(x, 0, z)), 6).steps).toEqual(clean);
+});
+
+// (turning half round on the spot, as quick as before — 162° in under 5.5 s — in quicker, smaller steps at its walk's footfalls)
+it.each([['left', 1], ['right', -1]] as const)('turns half round on the spot to its %s, its forefeet and hind feet never in the air together', (_, side) => {
+  const { steps, turnedBy } = walked((b) => walkTo(b, new Vector3(2.6, 0, -0.8), { face: side * 0.99 * Math.PI }), 8);
+  expect(steps).toEqual(clean);
+  expect(turnedBy).toBeLessThan(5.5);
+});
+
+// (and so again each time it sets off after its goal, which stops and goes on: walking 0.8 m/s for 2 s, standing 2.5 s)
+it('follows a goal that stops and goes on, setting off one hoof at a time', () => {
+  const goal = (t: number) => { const n = Math.floor(t / 4.5); return new Vector3(4.9, 0, -1.4 + 0.8 * (2 * n + Math.min(2, t - 4.5 * n))); };
+  expect(walked(after((time) => goal(time)), 16.5).steps).toEqual(clean);
+});
+
+// (led: following a person who walks 2 m on and stands 2.5 s, four times, a little behind and aside of them)
+it('follows a walking person, its forefeet and hind feet never in the air together', () => {
+  const walker = person();
+  const story = function* () {
+    for (const z of [2, 4, 6, 8]) { yield* walkTo(walker, new Vector3(0, 0, z)); yield* wait(2.5); }
   };
-  return { body, planted, phase };
+  const beside = new Vector3(2.3, 0, -0.6);
+  expect(walked(after(() => walker.pose.position(0).clone().setY(0).add(beside)), 16.5, { body: walker, story }).steps).toEqual(clean);
+});
+
+it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up together, in the final pose, only with dev enabled', () => {
+  const run = (dev: boolean) => {
+    // (a later writer lifts the whole standing body 2 cm on one sub-step: all four hooves leave the floor at once, no leap)
+    const { body, step } = writtenOver(dev, 0, (f) => { if (Math.abs(f.time - 0.5) < 1e-6) f.current.setRoot(f.current.position(0).clone().add(new Vector3(0, 0.02, 0))); });
+    for (let k = 0; k < 40; k++) step();
+    return body.log.filter((entry) => entry.check.startsWith('gait lift-off together') || entry.check.startsWith('walk pair in the air'));
+  };
+  const checks = run(true).map((entry) => `${entry.check} ${entry.where}`);
+  expect(checks).toContain('gait lift-off together (cycle apart) leftForeHoof with rightForeHoof');
+  expect(checks).toContain('walk pair in the air together (cycle apart) leftForeHoof with rightForeHoof');
+  expect(checks).toContain('walk pair in the air together (cycle apart) leftHindHoof with rightHindHoof');
+  // (a walk's hooves a quarter of a cycle apart may be up together: a diagonal or lateral pair is no girdle's)
+  expect(checks.filter((c) => c.startsWith('walk pair') && /Fore\w* with \w*Hind/.test(c))).toEqual([]);
+  expect(run(false)).toEqual([]);
+});
+
+
+function movingHorse(gait: 'walk' | 'trot', speed: number, life: Temperament = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
+  const body: Body = new Body(horse(HORSE, gait), { life: { ...life, seed }, dev: true });
+  claim(body, 'look', () => { const at = look(); if (at) selfOf(body).look = at; });
+  const step = scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 200), { speed, accel }); } : undefined);
+  const stepper = () => {
+    const legs = selfOf(body).stepper;
+    if (!legs) throw new Error('no legs');
+    return legs;
+  };
+  const planted = (i: number) => !stepper().legs[i].swing;
+  const phase = (i: number) => {
+    const legs = stepper(), leg = legs.legs[i];
+    return leg.swing ? (legs.Ts + leg.swing.u * (legs.cycle - legs.Ts)) / legs.cycle : (leg.planted / legs.cycle) % 1;
+  };
+  return { body, step, planted, phase };
 }
 const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samples);
 /** the croup read at the landmark its bounds were set at: the pelvis bone's origin before it moved to where the rigged horse has it, now
@@ -217,13 +322,14 @@ const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samp
 const CROUP = new Vector3(0, 0.03, 0.09);
 const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'YXZ').x;
 
-it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
-  const { body, phase: phaseOf } = movingHorse(gait, speed);
-  const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [], back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];
-  const high: number[] = [], low: number[] = [], relative: number[] = [], relativeCroup: number[] = [], lead: number[] = [];
+it.each([['walk', 1.6], ['trot', 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
+  const { body, step, phase: phaseOf } = movingHorse(gait, speed);
+  const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [];
+  const back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];
+  const high: number[] = [], low: number[] = [], relative: number[] = [], relativeCroup: number[] = [];
   // (at speed: 10 s on, then 6 s)
   for (let tick = 0; tick < 960; tick++) {
-    body.update(1 / 60);
+    step();
     if (tick < 600) continue;
     const p = body.pose;
     poll.push(p.position(HEAD).y); withers.push(p.position(LEGS[0].scapula ?? 0).y); croup.push(p.point(PELVIS, CROUP, new Vector3()).y);
@@ -232,7 +338,6 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
     pelvis.push(pitchOf(p.rotation(PELVIS))); tail.push(new Euler().setFromQuaternion(p.local(TAIL), 'YXZ').y);
     relative.push(p.position(HEAD).y - p.position(LEGS[0].scapula ?? 0).y);
     relativeCroup.push(p.position(HEAD).y - p.point(PELVIS, CROUP, new Vector3()).y);
-    lead.push(horseLeadPoint(p, new Vector3()).sub(p.position(0)).z);
     const phase = phaseOf(0) % 0.5;
     if (phase < 0.03 || phase > 0.47) high.push(p.position(HEAD).y);
     if (Math.abs(phase - 0.25) < 0.03) low.push(p.position(HEAD).y);
@@ -245,10 +350,9 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: final body excursi
   const passiveLag = lag.indexOf(Math.max(...lag)) / 60;
   expect(passiveLag).toBeGreaterThanOrEqual(0.1); expect(passiveLag).toBeLessThanOrEqual(0.2);
   expect(excursion(tail)).toBeGreaterThan(5 * Math.PI / 180);
-  expect(excursion(lead)).toBeLessThan(1e-12);
   expect(excursion(pelvis) / (Math.PI / 180)).toBeGreaterThan(6.5);
   expect(excursion(pelvis) / (Math.PI / 180)).toBeLessThan(7.5);
-  const trot = gait === HORSE_TROT;
+  const trot = gait === 'trot';
   expect(excursion(poll)).toBeGreaterThan(trot ? 0.08 : 0.12);
   expect(excursion(poll)).toBeLessThan(trot ? 0.1 : 0.15);
   expect(excursion(withers)).toBeGreaterThan(trot ? 0.08 : 0.06);
@@ -278,11 +382,11 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
   /** `seconds` of a tied horse standing: what moves, how far off it strays, and how its hind hooves rest late on */
   const sample = (seed: number, seconds: number) => {
     const knot = new Vector3(0.7, 1.12, 0.8);
-    const { body } = movingHorse(HORSE_WALK, 0, { tether: { position: knot, length: 1.1 } }, seed);
+    const { body, step } = movingHorse('walk', 0, { tether: () => ({ position: knot, length: 1.1 }) }, seed);
     const ears: number[][] = [[], []], tail: number[] = [], head: number[] = [], roll: number[] = [], yaw: number[] = [], shift: number[] = [];
     let rested = 0, toe = 0, heel = 0, tied = 0, aside = 0, ahead = -Infinity, behind = Infinity, standing = NaN;
     for (let tick = 0; tick < seconds * 60; tick++) {
-      body.update(1 / 60);
+      step();
       const p = body.pose;
       if (Number.isNaN(standing)) standing = p.position(LEGS[2].upper).y;
       EARS.forEach((ear, i) => ears[i].push(p.local(ear).angleTo(new Quaternion())));
@@ -322,15 +426,9 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
 }, 30000);
 
 it.each([false, true])('checks the final tied pose after later writers, dev=%s', (dev) => {
-  const pose = new Pose(SKELETON); pose.setRoot(new Vector3(0, 1.32, 0));
-  const motion = horseMotion(pose, HORSE_WALK);
-  // (standing legs, as the posture reads them)
-  const legs = { legs: LEGS.map(() => ({ phase: 0 })), rest: () => {} };
   const tether = { position: new Vector3(0.7, 1.12, 0.8), length: 0.9 };
-  const body = new Body({ skeleton: SKELETON }, () => (() => action<Frame>({ update: f => {
-    motion.prepare(f, legs, { tether: f.time < 0.02 ? tether : undefined });
-    if (f.time < 0.02) f.current.setLocal(NECK, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -0.5));
-  } })), { idle: false, pose, dev });
+  const body = new Body(MARE, { life: { tether: (time) => time < 0.02 ? tether : undefined }, dev });
+  claim(body, 'trunk', (f) => { if (f.time < 0.02) f.current.setLocal(NECK, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -0.5)); });
   body.update(1 / 30);
   const checks = body.log.filter(entry => entry.check === 'horse tether (m)');
   expect(checks.length).toBe(dev ? 1 : 0);
@@ -340,37 +438,37 @@ it.each([false, true])('checks the final tied pose after later writers, dev=%s',
 it('ears lead the head toward an approaching person; both saddling reactions begin within 1 s and settle by 5 s', () => {
   let person: Vector3 | null = null;
   let startle: Vector3 | undefined;
-  const { body } = movingHorse(HORSE_WALK, 0, { startle: () => startle }, 42, () => person);
-  for (let i = 0; i < 60; i++) body.update(1 / 60);
+  const { body, step } = movingHorse('walk', 0, { startle: () => startle }, 42, () => person);
+  for (let i = 0; i < 60; i++) step();
   const ear = body.pose.local(EARS[0]).clone(), neck = body.pose.local(NECK).clone();
   person = new Vector3(2, 1.5, 3);
-  for (let i = 0; i < 6; i++) body.update(1 / 60);
+  for (let i = 0; i < 6; i++) step();
   expect(ear.angleTo(body.pose.local(EARS[0]))).toBeGreaterThan(neck.angleTo(body.pose.local(NECK)));
-  for (let i = 0; i < 54; i++) body.update(1 / 60);
+  for (let i = 0; i < 54; i++) step();
   expect(new Euler().setFromQuaternion(body.pose.local(NECK), 'YXZ').y).toBeGreaterThan(0.1);
   const point = new Vector3(2, 1, -1);
   for (let event = 0; event < 2; event++) {
     const before = body.pose.local(HEAD).clone();
     startle = point.clone();
-    for (let i = 0; i < 60; i++) body.update(1 / 60);
+    for (let i = 0; i < 60; i++) step();
     expect(before.angleTo(body.pose.local(HEAD))).toBeGreaterThan(0.15);
     expect(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y).toBeGreaterThan(0.15);
-    for (let i = 0; i < 240; i++) body.update(1 / 60);
+    for (let i = 0; i < 240; i++) step();
     expect(Math.abs(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y)).toBeLessThan(0.01);
   }
   expect(body.log).toEqual([]);
 });
 
 
-it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: solved hooves peak near mid-swing, rise early and brake into contact', (gait, speed) => {
-  const { body, planted } = movingHorse(gait, speed);
+it.each([['walk', 1.6], ['trot', 3.7]] as const)('%s: solved hooves peak near mid-swing, rise early and brake into contact', (gait, speed) => {
+  const { body, step, planted } = movingHorse(gait, speed);
   const flights: { speed: number; height: number; forward: number }[][] = [[], [], [], []];
   let checked = 0;
   for (let tick = 0; tick < 960; tick++) {
-    body.update(1 / 60);
+    step();
     LEGS.forEach((leg, i) => {
       const p = body.pose;
-      const velocity = p.position(leg.hoof).clone().sub(body.frame.prev2.position(leg.hoof)).multiplyScalar(60);
+      const velocity = p.position(leg.hoof).clone().sub(selfOf(body).frame.prev2.position(leg.hoof)).multiplyScalar(60);
       if (!planted(i)) {
         flights[i].push({ speed: velocity.clone().setY(0).length(), height: Math.min(p.point(leg.hoof, leg.heel, new Vector3()).y, p.point(leg.hoof, leg.toe, new Vector3()).y), forward: velocity.z });
         return;
@@ -397,17 +495,19 @@ it.each([[HORSE_WALK, 1.6], [HORSE_TROT, 3.7]] as const)('%s: solved hooves peak
 // (a stepper keeps what it stood on for its own feet: another body stepping between its move and its feet changes nothing)
 it('plants its feet from its own pelvis, whatever another stepper did since', () => {
   const driven = (x: number, speed: number) => {
-    const root: DrivenRoot = { position: new Vector3(x, 0, 0), velocity: new Vector3(0, 0, speed), yaw: 0 };
-    return { root, body: new Humanoid(createSkeletonModel(), undefined, { at: { x, z: 0 }, idle: { root } }) };
+    const root = { position: new Vector3(x, 0, 0), velocity: new Vector3(0, 0, speed), yaw: 0 };
+    return { root, body: person({ at: new Vector3(x, 0, 0), drive: () => root }) };
   };
   const [a, b] = [driven(0, 3.5), driven(3, -3.5)];
   let most = 0;
   for (let i = 0; i < 120; i++) {
     for (const { root, body } of [a, b]) { root.position.addScaledVector(root.velocity, 1 / 60); body.update(1 / 60); }
-    const stepper = a.body.stepper as Stepper, legs = stepper.legs.flatMap((leg, k) => leg.swing ? [] : [k]);
+    const stepper = selfOf(a.body).stepper, other = selfOf(b.body).stepper;
+    if (!stepper || !other) throw new Error('no legs');
+    const legs = stepper.legs.flatMap((leg, k) => leg.swing ? [] : [k]);
     const tops = legs.map((k) => a.body.pose.position(k ? INDEX.rightUpperLeg : INDEX.leftUpperLeg).clone());
     const before = legs.map((k, j) => stepper.pose(k, tops[j]).ankle.clone());
-    (b.body.stepper as Stepper).move(b.body.frame, b.root);
+    other.move(selfOf(b.body).frame, b.root);
     legs.forEach((k, j) => { most = Math.max(most, stepper.pose(k, tops[j]).ankle.distanceTo(before[j])); });
   }
   expect(most).toBe(0);

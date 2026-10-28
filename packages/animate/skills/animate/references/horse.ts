@@ -1,0 +1,40 @@
+// Absolute model-space positions in metres: +Y up, +Z forward, +X left.
+import type { SkeletonBone } from '@drawcall/rig';
+
+/**
+ * A warmblood of 1.60 m at the withers (16 hands), standing square : the trunk on the spine under the saddle,
+ * the back's pivot at the hip axis, a scapula above each foreleg, ears and a tail.
+ */
+export const HORSE = [
+  { name: 'trunk', position: [0, 1.4, 0] },
+  { name: 'back', parent: 'trunk', position: [0, 1.24, -0.64] },
+  { name: 'pelvis', parent: 'back', position: [0, 1.39, -0.57] },
+  { name: 'neck', parent: 'trunk', position: [0, 1.34, 0.72] },
+  { name: 'head', parent: 'neck', position: [0, 1.75, 1.2] },
+  { name: 'jaw', parent: 'head', position: [0, 1.38, 1.5] },
+  { name: 'leftScapula', parent: 'trunk', position: [0.12, 1.44, 0.657] },
+  { name: 'leftHumerus', parent: 'leftScapula', position: [0.17, 1.1, 0.857] },
+  { name: 'leftForearm', parent: 'leftHumerus', position: [0.17, 0.889, 0.63] },
+  { name: 'leftForeCannon', parent: 'leftForearm', position: [0.17, 0.47, 0.63] },
+  { name: 'leftForePastern', parent: 'leftForeCannon', position: [0.17, 0.24, 0.63] },
+  { name: 'leftForeHoof', parent: 'leftForePastern', position: [0.17, 0.097, 0.73] },
+  { name: 'rightScapula', parent: 'trunk', position: [-0.12, 1.44, 0.657] },
+  { name: 'rightHumerus', parent: 'rightScapula', position: [-0.17, 1.1, 0.857] },
+  { name: 'rightForearm', parent: 'rightHumerus', position: [-0.17, 0.889, 0.63] },
+  { name: 'rightForeCannon', parent: 'rightForearm', position: [-0.17, 0.47, 0.63] },
+  { name: 'rightForePastern', parent: 'rightForeCannon', position: [-0.17, 0.24, 0.63] },
+  { name: 'rightForeHoof', parent: 'rightForePastern', position: [-0.17, 0.097, 0.73] },
+  { name: 'leftFemur', parent: 'pelvis', position: [0.15, 1.24, -0.64] },
+  { name: 'leftGaskin', parent: 'leftFemur', position: [0.16, 0.852, -0.433] },
+  { name: 'leftHindCannon', parent: 'leftGaskin', position: [0.15, 0.5, -0.71] },
+  { name: 'leftHindPastern', parent: 'leftHindCannon', position: [0.15, 0.22, -0.71] },
+  { name: 'leftHindHoof', parent: 'leftHindPastern', position: [0.15, 0.097, -0.624] },
+  { name: 'rightFemur', parent: 'pelvis', position: [-0.15, 1.24, -0.64] },
+  { name: 'rightGaskin', parent: 'rightFemur', position: [-0.16, 0.852, -0.433] },
+  { name: 'rightHindCannon', parent: 'rightGaskin', position: [-0.15, 0.5, -0.71] },
+  { name: 'rightHindPastern', parent: 'rightHindCannon', position: [-0.15, 0.22, -0.71] },
+  { name: 'rightHindHoof', parent: 'rightHindPastern', position: [-0.15, 0.097, -0.624] },
+  { name: 'leftEar', parent: 'head', position: [0.06, 1.82, 1.25] },
+  { name: 'rightEar', parent: 'head', position: [-0.06, 1.82, 1.25] },
+  { name: 'tail', parent: 'pelvis', position: [0, 1.43, -0.79] },
+] as const satisfies readonly SkeletonBone[];

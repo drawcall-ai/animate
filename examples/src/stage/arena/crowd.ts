@@ -1,4 +1,4 @@
-import { forwardOf, leftOf } from '@drawcall/animate';
+import { forwardOf, leftOf } from '../../math';
 import {
   BoxGeometry,
   CapsuleGeometry,

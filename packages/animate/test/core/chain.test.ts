@@ -1,8 +1,9 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose, type Skeleton } from '../../src';
-import { solveChain } from '../../src/rig';
-import { beyond } from '../../src/core/limits';
+import { Pose } from '../../src/kernel/pose';
+import type { Skeleton } from '../../src/kernel/skeleton';
+import { solveChain } from '../../src/kernel/chain';
+import { beyond } from '../../src/kernel/limits';
 import { hinge, horseLeg, leg, turn } from './rigs';
 
 const solve = (skeleton: Skeleton, ...args: Parameters<typeof solveChain> extends [unknown, unknown, ...infer R] ? R : never) => {
@@ -28,6 +29,19 @@ describe('solveChain', () => {
       const line = position.clone().sub(hip).normalize();
       const side = (p: Vector3) => p.clone().sub(hip).projectOnPlane(line).normalize();
       expect(side(pose.position(2)).dot(side(pole))).toBeGreaterThan(1 - 1e-9);
+    }
+  });
+
+  it('extends a bent rest chain in its own plane, including after an unconstrained joint has turned', () => {
+    const skeleton = leg();
+    skeleton.bones[2].offset.set(0, .35, .57);
+    skeleton.bones[3].offset.set(0, -.4, .5);
+    const target = new Vector3(.1, -.1, .2);
+    for (const rotation of [turn(1, 0, 0, 0), turn(1, 1, 1, .6), turn(0, 1, 0, .6)]) {
+      const pose = new Pose(skeleton);
+      pose.setLocal(2, rotation);
+      solveChain({ current: pose }, 'leg', { tip: { position: target } });
+      expect(pose.position(3).distanceTo(target)).toBeLessThan(1e-9);
     }
   });
 

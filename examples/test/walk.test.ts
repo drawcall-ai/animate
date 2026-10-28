@@ -1,29 +1,28 @@
 import { expect } from 'vitest';
-import type { CharacterModel } from '@pmndrs/viverse';
 import { stroll } from '../src/scenarios/stroll';
 import { legsBiped } from '../src/scenarios/legs';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
+import { OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from '../src/skeletons';
 import { failed, measure, walkingForm } from './metrics';
-import { SKELETONS, skeletonModel } from '../src/skeletons';
 import { frames } from './frame';
 import { cases } from '../../packages/animate/test/open';
 
 // A walk's form as people walk (`walkingForm`: the stance's share, the trunk's lean, the elbows, the pelvis's rise and fall) on the
-// default body and on skeletons unlike it, on both legs: the stroll's (a go-there point, balance) and a player's (the stepper under a
-// scripted root).
-const BODIES: [string, (() => CharacterModel) | undefined][] = [['default body', undefined],
-  ...Object.entries(SKELETONS).map(([name, { joints, height }]): [string, () => CharacterModel] => [`the ${name}`, () => skeletonModel(joints, height)])];
+// default body and on skeletons unlike it, on both legs: the stroll's (a go-there point, balance) and a player's (a driven root).
+const BODIES: [string, PersonSkeleton][] = [['default body', PERSON], ['the soldier', SOLDIER], ['the outlier', OUTLIER]];
 const WALKS: [string, () => Scenario][] = [['strolling after a point', stroll], ['stepping under a scripted root', legsBiped]];
 
 /** Open (expected to fail: each one fixed comes off the list). */
 const test = cases([
-  // (on the core legs, the people's only legs since 2026-10-23: none of the outlier's straight strides is steady enough to judge)
-  'strolling after a point, the outlier walks as people do']);
+  // (none of the outlier's straight strides is steady enough to judge)
+  'strolling after a point, the outlier walks as people do',
+  // (its stance 0.652 of the stride, just over people's 0.65)
+  'stepping under a scripted root, the outlier walks as people do']);
 
-for (const [body, model] of BODIES) for (const [walk, scenario] of WALKS) {
+for (const [body, skeleton] of BODIES) for (const [walk, scenario] of WALKS) {
   test(`${walk}, ${body} walks as people do`, () => {
-    const sim = new Simulation(scenario(), model);
+    const sim = new Simulation(scenario(), { skeleton });
     const m = measure(sim.scenario.id, frames(sim));
     const g = m.gait.summary(false, false);
     expect(m.gait.strides.filter((s) => !s.curve).length, 'steady straight strides').toBeGreaterThanOrEqual(3);

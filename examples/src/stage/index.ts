@@ -20,10 +20,10 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import type { CharacterModel } from '@pmndrs/viverse';
 import { drawOpenPose2D, projectBody25 } from '../openpose';
 import { createBoxingArena, type Environment } from './arena';
 import { context2d } from '../dom';
+import type { Joints } from '../joints';
 import type { Scenario } from '../scenario';
 
 export const FOV = 38;
@@ -104,8 +104,8 @@ export class Stage {
     this.composer.setSize(r.width, r.height);
   }
 
-  /** renders the scene; `flat` = these models drawn as 2D OpenPose over it instead */
-  draw(flat: readonly CharacterModel[] | null) {
+  /** renders the scene; `flat` = these people drawn as 2D OpenPose over it */
+  draw(flat: readonly Joints[] | null) {
     // (the grid goes along under the camera, its lines where they were: a ride leaves its middle)
     this.grid.position.set(Math.round(this.camera.position.x), 0, Math.round(this.camera.position.z));
     if (this.env) this.composer.render();
@@ -113,7 +113,6 @@ export class Stage {
     const { canvas } = this.overlay;
     this.overlay.clearRect(0, 0, canvas.width, canvas.height);
     if (!flat) return;
-    this.camera.updateMatrixWorld();
-    for (const m of flat) drawOpenPose2D(this.overlay, projectBody25(m, this.camera, canvas.width, canvas.height));
+    for (const joints of flat) drawOpenPose2D(this.overlay, projectBody25(joints, this.camera, canvas.width, canvas.height));
   }
 }

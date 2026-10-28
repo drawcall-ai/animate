@@ -1,0 +1,72 @@
+import { Vector3 } from 'three';
+import type { BoneDef } from '../../kernel/skeleton';
+import { BONES, INDEX, PARENT, type BoneName } from './bones';
+import { palmOf } from './landmarks';
+import type { Proportions } from './proportions';
+
+/** body mass for a standing height (kg): a body mass index of 22, mid normal weight */
+export const massFor = (height: number) => 22 * height * height;
+
+/**
+ * Each bone's segment (Dempster, as tabled by Winter 2009): its share of the body's mass, and
+ * where its centre of mass sits as a share of the way from the bone's origin to its child's (or a
+ * point of its own). Bones of no segment of their own (the neck: the head's segment is head and
+ * neck; the clavicles: in the thorax; the toes: in the foot) carry none.
+ * - pelvis (hips): 0.142, near the lumbosacral end of its span down to the hip joints
+ * - abdomen (spine, up to the chest): 0.139 at 0.56 of its way up
+ * - thorax (chest, up to the neck): 0.216 at 0.18 of its way up
+ * - head and neck: 0.081 at the skull's centre
+ * - upper arm 0.028 at 0.436, forearm 0.016 at 0.430, hand 0.006 at the palm's centre
+ * - thigh 0.100 at 0.433, shank 0.0465 at 0.433, foot 0.0145 halfway from the ankle to the ball
+ */
+const SEGMENT: Partial<Record<BoneName, { mass: number; com: (proportions: Proportions) => Vector3 }>> = {
+  hips: { mass: 0.142, com: (proportions) => proportions.offsets.spine.clone().multiplyScalar(0.895) },
+  spine: { mass: 0.139, com: (proportions) => proportions.offsets.chest.clone().multiplyScalar(0.56) },
+  chest: { mass: 0.216, com: (proportions) => proportions.offsets.neck.clone().multiplyScalar(0.18) },
+  head: { mass: 0.081, com: (proportions) => proportions.headCenter.clone() },
+};
+for (const s of ['left', 'right'] as const) {
+  SEGMENT[`${s}UpperArm`] = { mass: 0.028, com: (proportions) => proportions.offsets[`${s}LowerArm`].clone().multiplyScalar(0.436) };
+  SEGMENT[`${s}LowerArm`] = { mass: 0.016, com: (proportions) => proportions.offsets[`${s}Hand`].clone().multiplyScalar(0.43) };
+  SEGMENT[`${s}Hand`] = { mass: 0.006, com: (proportions) => palmOf(proportions, s) };
+  SEGMENT[`${s}UpperLeg`] = { mass: 0.1, com: (proportions) => proportions.offsets[`${s}LowerLeg`].clone().multiplyScalar(0.433) };
+  SEGMENT[`${s}LowerLeg`] = { mass: 0.0465, com: (proportions) => proportions.offsets[`${s}Foot`].clone().multiplyScalar(0.433) };
+  SEGMENT[`${s}Foot`] = { mass: 0.0145, com: (proportions) => proportions.offsets[`${s}Toes`].clone().multiplyScalar(0.5) };
+}
+
+/** Named IK chains: two-segment limbs, lumbar-to-skull spine, and neck-base-to-skull neck. */
+export const CHAINS = {
+  leftArm: ['leftUpperArm', 'leftLowerArm', 'leftHand'],
+  rightArm: ['rightUpperArm', 'rightLowerArm', 'rightHand'],
+  leftLeg: ['leftUpperLeg', 'leftLowerLeg', 'leftFoot'],
+  rightLeg: ['rightUpperLeg', 'rightLowerLeg', 'rightFoot'],
+  spine: ['spine', 'chest', 'neck', 'head'],
+  neck: ['neck', 'head'],
+} satisfies Record<string, readonly BoneName[]>;
+
+/** Bones in BONES/INDEX order at rest offsets; hips are relative to the ground point beneath them; mass defaults to massFor(height). */
+export function skeletonOf(proportions: Proportions, mass = massFor(proportions.height)): BoneDef[] {
+  return BONES.map((name) => {
+    const segment = SEGMENT[name], speed = snapSpeed(name);
+    return {
+      name,
+      snap: { speed, accel: speed / 0.03 },
+      parent: name === 'hips' ? -1 : INDEX[PARENT[name]],
+      offset: name === 'hips' ? proportions.hips.clone() : proportions.offsets[name].clone(),
+      mass: segment ? segment.mass * mass : 0,
+      com: segment ? segment.com(proportions) : new Vector3(),
+    };
+  });
+}
+
+/** A snap heuristic (°/s): elite joint speeds over 30 ms, a little under a throw's ~50 ms acceleration (Fleisig 1999); fault detectors, not clinical limits. */
+function snapSpeed(name: BoneName): number {
+  if (/UpperArm/.test(name)) return 7500;
+  if (/LowerArm/.test(name)) return 2900;
+  if (/Hand/.test(name)) return 3000;
+  if (/UpperLeg/.test(name)) return 2000;
+  if (/LowerLeg|Foot|Toes/.test(name)) return 2500;
+  if (/Shoulder/.test(name)) return 1000;
+  if (/neck|head/.test(name)) return 700;
+  return 1200;
+}

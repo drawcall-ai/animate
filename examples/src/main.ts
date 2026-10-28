@@ -1,18 +1,13 @@
-import { Group, Vector3, type Object3D } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { Skin } from './stage/skin';
-import { flattenCharacterModelOptions, loadCharacterModel, type CharacterModel } from '@pmndrs/viverse';
-import { Bodies, instance } from './stage/bodies';
+import { Group, Vector3 } from 'three';
+import { Figures, Wardrobe } from './stage/bodies';
 import { Framing, placeCamera, PlayerCamera, VIEWS } from './stage/camera';
 import { CinematicCamera } from './stage/cinematic';
 import { byId } from './dom';
 import { Playback } from './playback';
-import { FIXED_DT, type Look, type Role, type Scenario } from './scenario';
-import { SKELETONS, openPoseOf, type SkeletonName } from './skeletons';
+import { FIXED_DT, type Look, type Scenario } from './scenario';
+import { DOG, HORSE, LION, OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from './skeletons';
 import { SCENARIOS } from './scenarios';
 import { Simulation } from './simulation';
-import { drawProps } from './stage/props';
 import { FOV, Stage } from './stage';
 import { drawTrail } from './stage/trail';
 import { Panel, type Settings } from './ui';
@@ -26,31 +21,16 @@ const capture = params.has('capture') || video;
 if (capture) document.body.classList.add('capture');
 
 const stage = new Stage(byId('c', HTMLCanvasElement), byId('overlay', HTMLCanvasElement), capture);
-const props = new Group();
-stage.scene.add(props);
-const bodies = new Bodies(stage.scene);
-/** the soldier the people wear unless a scenario or body=openpose|mannequin says otherwise (rigged from a generated model) */
-const SOLDIER = { url: 'models/soldier.glb' };
-/** the skeleton body=soldier|outlier asks every person to stand on (drawn as an OpenPose skeleton), or none */
-const asked = params.get('body');
-const skeleton = asked && asked in SKELETONS ? (asked as SkeletonName) : undefined;
-/** the scenario's body, or the one body=openpose|mannequin asks for */
-function bodyOf(s: Scenario): NonNullable<Scenario['body']> {
-  const asked = params.get('body');
-  if (asked === 'openpose') return 'openpose';
-  if (asked === 'mannequin') return {};
-  return s.body ?? SOLDIER;
-}
-// the viverse characters the scenarios wear, loaded up front (by url; no url = viverse's mannequin;
-// Draco decoding for compressed files such as Drawcall Market characters)
-const characters = new Map<string | undefined, CharacterModel>();
-// the skins the scenarios' other bodies wear (none drawn as skeletons: body=openpose)
-const skins = new Map<string, Object3D>();
-for (const s of SCENARIOS) {
-  const body = bodyOf(s);
-  if (body !== 'openpose' && !characters.has(body.url)) characters.set(body.url, await loadCharacterModel(...flattenCharacterModelOptions({ url: body.url, useDraco: true })));
-  if (body !== 'openpose') for (const url of s.skins ?? []) if (url && !skins.has(url)) skins.set(url, (await new GLTFLoader().loadAsync(url)).scene);
-}
+/** the skeleton people stand on where a scenario names none: the soldier (wearing its model) unless body=person|outlier asks for a bare one */
+const skeleton = ({ person: PERSON, outlier: OUTLIER, soldier: SOLDIER } as Record<string, PersonSkeleton | undefined>)[params.get('body') ?? 'soldier'];
+if (!skeleton) throw new Error(`body=${params.get('body')}: a body is person, outlier or soldier`);
+/** the models bodies wear, by the skeleton measured on each: the bodies of other skeletons go bare */
+byId('time', HTMLElement).textContent = 'rigging the models…';
+const wardrobe = await Wardrobe.load([[SOLDIER, 'models/soldier.glb'], [HORSE, 'models/horse.glb'], [DOG, 'models/dog.glb'], [LION, 'models/lion.glb']]);
+const figures = new Figures();
+/** the run's scene, then the figures (they follow its world matrices) */
+const shown = new Group();
+stage.scene.add(shown, figures.group);
 const caption = byId('caption', HTMLElement);
 const zoom = Number(params.get('zoom') ?? 1);
 /** the shots turned about the focus by this much (rad, + = toward the body's left): the far side of what it faces */
@@ -59,6 +39,8 @@ const framing = new Framing();
 let playerCamera = new PlayerCamera();
 /** the player's look as last shown (`sync`): the camera's, the one the shown rifle is placed in */
 let shownLook: Look | null = null;
+/** the first person's head is hidden as the camera is in it */
+let headHidden = false;
 const settings: Settings = {
   view: VIEWS.find((v) => v === params.get('view')) ?? 'orbit',
   flat: params.get('mode') === '2d',
@@ -84,27 +66,21 @@ function load(s: Scenario) {
   show();
 }
 
-/** the scenario's actors are OpenPose skeletons (of their own skeleton, if one is named), or copies of its viverse character */
+/** a run of the scenario, its bodies dressed from the wardrobe */
 function start(s: Scenario) {
-  const body = bodyOf(s);
-  // (a role's own skeleton first, then the one body= asks for)
-  const named = (role: Role) => role.skeleton ?? skeleton;
-  if (body === 'openpose') return new Playback(new Simulation(s, skeleton && ((role) => openPoseOf(named(role)!))));
-  const character = characters.get(body.url);
-  if (!character) throw new Error(`character ${body.url ?? 'mannequin'} was not loaded`);
-  const person = (role: Role) => { const name = named(role); return name ? openPoseOf(name) : instance(character, body.url === undefined); };
-  return new Playback(new Simulation(s, person, false, (url, b) => new Skin(clone(skins.get(url)!), b.pose.skeleton)));
+  return new Playback(new Simulation(s, { skeleton, dress: wardrobe.dress }));
 }
 
 /** sets the stage for the playback just started */
 function show() {
   playerCamera = new PlayerCamera();
-  bodies.hideHead(false);
-  const { scenario: s, actors } = playback.sim;
-  bodies.cast(actors, playback.sim.skins);
+  const { scenario: s, stage: run } = playback.sim;
+  shown.clear();
+  shown.add(run.scene);
+  figures.cast(run.bodies);
   stage.setEnvironment(s);
-  bodies.castShadows(!!stage.env);
-  framing.set(playback.blend(1).root, facing());
+  figures.castShadows(!!stage.env);
+  framing.set(playback.blend(1).focus, facing());
   panel.select(s);
   if (settings.view === 'orbit') startOrbit();
   if (!capture) {
@@ -137,13 +113,10 @@ function sync(alpha = 1, dt = 1 / 60) {
   const s = sim.scenario;
   const between = playback.blend(alpha);
   shownLook = between.look;
-  // (a body wearing its skin is not drawn as a skeleton too)
-  const skinned = sim.skins.some((s) => s);
-  drawProps(props, skinned ? between.props.filter((p) => p.kind === 'ball' || !p.bone) : between.props);
   stage.env?.update(sim.t);
   const still = capture && !video;
-  if (still) framing.set(between.root, facing());
-  else framing.follow(between.root, playback.velocity, facing(), dt);
+  if (still) framing.set(between.focus, facing());
+  else framing.follow(between.focus, playback.velocity, facing(), dt);
   panel.showTime(sim.t, s.duration);
   caption.textContent = still ? `${s.id}  t=${sim.t.toFixed(2)}s  ${settings.view}` : '';
 }
@@ -159,7 +132,7 @@ function aim(dt = FIXED_DT) {
   const playerView = settings.view === 'first' || settings.view === 'third' ? settings.view : player?.input.view;
   const usePlayer = player && (player.live || settings.view === 'first' || settings.view === 'third' || !params.has('view') && settings.view === 'orbit');
   stage.controls.enabled = !usePlayer;
-  bodies.hideHead(!!usePlayer && playerView === 'first');
+  headHidden = !!usePlayer && playerView === 'first';
   if (usePlayer && playerView) {
     if (!shownLook) throw new Error('a player camera needs the look sync showed');
     playerCamera.apply(stage.camera, shownLook, player.input.ads, playerView, dt);
@@ -179,8 +152,10 @@ function aim(dt = FIXED_DT) {
 }
 
 function draw() {
-  bodies.hidden = settings.flat;
-  stage.draw(settings.flat ? bodies.all : null);
+  figures.hidden = settings.flat;
+  figures.hideHead(headHidden);
+  stage.draw(settings.flat ? figures.joints : null);
+  figures.hideHead(false);
 }
 
 if (video) recordVideo();
@@ -205,8 +180,9 @@ function recordVideo() {
     if (cinematic) {
       orbit = camera.position.clone();
       const look = settings.view === 'orbit' ? stage.controls.target.clone() : framing.focus.clone();
-      cinematic.apply(camera, t, dt, playback.sim.actors, { pos: camera.position.clone(), look, fov: FOV });
-      bodies.hideHead(cinematic.hideOwnHead);
+      stage.scene.updateMatrixWorld();
+      cinematic.apply(camera, t, dt, figures.joints, { pos: camera.position.clone(), look, fov: FOV });
+      headHidden = cinematic.hideOwnHead;
     }
     draw();
   };

@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { Skeleton, type BoneDef, type Limit } from '../../src';
+import { Skeleton, type BoneDef, type Limit } from '../../src/kernel/skeleton';
 
 const bone = (name: string, parent: number, offset: [number, number, number]): BoneDef => ({
   name,
@@ -22,7 +22,10 @@ export const leg = (limits: Limit[] = []) =>
 /** a horse's hind leg: four segments from the hip down to the hoof, each joint a hinge */
 export const horseLeg = () =>
   new Skeleton(
-    [bone('pelvis', -1, [0, 1.4, 0]), bone('femur', 0, [0.2, 0, 0]), bone('tibia', 1, [0, -0.45, 0]), bone('cannon', 2, [0, -0.45, 0]), bone('pastern', 3, [0, -0.35, 0]), bone('hoof', 4, [0, -0.15, 0])],
+    [
+      bone('pelvis', -1, [0, 1.4, 0]), bone('femur', 0, [0.2, 0, 0]), bone('tibia', 1, [0, -0.45, 0]),
+      bone('cannon', 2, [0, -0.45, 0]), bone('pastern', 3, [0, -0.35, 0]), bone('hoof', 4, [0, -0.15, 0]),
+    ],
     { limits: [hinge(1, -1.2, 0.6), hinge(2, -0.2, 1.6), hinge(3, -1.6, 0.2), hinge(4, -0.4, 1.4)], chains: { leg: ['femur', 'tibia', 'cannon', 'pastern', 'hoof'] } },
   );
 

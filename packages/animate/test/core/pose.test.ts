@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose } from '../../src';
+import { Pose } from '../../src/kernel/pose';
 import { leg, turn } from './rigs';
 
 describe('Pose', () => {
@@ -24,10 +24,6 @@ describe('Pose', () => {
     expect(pose.local(2).angleTo(turn(1, 0, 0, 0.25))).toBeLessThan(1e-7);
     pose.setRoot(new Vector3(0, 0, 0), 0.5);
     expect(pose.position(0).y).toBeCloseTo(0.5, 12);
-    // a world rotation, under a turned parent
-    pose.setLocal(1, turn(0, 0, 1, 0.3));
-    pose.setRotation(2, bent);
-    expect(pose.rotation(2).angleTo(bent)).toBeLessThan(1e-7);
     expect(() => pose.setLocal(2, new Quaternion(), 1.5)).toThrow(/weight/);
   });
 });

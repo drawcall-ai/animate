@@ -1,25 +1,38 @@
 import { Quaternion, Vector3 } from 'three';
-import { Carrier } from '../../src/core/carrier';
+import { Carrier } from '../../src/kernel/carrier';
 import { describe, expect, it } from 'vitest';
-import { action, parallel } from '@pmndrs/timeline';
-import { Body, lookAt, Skeleton, type BoneDef, type Frame } from '../../src';
-import { chainTo, TrackedRotation } from '../../src/rig';
-import { SHIFT } from '../../src/core/gaze';
-import { spinOf } from '../../src/core/rotation';
-import { reached } from '../../src/core/tip';
-import type { ReadonlyPose } from '../../src/core/pose';
-import { leg, turn } from './rigs';
+import { Body, species } from '../../src/index';
+import { selfOf } from '../../src/body/body';
+import { TrackedRotation } from '../../src/kernel/track';
+import { looking, SHIFT } from '../../src/look/gaze';
+import { spinOf } from '../../src/kernel/rotation';
+import { ChainTip, reached } from '../../src/kernel/tip';
+import { claim, dt } from '../bodies';
+import { turn } from './rigs';
 
-const dt = 1 / 60;
+/** a free root at (0, 1, 0) with a leg hanging down −y: a ball-jointed thigh, a knee bending back (+x), a foot */
+const LEG = [
+  { name: 'pelvis', position: [0, 1, 0] }, { name: 'thigh', parent: 'pelvis', position: [0.1, 1, 0] },
+  { name: 'shin', parent: 'thigh', position: [0.1, 0.55, 0] }, { name: 'foot', parent: 'shin', position: [0.1, 0.15, 0] },
+] as const;
+const leg = () => new Body(species(LEG, { hands: { leg: ['thigh', 'shin', 'foot'] } }, { masses: { pelvis: 1, thigh: 1, shin: 1, foot: 1 } }));
+
+/** a chest and a neck carrying a head, its eyes 5 cm up and 8 cm ahead of the head bone */
+const NECK = [
+  { name: 'chest', position: [0, 1.4, 0] }, { name: 'neck', parent: 'chest', position: [0, 1.5, 0] }, { name: 'head', parent: 'neck', position: [0, 1.6, 0] },
+] as const;
+const GAZE = { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, 0.05, 0.08] }, range: { down: 0.5, up: 0.35, side: 0.35 } } as const;
+const gazing = () => new Body(species(NECK, { gaze: GAZE }, { masses: { chest: 1, neck: 1, head: 1 } }));
+const eyesOf = (body: Body) => body.pose.point(2, new Vector3(0, 0.05, 0.08), new Vector3());
 
 describe('chainTo', () => {
-  it("moves a chain's tip on to its target, its joints braked to `turnAccel`, and ends there once reached", () => {
-    const goal = new Vector3(0.25, 0.35, 0.3);
+  it("moves a chain's tip on to its target, its joints braked to `turnAccel`, and gets there", () => {
+    const goal = new Vector3(0.25, 0.35, 0.3), body = leg(), tip = new ChainTip('leg');
     let ended = -1;
-    const body = new Body({ skeleton: leg() }, () => (function* () {
-      yield* chainTo('leg', { position: goal }, { accel: 6, speed: 1, turnAccel: 40, pole: new Vector3(0.1, 0.6, 2), until: 'reached' })();
-      yield* action<Frame>({ init: () => void (ended = body.frame.time), update: () => false });
-    }), { idle: false });
+    claim(body, 'hand.leg', (f) => {
+      if (ended < 0 && f.time > f.dt && reached(f, 3, { position: goal })) ended = f.time;
+      tip.to(f, { position: goal }, { accel: 6, speed: 1, turnAccel: 40, pole: new Vector3(0.1, 0.6, 2) });
+    });
     const knee: Quaternion[] = [];
     for (let k = 0; k < 240 && ended < 0; k++) {
       body.update(dt);
@@ -36,13 +49,12 @@ describe('chainTo', () => {
       const u = Math.max(0, Math.min(1, t));
       return u ** 3 * (10 - 15 * u + 6 * u * u);
     };
-    const body = new Body({ skeleton: leg() }, () => (() => parallel<Frame>('all',
-      action({ update: (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)) }),
-      chainTo('leg', (f) => {
-        const u = Math.max(0, Math.min(1, f.time - 1));
-        return { position: new Vector3(0.1, 0.1 + 0.6 * ease(u), 0.5), velocity: new Vector3(0, 18 * u * u * (1 - u) ** 2, 0) };
-      }, { accel: 8, speed: 2 }),
-    )), { idle: false });
+    const body = leg(), tip = new ChainTip('leg');
+    claim(body, 'go', (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)));
+    claim(body, 'hand.leg', (f) => {
+      const u = Math.max(0, Math.min(1, f.time - 1));
+      tip.to(f, { position: new Vector3(0.1, 0.1 + 0.6 * ease(u), 0.5), velocity: new Vector3(0, 18 * u * u * (1 - u) ** 2, 0) }, { accel: 8, speed: 2 });
+    });
     for (let k = 0; k < 90; k++) body.update(dt);
     expect(body.pose.position(3).distanceTo(new Vector3(0.1, 0.4, 0.5))).toBeLessThan(0.01);
   });
@@ -52,13 +64,10 @@ describe('TrackedRotation', () => {
   it('holds a joint to its acceleration where its goal jumps, and follows a goal moving smoothly without lag', () => {
     const joint = new TrackedRotation();
     let goal = (t: number) => turn(1, 0, 0, Math.sin(2 * t));
-    const body = new Body({ skeleton: leg() }, () => (function* () {
-      yield* action<Frame>({
-        update: (f) => void f.current.setLocal(2, joint.follow(f.prev2.local(2), f.prev.local(2), goal(f.time), { accel: 30, speed: 8 }, f.dt, new Quaternion())),
-      });
-    }), { idle: false });
+    const body = leg();
+    claim(body, 'hand.leg', (f) => void f.current.setLocal(2, joint.follow(f.prev2.local(2), f.prev.local(2), goal(f.time), { accel: 30, speed: 8 }, f.dt, new Quaternion())));
     for (let k = 0; k < 120; k++) body.update(dt);
-    expect(body.pose.local(2).angleTo(goal(body.frame.time))).toBeLessThan(1e-3);
+    expect(body.pose.local(2).angleTo(goal(selfOf(body).frame.time))).toBeLessThan(1e-3);
     goal = () => turn(1, 0, 0, 2);
     const turns: number[] = [];
     let last = body.pose.local(2).clone();
@@ -71,17 +80,14 @@ describe('TrackedRotation', () => {
   });
 });
 
-describe('lookAt', () => {
+describe('looking', () => {
   it("turns a gazer's head, upright, until its eyes are on the point: the head most of the way, the eyes the rest (a few degrees)", () => {
-    const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
-    const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
-    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
-    const point = new Vector3(2, 1.2, 1);
-    const body: Body = new Body({ skeleton, gaze: gazer }, () => (() => lookAt(body, point)()), { idle: false });
+    const point = new Vector3(2, 1.2, 1), body = gazing();
+    claim(body, 'look', looking(selfOf(body), () => point));
     for (let k = 0; k < 120; k++) body.update(dt);
     const head = body.pose.rotation(2);
     const forward = new Vector3(0, 0, 1).applyQuaternion(head);
-    const eyes = gazer.eyes(body.pose, new Vector3());
+    const eyes = eyesOf(body);
     // (the eyes take a quarter of the turn, at most 0.3 of their range to the side or up: 0.105 rad)
     const off = forward.angleTo(point.clone().sub(eyes));
     expect(off).toBeGreaterThan(0.08);
@@ -90,34 +96,26 @@ describe('lookAt', () => {
   });
 
   it('looks down past straight down at a point below and a little behind, rather than turning round', () => {
-    const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
-    const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
-    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
-    const point = new Vector3(0.05, 0, -0.3);
-    const body: Body = new Body({ skeleton, gaze: gazer }, () => (() => lookAt(body, point)()), { idle: false });
+    const point = new Vector3(0.05, 0, -0.3), body = gazing();
+    claim(body, 'look', looking(selfOf(body), () => point));
     for (let k = 0; k < 120; k++) body.update(dt);
     // (still facing the way the chest does, not turned half round)
     expect(new Vector3(1, 0, 0).applyQuaternion(body.pose.rotation(2)).x).toBeGreaterThan(0.9);
   });
 
   it('keeps one way of looking at a point nearly straight below, the chest bowed and swaying under it', () => {
-    const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
-    const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
-    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
     // (a hilt at the left hip, seen from above: down, a little left and ahead)
     const point = new Vector3(0.17, 0.95, 0.2);
     const sway = (t: number) => turn(0, 1, 0, 0.04 * Math.sin(2 * Math.PI * 3 * t)).multiply(turn(1, 0, 0, 0.4));
-    const body: Body = new Body({ skeleton, gaze: gazer }, () => (function* () {
-      yield* parallel<Frame>('all', function* () {
-        yield* action<Frame>({ update: (f) => void f.current.setLocal(0, sway(f.time)) });
-      }, lookAt(body, point));
-    }), { idle: false });
+    const body = gazing();
+    claim(body, 'go', (f) => void f.current.setLocal(0, sway(f.time)));
+    claim(body, 'look', looking(selfOf(body), () => point));
     const heads: Quaternion[] = [];
     let missed = 0;
     for (let k = 0; k < 120; k++) {
       body.update(dt);
       heads.push(body.pose.rotation(2).clone());
-      const eyes = gazer.eyes(body.pose, new Vector3());
+      const eyes = eyesOf(body);
       if (k >= 60) missed = Math.max(missed, new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(2)).angleTo(point.clone().sub(eyes)));
     }
     // (on it but for the eyes' share, the head turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
@@ -126,13 +124,11 @@ describe('lookAt', () => {
   });
 
   it('turns the head as fast as the gaze shift is large (its main sequence), a bell, however many joints share the turn', () => {
-    const bone = (name: string, parent: number, y: number): BoneDef => ({ name, parent, offset: new Vector3(0, y, 0), mass: 1, com: new Vector3() });
-    const skeleton = new Skeleton([bone('chest', -1, 1.4), bone('neck', 0, 0.1), bone('head', 1, 0.1)], { chains: { neck: ['neck', 'head'] } });
-    const gazer = { neck: 'neck', eyes: (pose: Frame['prev'], out: Vector3) => pose.point(2, new Vector3(0, 0.05, 0.08), out), range: { down: 0.5, up: 0.35, side: 0.35 } };
     /** the head's speed (rad/s) every step of a look `yaw` aside, and how far it turned */
     const look = (yaw: number) => {
       const eyes = new Vector3(0, 1.65, 0.08);
-      const body: Body = new Body({ skeleton, gaze: gazer }, () => (() => lookAt(body, eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3)), SHIFT)()), { idle: false });
+      const body = gazing(), point = eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3));
+      claim(body, 'look', looking(selfOf(body), () => point, SHIFT));
       const speeds: number[] = [];
       let last = new Quaternion();
       for (let k = 0; k < 180; k++) {
@@ -159,7 +155,7 @@ describe('lookAt', () => {
 describe('reached', () => {
   it('counts a tip tracking a moving target exactly, judging the last pose against where the target was then', () => {
     const speed = 0.9;
-    const pose = (x: number) => ({ position: () => new Vector3(x, 0, 0) }) as unknown as ReadonlyPose;
+    const pose = (x: number) => ({ position: () => new Vector3(x, 0, 0), rotation: () => new Quaternion() });
     const target = { position: new Vector3(speed * 2 * dt, 0, 0), velocity: new Vector3(speed, 0, 0) };
     // the tip was on the target both earlier frames; now the target is a frame (1.5 cm) further on
     expect(reached({ prev2: pose(0), prev: pose(speed * dt), dt, time: 2 * dt }, 0, target)).toBe(true);
@@ -172,7 +168,7 @@ describe('reached', () => {
     const turned = (k: number) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 6 * k * dt);
     for (let k = 1; k <= 2; k++) on.move(k * dt, new Vector3(), turned(k));
     const grip = { position: new Vector3(0.5, 0, 0) };
-    const pose = (k: number) => ({ position: () => grip.position.clone().applyQuaternion(turned(k)) }) as unknown as ReadonlyPose;
+    const pose = (k: number) => ({ position: () => grip.position.clone().applyQuaternion(turned(k)), rotation: () => turned(k) });
     expect(reached({ prev2: pose(0), prev: pose(1), dt, time: 2 * dt }, 0, grip, on)).toBe(true);
   });
 });

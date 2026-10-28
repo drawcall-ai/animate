@@ -1,44 +1,64 @@
-import { Humanoid, yawOf, type Body } from '@drawcall/animate';
-import { Bone, Box3, Quaternion, Vector3, type Object3D } from 'three';
-import type { Look, Prop } from './scenario';
-import type { Simulation } from './simulation';
+import { Box3, Quaternion, Vector3, type Object3D } from 'three';
+import type { Body } from '@drawcall/animate';
+import type { Look } from './scenario';
+import { isPerson, type Simulation } from './simulation';
 
-/** the height the camera looks at over the body's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
+/** the height the camera looks at over a person's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
 const FOCUS_HEIGHT = 0.54;
 
+/** The run's scene graph as a step left it: every node under the scene, its parent and its position and rotation (world for an app-owned world matrix). */
+class Snapshot {
+  readonly nodes: Object3D[] = [];
+  readonly parents: (Object3D | null)[] = [];
+  /** each node's position and quaternion (7 numbers) */
+  values = new Float64Array(0);
+  /** each node's index */
+  readonly index = new Map<Object3D, number>();
+
+  /** the scene as it stands now */
+  take(scene: Object3D) {
+    this.nodes.length = this.parents.length = 0;
+    this.index.clear();
+    scene.traverse((node) => {
+      if (node === scene) return;
+      this.index.set(node, this.nodes.length);
+      this.nodes.push(node);
+      this.parents.push(node.matrixWorldAutoUpdate ? node.parent : null);
+    });
+    if (this.values.length < 7 * this.nodes.length) this.values = new Float64Array(7 * this.nodes.length * 2);
+    this.nodes.forEach((node, i) => {
+      if (!node.matrixWorldAutoUpdate) node.matrixWorld.decompose(_p, _q, _s);
+      (node.matrixWorldAutoUpdate ? node.position : _p).toArray(this.values, 7 * i);
+      (node.matrixWorldAutoUpdate ? node.quaternion : _q).toArray(this.values, 7 * i + 3);
+    });
+  }
+
+  /** the nodes as they were taken */
+  show() {
+    this.nodes.forEach((node, i) => {
+      node.position.fromArray(this.values, 7 * i);
+      node.quaternion.fromArray(this.values, 7 * i + 3);
+      if (!node.matrixWorldAutoUpdate) node.matrixWorld.compose(node.position, node.quaternion, _s.setFromMatrixScale(node.matrixWorld));
+    });
+  }
+}
+
 /**
- * A simulation shown at display rate. The sim runs at a fixed 60 Hz; displays often refresh
- * faster (120 Hz), so what's shown is interpolated between the last two steps — otherwise the
- * body moves only on some frames while the camera glides every frame, which reads as stutter
- * ("Fix Your Timestep"). The actors' models show the blend; each step starts from the exact
- * state the last one left, so the simulation is the same however it is shown.
+ * A simulation shown at display rate. The sim runs at a fixed 60 Hz; displays often refresh faster (120 Hz), so what's shown is
+ * interpolated between the last two steps — otherwise the bodies move only on some frames while the camera glides every frame, which
+ * reads as stutter ("Fix Your Timestep"). What is shown is the run's scene graph: each node's position and rotation blended in the frame its matrix uses
+ * between the two steps while its parent stayed the same (a thing taken into a hand or set down shows where it is now). Each step starts
+ * from the exact state the last one left, so the simulation is the same however it is shown.
  */
 export class Playback {
-  /** what the humanoids pose: each model's scene and bones (not viverse's hidden rest copy; glTF-style models, not VRMs); the skins' bones */
-  private readonly nodes: Object3D[] = [];
-  /** the nodes' positions and quaternions (7 numbers each) after the previous and the current step */
-  private readonly prev: Float64Array;
-  private readonly current: Float64Array;
-  /** the props after the previous and the current step (as the models stood then: held ones are in the hands) */
-  private prevProps: Prop[] = [];
-  private currentProps: Prop[] = [];
-  private readonly prevRoot = new Vector3();
+  private previous = new Snapshot();
+  private current = new Snapshot();
+  private readonly previousFocus = new Vector3();
   /** the player's look after the previous and the current step, if there is a player */
-  private prevLook: Look | null = null;
+  private previousLook: Look | null = null;
   private currentLook: Look | null = null;
 
   constructor(readonly sim: Simulation) {
-    for (const { model } of this.sim.actors) {
-      this.nodes.push(model.scene);
-      model.scene.traverse((o) => {
-        if (o instanceof Bone && !o.name.startsWith('rest_')) this.nodes.push(o);
-      });
-    }
-    for (const skin of this.sim.skins) skin?.scene.traverse((o) => {
-      if (o instanceof Bone) this.nodes.push(o);
-    });
-    this.prev = new Float64Array(7 * this.nodes.length);
-    this.current = new Float64Array(7 * this.nodes.length);
     this.record();
     this.remember();
   }
@@ -59,89 +79,79 @@ export class Playback {
     this.remember();
   }
 
-  /**
-   * Shows the models `alpha` (0..1) of the way from the previous step to the current one and
-   * returns the props, the first actor's travel point and the player's look in between.
-   */
-  blend(alpha: number): { props: Prop[]; root: Vector3; look: Look | null } {
-    const { prev: a, current: b } = this;
-    this.nodes.forEach((n, i) => {
-      const k = 7 * i;
-      n.position.set(a[k] + (b[k] - a[k]) * alpha, a[k + 1] + (b[k + 1] - a[k + 1]) * alpha, a[k + 2] + (b[k + 2] - a[k + 2]) * alpha);
-      n.quaternion.fromArray(a, k + 3).slerp(_q.fromArray(b, k + 3), alpha);
+  /** shows the scene `alpha` (0..1) of the way from the previous step to the current one; the camera's focus and the player's look then */
+  blend(alpha: number): { focus: Vector3; look: Look | null } {
+    const { previous, current } = this;
+    const a = previous.values, b = current.values;
+    current.nodes.forEach((node, i) => {
+      const k = 7 * i, was = previous.index.get(node);
+      if (was === undefined || previous.parents[was] !== current.parents[i]) return;
+      const j = 7 * was;
+      node.position.set(a[j] + (b[k] - a[j]) * alpha, a[j + 1] + (b[k + 1] - a[j + 1]) * alpha, a[j + 2] + (b[k + 2] - a[j + 2]) * alpha);
+      node.quaternion.fromArray(a, j + 3).slerp(_q.fromArray(b, k + 3), alpha);
+      if (!node.matrixWorldAutoUpdate) node.matrixWorld.compose(node.position, node.quaternion, _s.setFromMatrixScale(node.matrixWorld));
     });
-    const props = this.currentProps.map((p, i) => {
-      const q = this.prevProps[i];
-      if (!q || q.kind !== p.kind) return p;
-      const position = q.position.clone().lerp(p.position, alpha);
-      if (p.kind === 'ball' || !p.quaternion || q.kind === 'ball' || !q.quaternion) return { ...p, position };
-      return { ...p, position, quaternion: q.quaternion.clone().slerp(p.quaternion, alpha) };
-    });
-    const root = this.prevRoot.clone().lerp(this.root(), alpha);
-    const [a0, b0] = [this.prevLook, this.currentLook];
+    const focus = this.previousFocus.clone().lerp(this.focus(), alpha);
+    const [from, to] = [this.previousLook, this.currentLook];
     // (the look blended as the rifle placed in it is: the camera and the rifle shown at the same instant)
-    const look = a0 && b0 && { eye: a0.eye.clone().lerp(b0.eye, alpha), yaw: a0.yaw + (b0.yaw - a0.yaw) * alpha, pitch: a0.pitch + (b0.pitch - a0.pitch) * alpha };
-    return { props, root, look };
+    const look = from && to && { eye: from.eye.clone().lerp(to.eye, alpha), yaw: from.yaw + (to.yaw - from.yaw) * alpha, pitch: from.pitch + (to.pitch - from.pitch) * alpha };
+    return { focus, look };
   }
 
-  /** the models as the last step left them */
+  /** the scene as the last step left it (its world matrices too: the run reads them) */
   private restore() {
-    this.nodes.forEach((n, i) => {
-      n.position.fromArray(this.current, 7 * i);
-      n.quaternion.fromArray(this.current, 7 * i + 3);
-    });
+    this.current.show();
+    this.sim.stage.scene.updateMatrixWorld(true);
   }
 
-  /** the models' state is the current one */
+  /** the scene's state is the current one */
   private record() {
-    this.nodes.forEach((n, i) => {
-      n.position.toArray(this.current, 7 * i);
-      n.quaternion.toArray(this.current, 7 * i + 3);
-    });
-    // (copied: the scenarios move their props' vectors in place)
-    this.currentLook = this.sim.stage.player?.look() ?? null;
-    this.currentProps = this.sim.props().map((p) => (p.kind === 'ball' || !p.quaternion ? { ...p, position: p.position.clone() } : { ...p, position: p.position.clone(), quaternion: p.quaternion.clone() }));
+    this.current.take(this.sim.stage.scene);
+    // (copied: a player keeps its look's vectors)
+    const look = this.sim.stage.player?.look();
+    this.currentLook = look ? { ...look, eye: look.eye.clone() } : null;
   }
 
   /** the current state is where the next blend starts */
   private remember() {
-    this.prev.set(this.current);
-    this.prevProps = this.currentProps;
-    this.prevLook = this.currentLook;
-    this.prevRoot.copy(this.root());
+    [this.previous, this.current] = [this.current, this.previous];
+    this.current.take(this.sim.stage.scene);
+    this.previousLook = this.currentLook;
+    this.previousFocus.copy(this.focus());
   }
 
-  private subject(): Humanoid | Body {
-    const body = this.sim.actors[0] ?? this.sim.stage.bodies?.[0];
-    if (!body) throw new Error('playback needs a humanoid or an articulated body');
+  /** the body the shots follow: the first */
+  private get subject(): Body {
+    const body = this.sim.stage.bodies[0];
+    if (!body) throw new Error(`${this.sim.scenario.id} has no body to show`);
     return body;
   }
 
+  /** how the first body moves over the floor (m/s) */
   get velocity(): Vector3 {
-    const body = this.subject();
-    if (body instanceof Humanoid) return new Vector3().copy(body.velocity);
-    const { frame } = body;
-    return new Vector3().subVectors(frame.prev.position(0), frame.prev2.position(0)).divideScalar(frame.dt);
+    return this.subject.velocity;
   }
 
+  /** the way the first body faces (rad) */
   get facing(): number {
-    return yawOf(this.subject().pose.rotation(0));
+    return this.subject.facing;
   }
 
+  /** where every body's joints are, with a margin for what lies beyond them */
   get bounds(): Box3 {
     const bounds = new Box3();
-    for (const body of [...this.sim.actors, ...this.sim.stage.bodies ?? []]) {
-      for (let i = 0; i < body.pose.skeleton.bones.length; i++) bounds.expandByPoint(body.pose.position(i));
-    }
+    for (const body of this.sim.stage.bodies) for (let i = 0; i < body.pose.skeleton.bones.length; i++) bounds.expandByPoint(body.pose.position(i));
     // Tuned 20 cm silhouette allowance beyond joints (head, barrel, hands and feet).
     return bounds.expandByScalar(0.2);
   }
 
-  private root() {
-    if (this.sim.stage.bodies?.length && this.sim.actors.length) return this.bounds.getCenter(new Vector3());
-    const body = this.subject();
-    return body instanceof Humanoid ? body.model.scene.position.clone().setY(FOCUS_HEIGHT * body.proportions.height) : body.pose.position(0).clone();
+  /** what the camera looks at: over the first body's travel (people and creatures together: the middle of them all) */
+  private focus(): Vector3 {
+    const { bodies } = this.sim.stage;
+    if (bodies.some(isPerson) && !bodies.every(isPerson)) return this.bounds.getCenter(new Vector3());
+    const body = this.subject;
+    return body.position.setY(body.species.person ? FOCUS_HEIGHT * body.species.person.height : body.species.bones[0].position[1]);
   }
 }
 
-const _q = new Quaternion();
+const _q = new Quaternion(), _p = new Vector3(), _s = new Vector3();

@@ -1,13 +1,13 @@
-import { Vector3 } from 'three';
+import { Group, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { touch, walkTo, type Frame } from '@drawcall/animate';
-import { idle } from '@drawcall/animate/rig';
-import { Report } from '../report';
+import { reach, walkTo } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
+import { OUTLIER, PERSON, SOLDIER } from '../skeletons';
+import { ball } from '../things';
 
-/** where the three walk from (x) and the ball each touches, as far ahead and as high as for the default body */
+/** where the three walk from (x), and how far ahead and how high the ball each touches is */
 const LANES = [-1.4, 0, 1.4];
-const BALL = new Vector3(0, 1.1, 4.4);
+const BALL = { ahead: 4.4, height: 1.1 };
 
 /**
  * Three people unlike each other — the default body, the soldier's skeleton (arms short for its 1.8 m) and an outlier's (legs 0.7×,
@@ -16,24 +16,22 @@ const BALL = new Vector3(0, 1.1, 4.4);
  */
 export function proportions(): Scenario {
   return {
-    id: 'proportions', title: 'Three bodies, three proportions', duration: 16, cameraDistance: 6, body: 'openpose',
+    id: 'proportions', title: 'Three bodies, three proportions', duration: 16, cameraDistance: 6,
     description: 'The default body, the soldier\'s skeleton (short arms) and an outlier\'s (short legs, long trunk and arms) walk side by side, each touches a ball and walks back.',
-    actors: [{ position: { x: LANES[0], z: 0 } }, { position: { x: LANES[1], z: 0 }, skeleton: 'soldier' }, { position: { x: LANES[2], z: 0 }, skeleton: 'outlier' }],
-    stage: () => {
-      const report = new Report();
-      const balls = LANES.map((x) => BALL.clone().setX(x));
+    stage: (cast) => {
+      const scene = new Group();
+      const people = [PERSON, SOLDIER, OUTLIER].map((skeleton, lane) => cast.person({ at: new Vector3(LANES[lane], 0, 0) }, skeleton));
+      const balls = LANES.map((x) => ball(scene, 'ball', 0.04, new Vector3(x, BALL.height, BALL.ahead)));
       let back = 0;
       return {
-        report,
-        props: () => balls.map((position) => ({ kind: 'ball', position, radius: 0.04 })),
-        done: () => back === LANES.length,
-        // (each its own base, `idle`, under its walk and touch)
-        script: (h, i) => () => parallel<Frame>('all', idle(h), function* () {
-          yield* walkTo(h, { to: new Vector3(LANES[i], 0, 3.6) })();
-          yield* touch(h, 'right', balls[i])();
-          yield* walkTo(h, { to: new Vector3(LANES[i], 0, 0), face: 0 })();
-          back++;
-        }),
+        scene,
+        bodies: people,
+        story: () => parallel('all', ...people.map(function* (person, lane) {
+          yield* walkTo(person, new Vector3(LANES[lane], 0, 3.6));
+          yield* reach(person, { right: balls[lane].position });
+          if (yield* walkTo(person, new Vector3(LANES[lane], 0, 0), { face: 0 })) back++;
+        })),
+        done: () => back === people.length,
       };
     },
   };

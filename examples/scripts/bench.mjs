@@ -1,5 +1,5 @@
 // Runs the browser benchmark (examples/bench.html) in headless Chromium and prints its report.
-// usage: node scripts/bench.mjs [--n 20,50,100] [--seconds 15] [--warmup 3]
+// usage: node scripts/bench.mjs [--n 20,50,100] [--seconds 15] [--warmup 3] [--scenarios stroll,dog-fetch]
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 import { BASE, devServer, pageError } from './examples.mjs';
@@ -10,6 +10,7 @@ const { values: args } = parseArgs({
     n: { type: 'string', default: '20,50,100' },
     seconds: { type: 'string', default: '15' },
     warmup: { type: 'string', default: '3' },
+    scenarios: { type: 'string', default: '' },
   },
 });
 

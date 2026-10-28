@@ -34,3 +34,24 @@ export class Spring {
 }
 
 const STILL = new Vector3();
+
+/** the way yaw `yaw` faces on the floor (0 faces +Z, positive turns toward +X), into `out` */
+export const forwardOf = (yaw: number, out = new Vector3()) => out.set(Math.sin(yaw), 0, Math.cos(yaw));
+
+/** the left of a body facing `yaw` on the floor, into `out` */
+export const leftOf = (yaw: number, out = new Vector3()) => out.set(Math.cos(yaw), 0, -Math.sin(yaw));
+
+/** `angle` wrapped into [−π, π] */
+export const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+/** a random source seeded by `seed` (mulberry32): the same numbers every run */
+export function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}

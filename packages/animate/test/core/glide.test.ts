@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Glide } from '../../src/core/glide';
+import { Glide } from '../../src/kernel/glide';
 
 const dt = 1 / 60;
 

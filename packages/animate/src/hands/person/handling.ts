@@ -1,0 +1,28 @@
+import type { Handling } from '../handling';
+import { bodyOf, goalOn } from '../../things/hold';
+import { sideOf } from '../../species/humanoid/bones';
+import type { Reacher } from './reacher';
+import { grabbing } from './grab';
+import { carrying, liftingClear } from './carry';
+import { wayOf } from '../route';
+import { reachingTo } from './reach';
+import { backingOut } from './release';
+
+/** Human hand staging; the right hand leads coordinated reaches. */
+export function personHands(person: Reacher): Handling {
+  return {
+    take: function* (request, thing, grips, pace) {
+      const loose = thing.massive && !bodyOf(thing.object);
+      const takes = grips.map(({ hand, grip }) => ({ side: sideOf(hand), thing, grip, goal: goalOn(thing.grip(grip), person.restOf(person.hands[hand])) }));
+      if (!(yield* grabbing(person, request, takes, pace.speed === undefined ? undefined : { speed: pace.speed, accel: pace.accel }))) return;
+      if (loose) yield* liftingClear(person, request, thing);
+      request.met();
+    },
+    bring: (request, thing, points, end, pace) => carrying(person, request, thing, wayOf(person, thing, points, end), pace),
+    reach: (request, aims, pace) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), pace),
+    backOut(hands) {
+      const sides = hands.map(sideOf);
+      person.own('release', '', (request) => () => backingOut(person, request, sides));
+    },
+  };
+}

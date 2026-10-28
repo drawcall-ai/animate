@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { jointOf } from '../src/joints';
+import { jointOf } from './actor';
 import { FIXED_DT } from '../src/scenario';
 import { comOf } from './com';
 import { tasked, type Frame } from './frame';
@@ -27,6 +27,7 @@ const see = (b: Band, v: number) => {
 /** free-arm measures over a set of frames (m, °) */
 export interface ArmStats {
   frames: number;
+  cycle: boolean;
   /** hand (wrist) distance out from the body's midline, and the hip joints' half-width */
   handOut: Band;
   hipHalf: number;
@@ -38,7 +39,7 @@ export interface ArmStats {
   elbow: Band;
 }
 
-const stats = (): ArmStats => ({ frames: 0, handOut: band(), hipHalf: 0, clearance: band(), abduction: band(), flexion: band(), elbow: band() });
+const stats = (): ArmStats => ({ frames: 0, cycle: false, handOut: band(), hipHalf: 0, clearance: band(), abduction: band(), flexion: band(), elbow: band() });
 
 /**
  * The free arms of the first actor (no hand on anything or asked anywhere), in the pelvis frame: how far the
@@ -47,7 +48,7 @@ const stats = (): ArmStats => ({ frames: 0, handOut: band(), hipHalf: 0, clearan
  */
 export class FreeArms {
   /** the free arms' frames: when, walking or standing, each side's measures; and when a hand held on to something */
-  private readonly samples: { t: number; walking: boolean; sides: { handOut: number; hipHalf: number; clearance: number; abduction: number; flexion: number; elbow: number }[] }[] = [];
+  private readonly samples: { t: number; phase: number; walking: boolean; sides: { handOut: number; hipHalf: number; clearance: number; abduction: number; flexion: number; elbow: number }[] }[] = [];
   private readonly held: number[] = [];
   private still = 0;
   /** the centre of mass last frame */
@@ -64,8 +65,14 @@ export class FreeArms {
   /** the measures over the standing or walking frames, but those near a hold (reaching for it, letting go) */
   private stats(walking: boolean): ArmStats {
     const out = stats();
+    let last = -Infinity, phase = 0, covered = 0;
     for (const q of this.samples) {
       if (q.walking !== walking || this.held.some((t) => Math.abs(t - q.t) < HOLD_NEAR)) continue;
+      const delta = q.phase - phase;
+      covered = q.t - last < 1.5 * FIXED_DT ? covered + Math.max(0, Math.atan2(Math.sin(delta), Math.cos(delta))) : 0;
+      out.cycle ||= covered >= 2 * Math.PI;
+      last = q.t;
+      phase = q.phase;
       for (const v of q.sides) {
         see(out.handOut, v.handOut);
         out.hipHalf = v.hipHalf;
@@ -121,14 +128,15 @@ export class FreeArms {
         elbow: 180 - shoulder.clone().sub(elbow).angleTo(hand.clone().sub(elbow)) * DEG,
       };
     });
-    this.samples.push({ t, walking: into === 'walking', sides });
+    this.samples.push({ t, phase: h.locomotion.phase, walking: into === 'walking', sides });
   }
 
   toString() {
     const f = (b: Band, k = 1, d = 0) => `${(b.min * k).toFixed(d)}…${(b.max * k).toFixed(d)}`;
     const line = (name: string, a: ArmStats) =>
       a.frames
-        ? `free arms ${name}: hand out ${f(a.handOut, 100)} cm (hip joint ${(a.hipHalf * 100).toFixed(0)} cm), thigh clearance ${f(a.clearance, 100)} cm; abduction ${f(a.abduction)}°, shoulder flexion ${f(a.flexion)}°, elbow ${f(a.elbow)}°`
+        ? `free arms ${name}: hand out ${f(a.handOut, 100)} cm (hip joint ${(a.hipHalf * 100).toFixed(0)} cm), thigh clearance ${f(a.clearance, 100)} cm; ` +
+          `abduction ${f(a.abduction)}°, shoulder flexion ${f(a.flexion)}°, elbow ${f(a.elbow)}°`
         : '';
     return [line('standing', this.standing), line('walking', this.walking)].filter(Boolean).join('\n') || 'free arms: none';
   }

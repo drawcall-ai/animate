@@ -22,15 +22,10 @@ export class Rope {
   private readonly spacing: number;
 
   /** a rope `length` long (m), laid straight from `from` to `to`, in `count` segments */
-  constructor(from: Vector3, to: Vector3, readonly length: number, count = 24) {
+  constructor(from: Vector3, to: Vector3, length: number, count = 24) {
     this.points = Array.from({ length: count + 1 }, (_, k) => from.clone().lerp(to, k / count));
     this.before = this.points.map((p) => p.clone());
     this.spacing = length / count;
-  }
-
-  /** the point `u` along it (0–1) */
-  at(u: number): Vector3 {
-    return this.points[this.index(u)];
   }
 
   /** moves it on `dt` (s), the points `u` along it held where `pins` put them */
@@ -57,15 +52,6 @@ export class Rope {
       for (const [k, at] of held) points[k].copy(at);
       for (const p of points) p.y = Math.max(p.y, RADIUS);
     }
-  }
-
-  /** how far along it (0–1) the point between `from` and `to` along it nearest `position` is */
-  nearest(position: Vector3, from = 0, to = 1): number {
-    let best = this.index(from);
-    for (let k = best; k <= this.index(to); k++) {
-      if (this.points[k].distanceToSquared(position) < this.points[best].distanceToSquared(position)) best = k;
-    }
-    return best / (this.points.length - 1);
   }
 
   private index(u: number): number {

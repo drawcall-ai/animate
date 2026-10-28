@@ -1,49 +1,26 @@
-// The newcomer surface: bodies, their species, items and the verbs that move them.
-// Parts for building behaviours of your own are in '@drawcall/animate/rig'.
+export { Body, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
+export type { Root } from './legs/legged';
+export { humanoid, type HumanoidBone } from './species/humanoid/humanoid';
+export { horse, type HorseBone } from './species/horse';
+export { dog, type DogBone } from './species/dog';
+export { species, type Species, type Temperament } from './species/define';
+export { walkTo, arriving, type WalkOptions } from './verbs/walk';
+export { lookAt, type LookOptions } from './verbs/look';
+export { track, type Tracked } from './verbs/track';
+export { grab, type GrabOptions } from './verbs/grab';
+export { reach, type ReachOptions } from './verbs/reach';
+export { carry, type CarryOptions } from './verbs/carry';
+export { release } from './verbs/release';
+export { wait, watch, type Until, type Verb } from './verbs/story';
+export type { Target } from './verbs/targets';
+export type { LogEntry, Problem } from './kernel/dev';
+export type { ReadonlyPose } from './kernel/pose';
 
-// Any body: a skeleton whose behaviour timeline writes its pose, layer by layer.
-export { Skeleton, type BoneDef, type Limit, type SkeletonOptions } from './core/skeleton';
-export { Pose, type ReadonlyPose } from './core/pose';
-export { Body, type BodyOptions, type Frame, type IdleOptions, type Jumper } from './core/body';
-export { World } from './core/world';
-export type { Attention, Posture, Species } from './core/species';
-export { scaled } from './core/scaled';
-export { swing, type Rhythm } from './core/life';
-export { facingAt, live, onBone, type Behaviour, type Live, type Motion, type Placement, type Target, type Until } from './core/goal';
-export { when } from './core/when';
-export { named, watch, type LogEntry, type Problem, type WatchFrame } from './core/dev';
-export { Carrier, Item, onItem, type ItemOptions } from './core/carrier';
-export { takeOff, wear, type Dressed, type WearOptions } from './core/worn';
-export { forwardOf, headingOf, leftOf, wrapAngle, yawOf } from './core/math';
-export { aimAt, lookAt, withGaze, type GazeOptions } from './core/gaze';
-// legs for your own creature, and a horse
-export type { LegChain } from './core/legs/legs';
-export type { JointCycle } from './core/legs/cycle';
-export type { Gait, Locomotion } from './core/legs/gait';
-export { carriages, footfalls, powerGait } from './core/legs/schedule';
-export type { Carriage, CarriedBones } from './core/legs/carriage';
-export type { DrivenRoot } from './core/legs/stepper';
-export { horse, horseLeadPoint } from './horse/legs';
-
-// A person: a body of a viverse character model.
-export { Humanoid, type HumanoidIdleOptions, type HumanoidOptions } from './humanoid/humanoid';
-export { createSkeletonModel } from './humanoid/model';
-export { INDEX, SIDES, type BoneName, type Side } from './humanoid/bones';
-export { DEFAULT_HEIGHT, type Proportions } from './humanoid/proportions';
-
-// Verbs.
-export { arriving, walkTo, type WalkOptions } from './core/walk';
-export type { Stance } from './core/asks';
-export { grab, type GrabOptions, type Spot } from './humanoid/hands/grab';
-export { carry, hold, type CarryOptions, type HoldOptions } from './humanoid/hands/carry';
-export type { Grips, Keeping, Reaching, Taking, Way } from './core/hands';
-export { still, type Waypoint } from './core/course';
-export { place } from './humanoid/hands/place';
-export { release, type ReleaseOptions } from './humanoid/hands/release';
-export { touch } from './humanoid/hands/touch';
-export { holds, offer, offered } from './humanoid/hands/offer';
-export { handTo, type HandOptions } from './humanoid/arms';
-export { carried } from './humanoid/goal';
-export { lookAround, type LookAroundOptions } from './humanoid/look';
-export { headTo, type HeadOptions } from './humanoid/head';
-export { eyesOnBefore } from './humanoid/watch';
+export type { BoneNames, Gazer, Having, LegRole, Range, Roles, Tuning, Vec3 } from './species/define';
+export type { Inertial } from './kernel/inertia';
+export type { Carriage, Gait } from './species/gait';
+export type { JointCycle } from './species/cycle';
+export type { CarriedBones } from './species/carriage';
+export { carriages, footfalls, powerGait } from './species/schedule';
+export { scaled } from './species/scaled';
+export { swing, type Rhythm } from './kernel/life';
