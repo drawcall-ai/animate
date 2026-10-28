@@ -7,6 +7,19 @@ import { NECK_PITCH, ranges } from './limits';
 import { derive, type Proportions } from './proportions';
 import { CHAINS, massFor, skeletonOf } from './skeleton';
 
+/**
+ * How a person strides, as multipliers on its defaults (1: as it is): its `cadence` (below 1 slower, so longer strides at a pace — its
+ * balance may still quicken a step it must catch), the `width` its feet land apart walking (the pelvis swaying and listing that much
+ * further over each foot), its pelvis's `bob`, and its feet's `toeOut`. A swagger: `{ cadence: 0.85, width: 1.3, toeOut: 1.3 }`; a
+ * lumber: `{ cadence: 0.85, width: 1.25, bob: 1.4 }`.
+ */
+export interface Stride {
+  cadence?: number;
+  width?: number;
+  bob?: number;
+  toeOut?: number;
+}
+
 /** the bones a person's skeleton names: every humanoid bone but the toes, which a foot without them is given at its ball */
 export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
 
@@ -14,9 +27,9 @@ export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
  * A person of a skeleton (as rigged with @drawcall/rig, `as const`): its bones named as `HumanoidBone` (camelCase: `hips`, `spine`,
  * `leftUpperArm`, …), its proportions measured off where they stand — limbs straight or bent (an A-pose) — and the standing height
  * off the crown (an end bone above the head), else off the head. Its masses are Dempster's shares of a body of that height; its
- * hands are `left` and `right`.
+ * hands are `left` and `right`. It steps as its legs' length has it — longer legs slower and longer — and as `stride` styles it.
  */
-export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & Having<S, HumanoidBone>): Species<BoneNames<S>, Side> {
+export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & Having<S, HumanoidBone>, options: { stride?: Stride } = {}): Species<BoneNames<S>, Side> {
   needing(skeleton, BONES.filter((bone) => bone !== 'leftToes' && bone !== 'rightToes'), 'humanoid');
   const at = new Map(skeleton.map((bone) => [bone.name, new Vector3(...bone.position)])), parents = new Map(skeleton.map((bone) => [bone.name, bone.parent]));
   for (const bone of CHILD_BONES) {
@@ -38,6 +51,7 @@ export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & 
     scale: proportions.scale,
     mass: massFor(proportions.height),
     person: proportions,
+    stride: options.stride ?? {},
   };
 }
 

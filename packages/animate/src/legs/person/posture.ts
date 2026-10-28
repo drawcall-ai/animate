@@ -8,6 +8,7 @@ import { INDEX } from '../../species/humanoid/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../../species/humanoid/proportions';
 import type { Stance } from '../../kernel/go';
+import type { Stride } from '../../species/humanoid/humanoid';
 import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../kernel/inertia';
 import { follow } from '../../kernel/follow';
@@ -66,6 +67,8 @@ export interface Trunk { chest: Quaternion; pelvisYaw: number; thoraxYaw: number
 /** The body upright over its legs: the root and the posture state the legs and `Posture` share. */
 export interface Upright {
   p: Proportions; root: Vector3;
+  /** how it strides: its `width` sways and lists the pelvis further, its `bob` bobs it further */
+  stride: Stride;
   /** the root's ground velocity (m/s) */
   velocity: Vector3;
   offset: Vector3; yaw: number; walk: number; run: number; moving: boolean; stance: Stance;
@@ -111,12 +114,13 @@ export class Posture {
     const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
     const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, proportions.legs, walk, run, upright.held, this.turn);
     const { bob, nod: nodPhase, compression: comp, phase: stride } = cycle;
-    let roll = -LIST * Math.sin(stride) * (1 - run) * walk;
+    const wide = upright.stride.width ?? 1;
+    let roll = -LIST * wide * Math.sin(stride) * (1 - run) * walk;
     // (over the stance foot at its mid-stance: walking a quarter stride on from the other's lift, as a walk has it; running, its stance
     // short, half the swing on — π(1 − stance share))
-    const side = -lerp(SWAY, RUN_SWAY, run) * H * Math.sin(stride + run * (Math.PI / 2 - Math.PI * (1 - cycle.stance))) * walk;
+    const side = -lerp(SWAY, RUN_SWAY, run) * wide * H * Math.sin(stride + run * (Math.PI / 2 - Math.PI * (1 - cycle.stance))) * walk;
     // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
-    const walkLift = -(0.001 + BOB * (1 - bob)) * L * walk;
+    const walkLift = -(0.001 + BOB * (upright.stride.bob ?? 1) * (1 - bob)) * L * walk;
     this.comp += (comp - this.comp) * Math.min(1, 40 * dt);
     const lift = lerp(walkLift, -(0.025 + 0.03 * this.comp) * L, run);
     const nod = lerp(NOD.walk * (nodPhase - 0.2), NOD.run * (this.comp * this.comp - 0.35), run) * walk;

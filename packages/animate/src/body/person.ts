@@ -19,6 +19,7 @@ import { bear, bodyOf, checkParents, inHand, move, worn } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
+import type { Stride } from '../species/humanoid/humanoid';
 import { footRotation } from '../legs/person/foot';
 import { legOf } from '../legs/person/leg';
 import { STANDING_REACH } from '../legs/person/posture';
@@ -36,12 +37,14 @@ export class Person extends Self {
   /** what its hands carry this sub-step and along which aim: fitted to the wrists after the hands */
   readonly carrying = new Map<Object3D, Carrier>();
   readonly proportions: Proportions;
+  readonly stride: Stride;
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;
     if (!proportions || !species.gaze) throw new Error('a person is made of a humanoid species');
     super(species, options, binding, (skeleton, floor) => relaxed(proportions, new Pose(skeleton), floor, options.at ?? new Vector3(), options.face ?? 0));
     this.proportions = proportions;
+    this.stride = species.stride ?? {};
   }
 
   /** a person's hands: both at once, the right leading */

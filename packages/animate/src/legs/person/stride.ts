@@ -8,8 +8,8 @@ import { hullOf, past } from '../support';
 import { footprint } from './foot';
 import { checkSupport, drivenBy, feetBehind } from './balance';
 import type { PersonLegged } from './legged';
-import { humanGait } from './stepping';
-import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
+import { humanGait, humanStepping } from './stepping';
+import { OVER_ANKLES } from '../../species/humanoid/stance';
 
 /**
  * A person standing and walking where asked on the core legs: the root — the body's centre of mass over the floor — goes where the
@@ -19,7 +19,7 @@ import { defaultStance, OVER_ANKLES } from '../../species/humanoid/stance';
  * and ends once close, slow and the goal still (`STOP`).
  */
 export function stride(person: PersonLegged, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
-  const proportions = person.proportions, s = proportions.scale, toeOut = defaultStance(proportions).toeOut;
+  const proportions = person.proportions, s = proportions.scale, toeOut = humanStepping(proportions, true, person.stride).toeOut;
   const stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, still: Vector3 | null = null;
   let moving = false, starting = false, seen = false, leaning = false;

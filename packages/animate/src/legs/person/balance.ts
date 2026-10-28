@@ -113,13 +113,13 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
   // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
   // (the feet where they stand as it is made: in its stance under it)
   const standing = standingFeet(proportions, person.pose.position(0).x, person.pose.position(0).z, person.yaw);
-  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen), feet, standing, person.yaw, person.floor));
+  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen, person.stride), feet, standing, person.yaw, person.floor));
   let stepper = stepperFor(true), first = true;
-  const { toeOut, crouch: crouching } = humanStepping(proportions);
+  const { toeOut, crouch: crouching } = humanStepping(proportions, true, person.stride);
   const poise = new Poise();
   const base = { ...defaultStance(proportions), ...options.stance };
   const upright: Upright = {
-    p: proportions, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: person.yaw, walk: 0, run: 0, moving: false, stance: base,
+    p: proportions, stride: person.stride, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: person.yaw, walk: 0, run: 0, moving: false, stance: base,
     // (where the feet stood as the sub-step began: the posture shifts the weight between them)
     feet: standing.map((foot) => ({ anchor: foot.position.clone() })),
     pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false,

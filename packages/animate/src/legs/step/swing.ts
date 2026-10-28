@@ -76,7 +76,8 @@ function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3
   const other = legs[pair[leg.i]];
   const yawed = turned + leg.sign * st.toeOut, others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw);
   const past = (at: Vector3, centre: Vector3) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > capture * s;
-  const centre = xcomAhead(steps, now, remaining, new Vector3());
+  // (as it will be: carried toward the landing foot as far as the pelvis sways over it beyond the midline — a wide stride's)
+  const centre = xcomAhead(steps, now, remaining, new Vector3()).addScaledVector(side, leg.sign * (st.width.sway ?? 0) * s * smoothstep(0, 1, speed));
   const under = (c: Vector3) => c.clone().addScaledVector(side, leg.sign * st.width.narrowest * s / 2);
   const present = r.xcom;
   // (a walker's slow step lands no further aside of the other foot than `WIDE.stances`, its extrapolated centre of mass, as it will be

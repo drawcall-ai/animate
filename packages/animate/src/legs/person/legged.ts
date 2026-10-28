@@ -1,10 +1,13 @@
 import { INDEX } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
+import type { Stride } from '../../species/humanoid/humanoid';
 import type { Legged } from '../legged';
 
 /** A person as its legs see it: a body on legs of its proportions, and whether its hands hold anything. */
 export interface PersonLegged extends Legged {
   readonly proportions: Proportions;
+  /** how it strides, as multipliers on a person's defaults */
+  readonly stride: Stride;
   readonly holding: Readonly<Record<string, object | null>>;
 }
 

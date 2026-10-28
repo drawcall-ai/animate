@@ -41,16 +41,18 @@ export interface Steering {
 
 /**
  * A species' stepping, in metres of its default body (× `scale`) and seconds: each leg's place in the cycle (`offsets`, 0 … 1: a leg
- * follows the one just before it); the feet's `toeOut` (rad, × side); the `cadence` (cycle 2 / (base + perSpeed v)); `duty` walking,
- * side-stepping, running (`run`: between these speeds); the most `travel` of a stance; the landing's `lead`; half the feet's spread
- * (`width.stand` already scaled); the pelvis' `bob` and `drop`; the swing's `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the
+ * follows the one just before it); the feet's `toeOut` (rad, × side); the `cadence` (cycles a second at a pace, m/s, and a share of it
+ * sideways, 0 … 1); `duty` walking, side-stepping, running (`run`: between these speeds); the most `travel` of a stance; the landing's
+ * `lead`; half the feet's spread (`width.stand` already scaled; `width.sway`: how far toward a walker's landing foot, past the midline, its
+ * extrapolated centre of mass is carried — a wider stride's, its pelvis swaying over it); the pelvis' `bob` and `drop`; the swing's
+ * `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the
  * most a planted foot rolls (`pitch`, rad) and the ankle bends (`dorsiflexion`); the `crouch`; the leg's `reach` (× length, a swinging
  * leg's easing off from `swingReach`); the sole's `clearance`.
  */
 export interface Stepping {
-  scale: number; offsets: readonly number[]; toeOut: number; cadence: { base: number; perSpeed: number; side?: number };
+  scale: number; offsets: readonly number[]; toeOut: number; cadence: (speed: number, sideways: number) => number;
   duty: { walk: number; side: number; run: number }; run: readonly [number, number]; travel: { forward: number; run: number; back: number; side: number };
-  lead: { share: number; side: number; most: number; run: number }; width: { stand: number; walk: number; run: number; narrowest: number };
+  lead: { share: number; side: number; most: number; run: number }; width: { stand: number; walk: number; run: number; narrowest: number; sway?: number };
   bob: number; drop: { walk: number; side: number; run: number }; lift: { walk: number; run: number; jump: number }; arc: number;
   strike: { walk: number; run: number; ahead: number }; pitch: { heel: number; ball: number }; dorsiflexion: number;
   crouch: { depth: number; wider: number; ahead: number; travel: number; lift: number }; reach: number; swingReach: number; clearance: number;

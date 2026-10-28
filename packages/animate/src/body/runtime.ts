@@ -43,7 +43,8 @@ export interface SelfOptions {
   drive?: (time: number) => Root;
   /** its quiet life: a seed that fixes its variation, what tethers it and what startles it */
   life?: Temperament;
-  /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces */
+  /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces — a walk given a `speed` keeps
+   * that speed, tempo or not; how it steps at a pace is its species' (a person's `stride`) */
   tempo?: number;
   /**
    * what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³, within half and twice its

@@ -114,7 +114,7 @@ export function steppingOf(gait: Gait, feet: Feet, twist: number, ball: number):
   const travelAt = (drop: number) => SPANNING * Math.min(...feet.legs.map((leg) => leg.span?.(drop) ?? Infinity));
   const travel = travelAt(lowered);
   return {
-    scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: { base: 1, perSpeed: 0 }, duty: { walk: 0.6, side: 0.6, run: 0.6 },
+    scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: (speed) => strideAt(gait, speed, 0).frequency, duty: { walk: 0.6, side: 0.6, run: 0.6 },
     run: run ? [speedAt(run.froude[0]), speedAt(run.froude[1])] : [NEVER, 2 * NEVER], travel: { forward: travel, run: run ? travelAt(drop) : travel, back: travel / 2, side: travel / 3 },
     lead: { share: LEAD, side: LEAD, most: length, run: length }, width: { stand: width, walk: width, run: width, narrowest: width },
     bob: 0, drop: { walk: lowered, side: lowered, run: drop }, lift: { walk: LIFT * clearance, run: LIFT * clearance, jump: LIFT * clearance }, arc: ARC,
