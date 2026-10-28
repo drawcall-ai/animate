@@ -168,6 +168,9 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
   const built = new Skeleton(bones, { limits, chains });
   const gaze = roles.gaze, eyes = gaze && { bone: built.index(gaze.eyes.bone), at: new Vector3(...gaze.eyes.at) };
   if (roles.legs && !tuning.gait) throw new Error('species: legs need a gait');
+  if (roles.carriage && roles.legs?.length !== 4) {
+    throw new Error(`species: a carriage rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has ${roles.legs?.length ?? 0}`);
+  }
   const hands = new Map<Hand, string>();
   for (const hand in roles.hands) hands.set(hand, hand);
   return {

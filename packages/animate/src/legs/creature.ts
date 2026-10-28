@@ -32,9 +32,14 @@ export function creature(body: Legged): Step {
     const chain = kind.chains[i], name = (index: number) => skeleton.bones[index].name;
     const top = name(leg.top), foot = name(leg.foot);
     const joints = chain.joints.slice(1, -1).map(({ bone }) => name(bone)).join(', ');
-    const drop = rest.position(leg.top).y - rest.position(leg.foot).y - record.drop.walk;
+    const at = rest.position(leg.top), under = rest.position(leg.foot), drop = at.y - under.y - record.drop.walk;
+    // (what it measured: how far below its top the leg reaches its foot where it stands, sole flat within the joint ranges, and straight)
+    const reach = leg.depth?.(leg.sign * (under.x - at.x), under.z - at.z, 0) ?? 0;
+    const straight = chain.joints.slice(1).reduce((sum, { bone }, k) => sum + rest.position(bone).distanceTo(rest.position(chain.joints[k].bone)), 0);
+    const reached = Number.isFinite(reach) ? `it reaches ${reach.toFixed(3)} m below ${top} there, ${Math.max(0, drop - reach).toFixed(3)} m short`
+      : `no pose its joint ranges allow sets ${foot}'s sole flat there`;
     throw new Error(`leg ${top} → ${foot}: joint ${top} stands too high for ${foot} to step with its sole flat within the joint ranges ` +
-      `(standing drop ${drop.toFixed(3)} m, including the gait's lowering). Lower ${top}'s skeleton position.y while keeping ${foot} on the floor; ` +
+      `(standing drop ${drop.toFixed(3)} m, including the gait's lowering; ${reached}; straight, the chain is ${straight.toFixed(3)} m). Lower ${top}'s skeleton position.y while keeping ${foot} on the floor; ` +
       `reposition the intermediate joints (${joints}) in x/z to preserve segment lengths and leave a bent rest chain with spare reach; ` +
       `see the skill's reference skeletons.`);
   });

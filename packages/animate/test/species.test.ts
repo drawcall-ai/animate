@@ -96,6 +96,13 @@ describe('a species of your own', () => {
     });
     const stiff = species(STIFF, { legs: [stiffLeg('left'), stiffLeg('right')] }, { gait, masses: { body: 1 } });
     expect(() => new Body(stiff)).toThrow(/leg leftHip → leftFoot: joint leftHip.*sole flat.*leftKnee/);
+    // (with what it measured: here no flat-soled pose under it at all, and the chain's straight length against the drop it stands)
+    expect(() => new Body(stiff)).toThrow("standing drop 0.260 m, including the gait's lowering; no pose its joint ranges allow sets leftFoot's sole flat there; straight, the chain is 0.267 m");
+  });
+
+  it('throws on a carriage its legs do not fit: it rides on four', () => {
+    expect(() => species(BIRD, { legs: [leg('left'), leg('right')], carriage: { spine: 'body' } }, { gait, masses }))
+      .toThrow('species: a carriage rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has 2');
   });
 
   it('takes a thing in one of its hands at a time', () => {
