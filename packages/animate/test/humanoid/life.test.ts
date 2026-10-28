@@ -160,3 +160,13 @@ it.each([1.6, 1.75, 1.85])('bends its knees for an 8 kg load taken low, on a %s 
   expect(drop).toBeGreaterThan(0.015 * scale);
   expect(body.log).toEqual([]);
 });
+
+it('glances about on its own schedule: bodies without a seed do not look aside in step', () => {
+  const headYaws = (at: Vector3) => {
+    const body = person({ at }), h = insides(body), yaws: number[] = [];
+    run(body, 20, () => yaws.push(yawOf(h.pose.rotation(INDEX.head))));
+    return yaws;
+  };
+  const a = headYaws(new Vector3(0, 0, 0)), b = headYaws(new Vector3(3, 0, 1));
+  expect(Math.max(...a.map((yaw, i) => Math.abs(yaw - b[i])))).toBeGreaterThan(0.2);
+});

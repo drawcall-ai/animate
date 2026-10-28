@@ -16,7 +16,7 @@ const AHEAD = { stand: { height: 0.75, distance: 3 }, walk: { height: 0.35, dist
 const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
 
 /** Idle gaze follows the walking path; standing glances vary deterministically with `seed`. */
-export function lookAround(person: Walking, seed = 1): (f: Frame) => Vector3 {
+export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3 {
   const rand = seeded(seed);
   const target = new Vector3();
   let next = lerp(GLANCES.every[0], GLANCES.every[1], rand());

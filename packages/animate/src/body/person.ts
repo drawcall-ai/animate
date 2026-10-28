@@ -11,6 +11,7 @@ import { solveChain } from '../kernel/chain';
 import { REACHED, type Goal } from '../kernel/goal';
 import { ChainTip } from '../kernel/tip';
 import { forwardOf } from '../kernel/math';
+import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
@@ -58,7 +59,8 @@ export class Person extends Self {
     const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
     return {
       balance: this.drive ? driven(this, seed) : stride(this, { seed }),
-      gaze: looking(this, lookAround(this, seed)),
+      // (unseeded, glances vary with where the body was made, as its balance does: a crowd does not look aside in step)
+      gaze: looking(this, lookAround(this, seed ?? seedOf('gaze', this.proportions.height, this.pose.position(0).x, this.pose.position(0).z))),
       hands: hanging(this),
       keep: (f, hand) => {
         const side = sideOf(hand), hold = this.holding[side];
