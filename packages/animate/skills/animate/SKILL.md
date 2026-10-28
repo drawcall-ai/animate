@@ -9,7 +9,7 @@ A story runs on the app's `runTimeline` from @pmndrs/timeline; step it before up
 
 ## Compose around contact
 
-Check a grab or carry's outcome before starting a dependent action. A time-based `until` ending is not proof of contact. For a hand-over, keep the giver carrying while the receiver grabs, confirm the receiver holds the object, then release the giver: the object changes holder without teleporting.
+Check a grab or carry's outcome before starting a dependent action. A time-based `until` ending is not proof of contact. For a hand-over, give the object grips for each body: the giver's hands are still on theirs while the receiver takes hold, and two hands cannot share one spot (the dev log says so). Facing each other, the receiver's left hand takes the side that is the giver's right. Keep the giver carrying while the receiver grabs, confirm the receiver holds the object, then release the giver: the object changes holder without teleporting.
 
 This complete headless example uses the shipped [person skeleton](references/person.ts). Run it beside this skill, or copy that file alongside your script and adjust the import. The box has constructed grip empties; no model or renderer is required.
 
@@ -27,10 +27,11 @@ const box = new Object3D();
 box.name = 'box';
 box.userData.mass = 2;
 box.position.set(0, 0.9, 0.45);
-for (const [name, x] of [['left', 0.15], ['right', -0.15]] as const) {
+// (the giver's grips at the box's sides, the receiver's beside them on its own end: facing the giver, its left is the giver's right)
+for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.08], ['receiver right', 0.15, 0.08]] as const) {
   const grip = new Object3D();
   grip.name = name;
-  grip.position.x = x;
+  grip.position.set(x, 0, z);
   box.add(grip);
 }
 const shelf = new Object3D();
@@ -44,7 +45,7 @@ const updateStory = runTimeline(function* () {
   if (!(yield* grab(giver, box, { left: 'left', right: 'right' }))) throw new Error('Giver could not grab the box');
   yield* parallel('race', carry(giver, box, new Vector3(0, 1.05, 0.8), { until: Infinity }), function* () {
     yield* wait(1.5); // lets the offer begin; acquisition below, not this delay, authorizes release
-    if (!(yield* grab(receiver, box, { left: 'right', right: 'left' }))) throw new Error('Receiver could not grab the box');
+    if (!(yield* grab(receiver, box, { left: 'receiver left', right: 'receiver right' }))) throw new Error('Receiver could not grab the box');
     if (!receiver.holds(box)) throw new Error('Receiver has no contact');
   });
   release(giver, box);

@@ -34,6 +34,8 @@ const PREPARED = 2;
 const CLEARED = 0.02;
 /** Artistic calibration (s): a brief preparatory lift, a slower precise raise, begun early enough to overlap arrival. */
 const LIFT = 0.5, RAISE = 1.3, RAISE_LEAD = 0.9;
+/** Tuned: how far (rad) the body may still have to turn to its stand as a transfer's raise begins */
+const RAISE_TURN = 0.5;
 /** Tuned (a box shelved overhead, gear put on a horse): a transfer's walk sets off once the load has risen this share of its way to the body */
 const APPROACH_RISE = 2 / 3;
 /** a carry's pace along a way it goes straight to (m/s, its mean) and how long it takes at least (s), unless told */
@@ -74,10 +76,12 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
   const atBody = carried(person);
   const rise = atBody(person.frame).position.y - from;
   let lifted = rise <= 0, approached = false;
-  const near = () => plan.walk.eta <= RAISE_LEAD;
+  // (raised onto its place as the body comes there turned as it stands: begun before it has turned, the load would turn to its place's
+  // facing ahead of the body, its grips swung out of the hands' reach)
+  const near = () => plan.walk.there <= RAISE_LEAD && plan.walk.unturned <= RAISE_TURN;
   const eyes = (f: Frame) => lifted ? end(f).position : watched;
   const walked = (f: Frame) => {
-    request.eta = Math.max(0, plan.walk.eta - RAISE_LEAD) + RAISE / loadFactor(thing.mass);
+    request.eta = Math.max(0, plan.walk.there - RAISE_LEAD) + RAISE / loadFactor(thing.mass);
     return atBody(f);
   };
   yield* parallel<Frame>('race', noticing(person, request, eyes), function* () {

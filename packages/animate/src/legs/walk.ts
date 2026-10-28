@@ -42,12 +42,17 @@ export interface Route {
 
 /**
  * A walk to `way`, a sub-step at a time (`step`): it asks balance to go there (and face so), and says when it will stand there facing so
- * (`eta`: what the hands time their reach to), when it will end (`ends`: its feet squared and settled too) and whether it has (`arrived`: there, turned and settled on its squared feet). Within reach (`within`), it stops short with the point that
- * far ahead, facing it. One that should end on arriving says once in the dev log if it stalls (`stalled`), and goes on.
+ * (`there`, as the body turns; `eta`, a little sooner: what the hands time their reach to), when it will end (`ends`: its feet squared
+ * and settled too) and whether it has (`arrived`: there, turned and settled on its squared feet). Within reach (`within`), it stops
+ * short with the point that far ahead, facing it. One that should end on arriving says once in the dev log if it stalls (`stalled`), and
+ * goes on.
  */
 export class Walk {
   eta = Infinity;
+  there = Infinity;
   ends = Infinity;
+  /** how far (rad) the body is still to turn to the facing it arrives with */
+  unturned = Infinity;
   stalled = false;
   private readonly go: Go = { to: new Vector3(), speed: STROLL.speed, accel: STROLL.accel };
 
@@ -84,11 +89,15 @@ export class Walk {
       onward += Math.hypot(next.x - previous.x, next.z - previous.z) / go.speed;
       previous = next;
     }
-    const body = placeOf(self, f), there = etaOf(self, body, go, yaw, TURNING) + onward;
+    const body = placeOf(self, f);
+    this.there = etaOf(self, body, go, yaw, TURNING) + onward;
     this.eta = etaOf(self, body, go, yaw, LEADING_TURN) + onward;
-    this.stood = there > 0 ? null : this.stood ?? f.time;
-    this.ends = there + closing(self, this.stood === null ? null : f.time - this.stood);
+    this.stood = this.there > 0 ? null : this.stood ?? f.time;
+    this.ends = this.there + closing(self, this.stood === null ? null : f.time - this.stood);
     go.face = yaw === null ? undefined : { yaw };
+    // (to the facing it arrives with, whichever leg of its way it is on)
+    const arriving = way.face?.(f) ?? null;
+    this.unturned = arriving === null ? 0 : Math.abs(wrapAngle(arriving - self.locomotion.facing));
     return go;
   }
 
