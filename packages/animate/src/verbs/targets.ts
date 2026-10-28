@@ -9,7 +9,8 @@ import { Carrier } from '../kernel/carrier';
 /**
  * Where a verb goes: a point (`Vector3`), a place that moves with its parent and sets the orientation too (an `Object3D`: an empty, a
  * bone), or either as it is at each of the body's sub-steps (a function of the body's time, s). An object is read eased across the
- * update from where the app last left it; an object a function returns is read as the function leaves it, each sub-step.
+ * update from where the app last left it; an object a function returns is read as the function leaves it, each sub-step. A body is no
+ * target — a hand or a walk goes to a place on it (one of its bones, an empty parented to one) — but `lookAt` takes one, meaning its eyes.
  */
 export type Target = Vector3 | Object3D | ((time: number) => Vector3 | Object3D);
 

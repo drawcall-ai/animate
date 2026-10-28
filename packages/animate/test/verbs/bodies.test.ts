@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { Body, carry, dog, grab, horse, lookAt, reach, release, wait, walkTo } from '../../src/index';
-import { insides, person, play } from '../bodies';
+import { gazeOff, insides, person, play } from '../bodies';
 import { DOG } from '../../skills/animate/references/dog';
 import { HORSE } from '../../skills/animate/references/horse';
 import { box, empty, roomOf, worldOf } from '../things';
@@ -76,6 +76,27 @@ describe('bodies together', () => {
     // (each reads the other as it was before this frame's updates: the order they update in changes nothing)
     expect(before.mare.equals(after.mare) && before.groom.equals(after.groom)).toBe(true);
     expect(after.mare.distanceTo(new Vector3(-2, 0, 0))).toBeGreaterThan(3);
+  }, 20000);
+
+  it('a person looks another in the eyes, following them as the other walks past', () => {
+    const watcher = person({ dev: true }), walker = person({ dev: true, at: new Vector3(-2, 0, 1.5), face: Math.PI / 2 });
+    let done = false, most = 0;
+    play(function* () {
+      yield* parallel('race', lookAt(watcher, walker), function* () {
+        yield* wait(1);
+        yield* walkTo(walker, new Vector3(2, 0, 1.5));
+        done = true;
+      });
+    }, [watcher, walker], 15, (time) => {
+      // (once the eyes have found the walker's, on them as they cross ~1.8 rad of the watcher's view: within the eyes' own range)
+      const eyes = insides(walker).gazer.eyes(walker.pose, new Vector3());
+      if (time > 1) most = Math.max(most, gazeOff(insides(watcher).gazer, watcher.pose, eyes));
+      return done;
+    });
+    expect(done).toBe(true);
+    expect(most).toBeLessThan(0.02);
+    expect([...watcher.log, ...walker.log]).toEqual([]);
+    expect(() => lookAt(watcher, watcher)).toThrow('its own eyes');
   }, 20000);
 });
 
