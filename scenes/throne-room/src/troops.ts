@@ -1,7 +1,7 @@
 import { Group, Quaternion, Vector3, type Bone, type Object3D } from 'three';
 import { action, parallel, type NonReuseableTimeline } from '@pmndrs/timeline';
-import { arriving, Body, humanoid, lookAt, track, wait, walkTo } from '@drawcall/animate';
-import type { Dress } from './cast';
+import { arriving, Body, lookAt, track, wait, walkTo } from '@drawcall/animate';
+import { personOf, type Dress } from './cast';
 import { HALL } from './hall';
 import { SOLDIER } from './skeletons/soldier';
 
@@ -41,7 +41,7 @@ export interface Troops {
 
 /** Creates each block's officer and simulated front-rank soldiers, and (dressed) the echoes that fill the ranks behind them. */
 export function createTroops(dress: Dress, dev = true): Troops {
-  const species = humanoid(SOLDIER);
+  const species = personOf(SOLDIER);
   const troopers: Trooper[] = [];
   const echoes = new Group();
   echoes.name = 'troop echoes';
