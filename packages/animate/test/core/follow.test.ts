@@ -18,6 +18,19 @@ function run(start: Vector3, velocity: Vector3, target: (k: number) => Vector3, 
 const accelerations = (path: Vector3[]) => path.slice(2).map((p, k) => p.clone().sub(path[k + 1]).sub(path[k + 1].clone().sub(path[k])).length() / dt ** 2);
 
 describe('follow', () => {
+  it('brakes a caught point independently of roundoff in its remaining displacement', () => {
+    const previous = new Vector3(), before = new Vector3(-dt, 0, 0);
+    const options = { accel: 6, velocity: new Vector3(0, 1, 0) };
+    const target = new Vector3(0, dt, 0);
+    const expected = follow(before, previous, target, options, dt);
+    for (const axis of [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]) {
+      for (const error of [-1e-15, 1e-15]) {
+        const next = follow(before, previous, target.clone().addScaledVector(axis, error), options, dt);
+        expect(next.distanceTo(expected)).toBeLessThan(1e-12);
+      }
+    }
+  });
+
   it('accelerates at most `accel` and closes in at most at `speed`, from any motion', () => {
     const goal = new Vector3(1, 0.5, 0);
     for (const velocity of [new Vector3(), new Vector3(-2, 0, 1), new Vector3(3, 1.5, 0)]) {

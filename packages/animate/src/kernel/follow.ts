@@ -33,7 +33,8 @@ export function follow(
   const velocity = _v.copy(p).sub(was).divideScalar(dt);
   // the goal where it was a step ago: the approach is to that, then moved with it
   const gap = vector(target, _d).addScaledVector(goal, -dt).sub(p);
-  step(velocity, gap, goal, options, dt);
+  // A caught point has no reliable braking direction inside the IK positional fitting tolerance.
+  step(velocity, gap, goal, options, dt, 1e-9);
   const next = p.addScaledVector(velocity, dt);
   if (on) next.applyQuaternion(on.current.quaternion).add(on.current.position);
   return typeof prev === 'number' ? next.x : out.copy(next);
