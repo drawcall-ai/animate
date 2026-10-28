@@ -3,21 +3,28 @@ import { expect } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { reaching } from '../src/scenarios/tracking';
 import { knownFailure, seeded } from '../scripts/run';
+import { SOLDIER, OUTLIER } from '../src/skeletons';
 import { cases } from '../../packages/animate/test/open';
 
-// Every scenario's run with development checks on: its dev log empty and its story finished; and a few of them varied (each person
-// up to 10 cm off, turned up to 0.15 rad, up to 4 % taller or shorter), which no story may hang on. Open cases are expected to fail:
-// each one fixed comes off the list.
-// - look-around: the left upper arm 1.05 cm into the trunk (limit 1) at 15.0 s, turning back from behind;
-// - reach variation #3 (seed 1): upstream tiptoe settlement leaves XCoM 11.37 cm outside support at 12.93 s.
 const test = cases([
-  ['reach: variation #3 final-pose dev checks', [1]],
-  'look-around: final-pose dev checks',
+  ['reach: variation #3 final-pose dev checks', [1]], // Tiptoe settlement exceeds 10 cm XCoM.
+  'shooter on the soldier: final-pose dev checks', // Grip/leg-rate violations.
+  'pickup-shelf on the soldier: final-pose dev checks', // Unreachable placement.
+  ['vr on the soldier: final-pose dev checks', [1]], // Tracking joint-rate violation.
+  'reach on the soldier: final-pose dev checks', // Reach diagnostics.
+  'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
+  'look-around: final-pose dev checks', // Upper arm penetrates the trunk.
 ]);
 for (const scenario of SCENARIOS) {
-  test(`${scenario.id}: final-pose dev checks${scenario.id === 'vr' ? ' (its side-step unfinished, known)' : ''}`, () => {
-    expect(run(scenario).filter((entry) => !knownFailure(entry))).toEqual([]);
-  });
+  const bodies = [{ on: '', skeleton: undefined },
+    ...(['legs-horse', 'dog-fetch', 'lion-run'].includes(scenario.id) ? [] : [{ on: ' on the soldier', skeleton: SOLDIER }]),
+    ...(scenario.id === 'reach-around' ? [{ on: ' on the outlier', skeleton: OUTLIER }] : []),
+  ];
+  for (const { on, skeleton } of bodies) {
+    test(`${scenario.id}${on}: final-pose dev checks`, () => {
+      expect(run(scenario, { skeleton }).filter((entry) => !knownFailure(entry))).toEqual([]);
+    });
+  }
 }
 
 for (const scenario of SCENARIOS.filter((each) => ['reach', 'knight-arming', 'pickup-shelf'].includes(each.id))) {

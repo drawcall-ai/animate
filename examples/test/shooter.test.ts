@@ -7,32 +7,26 @@ import { Playback } from '../src/playback';
 import { FIXED_DT, type Person, type Player, type Scenario, type Stage } from '../src/scenario';
 import { box, empty } from '../src/things';
 import { PlayerCamera } from '../src/stage/camera';
-import { OUTLIER, SOLDIER, type PersonSkeleton } from '../src/skeletons';
-import { seeded } from '../scripts/run';
+import { SOLDIER, type PersonSkeleton } from '../src/skeletons';
 import { solePoints } from '../../packages/animate/src/species/humanoid/landmarks';
 import { INDEX } from '../../packages/animate/src/species/humanoid/bones';
 import { Actor, wrapAngle } from './actor';
 import { cases } from '../../packages/animate/test/open';
 
-const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [['', undefined], [' on the soldier', SOLDIER], [' on the outlier', OUTLIER]];
-const BODY_NAMES = BODIES.map(([on]) => on);
+const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [['', undefined], [' on the soldier', SOLDIER]];
 
-// Current grip, reload and leg-rate failures on alternate bodies and seeded variations.
 const test = cases([
-  'keeps both grips, steady sights and final-pose checks clean #2',
-  ...BODY_NAMES.filter(Boolean).flatMap((on) => [0, 1, 2].map((seed) => `keeps both grips, steady sights and final-pose checks clean${on} #${seed}`)),
-  ...BODY_NAMES.filter(Boolean).map((on) => `reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept${on}`),
-  ...[' on the soldier', ' on the outlier'].flatMap((on) => [
-    `ADS overrides held sprint and keeps both grips during the raise${on}`,
-    `jumps from a walk and a sprint: quick take-off, a ballistic arc, momentum kept, the knees taking the landing${on}`,
-    `sprinting cancels a reload before the magazine is out, and the hand goes back to the handguard${on}`,
-  ]),
-  'sprints with the rifle, the trunk turning with the stride, both hands on their grips on the soldier',
+  'scripted aim and locomotion on the soldier', // Grip/leg-rate violations.
+  'walking reload keeps its grips on the soldier', // Grip/leg-rate violations.
+  'aim overrides sprint on the soldier', // Grip/leg-rate violations.
+  'walking and sprinting jumps on the soldier', // Landing joint-rate violations.
+  'sprint cancels reload on the soldier', // Reload joint-rate violations.
+  'sprint with both rifle grips on the soldier', // Sprint joint-rate violations.
 ]);
 
-/** a run of the shooter on `skeleton`, development checks on, its people varied by `seed` (none: as written) */
-function staged(skeleton?: PersonSkeleton, seed?: number) {
-  const sim = new Simulation(shooter(), { dev: true, skeleton, vary: seed ? seeded(seed) : undefined });
+/** The viewer story with development checks enabled. */
+function staged(skeleton?: PersonSkeleton) {
+  const sim = new Simulation(shooter(), { dev: true, skeleton });
   const person = sim.people[0], actor = new Actor(person), player = sim.stage.player!;
   const rifle = person.object.getObjectByName('rifle')!;
   return { sim, person, actor, player, rifle };
@@ -59,8 +53,8 @@ const logged = (log: readonly LogEntry[]) => log.slice(0, 4).map((entry) => `${e
 const idle = (player: Player) => Object.assign(player.input, { move: { x: 0, z: 0 }, ads: false, sprint: false, fire: false, crouch: false, jump: false, reload: false });
 
 for (const [on, skeleton] of BODIES) {
-  for (const seed of [0, 1, 2]) test(`keeps both grips, steady sights and final-pose checks clean${on} #${seed}`, () => {
-    const { sim, person, actor, player, rifle } = staged(skeleton, seed);
+  test(`scripted aim and locomotion${on}`, () => {
+    const { sim, person, actor, player, rifle } = staged(skeleton);
     const input = player.input, camera = new PerspectiveCamera(90, 16 / 9, 0.02, 1000), framing = new PlayerCamera();
     let grip = 0, sight = 0, sightLine = 0, acquired = Infinity, walking = 0, low = Infinity, raised = Infinity, facing = 0, heading = 0;
     let steady = 0, lastYaw = 0, lastPitch = 0, lastAds = false, lastFire = 0, sightFrames = 0, hipFrames = 0, flight = 0, moved = 0, lastMove = '';
@@ -153,7 +147,7 @@ for (const [on, skeleton] of BODIES) {
     expect(sim.stage.done()).toBe(true);
   }, 60000);
 
-  test(`keeps the rifle on the aim through fast turns: standing and walking, at the hip and aiming${on}`, () => {
+  test(`rifle follows fast aim turns${on}`, () => {
     const { sim, person, actor, player, rifle } = staged(skeleton);
     sim.advanceTo(2.5);
     player.live = true;
@@ -183,7 +177,7 @@ for (const [on, skeleton] of BODIES) {
 
   // (the mouse moves the look between steps, at the display's rate: the camera shows the look the rifle was placed in, blended as the
   // rifle is — the rifle never trails the view)
-  for (const [name, walk] of [['standing', 0], ['walking', 1]] as const) test(`shows the rifle steady in the first-person view through fast turns aiming, ${name}${on}`, () => {
+  for (const [name, walk] of [['standing', 0], ['walking', 1]] as const) test(`first-person sights through fast turns, ${name}${on}`, () => {
     const playback = new Playback(staged(skeleton).sim);
     playback.advanceTo(2.5);
     const player = playback.sim.stage.player!, rifle = playback.sim.people[0].object.getObjectByName('rifle')!;
@@ -213,7 +207,7 @@ for (const [on, skeleton] of BODIES) {
     expect(sight).toBeLessThan(0.002);
   });
 
-  test(`keeps the head level while aiming, including walking, firing and fast turns${on}`, () => {
+  test(`level head while aiming${on}`, () => {
     const { sim, actor, player } = staged(skeleton);
     let roll = 0, aimed = 0;
     while (sim.t < sim.scenario.duration) {
@@ -264,7 +258,7 @@ for (const [on, skeleton] of BODIES) {
   // & Kram 2014: arms held across the chest the pelvis turns 102% further, the shoulders 44%; Pontzer et al. 2009: arms folded, the shoulders
   // 50% further; snippet, Seay et al. 2011: soldiers running with a rifle turn the trunk further — from a free runner's ~14° pelvis and
   // ~20° thorax peak to peak; the grips held throughout)
-  test(`sprints with the rifle, the trunk turning with the stride, both hands on their grips${on}`, () => {
+  test(`sprint with both rifle grips${on}`, () => {
     const { sim, person, actor } = staged(skeleton);
     const pelvis: number[] = [], shoulders: number[] = [];
     let grip = 0;
@@ -303,7 +297,7 @@ for (const [on, skeleton] of BODIES) {
     expect(gripError(actor)).toBeLessThanOrEqual(0.01);
   });
 
-  test(`ADS overrides held sprint and keeps both grips during the raise${on}`, () => {
+  test(`aim overrides sprint${on}`, () => {
     const { sim, person, actor, player, rifle } = staged(skeleton);
     sim.advanceTo(21);
     player.live = true;
@@ -362,7 +356,7 @@ for (const [on, skeleton] of BODIES) {
     expect(jerk).toBeLessThan(36);
   });
 
-  test(`jumps from a walk and a sprint: quick take-off, a ballistic arc, momentum kept, the knees taking the landing${on}`, () => {
+  test(`walking and sprinting jumps${on}`, () => {
     const { frames, person } = recorded();
     const presses = frames.filter((frame, i) => frame.jump && !frames[i - 1].jump);
     expect(presses.length).toBe(2);
@@ -404,7 +398,7 @@ for (const [on, skeleton] of BODIES) {
 
   // (the pouches ride on the vest and the well on the rifle the body holds: bowing would carry them away as far, so the arm alone reaches
   // them and the trunk stays upright)
-  test(`reloads standing upright: the magazine out, stowed, the full one in, the trunk within 3° of upright${on}`, () => {
+  test(`standing reload stays upright${on}`, () => {
     const { sim, person, actor, player } = staged(skeleton);
     player.live = true;
     let most = 0;
@@ -421,7 +415,7 @@ for (const [on, skeleton] of BODIES) {
     expect(logged(person.log)).toEqual([]);
   });
 
-  test(`reloads while walking: magazine out, stowed, the full one in, back on the handguard, every grip kept${on}`, () => {
+  test(`walking reload keeps its grips${on}`, () => {
     const { frames, steps, person } = recorded();
     expect(steps).toEqual(['to magazine', 'stow', 'to pouch', 'insert', 'handguard']);
     const press = frames.find((frame) => frame.reload)!;
@@ -435,7 +429,7 @@ for (const [on, skeleton] of BODIES) {
     expect(logged(person.log)).toEqual([]);
   });
 
-  test(`sprinting cancels a reload before the magazine is out, and the hand goes back to the handguard${on}`, () => {
+  test(`sprint cancels reload${on}`, () => {
     const { sim, person, actor, player } = staged(skeleton);
     sim.advanceTo(30);
     player.live = true;

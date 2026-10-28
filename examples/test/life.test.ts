@@ -7,33 +7,24 @@ import { Simulation } from '../src/simulation';
 import { armInTrunk } from './clearance';
 import { Actor } from './actor';
 
-test('reaches every reach-around target standing, without a squat', () => {
+test('reaches every reach-around target without squatting or penetrating the trunk', () => {
   const sim = new Simulation(reachAround);
   const person = new Actor(sim.people[0]);
   const targets = sim.stage.scene.children.filter((child) => child.name === 'point').map((ball) => ball.position);
   const reached = new Set<number>();
-  let lowest = Infinity;
+  let lowest = Infinity, deepest = 0;
   while (sim.t < reachAround.duration) {
     sim.step();
+    deepest = Math.max(deepest, armInTrunk(person, 'right'));
     lowest = Math.min(lowest, person.joint('hips').y - person.proportions.hipHeight);
     targets.forEach((target, i) => {
       if (person.joint('rightHand').distanceTo(target) < 0.01) reached.add(i);
     });
   }
+  expect(deepest).toBeLessThan(0.01);
   expect(lowest).toBeGreaterThan(-0.08);
   expect(reached.size).toBe(3);
   expect(sim.stage.done()).toBe(true);
-});
-
-test('brings the right hand round the front of the trunk to the reach-around target behind it on the left', () => {
-  const sim = new Simulation(reachAround);
-  const person = new Actor(sim.people[0]);
-  let deepest = 0;
-  while (sim.t < reachAround.duration) {
-    sim.step();
-    deepest = Math.max(deepest, armInTrunk(person, 'right'));
-  }
-  expect(deepest).toBeLessThan(0.01);
 });
 
 test('keeps its hand on what it reaches for until the reach ends', () => {

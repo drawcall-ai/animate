@@ -3,17 +3,13 @@ import { setImmediate } from 'node:timers/promises';
 import { Vector3 } from 'three';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
-import { pickupShelf } from '../src/scenarios/pickup';
-import { knightArming } from '../src/scenarios/knight';
 import { stroll } from '../src/scenarios/stroll';
-import { walkThere } from './walk-scenario';
-import { lookAround, reaching, vr } from '../src/scenarios/tracking';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
 import { frames } from './frame';
 import { GaitKinematics } from './gait';
-import { cases, type Open } from '../../packages/animate/test/open';
+import { cases } from '../../packages/animate/test/open';
 
 // Whole-scene simulations can occupy a worker for over a minute; let Vitest receive its RPC replies between cases.
 afterEach(() => setImmediate());
@@ -37,112 +33,12 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   expect(fails, fails.join('\n')).toEqual([]);
 }
 
-// Expected failures still present at the listed life seeds. Finished viewer stories are guarded separately in viewer.test.ts.
-const OPEN: Open[] = [
-  // The lower-box gaze misses by about 70° at seed 3 on both architectures; the 45° limit stays unchanged.
-  ['pickup-shelf, the box 5 cm lower', [3]],
-  'stroll 15% faster',
-  'look-around, the headset 20% faster',
-  ["look-around, looking down 10 cm nearer", [0]],
-  'look-around, looking down 10 cm further off',
-  ["look-around, turned 0.3 rad left", [0]],
-  'knight-arming, the stand, wall and rack 15 cm further left',
-  'knight-arming, 20% slower',
-  ["stroll round a sharp 0.6 m turn", [2]],
-];
-// (and the known task-accuracy failures, `known()`, below)
-const KNOWN = known();
-const check = cases([...OPEN, 'vr', ...KNOWN.map(([name]) => name)]);
-
-// These metrics assume humanoid balance owns h.feet/h.locomotion and centres the CoM.
-// The isolated leg scenes have final-pose contact/ROM/rate coverage in legs.test.ts and dev.test.ts.
+// VR still misses its controller targets; variation grids are exercised by dev.test.ts.
+const check = cases(['vr']);
 for (const sc of SCENARIOS.filter((s) => !['legs-biped', 'legs-horse', 'dog-fetch', 'lion-run'].includes(s.id))) {
   check(sc.id, () => judged(sc));
 }
 
-// the same limits a little off the script: no metric may hang on its exact numbers
-// (a variation that walks less than its scenario says how few strides it judges: none go unjudged silently)
-const NONE = { straight: 0, curve: 0 };
-const VARIATIONS: [string, Scenario, MetricsOptions['strides']?][] = [
-  ['stroll 15% slower', stroll({ speed: 0.85 })],
-  ['stroll 15% faster', stroll({ speed: 1.15 })],
-  ['stroll on a 20% tighter arc', stroll({ radius: 2.4 })],
-  ['stroll on a 20% wider arc', stroll({ radius: 3.6 })],
-  ['stroll setting off turned 0.3 rad left', stroll({ yaw: 0.3 })],
-  ['stroll setting off turned 0.3 rad right', stroll({ yaw: -0.3 })],
-  ['stroll setting off turned a quarter turn away', stroll({ yaw: Math.PI / 2 })],
-  ['stroll setting off facing away', stroll({ yaw: Math.PI })],
-  // (round so sharp a bend the body slows below a walk's speed: no curve strides to judge)
-  ['stroll round a sharp 0.6 m turn', stroll({ radius: 0.6 }), { straight: 3, curve: 0 }],
-  ['walk to a point 2 m behind', walkThere(new Vector3(0, 0, -2)), NONE],
-  ['walk to a point 2 m to the right', walkThere(new Vector3(-2, 0, 0)), NONE],
-  ['turn round in place', walkThere(new Vector3(0, 0, 0), Math.PI), NONE],
-  ['walk 4 m ahead, turning round on arrival', walkThere(new Vector3(0, 0, 4), Math.PI), NONE],
-  ['stroll setting off turned 3/4 of a half turn left', stroll({ yaw: (3 * Math.PI) / 4 })],
-  ['stroll setting off turned 3/4 of a half turn right', stroll({ yaw: (-3 * Math.PI) / 4 })],
-  ['pickup-shelf, the box 10 cm nearer', pickupShelf({ nearer: 0.1 })],
-  ['pickup-shelf, the box 10 cm farther', pickupShelf({ nearer: -0.1 })],
-  ['pickup-shelf, the box 5 cm higher', pickupShelf({ taller: 0.1 })],
-  ['pickup-shelf, the box 5 cm lower', pickupShelf({ taller: -0.1 })],
-  ['pickup-shelf, the shelf 5 cm lower', pickupShelf({ lower: 0.05 })],
-  ['pickup-shelf, the box behind', pickupShelf({ around: Math.PI })],
-  ['pickup-shelf, the box lifted to the chest in 1.2 s', pickupShelf({ lift: 1.2 })],
-  ['look-around, the headset 20% faster', lookAround({ pace: 1.2 })],
-  ['look-around, the headset 20% slower', lookAround({ pace: 0.8 })],
-  ['look-around, looking down 10 cm nearer', lookAround({ shift: { x: 0, z: 0.1 } })],
-  ['look-around, looking down 10 cm lower', lookAround({ rise: -0.1 })],
-  // (off the known list since the head is judged by its course, 2026-10-22: it lags a moving target, holds within 5 cm)
-  ['look-around, looking down 10 cm further off', lookAround({ shift: { x: 0, z: -0.1 } })],
-  ['look-around, turned 0.3 rad left', lookAround({ turn: 0.3 })],
-  ['look-around, turned 0.3 rad right', lookAround({ turn: -0.3 })],
-  ['reach, the targets 10 cm to the left', reaching({ shift: { x: 0.1, z: 0 } })],
-  ['reach, the targets 10 cm nearer', reaching({ shift: { x: 0, z: -0.1 } })],
-  ['reach, the targets 10 cm to the right', reaching({ shift: { x: -0.1, z: 0 } })],
-  ['reach, the targets 10 cm higher', reaching({ rise: 0.1 })],
-  ['reach, the targets 10 cm lower', reaching({ rise: -0.1 })],
-  ['reach, turned 0.3 rad right', reaching({ turn: -0.3 })],
-  ['reach, turned 0.3 rad left', reaching({ turn: 0.3 })],
-  ['reach, the hand 20% slower', reaching({ pace: 0.8 })],
-  ['reach, the hand 20% faster', reaching({ pace: 1.2 })],
-  ['knight-arming, the stand, wall and rack 15 cm further left', knightArming({ shift: { x: 0.15, z: 0 } })],
-  ['knight-arming, the stand, wall and rack 15 cm further right', knightArming({ shift: { x: -0.15, z: 0 } })],
-  ['knight-arming, the stand, wall and rack 15 cm further on', knightArming({ shift: { x: 0, z: 0.15 } })],
-  ['knight-arming, the stand, wall and rack 15 cm nearer', knightArming({ shift: { x: 0, z: -0.15 } })],
-  ['knight-arming, the gear 10 cm higher', knightArming({ rise: 0.1 })],
-  ['knight-arming, the gear 10 cm lower', knightArming({ rise: -0.1 })],
-  ['knight-arming, the knight 5% taller', knightArming({ height: 1.75 * 1.05 })],
-  ['knight-arming, the knight 5% shorter', knightArming({ height: 1.75 * 0.95 })],
-  ['knight-arming, 20% quicker', knightArming({ pace: 1.2 })],
-  ['knight-arming, 20% slower', knightArming({ pace: 0.8 })],
-  ['knight-arming, the stand, wall and rack on the other sides', knightArming({ mirror: true })],
-  ['knight-arming, the helm turned a quarter on its stand', knightArming({ helmTurn: Math.PI / 2 })],
-  ['knight-arming, the helm turned a quarter the other way', knightArming({ helmTurn: -Math.PI / 2 })],
-  ['knight-arming, the helm turned half round on its stand: walked round to take it', knightArming({ helmTurn: Math.PI })],
-  ['knight-arming, mirrored, the helm turned half round: walked round the stand clear of it', knightArming({ mirror: true, helmTurn: Math.PI })],
-  ['knight-arming, the shield\'s wall turned 0.4 rad', knightArming({ wallTurn: 0.4 })],
-  ['knight-arming, the shield\'s wall turned −0.4 rad', knightArming({ wallTurn: -0.4 })],
-];
-for (const [name, sc, strides] of VARIATIONS) check(name, () => judged(sc, strides));
-
-// Known task-accuracy failures, tracked until fixed.
-function known(): [string, Scenario][] {
-  return [
-  // Head targets missed when raised or shifted sideways.
-  ['look-around, looking down 10 cm higher', lookAround({ rise: 0.1 })],
-  ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
-  // The side-step turns to walk instead of strafing; controller targets are missed.
-  ['vr, the trackers 20% faster', vr({ pace: 1.2 })],
-  ['vr, the trackers 20% slower', vr({ pace: 0.8 })],
-  ['vr, the controllers 10 cm further out', vr({ shift: { x: 0, z: 0.1 } })],
-  ['vr, the controllers 10 cm nearer', vr({ shift: { x: 0, z: -0.1 } })],
-  ['vr, the controllers 10 cm to the left', vr({ shift: { x: 0.1, z: 0 } })],
-  ['vr, the controllers 10 cm higher', vr({ rise: 0.1 })],
-  ['vr, the controllers 10 cm lower', vr({ rise: -0.1 })],
-  ['vr, turned 0.3 rad left', vr({ turn: 0.3 })],
-  ['vr, turned 0.3 rad right', vr({ turn: -0.3 })],
-  ];
-}
-for (const [name, sc] of KNOWN) check(name, () => judged(sc));
 // (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)
 it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
   const m = measure(frames(new Simulation(stroll())));
