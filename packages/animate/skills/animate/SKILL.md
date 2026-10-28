@@ -82,7 +82,7 @@ To lead a horse, take the rope, then walk both bodies in parallel with the horse
 
 Use `track` for headset and controller targets, or a body's `drive` for a player-controlled root with procedural legs. Scripted hands and eyes can still act on that body. The built-in creatures have no sitting or lying action; a stopped dog stands.
 
-For a custom creature, combine a skeleton with `species`, roles and tuning. Assign chains to the jobs they perform, then choose gait and mass distribution for that anatomy. The types at `@drawcall/animate/species` describe the inputs; its gait helpers compose footfall timing and carriage, and `swing` can supply tail life. A hand is a chain tip: the horse and dog expose `jaw`; use `reach` for mouth contact, not `lookAt`, which directs gaze. Creature hands operate one at a time. Leave spare leg reach with the sole flat after gait lowering; an extended rest chain may have no room to move.
+For a custom creature, combine a skeleton with `species`, roles and tuning. Assign chains to the jobs they perform, then choose gait and mass distribution for that anatomy. The types at `@drawcall/animate` describe the inputs; its gait helpers compose footfall timing and carriage, and `swing` can supply tail life. A hand is a chain tip: the horse and dog expose `jaw`; use `reach` for mouth contact, not `lookAt`, which directs gaze. Creature hands operate one at a time. Leave spare leg reach with the sole flat after gait lowering; an extended rest chain may have no room to move.
 
 ## Check the story
 

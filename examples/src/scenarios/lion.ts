@@ -1,7 +1,6 @@
 import { Group, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { species, walkTo } from '@drawcall/animate';
-import { carriages, footfalls, powerGait, swing, type Range } from '@drawcall/animate/species';
+import { carriages, footfalls, powerGait, species, swing, walkTo, type Range } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
 import { LION } from '../skeletons';
 import { ball } from '../things';

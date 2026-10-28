@@ -4,8 +4,7 @@
 import { describe, expect, test } from 'vitest';
 import { Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, reach, species, walkTo } from '@drawcall/animate';
-import { powerGait, swing, type Range } from '@drawcall/animate/species';
+import { Body, powerGait, reach, species, swing, walkTo, type Range } from '@drawcall/animate';
 import { play } from '../../packages/animate/test/bodies';
 
 const LEGS = ['leftFore', 'rightFore', 'leftHind', 'rightHind'] as const;

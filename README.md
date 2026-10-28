@@ -28,6 +28,8 @@ updateStory(undefined, delta);
 person.update(delta);
 ```
 
+Import custom-species types and helpers such as `species`, `powerGait` and `swing` from `@drawcall/animate` alongside `Body` and the story verbs.
+
 The package ships its usage guide as a skill: `packages/animate/skills/animate/SKILL.md`.
 
 `packages/animate` is the package; `examples` is the examples app (`pnpm dev`).

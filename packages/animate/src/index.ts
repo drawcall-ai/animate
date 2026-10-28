@@ -1,6 +1,3 @@
-// The story surface: bodies of a species, and the verbs that move them.
-// What a species of your own needs is in '@drawcall/animate/species'.
-
 export { Body, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
 export type { Root } from './legs/legged';
 export { humanoid, type HumanoidBone } from './species/humanoid/humanoid';
@@ -18,3 +15,12 @@ export { wait, watch, type Until, type Verb } from './verbs/story';
 export type { Target } from './verbs/targets';
 export type { LogEntry, Problem } from './kernel/dev';
 export type { ReadonlyPose } from './kernel/pose';
+
+export type { BoneNames, Gazer, Having, LegRole, Range, Roles, Tuning, Vec3 } from './species/define';
+export type { Inertial } from './kernel/inertia';
+export type { Carriage, Gait } from './species/gait';
+export type { JointCycle } from './species/cycle';
+export type { CarriedBones } from './species/carriage';
+export { carriages, footfalls, powerGait } from './species/schedule';
+export { scaled } from './species/scaled';
+export { swing, type Rhythm } from './kernel/life';
