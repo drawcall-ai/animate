@@ -50,7 +50,8 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
     description:
       'In his armoury a knight in harness buckles on his sword belt, hangs his sword on it and checks it draws, puts on his helm and buckles its strap, ' +
       'pulls on his gauntlets, takes his shield onto his left arm and his lance in his right hand, and walks out into the yard, looking round.',
-    duration: 50 + 24 / pace,
+    // Include a second of settlement after the story: the soldier's final look can finish just past 74 s.
+    duration: 51 + 24 / pace,
     cameraDistance: 4.2,
     stage: (cast) => {
       const knight = cast.person({ tempo: pace }, height === undefined ? undefined : scaled(PERSON, height / 1.75));
