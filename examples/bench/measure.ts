@@ -135,7 +135,7 @@ export function report(results: Result[]): string {
     lines.push(pad([r.bodies, ...[f.mean, f.p50, f.p95, f.p99, f.max].map((v) => v.toFixed(3)), r.perBody.mean.toFixed(1), r.perBody.p99.toFixed(1), (r.alloc / 1024).toFixed(2)]));
   }
   lines.push('', `µs per body per tick, mean (p99)\n${'scenario'.padEnd(14)}${pad(results.map((r) => r.bodies), 16)}`);
-  for (const id of results[0]?.byScenario.keys() ?? []) {
+  for (const id of new Set(results.flatMap((result) => [...result.byScenario.keys()]))) {
     const cells = results.map((r) => {
       const s = r.byScenario.get(id);
       return s ? `${s.mean.toFixed(1)} (${s.p99.toFixed(1)})` : '';
