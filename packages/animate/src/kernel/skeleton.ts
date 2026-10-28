@@ -38,12 +38,11 @@ interface SkeletonOptions {
 
 /** A rig: bones in order, parents before children, bone 0 the only root; its joint limits and named chains. */
 export class Skeleton {
-  readonly bones: readonly BoneDef[];
   readonly limits: readonly (Limit | undefined)[];
   private readonly byName = new Map<string, number>();
   private readonly chains = new Map<string, readonly number[]>();
 
-  constructor(bones: readonly BoneDef[], { limits = [], chains = {} }: SkeletonOptions = {}) {
+  constructor(readonly bones: readonly BoneDef[], { limits = [], chains = {} }: SkeletonOptions = {}) {
     if (bones.length === 0) throw new Error('a skeleton needs at least one bone');
     bones.forEach((b, i) => {
       if (this.byName.has(b.name)) throw new Error(`bone name "${b.name}" is used twice`);
@@ -54,7 +53,6 @@ export class Skeleton {
       }
       if (!(b.mass >= 0 && Number.isFinite(b.mass))) throw new Error(`bone "${b.name}" has mass ${b.mass}`);
     });
-    this.bones = bones;
     const byBone: (Limit | undefined)[] = bones.map(() => undefined);
     for (const l of limits) {
       if (!bones[l.bone]) throw new Error(`a limit for bone ${l.bone}, which does not exist`);

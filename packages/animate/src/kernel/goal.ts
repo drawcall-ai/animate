@@ -5,25 +5,11 @@ import type { Frame } from './frame';
 /** A goal as it is, or as it is at each sub-step (`T` is never itself a function). */
 export type Live<T> = T | ((f: Frame) => T);
 
-/** what a live goal is at `f` */
-export function live<T>(goal: Live<T>, f: Frame): T {
-  return isRead(goal) ? goal(f) : goal;
-}
-
-const isRead = <T>(goal: Live<T>): goal is (f: Frame) => T => typeof goal === 'function';
-
 /** Where something is, and turned how (world, or a carrier's frame). */
-export interface Placement {
-  position: Vector3;
-  quaternion: Quaternion;
-}
+export type Placement = Required<Pick<Goal, 'position' | 'quaternion'>>;
 
 /** Where a carrier is at a sub-step (`current`) and the two before. */
-export interface Trail {
-  readonly prev2: Placement;
-  readonly prev: Placement;
-  readonly current: Placement;
-}
+export type Trail = Readonly<Record<'prev2' | 'prev' | 'current', Placement>>;
 
 /** A placement to go to: its own velocity (m/s) and spin (rad/s) are followed without lag. */
 export interface Goal {

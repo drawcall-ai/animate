@@ -17,15 +17,13 @@ export type Side = (typeof SIDES)[number];
 
 /** `hand` as a person's side: a person's hands are `left` and `right` (a hand of another name is a misuse, said at once) */
 export function sideOf(hand: string): Side {
-  const side = SIDES.find((s) => s === hand);
-  if (!side) throw new Error(`a person's hands are left and right, not "${hand}"`);
-  return side;
+  if (hand !== 'left' && hand !== 'right') throw new Error(`a person's hands are left and right, not "${hand}"`);
+  return hand;
 }
 
 /** One fresh value per bone. */
 export function perBone<V>(make: (bone: BoneName) => V): Record<BoneName, V> {
-  const values: Partial<Record<BoneName, V>> = {};
-  for (const bone of BONES) values[bone] = make(bone);
+  const values: Partial<Record<BoneName, V>> = Object.fromEntries(BONES.map((bone) => [bone, make(bone)]));
   if (!complete(values)) throw new Error('a bone without a value');
   return values;
 }
@@ -46,13 +44,10 @@ export const PARENT: Record<ChildBone, BoneName> = {
 };
 
 /** Rest offsets in metres from each parent, at identity T-pose rotations. */
-export interface Rest {
-  /** hips origin above the ground point between the feet */
-  hips: Vector3;
-  offsets: Record<ChildBone, Vector3>;
-}
+export type Rest = ReturnType<typeof createRest>;
 
-export function createRest(): Rest {
+export function createRest() {
   const { hips, ...offsets } = perBone(() => new Vector3());
+  // hips origin above the ground point between the feet
   return { hips, offsets };
 }

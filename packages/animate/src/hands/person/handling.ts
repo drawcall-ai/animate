@@ -18,12 +18,8 @@ export function personHands(person: Reacher): Handling {
       if (loose) yield* liftingClear(person, request, thing);
       request.met();
     },
-    bring: function* (request, thing, points, end, pace) {
-      yield* carrying(person, request, thing, wayOf(person, thing, points, end), pace);
-    },
-    reach: function* (request, aims, pace) {
-      yield* reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), pace);
-    },
+    bring: (request, thing, points, end, pace) => carrying(person, request, thing, wayOf(person, thing, points, end), pace),
+    reach: (request, aims, pace) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), pace),
     backOut(hands) {
       const sides = hands.map(sideOf);
       person.own('release', '', (request) => () => backingOut(person, request, sides));

@@ -13,15 +13,10 @@ import type { LegChain } from './leg';
  * (the spine rolls the weight over) and `tail` (each change swishes the tail `swish.cycles` times, `swish.period` s each, by
  * `swish.amplitude` rad, standing), each acted on only where it is given; other rhythms are its posture's own.
  */
-export interface CarriedBones {
-  spine?: string;
-  pelvis?: string;
-  neck?: string;
-  head?: string;
-  tail?: string;
+export type CarriedBones = Partial<Record<'spine' | 'pelvis' | 'neck' | 'head' | 'tail', string>> & {
   life?: readonly (readonly [string, Rhythm])[];
   swish?: { amplitude: number; period: number; cycles: number };
-}
+};
 
 /** What a species' own posture adds to the carriage (`write`), each in the bone's terms; `weight` scales the weight roll. */
 interface Extras {

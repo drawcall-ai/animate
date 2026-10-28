@@ -13,7 +13,6 @@ function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined 
     const anchor = anchors.get(at);
     if (anchor) return anchor;
   }
-  return undefined;
 }
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
@@ -52,12 +51,7 @@ export function grasp(self: Holder, hand: string, hold: Hold | null): void {
 
 /** what `self`'s hands hold, a two-handed thing once */
 export function held(self: Holder): Thing[] {
-  const things: Thing[] = [];
-  for (const hand in self.holding) {
-    const thing = self.holding[hand]?.thing;
-    if (thing && !things.includes(thing)) things.push(thing);
-  }
-  return things;
+  return [...new Set(Object.values(self.holding).flatMap((hold) => hold ? [hold.thing] : []))];
 }
 
 /** the weight `self`'s hands bear: what they hold off its support, a two-handed thing once (kg) */
@@ -125,11 +119,8 @@ export function take(self: Holder, thing: Thing): void {
   const hands = handsOn(self, thing);
   if (!hands.length) throw new Error(`"${thing.object.name}" is in none of the body's hands`);
   if (carriedBy(self, thing)) return;
-  if (hands.length === 1) {
-    attach(thing, self.boneNode(self.hands[hands[0]]), self);
-    return;
-  }
-  attach(thing, self.boneNode(0), self);
+  attach(thing, self.boneNode(hands.length === 1 ? self.hands[hands[0]] : 0), self);
+  if (hands.length === 1) return;
   const at = resolve(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
   const carrier = new Carrier(at.position, at.quaternion);
   // (standing there as of the sub-step before: `move` moves it on in this one)

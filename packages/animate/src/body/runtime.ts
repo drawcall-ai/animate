@@ -52,8 +52,12 @@ export interface SelfOptions {
 export class Self implements Holder {
   readonly skeleton: Skeleton;
   readonly scale: number;
+  readonly restOf;
+  readonly scaleOf;
   readonly tempo: number;
   readonly frame: Frame;
+  readonly log: readonly LogEntry[];
+  readonly notes: readonly LogEntry[];
   /** the last final pose and the one before, as they were when its last update began: what others read while it is ahead of them */
   private readonly before: [ReadonlyPose, ReadonlyPose];
   private readonly poses: Pose[];
@@ -93,8 +97,13 @@ export class Self implements Holder {
 
   constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton) => Pose) {
     const dev = options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined;
+    this.log = dev?.log ?? EMPTY;
+    this.notes = dev?.notes ?? EMPTY;
     this.skeleton = massed(species, options.mass, dev);
     this.scale = species.scale;
+    this.object = binding.object;
+    this.restOf = binding.restOf.bind(binding);
+    this.scaleOf = binding.scaleOf.bind(binding);
     this.tempo = options.tempo ?? 1;
     if (!(this.tempo > 0 && Number.isFinite(this.tempo))) throw new Error(`a tempo of ${this.tempo}`);
     this.gazer = species.gaze;
@@ -114,6 +123,8 @@ export class Self implements Holder {
     });
     if (this.frame.dev && options.model) checkShear(this.binding, this.frame.dev);
     this.binding.write(this.pose);
+    /** Construct creature behaviours now so infeasible legs fail before the first update. */
+    if (!species.person) this.behaviours = this.behave();
   }
 
   /** what it bears of the things it holds and wears */
@@ -143,20 +154,13 @@ export class Self implements Holder {
     };
   }
 
-  /** Construct creature behaviours now so infeasible legs fail before the first update. */
-  initialize(): void {
-    this.behaviours = this.behave();
-  }
-
   /** the weight its hands bear off their support (kg) */
   get load(): number {
     return heldMass(this);
   }
 
   /** its object in the scene: a group on the floor, turned by its facing */
-  get object(): Object3D {
-    return this.binding.object;
-  }
+  readonly object;
 
   /** the scene node of moving bone `bone` */
   boneNode(bone: number): Object3D {
@@ -201,14 +205,6 @@ export class Self implements Holder {
 
   /** where it moved each thing it carries as its last update began: what others read while it is ahead of them */
   private readonly movedBefore = new Map<Object3D, Placement>();
-
-  restOf(bone: number): Readonly<Quaternion> {
-    return this.binding.restOf(bone);
-  }
-
-  scaleOf(bone: number): number {
-    return this.binding.scaleOf(bone);
-  }
 
   /** moves `node` itself from now on (a thing in both its hands), from where `carrier` has it */
   carry(node: Object3D, carrier: Carrier): void {
@@ -301,14 +297,6 @@ export class Self implements Holder {
     const owner = claims[claims.length - 1];
     if (channel === 'go') for (const claim of claims.slice(0, -1)) claim.step(f);
     return owner.step(f);
-  }
-
-  get log(): readonly LogEntry[] {
-    return this.frame.dev?.log ?? EMPTY;
-  }
-
-  get notes(): readonly LogEntry[] {
-    return this.frame.dev?.notes ?? EMPTY;
   }
 
   /** advances by `seconds`: every whole sub-step it covers, with what earlier updates left over */

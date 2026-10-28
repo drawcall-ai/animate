@@ -1,15 +1,12 @@
 import type { Object3D } from 'three';
 import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
-import type { Goal } from '../kernel/goal';
+import type { Goal, Motion } from '../kernel/goal';
 import type { Request } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 
 /** How briskly hands go: their speed (m/s) and acceleration (m/s²); none, the time a calm movement that far takes. */
-export interface Pace {
-  speed?: number;
-  accel?: number;
-}
+export type Pace = Partial<Pick<Motion, 'speed' | 'accel'>>;
 
 export function paceOf(pace: Pace, defaults: Required<Pace>): Required<Pace> {
   return { speed: pace.speed ?? defaults.speed, accel: pace.accel ?? defaults.accel };

@@ -19,11 +19,15 @@ export class Binding<Name extends string = string> {
    * bone the skeleton as written lacks (a person's toes, placed at the ball of a foot without them)
    */
   private readonly moving: readonly (Moving | null)[];
+  private readonly root: Moving;
   /** where the root bone's position is written from: `object`'s frame into the root node's parent's */
   private readonly rootFrame = new Matrix4();
+  /** moving bone `i`'s rotation in the body's frame, as `write` last worked it out */
+  private readonly turned;
 
   constructor(readonly species: Pick<AnySpecies, 'skeleton' | 'turns'> & { readonly bones: readonly SkeletonBone<Name>[] }, model?: Object3D) {
     const { skeleton } = species;
+    this.turned = skeleton.bones.map(() => new Quaternion());
     if (model) this.object.add(model);
     const found = model ? Object.fromEntries(species.bones.flatMap((bone) => {
       const node = model.getObjectByName(bone.name);
@@ -53,14 +57,11 @@ export class Binding<Name extends string = string> {
       rest(node).decompose(new Vector3(), turned, scale);
       return { node, anchor, between, scale: scale.x, turn: (species.turns.get(bone.name) ?? IDENTITY).clone().invert().multiply(turned) };
     });
-    const parent = this.root.node.parent;
-    if (parent && parent !== this.object) this.rootFrame.copy(rest(parent)).invert();
-  }
-
-  private get root(): Moving {
     const root = this.moving[0];
     if (!root) throw new Error(`the skeleton has no root bone "${this.species.skeleton.bones[0].name}"`);
-    return root;
+    this.root = root;
+    const parent = root.node.parent;
+    if (parent && parent !== this.object) this.rootFrame.copy(rest(parent)).invert();
   }
 
   /** each moving bone's rest frame relative to the body as the scene shows it: its rotation is the pose's times this (`turn⁻¹ · rest`) */
@@ -82,20 +83,13 @@ export class Binding<Name extends string = string> {
     this.moving.forEach((moving, i) => {
       if (!moving) return;
       // (its rotation in the body's frame, then in its parent node's: the bone it hangs from comes before it, worked out already)
-      const turned = this.turned(i).copy(back).multiply(pose.rotation(i)).multiply(moving.turn), parent = _parent.copy(moving.between);
-      if (moving.anchor >= 0) parent.premultiply(this.turned(moving.anchor));
+      const turned = this.turned[i].copy(back).multiply(pose.rotation(i)).multiply(moving.turn), parent = _parent.copy(moving.between);
+      if (moving.anchor >= 0) parent.premultiply(this.turned[moving.anchor]);
       moving.node.quaternion.copy(parent.invert().multiply(turned));
     });
     const at = _at.copy(root).sub(object.position).applyQuaternion(back);
     this.root.node.position.copy(at.applyMatrix4(this.rootFrame));
   }
-
-  /** moving bone `i`'s rotation in the body's frame, as `write` last worked it out */
-  private turned(i: number): Quaternion {
-    return (this.cache[i] ??= new Quaternion());
-  }
-
-  private readonly cache: Quaternion[] = [];
 
   /** library bones like the skeleton's, standing at rest under `object`, by name */
   private bare(): Record<string, Object3D> {

@@ -58,7 +58,7 @@ export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: f
 export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: { position: Vector3; quaternion?: Quaternion }, keeping: Keeping): number {
   const pose = f.current, chain = `${side}Arm`;
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = keeping.depth;
-  const upper = Math.max(clear, inTrunk(pose, proportions, shoulder, shoulder, ARM.upper));
+  const upper = Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth);
   const least = keeping.back ? ahead(pose, proportions, side, tip.position) : 0;
   if (least === 0 && armDepth(pose, proportions, side, upper, clear) <= clear) return 0;
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
@@ -130,13 +130,13 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
 export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height;
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
-  const upper = Math.max(clear, inTrunk(pose, proportions, shoulder, shoulder, ARM.upper));
+  const upper = Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth);
   const fits = (push: number) => {
     const at = _pushed.copy(wrist).addScaledVector(forward, push);
     return swivels(proportions, shoulder, at, near, SWIVEL.steps, (elbow, end) => {
       const hand = _hand.subVectors(end, elbow).setLength(ARM.length * proportions.height).add(end);
-      if (inTrunk(pose, proportions, shoulder, elbow, ARM.upper) > upper) return false;
-      if (inTrunk(pose, proportions, elbow, end, ARM.fore) > clear || inTrunk(pose, proportions, end, hand, ARM.hand) > clear) return false;
+      if (deepest(pose, proportions, shoulder, elbow, ARM.upper).depth > upper) return false;
+      if (deepest(pose, proportions, elbow, end, ARM.fore).depth > clear || deepest(pose, proportions, end, hand, ARM.hand).depth > clear) return false;
       pole.copy(elbow);
       return true;
     });
@@ -206,16 +206,11 @@ function armDepth(pose: ReadonlyPose, proportions: Proportions, side: Side, uppe
   const elbow = pose.position(INDEX[`${side}LowerArm`]);
   const wrist = pose.position(INDEX[`${side}Hand`]);
   const hand = _hand.subVectors(wrist, elbow).setLength(ARM.length * proportions.height).add(wrist);
-  const upperArm = inTrunk(pose, proportions, shoulder, elbow, ARM.upper) - upper + clear;
-  return Math.max(upperArm, inTrunk(pose, proportions, elbow, wrist, ARM.fore), inTrunk(pose, proportions, wrist, hand, ARM.hand));
+  const upperArm = deepest(pose, proportions, shoulder, elbow, ARM.upper).depth - upper + clear;
+  return Math.max(upperArm, deepest(pose, proportions, elbow, wrist, ARM.fore).depth, deepest(pose, proportions, wrist, hand, ARM.hand).depth);
 }
 
-/** how far (m) an arm part from `a` to `b`, `radius` round (× height), is in the trunk as `pose` holds it (`deepest`'s depth) */
-function inTrunk(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): number {
-  return deepest(pose, proportions, a, b, radius).depth;
-}
-
-/** how far an arm part is in the trunk at its deepest (m; negative: clear of it by so much), and in which capsule */
+/** how far an arm part from `a` to `b`, `radius` round (× height), is in the trunk at its deepest (m; negative: clear of it by so much), and in which capsule */
 function deepest(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): { depth: number; capsule: string } {
   let depth = -Infinity, capsule = '';
   for (const [from, to, r] of TRUNK) {

@@ -67,7 +67,6 @@ function find(root: Object3D, name: string): Object3D | undefined {
     const found = find(child, name);
     if (found) return found;
   }
-  return undefined;
 }
 
 /** `node` in `ancestor`'s frame (its scale left out: a body's frames are metres) */
@@ -86,22 +85,18 @@ export function localOf(node: Object3D, ancestor: Object3D): Placement {
 /** a thing's own meshes in its frame, or the points of its empties and centre where it has none */
 function boundsOf(object: Object3D, centre: Vector3): Box3[] {
   const boxes: Box3[] = [], points: Vector3[] = [centre.clone()];
-  const add = (mesh: Mesh, matrix: Matrix4) => {
-    mesh.geometry.computeBoundingBox();
-    const own = mesh.geometry.boundingBox;
-    if (own && !own.isEmpty()) boxes.push(own.clone().applyMatrix4(matrix));
-  };
   const visit = (node: Object3D, matrix: Matrix4) => {
+    if (node instanceof Mesh) {
+      node.geometry.computeBoundingBox();
+      const own = node.geometry.boundingBox;
+      if (own && !own.isEmpty()) boxes.push(own.clone().applyMatrix4(matrix));
+    } else if (node !== object) points.push(new Vector3().setFromMatrixPosition(matrix));
     for (const child of node.children) {
       if (child.userData.mass !== undefined) continue;
       child.updateMatrix();
-      const at = new Matrix4().multiplyMatrices(matrix, child.matrix);
-      if (child instanceof Mesh) add(child, at);
-      else points.push(new Vector3().setFromMatrixPosition(at));
-      visit(child, at);
+      visit(child, new Matrix4().multiplyMatrices(matrix, child.matrix));
     }
   };
-  if (object instanceof Mesh) add(object, new Matrix4());
   visit(object, new Matrix4());
   return boxes.length ? boxes : [new Box3().setFromPoints(points)];
 }

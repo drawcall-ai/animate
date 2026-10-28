@@ -9,10 +9,7 @@ import { minimumJerk } from './math';
 export type Waypoint = [seconds: number, to: Goal | ((f: Frame, start: Placement, last: Placement) => Goal)];
 
 /** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
-export interface Course {
-  to: (f: Frame) => Placement & Goal;
-  over: (f: Frame) => boolean;
-}
+export type Course = ReturnType<typeof course>;
 
 /**
  * A course (world) from where `item` is when it is first read, through its waypoints' placements as one smooth curve (centripetal
@@ -22,7 +19,7 @@ export interface Course {
  * reverse), it comes to rest there and sets off again. It sets off `delay` s after it is first read.
  * With `on`, its starting placement follows that moving approach frame throughout the course.
  */
-export function course(item: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0, on }: { pace?: number; delay?: number; on?: (f: Frame) => Goal } = {}): Course {
+export function course(item: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0, on }: { pace?: number; delay?: number; on?: (f: Frame) => Goal } = {}) {
   let start = NaN;
   let runs: Run[] = [];
   let from: Placement | undefined, carriedBy: object | undefined;
@@ -61,17 +58,14 @@ export function course(item: { readonly current: Placement }, waypoints: readonl
     const { position, quaternion } = runs[i].at(minimumJerk(t / runs[i].seconds), _at);
     return { position: position.clone(), quaternion: quaternion.clone(), carriedBy };
   };
-  return { to, over: (f) => !Number.isNaN(start) && f.time - start >= delay + total };
+  return { to, over: (f: Frame) => !Number.isNaN(start) && f.time - start >= delay + total };
 }
 
 /** a waypoint that stays where the one before ended: a moment held still */
 export const still = (_f: Frame, _start: Placement, last: Placement) => last;
 
 /** a stretch of a course gone without stopping: how long it takes (s), and where it is a share `s` of its length along */
-interface Run {
-  seconds: number;
-  at: (s: number, out: Placement) => Placement;
-}
+type Run = ReturnType<typeof curve>;
 
 /** how far a turn counts as going along a course (m per rad): a hand turning what it holds about its grip moves its far side about so much */
 const TURN = 0.1;
@@ -120,7 +114,7 @@ const SAMPLES = 24;
 /** a run through `stops` in `seconds`: a centripetal Catmull–Rom curve through their positions and, on the same knots, their rotations
  * (as rotation vectors from the first), its ends extended by reflection; `at` goes a share of its length (position and turn, `TURN`)
  * along it */
-function curve(stops: readonly Placement[], seconds: number): Run {
+function curve(stops: readonly Placement[], seconds: number) {
   const q0 = stops[0].quaternion;
   const inverse = q0.clone().invert();
   // (each placement as six numbers: where, and its turn from the first — each rotation on the side of the last)
@@ -161,7 +155,7 @@ function curve(stops: readonly Placement[], seconds: number): Run {
   }
   return {
     seconds,
-    at: (s, out) => {
+    at: (s: number, out: Placement) => {
       const want = s * length;
       let k = 1;
       while (k < lengths.length - 1 && lengths[k] < want) k++;

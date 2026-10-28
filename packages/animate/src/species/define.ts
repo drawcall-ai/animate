@@ -3,7 +3,6 @@ import type { SkeletonBone } from '@drawcall/rig';
 import type { Inertial } from '../kernel/inertia';
 import type { Gait } from './gait';
 import type { CarriedBones, Striding } from './carriage';
-import type { JointCycle } from './cycle';
 import type { LegChain } from './leg';
 import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
@@ -99,14 +98,8 @@ export function mirrored(range: Range): Range {
 
 /** A leg by its bones' names, as `LegChain` has it by their indices: each joint top first, the last the foot — which must keep flat on the
  * floor as the leg bends, or the legs reach no step — and its sole's `heel` and `toe` in the foot's frame. */
-export interface LegRole<Name extends string> {
-  joints: readonly { bone: Name; axes: string; cycle?: JointCycle }[];
-  heel: Vec3;
-  toe: Vec3;
-  toes?: { bone: Name; tip: Vec3 };
-  toeOut?: number;
-  rocker?: LegChain['rocker'];
-}
+export type LegRole<Name extends string> = Omit<LegChain<Name, Vec3>, 'toeOut' | 'rocker'>
+  & Partial<Pick<LegChain<Name, Vec3>, 'toeOut' | 'rocker'>>;
 
 /**
  * What each of a species' bones does, by name: the `root` it moves from (default the skeleton's), its `legs` (fore-left, fore-right,

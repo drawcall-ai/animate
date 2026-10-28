@@ -1,9 +1,9 @@
 import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Carrier } from '../../kernel/carrier';
-import { followRotation } from '../../kernel/follow';
+import { followRotation, toLocal } from '../../kernel/follow';
 import { Glide } from '../../kernel/glide';
-import { live, type Live, type Motion, type Placement, type Goal } from '../../kernel/goal';
+import { type Live, type Motion, type Goal } from '../../kernel/goal';
 import { limited } from '../../kernel/limits';
 import { ChainTip } from '../../kernel/tip';
 import { TrackedRotation } from '../../kernel/track';
@@ -121,7 +121,7 @@ interface HandOptions extends Partial<Motion> {
   /** the thing that frame is, if it is one */
   thing?: Thing;
   /** where the elbow bends toward (world; default as where the hand is asks: down and back hanging, out reaching across, …) */
-  pole?: Live<Vector3>;
+  pole?: Vector3;
   /** the body comes along for a target out of the arm's reach: it bows and squats for one low, goes up on its toes for one high (default
    * true); false: the hand only follows (a tracked controller: the head leads) */
   lead?: boolean;
@@ -140,7 +140,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
   const joints = new Map<number, TrackedRotation>();
   let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
   return (f) => {
-    const goal = live(target, f);
+    const goal = typeof target === 'function' ? target(f) : target;
     if (seconds === undefined) {
       let wait: Vector3 | null = null;
       if (!options.on && !person.locomotion.settled) {
@@ -169,8 +169,8 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     const aim = placed ? { ...goal, velocity: goal.velocity ?? ZERO } : world;
     const from = _from.copy(f.prev.position(bone)), was = _was.copy(f.prev2.position(bone));
     if (placed) {
-      toFrame(placed.prev, from);
-      toFrame(placed.prev2, was);
+      toLocal(placed.prev, from);
+      toLocal(placed.prev2, was);
     }
     const end = _end.copy(aim.position);
     const near = placed ? null : elbowPole(f, person.proportions, side, end, _spare);
@@ -200,7 +200,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     }
     const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(aim.position) / start.off) : 1;
     const bent = _bend.copy(start.elbow).applyQuaternion(chest).add(shoulder);
-    const pole = options.pole === undefined ? elbowPole(f, person.proportions, side, world.position, _pole).lerp(bent, 1 - share) : live(options.pole, f);
+    const pole = options.pole === undefined ? elbowPole(f, person.proportions, side, world.position, _pole).lerp(bent, 1 - share) : options.pole;
     const glided = { ...aim, position: _glided.position, velocity: _glided.velocity };
     const toward = { at: world.position, center: on?.current.position, clavicle: start.clavicle, share, held };
     handStep(person, f, side, glided, { ...options, on: own, pole }, arm, toward);
@@ -224,7 +224,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   const proportions = person.proportions;
   const at = options.on ? options.on.toWorld(target, _target, f.time).position : target.position;
   shrug(f, proportions, side, toward?.at ?? at, toward);
-  const pole = options.pole === undefined ? elbowPole(f, proportions, side, at, _pole) : live(options.pole, f);
+  const pole = options.pole === undefined ? elbowPole(f, proportions, side, at, _pole) : options.pole;
   let held = Math.max(toward?.held ?? 0, clearWrist(f.current, proportions, side, _cleared.copy(at), elbowPole(f, proportions, side, at, _spare), _spare));
   if (held > 0) {
     const shift = _cleared.sub(at);
@@ -296,11 +296,6 @@ function elbowPole(f: Frame, proportions: Proportions, side: Side, hand: Readonl
     .addScaledVector(_w.set(0.7, -0.6, 0), Math.max(0, -dl.x));
   out.x *= sign;
   return out.applyQuaternion(chest).setLength(proportions.upperArm).add(shoulder);
-}
-
-/** `world` into the frame of a carrier placed `at` */
-function toFrame(at: Placement, world: Vector3): Vector3 {
-  return world.sub(at.position).applyQuaternion(_frame.copy(at.quaternion).invert());
 }
 
 /** an arm's joints, from the clavicle out */

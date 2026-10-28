@@ -194,21 +194,16 @@ function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion
 }
 
 /** a middle joint as a hinge: its axis and range in its parent's frame, the rotation it bends from, and how far it is bent now */
-interface Hinge {
-  axis: Vector3;
-  range: [number, number];
-  neutral: Quaternion;
-  now: number;
-}
+type Hinge = ReturnType<typeof hingeOf>;
 
 /** the hinge of a middle joint turned `q` now, `offset` from its parent: about the axis its limit allows the most swing about, or
  * without a limit perpendicular to its current segment plane */
-function hingeOf(limit: Limit | undefined, q: Quaternion, offset: Vector3, end: Vector3): Hinge {
+function hingeOf(limit: Limit | undefined, q: Quaternion, offset: Vector3, end: Vector3) {
   if (!limit) {
     const neutral = _neutral.copy(q), axis = _h.crossVectors(offset, _v.copy(end).applyQuaternion(neutral));
     // An unrestricted joint bends in the segments' current plane, not an arbitrary plane that can lock their extension.
     if (axis.lengthSq() < 1e-18) perpendicular(offset, axis);
-    return { axis: axis.normalize(), range: [-Math.PI, Math.PI], neutral, now: 0 };
+    return { axis: axis.normalize(), range: [-Math.PI, Math.PI] as const, neutral, now: 0 };
   }
   const { value } = coordinatesOf(q, limit, _coords);
   const wider = limit.swing[0][1] - limit.swing[0][0] >= limit.swing[1][1] - limit.swing[1][0] ? 0 : 1;

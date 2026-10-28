@@ -56,7 +56,6 @@ export class Body<S extends AnySpecies = AnySpecies> {
   constructor(readonly species: S, options: BodyOptions = {}) {
     const { avoid, ...rest } = options, binding = new Binding(species, rest.model);
     const self = species.person ? new Person(species, rest, binding) : new Self(species, rest, binding);
-    if (!species.person) self.initialize();
     selves.set(this, self);
     for (const body of avoid ?? []) self.near.add(selfOf(body));
     this.object = binding.object;
@@ -82,8 +81,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** where it stands: its root over the floor (m) */
   get position(): Vector3 {
-    const root = read(this).position(0);
-    return new Vector3(root.x, 0, root.z);
+    return this.pose.position(0).clone().setY(0);
   }
 
   /** its ground velocity: its centre of mass's over the last sub-step, horizontal (m/s) */
@@ -94,7 +92,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** the way it faces (rad about +Y; 0 faces +Z) */
   get facing(): number {
-    return read(this).facing;
+    return this.pose.facing;
   }
 
   /** come to rest: no walk under way, its feet planted a while and none wanting to step */
@@ -137,9 +135,11 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), hands: Object.fromEntries(hands) };
   }
 
-  /** its last final pose: bone rotations and positions by index, its centre of mass, what its bones carry */
+  /** its last final pose: bone rotations and positions by index, its centre of mass, what its bones carry
+   * As the body updating now reads it. */
   get pose(): ReadonlyPose {
-    return read(this);
+    const self = selfOf(this);
+    return reader && reader !== self ? self.poseFor(reader) : self.pose;
   }
 
   /** development problems (empty with dev off): each check that failed, by when and while which verbs ran */
@@ -164,9 +164,3 @@ export function selfOf(body: Body): Self {
 
 /** the body updating now, if any: while it does, another body's state reads as it was before that body's own update this frame */
 let reader: Self | null = null;
-
-/** `body`'s last final pose as the body updating now reads it */
-function read(body: Body): ReadonlyPose {
-  const self = selfOf(body);
-  return reader && reader !== self ? self.poseFor(reader) : self.pose;
-}

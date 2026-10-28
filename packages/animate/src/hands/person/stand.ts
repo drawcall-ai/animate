@@ -40,13 +40,7 @@ type Stand =
   | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[] };
 
 /** A walk to where a person stands, and when it has arrived there. */
-export interface WalkUp {
-  walk: Walk;
-  arrived: (f: Frame) => boolean;
-}
-
-/** Where a person stands to take or put something: there already, nowhere it could, or a walk there. */
-type Footing = 'there' | 'nowhere' | WalkUp;
+export type WalkUp = Exclude<ReturnType<typeof footing>, string>;
 
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
@@ -60,11 +54,11 @@ function shoulderOf(person: Reacher, side?: Side): Vector3 {
     : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
 }
 
-/** Find a comfortable stand clear of bodies and support, or report that no reachable stand exists. */
-export function footing(person: Reacher, to: Stand): Footing {
+/** Find a comfortable stand clear of bodies and support: there already, nowhere it could, or a walk there. */
+export function footing(person: Reacher, to: Stand) {
   const f0 = person.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
-  if (start?.carriedBy === person) return 'there';
+  if (start?.carriedBy === person) return 'there' as const;
   const grips: { side?: Side; at: Vector3 }[] = [];
   if (!point) grips.push(...to.grips.map((grip) => ({ side: grip.side, at: grip.at.clone() })));
   else if (start) {
@@ -93,7 +87,7 @@ export function footing(person: Reacher, to: Stand): Footing {
   if (point && Math.abs(height - shoulders) > reach) return nowhere(`approach: placing point from the shoulders' middle, lowered and bowed (m)`, Math.abs(height - shoulders));
   const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - (standing + TIPTOE * proportions.scale);
   if (above > reach) return nowhere('approach: grip above the shoulders on tiptoe (m)', above);
-  if (person.drive) return 'there';
+  if (person.drive) return 'there' as const;
   const at = middle.clone(), there = new Vector3();
   // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
   const feetOut = Math.max(proportions.hipHalfWidth, defaultStance(proportions).width);
@@ -124,9 +118,9 @@ export function footing(person: Reacher, to: Stand): Footing {
   face = clearYaw;
   const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
   const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
-  if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there';
-  if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there';
-  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there';
+  if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there' as const;
+  if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there' as const;
+  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there' as const;
   const rotation = (f: Frame) => {
     const current = point ? to.place(f) : null;
     return start?.quaternion && current?.quaternion ? current.quaternion.clone().multiply(start.quaternion.clone().invert()) : new Quaternion();
@@ -160,7 +154,7 @@ export function footing(person: Reacher, to: Stand): Footing {
   const walk = new Walk(person, { to: destination, face: facing, within: ahead, via });
   return {
     walk,
-    arrived: (f) => {
+    arrived: (f: Frame) => {
       const spot = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
       return turned(facing(f)) && flat(f.prev.com(_com), spot) < ARRIVED * proportions.scale && !person.locomotion.moving && (person.stepper?.legs.some((leg) => !leg.swing) ?? true);
     },

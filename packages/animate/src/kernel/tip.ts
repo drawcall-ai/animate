@@ -5,14 +5,14 @@ import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { limited } from './limits';
 import { exp, log } from './rotation';
-import { live, REACHED, REACHING, type Live, type Motion, type Trail, type Placement, type Goal } from './goal';
+import { REACHED, REACHING, type Motion, type Trail, type Placement, type Goal } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
 
 /** How a chain's tip goes to its target. */
 interface TipOptions extends Motion {
   /** where a two-segment chain's middle joint bends toward (world) */
-  pole?: Live<Vector3>;
+  pole?: Vector3;
   /** the target is on this carrier, in its frame: the tip goes with it */
   on?: Carrier;
   /** a tip further out than all but the chain's full length as this sets off (an arm hanging all but straight) is not drawn in at once:
@@ -81,7 +81,7 @@ export class ChainTip {
     const most = (this.most = options.letOut ? Math.max(REACH * length, Math.min(length, was, own ? this.most : Infinity)) : REACH * length);
     const out = position.distanceTo(base);
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
-    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole === undefined ? undefined : live(options.pole, f) });
+    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole });
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       const nudged = own ? this.nudged : null;

@@ -36,7 +36,7 @@ const SPOT_RATE = 10;
 const UNDER = { speed: 1.0, accel: 1.2 };
 
 /** Follow tracked eye-midpoint position and orientation (default: level, facing with the pelvis). Run `under` before `look`, and both before the hands, which depend on the posed chest. */
-export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
+export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
   const joints = SPINE.map(() => new TrackedRotation());
@@ -47,8 +47,8 @@ export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HE
     const goal = eyes(f), proportions = person.proportions;
     const level = goal.quaternion ?? _level.setFromAxisAngle(UP, yawOf(f.current.local(0)));
     // (the eyes and the head's turn where they were, moved on)
-    at.follow(f.prev2.point(INDEX.head, proportions.eyes, _a), f.prev.point(INDEX.head, proportions.eyes, _b), goal.position, pace, f.dt, head.position);
-    turned.follow(f.prev2.rotation(INDEX.head), f.prev.rotation(INDEX.head), level, { accel: pace.turnAccel ?? HEADSET.turnAccel, speed: pace.turnSpeed }, f.dt, head.quaternion);
+    at.follow(f.prev2.point(INDEX.head, proportions.eyes, _a), f.prev.point(INDEX.head, proportions.eyes, _b), goal.position, HEADSET, f.dt, head.position);
+    turned.follow(f.prev2.rotation(INDEX.head), f.prev.rotation(INDEX.head), level, { accel: HEADSET.turnAccel, speed: HEADSET.turnSpeed }, f.dt, head.quaternion);
     return goal;
   };
   let followed = NaN;
@@ -62,7 +62,7 @@ export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HE
       if (followed !== f.time) follow(f);
       const pose = f.current;
       place(pose, person.proportions.eyes, head.position, head.quaternion);
-      SPINE.forEach((bone, k) => setLimited(pose, bone, joints[k].follow(f.prev2.local(bone), f.prev.local(bone), pose.local(bone), JOINTS, f.dt, _q)));
+      SPINE.forEach((bone, k) => pose.setLocal(bone, limited(pose.skeleton, bone, joints[k].follow(f.prev2.local(bone), f.prev.local(bone), pose.local(bone), JOINTS, f.dt, _q))));
     },
   };
 }
@@ -108,14 +108,14 @@ const SPINE = [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head];
 function place(pose: Pose, eyes: Vector3, at: Vector3, q: Quaternion) {
   const [spine, chest, neck, head] = SPINE;
   const rel = _rel.copy(pose.rotation(0)).invert().multiply(q);
-  SPINE.forEach((bone, k) => setLimited(pose, bone, _share.identity().slerp(rel, SHARE[k])));
+  SPINE.forEach((bone, k) => pose.setLocal(bone, limited(pose.skeleton, bone, _share.identity().slerp(rel, SHARE[k]))));
   const origin = _origin.copy(eyes).applyQuaternion(q).negate().add(at);
   for (let pass = 0; pass < PASSES; pass++) {
     swing(pose, spine, origin, 0.5);
     swing(pose, chest, origin, 1);
     const from = _rel.copy(pose.rotation(chest)).invert().multiply(q);
-    setLimited(pose, neck, _share.identity().slerp(from, 0.5));
-    setLimited(pose, head, _share.copy(pose.rotation(neck)).invert().multiply(q));
+    pose.setLocal(neck, limited(pose.skeleton, neck, _share.identity().slerp(from, 0.5)));
+    pose.setLocal(head, limited(pose.skeleton, head, _share.copy(pose.rotation(neck)).invert().multiply(q)));
   }
 }
 
@@ -126,11 +126,7 @@ function swing(pose: Pose, bone: number, to: Vector3, share: number) {
   const toward = _to.subVectors(to, base);
   if (from.lengthSq() < 1e-12 || toward.lengthSq() < 1e-12) return;
   const turn = _turn.identity().slerp(_swing.setFromUnitVectors(from.normalize(), toward.normalize()), share);
-  setLimited(pose, bone, _local.copy(pose.rotation(bone)).premultiply(turn).premultiply(_parent.copy(pose.rotation(pose.skeleton.bones[bone].parent)).invert()));
-}
-
-function setLimited(pose: Pose, bone: number, q: Quaternion) {
-  pose.setLocal(bone, limited(pose.skeleton, bone, q));
+  pose.setLocal(bone, limited(pose.skeleton, bone, _local.copy(pose.rotation(bone)).premultiply(turn).premultiply(_parent.copy(pose.rotation(pose.skeleton.bones[bone].parent)).invert())));
 }
 
 const UP = new Vector3(0, 1, 0);
