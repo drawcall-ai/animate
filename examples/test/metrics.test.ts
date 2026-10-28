@@ -43,11 +43,9 @@ it('lists each scenario once', () => {
 });
 
 // Expected failures still present at the listed life seeds. Finished viewer stories are guarded separately in viewer.test.ts.
-// Upstream tiptoe settlement retains the higher target's 55–56 mm wrist error (50 mm bound).
 // The upstream forward-shifted knight remains open at seed 2: helm rim 23.2 mm into the forearm (15 mm bound).
 const OPEN: Open[] = [
   ['knight-arming, the stand, wall and rack 15 cm further on', [2]],
-  ['reach, the targets 10 cm higher', [0, 2]],
   'stroll 15% faster',
   'look-around, the headset 20% faster',
   ["look-around, looking down 10 cm nearer", [0]],

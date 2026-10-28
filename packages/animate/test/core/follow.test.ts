@@ -95,6 +95,20 @@ describe('follow', () => {
 });
 
 describe('followRotation', () => {
+  it('brakes a caught spin independently of roundoff in the remaining rotation', () => {
+    const previous = new Quaternion(), before = turn(1, 0, 0, -dt);
+    const velocity = new Vector3(0, 1, 0), options = { accel: 6, velocity };
+    const target = turn(0, 1, 0, dt);
+    const expected = followRotation(before, previous, target, options, dt);
+    for (const axis of [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]) {
+      for (const error of [-1e-15, 1e-15]) {
+        const perturbed = new Quaternion().setFromAxisAngle(axis, error).multiply(target);
+        const next = followRotation(before, previous, perturbed, options, dt);
+        expect(new Vector3(next.x - expected.x, next.y - expected.y, next.z - expected.z).length()).toBeLessThan(1e-12);
+      }
+    }
+  });
+
   it('turns to a still rotation within its acceleration, and follows a steady spin without lag', () => {
     const goal = turn(1, 2, 0, 2);
     const path = [new Quaternion(), new Quaternion()];

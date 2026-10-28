@@ -29,7 +29,7 @@ interface TipOptions extends Motion {
  * Keep one ChainTip per behaviour: it owns the joint goals and path history. */
 export class ChainTip {
   private readonly joints = new Map<number, TrackedRotation>();
-  /** each joint `clear` moved after its brakes in its last call, and its step then as the brakes are to read it (a rotation vector, its
+  /** each joint contact or clearance moved after its brakes in its last call, and its step then as the brakes are to read it (a rotation vector, its
    * parent's frame) */
   private readonly nudged = new Map<number, Vector3>();
   /** where it moved the tip the last two sub-steps (world) and when last; on a carrier, where it took the carrier to be then */
@@ -47,7 +47,8 @@ export class ChainTip {
     const { on, accel, speed, turnAccel, turnSpeed } = options;
     // Resume the intended path unless another layer changed the last applied pose.
     const { moved } = this;
-    const own = !options.contact && this.on === on && Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
+    const continued = this.on === on && Math.abs(f.time - f.dt - moved.time) < 1e-9 && moved.placed.distanceTo(f.prev.position(tip)) < 1e-9;
+    const own = !options.contact && continued;
     this.on = on;
     if (!own) this.joints.clear();
     const placed = on?.at(f.time);
@@ -84,10 +85,10 @@ export class ChainTip {
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole });
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
-      const nudged = own ? this.nudged : null;
+      const nudged = continued ? this.nudged : null;
       for (const b of bones) {
         const pace = { accel: turnAccel, speed: turnSpeed };
-        // (a joint nudged last sub-step moved on as `clear` left its step, from where it was put)
+        // (a corrected joint continues its braked velocity from where contact or clearance put it)
         const step = nudged?.get(b);
         const before = step ? exp(-step.x, -step.y, -step.z, _before).multiply(f.prev.local(b)) : f.prev2.local(b);
         const joint = this.joints.get(b) ?? new TrackedRotation();
@@ -103,16 +104,19 @@ export class ChainTip {
     // A grip without a rotation leaves the damped wrist free: pinned, a folded arm would swivel round to keep it. The bend kept as the
     // brakes left it, the limits clamped there: a grip the wrist turns just past its range would otherwise swivel the elbow round in
     // one sub-step (thousands of °/s), the brakes' work undone; the brakes carry it round toward the solve instead.
+    const braked = turnAccel !== undefined && (options.contact || options.clear) ? bones.map((b) => f.current.local(b).clone()) : null;
     const off = f.current.position(tip).distanceTo(position) > 1e-6 || (quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > 1e-6);
     if (options.contact && off) solveChain(f, chain, { tip: { position, quaternion }, pole: f.current.position(bones[1]).clone(), swivel: false });
     this.nudged.clear();
     if (options.clear && turnAccel !== undefined) {
-      const braked = bones.map((b) => f.current.local(b).clone());
       options.clear(f, { position: _braked.copy(f.current.position(tip)), quaternion: quaternion && _turned.copy(f.current.rotation(tip)) }, true);
+    }
+    if (braked) {
       // (a joint nudged was put there, not swung: the brakes read it as going on as they had it go — the nudge read as its motion,
       // they would carry it on at the nudge's speed, far beyond what they stop soon, flinging the limb on)
       bones.forEach((b, k) => {
-        if (f.current.local(b).angleTo(braked[k]) < 1e-9) return;
+        // acos(dot) loses precision near zero and can classify an unchanged rotation as a correction.
+        if (log(_r.copy(braked[k]).invert().premultiply(f.current.local(b)), _v).length() < 1e-9) return;
         this.nudged.set(b, log(braked[k].multiply(_r.copy(f.prev.local(b)).invert()), new Vector3()));
       });
     }

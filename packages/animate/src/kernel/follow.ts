@@ -57,7 +57,8 @@ export function followRotation(prev2: Quaternion, prev: Quaternion, target: Quat
   // (the goal a step ago: exp(−ω·dt) · target)
   const was = exp(-goal.x * dt, -goal.y * dt, -goal.z * dt, _q).multiply(target);
   const gap = log(was.multiply(_r.copy(p).invert()), _d);
-  step(velocity, gap, goal, options, dt);
+  // Within the IK solver's 1e-9 rad fitting tolerance, do not choose a braking axis from quaternion-product roundoff.
+  step(velocity, gap, goal, options, dt, 1e-9);
   velocity.multiplyScalar(dt);
   out.copy(p).premultiply(exp(velocity.x, velocity.y, velocity.z, _q)).normalize();
   return on ? out.premultiply(on.current.quaternion) : out;
@@ -69,14 +70,14 @@ export function toLocal(at: Placement, world: Vector3): Vector3 {
 }
 
 /** turns `velocity` into the next step's: toward `gap` (from the goal a step ago), braking in time, plus the goal's own `goal` */
-function step(velocity: Vector3, gap: Vector3, goal: Vector3, { accel: a, speed = Infinity }: { accel: number; speed?: number }, dt: number) {
+function step(velocity: Vector3, gap: Vector3, goal: Vector3, { accel: a, speed = Infinity }: { accel: number; speed?: number }, dt: number, roundoff = 0) {
   if (!(a > 0 && Number.isFinite(a))) throw new Error(`an acceleration of ${a}`);
   if (!(speed >= 0)) throw new Error(`a speed of ${speed}`);
   if (!(dt > 0 && Number.isFinite(dt))) throw new Error(`a step of ${dt} s`);
   const d = gap.length();
   if (!Number.isFinite(d) || !Number.isFinite(velocity.lengthSq())) throw new Error('a goal, history or goal velocity that is not finite');
   const approach = Math.min(speed, brakingSpeed(d, a, dt));
-  const dir = d > 0 ? _u.copy(gap).divideScalar(d) : _u.set(0, 0, 0);
+  const dir = d > roundoff ? _u.copy(gap).divideScalar(d) : _u.set(0, 0, 0);
   const wanted = d > 0 ? gap.multiplyScalar(approach / d).add(goal) : gap.copy(goal);
   const change = wanted.sub(velocity);
   const most = a * dt;
