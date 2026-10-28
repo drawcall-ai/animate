@@ -4,7 +4,9 @@ import type { Skeleton } from './skeleton';
 /** A pose to read: by bone index, the transforms of `Pose`. */
 export type ReadonlyPose = Readonly<Pick<Pose, 'skeleton' | 'facing' | 'local' | 'position' | 'rotation' | 'point' | 'com' | 'load'>>;
 
-/** Root world position and parent-relative bone rotations (the root rotation is world-relative), with lazy forward kinematics. Weighted writes blend from the current pose, so repeated blends depend on the sub-step. */
+/** Root world position and parent-relative bone rotations (the root rotation is world-relative), with lazy forward kinematics. Weighted writes
+ * blend from the current pose, so repeated blends depend on the sub-step.
+ */
 export class Pose {
   private readonly root = new Vector3();
   private readonly locals: Quaternion[];

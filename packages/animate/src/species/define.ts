@@ -98,8 +98,10 @@ export function mirrored(range: Range): Range {
 
 /** A leg by its bones' names, as `LegChain` has it by their indices: each joint top first, the last the foot — which must keep flat on the
  * floor as the leg bends, or the legs reach no step — and its sole's `heel` and `toe` in the foot's frame. */
-export type LegRole<Name extends string> = Omit<LegChain<Name, Vec3>, 'toeOut' | 'rocker'>
-  & Partial<Pick<LegChain<Name, Vec3>, 'toeOut' | 'rocker'>>;
+export interface LegRole<Name extends string> extends Omit<LegChain<Name, Vec3>, 'toeOut' | 'rocker'> {
+  toeOut?: number;
+  rocker?: LegChain['rocker'];
+}
 
 /**
  * What each of a species' bones does, by name: the `root` it moves from (default the skeleton's), its `legs` (fore-left, fore-right,

@@ -126,7 +126,9 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
   return hi;
 }
 
-/** Clear the world-space wrist in place and write the elbow to `pole`, with minimum swivel from `near`. Cross-body reaches stay in front; return forward push (m), or -1 without changing an infeasible goal. */
+/** Clear the world-space wrist in place and write the elbow to `pole`, with minimum swivel from `near`. Cross-body reaches stay in front;
+ * return forward push (m), or -1 without changing an infeasible goal.
+ */
 export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height;
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
