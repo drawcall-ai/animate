@@ -22,6 +22,10 @@ const test = cases([
   'walking and sprinting jumps on the soldier', // Landing joint-rate violations.
   'sprint cancels reload on the soldier', // Reload joint-rate violations.
   'sprint with both rifle grips on the soldier', // Sprint joint-rate violations.
+  // (the soldier's wrists turned with their forearms: taking the rifle up, his right upper arm and forearm pass 2–4 cm into his trunk)
+  'rifle follows fast aim turns on the soldier',
+  'stands alive at ease and holds still aiming on the soldier',
+  'standing reload stays upright on the soldier',
 ]);
 
 /** The viewer story with development checks enabled. */

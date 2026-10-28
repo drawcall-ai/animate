@@ -87,6 +87,8 @@ function measure(at: Record<BoneName, Vector3 | null>, height?: number): { propo
     const length = offset.length();
     offset.copy(axis).multiplyScalar(length);
   }
+  // (a hand has no straight segment of its own to turn onto: it turns with its forearm, else its forearm's rest turn bends every posed wrist)
+  for (const side of ['left', 'right'] as const) turns[`${side}Hand`].copy(turns[`${side}LowerArm`]);
   return { proportions: derive(rest, height), turns };
 }
 

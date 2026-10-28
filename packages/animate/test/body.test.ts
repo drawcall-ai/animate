@@ -97,6 +97,33 @@ describe('a body', () => {
     expect(tip.distanceTo(new Vector3(0.108 * 1.75 * Math.SQRT1_2, -0.108 * 1.75 * Math.SQRT1_2, 0).applyMatrix4(hand.matrixWorld))).toBeLessThan(1e-6);
   });
 
+  it("keeps a rigged wrist straight whose forearm is rigged bent: the hand turns with the forearm onto the straight arm", () => {
+    // (the forearm and hand bent 40° down at the elbow, the wrist straight, as an A-posed mesh is often rigged)
+    const bend = (side: 'left' | 'right') => new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), side === 'left' ? -0.7 : 0.7);
+    const posed = PERSON.map((entry): SkeletonBone<(typeof PERSON)[number]['name']> => {
+      const side = /^(left|right)(Hand|Hand_end)$/.exec(entry.name)?.[1];
+      if (side !== 'left' && side !== 'right') return entry;
+      const elbow = new Vector3(...(PERSON.find((b) => b.name === `${side}LowerArm`)?.position ?? [0, 0, 0]));
+      const at = new Vector3(...entry.position).sub(elbow).applyQuaternion(bend(side)).add(elbow);
+      return { ...entry, position: [at.x, at.y, at.z] as const };
+    });
+    const nodes = new Map<string, Bone>();
+    for (const entry of posed) nodes.set(entry.name, bone(entry.name, [...entry.position], entry.parent ? nodes.get(entry.parent) : undefined));
+    const hips = nodes.get('hips');
+    if (!hips) throw new Error('no hips');
+    const body = new Body(humanoid(posed), { model: hips });
+    run(body, 1);
+    body.object.updateMatrixWorld(true);
+    for (const side of ['left', 'right'] as const) {
+      const [elbow, wrist, tip] = [`${side}LowerArm`, `${side}Hand`, `${side}Hand_end`].map((name) => {
+        const node = nodes.get(name);
+        if (!node) throw new Error(`no ${name}`);
+        return node.getWorldPosition(new Vector3());
+      });
+      expect(tip.clone().sub(wrist).angleTo(wrist.clone().sub(elbow)), side).toBeLessThan(0.01);
+    }
+  });
+
   it('throws on a model without a bone its species moves', () => {
     const container = new Group();
     container.add(bone('hips', [0, 0.9, 0]));
