@@ -5,9 +5,10 @@ import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { limited } from './limits';
 import { exp, log } from './rotation';
-import { REACHED, REACHING, type Motion, type Trail, type Placement, type Goal } from './goal';
+import { REACHED, type Motion, type Trail, type Placement, type Goal } from './goal';
 import type { ReadonlyPose } from './pose';
 import { TrackedRotation } from './track';
+import { forwardOf, leftOf } from './math';
 
 /** How a chain's tip goes to its target. */
 interface TipOptions extends Motion {
@@ -156,12 +157,61 @@ function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip
   return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned);
 }
 
-/** A late reach reports each unmet constraint, never a zero distance for a blocked turn. Returns whether position or turn is unmet. */
-export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier): boolean {
-  const angle = angleOff(f, tip, target, on), position = on ? on.toWorld(target, _goal, f.time).position : target.position;
-  const distance = f.prev.position(tip).distanceTo(position);
-  for (const [name, value, limit] of [['distance (m)', distance, REACHED.distance], ['angle (rad)', angle, REACHED.angle]] as const) {
-    if (value > limit) f.dev?.append(f.time, { check: `late reach: ${name} (${REACHING} s overdue)`, value, limit, where });
+/** how far a tip is from its target as the last final pose has it: its distance (m) and the turn left (rad), the target's world point */
+export function unmet(f: Frame, tip: number, target: Goal, on?: Carrier): { distance: number; angle: number; at: Vector3 } {
+  const at = on ? on.toWorld(target, _goal, f.time).position : target.position;
+  return { distance: f.prev.position(tip).distanceTo(at), angle: angleOff(f, tip, target, on), at: _late.copy(at) };
+}
+
+/**
+ * Whether a tip has stopped: it has kept within `STOPPED.moved` (m) of where it was and turned no more than `STOPPED.turned`, and its
+ * target kept its place, for `STOPPED.seconds`, as the last final poses have it — a hand held off its target, not one still on its way
+ * or knocked about by the body under it. Read once a sub-step.
+ */
+export class Progress {
+  private readonly tip = new Vector3();
+  private readonly turn = new Quaternion();
+  private readonly target = new Vector3();
+  private since = NaN;
+
+  stopped(f: Frame, tip: number, at: Readonly<Vector3>): boolean {
+    const now = f.prev.position(tip), turn = f.prev.rotation(tip);
+    const moved = now.distanceTo(this.tip) > STOPPED.moved || turn.angleTo(this.turn) > STOPPED.turned || at.distanceTo(this.target) > STOPPED.moved;
+    if (Number.isNaN(this.since) || moved) {
+      this.tip.copy(now);
+      this.turn.copy(turn);
+      this.target.copy(at);
+      this.since = f.time;
+    }
+    return f.time - this.since > STOPPED.seconds;
+  }
+
+  /** watched afresh from the next sub-step on (the body stepping under the hand: not the hand's own lack of progress) */
+  reset(): void {
+    this.since = NaN;
+  }
+}
+
+/** how near (m) a stopped tip and its target keep to where they were, how little (rad) the tip turns, and for how long (s) */
+const STOPPED = { moved: 0.003, turned: 0.02, seconds: 0.5 };
+
+/**
+ * A late reach reports each unmet constraint, never a zero distance for a blocked turn, saying in `detail` where the tip stopped in the
+ * body's frame and, if `cause` says, what held it there. Returns whether position or turn is unmet.
+ */
+export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier, cause?: (at: Vector3) => string | undefined): boolean {
+  const { distance, angle, at } = unmet(f, tip, target, on);
+  const why = cause?.(at), held = why ? `: ${why}` : '';
+  const off = _off.subVectors(f.prev.position(tip), at), facing = f.prev.facing;
+  const ahead = off.dot(forwardOf(facing, _axis)), left = off.dot(leftOf(facing, _axis)), cm = (m: number) => (100 * Math.abs(m)).toFixed(1);
+  const offset = `${cm(ahead)} cm ${ahead >= 0 ? 'ahead of' : 'behind'}, ${cm(left)} cm ${left >= 0 ? 'left of' : 'right of'}, ` +
+    `${cm(off.y)} cm ${off.y >= 0 ? 'above' : 'below'} it in the body's frame`;
+  const details = {
+    distance: `stopped ${cm(distance)} cm off it (${offset})${held}`,
+    angle: `stopped turned ${(angle * 180 / Math.PI).toFixed(1)}° off it${held}`,
+  };
+  for (const [name, value, limit] of [['distance', distance, REACHED.distance], ['angle', angle, REACHED.angle]] as const) {
+    if (value > limit) f.dev?.append(f.time, { check: `late reach: ${name} (${name === 'distance' ? 'm' : 'rad'})`, value, limit, where, detail: details[name] });
   }
   return distance > REACHED.distance || angle > REACHED.angle;
 }
@@ -183,6 +233,6 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
 /** the share of a chain's length its tip is moved out to at most */
 const REACH = 0.98;
 const ZERO = new Vector3();
-const [_position, _braked, _v, _axis, _velocity, _then, _was, _was2] = Array.from({ length: 8 }, () => new Vector3());
+const [_position, _braked, _v, _axis, _velocity, _then, _was, _was2, _late, _off] = Array.from({ length: 10 }, () => new Vector3());
 const [_turned, _before, _quaternion, _joint, _r, _d, _roll, _near] = Array.from({ length: 8 }, () => new Quaternion());
 const _goal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

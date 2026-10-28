@@ -42,11 +42,12 @@ export function track(body: Body, tracked: Tracked, options: { until?: Until } =
       branches.push(during(request, `hand.${side}`, 'asked', (f) => {
         if (f.dev && !said && last) {
           const gap = f.prev.position(person.hands[side]).distanceTo(last);
-          const beyond = f.prev.position(shoulder).distanceTo(last) > OFF.reach * person.proportions.armLength;
+          const from = f.prev.position(shoulder).distanceTo(last), beyond = from > OFF.reach * person.proportions.armLength;
           if (!beyond || gap <= OFF.distance * person.scale || gap < nearest - OFF.closing * person.scale) [since, nearest] = [f.time, gap];
           if (f.time - since > OFF.seconds) {
             said = true;
-            f.dev.append(f.time, { check: 'tracked hand short of a target out of reach (m)', value: gap, limit: OFF.distance * person.scale, where: side });
+            f.dev.append(f.time, { check: 'tracked hand short of a target out of reach (m)', value: gap, limit: OFF.distance * person.scale, where: side,
+              detail: `the shoulder ${from.toFixed(2)} m from it, the arm ${person.proportions.armLength.toFixed(2)} m` });
           }
         }
         keep(f);

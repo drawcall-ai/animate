@@ -5,6 +5,8 @@ export interface Problem {
   limit: number;
   /** the bone, thing or other place the problem is at */
   where: string;
+  /** what was seen, said for a reader: what limited it and by how much (a check is matched by `check` and `where`, not this) */
+  detail?: string;
 }
 
 /** A problem in a body's log: when it was seen (the body's time, s), and the requests running then. */

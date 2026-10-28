@@ -3,7 +3,7 @@ import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import type { Carrier } from '../../kernel/carrier';
-import { ChainTip, lateReach, reached } from '../../kernel/tip';
+import { ChainTip, lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { noticing } from '../../look/gaze';
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
@@ -129,6 +129,7 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
   const first = goal(self.frame), at = on ? on.toWorld(first, _world, self.frame.time).position : first.position;
   const ends = self.frame.time + dipping(self.pose.position(bone).distanceTo(at), pace);
   let late = false;
+  const progress = new Progress();
   return during(request, `hand.${hand}`, 'asked', (f) => {
     const target = goal(f);
     stoop.to(f, on ? on.toWorld(target, _world, f.time).position : target.position, f.time >= ends);
@@ -137,7 +138,10 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
     const target = goal(f), at = on ? on.toWorld(target, _world, f.time).position : target.position;
     request.eta = dipping(f.prev.position(bone).distanceTo(at), pace);
     if (reached(f, bone, target, on)) return true;
-    if (!late && f.time > ends + REACHING) {
+    // (past its planned end, a tip that has stopped off its goal fails at once; one still moving, `REACHING` s on. The legs stepping
+    // under it, it is watched afresh after)
+    if (!self.locomotion.settled) progress.reset();
+    if (!late && f.time > ends && (progress.stopped(f, bone, unmet(f, bone, target, on).at) || f.time > ends + REACHING)) {
       late = true;
       if (lateReach(f, bone, target, chain, on)) request.fail();
     }
