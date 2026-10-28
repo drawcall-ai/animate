@@ -38,7 +38,9 @@ export class Planner {
     (this.goalVelocity ??= new Vector3()).copy(velocity);
     const facing = goal.yaw === undefined ? undefined : new Quaternion().setFromAxisAngle(UP, goal.yaw);
     const targets = [goal.position.clone()];
-    const planned = (share: number) => rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance, targets);
+    // (at rest on a still goal, facing as asked, it stays as it is however far ahead it is read, at any share: a standing body's plan)
+    const still = resting(goal.position, velocity, acceleration, goalTurn, this.state, facing) ? keptAt(this.state) : null;
+    const planned = (share: number) => still ?? rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance, targets);
     let accepted: ReturnType<typeof planned> | undefined;
     const kept = (plan: ReturnType<typeof planned>) => {
       const fits = holds((ahead) => plan(f.time + ahead));
@@ -52,10 +54,13 @@ export class Planner {
     if (!kept(plan)) {
       // (the turn it is held back from, as it would be under way)
       this.root.turning = plan(f.time + PRESSING).angular;
-      let [lo, hi] = [0, 1];
-      for (let short = PRECISION; short < 1 && lo === 0; short *= 2) [lo, hi] = kept(planned(1 - short)) ? [1 - short, hi] : [0, 1 - short];
-      while (hi - lo > PRECISION) { const mid = (lo + hi) / 2; if (kept(planned(mid))) lo = mid; else hi = mid; }
-      plan = accepted ?? planned(0);
+      // (a plan at rest is the same at any share: there is none to search)
+      if (!still) {
+        let [lo, hi] = [0, 1];
+        for (let short = PRECISION; short < 1 && lo === 0; short *= 2) [lo, hi] = kept(planned(1 - short)) ? [1 - short, hi] : [0, 1 - short];
+        while (hi - lo > PRECISION) { const mid = (lo + hi) / 2; if (kept(planned(mid))) lo = mid; else hi = mid; }
+        plan = accepted ?? planned(0);
+      }
     }
     const chosen = plan, now = f.time;
     this.root.forecast = (ahead) => chosen(now + ahead);
@@ -159,6 +164,23 @@ function rootPlan(
   };
 }
 
+/** the plan of a root resting as `previous` is (`resting`): where it is, still, at any time */
+function keptAt(previous: RootState): (time: number) => RootState {
+  const kept: RootState = { position: previous.position.clone(), yaw: yawOf(_turn.setFromAxisAngle(UP, previous.yaw)), velocity: new Vector3(), angular: 0 };
+  return () => kept;
+}
+
+/**
+ * whether a root `previous` rests on its goal: still, not turning, on a goal at rest (not speeding up nor turning), facing it is asked
+ * (or none) — the plan from it, `advance` after `advance`, stays where it is to within `RESTING`
+ */
+function resting(goal: Readonly<Vector3>, velocity: Vector3, acceleration: number, goalTurn: number, previous: RootState, facing: Quaternion | undefined): boolean {
+  if (acceleration !== 0 || goalTurn !== 0 || velocity.lengthSq() > RESTING.speed ** 2) return false;
+  if (Math.abs(previous.angular) > RESTING.turn || previous.velocity.lengthSq() > RESTING.speed ** 2) return false;
+  if (Math.hypot(goal.x - previous.position.x, goal.z - previous.position.z) > RESTING.distance) return false;
+  return !facing || Math.abs(wrapAngle(yawOf(facing) - previous.yaw)) <= RESTING.yaw;
+}
+
 /** the way a body's feet face, on average (rad about +Y), as its root faces `rootYaw`: each foot's yaw less its toe-out (`toeOut`, rad) */
 export function stanceYaw(legs: readonly { yaw: number; sign: 1 | -1 }[], rootYaw: number, toeOut = 0): number {
   return legs.reduce((sum, leg) => sum + wrapAngle(leg.yaw - leg.sign * toeOut - rootYaw), 0) / legs.length + rootYaw;
@@ -182,4 +204,10 @@ const TURN_FIRST = [0.6, 1.3] as const;
 const ABOUT = 0.35;
 /** Tuned: a goal moving slower than this (m/s) is still: arrived at, it may be faced any way */
 const STILL = 0.08;
+/**
+ * Derived: at rest within these (m/s, m, rad/s, rad) a plan moves nowhere — `advance` leaves a goal within 1e-9 m where it stands (it
+ * heads for it from where it is) and zeroes a turn rate under 1e-9 rad/s (a facing 1e-12 rad off turns it slower); a speed of 1e-9 m/s
+ * or a turn of 1e-9 rad/s would carry it under a nanometre or a nanoradian over a forecast's second
+ */
+const RESTING = { speed: 1e-9, distance: 1e-9, turn: 1e-9, yaw: 1e-12 };
 const UP = new Vector3(0, 1, 0), _target = new Vector3(), _velocity = new Vector3(), _direction = new Vector3(), _turn = new Quaternion();
