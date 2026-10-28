@@ -17,6 +17,14 @@ it('checks a planted foot in the final pose after a later writer moved it, namin
   expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/planted .*slide/), where: 'leftFoot', time: dt, beat: 'test', value: expect.closeTo(0.04, 3) }));
 });
 
+it('names its leg checks for what they measure, and notes a driven balance only on a driven body', () => {
+  const body = person({ dev: { notes: true } });
+  claim(body, 'trunk', (f) => f.current.setRoot(f.current.position(0).clone().add(new Vector3(0.2, 0, 0))));
+  run(body, 3 * dt);
+  expect(body.log).toContainEqual(expect.objectContaining({ check: 'planted slide (m)', where: 'leftFoot' }));
+  expect([...body.log, ...body.notes].filter((entry) => entry.check.startsWith('driven'))).toEqual([]);
+});
+
 it.each([false, true])('logs what a scene watches into the body it names, under its label, only with dev on (%s)', (dev) => {
   const body = person({ dev });
   let checked = 0;

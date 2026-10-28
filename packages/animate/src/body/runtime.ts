@@ -2,7 +2,7 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { SkinReport } from '@drawcall/rig';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
 import { STEP, type Frame, type Step } from '../kernel/frame';
-import { Dev, type LogEntry } from '../kernel/dev';
+import { Dev, OFF_FLOOR, type LogEntry } from '../kernel/dev';
 import { Skeleton } from '../kernel/skeleton';
 import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
@@ -26,7 +26,7 @@ import type { Handling } from '../hands/handling';
 
 /** How a body is made. */
 export interface SelfOptions {
-  /** where it stands on the floor (default the origin) */
+  /** where it stands on the floor (default the origin): the floor is the plane y = 0, so a height here is ignored (a dev log says so) */
   at?: Vector3;
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
@@ -109,6 +109,9 @@ export class Self implements Holder {
     this.gazer = species.gaze;
     this.drive = options.drive;
     this.life = options.life ?? {};
+    // (the floor is the plane y = 0: a body stands on it wherever it is asked to start)
+    const height = Math.abs(options.at?.y ?? 0);
+    if (height > OFF_FLOOR) dev?.append(0, { check: 'start off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'at' });
     const pose = start?.(this.skeleton) ?? restPose(this.skeleton, options.at, options.face);
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
@@ -430,10 +433,10 @@ function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'vo
   return held;
 }
 
-/** the skeleton's rest pose standing `at` facing `face` */
+/** the skeleton's rest pose standing on the floor at `at`'s x and z, facing `face` */
 function restPose(skeleton: Skeleton, at?: Vector3, face = 0): Pose {
   const pose = new Pose(skeleton), root = pose.position(0);
-  pose.setRoot(new Vector3(at?.x ?? root.x, root.y + (at?.y ?? 0), at?.z ?? root.z));
+  pose.setRoot(new Vector3(at?.x ?? root.x, root.y, at?.z ?? root.z));
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), face).multiply(pose.local(0)));
   pose.facing = face;
   pose.forward();

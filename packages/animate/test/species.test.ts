@@ -1,6 +1,6 @@
-import { Vector3 } from 'three';
+import { Euler, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, grab, horse, humanoid, powerGait, species, walkTo } from '../src/index';
+import { Body, grab, horse, humanoid, lookAt, powerGait, species, walkTo } from '../src/index';
 import { Pose } from '../src/kernel/pose';
 import { proportionsFor } from '../src/species/humanoid/proportions';
 import { massFor } from '../src/species/humanoid/skeleton';
@@ -96,11 +96,45 @@ describe('a species of your own', () => {
     });
     const stiff = species(STIFF, { legs: [stiffLeg('left'), stiffLeg('right')] }, { gait, masses: { body: 1 } });
     expect(() => new Body(stiff)).toThrow(/leg leftHip → leftFoot: joint leftHip.*sole flat.*leftKnee/);
+    // (with what it measured: here no flat-soled pose under it at all, and the chain's straight length against the drop it stands)
+    expect(() => new Body(stiff)).toThrow("standing drop 0.260 m, including the gait's lowering; no pose its joint ranges allow sets leftFoot's sole flat there; straight, the chain is 0.267 m");
+  });
+
+  it('throws on a carriage its legs do not fit: it rides on four', () => {
+    expect(() => species(BIRD, { legs: [leg('left'), leg('right')], carriage: { spine: 'body' } }, { gait, masses }))
+      .toThrow('species: a carriage rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has 2');
   });
 
   it('takes a thing in one of its hands at a time', () => {
     const body = new Body(bird), room = roomOf(body);
     const twig = box(room, new Vector3(0, 0.05, 0.3), { size: new Vector3(0.1, 0.01, 0.01), mass: 0.01, solid: false });
     expect(() => play(function* () { yield* grab(body, twig, { beak: 'left', tail: 'right' }); }, [body], 0.1)).toThrow('a creature uses one hand at a time');
+  });
+});
+
+describe('a species’ gaze', () => {
+  /** how far round (rad, + left) the eye bone turns to look at a point well round to its right, at the eyes' height, on `neck` */
+  const turned = (neck: readonly BirdBone[], limits: Record<string, { axis: 0 | 1 | 2; swing: [[number, number], [number, number]]; twist: [number, number] }> = {}) => {
+    const eyes = neck[neck.length - 1];
+    const kind = species(BIRD, { legs: [leg('left'), leg('right')], gaze: { neck, eyes: { bone: eyes, at: [0, 0, 0.02] }, range: { down: 0.3, up: 0.3, side: 0.3 } } }, { gait, masses, limits });
+    const body = new Body(kind, { dev: true });
+    play(function* () { yield* lookAt(body, new Vector3(-3, 0.42, 0.3)); }, [body], 3);
+    expect(body.log).toEqual([]);
+    return new Euler().setFromQuaternion(body.pose.rotation(kind.skeleton.index(eyes)), 'YXZ').y;
+  };
+  const free = turned(['neck', 'beak']);
+
+  it('turns the head as far on a neck whose base a joint limit holds back: what the limit cuts off goes on up the chain', () => {
+    expect(free).toBeLessThan(-1);
+    expect(turned(['neck', 'beak'], { neck: { axis: 1, swing: [[-0.3, 0.3], [-0.3, 0.3]], twist: [-0.15, 0.15] } })).toBeCloseTo(free, 1);
+  });
+
+  it('turns a head on a neck of one bone all the way', () => {
+    expect(turned(['beak'])).toBeCloseTo(free, 1);
+  });
+
+  it('throws when the eyes ride on a bone other than the neck’s last: they would get only a share of each turn', () => {
+    expect(() => species(BIRD, { legs: [leg('left'), leg('right')], gaze: { neck: ['neck', 'beak'], eyes: { bone: 'neck', at: [0, 0, 0] }, range: { down: 0.3, up: 0.3, side: 0.3 } } }, { gait, masses }))
+      .toThrow('species: the eyes ride on "neck", but the neck ends at "beak": end the neck at the bone the eyes ride on');
   });
 });

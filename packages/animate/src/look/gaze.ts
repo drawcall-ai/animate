@@ -8,6 +8,7 @@ import type { Motion } from '../kernel/goal';
 import { limited } from '../kernel/limits';
 import { angleOf, spinOf } from '../kernel/rotation';
 import type { ReadonlyPose } from '../kernel/pose';
+import type { Skeleton } from '../kernel/skeleton';
 import type { Poise } from '../kernel/poise';
 import type { Gazer } from '../species/define';
 import type { Locomotion } from '../legs/locomotion';
@@ -48,7 +49,7 @@ const GLANCE = { turnAccel: 40, turnSpeed: 6 };
  */
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
-/** Keep the eyes on a world target (rest: +Z forward, +Y up), sharing the braked head turn evenly over the neck chain within joint limits; EYES
+/** Keep the eyes on a world target (rest: +Z forward, +Y up), sharing the braked head turn over the neck chain within joint limits (`shareOver`); EYES
  * takes the remainder. The history-followed head turn uses headPace, capped by motion.
  */
 export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, motion: HeadMotion = GLANCE): Step {
@@ -177,9 +178,22 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     if (sighted) (sightedBefore ??= new Vector3()).copy(sighted);
     sighted = level > 0 ? fick(whole, sighted ?? new Vector3()) : null;
     if (!sighted) sightedBefore = null;
-    const share = _share.identity().slerp(followed.premultiply(_rel.copy(turned).invert()), 1 / bones.length);
-    for (const b of bones) pose.setLocal(b, limited(pose.skeleton, b, _goal.copy(share)));
+    shareOver(pose.skeleton, bones, followed.premultiply(_rel.copy(turned).invert()), (b, share) => pose.setLocal(b, share));
   };
+}
+
+/**
+ * `turn` (in the neck's parent's frame) shared over the neck's `bones`, base first: each takes an even share of what the bones before it
+ * left, within its own limit, so what a limit cuts off goes on up the chain (a neck whose base hardly turns leaves the turn to the head),
+ * `each` given each bone's share (local) in turn
+ */
+function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<Quaternion>, each: (bone: number, share: Quaternion) => void): void {
+  const left = _left.copy(turn);
+  bones.forEach((b, k) => {
+    const share = limited(skeleton, b, _goal.identity().slerp(left, 1 / (bones.length - k)));
+    left.premultiply(_taken.copy(share).invert());
+    each(b, share);
+  });
 }
 
 /** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned and pitched toward `at`, a sub-step.
@@ -226,19 +240,18 @@ const BRAKE = 4;
  * flattened a little: the eyes' line gets there within ~0.6 s of a large shift's start) */
 const BELL = 1.5;
 
-/** how much of the eyes' range (1: all of it) the head, turned toward `goal` (world) from `parent`'s turn shared evenly over the neck's
+/** how much of the eyes' range (1: all of it) the head, turned toward `goal` (world) from `parent`'s turn shared over the neck's
  * `bones` each within its limit, leaves them to look at `point` (world) */
 function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, point: Readonly<Vector3>): number {
   const last = bones[bones.length - 1];
   const offset = gazer.eyes(pose, _eyeOffset).sub(pose.position(last)).applyQuaternion(_rel.copy(pose.rotation(last)).invert());
   // (the head's turn down the neck, the eyes' origin carried from the chain's base to the head's under it)
-  const share = _share.identity().slerp(_rel.copy(parent).invert().multiply(goal), 1 / bones.length);
   const turn = _within.copy(parent);
   const origin = _eyeOrigin.copy(pose.position(bones[0]));
-  for (const b of bones) {
+  shareOver(pose.skeleton, bones, _rel.copy(parent).invert().multiply(goal), (b, share) => {
     if (b !== bones[0]) origin.add(_offset.copy(pose.skeleton.bones[b].offset).applyQuaternion(turn));
-    turn.multiply(limited(pose.skeleton, b, _goal.copy(share)));
-  }
+    turn.multiply(share);
+  });
   origin.add(offset.applyQuaternion(turn));
   const local = _l.copy(point).sub(origin).applyQuaternion(_rel.copy(turn).invert());
   const side = Math.atan2(local.x, local.z);
@@ -286,4 +299,4 @@ const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
 const _euler = new Euler();
 const [_com, _d, _eyes, _l, _line, _spin, _tl, _now, _aim, _turning, _before, _next, _offset, _eyeOffset, _eyeOrigin] = Array.from({ length: 15 }, () => new Vector3());
-const [_q, _o, _p, _rel, _share, _goal, _out, _within, _was, _was2, _fick, _whole, _full, _candidate] = Array.from({ length: 14 }, () => new Quaternion());
+const [_q, _o, _p, _rel, _left, _taken, _goal, _out, _within, _was, _was2, _fick, _whole, _full, _candidate] = Array.from({ length: 15 }, () => new Quaternion());

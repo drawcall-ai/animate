@@ -62,4 +62,17 @@ describe('track', () => {
     const asked = tracked().multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.4));
     expect(tracked(asked).angleTo(asked)).toBeLessThan(0.05);
   });
+
+  it('says so when a hand stays short of a target out of its reach, once, and not for one it keeps up with', () => {
+    const logged = (right: Vector3) => {
+      const body = person({ dev: true });
+      play(function* () { yield* track(body, { right }); }, [body], 3);
+      return body.log;
+    };
+    // (a wrist held up and out past the arm's length: it comes to rest about 10 cm short, said as it stops coming nearer)
+    const short = logged(new Vector3(-0.2, 1.9, 0.6));
+    expect(short).toEqual([expect.objectContaining({ check: 'tracked hand short of a target out of reach (m)', where: 'right', limit: 0.02 })]);
+    expect(short[0].value).toBeGreaterThan(0.05);
+    expect(logged(new Vector3(-0.25, 1.35, 0.4))).toEqual([]);
+  });
 });

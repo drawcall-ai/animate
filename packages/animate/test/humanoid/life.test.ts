@@ -43,7 +43,9 @@ it.each(['an across-body reach', 'an over-shoulder look'])('turns the trunk on t
   let most = 0;
   play(function* () {
     if (what === 'an over-shoulder look') yield* lookAt(body, new Vector3(-2, 1.4, -1), { until: 3 });
-    else yield* reach(body, { right: new Vector3(0.45, 1.2, 0.25) }, { until: 3 });
+    // (across to a point the right hand reaches twisted: one at x 0.45 stayed 5 cm short, beyond the arm, hidden by `until` before reaches
+    // failed as their hands stopped)
+    else yield* reach(body, { right: new Vector3(0.38, 1.2, 0.25) }, { until: 3 });
   }, [body], 3.1, () => void (most = Math.max(most, twist())));
   expect(most).toBeGreaterThan(0.12);
   run(body, 3);
@@ -159,4 +161,14 @@ it.each([1.6, 1.75, 1.85])('bends its knees for an 8 kg load taken low, on a %s 
   expect(pitch).toBeLessThanOrEqual(35);
   expect(drop).toBeGreaterThan(0.015 * scale);
   expect(body.log).toEqual([]);
+});
+
+it('glances about on its own schedule: bodies without a seed do not look aside in step', () => {
+  const headYaws = (at: Vector3) => {
+    const body = person({ at }), h = insides(body), yaws: number[] = [];
+    run(body, 20, () => yaws.push(yawOf(h.pose.rotation(INDEX.head))));
+    return yaws;
+  };
+  const a = headYaws(new Vector3(0, 0, 0)), b = headYaws(new Vector3(3, 0, 1));
+  expect(Math.max(...a.map((yaw, i) => Math.abs(yaw - b[i])))).toBeGreaterThan(0.2);
 });

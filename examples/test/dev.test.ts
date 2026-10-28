@@ -7,10 +7,14 @@ import { SOLDIER, OUTLIER } from '../src/skeletons';
 import { cases } from '../../packages/animate/test/open';
 
 const test = cases([
-  ['reach: variation #3 final-pose dev checks', [1]], // Tiptoe settlement exceeds 10 cm XCoM.
+  // (the reach on its toes for targets 10 cm higher: XCoM 10.5 cm outside the support at life seed 0, an open breach)
+  ['reach: higher final-pose dev checks', [0]],
+  ['reach: higher with -0.000001 m target perturbation', [0]],
+  ['reach: higher with 0.000001 m target perturbation', [0]],
   'shooter on the soldier: final-pose dev checks', // Grip/leg-rate violations.
   'pickup-shelf on the soldier: final-pose dev checks', // Unreachable placement.
-  ['vr on the soldier: final-pose dev checks', [1]], // Tracking joint-rate violation.
+  'vr: final-pose dev checks', // Hands ~14 cm short of the floor controllers in the crouch (tracked hand short of a target out of reach).
+  'vr on the soldier: final-pose dev checks', // The same; at life seed 1 also a tracking joint-rate violation.
   'reach on the soldier: final-pose dev checks', // Reach diagnostics.
   'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
   'look-around: final-pose dev checks', // Upper arm penetrates the trunk.

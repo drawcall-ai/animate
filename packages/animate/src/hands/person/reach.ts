@@ -4,7 +4,7 @@ import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
-import { lateReach, reached } from '../../kernel/tip';
+import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, held, onBody, worn } from '../../things/hold';
 import type { Hold } from '../../things/resolve';
@@ -12,7 +12,7 @@ import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
 import { noticing } from '../../look/gaze';
-import { SIDES, type Side } from '../../species/humanoid/bones';
+import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { paceOf, type Pace } from '../handling';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
@@ -38,13 +38,21 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   const close = () => takes.forEach((take) => grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal }));
   if (there(person.frame)) return close();
   let late = false, ends = Infinity;
+  const progress = takes.map(() => new Progress());
+  // (past its planned end, a hand off its grip that has stopped there fails the reach at once; one still moving, `REACHING` s on. The
+  // legs stepping under it, it is watched afresh after)
+  const stopped = (f: Frame) => takes.some((take, k) => {
+    if (!person.locomotion.settled) progress[k].reset();
+    const off = unmet(f, person.hands[take.side], take.goal, person.track(take.thing.object));
+    return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, person.hands[take.side], off.at);
+  });
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
     request.eta = Math.max(0, ends - f.time);
     if (ready(f)) return true;
-    if (!late && f.time > ends + REACHING) {
+    if (!late && f.time > ends && (stopped(f) || f.time > ends + REACHING)) {
       late = true;
       for (const take of takes) {
-        if (lateReach(f, person.hands[take.side], take.goal, `${take.thing.object.name} ${take.side} ${take.grip}`, person.track(take.thing.object))) request.fail();
+        if (lateReach(f, person.hands[take.side], take.goal, `${take.thing.object.name} ${take.side} ${take.grip}`, person.track(take.thing.object), limitOf(person, take.side))) request.fail();
       }
     }
     return false;
@@ -197,13 +205,22 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   });
   const lasts = Math.max(...going.map((hand) => hand.lasts));
   let setOff = NaN, late = false;
+  const progress = aims.map(() => new Progress());
+  const stopped = (f: Frame) => aims.some(({ side, target }, k) => {
+    const off = unmet(f, person.hands[side], target(f));
+    return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, person.hands[side], off.at);
+  });
   const eta = (f: Frame) => {
     // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach.
-    if (!person.locomotion.settled) setOff += f.dt;
+    if (!person.locomotion.settled) {
+      setOff += f.dt;
+      progress.forEach((hand) => hand.reset());
+    }
     request.eta = Math.max(0, setOff + lasts - f.time);
-    if (late || f.time <= setOff + lasts + REACHING) return;
+    // (past its planned end, a hand off its target that has stopped there fails the reach at once; one still moving, `REACHING` s on)
+    if (late || f.time <= setOff + lasts || !(stopped(f) || f.time > setOff + lasts + REACHING)) return;
     late = true;
-    for (const { side, target } of aims) if (lateReach(f, person.hands[side], target(f), side)) request.fail();
+    for (const { side, target } of aims) if (lateReach(f, person.hands[side], target(f), side, undefined, limitOf(person, side))) request.fail();
   };
   yield* parallel<Frame>('all', function* () {
     for (;;) {
@@ -235,6 +252,25 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
     yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
   });
 }
+
+/**
+ * what held hand `side` off a point `at` (world) it reached for, as the body stands: further than the arm held out straight from the
+ * shoulder, or nearer the trunk than the arm is kept clear of it; else something within reach (a joint's range, the other hand, the
+ * body's balance)
+ */
+function limitOf(person: Reacher, side: Side): (at: Vector3) => string {
+  return (at) => {
+    const pose = person.pose, arm = person.proportions.armLength, shoulder = pose.position(INDEX[`${side}UpperArm`]).distanceTo(at);
+    if (shoulder > STRAIGHT * arm) return `beyond the arm’s reach: the shoulder ${shoulder.toFixed(2)} m from it, the arm ${arm.toFixed(2)} m`;
+    const hips = pose.position(0), chest = pose.position(INDEX.chest), clear = BODY_RADIUS * person.proportions.height;
+    const trunk = pointSegmentDistance(at, hips, chest);
+    if (trunk < 2 * clear) return `trunk clearance: it is ${trunk.toFixed(2)} m from the trunk’s axis, the arm kept ${clear.toFixed(2)} m clear of it`;
+    return 'within reach: held off by a joint’s range, the other hand or the body’s balance';
+  };
+}
+
+/** how far out a hand reaches from the shoulder, its arm straight (× the arm's length) */
+const STRAIGHT = 0.98;
 
 /** Artistic calibration: 0.6 s overlaps hand preparation with arrival without starting the reach a full stride away. */
 const NEAR = 0.6;

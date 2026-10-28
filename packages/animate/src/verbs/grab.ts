@@ -1,6 +1,8 @@
 import { Vector3, type Object3D } from 'three';
 import { selfOf, type Body, type ByHand } from '../body/body';
 import { bodyOf } from '../things/hold';
+import type { Holder } from '../things/resolve';
+import type { Frame } from '../kernel/frame';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Until, type Verb } from './story';
@@ -29,9 +31,20 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
   return verb(body, 'grab', (request) => function* () {
     const self = selfOf(body), held = Thing.of(thing), on = bodyOf(thing);
     if (on) self.meet(on);
+    if (on && on !== self) checkShared(self.frame, on, held, named);
     for (const { grip } of named) checkScale(self.frame, held.grip(grip).node);
     yield* self.handling.take(request, held, named, options);
   }, options.until);
+}
+
+/** development: a grip another body's hand holds: two hands cannot be on one spot (a hand-over gives the taker grips of its own) */
+function checkShared(f: Frame, holder: Holder, thing: Thing, named: readonly { hand: string; grip: string }[]): void {
+  for (const { grip } of named) {
+    const hand = Object.keys(holder.holding).find((side) => holder.holding[side]?.thing === thing && holder.holding[side]?.grip === grip);
+    if (hand === undefined) continue;
+    const name = holder.object.name || 'another body';
+    f.dev?.append(f.time, { check: 'grip another body’s hand holds', value: 1, limit: 0, where: `${thing.object.name} ${grip}: ${name}’s ${hand} hand` });
+  }
 }
 
 /** development: a grip whose world scale is not uniform has no one turn a hand can take */

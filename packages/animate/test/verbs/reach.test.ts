@@ -122,6 +122,26 @@ it('does not borrow a driven creature’s legs for an unreachable point', () => 
   expect(pet.log.some(entry => entry.check.startsWith('late reach: distance'))).toBe(true);
 });
 
+// (a body its app drives cannot walk up: its hand stops at arm's length, and the reach ends false as soon as it comes no nearer)
+it('fails a reach whose hand has stopped short at once, saying where it stopped and what held it', () => {
+  const body = person({ dev: true, drive: () => ({ position: new Vector3(), yaw: 0 }) });
+  let result: boolean | undefined, ended = NaN, time = 0;
+  play(function* () {
+    result = yield* reach(body, { right: new Vector3(-0.2, 1.3, 1.6) });
+    ended = time;
+  }, [body], 8, (t) => {
+    time = t;
+    return result !== undefined;
+  });
+  expect(result).toBe(false);
+  // (a calm reach that far takes about a second; failed 4 s past that before)
+  expect(ended).toBeLessThan(2.5);
+  expect(body.log).toEqual([expect.objectContaining({
+    check: 'late reach: distance (m)', where: 'right',
+    detail: expect.stringMatching(/^stopped \d+\.\d cm off it \(\d+\.\d cm behind, .* in the body's frame\): beyond the arm’s reach: the shoulder 1\.\d\d m from it, the arm 0\.\d\d m$/),
+  })]);
+});
+
 it('allows balance-support steps to finish a cross-body reach before judging it late', () => {
   const body = new Body(humanoid(PERSON), { dev: true });
   const results: boolean[] = [], errors: number[] = [];

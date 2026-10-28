@@ -1,6 +1,8 @@
 import { during } from '../kernel/requests';
 import { selfOf, type Body } from '../body/body';
 import type { Frame } from '../kernel/frame';
+import { OFF_FLOOR } from '../kernel/dev';
+import { bodyOf } from '../things/hold';
 import { headingOf, headingOfTurn } from '../kernel/math';
 import { Walk } from '../legs/walk';
 import { finder, type Target } from './targets';
@@ -20,7 +22,8 @@ export interface WalkOptions {
 
 /**
  * Walks to `target` (exactly there: to stand within reach of something, `grab` or `reach` it), turning to arrive facing as asked: a
- * mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls: no nearer for 6 s.
+ * mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls: no nearer for 6 s. The floor
+ * is the plane y = 0: it walks to where the target is over it (a point or an empty off it is said once in the dev log).
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
   const { face, speed, accel, until } = options;
@@ -41,10 +44,20 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       const turn = find(f).quaternion;
       return turn ? headingOfTurn(turn) : null;
     };
-    const walk = new Walk(self, { to: (f) => find(f).position, face: yaw, velocity: (f) => find(f).velocity, speed, accel }, until === undefined);
+    // (the floor is the plane y = 0: a target above or below it is walked to where it is over the floor. A thing or a body walked to is
+    // above it as things are; a point or an empty — a mark to stand on — off it says so, once)
+    const to = (f: Frame) => {
+      const found = find(f), height = Math.abs(found.position.y);
+      const mark = !found.object || (found.object.type === 'Object3D' && !bodyOf(found.object));
+      if (mark && height > OFF_FLOOR) {
+        f.dev?.once(f.time, { check: 'walk target off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'target' });
+      }
+      return found.position;
+    };
+    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, accel }, until === undefined);
     const step = (f: Frame) => {
       const go = walk.step(f);
-      request.eta = walk.eta;
+      request.eta = walk.ends;
       return go;
     };
     // (given `until`, it follows its target, however it moves, until then)

@@ -12,6 +12,10 @@ describe('bodies together', () => {
     const giver = person({ dev: true }), taker = person({ dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
     const room = roomOf(giver, taker);
     const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 2, solid: false });
+    // (grips of the taker's own, nearer it: the giver's hands are still on theirs as it takes hold. Facing each other, the taker's left
+    // hand goes to the side that is the giver's right)
+    empty(load, 'taker left', new Vector3(-0.15, 0, 0.08));
+    empty(load, 'taker right', new Vector3(0.15, 0, 0.08));
     const shelf = empty(room, 'shelf', new Vector3(0.8, 1.0, 1.2));
     const steps: string[] = [];
     play(function* () {
@@ -19,7 +23,7 @@ describe('bodies together', () => {
       // (held out between them, the giver keeping it there as the taker's hands come on it)
       yield* parallel('race', carry(giver, load, new Vector3(0, 1.05, 0.8), { until: Infinity }), function* () {
         yield* wait(1.5);
-        steps.push(`taken ${yield* grab(taker, load, { left: 'right', right: 'left' })}`);
+        steps.push(`taken ${yield* grab(taker, load, { left: 'taker left', right: 'taker right' })}`);
       });
       release(giver, load);
       steps.push(insides(taker).carried.has(load) ? 'the taker moves it' : 'nobody moves it');
@@ -31,6 +35,21 @@ describe('bodies together', () => {
     expect(worldOf(load).distanceTo(worldOf(shelf))).toBeLessThan(0.01);
     expect([...giver.log, ...taker.log]).toEqual([]);
   }, 20000);
+
+  it('says so when a hand is sent to a grip another body’s hand holds', () => {
+    const giver = person({ dev: true }), taker = person({ dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
+    giver.object.name = 'giver';
+    const room = roomOf(giver, taker), load = box(room, new Vector3(0, 0.9, 0.45), { mass: 2, solid: false });
+    let tried = false;
+    play(function* () {
+      yield* grab(giver, load, { left: 'left', right: 'right' });
+      yield* parallel('race', carry(giver, load, new Vector3(0, 1.05, 0.8), { until: Infinity }), function* () {
+        yield* parallel('race', grab(taker, load, { left: 'right' }), wait(0.1));
+        tried = true;
+      });
+    }, [giver, taker], 10, () => tried);
+    expect(taker.log).toContainEqual(expect.objectContaining({ check: 'grip another body’s hand holds', where: 'box right: giver’s right hand' }));
+  });
 
   it('a dog fetches a stick to a person, who takes it from its jaw', () => {
     const owner = person({ dev: true, at: new Vector3(0, 0, -1.5) });

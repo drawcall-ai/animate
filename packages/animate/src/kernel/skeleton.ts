@@ -62,7 +62,7 @@ export class Skeleton {
     this.limits = byBone;
     for (const [name, names] of Object.entries(chains)) {
       const chain = names.map((n) => this.index(n));
-      if (chain.length < 2) throw new Error(`chain "${name}" needs at least two bones`);
+      if (chain.length < 1) throw new Error(`chain "${name}" has no bones`);
       for (let k = 1; k < chain.length; k++) {
         if (bones[chain[k]].parent !== chain[k - 1]) throw new Error(`chain "${name}": "${bones[chain[k]].name}" is not the child of "${names[k - 1]}"`);
       }

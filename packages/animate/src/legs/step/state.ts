@@ -160,6 +160,8 @@ export const SWEEPING = 4;
  * stance's travel behind it
  */
 export const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
+/** Tuned: how long every foot stands planted, none wanting a step, before the legs are settled (s) */
+export const SETTLED_AFTER = 0.4;
 /** Tuned: the pelvis turns at most `PELVIS_TURN` (rad) from a planted foot's facing (the trunk and gaze take the rest) */
 const PELVIS_TURN = (50 * Math.PI) / 180;
 /** Tuned: the pelvis turns toward its facing at most at `TURN` (rad/s², rad/s) */
