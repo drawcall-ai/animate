@@ -273,13 +273,14 @@ it('follows a goal that stops and goes on, setting off one hoof at a time', () =
   expect(walked(after((time) => goal(time)), 16.5).steps).toEqual(clean);
 });
 
-// (led: following a person who walks 2 m on and stands 2.5 s, four times, a little behind and aside of them)
-it('follows a walking person, its forefeet and hind feet never in the air together', () => {
+// (led: following a person who walks 2 m on and stands 2.5 s, four times, a little behind and aside of them; millimetre
+// changes must not tip a landing into an unreachable stance as the root brakes or starts again)
+it.each([2.299, 2.3, 2.301])('follows a walking person %s m beside it, its forefeet and hind feet never in the air together', (offset) => {
   const walker = person();
   const story = function* () {
     for (const z of [2, 4, 6, 8]) { yield* walkTo(walker, new Vector3(0, 0, z)); yield* wait(2.5); }
   };
-  const beside = new Vector3(2.3, 0, -0.6);
+  const beside = new Vector3(offset, 0, -0.6);
   expect(walked(after(() => walker.pose.position(0).clone().setY(0).add(beside)), 16.5, { body: walker, story }).steps).toEqual(clean);
 });
 

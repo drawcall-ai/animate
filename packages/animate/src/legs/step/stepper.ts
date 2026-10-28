@@ -302,7 +302,13 @@ export class Stepper extends Steps {
         const allowed = Math.max(this.pelvisTurn, turned(0)), rest = remaining(w);
         for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (turned(t) > allowed + 1e-6) return false;
         // (a gait's landing, frozen once aimed, is kept within reach from then on: its body's forecast may turn out slower)
-        return w.u < (st.gait ? AIMED : SETTLE) || within(leg, rest, [0]);
+        if (w.u < (st.gait ? AIMED : SETTLE)) return true;
+        if (!within(leg, rest, [0])) return false;
+        // Touchdown alone is not enough: the root needs time to brake while this foot supports it. Look into the
+        // first stance over the same horizon as a planted walking foot, so it brakes before contact is lost.
+        const stance = Math.min(this.Ts, AWAIT * this.cycle);
+        if (st.gait) for (let n = 1; n <= 6; n++) if (!within(leg, rest + stance * n / 6, [0, st.pitch.ball])) return false;
+        return true;
       }
       // (a gait's foot may next lift once the others in the air have landed, or as its turn comes round if the gait has it leave the floor
       // before they do: it holds till then)
