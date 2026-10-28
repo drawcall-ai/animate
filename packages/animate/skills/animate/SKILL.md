@@ -66,6 +66,8 @@ Use `parallel('all', …)` when every branch must finish, and `'race'` to cancel
 
 Each body part does one thing at a time. An asked verb beats a borrowed part; a newer asked verb overrides an older one until it ends. Thus a look beside a grab directs the eyes without interrupting the hands. Inspect `body.owners` when that composition surprises you.
 
+For a gesture such as a nod, a bow, an arched back or a head tilt, use `pose`: it adds trunk and head angles on top of whatever the body is doing and eases them in and out, so a short pose is a nod and poses in sequence blend into each other. Keep `lookAt` for where the eyes go (its `roll` and `pitch` tilt the head while it looks), `reach` for where the hands go, and `track` for tracked devices. Moving a look or track target to fake a gesture also borrows the trunk or legs, and the gesture reads smaller than its numbers. A pose's head offset sits on top of the gaze instead of taking the eyes, so pair it with a look to keep the eyes on someone. A trunk pose competes for the trunk with a `lookAt` that uses `trunk`. A creature takes a trunk pose by turning its whole body over its planted legs, and only as far as they allow.
+
 ## Bodies and places
 
 A bare body and a skinned body use the same skeleton. For a mesh, resolve the installed `@drawcall/rig` package and read its `skills/rig/SKILL.md` to author the skeleton. The reference [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) skeletons are starting points; mesh positions must fit the mesh. The lion skeleton also needs custom roles and tuning.

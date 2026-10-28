@@ -11,6 +11,7 @@ import { legsBiped, legsHorse } from './legs';
 import { dogFetch } from './dog';
 import { lionRun } from './lion';
 import { idleLife, liftHeavy, reachAround } from './life';
+import { gestures } from './gestures';
 
 /** The scenarios the app and headless runner list. */
-export const SCENARIOS: readonly Scenario[] = [shooter(), stableMorning(), stroll(), proportions(), pickupShelf(), reachOverride, lookAround(), vr(), reaching(), knightArming(), legsBiped(), legsHorse(), dogFetch(), lionRun(), idleLife, reachAround, liftHeavy];
+export const SCENARIOS: readonly Scenario[] = [shooter(), stableMorning(), stroll(), proportions(), pickupShelf(), reachOverride, lookAround(), vr(), reaching(), knightArming(), legsBiped(), legsHorse(), dogFetch(), lionRun(), idleLife, reachAround, liftHeavy, gestures];
