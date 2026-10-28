@@ -105,8 +105,9 @@ export interface LegRole<Name extends string> extends Omit<LegChain<Name, Vec3>,
 
 /**
  * What each of a species' bones does, by name: the `root` it moves from (default the skeleton's), its `legs` (fore-left, fore-right,
- * hind-left, hind-right for four), the `gaze` (a neck chain from its base to the head, and the eyes on a bone), its `hands` (a chain
- * each, from its first joint to the hand or jaw), and the `carriage` its gait carries over its legs.
+ * hind-left, hind-right for four), the `gaze` (a neck chain from its base to the head, one bone or more: the head's turn shared over them,
+ * each within its limit, what a limit cuts off going on up; and the eyes, on the head), its `hands` (a chain each, from its first joint to
+ * the hand or jaw), and the `carriage` its gait carries over its legs.
  */
 export interface Roles<Name extends string, Hand extends string> {
   root?: Name;
@@ -164,6 +165,14 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
     return { name: bone.name, parent, offset, mass, com: centreOf(bone.name), snap: tuning.snaps?.[bone.name] };
   });
   const limits = Object.entries<Range | undefined>(tuning.limits ?? {}).flatMap(([name, range]) => range ? [{ ...range, bone: index(name) }] : []);
+  for (const [hand, chain] of Object.entries<readonly string[]>(roles.hands ?? {})) {
+    if (chain.length < 2) throw new Error(`species: hand "${hand}" needs a chain of two bones or more: a joint it turns from, and the hand`);
+  }
+  // (the eyes ride on the head the neck turns: on a bone below it they would take only that bone's share of each turn)
+  const eyesOn = roles.gaze?.eyes.bone, headOf = roles.gaze?.neck?.at(-1);
+  if (headOf !== undefined && eyesOn !== headOf) {
+    throw new Error(`species: the eyes ride on "${eyesOn}", but the neck ends at "${headOf}": end the neck at the bone the eyes ride on`);
+  }
   const chains: Record<string, readonly string[]> = { ...(roles.gaze?.neck && { neck: roles.gaze.neck }), ...roles.hands };
   const built = new Skeleton(bones, { limits, chains });
   const gaze = roles.gaze, eyes = gaze && { bone: built.index(gaze.eyes.bone), at: new Vector3(...gaze.eyes.at) };
