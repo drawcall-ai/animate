@@ -286,20 +286,20 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];
     if (leg.swing) {
       const sink = -Math.min(...solePoints(person.proportions, f.prev, side).map((at) => at.y));
-      if (sink > 0.002) dev.append(time, { check: 'driven swing sole sink (m)', value: sink, limit: 0.002, where: `${side}Foot` });
+      if (sink > 0.002) dev.append(time, { check: 'swing sole sink (m)', value: sink, limit: 0.002, where: `${side}Foot` });
       return;
     }
     const pivots = leg.pitch > 0 ? [heelOf(proportions)] : leg.pitch < 0 ? [ballOf(proportions, side)] : [heelOf(proportions), ballOf(proportions, side)];
     for (const pivot of pivots) {
       const at = f.prev.point(bone, pivot, new Vector3());
       const slide = at.distanceTo(pivot.clone().applyQuaternion(footRotation(leg.yaw, 0)).add(leg.anchor));
-      if (slide > LIMIT.slide) dev.append(time, { check: 'driven planted slide (m)', value: slide, limit: LIMIT.slide, where: `${side}Foot` });
+      if (slide > LIMIT.slide) dev.append(time, { check: 'planted slide (m)', value: slide, limit: LIMIT.slide, where: `${side}Foot` });
       if (!leg.landed) continue;
       const was = f.prev2.point(bone, pivot, new Vector3());
       const vertical = Math.abs(at.y - was.y) / f.dt, horizontal = Math.hypot(at.x - was.x, at.z - was.z) / f.dt;
       // (landing a leap the foot comes down with the body, the knees taking up the fall after: only its horizontal speed is bounded)
-      if (vertical > LIMIT.vertical && !leg.leapt) dev.append(time, { check: 'driven touchdown vertical speed (m/s)', value: vertical, limit: LIMIT.vertical, where: `${side}Foot` });
-      if (horizontal > LIMIT.horizontal) dev.append(time, { check: 'driven touchdown horizontal speed (m/s)', value: horizontal, limit: LIMIT.horizontal, where: `${side}Foot` });
+      if (vertical > LIMIT.vertical && !leg.leapt) dev.append(time, { check: 'touchdown vertical speed (m/s)', value: vertical, limit: LIMIT.vertical, where: `${side}Foot` });
+      if (horizontal > LIMIT.horizontal) dev.append(time, { check: 'touchdown horizontal speed (m/s)', value: horizontal, limit: LIMIT.horizontal, where: `${side}Foot` });
     }
   });
   // (the shanks never closer than their thickness: legs that cross pass through each other)
@@ -309,8 +309,9 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
     pointSegmentDistance(new Vector3().lerpVectors(left[0], left[1], k), right[0], right[1]),
     pointSegmentDistance(new Vector3().lerpVectors(right[0], right[1], k), left[0], left[1]),
   ]));
-  if (gap < LIMIT.across * proportions.scale) dev.append(time, { check: 'driven legs crossed (m)', value: LIMIT.across * proportions.scale - gap, limit: 0, where: 'legs' });
-  // Noted only: a driven body follows its input, not its balance.
+  if (gap < LIMIT.across * proportions.scale) dev.append(time, { check: 'legs crossed (m)', value: LIMIT.across * proportions.scale - gap, limit: 0, where: 'legs' });
+  // (noted only, and for a driven body only: it follows its input, not its balance; a walker's balance is checked, `checkSupport`)
+  if (!person.drive) return;
   const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(person.proportions, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
   if (!support.length) return;
   const xcom = xcomOfPoses(f.prev, f.prev2, f.dt, proportions.legLength, new Vector3());
