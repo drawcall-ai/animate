@@ -288,8 +288,14 @@ class CarryAim {
   private setOut = false;
   private readonly unpushed = [new Vector3(), new Vector3()];
 
+  /** the middle of the grips both its hands hold it by (its frame; held in one, its origin) */
+  private readonly pivot = new Vector3();
+
   constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: Clearance) {
     const own = person.track(thing.object);
+    const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [hold.goal.position] : []);
+    // (held in both hands; one hand's thing goes where its course has it, the hand with it)
+    if (grips.length > 1) for (const grip of grips) this.pivot.addScaledVector(grip, 1 / grips.length);
     this.nominal = new Carrier(own.current.position, own.current.quaternion);
     this.carrier = new Carrier(own.current.position, own.current.quaternion);
     this.nominal.prev.position.copy(own.prev.position);
@@ -314,7 +320,11 @@ class CarryAim {
       this.cleared = true;
       f.dev.note(f.time, { check: 'held goal moved clear of the head (m)', value: moved, limit: CLEARED * person.scale, where: thing.object.name });
     }
-    this.position.follow(aim.prev.position, aim.current.position, goal.position, motion, f.dt, this.at);
+    // (followed about the middle of its grips, where the hands are: turning, a thing held off its middle lags about them, not about its
+    // own origin, and does not swing off them)
+    const pivot = this.pivot, held = (at: Placement, turn: Quaternion, out: Vector3) => out.copy(pivot).applyQuaternion(turn).add(at.position);
+    this.position.follow(held(aim.prev, aim.prev.quaternion, _p1), held(aim.current, aim.current.quaternion, _p2), held(goal, goal.quaternion, _p3), motion, f.dt, this.at);
+    this.at.sub(_p1.copy(pivot).applyQuaternion(turned));
     // Constraint correction is not velocity to feed back into the intended path.
     aim.move(f.time, this.at, turned);
     const aimed = _aimed.copy(this.at);
@@ -369,3 +379,4 @@ function inReach(person: Reacher, thing: Thing, wideOnly = false): number {
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
 const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), _v = new Vector3(), _g = new Vector3(), _aimed = new Vector3(), _left = new Vector3();
+const [_p1, _p2, _p3] = [new Vector3(), new Vector3(), new Vector3()];
