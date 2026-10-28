@@ -63,23 +63,14 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
   if (least === 0 && armDepth(pose, proportions, side, upper, clear) <= clear) return 0;
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
   const near = _elbow.copy(pose.position(INDEX[`${side}LowerArm`]));
-  // (the arm as solved, to put back if nothing clears)
+  // (the arm as solved; every bounded candidate starts here, so search trials cannot accumulate nudges)
   const bones = pose.skeleton.chain(chain);
   bones.forEach((bone, k) => _was[k].copy(pose.local(bone)));
-  const fits = (push: number) => {
-    const goal = _goal.copy(tip.position).addScaledVector(forward, push);
-    return swivels(proportions, shoulder, goal, near, keeping.swivel, (elbow) => {
-      solveChain(f, chain, { tip: { position: goal, quaternion: tip.quaternion }, pole: elbow });
-      return armDepth(pose, proportions, side, upper, clear) <= clear;
-    });
-  };
-  const pushed = leastPush(fits, least, Math.max(AIR * proportions.height, 0.005), keeping.push * proportions.armLength, 8, 1e-3);
-  if (pushed === null) {
-    bones.forEach((bone, k) => pose.setLocal(bone, _was[k]));
-    return 0;
-  }
   const nudge = keeping.nudge;
-  if (nudge !== undefined) {
+  const best = bones.map((bone) => pose.local(bone).clone());
+  let bestDepth = armDepth(pose, proportions, side, upper, clear);
+  const bounded = () => {
+    if (nudge === undefined) return;
     // (the joints turned from where they were toward the re-solve, each its share of the way: the least share that clears, halved in
     // on; no joint further than `nudge` of its checked acceleration takes it in a sub-step)
     let most = 1;
@@ -106,6 +97,27 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
       }
     }
     toward(inn);
+  };
+  const fits = (push: number) => {
+    const goal = _goal.copy(tip.position).addScaledVector(forward, push);
+    return swivels(proportions, shoulder, goal, near, keeping.swivel, (elbow) => {
+      if (nudge !== undefined) bones.forEach((bone, k) => pose.setLocal(bone, _was[k]));
+      solveChain(f, chain, { tip: { position: goal, quaternion: tip.quaternion }, pole: elbow });
+      // Judge the correction the acceleration budget permits, not the full solve it cannot reach this step.
+      bounded();
+      const depth = armDepth(pose, proportions, side, upper, clear);
+      if (depth < bestDepth) {
+        bestDepth = depth;
+        bones.forEach((bone, k) => best[k].copy(pose.local(bone)));
+      }
+      return depth <= clear;
+    });
+  };
+  const pushed = leastPush(fits, least, Math.max(AIR * proportions.height, 0.005), keeping.push * proportions.armLength, 8, 1e-3);
+  if (pushed === null) {
+    // An incomplete nudge can still reduce penetration; do not throw away the best legal progress.
+    bones.forEach((bone, k) => pose.setLocal(bone, nudge === undefined ? _was[k] : best[k]));
+    return 0;
   }
   return pushed;
 }
