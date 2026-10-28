@@ -26,6 +26,12 @@ export function spinOf(from: Quaternion, to: Quaternion, dt: number, out: Vector
   return log(_d.copy(from).invert().premultiply(to), out).divideScalar(dt);
 }
 
+/** Shortest angle (rad), retaining precision at coincident rotations where acos(dot) loses it. */
+export function angleOf(from: Quaternion, to: Quaternion): number {
+  _d.copy(from).invert().premultiply(to);
+  return 2 * Math.atan2(Math.hypot(_d.x, _d.y, _d.z), Math.abs(_d.w));
+}
+
 const _d = new Quaternion();
 
 /** Joint speed and the difference of successive angular velocities, from final poses. */

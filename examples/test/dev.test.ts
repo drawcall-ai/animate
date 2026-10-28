@@ -9,14 +9,10 @@ import { cases } from '../../packages/animate/test/open';
 // up to 10 cm off, turned up to 0.15 rad, up to 4 % taller or shorter), which no story may hang on. Open cases are expected to fail:
 // each one fixed comes off the list.
 // - look-around: the left upper arm 1.05 cm into the trunk (limit 1) at 15.0 s, turning back from behind;
-// - reach higher and faster (seed 0): the anticipatory walk's braking leaves final-pose XCoM 10.2–11.2 cm outside
-//   support at 12.9 / 8.1 s (limit 10 cm), though the hand stays on its course;
 // - reach variation #3 (seed 1): upstream tiptoe settlement leaves XCoM 11.37 cm outside support at 12.93 s.
 const test = cases([
   ['reach: variation #3 final-pose dev checks', [1]],
   'look-around: final-pose dev checks',
-  ["reach: higher final-pose dev checks", [0]],
-  ["reach: faster final-pose dev checks", [0]],
 ]);
 for (const scenario of SCENARIOS) {
   test(`${scenario.id}: final-pose dev checks${scenario.id === 'vr' ? ' (its side-step unfinished, known)' : ''}`, () => {
@@ -32,4 +28,8 @@ for (const scenario of SCENARIOS.filter((each) => ['reach', 'knight-arming', 'pi
 
 for (const [name, variation] of [['higher', { rise: 0.1 }], ['faster', { pace: 1.2 }]] as const) {
   test(`reach: ${name} final-pose dev checks`, () => expect(run(reaching(variation))).toEqual([]));
+}
+
+for (const offset of [-1e-6, 1e-6]) {
+  test(`reach: higher with ${offset} m target perturbation`, () => expect(run(reaching({ rise: 0.1 + offset }))).toEqual([]));
 }

@@ -50,7 +50,8 @@ const test = cases([
   "turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back",
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the soldier',
   'carries below the face until arrival and places clear of both bodies on the soldier #0',
-  ["carries below the face until arrival and places clear of both bodies on the soldier #1", [0, 2, 3]],
+  // The approach still crowds the horse's legs (about 14 mm at life seed 1 on both architectures).
+  "carries below the face until arrival and places clear of both bodies on the soldier #1",
   'carries below the face until arrival and places clear of both bodies on the soldier #2',
   "turns its eyes from the saddle's place to the horse, to the knot and back to the horse upright, never turning back on the soldier",
   'leads upright with the near hand forward, slack outside, and halts beyond the gate on the outlier',

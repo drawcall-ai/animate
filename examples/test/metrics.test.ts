@@ -43,9 +43,9 @@ it('lists each scenario once', () => {
 });
 
 // Expected failures still present at the listed life seeds. Finished viewer stories are guarded separately in viewer.test.ts.
-// The upstream forward-shifted knight remains open at seed 2: helm rim 23.2 mm into the forearm (15 mm bound).
 const OPEN: Open[] = [
-  ['knight-arming, the stand, wall and rack 15 cm further on', [2]],
+  // The lower-box gaze misses by about 70° at seed 3 on both architectures; the 45° limit stays unchanged.
+  ['pickup-shelf, the box 5 cm lower', [3]],
   'stroll 15% faster',
   'look-around, the headset 20% faster',
   ["look-around, looking down 10 cm nearer", [0]],

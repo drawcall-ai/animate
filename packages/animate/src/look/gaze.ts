@@ -6,7 +6,7 @@ import type { Frame, Step } from '../kernel/frame';
 import { follow, followRotation } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
 import { limited } from '../kernel/limits';
-import { spinOf } from '../kernel/rotation';
+import { angleOf, spinOf } from '../kernel/rotation';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Poise } from '../kernel/poise';
 import type { Gazer } from '../species/define';
@@ -58,9 +58,11 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
   let over: boolean | null = null;
   /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
   let shift = 0;
-  /** the head's goal the sub-step before (null: none yet), and in its own angles (`fick`; null: not followed in them) */
+  /** the last two head goals, in world rotation and in its own angles (`fick`; null: not followed in them) */
   let seen: Quaternion | null = null;
   let sighted: Vector3 | null = null;
+  let seenBefore: Quaternion | null = null;
+  let sightedBefore: Vector3 | null = null;
   /** the target's turn followed the sub-step before (rad/s) */
   const pursued = new Vector3();
   /** where the target was the sub-step before (null: not yet seen) */
@@ -76,6 +78,9 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     if (jumped) {
       over = null;
       seen = null;
+      seenBefore = null;
+      sighted = null;
+      sightedBefore = null;
       pursued.set(0, 0, 0);
       shift = 0;
     }
@@ -117,7 +122,7 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     const last = bones[bones.length - 1];
     const was = _was.copy(f.prev.rotation(last));
     // Acquire from the final head history once; earlier gaze layers cannot choose the branch.
-    over ??= _o.angleTo(was) < _q.angleTo(was);
+    over ??= angleOf(_o, was) < angleOf(_q, was) - 1e-9;
     const [kept, other] = over ? [_o, _q] : [_q, _o];
     const strained = strainOf(kept);
     if (strainOf(other) < strained - HYSTERESIS) over = !over;
@@ -145,12 +150,14 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
         eyePitch -= hi;
       }
     }
-    // (followed at the shift's pace, `headPace`; a target moving smoothly pursued without lag, its own acceleration on top)
-    const pursuit = jumped || !seen ? _spin.set(0, 0, 0) : spinOf(seen, whole, f.dt, _spin).clampLength(0, motion.turnSpeed ?? Infinity);
+    // The desired look depends on the last eye position. Differentiate over two steps so alternating errors in that feedback
+    // are not chased as target velocity; a steady pursuit keeps its exact speed.
+    const pursuit = jumped || !seen ? _spin.set(0, 0, 0) : spinOf(seenBefore ?? seen, whole, f.dt * (seenBefore ? 2 : 1), _spin).clampLength(0, motion.turnSpeed ?? Infinity);
+    if (seen) (seenBefore ??= new Quaternion()).copy(seen);
     (seen ??= new Quaternion()).copy(whole);
     const speeding = pursuit.distanceTo(pursued) / f.dt;
     pursued.copy(pursuit);
-    const gap = was.angleTo(whole);
+    const gap = angleOf(was, whole);
     shift = gap > shift || gap < SETTLED ? gap : shift;
     const pace = headPace(shift, motion);
     pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
@@ -163,11 +170,13 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     if (level > 0) {
       const now = fick(was, _now), goal = fick(whole, _aim, now);
       const turning = jumped || !sighted ? _turning.set(0, 0, 0)
-        : unwrapped(_turning.subVectors(goal, sighted)).divideScalar(f.dt).clampLength(0, motion.turnSpeed ?? Infinity);
+        : unwrapped(_turning.subVectors(goal, sightedBefore ?? sighted)).divideScalar(f.dt * (sightedBefore ? 2 : 1)).clampLength(0, motion.turnSpeed ?? Infinity);
       const next = follow(fick(before, _before, now), now, goal, { ...pace, velocity: turning }, f.dt, _next);
       followed.slerp(_fick.setFromEuler(_euler.set(next.x, next.y, next.z, 'YXZ')), level);
     }
+    if (sighted) (sightedBefore ??= new Vector3()).copy(sighted);
     sighted = level > 0 ? fick(whole, sighted ?? new Vector3()) : null;
+    if (!sighted) sightedBefore = null;
     const share = _share.identity().slerp(followed.premultiply(_rel.copy(turned).invert()), 1 / bones.length);
     for (const b of bones) pose.setLocal(b, limited(pose.skeleton, b, _goal.copy(share)));
   };
