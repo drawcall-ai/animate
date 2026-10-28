@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import { Body, humanoid, walkTo } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { dt, insides, person } from '../bodies';
-import { PERSON } from '../skeletons/person';
+import { PERSON } from '../../skills/animate/references/person';
 
 const DEG = Math.PI / 180;
 /** half a step walking at 1.3 m/s (sub-steps: ~0.47 s a step, ~2.1 steps/s) */

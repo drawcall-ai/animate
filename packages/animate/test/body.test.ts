@@ -6,9 +6,9 @@ import { BONES, INDEX } from '../src/species/humanoid/bones';
 import { claim, dt, insides, person, run } from './bodies';
 import { rng } from './random';
 import { resolve } from '../src/things/resolve';
-import { PERSON } from './skeletons/person';
-import { HORSE } from './skeletons/horse';
-import { DOG } from './skeletons/dog';
+import { PERSON } from '../skills/animate/references/person';
+import { HORSE } from '../skills/animate/references/horse';
+import { DOG } from '../skills/animate/references/dog';
 
 describe('a body', () => {
   it('steps in fixed sub-steps whatever its frames: jittered frames give what fixed ones do', () => {

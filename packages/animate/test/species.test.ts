@@ -6,8 +6,8 @@ import { proportionsFor } from '../src/species/humanoid/proportions';
 import { massFor } from '../src/species/humanoid/skeleton';
 import { play, run } from './bodies';
 import { box, roomOf } from './things';
-import { PERSON } from './skeletons/person';
-import { HORSE } from './skeletons/horse';
+import { PERSON } from '../skills/animate/references/person';
+import { HORSE } from '../skills/animate/references/horse';
 
 describe('a humanoid', () => {
   it('measures its proportions off its skeleton, its height off the crown, with Dempster’s masses for that height', () => {

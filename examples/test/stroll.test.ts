@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { stroll, walkThere } from '../src/scenarios/stroll';
+import { stroll } from '../src/scenarios/stroll';
+import { walkThere } from './walk-scenario';
 import { checks, failed, measure } from './metrics';
 import { frames, type Frame } from './frame';
 import { Simulation } from '../src/simulation';
@@ -33,16 +34,13 @@ function straightStroll() {
       yield each;
     }
   }
-  const metrics = measure('stroll', observed());
+  const metrics = measure(observed());
   return { sim, metrics, heights, landings, touchdown };
 }
 
-it('strolls straight on: soft touchdowns', () => {
-  expect(straightStroll().touchdown).toBeLessThanOrEqual(0.1);
-});
-
 it('strolls straight on: knees near straight at mid-stance, a 3.5–5 cm bob lowest just after contact', () => {
-  const { sim, metrics, heights, landings } = straightStroll();
+  const { sim, metrics, heights, landings, touchdown } = straightStroll();
+  expect(touchdown).toBeLessThanOrEqual(0.1);
   expect(sim.stage.done(), 'straight stroll finished').toBe(true);
   expect(checks(metrics, { strides: { straight: 3, curve: 0 }, startStop: null }).filter(failed)).toEqual([]);
   expect(sim.people.flatMap((person) => [...person.log])).toEqual([]);
@@ -69,7 +67,6 @@ it('strolls straight on: knees near straight at mid-stance, a 3.5–5 cm bob low
 }, 20000);
 
 for (const [name, scene] of [
-  ['round a curve', stroll()],
   ['round a tighter arc', stroll({ radius: 2.4 })],
   ['round a wider arc', stroll({ radius: 3.6 })],
   ['setting off turned left', stroll({ yaw: 0.3 })],

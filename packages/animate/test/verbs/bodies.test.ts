@@ -3,8 +3,8 @@ import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { Body, carry, dog, grab, horse, lookAt, reach, release, wait, walkTo } from '../../src/index';
 import { insides, person, play } from '../bodies';
-import { DOG } from '../skeletons/dog';
-import { HORSE } from '../skeletons/horse';
+import { DOG } from '../../skills/animate/references/dog';
+import { HORSE } from '../../skills/animate/references/horse';
 import { box, empty, roomOf, worldOf } from '../things';
 
 describe('bodies together', () => {

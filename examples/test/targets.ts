@@ -12,15 +12,10 @@ import { aroundTheTrunk } from './clearance';
  */
 export class Targets {
   private readonly wristPeak = new Peak();
-  private readonly headPeak = new Peak();
-  private readonly gazePeak = new Peak();
-  private readonly headOffPeak = new Peak();
   /** the most the eyes turn in the head to the gaze target (°), and the longest the target stays past the comfortable turn by `PAST` (s) */
   readonly eyesPeak = new Peak();
   readonly pastPeak = new Peak();
   private past = NaN;
-  /** the largest error of a tracked wrist target (m), judged only by its course (`over`), not a fixed bound */
-  private readonly trackedPeak = new Peak();
   /** how far a tracked target's error goes past the bound its course sets (m; see `judge`), and on which target and course */
   readonly over = { value: -Infinity, at: 0, what: '' };
   private readonly wrists = { left: new Course(), right: new Course() };
@@ -30,30 +25,14 @@ export class Targets {
   judged = 0;
   /** frames a tracked wrist target was asked (per wrist), and judged (within reach); frames a tracked head was asked (all judged) */
   tracked = { asked: 0, judged: 0, head: 0 };
-  get head() {
-    return this.headPeak.value;
-  }
   /** the gaze target asked (as it was last step), and since when (s) */
   private goal: { target: Vector3; since: number } | null = null;
   /** the largest error of a hand off the grip of what it holds (m) */
   get wrist() {
     return this.wristPeak.value;
   }
-  get trackedWrist() {
-    return this.trackedPeak;
-  }
   get wristAt() {
     return this.wristPeak.at;
-  }
-  get headAt() {
-    return this.headPeak.at;
-  }
-  get gazeAt() {
-    return this.gazePeak.at;
-  }
-  /** how far beyond what the eyes turn comfortably in the head (EYES) the gaze target asked lies (°), SETTLE after it last jumped, where it is before the body (in front of the frontal plane through the hips) */
-  get gaze() {
-    return this.gazePeak.value;
   }
 
   see({ t, h, asked }: Frame) {
@@ -73,9 +52,7 @@ export class Targets {
       if (seen && t - this.goal.since > SETTLE) {
         this.judged++;
         const off = (forward.angleTo(toward) * 180) / Math.PI;
-        this.headOffPeak.see(off, t);
         const beyond = beyondEyes(toward.applyQuaternion(head.invert()), off);
-        this.gazePeak.see(beyond, t);
         this.eyesPeak.see(off, t);
         // (how long on end the target lies past the comfortable turn by more than `PAST`: a brief eccentric glance as the head comes
         // round is normal, a held one is not)
@@ -87,7 +64,6 @@ export class Targets {
     if (head) {
       this.tracked.head++;
       const error = eyesOf(h).distanceTo(head);
-      this.headPeak.see(error, t);
       this.judge(this.heads, head, error, false, t, 'head');
     } else this.heads.reset();
     for (const s of ['left', 'right'] as const) {
@@ -100,8 +76,7 @@ export class Targets {
       const shoulder = jointOf(h, `${s}UpperArm`).distanceTo(target), arm = h.proportions.armLength;
       if (shoulder >= arm + 0.35) { course.reset(); continue; }
       this.tracked.judged++;
-      const error = jointOf(h, `${s}Hand`, _v).distanceTo(target);
-      this.trackedPeak.see(error, t);
+      jointOf(h, `${s}Hand`, _v);
       // (judged on as much of it as a hand reaches standing: no lower than the floor lets the wrist, no higher than the arm raised flat-footed)
       const p = h.proportions, reached = _r.copy(target).setY(Math.min(Math.max(target.y, FLOOR * p.scale), p.shoulderHeight + p.armLength));
       this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm), aroundTheTrunk(h, s, reached));
@@ -140,11 +115,6 @@ export class Targets {
     // (held still out of reach without a step, it is reached for as far as the arm goes while the body comes)
     if (t - course.still >= HOLD.after) [bound, kind] = held === undefined ? [beyond + LAG.within, 'held out of reach'] : [held, 'hold'];
     if (error - bound > this.over.value) Object.assign(this.over, { value: error - bound, at: t, what: `${what} ${kind}` });
-  }
-
-  toString() {
-    const { asked, judged, head } = this.tracked;
-    return `max wrist err off held grips ${this.wristPeak}, off tracked targets within arm+0.35m ${this.trackedPeak} (judged ${judged} of ${asked} frames asked), head (eyes) err ${this.headPeak} (${head} frames), tracked past its course's bound ${this.over.value.toFixed(3)} m @${this.over.at.toFixed(2)}s (${this.over.what}), gaze beyond the eyes' comfortable turn ${this.gazePeak.value.toFixed(1)}° @${this.gazePeak.at.toFixed(2)}s, the head off its target ${this.headOffPeak.value.toFixed(1)}° @${this.headOffPeak.at.toFixed(2)}s (judged ${this.judged} of ${this.asked} frames asked)`;
   }
 }
 

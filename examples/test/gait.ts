@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { eyesOf, forwardOf, jointOf, leftOf } from './actor';
+import { forwardOf, jointOf, leftOf } from './actor';
 import { tasked, type Frame } from './frame';
 
 /** a stride is steady when its speed varies across it, and the stride before, by less than this share of its mean (and its turn rate by less than CURVE) */
@@ -33,11 +33,7 @@ interface Sample {
   standing: number;
   /** the chest, its offset from the hips turned back with the thorax (see `see`) */
   chest: Vector3;
-  head: Vector3;
-  /** pelvic obliquity (+ = left hip up), rotation (+ = left hip forward), thorax roll and yaw, trunk lean (hips → neck in the thorax's frontal plane, + = to the left), head roll and yaw (rad) */
-  pelvisRoll: number;
-  pelvisYaw: number;
-  thoraxRoll: number;
+  /** Shoulder-line yaw in the body's heading frame (rad). */
   thoraxYaw: number;
   /** the thorax segment's own roll and yaw (rad): across its sternoclavicular joints, not the shoulders the girdle moves on its own */
   segmentRoll: number;
@@ -81,12 +77,11 @@ export interface Stride {
   to: number;
   curve: boolean;
   speed: number;
-  /** lateral peak to peak: pelvis, chest, head (m) */
   /** the stride's two step lengths' difference over their mean */
   stepAsymmetry: number;
+  /** lateral peak to peak (m) */
   pelvisLat: number;
   chestLat: number;
-  headLat: number;
   /** pelvis vertical peak to peak (m), and the legs' length over the default body's it rides on */
   pelvisUp: number;
   legs: number;
@@ -98,21 +93,11 @@ export interface Stride {
   elbowMin: number;
   elbowMax: number;
   /** angle amplitudes (half peak to peak, °) */
-  obliquity: number;
-  rotation: number;
-  thoraxToPelvisRoll: number;
   lean: number;
-  thoraxToPelvisYaw: number;
   headRoll: number;
-  headYaw: number;
-  /** thorax vs pelvis rotation correlation (−1 = counter-rotating) */
-  counter: number;
-  /** RMS lateral jerk of the chest (m/s³) */
-  chestJerk: number;
-  /** that over the RMS jerk of one sinusoid with the stride's sway (1: a pure sway; more: jerkier than its own sway) */
+  /** RMS chest jerk over the RMS jerk of one sinusoid with the stride's sway (1: a pure sway; more: jerkier than its own sway) */
   chestJerkShare: number;
   /** lateral motion not explained by one sinusoid at the stride frequency, relative to it (RMS ratio) */
-  pelvisResidual: number;
   chestResidual: number;
   /** pelvis lateral shift toward the stance foot at mid-stance, relative to its amplitude (+1 = over the stance foot) */
   phase: number;
@@ -161,10 +146,8 @@ export class GaitKinematics {
       const across = d.dot(left);
       return { roll: Math.atan2(d.y, across), yaw: Math.atan2(d.dot(fwd), across) };
     };
-    const pelvis = angles(j('leftUpperLeg'), j('rightUpperLeg'));
     const thorax = angles(j('leftUpperArm'), j('rightUpperArm'));
     const head = angles(j('leftEye'), j('rightEye'));
-    const torsoYaw = asked.get('torsoYaw');
     const segment = angles(j('leftShoulder'), j('rightShoulder'));
     const eyes = j('leftEye').sub(j('rightEye'));
     // Eye-line inclination is independent of yaw, including a look behind the body.
@@ -188,14 +171,9 @@ export class GaitKinematics {
       hips: j('hips'),
       standing: h.proportions.hipHeight,
       chest,
-      head: eyesOf(h),
-      pelvisRoll: pelvis.roll,
-      pelvisYaw: pelvis.yaw,
-      thoraxRoll: thorax.roll,
-      // (approved, 2026-10-21: an asked torso turn — an aim — is taken off, the counter-rotation check judging the stride's own)
-      thoraxYaw: thorax.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
+      thoraxYaw: thorax.yaw,
       segmentRoll: segment.roll,
-      segmentYaw: segment.yaw + (typeof torsoYaw === 'number' ? torsoYaw : 0),
+      segmentYaw: segment.yaw,
       lean: Math.atan2(up.dot(across), up.y),
       headRoll: head.roll,
       headYaw: head.yaw,
@@ -270,7 +248,6 @@ export class GaitKinematics {
     };
     const pl = centred(lateral((s) => s.hips));
     const cl = centred(lateral((s) => s.chest));
-    const hl = centred(lateral((s) => s.head));
     const range = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
     const amp = (f: (s: Sample) => number) => (range(S.slice(a, b).map(f)) / 2) * DEG;
     const headRoll = S.slice(a, b).filter((s) => !s.borrowedGaze).map((s) => s.headRoll);
@@ -279,9 +256,6 @@ export class GaitKinematics {
     const dt = (S[b].t - S[a].t) / n;
     let jerk = 0;
     for (let k = 3; k < cl.length; k++) jerk += ((cl[k] - 3 * cl[k - 1] + 3 * cl[k - 2] - cl[k - 3]) / dt ** 3) ** 2;
-    // the thorax against the pelvis (relative yaw), and its correlation with the pelvis's
-    const pr = S.slice(a, b).map((s) => s.pelvisYaw);
-    const tr = S.slice(a, b).map((s) => s.thoraxYaw - s.pelvisYaw);
     // phase: where the pelvis is at each foot's mid-stance (the other's mid-swing)
     let phase = 0;
     let phases = 0;
@@ -353,28 +327,19 @@ export class GaitKinematics {
       stepAsymmetry: asymmetry(S, a, b),
       pelvisLat: range(pl),
       chestLat: range(cl),
-      headLat: range(hl),
       pelvisUp: range(ys),
       legs: S[a].legs,
       duty: (lift - a) / n,
       trunkLean: (S.slice(a, b).reduce((x, s) => x + s.trunk, 0) / n) * DEG,
       elbowMin: free ? Math.min(...elbows) : NaN,
       elbowMax: free ? Math.max(...elbows) : NaN,
-      obliquity: amp((s) => s.pelvisRoll),
-      rotation: amp((s) => s.pelvisYaw),
-      thoraxToPelvisRoll: amp((s) => s.thoraxRoll - s.pelvisRoll),
       lean: amp((s) => s.lean),
-      thoraxToPelvisYaw: amp((s) => s.thoraxYaw - s.pelvisYaw),
       // A hand task borrows gaze to find its grip; ordinary lookAt still asks for an upright head.
       // Keep the rest of a mixed stride, but one sample cannot establish an amplitude.
       headRoll: headRoll.length >= 2 ? range(headRoll) / 2 * DEG : NaN,
-      headYaw: amp((s) => s.headYaw),
-      counter: correlation(pr, tr),
-      chestJerk: Math.sqrt(jerk / Math.max(1, cl.length - 3)),
       // (over the RMS jerk of the stride's own sway as one sinusoid — half its peak to peak at one cycle per stride: A ω³ / √2 — so a
       // quicker or wider sway of the same shape is judged alike: jerk alone grows with the cadence cubed)
       chestJerkShare: Math.sqrt(jerk / Math.max(1, cl.length - 3)) / ((range(cl) / 2) * ((2 * Math.PI) / (S[b].t - S[a].t)) ** 3 / Math.SQRT2),
-      pelvisResidual: residual(pl),
       chestResidual: residual(cl),
       phase: phases ? phase / phases : 0,
       bobPhase: phases ? bob / phases : 0,
@@ -425,28 +390,6 @@ export class GaitKinematics {
     for (const k of keys) out[k] = med((s) => s[k]);
     out.stepAsymmetry = Math.max(...xs.map((s) => s.stepAsymmetry).filter((x) => !Number.isNaN(x)), 0);
     return out;
-  }
-
-  toString() {
-    const lines: string[] = [];
-    for (const [curve, run] of [[false, false], [false, true], [true, false], [true, true]]) {
-      const s = this.summary(curve, run);
-      const n = this.strides.filter((x) => x.curve === curve && x.speed > RUNNING === run).length;
-      if (!s) continue;
-      const cm = (m: number) => (m * 100).toFixed(1);
-      lines.push(
-        `gait ${curve ? 'curve   ' : 'straight'} ${run ? 'run ' : 'walk'} (${n} strides, ${s.speed.toFixed(2)} m/s): lateral p2p pelvis ${cm(s.pelvisLat)} chest ${cm(s.chestLat)} head ${cm(s.headLat)} cm, pelvis vertical ${cm(s.pelvisUp)} cm, step asymmetry ≤ ${(s.stepAsymmetry * 100).toFixed(0)}%, stance ${(s.duty * 100).toFixed(0)}% of the stride; ` +
-          `± pelvis obliquity ${s.obliquity.toFixed(1)}° rotation ${s.rotation.toFixed(1)}°, thorax−pelvis roll ${s.thoraxToPelvisRoll.toFixed(1)}° yaw ${s.thoraxToPelvisYaw.toFixed(1)}° (corr ${s.counter.toFixed(2)}), trunk lean ${s.lean.toFixed(1)}° sideways ${s.trunkLean.toFixed(1)}° forward, head roll ${s.headRoll.toFixed(1)}° yaw ${s.headYaw.toFixed(1)}°; ` +
-          `chest jerk ${s.chestJerk.toFixed(1)} m/s³ (×${s.chestJerkShare.toFixed(1)} its sway's), off-stride residual pelvis ${s.pelvisResidual.toFixed(2)} chest ${s.chestResidual.toFixed(2)}; phase: sway ${s.phase.toFixed(2)} bob ${s.bobPhase.toFixed(2)}; ` +
-          `arm vs other thigh: corr ${s.armCorrelation.toFixed(2)} lag ${(s.armLag * 100).toFixed(0)}% cycles ${s.armCycles.toFixed(1)} range ${s.armRange.toFixed(0)}°, elbow ${s.elbowMin.toFixed(0)}–${s.elbowMax.toFixed(0)}°; ` +
-          `arm fit R² ${s.armFit.toFixed(3)} turns ${s.armTurns} peak acceleration ×${s.armAcceleration.toFixed(1)} of the sinusoid's; ` +
-          `thorax roll with its rotation ${s.rollWithYaw.toFixed(2)}, head carries ${(s.headCarry * 100).toFixed(0)}% of it, trunk nod ±${s.nod.toFixed(1)}°, push-off ${s.pushOff.toFixed(0)}°, knee at 3/4 swing ${s.lateKnee.toFixed(0)}°`,
-      );
-    }
-    const r = this.rates();
-    const f = (x: Rates) => `trunk ${x.trunk.toFixed(0)} pelvis ${x.pelvis.toFixed(0)}`;
-    if (r) lines.push(`pitch rates (peak °/s): steady ${f(r.steady)}, setting off ${f(r.start)}, stopping ${f(r.stop)}`);
-    return lines.join('\n') || 'gait: no steady strides';
   }
 }
 

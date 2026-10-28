@@ -43,6 +43,6 @@ export class Peak {
 export const tasked = (frame: Frame, side?: Side): boolean => {
   const { h, asked } = frame;
   return side
-    ? !!h.insides.holding[side] || !!h.body.owners.hands[side] || asked.has(`${side}Wrist`)
+    ? !!h.holding[side] || !!h.body.owners.hands[side] || asked.has(`${side}Wrist`)
     : tasked(frame, 'left') || tasked(frame, 'right');
 };

@@ -8,11 +8,9 @@ import * as three from 'three';
 import * as timeline from '@pmndrs/timeline';
 import { PERSON } from '../../packages/animate/skills/animate/references/person';
 
-// Skill blocks are standalone modules; only the README's surrounding application is declared.
+// Compile and run the shipped skill's standalone examples.
 const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '../..');
-const DOCS = ['packages/animate/skills/animate/SKILL.md', 'README.md'];
-const APP = `declare const scene: import('three').Scene, characterModel: import('three').Object3D,
-  skeleton: typeof import('../src/skeletons').PERSON, delta: number;`;
+const DOCS = ['packages/animate/skills/animate/SKILL.md'];
 
 function blocks(): { name: string; code: string; doc: string }[] {
   return DOCS.flatMap((doc) => [...readFileSync(resolve(root, doc), 'utf8').matchAll(/```ts\n([\s\S]*?)```/g)]
@@ -24,8 +22,8 @@ function compiled(): Map<string, string[]> {
   const config = ts.readConfigFile(resolve(root, 'tsconfig.base.json'), ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'examples'));
   const options = { ...parsed.options, noUnusedLocals: false, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 };
-  const files = new Map(blocks().map(({ name, code, doc }, i) => [resolve(doc.endsWith('SKILL.md') ? resolve(root, dirname(doc)) : here, `__snippet${i + 1}.ts`),
-    { name, text: doc.endsWith('SKILL.md') ? code : `${APP}\n${code}` }]));
+  const files = new Map(blocks().map(({ name, code, doc }, i) => [resolve(root, dirname(doc), `__snippet${i + 1}.ts`),
+    { name, text: code }]));
   const host = ts.createCompilerHost(options);
   const { getSourceFile, fileExists, readFile } = host;
   host.fileExists = (file) => files.has(file) || fileExists(file);

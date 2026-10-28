@@ -26,7 +26,7 @@ const GAZE = { held: 0.3, eyes: 45 };
  */
 const ASYMMETRY = { straight: 0.05, curve: 0.10 };
 /** every metric over a run of scenario `id`: `steps` gives each fixed step's frames, one per actor (the feet are every actor's, the rest the first's) */
-export function measure(id: string, steps: Iterable<readonly Frame[]>) {
+export function measure(steps: Iterable<readonly Frame[]>) {
   const feet = new Feet();
   const landings = new Landings();
   const targets = new Targets();
@@ -35,9 +35,7 @@ export function measure(id: string, steps: Iterable<readonly Frame[]>) {
   const turns = new ArmTurns();
   const stance = new FinalStance();
   const clearance = new Clearance();
-  let frames = 0;
   for (const step of steps) {
-    frames++;
     step.forEach((f, i) => {
       feet.see(f);
       landings.see(f);
@@ -45,8 +43,7 @@ export function measure(id: string, steps: Iterable<readonly Frame[]>) {
       for (const m of [targets, gait, arms, turns, stance, clearance]) m.see(f);
     });
   }
-  const report = [`== ${id} (${frames} frames)`, feet, landings, targets, gait, arms, turns, stance, clearance].join('\n');
-  return { report, feet, landings, targets, gait, arms, turns, stance, clearance };
+  return { feet, landings, targets, gait, arms, turns, stance, clearance };
 }
 
 export type Measured = ReturnType<typeof measure>;

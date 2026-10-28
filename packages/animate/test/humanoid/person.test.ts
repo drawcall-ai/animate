@@ -9,7 +9,7 @@ import { INDEX } from '../../src/species/humanoid/bones';
 import { humanoid } from '../../src/index';
 import { rng, turnUpTo } from '../random';
 import { claim, dt, insides, person } from '../bodies';
-import { PERSON } from '../skeletons/person';
+import { PERSON } from '../../skills/animate/references/person';
 
 /** where bone `name` of a body is in the scene, as its last update wrote it */
 const at = (body: ReturnType<typeof person>, name: keyof typeof body.bones) => {

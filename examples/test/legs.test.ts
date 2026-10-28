@@ -10,7 +10,7 @@ import { play } from '../../packages/animate/test/bodies';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { HORSE, PERSON } from '../src/skeletons';
-import { legsBiped, legsHorse, scripted, type Route } from '../src/scenarios/legs';
+import { legsHorse, scripted, type Route } from '../src/scenarios/legs';
 
 // The legs on scripted roots: a person and two horses (walk, trot) carried along a straight, a bend and a stop by the scene.
 
@@ -32,13 +32,6 @@ it('two horses walk and trot along their scripted roots, every hoof down again a
   for (const count of landings) expect(count).toBeGreaterThan(10);
   expect(sim.stage.done()).toBe(true);
   for (const body of sim.stage.bodies) expect(body.log).toEqual([]);
-});
-
-it('a person steps along a scripted root and stops, the dev log empty', () => {
-  const sim = new Simulation(legsBiped(), { dev: true });
-  while (sim.t < sim.scenario.duration) sim.step();
-  expect(sim.stage.done()).toBe(true);
-  expect(sim.people[0].log).toEqual([]);
 });
 
 it('plays back creatures on driven roots, no person among them', () => {

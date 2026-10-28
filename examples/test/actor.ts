@@ -1,14 +1,12 @@
-// A person as the metrics read it: what the public body reports, and what only its insides know (its proportions, its landmarks, its
-// feet's phases, what its hands hold by which grip). The one place the examples' tests reach into the library's source.
+// Pose metrics use public bones, proportions and feet. Grip ownership, borne loads and quiet-stance intent still need the runtime.
 import { Quaternion, Vector3, type Object3D } from 'three';
-import type { Body } from '@drawcall/animate';
+import type { HumanoidBone } from '@drawcall/animate';
 import { selfOf } from '../../packages/animate/src/body/body';
 import { personOf, type Person as Insides } from '../../packages/animate/src/body/person';
-import { INDEX, type BoneName } from '../../packages/animate/src/species/humanoid/bones';
-import { palmOf } from '../../packages/animate/src/species/humanoid/landmarks';
-import type { Proportions } from '../../packages/animate/src/species/humanoid/proportions';
 import type { Person } from '../src/scenario';
 
+type Proportions = NonNullable<Person['species']['person']>;
+type BoneName = HumanoidBone | 'leftToes' | 'rightToes';
 export type Side = 'left' | 'right';
 
 /** what a hand holds: the thing, its grip where it is now (world) and the thing's mass (kg) */
@@ -31,12 +29,14 @@ export class Actor {
   private readonly points: Record<string, { bone: BoneName; at: Vector3 }>;
 
   constructor(readonly body: Person) {
-    this.insides = personOf(selfOf(body as Body));
-    this.points = pointsOf(this.insides.proportions);
+    this.insides = personOf(selfOf(body));
+    this.points = pointsOf(this.proportions);
   }
 
   get proportions() {
-    return this.insides.proportions;
+    const proportions = this.body.species.person;
+    if (!proportions) throw new Error('metrics need a person');
+    return proportions;
   }
 
   /** its walk: facing, ground velocity, quiet stance displacement */
@@ -45,7 +45,7 @@ export class Actor {
   }
 
   get feet(): Foot[] {
-    return (this.insides.stepper?.legs ?? []).map((leg) => ({ position: leg.anchor, yaw: leg.yaw, phase: leg.swing ? 'swing' : 'planted' }));
+    return this.body.feet.map((foot) => ({ position: foot.position, yaw: foot.yaw, phase: foot.planted ? 'planted' : 'swing' }));
   }
 
   /** what each hand holds (the scene's world matrices as of its last update) */
@@ -67,20 +67,21 @@ export class Actor {
   /** where a bone (by its humanoid name) or a landmark (`leftEye`, `leftHeel`, `leftBigToe`, `nose`, …) is (world) */
   joint(name: string, out = new Vector3()): Vector3 {
     const pose = this.body.pose;
-    if (name in INDEX) return out.copy(pose.position(INDEX[name as BoneName]));
+    const index = pose.skeleton.bones.findIndex((bone) => bone.name === name);
+    if (index >= 0) return out.copy(pose.position(index));
     const point = this.points[name];
     if (!point) throw new Error(`a person has no ${name}`);
-    return pose.point(INDEX[point.bone], point.at, out);
+    return pose.point(pose.skeleton.index(point.bone), point.at, out);
   }
 
   /** a bone's turn (world; identity standing in the T-pose facing +Z) */
   turn(name: BoneName, out = new Quaternion()): Quaternion {
-    return out.copy(this.body.pose.rotation(INDEX[name]));
+    return out.copy(this.body.pose.rotation(this.body.pose.skeleton.index(name)));
   }
 
   /** a point fixed in a bone's frame, where it is now (world) */
   point(name: BoneName, local: Vector3, out = new Vector3()): Vector3 {
-    return this.body.pose.point(INDEX[name], local, out);
+    return this.body.pose.point(this.body.pose.skeleton.index(name), local, out);
   }
 }
 
@@ -103,8 +104,6 @@ function pointsOf(proportions: Proportions): Record<string, { bone: BoneName; at
     rightSmallToe: { bone: 'rightToes', at: mirror(sole.smallToe) },
     leftWrist: { bone: 'leftHand', at: new Vector3() },
     rightWrist: { bone: 'rightHand', at: new Vector3() },
-    leftPalm: { bone: 'leftHand', at: palmOf(proportions, 'left') },
-    rightPalm: { bone: 'rightHand', at: palmOf(proportions, 'right') },
   };
 }
 

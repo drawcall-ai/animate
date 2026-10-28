@@ -23,7 +23,7 @@ const test = cases([
 for (const [body, skeleton] of BODIES) for (const [walk, scenario] of WALKS) {
   test(`${walk}, ${body} walks as people do`, () => {
     const sim = new Simulation(scenario(), { skeleton });
-    const m = measure(sim.scenario.id, frames(sim));
+    const m = measure(frames(sim));
     const g = m.gait.summary(false, false);
     expect(m.gait.strides.filter((s) => !s.curve).length, 'steady straight strides').toBeGreaterThanOrEqual(3);
     if (!g) throw new Error('no steady straight strides');

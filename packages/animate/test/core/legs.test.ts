@@ -9,7 +9,7 @@ import { quintic } from '../../src/legs/step/swing';
 import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, person, scene } from '../bodies';
-import { HORSE } from '../skeletons/horse';
+import { HORSE } from '../../skills/animate/references/horse';
 
 const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);
 const WALK = gaitOf(MARE);

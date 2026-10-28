@@ -11,12 +11,9 @@ import { ball, box, cylinder, empty } from '../src/things';
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed open (expected
 // to fail: each one fixed comes off the list).
 const check = cases([
-  // (asked a goal 0.5 m behind it, facing on, it turns round to walk there (to 156° by 4.5 s, ~45°/s) rather than keep its facing, and
-  // its walk ends false at 6.03 s, 0.28 m short: "stalled walk", a radian of facing left counting as 0.3 m)
+  // Turns instead of backing up.
   'a dog walks 0.5 m back, keeping its facing',
-  // (carrying the ball onto an empty on the floor 1 m to its side, its jaw turns the ball 150° to the empty's turn and its carry ends
-  // as the jaw is within a reach's 1 cm of where it puts it, the ball 9 mm off the empty at 13.55 s: "put onto an empty this far off it",
-  // against 5 mm — a person's carry ends within 5 mm)
+  // Placement ends 9 mm off its empty (5 mm limit).
   'a dog takes a ball, puts it down 1 m off, takes it again and puts it back',
 ]);
 

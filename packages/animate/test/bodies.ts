@@ -9,7 +9,7 @@ import type { Frame } from '../src/kernel/frame';
 import type { Go } from '../src/kernel/go';
 import type { Person } from '../src/body/person';
 import { personOf } from '../src/body/person';
-import { PERSON } from './skeletons/person';
+import { PERSON } from '../skills/animate/references/person';
 
 /** the sub-step (s) */
 export const dt = 1 / 60;

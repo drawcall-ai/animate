@@ -1,7 +1,7 @@
 import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { carry, grab, reach, release, Body, dog } from '../../src/index';
-import { DOG } from '../skeletons/dog';
+import { DOG } from '../../skills/animate/references/dog';
 import { person, play } from '../bodies';
 import { box, empty, roomOf } from '../things';
 

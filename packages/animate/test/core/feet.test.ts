@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { horse } from '../../src/index';
 import { Pose } from '../../src/kernel/pose';
-import { HORSE } from '../skeletons/horse';
+import { HORSE } from '../../skills/animate/references/horse';
 
 it('samples shared leg reach tables independently of query order and earlier bodies', async () => {
   const species = horse(HORSE), rest = new Pose(species.skeleton), chains = species.legs?.chains;

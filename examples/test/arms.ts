@@ -130,16 +130,6 @@ export class FreeArms {
     });
     this.samples.push({ t, phase: h.locomotion.phase, walking: into === 'walking', sides });
   }
-
-  toString() {
-    const f = (b: Band, k = 1, d = 0) => `${(b.min * k).toFixed(d)}…${(b.max * k).toFixed(d)}`;
-    const line = (name: string, a: ArmStats) =>
-      a.frames
-        ? `free arms ${name}: hand out ${f(a.handOut, 100)} cm (hip joint ${(a.hipHalf * 100).toFixed(0)} cm), thigh clearance ${f(a.clearance, 100)} cm; ` +
-          `abduction ${f(a.abduction)}°, shoulder flexion ${f(a.flexion)}°, elbow ${f(a.elbow)}°`
-        : '';
-    return [line('standing', this.standing), line('walking', this.walking)].filter(Boolean).join('\n') || 'free arms: none';
-  }
 }
 
 /** a turn of the arm's swing counts once it has swung back this far from its end (°): a pendulum's, not a wobble */
@@ -188,10 +178,5 @@ export class ArmTurns {
         [s.dir, s.end, s.turned] = [-s.dir, a, t];
       }
     });
-  }
-
-  toString() {
-    const { gap, t } = this.shortest;
-    return `free arm swing: shortest between turns ${gap === Infinity ? '–' : `${gap.toFixed(2)} s @${t.toFixed(2)}s`}`;
   }
 }

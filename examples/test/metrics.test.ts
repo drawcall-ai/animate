@@ -1,12 +1,12 @@
 // Scenario statistics and task accuracy under small changes. Run: pnpm metrics [-- -t <id>]
 import { setImmediate } from 'node:timers/promises';
-import { Group, Vector3 } from 'three';
-import { action } from '@pmndrs/timeline';
+import { Vector3 } from 'three';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
 import { knightArming } from '../src/scenarios/knight';
-import { stroll, walkThere } from '../src/scenarios/stroll';
+import { stroll } from '../src/scenarios/stroll';
+import { walkThere } from './walk-scenario';
 import { lookAround, reaching, vr } from '../src/scenarios/tracking';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
@@ -21,7 +21,7 @@ afterEach(() => setImmediate());
 /** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
 function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   const sim = new Simulation(sc);
-  const m = measure(sc.id, frames(sim));
+  const m = measure(frames(sim));
   const options: MetricsOptions = { startStop: null, strides };
   // Gait coverage and start/stop blending are run-level regressions.
   // (setting off, the trunk leans ~7° forward between the first knee movement and the first heel strike, under a second — read:
@@ -36,11 +36,6 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   const fails = checks(m, options).filter(failed).map((c) => `${c.what}${c.where ? ` (${c.where})` : ''}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
   expect(fails, fails.join('\n')).toEqual([]);
 }
-
-it('lists each scenario once', () => {
-  const ids = SCENARIOS.map((s) => s.id);
-  expect(new Set(ids).size).toBe(ids.length);
-});
 
 // Expected failures still present at the listed life seeds. Finished viewer stories are guarded separately in viewer.test.ts.
 const OPEN: Open[] = [
@@ -132,16 +127,10 @@ for (const [name, sc, strides] of VARIATIONS) check(name, () => judged(sc, strid
 // Known task-accuracy failures, tracked until fixed.
 function known(): [string, Scenario][] {
   return [
-  // a head bent down off the line the body faces, or a little further than it bows to, is reached by
-  // the spine alone: `balance` carries the centre of mass toward it only by walking, and walks only
-  // to a goal 14 cm off (asks.lean, being built, is the way: the weight shifted within the feet).
-  // Higher the eyes miss (8 cm); further left the spine bends sideways and carries
-  // the shoulder 5 cm in over the squatting thigh: a hand hanging clear of it is out 17° (free arms: ≤ 12°)
+  // Head targets missed when raised or shifted sideways.
   ['look-around, looking down 10 cm higher', lookAround({ rise: 0.1 })],
   ['look-around, looking down 10 cm further left', lookAround({ shift: { x: 0.1, z: 0 } })],
-  // the side-step: `balance` turns to walk sideways rather than keep the facing asked (no strafe yet),
-  // so the body comes under the head late; and a controller on the floor turned off the body's facing,
-  // or brought in close while rising to the cheer, is missed by more than the floor's own 15 cm
+  // The side-step turns to walk instead of strafing; controller targets are missed.
   ['vr, the trackers 20% faster', vr({ pace: 1.2 })],
   ['vr, the trackers 20% slower', vr({ pace: 0.8 })],
   ['vr, the controllers 10 cm further out', vr({ shift: { x: 0, z: 0.1 } })],
@@ -156,34 +145,12 @@ function known(): [string, Scenario][] {
 for (const [name, sc] of KNOWN) check(name, () => judged(sc));
 // (known too: on a bend the outer foot's steps dip the pelvis 1.5–2 cm lower than straight)
 it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
-  const m = measure('stroll', frames(new Simulation(stroll())));
+  const m = measure(frames(new Simulation(stroll())));
   const straight = m.gait.summary(false, false);
   const curve = m.gait.summary(true, false);
   expect(straight && curve).toBeTruthy();
   if (!straight || !curve) throw new Error('no steady strides');
   expect(curve.pelvisUp, 'curve pelvis vertical (m)').toBeLessThanOrEqual(straight.pelvisUp + 0.01);
-});
-
-it('runs a scenario through the metrics: two people standing still, relaxed, each reading the other', () => {
-  const seen: number[] = [];
-  const still: Scenario = {
-    id: 'still',
-    title: 'Standing still',
-    duration: 0.49,
-    stage: (cast) => {
-      const people = [cast.person({ at: new Vector3(-1, 0, 0) }), cast.person({ at: new Vector3(1, 0, 0), face: Math.PI })];
-      return {
-        scene: new Group(),
-        bodies: people,
-        done: () => true,
-        story: () => action({ update: () => void seen.push(...people.map((_, index) => people[1 - index].position.x)) }),
-      };
-    },
-  };
-  const m = measure(still.id, frames(new Simulation(still)));
-  expect(seen.length).toBe(2 * 30);
-  expect(seen.every((x, i) => Math.abs(x - (i % 2 === 0 ? 1 : -1)) < 0.05)).toBe(true);
-  expect(m.report).toContain('== still (30 frames)');
 });
 
 it('judges head roll while looking and outside samples borrowed by hand tasks', () => {

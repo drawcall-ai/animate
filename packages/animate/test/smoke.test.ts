@@ -5,8 +5,8 @@ import { expect, it } from 'vitest';
 import { Body, horse, humanoid, lookAt, walkTo } from '../src/index';
 import { dt } from './bodies';
 import { named } from './things';
-import { HORSE } from './skeletons/horse';
-import { PERSON } from './skeletons/person';
+import { HORSE } from '../skills/animate/references/horse';
+import { PERSON } from '../skills/animate/references/person';
 
 /** a capsule from `a` to `b` (model space, m), `radius` thick */
 function capsule(a: Vector3, b: Vector3, radius: number): Mesh {

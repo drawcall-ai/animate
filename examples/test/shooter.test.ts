@@ -17,14 +17,7 @@ import { cases } from '../../packages/animate/test/open';
 const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [['', undefined], [' on the soldier', SOLDIER], [' on the outlier', OUTLIER]];
 const BODY_NAMES = BODIES.map(([on]) => on);
 
-// The shooter on every body: the default and the skeletons unlike it — the rifle, its grips, the reload and the dev log hold for any
-// body. The cases that do not hold yet are listed (expected to fail: each one fixed comes off the list), each with what fails, at seed 0:
-// - the default body's variation #2 still has its right foot at 95 205°/s² (limit 83 333) at 23.65 s;
-// - the soldier at a sprint and sprinting off: its knees fold at up to 96 000°/s² (19.53 s and on, the check's 83 333), its stride read
-//   as 1.14 m (2× its legs is 1.92: a foot leaving the floor twice a stance) — the stepper's, not the arms'; its jumps' landings fold
-//   them at 91 000°/s² (44.98 s); its short arms hold the rifle at the hip just below the first-person view (the receiver at −1.013 of
-//   the half-height, varied #1) and sprinting 0.197 m below the eye (#2; 0.2 at least);
-// - the outlier's knees, sprinting off and landing a jump: 95 600°/s² (21.20 s), 95 500 (44.52 s), 94 600 (30.77 s).
+// Current grip, reload and leg-rate failures on alternate bodies and seeded variations.
 const test = cases([
   'keeps both grips, steady sights and final-pose checks clean #2',
   ...BODY_NAMES.filter(Boolean).flatMap((on) => [0, 1, 2].map((seed) => `keeps both grips, steady sights and final-pose checks clean${on} #${seed}`)),

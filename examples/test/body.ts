@@ -37,10 +37,6 @@ export class Feet {
     });
     if (jointOf(h, 'leftFoot').sub(jointOf(h, 'rightFoot')).dot(leftOf(h.locomotion.facing)) < 0.02) this.crossings++;
   }
-
-  toString() {
-    return `planted foothold out of reach ${this.reach}, knee-backward frames ${this.hyper}, ankle ${(180 - this.ankle.min.value).toFixed(0)}° (@${this.ankle.min.at.toFixed(2)}s) … ${this.ankle.max.value.toFixed(0)}° (@${this.ankle.max.at.toFixed(2)}s), leg-crossing frames ${this.crossings}`;
-  }
 }
 
 /** the latest 40% of a swing: where the foot lands is settled by then (m) */
@@ -108,10 +104,6 @@ export class Landings {
       this.wide.see(across / (bound * h.proportions.height), t);
     });
   }
-
-  toString() {
-    return `late landing retarget max ${this.late}, slow step width max ${this.wide.value.toFixed(2)} of its bound @${this.wide.at.toFixed(2)}s`;
-  }
 }
 
 const DEG = 180 / Math.PI;
@@ -163,12 +155,5 @@ export class FinalStance {
       overAnkles: comOf(h).sub(j('leftFoot').add(j('rightFoot')).multiplyScalar(0.5)).sub(h.locomotion.quiet).dot(fwd),
       toeOut,
     };
-  }
-
-  toString() {
-    const r = this.rest;
-    if (!r) return 'rest: never stood still';
-    const cm = (m: number) => (m * 100).toFixed(1);
-    return `rest${this.endsStanding ? ' (at the end)' : ''}: heels ${r.heels.toFixed(3)} H apart, feet's midpoint off the CoM ${cm(r.aside)} cm aside ${cm(r.ahead)} cm ahead, pelvis ${cm(r.pelvis)} cm aside, CoM ${cm(r.overAnkles)} cm ahead of the ankles, toe-out ${r.toeOut.map((a) => a.toFixed(0)).join('/')}°`;
   }
 }
