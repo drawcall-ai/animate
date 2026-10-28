@@ -123,7 +123,7 @@ export function creature(body: Legged): Step {
     bowing = ease(bowing, clamp(bow, -POSED.bow, Math.max(tasked, STOOPING.bow)), f.dt);
     twisting = ease(twisting, clamp(posed.twist, -POSED.twist, POSED.twist), f.dt);
     leaning = ease(leaning, clamp(posed.lean + (own?.roll ?? 0), -POSED.lean, POSED.lean), f.dt);
-    if ([lowering, bowing, twisting, leaning].some(([value]) => Math.abs(value) > 1e-6)) {
+    if (Math.max(Math.abs(lowering[0]), Math.abs(bowing[0]), Math.abs(twisting[0]), Math.abs(leaning[0])) > 1e-6) {
       const aheads = feet.legs.map((leg) => leg.ahead ?? 0), end = bowing[0] >= 0 ? Math.min(...aheads) : Math.max(...aheads);
       const girdle = feet.legs.filter((_, i) => Math.abs(aheads[i] - end) <= 1e-6), hip = _p.set(0, 0, 0), middle = _m.set(0, 0, 0);
       for (const leg of girdle) hip.add(f.current.position(leg.top));

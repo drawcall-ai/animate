@@ -20,9 +20,11 @@ export class HeadOffset {
   /** each angle as followed the sub-step before last and the last (rad) */
   private readonly history = { pitch: [0, 0], yaw: [0, 0], roll: [0, 0] };
   /** for each final pose the offset was written into: the head as the gaze had it, turned (world) and where its eyes were */
-  private readonly gazed = new WeakMap<ReadonlyPose, { rotation: Quaternion; eyes: Vector3 }>();
+  private readonly gazed = new Map<ReadonlyPose, { rotation: Quaternion; eyes: Vector3 }>();
   /** each neck bone's own turn as the offset was last written over it, and what it wrote */
   private readonly kept = new Map<number, { under: Quaternion; written: Quaternion }>();
+  /** no offset written, none being given back */
+  private idle = true;
 
   constructor(private readonly gazer: Gazer | undefined) {}
 
@@ -34,14 +36,16 @@ export class HeadOffset {
   /** the offset a sub-step on, toward what was asked (then cleared), written over the head in `f.current` */
   write(f: Frame): void {
     const gazer = this.gazer, pose = f.current;
-    if (!gazer) return;
+    // (nothing asked and nothing to give back: the head as the gaze has it)
+    if (!gazer || (this.idle && ANGLES.every((key) => this.asked[key] === 0))) return;
     let still = true;
     for (const key of ANGLES) {
-      const [before, last] = this.history[key];
-      const next = follow(before, last, this.asked[key], NOD, f.dt);
-      this.history[key] = [last, Math.abs(next) < 1e-7 && Math.abs(last) < 1e-7 ? 0 : next];
+      const history = this.history[key], last = history[1];
+      const next = follow(history[0], last, this.asked[key], NOD, f.dt);
+      history[0] = last;
+      history[1] = Math.abs(next) < 1e-7 && Math.abs(last) < 1e-7 ? 0 : next;
       this.asked[key] = 0;
-      still &&= this.history[key][1] === 0;
+      still &&= history[1] === 0 && history[0] === 0;
     }
     const bones = gazer.neck === undefined ? [gazer.head] : pose.skeleton.chain(gazer.neck), last = bones[bones.length - 1];
     // (a bone nothing turned this sub-step — a creature's neck with no gaze to aim it — is under the offset still: from its own turn)
@@ -49,8 +53,10 @@ export class HeadOffset {
       const kept = this.kept.get(bone);
       if (kept && pose.local(bone).equals(kept.written)) pose.setLocal(bone, kept.under);
     }
+    this.idle = still;
     if (still) {
-      this.gazed.delete(pose);
+      // (given back: no final pose holds an offset the gaze must read past)
+      this.gazed.clear();
       this.kept.clear();
       return;
     }

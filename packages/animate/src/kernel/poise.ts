@@ -67,7 +67,10 @@ export class Poise {
   pass(into: Poise): Poise {
     [into.lower, into.bow, into.bowLimit, into.twist, into.twistRate, into.shift, into.steady] = [this.lower, this.bow, this.bowLimit, this.twist, this.twistRate, this.shift, this.steady];
     [this.lower, this.bow, this.bowLimit, this.twist, this.twistRate, this.shift, this.steady] = [0, 0, Infinity, 0, 0, null, 0];
-    for (const key of TRUNK) [into.posture[key], this.posture[key]] = [this.posture[key], 0];
+    for (const key of TRUNK) {
+      into.posture[key] = this.posture[key];
+      this.posture[key] = 0;
+    }
     return into;
   }
 }
