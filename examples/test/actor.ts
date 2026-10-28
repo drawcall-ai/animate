@@ -39,7 +39,7 @@ export class Actor {
     return proportions;
   }
 
-  /** its walk: facing, ground velocity, quiet stance displacement */
+  /** Locomotion intent: public velocity/facing include pose sway and cannot classify steady strides. */
   get locomotion() {
     return this.insides.locomotion;
   }

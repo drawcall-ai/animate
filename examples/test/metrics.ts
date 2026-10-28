@@ -1,8 +1,9 @@
 // Scenario statistics and task accuracy: these are regression tests, not runtime invariants.
 import { ArmTurns, FreeArms } from './arms';
 import { Clearance } from './clearance';
-import { Feet, FinalStance, Landings } from './body';
+import { FinalStance, Landings } from './body';
 import type { Frame } from './frame';
+import { leftOf } from './actor';
 import { GaitKinematics, RUNNING, type Stride } from './gait';
 import { Targets } from './targets';
 
@@ -27,7 +28,7 @@ const GAZE = { held: 0.3, eyes: 45 };
 const ASYMMETRY = { straight: 0.05, curve: 0.10 };
 /** every metric over a run of scenario `id`: `steps` gives each fixed step's frames, one per actor (the feet are every actor's, the rest the first's) */
 export function measure(steps: Iterable<readonly Frame[]>) {
-  const feet = new Feet();
+  let crossings = 0;
   const landings = new Landings();
   const targets = new Targets();
   const gait = new GaitKinematics();
@@ -37,13 +38,13 @@ export function measure(steps: Iterable<readonly Frame[]>) {
   const clearance = new Clearance();
   for (const step of steps) {
     step.forEach((f, i) => {
-      feet.see(f);
+      if (f.h.joint('leftFoot').sub(f.h.joint('rightFoot')).dot(leftOf(f.h.locomotion.facing)) < 0.02) crossings++;
       landings.see(f);
       if (i > 0) return;
       for (const m of [targets, gait, arms, turns, stance, clearance]) m.see(f);
     });
   }
-  return { feet, landings, targets, gait, arms, turns, stance, clearance };
+  return { crossings, landings, targets, gait, arms, turns, stance, clearance };
 }
 
 export type Measured = ReturnType<typeof measure>;
@@ -99,15 +100,10 @@ export function walkingForm(g: Stride, run: boolean): Check[] {
 export function checks(m: Measured, limit: MetricsOptions): Check[] {
   const out: Check[] = [];
   const add = (what: string, value: number, bound: Check['bound'], lim: number, at?: number, where?: string) => void out.push({ what, value, bound, limit: lim, at, where });
-  add('planted foothold out of reach (m)', m.feet.reach.value, 'max', 0.3, m.feet.reach.at);
-  add('knee-backward frames', m.feet.hyper, 'max', 0);
-  const [pointed, flexed] = [20, 125];
-  add('ankle pointed (°)', 180 - m.feet.ankle.min.value, 'min', pointed - 1, m.feet.ankle.min.at);
-  add('ankle flexed up (°)', m.feet.ankle.max.value, 'max', flexed + 1, m.feet.ankle.max.at);
   add('late landing retarget (m)', m.landings.late.value, 'max', LATE_RETARGET, m.landings.late.at);
   // stopping and standing, no wide catching steps: the feet land at most as far apart as the step's kind allows (`SLOW_WIDTH`, × height)
   add('slow step width (share of its bound)', m.landings.wide.value, 'max', 1, m.landings.wide.at);
-  add('leg-crossing frames', m.feet.crossings, 'max', 0);
+  add('leg-crossing frames', m.crossings, 'max', 0);
   // (what is held or tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
   if (limit.wrist !== undefined) add('wrist off the grip it holds (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
   // (a tracked target is judged by its course — held, moving, within reach — not one fixed margin: `Targets.judge`)

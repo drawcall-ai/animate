@@ -24,22 +24,7 @@ const see = (b: Band, v: number) => {
   b.max = Math.max(b.max, v);
 };
 
-/** free-arm measures over a set of frames (m, °) */
-export interface ArmStats {
-  frames: number;
-  cycle: boolean;
-  /** hand (wrist) distance out from the body's midline, and the hip joints' half-width */
-  handOut: Band;
-  hipHalf: number;
-  /** hand to thigh surface, sideways (negative: inside the thigh) */
-  clearance: Band;
-  /** upper arm abduction (+ = out from the side), shoulder flexion (+ = forward), elbow flexion */
-  abduction: Band;
-  flexion: Band;
-  elbow: Band;
-}
-
-const stats = (): ArmStats => ({ frames: 0, cycle: false, handOut: band(), hipHalf: 0, clearance: band(), abduction: band(), flexion: band(), elbow: band() });
+const stats = () => ({ frames: 0, cycle: false, handOut: band(), hipHalf: 0, clearance: band(), abduction: band(), flexion: band(), elbow: band() });
 
 /**
  * The free arms of the first actor (no hand on anything or asked anywhere), in the pelvis frame: how far the
@@ -54,16 +39,16 @@ export class FreeArms {
   /** the centre of mass last frame */
   private com: Vector3 | null = null;
 
-  get standing(): ArmStats {
+  get standing() {
     return this.stats(false);
   }
 
-  get walking(): ArmStats {
+  get walking() {
     return this.stats(true);
   }
 
   /** the measures over the standing or walking frames, but those near a hold (reaching for it, letting go) */
-  private stats(walking: boolean): ArmStats {
+  private stats(walking: boolean) {
     const out = stats();
     let last = -Infinity, phase = 0, covered = 0;
     for (const q of this.samples) {
@@ -128,7 +113,7 @@ export class FreeArms {
         elbow: 180 - shoulder.clone().sub(elbow).angleTo(hand.clone().sub(elbow)) * DEG,
       };
     });
-    this.samples.push({ t, phase: h.locomotion.phase, walking: into === 'walking', sides });
+    this.samples.push({ t, phase: h.body.gait.phase, walking: into === 'walking', sides });
   }
 }
 

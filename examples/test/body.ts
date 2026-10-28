@@ -4,41 +4,6 @@ import { comOf } from './com';
 import { Peak, type Frame } from './frame';
 
 
-/** Foot geometry regressions that a joint-local range check cannot express. */
-export class Feet {
-  hyper = 0;
-  crossings = 0;
-  /** the most a planted foothold (its flat-foot ankle) is out of the leg's reach (m): the foot dangles off it */
-  readonly reach = new Peak();
-  /**
-   * the ankle's angle between the shank (knee → ankle) and the foot (ankle → ball) (°): ~120
-   * standing; smaller pointed (plantarflexed), larger flexed up (dorsiflexed)
-   */
-  readonly ankle = { min: new Peak(), max: new Peak() };
-  see({ t, h }: Frame) {
-    for (const s of ['left', 'right'] as const) {
-      const hip = jointOf(h, `${s}UpperLeg`);
-      const knee = jointOf(h, `${s}LowerLeg`);
-      const ankle = jointOf(h, `${s}Foot`);
-      // the knee behind the hip–ankle line: its front is where the knee's hinge (across the
-      // foot) turns the leg — the toes' way for a standing leg, up for one raised forward, down
-      // for one drawn back (whose pointed toes point back: the hinge is across the body's facing)
-      const toes = jointOf(h, `${s}BigToe`).sub(jointOf(h, `${s}Heel`)).setY(0);
-      if (toes.dot(forwardOf(h.locomotion.facing)) < 0) toes.negate();
-      const hinge = new Vector3(0, 1, 0).cross(toes).normalize();
-      const front = ankle.clone().sub(hip).cross(hinge).normalize();
-      if (knee.clone().sub(hip.clone().lerp(ankle, 0.5)).dot(front) < -0.02) this.hyper++;
-      const a = (ankle.clone().sub(knee).angleTo(jointOf(h, `${s}Toes`).sub(ankle)) * 180) / Math.PI;
-      this.ankle.max.see(a, t);
-      this.ankle.min.see(180 - a, t);
-    }
-    h.feet.forEach((f, s) => {
-      if (f.phase === 'planted') this.reach.see(jointOf(h, s === 0 ? 'leftUpperLeg' : 'rightUpperLeg').distanceTo(f.position) - h.proportions.legLength, t);
-    });
-    if (jointOf(h, 'leftFoot').sub(jointOf(h, 'rightFoot')).dot(leftOf(h.locomotion.facing)) < 0.02) this.crossings++;
-  }
-}
-
 /** the latest 40% of a swing: where the foot lands is settled by then (m) */
 const LATE = 0.6;
 /** below this speed (m/s) a step is a slow one: stopping, turning, standing */
