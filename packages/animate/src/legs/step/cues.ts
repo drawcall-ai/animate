@@ -58,7 +58,7 @@ export function keepTime(steps: Steps, now: Now, cues: Cues) {
   // (setting off from standing, the gait's cycle starts with the foot furthest behind where it would land: it steps first; a root its
   // legs hold back is setting off too — its feet step in their turn to make way for it, else it waits on feet that wait on it)
   const underway = moving > 0 || pressed !== 0 || now.r.turning !== undefined;
-  if (underway && !steps.going && legs.every((leg) => !leg.swing)) [steps.clock, steps.since] = [steps.lifts[furthestOf(steps, now, lead)[0].i], 0];
+  if (underway && !steps.going && legs.every((leg) => !leg.swing)) [steps.clock, steps.since] = [steps.lifts[firstStep(steps, now, lead).i], 0];
   steps.going = underway || legs.some((leg) => leg.swing);
   if (!underway && !legs.some((leg) => leg.swing || wants(steps, now, cues, leg))) return;
   // (a foot whose turn passes while it is held down still owes its step: it takes it as soon as it may, not a cycle on)
@@ -218,6 +218,16 @@ function staggered(steps: Steps, now: Now, leg: Leg): boolean {
 function turnedOff(steps: Steps, now: Now, cues: Cues, leg: Leg): boolean {
   const off = (facing: number) => Math.abs(wrapAngle(leg.yaw - facing - leg.sign * steps.st.toeOut)) > cues.turn;
   return off(now.yaw) && off(cues.turningTo);
+}
+
+/** Start the gait with the furthest foot; effectively tied feet take the longest-rested one's turn. */
+function firstStep(steps: Steps, now: Now, ahead: number): Leg {
+  const distances = steps.legs.map((leg) => offHome(steps, now, leg, ahead));
+  const furthest = Math.max(...distances);
+  // A symmetric turn must not choose its diagonal pair from roundoff in the foot distances.
+  const tied = steps.legs.filter((leg) => furthest - distances[leg.i] <= 1e-6 * steps.st.scale);
+  return tied.reduce((first, leg) => leg.lifted > first.lifted ||
+    (leg.lifted === first.lifted && steps.lifts[leg.i] < steps.lifts[first.i]) ? leg : first);
 }
 
 /** the legs, the foot furthest from its home `ahead` s on first */

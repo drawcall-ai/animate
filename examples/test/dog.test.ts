@@ -24,8 +24,9 @@ function fetching() {
   return { sim, labrador, toy, bone: (name: string) => labrador.pose.skeleton.index(name) };
 }
 
-it('trots to a ball, takes it in its jaw and carries it back, its whole body riding on the trot', () => {
+it.each([-1e-6, 0, 1e-6])('trots to a ball, takes it in its jaw and carries it back, its whole body riding on the trot (offset %s m)', (offset) => {
   const { sim, labrador, toy, bone } = fetching();
+  toy.position.x += offset;
   const jaw = bone('jaw'), withersAt = bone('leftFore0'), pelvis = bone('pelvis');
   const paws = labrador.species.legs!.chains.map((leg) => leg.joints[3].bone);
   let off = 0, taken = NaN, up = paws.map(() => false), cruising = 0, pace = 0;
