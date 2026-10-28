@@ -14,7 +14,7 @@ import { armReaches, footing, walking } from './stand';
 import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { paceOf, type Pace } from '../handling';
+import { paceOf, type Manner } from '../handling';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 
 /** An outside guide beyond the arm's reach is followed this long after its planned arrival before closing on the exact grip. */
@@ -178,7 +178,7 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 }
 
 /** Follow targets with borrowed walking; replan after movement while keeping each hand's motion history. */
-export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: Pace) {
+export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: Manner) {
   const motion = paceOf(pace, CALM);
   aims = aims.map(({ side, target }) => {
     const sample = new PointVelocity();
@@ -228,7 +228,7 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
       const moved = (f: Frame) => aims.some(({ target }, i) => target(f).position.distanceTo(planned[i]) > MOVED * person.scale);
       const inReach = aims.every(({ side }, i) => armReaches(person, planned[i], side, true));
       const held = aims.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
-      const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held });
+      const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
       let stalled = plan === 'nowhere', arrived = false;
       const setsOff = (f: Frame) => {
         if (Number.isNaN(setOff) && (plan === 'there' || (plan !== 'nowhere' && plan.walk.eta <= NEAR))) setOff = f.time;

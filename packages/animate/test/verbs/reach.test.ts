@@ -155,3 +155,49 @@ it('allows balance-support steps to finish a cross-body reach before judging it 
   expect(errors.every(distance => distance < .01)).toBe(true);
   expect(body.log).toEqual([]);
 });
+
+it.each([
+  { ahead: .8, step: true, met: true, walks: true },
+  { ahead: .62, step: false, met: true, walks: false },
+  { ahead: .66, step: false, met: true, walks: false },
+  { ahead: .8, step: false, met: false, walks: false },
+])('a reach $ahead m ahead, step $step: met $met, walking up $walks (noted)', ({ ahead, step, met, walks }) => {
+  const body = person({ dev: { notes: true } }), target = new Vector3(-.2, 1.15, ahead), start = body.position;
+  let result: boolean | undefined, moved = 0, logged = NaN;
+  play(function* () {
+    result = yield* reach(body, { right: target }, { step });
+    logged = body.log.length;
+  }, [body], 10, () => {
+    moved = Math.max(moved, body.position.distanceTo(start));
+    return result !== undefined;
+  });
+  expect(result).toBe(met);
+  // (planted, the weight shifts toward the hand within the feet, a few centimetres; walking up, it stands ~0.2 m nearer and stays)
+  expect(moved > .1).toBe(walks);
+  expect(body.notes.some(note => note.check.startsWith('approach: walks up'))).toBe(walks);
+  if (met) {
+    expect(worldOf(body.bones.rightHand).distanceTo(target)).toBeLessThan(.011);
+    expect(body.log).toEqual([]);
+  } else {
+    // (at once, from where it stands)
+    expect(logged).toBe(1);
+    expect(body.log[0].check).toBe('approach: beyond reach with the feet planted (m short)');
+  }
+});
+
+it('grab and a creature reach keep the feet planted with step false, ending false out of reach', () => {
+  const farmer = person({ dev: true }), pet = new Body(dog(DOG), { dev: true, at: new Vector3(3, 0, 0) });
+  const room = roomOf(farmer, pet);
+  const bucket = empty(room, 'bucket', new Vector3(0, 0, 1.5));
+  empty(bucket, 'handle', new Vector3(0, .55, 0));
+  const results: boolean[] = [];
+  play(function* () {
+    results.push(yield* grab(farmer, bucket, { right: 'handle' }, { step: false }));
+    results.push(yield* reach(pet, { jaw: new Vector3(3, .5, 2) }, { step: false }));
+  }, [farmer, pet], 5, () => results.length === 2);
+  expect(results).toEqual([false, false]);
+  expect(farmer.position.length()).toBeLessThan(.05);
+  expect(pet.position.distanceTo(new Vector3(3, 0, 0))).toBeLessThan(.05);
+  expect(farmer.log.map(entry => entry.check)).toEqual(['approach: beyond reach with the feet planted (m short)']);
+  expect(pet.log.map(entry => entry.check)).toEqual(['out of reach with the feet planted (m short)']);
+});

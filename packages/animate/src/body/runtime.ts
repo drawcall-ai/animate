@@ -7,6 +7,7 @@ import { Skeleton } from '../kernel/skeleton';
 import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
 import { Poise } from '../kernel/poise';
+import { HeadOffset } from '../look/offset';
 import type { Go } from '../kernel/go';
 import { createLocomotion, type Locomotion } from '../legs/locomotion';
 import type { Root } from '../legs/legged';
@@ -74,6 +75,8 @@ export class Self implements Holder {
   readonly frames = new WeakMap<Object3D, Interpolated>();
   /** how it is asked to hold itself over its legs, by all its parts this sub-step: balance takes it at the start of the next */
   readonly poise = new Poise();
+  /** its head turned over its gaze as its story asks (`pose`, `lookAt`'s roll and pitch), written after the eyes each sub-step */
+  readonly headOffset: HeadOffset;
   /** where the request that has its legs asks them to take it this sub-step (balance takes it at the start of the next) */
   going: Go | null = null;
   /** where the request that has its eyes asks them to look, for a species whose posture turns its head (it has no neck chain) */
@@ -117,6 +120,7 @@ export class Self implements Holder {
     this.tempo = options.tempo ?? 1;
     if (!(this.tempo > 0 && Number.isFinite(this.tempo))) throw new Error(`a tempo of ${this.tempo}`);
     this.gazer = species.gaze;
+    this.headOffset = new HeadOffset(species.gaze);
     this.drive = options.drive;
     this.floor = options.floor ?? FLAT;
     this.life = options.life ?? {};
@@ -398,6 +402,8 @@ export class Self implements Holder {
     this.look = null;
     behaviours.gaze?.(f);
     this.run('look', f);
+    this.run('head', f);
+    this.headOffset.write(f);
     this.run('trunk', f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {

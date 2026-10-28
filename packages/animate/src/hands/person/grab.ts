@@ -26,12 +26,12 @@ const REACHED_AFTER = 0.35;
 const CLOSE = 1.6;
 
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
-export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
+export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], step: boolean, motion?: { speed: number; accel?: number }) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
     grips: takes.map((take) => ({ side: take.side, at: gripAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
-  });
+  }, step);
   if (plan === 'nowhere') {
     request.fail();
     return false;

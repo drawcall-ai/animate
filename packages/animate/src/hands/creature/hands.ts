@@ -98,8 +98,8 @@ const _v = new Vector3(), _t = new Vector3();
 /** how long a creature's hand takes to go `distance` (s) at a calm dip's pace */
 const dipping = (distance: number, pace: Required<Pace>) => distance / pace.speed + pace.speed / pace.accel;
 
-/** Borrow walking to a stand within chain reach; fail unreachable heights and stalled walks. */
-function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Required<Pace>) {
+/** Borrow walking to a stand within chain reach (with `step`: without it, the feet stay put); fail unreachable heights, points out of reach without a step and stalled walks. */
+function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Required<Pace>, step: boolean) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
   if (!self.species.legs || self.drive) return { chain, bones, stoop };
   const at = point(self.frame), lowered = stoop.most(self.frame), base = self.pose.position(bones[0]), out = OUT * chainLength(self, bones);
@@ -110,7 +110,14 @@ function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Fra
     request.fail();
     return null;
   }
-  if (Math.hypot(base.x - at.x, drop, base.z - at.z) <= out) return { chain, bones, stoop };
+  const beyond = Math.hypot(base.x - at.x, drop, base.z - at.z) - out;
+  if (beyond <= 0) return { chain, bones, stoop };
+  if (!step) {
+    self.frame.dev?.append(self.frame.time, { check: 'out of reach with the feet planted (m short)', value: beyond, limit: 0, where: `${where} ${chain}` });
+    request.fail();
+    return null;
+  }
+  self.frame.dev?.note(self.frame.time, { check: 'walks up to stand in reach, staying there (m short; `step: false` keeps the feet)', value: beyond, limit: 0, where: `${where} ${chain}` });
   const off = _v.subVectors(base, self.pose.position(0)).dot(forwardOf(self.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
   const after = dipping(out, pace), walk = new Walk(self, { to: point, within: off });
   const legs = during(request, 'go', 'borrowed', (f) => {
@@ -151,8 +158,8 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
 }
 
 /** A creature's hand walked up to `point`, then its tip (`bone`) onto the goal `aim` gives, at a calm dip's pace: met once there, it keeps there */
-function* holdingOn(self: Handed, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Required<Pace>) {
-  const reach = yield* walkingUp(self, request, hand, point, where, pace);
+function* holdingOn(self: Handed, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Required<Pace>, step: boolean) {
+  const reach = yield* walkingUp(self, request, hand, point, where, pace, step);
   if (!reach) return;
   const goal = aim(reach.bones[reach.bones.length - 1]);
   yield* tipping(self, request, hand, goal, pace);
@@ -174,20 +181,20 @@ export function creatureHands(self: Handed): Handling {
     return uses[0];
   };
   return {
-    take: function* (request, thing, grips, pace) {
-      const motion = paceOf(pace, DIP);
+    take: function* (request, thing, grips, manner) {
+      const motion = paceOf(manner, DIP);
       const { hand, grip } = only('grab', grips);
       const goal = goalOn(thing.grip(grip), self.restOf(self.hands[hand])), frame = self.track(thing.object);
       const point = (f: Frame) => frame.toWorld({ position: goal.position }, _world, f.time).position.clone();
-      if (!(yield* walkingUp(self, request, hand, point, thing.object.name, motion))) return;
+      if (!(yield* walkingUp(self, request, hand, point, thing.object.name, motion, manner.step ?? true))) return;
       yield* tipping(self, request, hand, () => goal, motion, frame);
       grasp(self, hand, { thing, grip, goal });
       if (thing.massive && !bodyOf(thing.object)) lift(self, thing);
       yield* handingBack(self, request, [hand], 'asked');
       request.met();
     },
-    bring: function* (request, thing, points, end, pace) {
-      const motion = paceOf(pace, DIP);
+    bring: function* (request, thing, points, end, manner) {
+      const motion = paceOf(manner, DIP);
       const way = wayOf(self, thing, points, end);
       if (way.points.length !== 1) throw new Error('carry: creature hands do not support waypoints or approach routes');
       if (end?.userData.speed !== undefined) throw new Error('carry: creature hands do not support approach speed; use the pace option');
@@ -202,13 +209,13 @@ export function creatureHands(self: Handed): Handling {
           const position = inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position);
           return at.quaternion ? { position, quaternion } : { position };
         };
-      }, motion);
+      }, motion, manner.step ?? true);
     },
-    reach: function* (request, aims, pace) {
-      const motion = paceOf(pace, DIP);
+    reach: function* (request, aims, manner) {
+      const motion = paceOf(manner, DIP);
       const { hand, target } = only('reach', aims);
       try {
-        yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion);
+        yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion, manner.step ?? true);
       } finally {
         self.own('reach', '', (returning) => () => handingBack(self, returning, [hand], 'borrowed'));
       }

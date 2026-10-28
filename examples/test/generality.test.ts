@@ -246,7 +246,10 @@ it('a cup carried to the mouth stops in front of the face, and the notes say so'
     yield* grab(body, cup, { right: 'cup' });
     yield* carry(body, cup, mouth, { until: 2 });
   }, 15)).toEqual(ok);
-  expect([...new Set(body.notes.map((note) => note.check))]).toEqual(['held goal moved clear of the head (m)']);
+  // (and that the grab walked up to the cup first)
+  expect([...new Set(body.notes.map((note) => note.check))]).toEqual([
+    'approach: walks up to stand in reach, staying there (m to walk; `step: false` keeps the feet)', 'held goal moved clear of the head (m)',
+  ]);
 });
 it('a hand a body does not have fails to compile', () => {
   const body = person(), toy = ballIn(roomWith(body), around(0, 1.5, 0.04));

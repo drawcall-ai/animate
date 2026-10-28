@@ -54,13 +54,69 @@ export const SOLVED = (proportions: Proportions): Keeping => ({ depth: -AIR * pr
  * push, the joints turned toward it as little as clears the arm and within `NUDGE` — so the brakes' work is not undone in a jerk */
 export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: false, nudge: NUDGE };
 
-/** Re-solve a colliding arm toward world-space `tip` within joint limits, minimizing forward push and elbow swivel. Return push in metres; leave an infeasible pose for the dev check. */
-export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: { position: Vector3; quaternion?: Quaternion }, keeping: Keeping): number {
+/**
+ * An arm last seen clear of the trunk, and by how much: while its points and the trunk's have moved less than half that since, it is
+ * still clear — an arm part's depth moves no further than its own ends and the trunk's do, and the upper arm's, judged against its
+ * shoulder's, twice that — so a hanging arm at rest is not judged again every sub-step.
+ */
+export class ArmClear {
+  private margin = -Infinity;
+  /** the depth it was judged against (`Keeping.depth`) */
+  private clear = NaN;
+  private readonly seen = Array.from({ length: 7 }, () => new Vector3());
+
+  /** whether arm `side` of `pose` is still clear of `clear` as it was last seen (`saw`) */
+  holds(pose: ReadonlyPose, proportions: Proportions, side: Side, clear: number): boolean {
+    if (this.margin <= 0 || clear !== this.clear) return false;
+    const points = pointsOf(pose, proportions, side);
+    let arm = 0, trunk = 0;
+    points.forEach((point, k) => {
+      const moved = point.distanceTo(this.seen[k]);
+      if (k < 4) arm = Math.max(arm, moved);
+      else trunk = Math.max(trunk, moved);
+    });
+    return 2 * (arm + trunk) < this.margin;
+  }
+
+  /** arm `side` of `pose` seen `margin` (m) clear of `clear`, how deep it may be */
+  saw(pose: ReadonlyPose, proportions: Proportions, side: Side, clear: number, margin: number): void {
+    [this.clear, this.margin] = [clear, margin];
+    pointsOf(pose, proportions, side).forEach((point, k) => this.seen[k].copy(point));
+  }
+}
+
+/** an arm's shoulder, elbow, wrist and hand's end, and the trunk's hips, chest and neck, as `armDepth` reads them */
+function pointsOf(pose: ReadonlyPose, proportions: Proportions, side: Side): readonly Readonly<Vector3>[] {
+  const elbow = pose.position(INDEX[`${side}LowerArm`]), wrist = pose.position(INDEX[`${side}Hand`]);
+  _points[0] = pose.position(INDEX[`${side}UpperArm`]);
+  _points[1] = elbow;
+  _points[2] = wrist;
+  _points[3] = _handEnd.subVectors(wrist, elbow).setLength(ARM.length * proportions.height).add(wrist);
+  _points[4] = pose.position(INDEX.hips);
+  _points[5] = pose.position(INDEX.chest);
+  _points[6] = pose.position(INDEX.neck);
+  return _points;
+}
+
+/**
+ * Re-solve a colliding arm toward world-space `tip` within joint limits, minimizing forward push and elbow swivel. Return push in metres;
+ * leave an infeasible pose for the dev check. Given `seen`, an arm judged clear by its bound is left as it is, and one found clear is
+ * remembered there.
+ */
+export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: { position: Vector3; quaternion?: Quaternion }, keeping: Keeping, seen?: ArmClear): number {
   const pose = f.current, chain = `${side}Arm`;
+  if (!keeping.back && seen?.holds(pose, proportions, side, keeping.depth)) return 0;
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = keeping.depth;
   const upper = Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth);
   const least = keeping.back ? ahead(pose, proportions, side, tip.position) : 0;
-  if (least === 0 && armDepth(pose, proportions, side, upper, clear) <= clear) return 0;
+  if (least === 0) {
+    const depth = armDepth(pose, proportions, side, upper, clear);
+    if (depth <= clear) {
+      seen?.saw(pose, proportions, side, clear, clear - depth);
+      return 0;
+    }
+  }
+  seen?.saw(pose, proportions, side, clear, 0);
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
   const near = _elbow.copy(pose.position(INDEX[`${side}LowerArm`]));
   // (the arm as solved; every bounded candidate starts here, so search trials cannot accumulate nudges)
@@ -266,4 +322,5 @@ const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), 
 const _was = [new Quaternion(), new Quaternion(), new Quaternion()], _fit = [new Quaternion(), new Quaternion(), new Quaternion()], _blend = new Quaternion();
 const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3(), _goal = new Vector3(), _swivel = new Vector3();
 const _elbow = new Vector3(), _hand = new Vector3(), _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
+const _points: Readonly<Vector3>[] = [], _handEnd = new Vector3();
 const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3(), _sp = new Vector3(), _sq = new Vector3();

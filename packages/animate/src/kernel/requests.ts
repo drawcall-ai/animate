@@ -5,8 +5,9 @@ import type { Go } from './go';
 /** `asked` serves the verb directly; `borrowed` recruits supporting parts. Both override holding and idle behaviour. */
 export type Tier = 'borrowed' | 'asked';
 
-/** A body part a request takes: the legs (`go`, with the facing), the eyes (`look`), the trunk's turn (`trunk`), a hand by name. */
-export type Channel = 'go' | 'look' | 'trunk' | `hand.${string}`;
+/** A body part a request takes: the legs (`go`, with the facing), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
+ * the eyes (`head`), a hand by name. */
+export type Channel = 'go' | 'look' | 'trunk' | 'head' | `hand.${string}`;
 
 /** A claimed part poses the body; a leg claim returns its requested motion. */
 export interface Claim {

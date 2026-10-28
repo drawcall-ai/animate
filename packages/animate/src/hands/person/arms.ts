@@ -13,7 +13,7 @@ import type { Step } from '../../kernel/frame';
 import type { Thing } from '../../things/thing';
 import { hangsFrom, onBody } from '../../things/hold';
 import { bringShoulder, PROTRACTION, twistToward } from './bend';
-import { checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
+import { ArmClear, checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 
@@ -35,7 +35,7 @@ const CLAVICLE = { accel: 30 };
 
 /** Free arms follow their own histories back into stride swing; holding hands keep their grips. */
 export function hanging(person: Reacher): Step {
-  const goals = new Map<number, TrackedRotation>();
+  const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
   let phase = person.locomotion.phase;
   return (f) => {
     if (f.dev && f.time > f.dt) checkArms(f.prev, person.proportions, f.time - f.dt, f.dev);
@@ -74,11 +74,11 @@ export function hanging(person: Reacher): Step {
       f.current.setLocal(limb[0], hang.premultiply(_h.copy(f.current.rotation(INDEX[`${side}Shoulder`])).invert()));
       f.current.setLocal(limb[1], _q.setFromAxisAngle(Y, -sign * flex));
       f.current.setLocal(limb[2], IDENTITY);
-      keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, { ...NUDGED, swivel: 0 });
+      keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, HUNG, seen[side]);
       for (const bone of limb) set(f, goals, bone, f.current.local(bone).clone());
       // A hand returning from a task above the hips must stay clear as its braked joints descend with the turning trunk.
       if (person.holding[SIDES[1 - s]] || f.current.position(limb[2]).y > hips.y) {
-        keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, NUDGED);
+        keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, NUDGED, seen[side]);
       }
     });
   };
@@ -110,6 +110,9 @@ function set(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal:
   const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
   f.current.setLocal(bone, limited(f.current.skeleton, bone, q));
 }
+
+/** a hanging arm kept out of the trunk as a free arm is, without swivelling its elbow */
+const HUNG = { ...NUDGED, swivel: 0 };
 
 /** Tuned: how briskly a holding hand keeps to its grip (m/s², m/s, rad/s², rad/s): far quicker than a reach, so it never trails it */
 export const HOLD = { accel: 30, speed: 3, turnAccel: 200, turnSpeed: 15 };

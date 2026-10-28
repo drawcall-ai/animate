@@ -12,6 +12,7 @@ import type { Skeleton } from '../kernel/skeleton';
 import type { Poise } from '../kernel/poise';
 import type { Gazer } from '../species/define';
 import type { Locomotion } from '../legs/locomotion';
+import type { HeadOffset } from './offset';
 
 /** A body as its eyes see it: its gaze, where a neckless species' posture turns its head, its poise and its walk. */
 export interface Looker {
@@ -19,6 +20,8 @@ export interface Looker {
   look: Readonly<Vector3> | null;
   readonly poise: Poise;
   readonly locomotion: Locomotion;
+  /** its head's turn over the gaze, which the gaze reads the head without */
+  readonly headOffset: HeadOffset;
   /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
   lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
 }
@@ -90,7 +93,7 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     const parent = pose.skeleton.bones[base].parent;
     const turned = pose.rotation(parent);
     const carried = _rel.copy(turned).multiply(_p.copy(f.prev.rotation(parent)).invert());
-    const origin = gazer.eyes(f.prev, _eyes).sub(f.prev.position(base)).applyQuaternion(carried).add(pose.position(base));
+    const origin = self.headOffset.eyes(f.prev, _eyes).sub(f.prev.position(base)).applyQuaternion(carried).add(pose.position(base));
     const d = _d.subVectors(point, origin).normalize();
     if (d.lengthSq() === 0) return;
     // (upright, `upright`: the way it faces easing to the neck's parent's nearly straight up or down; toward the target, or away and
@@ -121,7 +124,7 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     };
     ways(d);
     const last = bones[bones.length - 1];
-    const was = _was.copy(f.prev.rotation(last));
+    const was = _was.copy(self.headOffset.rotation(f.prev, last));
     // Acquire from the final head history once; earlier gaze layers cannot choose the branch.
     over ??= angleOf(_o, was) < angleOf(_q, was) - 1e-9;
     const [kept, other] = over ? [_o, _q] : [_q, _o];
@@ -162,7 +165,7 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     shift = gap > shift || gap < SETTLED ? gap : shift;
     const pace = headPace(shift, motion);
     pace.accel = Math.min(motion.turnAccel, pace.accel + speeding);
-    const before = _was2.copy(f.prev2.rotation(last));
+    const before = _was2.copy(self.headOffset.rotation(f.prev2, last));
     const followed = followRotation(before, was, whole, { ...pace, velocity: pursuit }, f.dt, _out);
     // (followed in the head's own angles, `fick`, it keeps upright on the way: the shortest turn between two upright looks rolls it
     // mid-shift — 13–17° from aside and level across to down; but not from or to a line of sight steep up or down (`LEVEL`), where
@@ -200,10 +203,9 @@ function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<
  * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck. Tuned torso shares: 65% yaw, 25% pitch; the
  * base shares them over spine/chest, gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow. */
 export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>): Step {
-  const gazer = self.gazer;
-  if (!gazer) throw new Error('lookAt: the body has no gaze');
+  if (!self.gazer) throw new Error('lookAt: the body has no gaze');
   return (f) => {
-    const direction = at(f).clone().sub(gazer.eyes(f.prev, new Vector3()));
+    const direction = at(f).clone().sub(self.headOffset.eyes(f.prev, new Vector3()));
     const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - self.locomotion.facing);
     const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
     // (derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at once, as an aim offset follows the look:
