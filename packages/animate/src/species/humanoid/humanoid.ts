@@ -28,6 +28,8 @@ export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
  * `leftUpperArm`, …), its proportions measured off where they stand — limbs straight or bent (an A-pose) — and the standing height
  * off the crown (an end bone above the head), else off the head. Its masses are Dempster's shares of a body of that height; its
  * hands are `left` and `right`. It steps as its legs' length has it — longer legs slower and longer — and as `stride` styles it.
+ * Each joint goes on its limb's centre line, where the mesh bends: the limbs are measured straightened, so a joint moved off it to gain
+ * reach or to quiet a check (an upper-arm joint pulled in toward the spine) is a limb of another length, and its arm moves as that one.
  */
 export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & Having<S, HumanoidBone>, options: { stride?: Stride } = {}): Species<BoneNames<S>, Side> {
   needing(skeleton, BONES.filter((bone) => bone !== 'leftToes' && bone !== 'rightToes'), 'humanoid');
