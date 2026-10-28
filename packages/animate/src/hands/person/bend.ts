@@ -62,7 +62,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
   if (!person.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
     const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
-    if (toward.lengthSq() > 1e-12) person.poise.add({ lean: toward.setLength(short * share) });
+    if (toward.lengthSq() > 1e-12) person.poise.add({ shift: toward.setLength(short * share) });
   }
   if (person.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back: every reach is planned from the support station, so that shift cannot make a shoulder ask for more bow.

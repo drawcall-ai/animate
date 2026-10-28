@@ -23,12 +23,12 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
   const stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, still: Vector3 | null = null;
   let moving = false, starting = false, seen = false, leaning = false;
-  // (`from` shifted by `lean` as far as the planted feet hold it, `LEAN.inside` within their edge)
-  const within = (from: Vector3, lean: Vector3 | null, stepper: Stepper) => {
-    if (!lean) return from;
+  // (`from` shifted by `shift` as far as the planted feet hold it, `LEAN.inside` within their edge)
+  const within = (from: Vector3, shift: Vector3 | null, stepper: Stepper) => {
+    if (!shift) return from;
     const hull = hullOf(stepper.legs.filter((leg) => !leg.swing).flatMap((leg) => footprint(proportions, leg.anchor, leg.yaw)));
     if (hull.length < 3) return from;
-    const at = (t: number) => from.clone().addScaledVector(lean, t);
+    const at = (t: number) => from.clone().addScaledVector(shift, t);
     if (past(hull, at(1)) <= -LEAN.inside * s) return at(1);
     let [lo, hi] = [0, 1];
     for (let k = 0; k < 12; k++) [lo, hi] = past(hull, at((lo + hi) / 2)) <= -LEAN.inside * s ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
@@ -68,9 +68,9 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const faced = !!face || !moving || offTheWay(heading, plan.root.yaw);
     const stance = stanceYaw(stepper.legs, plan.root.yaw, toeOut);
     // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
-    const lean = !moving && !go ? poise.lean : null;
-    const leaned = still && (lean || leaning) ? within(still, lean, stepper) : null;
-    leaning = !!leaned && (!!lean || root.distanceTo(leaned) > LEAN.back * s);
+    const shift = !moving && !go ? poise.shift : null;
+    const leaned = still && (shift || leaning) ? within(still, shift, stepper) : null;
+    leaning = !!leaned && (!!shift || root.distanceTo(leaned) > LEAN.back * s);
     // (at rest on planted feet it settles over their rear half, `OVER_ANKLES` ahead of the ankles, as a person stands — read: Winter 1995,
     // Gait Posture 3:193, the quiet gravity line ~4–6 cm ahead of the ankles — wherever it stopped; edging onto a goal still asked, its
     // weight goes no further than `EDGING` from there: further, it steps)

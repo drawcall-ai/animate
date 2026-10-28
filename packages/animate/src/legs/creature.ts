@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { forwardOf, leftOf, wrapAngle } from '../kernel/math';
+import { clamp, forwardOf, leftOf, wrapAngle } from '../kernel/math';
 import type { Frame, Step } from '../kernel/frame';
 import { Poise } from '../kernel/poise';
 import { Pose } from '../kernel/pose';
@@ -49,7 +49,7 @@ export function creature(body: Legged): Step {
   const carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seed) : null;
   const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
   let going = false, followed: Vector3 | null = null;
-  let lowering: Eased = [0, 0], bowing: Eased = [0, 0];
+  let lowering: Eased = [0, 0], bowing: Eased = [0, 0], twisting: Eased = [0, 0], leaning: Eased = [0, 0];
   // (development check: the legs across a girdle never pass through each other — their bones kept `CLEARANCE` of a leg apart)
   const across = feet.legs.flatMap((leg, i) => leg.partner !== undefined && leg.partner > i ? [[i, leg.partner]] : []);
   const bones = kind.chains.map((chain) => chain.joints.map(({ bone }) => bone));
@@ -113,18 +113,31 @@ export function creature(body: Legged): Step {
     [legs.stride.cycle, legs.stride.stance, legs.held] = [stepper.cycle, stepper.Ts, stepper.held];
     posture?.prepare(f, legs, attention, body.look);
     if (carried) { carried.step(f, legs); carried.write(f); }
-    // (let down and bowed as a task asks: the body lower on its legs, its front tipped down about its hind girdle — eased there and back)
-    lowering = ease(lowering, Math.max(0, Math.min(poise.lower, STOOPING.lowest * feet.length)), f.dt);
-    bowing = ease(bowing, Math.max(0, Math.min(poise.bow, poise.bowLimit, STOOPING.bow)), f.dt);
-    if (lowering[0] > 1e-6 || bowing[0] > 1e-6) {
-      const behind = Math.min(...feet.legs.map((leg) => leg.ahead ?? 0)), pivot = _p.set(0, 0, 0);
-      const hinds = feet.legs.filter((leg) => (leg.ahead ?? 0) <= behind + 1e-6);
-      for (const leg of hinds) pivot.add(f.current.position(leg.top));
-      pivot.divideScalar(hinds.length);
-      const turn = _bow.setFromAxisAngle(leftOf(stepper.yaw, _left), bowing[0]);
-      const at = _at.copy(f.current.position(0)).sub(pivot).applyQuaternion(turn).add(pivot);
-      f.current.setRoot(at.setY(at.y - lowering[0]));
-      f.current.setLocal(0, _q.copy(turn).multiply(f.current.local(0)));
+    // (let down, bowed, turned and bent sideways as its tasks and its story's posture ask — the body lower on its legs, its front tipped
+    // down about its hind girdle or its croup down about its fore girdle (arched: settling onto its haunches, as a lean back does), its
+    // trunk turned and rolled about its legs' tops' middle — and, with no carriage to lean it, leaning into its root's acceleration so:
+    // eased there and back, as far as `STOOPING` and `POSED` let it)
+    const posed = poise.posture, own = !carried && !posture ? inertia : null;
+    const tasked = Math.max(0, Math.min(poise.bow, poise.bowLimit)), bow = tasked + clamp(posed.bow + (own?.pitch ?? 0), -POSED.bow, POSED.bow);
+    lowering = ease(lowering, clamp(poise.lower + posed.lower, 0, STOOPING.lowest * feet.length), f.dt);
+    bowing = ease(bowing, clamp(bow, -POSED.bow, Math.max(tasked, STOOPING.bow)), f.dt);
+    twisting = ease(twisting, clamp(posed.twist, -POSED.twist, POSED.twist), f.dt);
+    leaning = ease(leaning, clamp(posed.lean + (own?.roll ?? 0), -POSED.lean, POSED.lean), f.dt);
+    if ([lowering, bowing, twisting, leaning].some(([value]) => Math.abs(value) > 1e-6)) {
+      const aheads = feet.legs.map((leg) => leg.ahead ?? 0), end = bowing[0] >= 0 ? Math.min(...aheads) : Math.max(...aheads);
+      const girdle = feet.legs.filter((_, i) => Math.abs(aheads[i] - end) <= 1e-6), hip = _p.set(0, 0, 0), middle = _m.set(0, 0, 0);
+      for (const leg of girdle) hip.add(f.current.position(leg.top));
+      hip.divideScalar(girdle.length);
+      for (const leg of feet.legs) middle.add(f.current.position(leg.top));
+      middle.divideScalar(feet.legs.length);
+      const about = (pivot: Vector3, turn: Quaternion) => {
+        f.current.setRoot(_at.copy(f.current.position(0)).sub(pivot).applyQuaternion(turn).add(pivot));
+        f.current.setLocal(0, _q.copy(turn).multiply(f.current.local(0)));
+      };
+      const turn = _turn.setFromAxisAngle(UP, twisting[0]).multiply(_bow.setFromAxisAngle(forwardOf(stepper.yaw, _left), leaning[0]));
+      about(middle, turn);
+      about(hip.sub(middle).applyQuaternion(turn).add(middle), _bow.setFromAxisAngle(leftOf(stepper.yaw, _left), bowing[0]));
+      f.current.setRoot(_at.copy(f.current.position(0)).setY(f.current.position(0).y - lowering[0]));
     }
     const speed = Math.hypot(r.velocity.x, r.velocity.z), walking = Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest));
     stepper.legs.forEach((leg, i) => {
@@ -166,6 +179,12 @@ const LOCKING = 6;
 const UP = new Vector3(0, 1, 0);
 /** Tuned: the most a creature lets its body down (× its legs' length) and bows its front (rad), as a task asks */
 export const STOOPING = { lowest: 0.3, bow: 0.5 };
+/**
+ * Tuned: the most a creature's trunk takes of a story's posture and its own lean (rad: bowed or arched, turned, rolled) — what a horse's
+ * legs follow with their hooves planted and flat (a horse's fore legs lose their hooves' contact past ~0.2 of a turn or a roll); a
+ * task's bow adds onto it
+ */
+const POSED = { bow: 0.25, twist: 0.15, lean: 0.15 };
 /** Tuned (1/s): how quickly it lets itself down or bows and comes back up: critically damped */
 const EASING = 6;
 type Eased = [value: number, rate: number];
@@ -175,7 +194,7 @@ function ease([x, v]: Eased, goal: number, dt: number): Eased {
   return [x + v * dt, v];
 }
 const _p = new Vector3(), _at = new Vector3(), _left = new Vector3(), _gap = new Vector3(), _to = new Vector3();
-const _bow = new Quaternion(), _q = new Quaternion(), _yaw = new Quaternion();
+const _bow = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion(), _yaw = new Quaternion(), _m = new Vector3();
 
 /** the least distance between segments `a0`–`a1` and `b0`–`b1` (m) */
 function segmentGap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3): number {

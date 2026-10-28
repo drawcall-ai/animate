@@ -97,9 +97,10 @@ export class Posture {
     this.inertia = inertia ? new Inertia(inertia) : null;
   }
 
-  /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m) and `bow` (rad) as balance has them */
-  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number }, out: Trunk, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
-    const { lower, bow, twist } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
+  /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist` and `lean`
+   * (rad, sideways: + its left side up) as balance has them */
+  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number; lean: number }, out: Trunk, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
+    const { lower, bow, twist, lean: bent } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;
     const fwd = forwardOf(upright.yaw, _f), left = leftOf(upright.yaw, _l);
@@ -144,11 +145,11 @@ export class Posture {
     pelvis.y = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
-    // nodding and bowing
+    // nodding, bowing and bent sideways
     this.inertia?.step(upright.velocity, upright.yaw, dt);
     const lean = this.inertia ?? { pitch: 0, roll: 0 };
     const pitch = forward + nod + bow - loadLean(f.prev, proportions, fwd) + life.breath + lean.pitch;
-    quatYXZ(upright.yaw + thoraxYaw + upright.stance.blade, pitch, thoraxRoll + lean.roll, out.chest);
+    quatYXZ(upright.yaw + thoraxYaw + upright.stance.blade, pitch, thoraxRoll + lean.roll + bent, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }
