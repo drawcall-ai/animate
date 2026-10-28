@@ -23,7 +23,7 @@ export function creature(body: Legged): Step {
   const kind = body.species.legs;
   if (!kind) throw new Error('creature: the species has no legs');
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);
-  const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest));
+  const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest, body.floor));
   const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
   const turn = Math.min(...posers.map((poser) => poser.turn)), ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);
@@ -43,8 +43,8 @@ export function creature(body: Legged): Step {
       `reposition the intermediate joints (${joints}) in x/z to preserve segment lengths and leave a bent rest chain with spare reach; ` +
       `see the skill's reference skeletons.`);
   });
-  const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone().setY(feet.ankleHeight), yaw: body.yaw }));
-  const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw));
+  const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone(), yaw: body.yaw }));
+  const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw, body.floor));
   const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
   const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius);
   // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)

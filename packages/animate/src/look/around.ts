@@ -4,13 +4,13 @@ import { seeded } from '../kernel/random';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { PersonLegged } from '../legs/person/legged';
 
-/** a person as its idle eyes see it: how it walks, and its proportions */
-type Walking = Pick<PersonLegged, 'locomotion' | 'proportions'>;
+/** a person as its idle eyes see it: how it walks, its proportions and the floor it walks on */
+type Walking = Pick<PersonLegged, 'locomotion' | 'proportions' | 'floor'>;
 import { forwardOf, lerp, smoothstep } from '../kernel/math';
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
 const HEAD_SHARE = 0.55;
-/** standing, the eyes rest ahead a little below eye level; walking, on the path a few steps ahead (× height up, m ahead) */
+/** standing, the eyes rest ahead a little below eye level; walking, on the path a few steps ahead (× height up off the floor there, m ahead) */
 const AHEAD = { stand: { height: 0.75, distance: 3 }, walk: { height: 0.35, distance: 4.5 } };
 /** standing still, a glance aside every so often (s apart, s held, rad aside at most and up or down at most) */
 const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
@@ -40,15 +40,18 @@ export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3
     const distance = lerp(AHEAD.stand.distance, AHEAD.walk.distance, w);
     const height = lerp(AHEAD.stand.height, AHEAD.walk.height, w) * proportions.height + glance * up * distance;
     const yaw = (locomotion.facingAhead ?? locomotion.facing) + HEAD_SHARE * locomotion.thoraxYaw + glance * aside;
-    return target.copy(f.prev.com(_com)).setY(height).addScaledVector(forwardOf(yaw, _v), distance);
+    return onFloor(person, target.copy(f.prev.com(_com)).addScaledVector(forwardOf(yaw, _v), distance), height);
   };
 }
 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
 export function pathAhead(person: Walking, pose: ReadonlyPose, out: Vector3): Vector3 {
-  return out.copy(pose.com(_com)).setY(AHEAD.walk.height * person.proportions.height)
-    .addScaledVector(forwardOf(person.locomotion.facingAhead ?? person.locomotion.facing, _v), AHEAD.walk.distance);
+  out.copy(pose.com(_com)).addScaledVector(forwardOf(person.locomotion.facingAhead ?? person.locomotion.facing, _v), AHEAD.walk.distance);
+  return onFloor(person, out, AHEAD.walk.height * person.proportions.height);
 }
+
+/** `at` (x, z) `height` m over the floor under it */
+const onFloor = (person: Walking, at: Vector3, height: number) => at.setY(person.floor(at.x, at.z) + height);
 
 const [_com, _v] = [new Vector3(), new Vector3()];
 

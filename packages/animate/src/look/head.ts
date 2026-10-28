@@ -11,7 +11,7 @@ import { forwardOf, wrapAngle, yawOf } from '../kernel/math';
 import type { Go } from '../kernel/go';
 
 /** a person as a led head sees it: its proportions, how it walks and stands, and what its parts ask of its stance */
-type Led = Pick<PersonLegged, 'proportions' | 'locomotion' | 'stepper' | 'poise'>;
+type Led = Pick<PersonLegged, 'proportions' | 'locomotion' | 'stepper' | 'poise' | 'floor'>;
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
 const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
@@ -86,7 +86,8 @@ function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => G
     // moving at v by about v² / 2a)
     const rising = Number.isNaN(height) ? 0 : (eyes.y - height) / f.dt;
     height = eyes.y;
-    const drop = proportions.eyeHeight - eyes.y - (rising * Math.abs(rising)) / (2 * LOWER.accel);
+    // (over the floor under the eyes: the body stands there)
+    const drop = proportions.eyeHeight - (eyes.y - person.floor(eyes.x, eyes.z)) - (rising * Math.abs(rising)) / (2 * LOWER.accel);
     const fwd = forwardOf(yaw, _v);
     const com = f.prev.com(_c);
     const { lower, bow } = lowering(proportions, { height: proportions.eyeHeight, ahead: ((eyes.x - com.x) * fwd.x + (eyes.z - com.z) * fwd.z - EYES_AHEAD * proportions.scale) / BOW_AHEAD, drop });

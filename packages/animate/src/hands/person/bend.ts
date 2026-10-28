@@ -38,7 +38,7 @@ const BOWED = 0.95;
 export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
   const proportions = person.proportions;
   const factor = loadFactor(Math.max(mass, heldMass(person)));
-  const height = carried ? hand.y - f.current.position(0).y + proportions.hipHeight : hand.y;
+  const floor = floorUnder(person), height = carried ? hand.y - f.current.position(0).y + proportions.hipHeight : hand.y - floor;
   const low = height < proportions.hipHeight;
   // Tuned load strategy, not an empirical dose-response: heavier low reaches trade bow for knees.
   let bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
@@ -55,7 +55,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   const allowance = person.locomotion.moving ? PROTRACTION * proportions.height : 0;
   // (judged from the shoulder standing upright, not as low as the reach has let it down, so a lowering reach keeps asking while it is short
   // standing — but from the shoulder as it is for a goal on the body, which falls with it, and before the legs' first sub-step)
-  const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(proportions.shoulderHeight) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
+  const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(floor + proportions.shoulderHeight) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
   // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
   const short = shoulder.distanceTo(hand) - ARM_REACH * proportions.armLength;
@@ -90,7 +90,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   if (deep && mass === 0 && factor > 1 && !carried && person.locomotion.settled && bow >= BOWED * bowLimit && horizontal < out) {
     const missing = shoulder.y - hand.y - Math.sqrt(out ** 2 - horizontal ** 2);
     if (missing > 0) {
-      const lowered = floorUnder(person) + proportions.hipHeight - f.current.position(0).y;
+      const lowered = floor + proportions.hipHeight - f.current.position(0).y;
       person.poise.add({ lower: Math.min(squatOf(proportions), Math.max(lower, lowered + missing)) * share });
     }
   }

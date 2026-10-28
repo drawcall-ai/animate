@@ -27,7 +27,10 @@ export function placePelvis(steps: Steps, now: Now) {
   });
   // (let down at once as the feet need, up again within `RISE`: a foot let go of does not pop the pelvis up)
   // (the root's own rise and fall are followed at once)
-  const want = Math.max(y - rise, standing - LOWEST * s);
+  // (no further than `LOWEST` below standing over the lowest floor a foot stands or lands on: down a stair, as far as the leg reaching
+  // for the tread below needs)
+  const lowest = Math.min(...legs.map((leg) => leg.anchor.y - steps.feet.ankleHeight));
+  const want = Math.max(y - rise, standing - Math.max(0, now.ground - lowest) - LOWEST * s);
   // (let down no further than the feet need: a quick drop is not carried on past it — the soldier's pelvis sank 3 cm more than its trailing
   // leg asked, a 6 cm bob a stride)
   const base = airborne ? flying : Math.max(Math.min(want, lifted(want)), Math.min(want, heights[1] - crouched), foldOf(steps, now) - rise);

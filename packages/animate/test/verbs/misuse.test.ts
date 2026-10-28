@@ -131,17 +131,19 @@ it('lifts an attached item when a creature starts carrying it', () => {
   expect(load.parent).toBe(body.bones.jaw);
 });
 
-// (the floor is the plane y = 0: a height asked of where a body stands is ignored, and the dev log says so, once)
+// (a body stands on its floor: a height asked of where it stands that is off the floor there is ignored, and the dev log says so, once)
 describe('a height off the floor is said, once, and ignored', () => {
+  const raised = () => 0.5;
   it.each([
-    ['a person', () => person({ dev: true, at: new Vector3(0, 1, 0) })],
-    ['a creature', () => new Body(dog(DOG), { dev: true, at: new Vector3(0, 1, 0) })],
-  ])('%s made to stand above it', (_, make) => {
+    ['a person', 0, 1, () => person({ dev: true, at: new Vector3(0, 1, 0) })],
+    ['a creature', 0, 1, () => new Body(dog(DOG), { dev: true, at: new Vector3(0, 1, 0) })],
+    ['a person on a raised floor', 0.5, 0.5, () => person({ dev: true, floor: raised, at: new Vector3(0, 0, 0) })],
+  ])('%s made to stand off it', (_, floor, off, make) => {
     const body = make();
     run(body, 0.5);
-    expect(body.log).toEqual([expect.objectContaining({ check: 'start off the floor, its height ignored (m)', value: 1, where: 'at' })]);
+    expect(body.log).toEqual([expect.objectContaining({ check: 'start off the floor, its height ignored (m)', value: off, where: 'at' })]);
     expect(body.feet.every((foot) => foot.planted)).toBe(true);
-    expect(body.position.y).toBe(0);
+    expect(body.position.y).toBe(floor);
   });
 
   it.each(['a point', 'an empty'])('a walk to %s above it', (what) => {

@@ -12,7 +12,7 @@ import { verb, type Until, type Verb } from './story';
 export interface WalkOptions {
   /** the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else the way it comes */
   face?: number | Target;
-  /** its top speed (m/s; default a stroll's 1.3, slower with a load) */
+  /** its top speed (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7) */
   speed?: number;
   /** how quickly it speeds up (m/s²; default 1.2) */
   accel?: number;
@@ -21,9 +21,9 @@ export interface WalkOptions {
 }
 
 /**
- * Walks to `target` (exactly there: to stand within reach of something, `grab` or `reach` it), turning to arrive facing as asked: a
- * mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls: no nearer for 6 s. The floor
- * is the plane y = 0: it walks to where the target is over it (a point or an empty off it is said once in the dev log).
+ * Walks to `target` (exactly there, on the floor under it: to stand within reach of something, `grab` or `reach` it), turning to
+ * arrive facing as asked: a mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls:
+ * no nearer for 6 s. A point or an empty off the floor under it is said once in the dev log.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
   const { face, speed, accel, until } = options;
@@ -44,10 +44,10 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       const turn = find(f).quaternion;
       return turn ? headingOfTurn(turn) : null;
     };
-    // (the floor is the plane y = 0: a target above or below it is walked to where it is over the floor. A thing or a body walked to is
-    // above it as things are; a point or an empty — a mark to stand on — off it says so, once)
+    // (a target above or below the floor is walked to where it is over the floor. A thing or a body walked to is above it as things
+    // are; a point or an empty — a mark to stand on — off it says so, once)
     const to = (f: Frame) => {
-      const found = find(f), height = Math.abs(found.position.y);
+      const found = find(f), at = found.position, height = Math.abs(at.y - self.floor(at.x, at.z));
       const mark = !found.object || (found.object.type === 'Object3D' && !bodyOf(found.object));
       if (mark && height > OFF_FLOOR) {
         f.dev?.once(f.time, { check: 'walk target off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'target' });

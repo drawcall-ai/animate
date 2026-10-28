@@ -80,9 +80,11 @@ export function shankLean(steps: Steps, hip: Vector3, ankle: Vector3, yaw: numbe
   return Math.atan2(shin.dot(fw), shin.y);
 }
 
-/** The pelvis' height: let down walking, bobbing lowest after contact (running: mid-stance), the leap's rise on it. */
+/** The pelvis' height: let down walking, bobbing lowest after contact (running: mid-stance) — on stairs less, its legs bent over the
+ * treads, `STAIRS` of the bob gone on a flight's slope — the leap's rise on it. */
 export function nominal(steps: Steps, body: Body): number {
-  const { st, legs } = steps, { standing, rise, run, Ts, moving } = body;
+  const { st, legs } = steps, { standing, rise, run, Ts, v, climb } = body;
+  const moving = body.moving * (1 - STAIRS.bob * smoothstep(0, STAIRS.slope, Math.abs(climb) / Math.max(v, STAIRS.slow)));
   const swinging = 1 - Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0));
   const planted = Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / Ts)) ** 2), 0));
   return standing + rise - (dropOf(st, body) + st.bob * lerp(swinging, planted, run)) * st.scale * moving;
@@ -126,5 +128,8 @@ export function widthAt(steps: Steps, { across, Ts, crouch }: Reading & Timing, 
   return Math.max(gait, (width.narrowest * s + Math.abs(across) * speed * Ts) / 2) + st.crouch.wider * s * crouch;
 }
 
+/** Tuned: on a slope of `slope` (rise per run) or steeper — a stair's (recalled ~0.4–0.7) — the walking bob is `bob` less; read at no
+ * slower than `slow` (m/s) */
+const STAIRS = { bob: 0.6, slope: 0.3, slow: 0.3 };
 /** Tuned: within `PIVOT` (m) of being over a planted foot the hip lets it settle flat to change the end it rolls on */
 const PIVOT = 0.03;

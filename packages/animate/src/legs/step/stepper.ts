@@ -5,7 +5,7 @@
 import { Vector3 } from 'three';
 import { STEP as SUB_STEP, type Frame } from '../../kernel/frame';
 import { follow } from '../../kernel/follow';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, smoothstep, wrapAngle } from '../../kernel/math';
+import { clamp, forwardOf, leftOf, lerp, minimumJerk, quintic, smoothstep, wrapAngle } from '../../kernel/math';
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
 import {
@@ -15,7 +15,7 @@ import {
   type Body, type FootPose, type Leg, type Now, type Reading, type Steering, type Timing,
 } from './state';
 import { lengthOf, nominal, pace, widthAt } from './reach';
-import { landing, quintic, settle, swingOn } from './swing';
+import { landing, settle, swingOn } from './swing';
 import { cue, exclusive, inTurn, isWalking, keepTime, liftFeet, together, wants } from './cues';
 import { placePelvis } from './pelvis';
 import { plantedPose } from './plant';
@@ -49,10 +49,12 @@ export class Stepper extends Steps {
     const timing = this.timing(root);
     const yaw = this.face(root);
     const { v, crouch: k, run, tiptoe } = root;
-    const timed = { ...root, ...timing };
+    const timed = { ...root, ...timing }, ground = this.ground.at(r, f.dt), climb = this.ground.rising;
+    // (first moved: standing as high over the ground as it stands)
+    if (Number.isNaN(this.stand)) this.stand = this.heights[1] - ground;
     const body: Body = {
-      ...timed, yaw, width: widthAt(this, timed, v), moving: smoothstep(0, 1, v),
-      standing: this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? ZERO).setY(0),
+      ...timed, yaw, width: widthAt(this, timed, v), moving: smoothstep(0, 1, v), ground, climb,
+      standing: ground + this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? ZERO).setY(0),
     };
     const now: Now = { ...body, ...this.landingReach(body) };
     this.now = now;
@@ -81,7 +83,7 @@ export class Stepper extends Steps {
     const { feet, legs } = this, was = this.aloft;
     const aloft = legs.map((leg) => {
       const { foot, toes } = feet.legs[leg.i], rotation = f.prev.rotation(foot);
-      return feet.sole(leg.i, f.prev.position(foot), rotation, toes === undefined ? rotation : f.prev.rotation(toes)) > LIFTED;
+      return this.above(feet.soles(leg.i, f.prev.position(foot), rotation, toes === undefined ? rotation : f.prev.rotation(toes))) > LIFTED;
     });
     this.aloft = aloft;
     if (!was || this.airborne) return;
@@ -105,7 +107,7 @@ export class Stepper extends Steps {
   private read(f: Frame, r: Steering): Reading {
     const { st, jumping: jump, yaws, heights, velocity } = this, s = st.scale, dt = f.dt;
     // (first moved: standing where it is, moving as the root already does — a body spawned on the move gets no jolt)
-    if (Number.isNaN(this.stand)) { this.stand = heights[0] = heights[1] = f.prev.position(0).y; velocity.copy(r.velocity); }
+    if (Number.isNaN(this.stand)) { heights[0] = heights[1] = f.prev.position(0).y; velocity.copy(r.velocity); }
     const v = Math.hypot(r.velocity.x, r.velocity.z);
     // (crouched: lower, the feet wider and a little ahead of the hips — the hips sit back — shorter, lower steps)
     const k = clamp(follow(this.crouches[0], this.crouches[1], minimumJerk(clamp(r.crouch ?? 0, 0, 1)), CROUCHING, dt), 0, 1);
@@ -222,7 +224,7 @@ export class Stepper extends Steps {
       ? standing - (dropOf(st, body) + st.bob) * s * moving
       : Math.max(nominal(this, body) - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
     const reaches = legs.map((leg) =>
-      Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(this, leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - feet.ankleHeight) ** 2))));
+      Math.max(LANDING.least * s, Math.sqrt(Math.max(0, (st.reach * lengthOf(this, leg)) ** 2 - (holding + (feet.legs[leg.i].up ?? 0) - body.ground - feet.ankleHeight) ** 2))));
     return { holding, reaches };
   }
 

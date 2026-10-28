@@ -23,11 +23,19 @@ import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/ho
 import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
+import { FLAT, type Floor } from '../legs/floor';
 
 /** How a body is made. */
 export interface SelfOptions {
-  /** where it stands on the floor (default the origin): the floor is the plane y = 0, so a height here is ignored (a dev log says so) */
+  /** where it stands (default the origin): x and z — it stands on its floor there; a y off that floor is ignored (a dev log says so) */
   at?: Vector3;
+  /**
+   * the floor's height under a world point (x, z) (m; default 0 everywhere): what it stands and steps on — a raised stage, a dais, a
+   * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
+   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (0.35 m for the default body) and steps
+   * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled.
+   */
+  floor?: (x: number, z: number) => number;
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
   /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
@@ -78,6 +86,8 @@ export class Self implements Holder {
   readonly hands: Readonly<Record<string, number>>;
   readonly holding: Record<string, Hold | null>;
   readonly drive?: (time: number) => Root;
+  /** what it stands on: the floor's height under a world point */
+  readonly floor: Floor;
   readonly life: Temperament;
   /** the bodies it keeps clear of: those it has dealt with (`meet`), either way, and those it was told to avoid */
   readonly near = new Set<Self>();
@@ -95,7 +105,7 @@ export class Self implements Holder {
   private stepping = false;
   private behaviours: Behaviours | null = null;
 
-  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton) => Pose) {
+  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose) {
     const dev = options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined;
     this.log = dev?.log ?? EMPTY;
     this.notes = dev?.notes ?? EMPTY;
@@ -108,11 +118,12 @@ export class Self implements Holder {
     if (!(this.tempo > 0 && Number.isFinite(this.tempo))) throw new Error(`a tempo of ${this.tempo}`);
     this.gazer = species.gaze;
     this.drive = options.drive;
+    this.floor = options.floor ?? FLAT;
     this.life = options.life ?? {};
-    // (the floor is the plane y = 0: a body stands on it wherever it is asked to start)
-    const height = Math.abs(options.at?.y ?? 0);
+    // (a body stands on its floor wherever it is asked to start)
+    const at = options.at, height = at ? Math.abs(at.y - this.floor(at.x, at.z)) : 0;
     if (height > OFF_FLOOR) dev?.append(0, { check: 'start off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'at' });
-    const pose = start?.(this.skeleton) ?? restPose(this.skeleton, options.at, options.face);
+    const pose = start?.(this.skeleton, this.floor) ?? restPose(this.skeleton, this.floor, options.at, options.face);
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
@@ -125,7 +136,7 @@ export class Self implements Holder {
       if (node) anchors.set(node, { body: this, bone: i });
     });
     if (this.frame.dev && options.model) checkShear(this.binding, this.frame.dev);
-    this.binding.write(this.pose);
+    this.binding.write(this.pose, this.floor);
     /** Construct creature behaviours now so infeasible legs fail before the first update. */
     if (!species.person) this.behaviours = this.behave();
   }
@@ -162,7 +173,7 @@ export class Self implements Holder {
     return heldMass(this);
   }
 
-  /** its object in the scene: a group on the floor, turned by its facing */
+  /** its object in the scene: a group on the floor under its root, turned by its facing */
   readonly object;
 
   /** the scene node of moving bone `bone` */
@@ -328,7 +339,7 @@ export class Self implements Holder {
       this.stepping = false;
     }
     this.updates++;
-    this.binding.write(this.pose);
+    this.binding.write(this.pose, this.floor);
   }
 
   /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
@@ -433,10 +444,10 @@ function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'vo
   return held;
 }
 
-/** the skeleton's rest pose standing on the floor at `at`'s x and z, facing `face` */
-function restPose(skeleton: Skeleton, at?: Vector3, face = 0): Pose {
-  const pose = new Pose(skeleton), root = pose.position(0);
-  pose.setRoot(new Vector3(at?.x ?? root.x, root.y, at?.z ?? root.z));
+/** the skeleton's rest pose standing on `floor` at `at` (its x and z) facing `face` */
+function restPose(skeleton: Skeleton, floor: Floor, at?: Vector3, face = 0): Pose {
+  const pose = new Pose(skeleton), root = pose.position(0), x = at?.x ?? root.x, z = at?.z ?? root.z;
+  pose.setRoot(new Vector3(x, root.y + floor(x, z), z));
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), face).multiply(pose.local(0)));
   pose.facing = face;
   pose.forward();

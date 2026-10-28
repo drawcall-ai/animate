@@ -8,10 +8,11 @@ import type { AnySpecies, Temperament } from '../species/define';
 import type { Locomotion } from './locomotion';
 import type { Stepper } from './step/stepper';
 import type { Steering } from './step/state';
+import type { Floor } from './floor';
 
 /** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
 export interface Root {
-  /** its point on the floor (m): the floor is the plane y = 0, so a height here is ignored (a dev log says so) */
+  /** its point on the floor (m): x and z — the body stands on its floor there; a y off that floor is ignored (a dev log says so) */
   position: Vector3;
   /** its velocity over the floor (m/s); default read off its moves */
   velocity?: Vector3;
@@ -38,6 +39,8 @@ export interface Legged {
   readonly tempo: number;
   readonly life: Temperament;
   readonly drive?: (time: number) => Root;
+  /** what it stands on */
+  readonly floor: Floor;
   /** its stepping legs, made with its balance */
   stepper: Stepper | null;
   readonly poise: Poise;
@@ -53,14 +56,14 @@ export interface Legged {
  * A body's root as its app drives it (`drive`), a sub-step at a time: where it is, its velocity (read off its moves when not given),
  * facing and crouch; a leap it asks is passed to the legs, and how still it holds itself to its balance (`steady`).
  */
-export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise'>): (f: Frame) => Steering {
+export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise' | 'floor'>): (f: Frame) => Steering {
   const drive = self.drive;
   if (!drive) throw new Error('drivenRoot: the body is not driven');
   let last: Vector3 | null = null;
   return (f) => {
     const root = drive(f.time);
-    // (the floor is the plane y = 0: a root driven above or below it stands on it)
-    const height = Math.abs(root.position.y);
+    // (a root driven above or below its floor stands on it)
+    const height = Math.abs(root.position.y - self.floor(root.position.x, root.position.z));
     if (height > OFF_FLOOR) f.dev?.once(f.time, { check: 'driven root off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'root' });
     const position = root.position.clone().setY(0);
     const velocity = root.velocity?.clone().setY(0) ?? (last ? position.clone().sub(last).divideScalar(f.dt) : new Vector3());

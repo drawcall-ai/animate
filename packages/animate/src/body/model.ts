@@ -2,9 +2,10 @@ import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
 import type { AnySpecies } from '../species/define';
 import type { ReadonlyPose } from '../kernel/pose';
+import type { Floor } from '../legs/floor';
 
 /**
- * The scene-graph side of a body: `object`, a group on the floor turned by the body's facing alone, and `bones`, by name. Given a
+ * The scene-graph side of a body: `object`, a group on the floor under its root turned by the body's facing alone, and `bones`, by name. Given a
  * `model` (a container rigged with @drawcall/rig), the bones are the very bones bound to its meshes, found by name; else they are
  * library objects in a tree like the skeleton's, each standing at rest as a bone rig builds does (turned as the container is). Once an
  * update, `write` poses them: each moving bone's rotation through its rest turns (`turnₚ · q · turn⁻¹`, read once relative to the
@@ -74,10 +75,10 @@ export class Binding<Name extends string = string> {
     return this.moving[bone]?.scale ?? 1;
   }
 
-  /** `object` placed where the body stands facing, and each moving bone posed from `pose` */
-  write(pose: ReadonlyPose): void {
+  /** `object` placed where the body stands — on `floor` under its root — facing, and each moving bone posed from `pose` */
+  write(pose: ReadonlyPose, floor: Floor): void {
     const root = pose.position(0), object = this.object;
-    object.position.set(root.x, 0, root.z);
+    object.position.set(root.x, floor(root.x, root.z), root.z);
     object.quaternion.setFromAxisAngle(UP, pose.facing);
     const back = _back.copy(object.quaternion).invert();
     this.moving.forEach((moving, i) => {

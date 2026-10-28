@@ -68,8 +68,10 @@ export function footing(person: Reacher, to: Stand) {
   }
   let face = facingFor(person, grips);
   const proportions = person.proportions;
-  const height = grips.reduce((sum, grip) => sum + grip.at.y, 0) / grips.length;
-  const standing = floorUnder(person) + proportions.shoulderHeight;
+  // (heights over the floor under the grips: the body stands on it there to take them)
+  const middle = grips.reduce((sum, grip) => sum.add(grip.at), new Vector3()).divideScalar(grips.length), floor = person.floor(middle.x, middle.z);
+  const height = grips.reduce((sum, grip) => sum + grip.at.y, 0) / grips.length - floor;
+  const standing = proportions.shoulderHeight;
   const reach = ARM_REACH * proportions.armLength;
   const { drop, forward } = point ? stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach)) : { drop: 0, forward: 0 };
   const shoulders = standing - drop + (point ? Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing)) : 0);
@@ -79,13 +81,12 @@ export function footing(person: Reacher, to: Stand) {
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
   const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
   let ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up);
-  const middle = grips.reduce((sum, grip) => sum.add(grip.at), new Vector3()).divideScalar(grips.length);
   const nowhere = (check: string, value: number, limit = reach) => {
     f0.dev?.append(f0.time, { check, value, limit, where: `${grips.length} grips` });
     return 'nowhere' as const;
   };
   if (point && Math.abs(height - shoulders) > reach) return nowhere(`approach: placing point from the shoulders' middle, lowered and bowed (m)`, Math.abs(height - shoulders));
-  const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - (standing + TIPTOE * proportions.scale);
+  const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - floor - (standing + TIPTOE * proportions.scale);
   if (above > reach) return nowhere('approach: grip above the shoulders on tiptoe (m)', above);
   if (person.drive) return 'there' as const;
   const at = middle.clone(), there = new Vector3();
@@ -97,7 +98,7 @@ export function footing(person: Reacher, to: Stand) {
       if (!b) return true;
       const a = pose.position(bone.parent), end = pose.position(b);
       // Low segments, including any crouched trunk, bound the space occupied near the feet.
-      return Math.min(a.y, end.y) > proportions.hipHeight || pointSegmentDistance(there, a, end) >= feetOut + proportions.toeFront + SEGMENT_RADIUS;
+      return Math.min(a.y, end.y) > floor + proportions.hipHeight || pointSegmentDistance(there, a, end) >= feetOut + proportions.toeFront + SEGMENT_RADIUS;
     });
   });
   // If a single hand's comfortable stand crowds another body, use its remaining reach before giving up.

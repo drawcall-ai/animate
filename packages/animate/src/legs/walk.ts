@@ -5,6 +5,7 @@ import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
 import type { Legged } from './legged';
 import { remaining, SETTLED_AFTER } from './step/state';
+import { FLAT } from './floor';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
 const STROLL = { speed: 1.3, accel: 1.2 };
@@ -19,6 +20,12 @@ const STALL = { nearer: 0.02, turn: 0.3, seconds: 6 };
 const TURNING = 1.25, SETTING_OFF = 0.5;
 /** the turn rate the hands time their reach to (rad/s; tuned: quicker than the body turns, so they set off as it comes round) */
 const LEADING_TURN = 2;
+/**
+ * Tuned: on a floor that rises or falls by `rise` (m, default body) within `ahead` (m) on its way or `behind` (m) — a stair's — a walk goes at most
+ * at a stair's `pace` (m/s; recalled: people climb and descend stairs at ~0.5–0.7 m/s over the floor, slower than they walk), read at
+ * `reads` points
+ */
+const STAIRS = { pace: 0.7, ahead: 1.5, behind: 1, rise: 0.05, reads: 20 };
 
 /** Where a walk goes, a sub-step at a time. */
 export interface Route {
@@ -114,10 +121,9 @@ export class Walk {
   /** where it goes this sub-step (`go.to`), and the facing it arrives with (null: none) */
   private where(f: Frame): number | null {
     const { self, way, go } = this, within = way.within ?? 0, via = way.via ?? [];
-    const effort = loadFactor(self.load);
+    const effort = loadFactor(self.load), body = placeOf(self, f).setY(0);
     go.speed = way.speed ?? STROLL.speed * self.tempo / effort;
     go.accel = way.accel ?? STROLL.accel * self.tempo / effort;
-    const body = placeOf(self, f).setY(0);
     this.start ??= body.clone();
     if (this.leg < via.length && body.distanceTo(_v.copy(via[this.leg](f)).setY(0)) < ARRIVED.distance * self.scale) {
       this.leg++;
@@ -131,6 +137,7 @@ export class Walk {
     const yaw = asked ?? (within > 0 ? toward : null);
     this.end.copy(to).setY(0).addScaledVector(forwardOf(yaw ?? toward, _v), -within);
     go.to.copy(this.leg < via.length ? via[this.leg](f) : this.end).setY(0);
+    if (stepped(self, body, go.to)) go.speed = Math.min(go.speed, STAIRS.pace * self.scale);
     return this.leg < via.length ? null : yaw;
   }
 
@@ -183,7 +190,25 @@ function etaOf(self: Legged, body: Readonly<Vector3>, go: Go, yaw: number | null
   return Math.max(walk, turn);
 }
 
+/**
+ * whether the floor rises or falls by `STAIRS.rise` or more (m, default body) on the way from `from` to `to`, `STAIRS.ahead` (m) of it
+ * at most, and `STAIRS.behind` (m) back: the body keeps its pace till it is past the edge
+ */
+function stepped(self: Legged, from: Readonly<Vector3>, to: Readonly<Vector3>): boolean {
+  if (self.floor === FLAT) return false;
+  const way = _way.subVectors(to, from).setY(0), along = way.length(), s = self.scale;
+  if (along < 1e-6) return false;
+  way.divideScalar(along);
+  const [back, ahead] = [-STAIRS.behind * s, Math.min(along, STAIRS.ahead * s)];
+  let most = -Infinity, least = Infinity;
+  for (let k = 0; k <= STAIRS.reads; k++) {
+    const d = back + (ahead - back) * k / STAIRS.reads, y = self.floor(from.x + way.x * d, from.z + way.z * d);
+    [most, least] = [Math.max(most, y), Math.min(least, y)];
+  }
+  return most - least >= STAIRS.rise * s;
+}
+
 /** where a walk takes the body: a species' legs carry its root there, a person's balance its centre of mass */
 const placeOf = (self: Legged, f: Frame) => (self.species.legs ? _com.copy(f.prev.position(0)) : f.prev.com(_com)).setY(0);
-const _com = new Vector3();
+const _com = new Vector3(), _way = new Vector3();
 const _v = new Vector3();

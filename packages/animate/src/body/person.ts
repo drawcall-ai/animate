@@ -28,6 +28,7 @@ import { driven } from '../legs/person/balance';
 import { stride } from '../legs/person/stride';
 import { hanging, handStep, HOLD } from '../hands/person/arms';
 import { lookAround } from '../look/around';
+import type { Floor } from '../legs/floor';
 
 /** Humanoid balance, idle gaze and arms, and held-object fitting. */
 export class Person extends Self {
@@ -39,7 +40,7 @@ export class Person extends Self {
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;
     if (!proportions || !species.gaze) throw new Error('a person is made of a humanoid species');
-    super(species, options, binding, (skeleton) => relaxed(proportions, new Pose(skeleton), options.at ?? new Vector3(), options.face ?? 0));
+    super(species, options, binding, (skeleton, floor) => relaxed(proportions, new Pose(skeleton), floor, options.at ?? new Vector3(), options.face ?? 0));
     this.proportions = proportions;
   }
 
@@ -145,20 +146,22 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   }
 }
 
-/** Start relaxed at `floor`, facing `yaw`, with flat feet and the pelvis within standing reach. */
-function relaxed(proportions: Proportions, pose: Pose, floor: Vector3, yaw: number): Pose {
+/** Start relaxed on `floor` at `at` (its x and z), facing `yaw`, with flat feet each on the floor under it and the pelvis within standing reach. */
+function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3, yaw: number): Pose {
   for (const { bone, rotation } of relaxedPose()) pose.setLocal(bone, rotation);
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));
-  pose.setRoot(new Vector3(floor.x, proportions.hipHeight, floor.z));
+  const standing = floor(at.x, at.z) + proportions.hipHeight;
+  pose.setRoot(new Vector3(at.x, standing, at.z));
   pose.facing = yaw;
-  const feet = standingFeet(proportions, floor.x, floor.z, yaw), reach = STANDING_REACH * proportions.legLength;
+  const feet = standingFeet(proportions, at.x, at.z, yaw), reach = STANDING_REACH * proportions.legLength;
+  for (const foot of feet) foot.position.y += floor(foot.position.x, foot.position.z);
   // (no higher than the legs reach)
-  let y = proportions.hipHeight;
+  let y = standing;
   SIDES.forEach((side, s) => {
     const hip = pose.position(INDEX[`${side}UpperLeg`]), ankle = feet[s].position;
-    y = Math.min(y, ankle.y + Math.sqrt(reach * reach - (hip.x - ankle.x) ** 2 - (hip.z - ankle.z) ** 2) + proportions.hipHeight - hip.y);
+    y = Math.min(y, ankle.y + Math.sqrt(reach * reach - (hip.x - ankle.x) ** 2 - (hip.z - ankle.z) ** 2) + standing - hip.y);
   });
-  pose.setRoot(new Vector3(floor.x, y, floor.z));
+  pose.setRoot(new Vector3(at.x, y, at.z));
   SIDES.forEach((side, s) => {
     const { position, yaw: heading } = feet[s];
     const knee = forwardOf(heading).add(pose.position(INDEX[`${side}UpperLeg`]));
