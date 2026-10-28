@@ -20,8 +20,6 @@ export const GATE = 8.2;
 const SEAT = new Vector3(0.48, 0.16, 0.44);
 const SKIRT = new Vector3(0.42, 0.29, 0.05);
 const MASS = 8;
-/** where it sits on the horse's trunk bone (m) */
-const SADDLED = new Vector3(0, 0.23, 0);
 /**
  * A lead rope 2.4 m long, tied 1.2 m from the halter (the tie's reach); its slack coiled in the knot's hand 1 m on, more than the
  * hands' span apart, so the rope hangs between them; and what it weighs, the knot and the coil (m, kg)
@@ -30,18 +28,10 @@ export const LEAD_ROPE = 2.4;
 const KNOT_AT = 1.2;
 const SLACK_AT = 2.2;
 const ROPE_MASS = { knot: 0.2, slack: 0.1 };
-/** the halter's lead ring, on the horse's head bone (m) */
-const HALTER = new Vector3(0, -0.3, 0.05);
 /** checking the fit: the eyes sweep the saddle front to back in this long (s), the hand on its near skirt the second half of it */
 const INSPECT = 0.85;
-/** led, the handler walks 0.6 m to the horse's left, its pelvis 0.88 m ahead of the horse's trunk: beside the throatlatch (m) */
-const LEAD_ASIDE = 0.6;
-const LEAD_AHEAD = 0.88;
-/** the leading walk's pace, the horse's catch-up walk's (m/s) */
-const LEADING = 0.9;
-const CATCHING_UP = 1.6;
-/** setting off, the eyes on the horse this long, over the near shoulder (s) */
-const LOOK_BACK = 1.5;
+/** The handler's pelvis leads the horse's trunk by 88 cm. */
+const HANDLER_LEAD_DISTANCE = 0.88;
 
 /** A morning's small job: fetch, saddle, untie, and go out together. */
 export function stableMorning(): Scenario {
@@ -70,9 +60,9 @@ export function stableMorning(): Scenario {
         life: { tether: () => (tied() ? { position: KNOT, length: KNOT_AT } : undefined), startle: () => startle },
       });
       // (its saddle's place on its back, turned the way the handler faces setting it there; the halter its lead hangs from)
-      const saddled = empty(mare.bones.trunk, 'saddled', SADDLED);
+      const saddled = empty(mare.bones.trunk, 'saddled', new Vector3(0, 0.23, 0));
       saddled.rotation.y = -Math.PI / 2;
-      const halter = empty(mare.bones.head, 'halter', HALTER);
+      const halter = empty(mare.bones.head, 'halter', new Vector3(0, -0.3, 0.05));
       const lead = leadRope(scene, [[0, halter], [KNOT_AT, knot], [SLACK_AT, slack]]);
       // (where the eyes go checking the fit, and the near skirt the hand touches)
       const glance = empty(saddle, 'glance', new Vector3());
@@ -83,10 +73,16 @@ export function stableMorning(): Scenario {
       const nearHand = empty(handler.object, 'near hand', new Vector3(-0.5, height(handler.bones.chest) + 0.1, 0.35));
       const slackHand = empty(handler.object, 'slack hand', new Vector3(0.22, height(handler.bones.hips) - 0.08, 0.16));
       const ahead = empty(handler.object, 'ahead', new Vector3(0, height(handler.bones.head), 4));
-      const led = empty(scene, 'led', TIED);
+      const horseDestination = empty(scene, 'led', TIED);
       const besideHandler = () => {
-        led.position.z = Math.max(TIED.z, handler.position.z - LEAD_AHEAD);
-        return led;
+        horseDestination.position.z = Math.max(TIED.z, handler.position.z - HANDLER_LEAD_DISTANCE);
+        return horseDestination;
+      };
+      const inspectionFront = new Vector3(0.65, 0.12, 0), inspectionBack = new Vector3(-0.65, -0.25, 0);
+      let inspectionStart: number | undefined;
+      const inspectSaddle = (time: number) => {
+        glance.position.lerpVectors(inspectionFront, inspectionBack, Math.min(1, (time - (inspectionStart ??= time)) / INSPECT));
+        return glance;
       };
       let lookedBack = false, halted = false;
       return {
@@ -98,7 +94,7 @@ export function stableMorning(): Scenario {
           // (untied, it walks at the handler's side till the handler halts)
           function* () {
             yield* wait(() => !tied());
-            yield* walkTo(mare, besideHandler, { speed: CATCHING_UP, until: () => halted });
+            yield* walkTo(mare, besideHandler, { speed: 1.6, until: () => halted });
           },
           function* () {
             // (its eyes on the saddle's place from when its hands close on the saddle until it is there)
@@ -111,7 +107,7 @@ export function stableMorning(): Scenario {
             });
             release(handler, saddle, saddled);
             // checking the fit: the eyes sweep it, the hand touches its near skirt, the horse startles at it
-            yield* parallel('all', lookAt(handler, sweeping(glance), { until: INSPECT }), function* () {
+            yield* parallel('all', lookAt(handler, inspectSaddle, { until: INSPECT }), function* () {
               yield* wait(INSPECT / 2);
               startle = handler.position.clone();
               yield* reach(handler, { right: skirt }, { until: INSPECT / 2 });
@@ -125,10 +121,10 @@ export function stableMorning(): Scenario {
               // (once both hands hold the lead where they keep it)
               function* () {
                 yield* wait(arriving(handler, 0));
-                halted = yield* walkTo(handler, new Vector3(TIED.x + LEAD_ASIDE, 0, GATE + 1 + LEAD_AHEAD), { face: 0, speed: LEADING });
+                halted = yield* walkTo(handler, new Vector3(TIED.x + 0.6, 0, GATE + 1 + HANDLER_LEAD_DISTANCE), { face: 0, speed: 0.9 });
               },
               function* () {
-                yield* lookAt(handler, mare.bones.head, { until: LOOK_BACK });
+                yield* lookAt(handler, mare.bones.head, { until: 1.5 });
                 lookedBack = true;
                 yield* lookAt(handler, ahead, { until: Infinity });
               },
@@ -175,16 +171,6 @@ function leadRope(scene: Group, pins: readonly [along: number, at: Object3D][]) 
       rope.step(seconds, pins.map(([along, at]) => [along / LEAD_ROPE, at.getWorldPosition(new Vector3())]));
       line.geometry.setFromPoints(rope.points);
     },
-  };
-}
-
-/** a target sweeping from the front of `glance`'s saddle to its back over `INSPECT` s, from when it is first read */
-function sweeping(glance: Object3D) {
-  const front = new Vector3(0.65, 0.12, 0), back = new Vector3(-0.65, -0.25, 0);
-  let start: number | undefined;
-  return (time: number) => {
-    glance.position.lerpVectors(front, back, Math.min(1, (time - (start ??= time)) / INSPECT));
-    return glance;
   };
 }
 

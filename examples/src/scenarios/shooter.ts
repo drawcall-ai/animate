@@ -23,7 +23,6 @@ const MAGAZINE = { size: new Vector3(0.03, 0.15, 0.07), base: new Vector3(0, -0.
  * above its pouch a magazine comes out to (m)
  */
 const POUCHES = [new Vector3(0.06, -0.17, 0.2), new Vector3(0.13, -0.17, 0.2)];
-const OUT_OF_POUCH = 0.1;
 
 /**
  * Where the rifle is held in the look's frame (from the right eye: +X left, +Y up, +Z ahead; m for the default body's arms, rad): at the
@@ -49,11 +48,7 @@ const BREATH = { drift: 0.004, roll: 0.03, rate: 0.25, after: 1 };
  */
 const SPEED = { forward: 1.4, back: 1.1, side: 1.1, sprint: 3.5, aiming: 0.65, crouching: 0.8 / 1.4 };
 const ACCEL = { ground: 10, air: 2 };
-const FACING = 0.025;
-const LEAP = 2.5;
 
-/** how long the demo runs (s) */
-const DURATION = 62;
 /** mouse turns (minimum jerk): a turn while walking, a quick turn standing, quick turns aiming */
 const TURNS = scalar([[0, 0], [24, 0], [28, 1.2], [29.5, 1.2], [30.7, -0.6], [56.8, -0.6], [57.4, 0.4], [58.2, 0.4], [58.8, -0.6]]);
 
@@ -80,7 +75,7 @@ export function shooter(): Scenario {
   return {
     id: 'shooter', title: 'Full-body shooter',
     description: 'Click to play · mouse look · WASD move (relative to where you look) · Shift sprint · right mouse aim down sights · left click fire · Space jump · C or Ctrl crouch · R reload · V first/third person · Esc release mouse. The body always faces where you look; the legs step to keep up.',
-    duration: DURATION, cameraDistance: 4,
+    duration: 62, cameraDistance: 4,
     stage: (cast) => {
       const scene = new Group();
       const root: Root & { velocity: Vector3 } = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
@@ -101,7 +96,7 @@ export function shooter(): Scenario {
       const well = rifle.getObjectByName('well')!, flash = rifle.getObjectByName('flash')!;
       const pouches = POUCHES.map((at, i) => {
         const pouch = onBone(person, chest, `pouch ${i + 1}`, at.clone().multiply(new Vector3(arms, arms, proportions.scale)));
-        empty(pouch, `over pouch ${i + 1}`, new Vector3(0, OUT_OF_POUCH * proportions.scale, 0));
+        empty(pouch, `over pouch ${i + 1}`, new Vector3(0, 0.1 * proportions.scale, 0));
         pouch.userData.approach = [`over pouch ${i + 1}`];
         return pouch;
       });
@@ -129,7 +124,7 @@ export function shooter(): Scenario {
 
       /** the root as the keys move it over `seconds`: facing the look, moving relative to it, crouching, jumping on a press */
       const steer = (seconds: number) => {
-        root.yaw += wrapAngle(input.aimYaw - root.yaw) * (1 - Math.exp(-seconds / FACING));
+        root.yaw += wrapAngle(input.aimYaw - root.yaw) * (1 - Math.exp(-seconds / 0.025));
         const { x, z } = input.move, length = Math.hypot(x, z), wanted = new Vector3();
         if (length > 0) {
           const forward = z > 0 ? (sprinting() ? SPEED.sprint : SPEED.forward) : SPEED.back;
@@ -140,7 +135,7 @@ export function shooter(): Scenario {
         root.velocity.add(wanted.sub(root.velocity).clampLength(0, (person.airborne ? ACCEL.air : ACCEL.ground) * seconds));
         root.position.addScaledVector(root.velocity, seconds);
         root.crouch = input.crouch && !sprinting() ? 1 : 0;
-        root.jump = input.jump && !jumped && !person.airborne ? LEAP : undefined;
+        root.jump = input.jump && !jumped && !person.airborne ? 2.5 : undefined;
         jumped = input.jump;
         root.steady = smooth(aiming);
       };
@@ -232,7 +227,7 @@ export function shooter(): Scenario {
           },
           action({ update: (_, clock) => frame(clock.delta) }),
         ),
-        done: () => acquired && time >= DURATION - 1 / 60,
+        done: () => acquired && time >= 62 - 1 / 60,
       };
     },
   };

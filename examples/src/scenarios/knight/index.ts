@@ -90,46 +90,46 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       scene.add(strap(gear.buckle, gear.tongue, knight.bones.hips, () => knight.facing));
 
       // where things go about him (m, the default body's, scaled to his height): before him (turned as he faces) and on his bones (worn)
-      const at = (parent: Object3D, name: string, x: number, y: number, z: number, turn?: Euler) => {
+      const scaledPlace = (parent: Object3D, name: string, x: number, y: number, z: number, turn?: Euler) => {
         const place = empty(parent, name, new Vector3(x, y, z).multiplyScalar(scale));
         if (turn) place.quaternion.setFromEuler(turn);
         return place;
       };
-      const before = knight.object, hips = knight.bones.hips;
+      const bodyFrame = knight.object, hips = knight.bones.hips;
       const places = {
         // the belt's ends lifted out before him, round the hips (the strap behind them) and drawn round to the belly, buckled there
-        buckleRound: [at(before, 'buckle out', 0.3, HIPS + 0.14, 0.34), at(before, 'buckle round', 0.26, HIPS + 0.07, -0.05), at(before, 'buckle before', 0.17, HIPS + 0.06, 0.22)],
-        tongueRound: [at(before, 'tongue out', -0.3, HIPS + 0.14, 0.34), at(before, 'tongue round', -0.26, HIPS + 0.07, -0.05),
-          at(before, 'tongue before', -0.17, HIPS + 0.06, 0.22), at(hips, 'tongue through', 0.01, 0.07, 0.175)],
-        belt: at(before, 'the belt before him', 0, HIPS, 0.45),
-        buckled: at(hips, 'buckled', 0.035, 0.07, 0.165),
-        tongued: at(hips, 'tongued', -0.05, 0.07, 0.16),
+        buckleRound: [scaledPlace(bodyFrame, 'buckle out', 0.3, HIPS + 0.14, 0.34), scaledPlace(bodyFrame, 'buckle round', 0.26, HIPS + 0.07, -0.05), scaledPlace(bodyFrame, 'buckle before', 0.17, HIPS + 0.06, 0.22)],
+        tongueRound: [scaledPlace(bodyFrame, 'tongue out', -0.3, HIPS + 0.14, 0.34), scaledPlace(bodyFrame, 'tongue round', -0.26, HIPS + 0.07, -0.05),
+          scaledPlace(bodyFrame, 'tongue before', -0.17, HIPS + 0.06, 0.22), scaledPlace(hips, 'tongue through', 0.01, 0.07, 0.175)],
+        belt: scaledPlace(bodyFrame, 'the belt before him', 0, HIPS, 0.45),
+        buckled: scaledPlace(hips, 'buckled', 0.035, 0.07, 0.165),
+        tongued: scaledPlace(hips, 'tongued', -0.05, 0.07, 0.16),
         // the scabbard out beside him, then hung before the left hip, the hilt up and forward, its chape back and out (clear of the
         // thigh swinging back); tilted forward to present the hilt
-        aside: at(before, 'scabbard aside', 0.3, HIPS + 0.32, 0.3),
-        hanging: at(hips, 'hanging', 0.2, 0.03, 0.1, new Euler(0.6, 0, 0.22, 'YXZ')),
-        presented: at(before, 'presented', 0.2, HIPS + 0.06, 0.22, new Euler(1.0, 0, 0.1, 'YXZ')),
+        scabbardAside: scaledPlace(bodyFrame, 'scabbard aside', 0.3, HIPS + 0.32, 0.3),
+        hanging: scaledPlace(hips, 'hanging', 0.2, 0.03, 0.1, new Euler(0.6, 0, 0.22, 'YXZ')),
+        scabbardPresented: scaledPlace(bodyFrame, 'presented', 0.2, HIPS + 0.06, 0.22, new Euler(1.0, 0, 0.1, 'YXZ')),
         // the helm before his face (a look into it), raised over his head and lowered onto it, round the skull; the eyes ahead and down
-        faced: at(before, 'helm before the face', 0, 1.68, 0.3),
+        helmBeforeFace: scaledPlace(bodyFrame, 'helm before the face', 0, 1.68, 0.3),
         // The grips sit another 16 cm forward: lift overhead within a short arm's reach.
-        raised: at(before, 'helm raised', 0, 1.96, 0.16),
-        helmed: at(knight.bones.head, 'helmed', 0, 0.15, 0.02),
-        bowed: at(before, 'bowed', 0, HIPS + 0.15, 1.6),
-        level: at(before, 'level', 0, 1.6, 3),
+        helmRaised: scaledPlace(bodyFrame, 'helm raised', 0, 1.96, 0.16),
+        helmed: scaledPlace(knight.bones.head, 'helmed', 0, 0.15, 0.02),
+        bowed: scaledPlace(bodyFrame, 'bowed', 0, HIPS + 0.15, 1.6),
+        level: scaledPlace(bodyFrame, 'level', 0, 1.6, 3),
         // each gauntlet held open before the belly (fingers ahead and across, palm down), and worn on its hand
-        open: { left: at(before, 'held open left', 0.07, 1.055, 0.36, new Euler(0, -1.92, 0)), right: at(before, 'held open right', -0.07, 1.055, 0.36, new Euler(0, 1.92, 0)) },
-        gloved: { left: at(knight.bones.leftHand, 'gloved', 0, 0, 0), right: at(knight.bones.rightHand, 'gloved', 0, 0, 0) },
+        open: { left: scaledPlace(bodyFrame, 'held open left', 0.07, 1.055, 0.36, new Euler(0, -1.92, 0)), right: scaledPlace(bodyFrame, 'held open right', -0.07, 1.055, 0.36, new Euler(0, 1.92, 0)) },
+        gloved: { left: scaledPlace(knight.bones.leftHand, 'gloved', 0, 0, 0), right: scaledPlace(knight.bones.rightHand, 'gloved', 0, 0, 0) },
         // the shield borne on the left forearm across the belly, its face out to the front and left; the lance upright by the right side
-        borne: at(before, 'shield borne', 0.2, HIPS + 0.16, 0.3, new Euler(0, Math.PI + 0.35, 0)),
-        upright: at(before, 'lance upright', -0.27, HIPS + 0.3, 0.1),
+        shieldOnForearm: scaledPlace(bodyFrame, 'shield borne', 0.2, HIPS + 0.16, 0.3, new Euler(0, Math.PI + 0.35, 0)),
+        lanceUpright: scaledPlace(bodyFrame, 'lance upright', -0.27, HIPS + 0.3, 0.1),
       };
       // (put on from straight above it)
-      at(knight.bones.head, 'over the head', 0, 0.4, 0.02);
+      scaledPlace(knight.bones.head, 'over the head', 0, 0.4, 0.02);
       places.helmed.userData.approach = ['over the head'];
       const yard = YARD.clone().setX(side * YARD.x), downTheYard = yard.clone().add(new Vector3(0, 1.5, 4));
 
       /** the eyes on to `next` as what the body moves arrives (run it in a race with that) */
-      const ahead = (next: Target) => function* () {
+      const lookAtNext = (next: Target) => function* () {
         yield* wait(arriving(knight, LOOK_AHEAD));
         yield* lookAt(knight, next, { until: Infinity });
       };
@@ -142,29 +142,29 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           yield* grab(knight, gear.buckle, { left: 'end' });
           yield* grab(knight, gear.tongue, { right: 'end' });
           yield* parallel('race', parallel('all', carry(knight, gear.buckle, [...places.buckleRound, places.buckled]), carry(knight, gear.tongue, [...places.tongueRound, places.tongued])),
-            lookAt(knight, places.belt, { until: Infinity }), ahead(gear.scabbard));
+            lookAt(knight, places.belt, { until: Infinity }), lookAtNext(gear.scabbard));
           release(knight, gear.buckle, places.buckled);
           release(knight, gear.tongue, places.tongued);
 
           // the sword, in its scabbard, hung at the left hip; its draw checked: the scabbard tilted, the sword drawn 30 cm and sheathed
           yield* grab(knight, gear.scabbard, { left: 'throat' });
-          yield* carry(knight, gear.scabbard, [places.aside, places.hanging]);
+          yield* carry(knight, gear.scabbard, [places.scabbardAside, places.hanging]);
           yield* parallel('race', lookAt(knight, hilt, { until: Infinity }), function* () {
-            yield* carry(knight, gear.scabbard, places.presented);
+            yield* carry(knight, gear.scabbard, places.scabbardPresented);
             yield* grab(knight, gear.sword, { right: 'hilt' });
             yield* carry(knight, gear.sword, drawn);
             yield* wait(0.5);
             yield* carry(knight, gear.sword, mouth);
           });
           release(knight, gear.sword, mouth);
-          yield* parallel('race', carry(knight, gear.scabbard, places.hanging), ahead(gear.helm));
+          yield* parallel('race', carry(knight, gear.scabbard, places.hanging), lookAtNext(gear.helm));
           release(knight, gear.scabbard, places.hanging);
 
           // the helm off its stand in both hands, lifted before the face, raised over the head and lowered on, the head bowed; its strap buckled
           yield* grab(knight, gear.helm, { left: 'left', right: 'right' });
-          yield* carry(knight, gear.helm, places.faced);
+          yield* carry(knight, gear.helm, places.helmBeforeFace);
           yield* wait(0.4);
-          yield* parallel('race', carry(knight, gear.helm, [places.raised, places.helmed]), function* () {
+          yield* parallel('race', carry(knight, gear.helm, [places.helmRaised, places.helmed]), function* () {
             yield* wait(arriving(knight, 1.2));
             yield* lookAt(knight, places.bowed, { until: Infinity });
           });
@@ -190,11 +190,11 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           yield* grab(knight, gear.shield, { right: 'edge', left: 'enter' });
           yield* grab(knight, gear.shield, { left: 'handle' }, { speed: 0.3 });
           release(knight, { right: gear.shield });
-          yield* parallel('race', carry(knight, gear.shield, places.borne), ahead(gear.lance));
+          yield* parallel('race', carry(knight, gear.shield, places.shieldOnForearm), lookAtNext(gear.lance));
 
           // the lance out of its rack, upright in the right hand; out to the yard as it comes upright, looking round from a second before he stops
           yield* grab(knight, gear.lance, { right: 'grip' });
-          yield* parallel('all', carry(knight, gear.lance, places.upright), function* () {
+          yield* parallel('all', carry(knight, gear.lance, places.lanceUpright), function* () {
             yield* wait(arriving(knight, 0.5));
             // (the eyes down the yard as he goes, on the sights round it from a second before he stops)
             yield* parallel('all', walkTo(knight, yard, { face: 0 }), function* () {

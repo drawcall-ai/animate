@@ -8,16 +8,15 @@ const PACE = 1.3;
 const STRAIGHT = 12;
 const ARC = 6.6;
 
-/** a stroll's variations: its pace (× PACE), the arc's radius (m), the body's facing at the start (rad), and the point stopping dead rather than slowing */
+/** a stroll's variations: its pace (× PACE), the arc's radius (m), the body's facing at the start (rad) */
 export interface Variation {
   speed?: number;
   radius?: number;
   yaw?: number;
-  halt?: boolean;
 }
 
 /** Only a go-there point moves, along a path at a stroll; nobody scripts a step. */
-export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variation = {}): Scenario {
+export function stroll({ speed = 1, radius = 3, yaw = 0 }: Variation = {}): Scenario {
   return {
     id: 'stroll',
     title: 'Stroll (a go-there point)',
@@ -29,7 +28,7 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variati
       // (it slows once as far along the arc at any pace: as many strides on it, slower or faster)
       const slowing = 1.65 + (STRAIGHT + ARC) / (PACE * speed);
       const pace = (time: number) => {
-        const stopping = halt ? (time < slowing ? 0 : 1) : MathUtils.smoothstep(time, slowing, slowing + 2);
+        const stopping = MathUtils.smoothstep(time, slowing, slowing + 2);
         return PACE * speed * MathUtils.smoothstep(time, 0.8, 2.5) * (1 - stopping);
       };
       // the point glides along the path, speeding up into a stroll and slowing to a stop
@@ -47,31 +46,6 @@ export function stroll({ speed = 1, radius = 3, yaw = 0, halt = false }: Variati
         story: () => walkTo(walker, glide, { speed: PACE * speed, until: 22 }),
         // (come to rest at the point where it stopped)
         done: () => walker.settled && standsAt(walker, point),
-      };
-    },
-  };
-}
-
-/**
- * A walk from standing at the origin facing +Z to a point on the floor (and a facing there): judged as a stroll, done once the walk
- * has ended there.
- */
-export function walkThere(to: Vector3, face?: number): Scenario {
-  return {
-    id: 'stroll',
-    title: 'Walk there',
-    description: 'From standing, the body walks to a point (behind it, beside it, or where it stands, turning round) and comes to rest there.',
-    duration: 8,
-    stage: (cast) => {
-      const walker = cast.person();
-      let arrived = false;
-      return {
-        scene: new Group(),
-        bodies: [walker],
-        story: function* () {
-          arrived = yield* walkTo(walker, to, { face });
-        },
-        done: () => arrived && walker.settled && standsAt(walker, to) && (face === undefined || Math.abs(MathUtils.euclideanModulo(walker.facing - face + Math.PI, 2 * Math.PI) - Math.PI) < 0.15),
       };
     },
   };

@@ -34,7 +34,8 @@ function moved(ways: Way[], { shift = { x: 0, z: 0 }, rise = 0 }: Variation, whi
  * place: its height scaled to the body, as a headset is calibrated to its wearer, and turned round the start)
  */
 function playback(person: Person, { pace = 1, turn = 0 }: Variation) {
-  const proportions = person.species.person!;
+  const proportions = person.species.person;
+  if (!proportions) throw new Error('the recording needs a person');
   const heightScale = (proportions.eyeHeight - proportions.eyes.y + proportions.headCenter.y) / RECORDED;
   return {
     time: (time: number) => time * pace,
@@ -48,7 +49,8 @@ function playback(person: Person, { pace = 1, turn = 0 }: Variation) {
  */
 function headset(person: Person, variation: Variation, device: Object3D, centre: (t: number, out: Vector3) => Vector3, yaw: (t: number) => number, pitch: (t: number) => number) {
   const play = playback(person, variation);
-  const proportions = person.species.person!;
+  const proportions = person.species.person;
+  if (!proportions) throw new Error('the recording needs a person');
   const eyesFromCentre = proportions.eyes.clone().sub(proportions.headCenter);
   return (time: number) => {
     const recorded = play.time(time);
@@ -209,26 +211,27 @@ export function reaching(variation: Variation = {}): Scenario {
             time = now;
             return target(now, marker.position);
           };
-          const next = destination(ways), stand = person.position.clone().setY(0);
+          const nextWaypoint = destination(ways), standingTarget = person.position.clone().setY(0);
           let facing = person.facing, turning = false;
           const proportions = person.species.person;
           if (!proportions) throw new Error('the reach recording needs a person');
           // (the body anticipates the next recorded waypoint: turn toward it and step before the arm runs out of reach)
-          const comeAlong = (time: number) => {
-            const ahead = next(time * pace).applyAxisAngle(UP, turn);
+          const followNextWaypoint = (time: number) => {
+            const ahead = nextWaypoint(time * pace).applyAxisAngle(UP, turn);
             const beside = new Vector3(-Math.cos(facing), 0, Math.sin(facing)).multiplyScalar(proportions.shoulderHalfWidth);
-            const shoulder = stand.clone().add(beside);
+            const shoulder = standingTarget.clone().add(beside);
             const toward = Math.atan2(ahead.x - shoulder.x, ahead.z - shoulder.z);
-            const off = Math.abs(Math.atan2(Math.sin(toward - facing), Math.cos(toward - facing)));
-            turning = off > (turning ? 0.3 : 0.7);
+            const facingDifference = Math.abs(Math.atan2(Math.sin(toward - facing), Math.cos(toward - facing)));
+            // Separate start/stop angles prevent toggling the turn near its boundary.
+            turning = facingDifference > (turning ? 0.3 : 0.7);
             if (turning) facing = toward;
             beside.set(-Math.cos(facing), 0, Math.sin(facing)).multiplyScalar(proportions.shoulderHalfWidth);
-            shoulder.copy(stand).add(beside);
+            shoulder.copy(standingTarget).add(beside);
             if (Math.hypot(ahead.x - shoulder.x, ahead.z - shoulder.z) > 0.95 * proportions.armLength) {
-              const back = shoulder.sub(ahead).setY(0).normalize();
-              stand.copy(ahead).setY(0).addScaledVector(back, 0.55 * proportions.armLength).sub(beside);
+              const awayFromTarget = shoulder.sub(ahead).setY(0).normalize();
+              standingTarget.copy(ahead).setY(0).addScaledVector(awayFromTarget, 0.55 * proportions.armLength).sub(beside);
             }
-            return stand;
+            return standingTarget;
           };
           yield* parallel('race',
             function* () {
@@ -236,7 +239,7 @@ export function reaching(variation: Variation = {}): Scenario {
               reached = yield* reach(person, { right: followed }, { speed: 2,
                 until: () => time >= stops && person.bones.rightHand.getWorldPosition(new Vector3()).distanceTo(marker.position) < 0.01 });
             },
-            walkTo(person, comeAlong, { speed: 1.3 * pace, accel: 1.2 * pace ** 2, until: Infinity,
+            walkTo(person, followNextWaypoint, { speed: 1.3 * pace, accel: 1.2 * pace ** 2, until: Infinity,
               face: () => person.position.clone().add(new Vector3(Math.sin(facing), 0, Math.cos(facing))) }),
             // (the eyes lead the hand: where it is going a moment on)
             lookAt(person, (time) => target(time + GLANCE / pace, new Vector3())),

@@ -4,13 +4,10 @@ import { carry, grab, lookAt, release, wait } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
 import { box, empty } from '../things';
 
-/** the box's width, height and depth (m), and its weight (kg) */
+/** the box's width, height and depth (m) */
 const BOX = new Vector3(0.34, 0.26, 0.26);
-const MASS = 2;
 /** the shelf: where its middle stands on the floor, its boards' heights, its width and depth (m) */
 const SHELF = { x: -1.3, z: 4.4, boards: [0.4, 0.95, 1.4, 1.8], width: 1.0, depth: 0.34 };
-/** lifted past the knees (m): the eyes go on from the box to the board it is for */
-const KNEES = 0.6;
 /** how long a lift to the chest takes at the carry's own pace (s) */
 const LIFT = 1.8;
 
@@ -40,7 +37,7 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
       const size = BOX.clone().setY(BOX.y + taller);
       const parcel = box(scene, 'box', size, new Vector3(0.35, size.y / 2, 2.6 - nearer).applyAxisAngle(UP, around));
       parcel.rotation.y = 0.35 + around;
-      parcel.userData.mass = MASS;
+      parcel.userData.mass = 2;
       // (taken as the hands come: the box's sides have no one way to hold them)
       empty(parcel, 'left', new Vector3(size.x / 2 + 0.015, 0, 0));
       empty(parcel, 'right', new Vector3(-size.x / 2 - 0.015, 0, 0));
@@ -56,8 +53,9 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
         story: function* () {
           yield* grab(person, parcel, { left: 'left', right: 'right' });
           // (its eyes on the box as it lifts it, and on to the board once it is past the knees)
+          // Scale the baseline carry speed of 0.5 m/s by the requested lift time.
           yield* parallel('race', carry(person, parcel, shelved, { speed: (0.5 * LIFT) / lift }), function* () {
-            yield* wait(() => parcel.getWorldPosition(new Vector3()).y > KNEES);
+            yield* wait(() => parcel.getWorldPosition(new Vector3()).y > 0.6);
             yield* lookAt(person, top, { until: Infinity });
           });
           release(person, parcel, shelved);

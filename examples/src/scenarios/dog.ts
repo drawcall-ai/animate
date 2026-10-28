@@ -4,9 +4,6 @@ import type { Scenario } from '../scenario';
 import { DOG } from '../skeletons';
 import { ball } from '../things';
 
-/** where the ball lies, and where the dog brings it back to (m) */
-const BALL = new Vector3(4, 0.04, 4);
-const BACK = new Vector3(0, 0, 0.5);
 
 /** A dog trots to a ball, takes it in its jaw and carries it back. */
 export function dogFetch(): Scenario {
@@ -20,17 +17,17 @@ export function dogFetch(): Scenario {
     stage: (cast) => {
       const labrador = cast.body(dog(DOG));
       const scene = new Group();
-      const toy = ball(scene, 'ball', 0.04, BALL);
+      const toy = ball(scene, 'ball', 0.04, new Vector3(4, 0.04, 4));
       toy.userData.mass = 0.06;
-      let back = false;
+      let returned = false;
       return {
         scene,
         bodies: [labrador],
         story: function* () {
           yield* grab(labrador, toy, { jaw: 'ball' });
-          back = yield* walkTo(labrador, BACK);
+          returned = yield* walkTo(labrador, new Vector3(0, 0, 0.5));
         },
-        done: () => back && labrador.holds(toy),
+        done: () => returned && labrador.holds(toy),
       };
     },
   };
