@@ -17,9 +17,11 @@
     "bench:browser": "node examples/scripts/bench.mjs",
     "capture": "node examples/scripts/capture.mjs",
     "video": "node examples/scripts/video.mjs",
-    "run-scene": "pnpm -F examples run-scene"
+    "run-scene": "pnpm -F examples run-scene",
+    "check": "pnpm typecheck && pnpm test && pnpm metrics && pnpm -F examples build && pnpm -F @drawcall/animate exec npm pack --dry-run"
   },
   "devDependencies": {
+    "npm": "11.6.4",
     "playwright": "^1.55.0",
     "tsdown": "^0.23.0",
     "typescript": "^5.9.0"
