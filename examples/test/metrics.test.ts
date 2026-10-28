@@ -1,7 +1,8 @@
 // Scenario statistics and task accuracy under small changes. Run: pnpm metrics [-- -t <id>]
+import { setImmediate } from 'node:timers/promises';
 import { Group, Vector3 } from 'three';
 import { action } from '@pmndrs/timeline';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { SCENARIOS } from '../src/scenarios';
 import { pickupShelf } from '../src/scenarios/pickup';
 import { knightArming } from '../src/scenarios/knight';
@@ -13,6 +14,9 @@ import { checks, failed, measure, type MetricsOptions } from './metrics';
 import { frames } from './frame';
 import { GaitKinematics } from './gait';
 import { cases, type Open } from '../../packages/animate/test/open';
+
+// Whole-scene simulations can occupy a worker for over a minute; let Vitest receive its RPC replies between cases.
+afterEach(() => setImmediate());
 
 /** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
 function judged(sc: Scenario, strides?: MetricsOptions['strides']) {

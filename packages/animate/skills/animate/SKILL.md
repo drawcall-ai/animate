@@ -68,7 +68,9 @@ Each body part does one thing at a time. An asked verb beats a borrowed part; a 
 
 ## Bodies and places
 
-A bare body and a skinned body use the same skeleton. For a mesh, resolve the installed `@drawcall/rig` package and read its `skills/rig/SKILL.md` to author the skeleton and bind it with `skin`. The reference [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) skeletons are starting points; mesh positions must fit the mesh. The lion skeleton also needs custom roles and tuning.
+A bare body and a skinned body use the same skeleton. For a mesh, resolve the installed `@drawcall/rig` package and read its `skills/rig/SKILL.md` to author the skeleton. The reference [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) skeletons are starting points; mesh positions must fit the mesh. The lion skeleton also needs custom roles and tuning.
+
+For a self-contained GLB with cached weights in rig 0.5, use `await new RigLoader().loadAsync({ url, skeleton, source: { url, dependencyUrls: [] } })` and add `vitecache()` from `vitecache/vite` to the host’s Vite plugins. Pass the returned `scene` as the body’s `model`. For existing or procedural objects, `await skin(model, skeleton)` binds directly without caching. The skin report (`rig.report` for the loader) retains `closed` and `volume`; pass the report as the body’s `mass` to derive kilograms from enclosed volume.
 
 Targets are scene points, objects or functions returning them. Use a point when only position matters; a scene empty also supplies orientation and follows its parent. Turn a placement empty's +Z toward the direction the body should face there. Grips and approach empties belong to the prop, so the same story can work with moved furniture. The body avoids other bodies, but does not plan paths around props.
 

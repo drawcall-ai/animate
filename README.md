@@ -31,3 +31,7 @@ person.update(delta);
 The package ships its usage guide as a skill: `packages/animate/skills/animate/SKILL.md`.
 
 `packages/animate` is the package; `examples` is the examples app (`pnpm dev`).
+
+The viewer loads its GLBs with `@drawcall/rig`’s `RigLoader`, supplying source metadata to cache weights through the `vitecache()` Vite plugin. Model contents, skeleton, resolution and installed rig/three versions invalidate cached weights. Run the viewer before building to populate `examples/public/_vitecache/`; Vite includes these ignored cache files in the deployment. The production site reads caches but does not write them.
+
+The Vite config excludes rig from dependency prebundling to preserve worker URLs and serves COOP/COEP headers for parallel WASM workers; configure those headers on the deployment host too to parallelize cache misses.

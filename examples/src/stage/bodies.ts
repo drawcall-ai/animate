@@ -1,7 +1,6 @@
 import { Bone, BufferAttribute, BufferGeometry, Group, LineBasicMaterial, LineSegments, Mesh, Vector3, type Object3D } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { skin, type SkeletonBone } from '@drawcall/rig';
+import { RigLoader, type SkeletonBone } from '@drawcall/rig';
 import type { Body } from '@drawcall/animate';
 import { Joints } from '../joints';
 import { OpenPoseSkeleton } from '../openpose';
@@ -14,12 +13,11 @@ const HEAD_KEYPOINTS = [0, 15, 16, 17, 18];
 export class Wardrobe {
   private constructor(private readonly models: ReadonlyMap<readonly SkeletonBone[], Object3D>) {}
 
-  /** loads each model and skins it on its skeleton (in parallel; the skinning takes a while) */
+  /** loads fresh models in parallel, reusing cached weights for unchanged meshes and skeletons */
   static async load(models: readonly (readonly [skeleton: readonly SkeletonBone[], url: string])[]): Promise<Wardrobe> {
-    const loader = new GLTFLoader();
+    const loader = new RigLoader();
     const rigged = await Promise.all(models.map(async ([skeleton, url]) => {
-      const model = (await loader.loadAsync(url)).scene;
-      await skin(model, skeleton);
+      const { scene: model } = await loader.loadAsync({ url, skeleton, source: { url, dependencyUrls: [] } });
       // (a skinned mesh's bounds are its rest pose's, at the origin: a body that has walked away would be culled)
       model.traverse((node) => (node.frustumCulled = false));
       return [skeleton, model] as const;
