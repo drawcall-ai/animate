@@ -10,8 +10,7 @@ permissions:
 
 jobs:
   check:
-    # one platform, the one the package is published from: long seeded stories amplify last-bit differences in platform maths into
-    # different outcomes for the marginal checks, so the suite's expected results hold per platform
+    # Seeded motion expectations use the release platform.
     runs-on: ubuntu-latest
     env:
       LIFE_SEED_OFFSET: "0"

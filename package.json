@@ -10,15 +10,15 @@
     "dev": "pnpm -F examples dev",
     "build": "pnpm -F @drawcall/animate build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "test:seeds": "for offset in 0 1 2 3; do LIFE_SEED_OFFSET=$offset pnpm -r test || exit $?; done",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:seeds": "for offset in 0 1 2 3; do LIFE_SEED_OFFSET=$offset pnpm test || exit $?; done",
     "metrics": "pnpm -F examples metrics",
     "bench": "pnpm -F examples bench",
-    "bench:browser": "node examples/scripts/bench.mjs",
     "capture": "node examples/scripts/capture.mjs",
     "video": "node examples/scripts/video.mjs",
     "run-scene": "pnpm -F examples run-scene",
-    "check": "pnpm typecheck && pnpm test && pnpm metrics && pnpm -F examples build && pnpm -F @drawcall/animate exec npm pack --dry-run"
+    "check": "pnpm typecheck && pnpm test && pnpm -F examples build && pnpm -F @drawcall/animate exec npm pack --dry-run",
+    "viewer:check": "pnpm exec node examples/scripts/viewer-check.mjs"
   },
   "devDependencies": {
     "npm": "11.6.4",

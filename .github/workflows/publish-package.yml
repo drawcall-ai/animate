@@ -36,7 +36,6 @@ jobs:
           pnpm --dir packages/animate exec npm pkg set version="$version"
       - run: pnpm check
       # npm trusted publisher: drawcall-ai/animate, publish-package.yml, no environment.
-      # Confirm the repository before enabling publishing: this checkout has no Git remote.
       - name: Publish @drawcall/animate
         working-directory: packages/animate
         run: pnpm exec npm publish --access public --provenance --tag latest

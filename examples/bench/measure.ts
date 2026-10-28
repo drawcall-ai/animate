@@ -1,6 +1,4 @@
-// The benchmark, shared by node (node.ts) and the browser (page.ts): a crowd of the example
-// scenarios stepped at 60 Hz without rendering (each scenario's story steps with its bodies, so it
-// is timed with them).
+// A crowd of complete scenarios stepped at 60 Hz, without rendering.
 import { SCENARIOS } from '../src/scenarios';
 import { FIXED_DT, type Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
@@ -43,16 +41,6 @@ export function named(ids: string | null | undefined): readonly Scenario[] {
   });
 }
 
-/** what the benchmark needs from its runtime */
-export interface Host {
-  /** the heap in use (bytes), or null where it can't be read */
-  heap(): number | null;
-  /** a full collection, where one can be forced */
-  collect?(): void;
-  /** called every simulated second (the browser yields to the page here) */
-  pause?(): Promise<void>;
-}
-
 export interface Stats {
   mean: number;
   p50: number;
@@ -69,12 +57,12 @@ export interface Result {
   /** µs per body per tick, over all bodies and by scenario */
   perBody: Stats;
   byScenario: Map<string, Stats>;
-  /** heap growth per frame between collections (bytes; NaN where the heap can't be read) */
+  /** heap growth per frame between collections (bytes) */
   alloc: number;
 }
 
 /** Times `n` bodies of `scenarios` for `seconds` after `warmup` seconds, then measures their allocation. */
-export async function measure(n: number, seconds: number, warmup: number, host: Host, scenarios?: readonly Scenario[]): Promise<Result> {
+export function measure(n: number, seconds: number, warmup: number, scenarios?: readonly Scenario[]): Result {
   const crowd = new Crowd(n, scenarios);
   for (let f = 0; f < warmup / FIXED_DT; f++) crowd.step();
 
@@ -90,30 +78,30 @@ export async function measure(n: number, seconds: number, warmup: number, host: 
       perSim[i][f] = performance.now() - t0;
     }
     perFrame[f] = performance.now() - f0;
-    if (f % 60 === 59) await host.pause?.();
   }
 
   // µs per body: a simulation's time shared among its bodies
   const perBody = perSim.map((a, i) => a.map((ms) => (ms * 1000) / crowd.sims[i].stage.bodies.length));
   const byScenario = new Map<string, Stats>();
   for (const s of new Set(crowd.sims.map((sim) => sim.scenario.id))) byScenario.set(s, stats(perBody.filter((_, i) => crowd.sims[i].scenario.id === s)));
-  return { bodies: crowd.bodies, frames, frame: stats([perFrame]), perBody: stats(perBody), byScenario, alloc: allocation(crowd, host) };
+  return { bodies: crowd.bodies, frames, frame: stats([perFrame]), perBody: stats(perBody), byScenario, alloc: allocation(crowd) };
 }
 
 /**
  * heap growth per frame: each simulation's step measured alone, over 40 frames, its median over the steps no collection fell in, summed
  * over the crowd (a whole frame of a large crowd allocates past the young generation: a collection falls in nearly every one)
  */
-function allocation(crowd: Crowd, host: Host): number {
-  if (host.heap() === null) return NaN;
-  host.collect?.();
+function allocation(crowd: Crowd): number {
+  const collect = globalThis.gc;
+  if (!collect) throw new Error('run with --expose-gc');
+  collect();
   const grew = crowd.sims.map((): number[] => []);
   for (let f = 0; f < 40; f++) {
     crowd.restart();
     crowd.sims.forEach((sim, i) => {
-      const before = host.heap() ?? NaN;
+      const before = process.memoryUsage().heapUsed;
       sim.step();
-      const after = host.heap() ?? NaN;
+      const after = process.memoryUsage().heapUsed;
       if (after >= before) grew[i].push(after - before);
     });
   }

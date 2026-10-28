@@ -7,6 +7,8 @@ const source = 'source';
 const headers = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
 
 export default defineConfig({
+  // Run the viewer before building to populate public/_vitecache; Vite includes it in the build.
+  // Deploy with the same COOP/COEP headers to allow parallel rigging workers on cache misses.
   plugins: [vitecache()],
   // Preserve rig's worker URLs relative to its published modules.
   optimizeDeps: { exclude: ['@drawcall/rig'] },
@@ -15,6 +17,4 @@ export default defineConfig({
   ssr: { resolve: { conditions: [source, ...defaultServerConditions] }, noExternal: ['@drawcall/animate'] },
   server: { port: 5287, strictPort: true, headers },
   preview: { port: 5287, strictPort: true, headers },
-  // the benchmark page ships too, to measure on real devices
-  build: { rollupOptions: { input: ['index.html', 'bench.html'] } },
 });
