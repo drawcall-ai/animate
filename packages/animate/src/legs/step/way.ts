@@ -42,7 +42,7 @@ function wayOf(steps: Steps, leg: Leg, w: Swing, land: Readonly<Vector3>): { acr
   const { floor, feet, st } = steps, level = leg.anchor.y - feet.ankleHeight, climb = level - w.level;
   const lead = Math.min(STAIR.share * w.T, Math.abs(climb) / STAIR.speed);
   const across = climb < 0 ? Math.max(STEP_TIME, w.rest - lead) : w.rest, up = climb > 0 ? Math.max(STEP_TIME, w.rest - lead) : w.rest;
-  const print = feet.print(leg.i, w.x, leg.yaw), under = highestUnder(floor, print);
+  const print = feet.print(leg.i, w.x, leg.yaw);
   // (up onto a tread, its sole kept its clearance over it till it is all over the tread: its heel clear of the nosing it lands past)
   // (its sole's lowest point — a toe hanging down — kept its clearance over the floor it passes, let go over its last stretch onto its landing)
   const over = feet.ankleHeight + (w.drop - feet.ankleHeight + st.clearance * st.scale) * (1 - minimumJerk((w.u - LANDING) / (1 - LANDING)));
@@ -52,7 +52,7 @@ function wayOf(steps: Steps, leg: Leg, w: Swing, land: Readonly<Vector3>): { acr
     const dx = quintic(w.x.x, w.v.x, w.a.x, land.x, 0, across, t)[0] - w.x.x, dz = quintic(w.x.z, w.v.z, w.a.z, land.z, 0, across, t)[0] - w.x.z;
     const there = highestUnder(floor, print.map(([x, z]): Spot => [x + dx, z + dz]));
     if (there > level + RISE) pass = Math.max(pass, there + over);
-    if (k === 0 || t > CLEAR || w.u > HOLDING || there <= under + RISE) continue;
+    if (k === 0 || climb <= RISE || t > CLEAR || w.u > HOLDING || there <= w.level + RISE) continue;
     const sole = quintic(w.x.y, w.v.y, w.a.y, land.y, 0, up, t)[0] + arcOf(steps, w, u) - w.drop;
     held ||= sole < there + st.clearance * st.scale;
   }
@@ -69,7 +69,7 @@ const BRAKING = 0.1, CLEAR = 0.1, HOLDING = 0.5;
 const STAIR = { speed: 1, share: 0.25 };
 /** the least time a swing's way is planned over (s): a sub-step */
 const STEP_TIME = 1 / 60;
-/** Tuned: a floor this much higher (m) than the one under a swing is a rise it waits to clear */
+/** Tuned: a floor this much higher (m) than the one a swing left is a rise it waits to clear */
 const RISE = 0.01;
 /** how many moments to come a swing's way over the floor is read at */
 const AHEAD = 10;

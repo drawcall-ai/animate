@@ -237,8 +237,8 @@ export class Steps {
   readonly pair: number[]; readonly apart: number[];
   /** the pelvis' last two facings (rad) */
   readonly yaws: number[];
-  /** how high the pelvis stands over the ground (m), as it first stood; the ground's height last sub-step (m) */
-  stand = NaN; under = NaN;
+  /** how high the pelvis stands over the ground (m), as it first stood */
+  stand = NaN;
   asked: number | undefined; last: number; rootYaw: number;
   readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
   low = NaN; most = Infinity; sense = 0; paused = 0;

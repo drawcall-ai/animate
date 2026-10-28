@@ -49,11 +49,9 @@ export class Stepper extends Steps {
     const timing = this.timing(root);
     const yaw = this.face(root);
     const { v, crouch: k, run, tiptoe } = root;
-    const timed = { ...root, ...timing }, ground = this.ground.at(r, f.dt);
+    const timed = { ...root, ...timing }, ground = this.ground.at(r, f.dt), climb = this.ground.rising;
     // (first moved: standing as high over the ground as it stands)
-    if (Number.isNaN(this.stand)) [this.stand, this.under] = [this.heights[1] - ground, ground];
-    const climb = (ground - this.under) / f.dt;
-    this.under = ground;
+    if (Number.isNaN(this.stand)) this.stand = this.heights[1] - ground;
     const body: Body = {
       ...timed, yaw, width: widthAt(this, timed, v), moving: smoothstep(0, 1, v), ground, climb,
       standing: ground + this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? ZERO).setY(0),

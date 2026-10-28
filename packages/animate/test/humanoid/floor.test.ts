@@ -28,11 +28,13 @@ interface Walked {
   up: number; down: number; pelvis: number;
   /** furthest the extrapolated centre of mass went past the feet (m) */
   xcom: number;
+  /** the pelvis's least height over the higher floor its planted feet stand on (m): how deep it sinks onto its legs */
+  seat: number;
 }
 
 /** `body` walked to `to` on `floor`, read every frame (the walk given `speed`, else as it goes) */
 function walked(body: Body, floor: (x: number, z: number) => number, to: Vector3, speed?: number): Walked {
-  const h = insides(body), out: Walked = { sunk: 0, raised: 0, touchdowns: 0, straddled: 0, swing: Infinity, nosing: Infinity, up: 0, down: 0, pelvis: 0, xcom: 0 };
+  const h = insides(body), out: Walked = { sunk: 0, raised: 0, touchdowns: 0, straddled: 0, swing: Infinity, nosing: Infinity, up: 0, down: 0, pelvis: 0, xcom: 0, seat: Infinity };
   const coms: number[] = [], hips: number[] = [], last: (Vector3[] | null)[] = [null, null];
   let arrived = false;
   play(function* () { arrived = yield* walkTo(body, to, { speed }); }, [body], 20, () => {
@@ -61,6 +63,8 @@ function walked(body: Body, floor: (x: number, z: number) => number, to: Vector3
       }
       last[i] = leg.swing ? soles : null;
     });
+    const levels = (h.stepper?.legs ?? []).flatMap((leg) => leg.swing ? [] : [leg.anchor.y - h.proportions.ankleHeight]);
+    if (levels.length) out.seat = Math.min(out.seat, h.pose.position(0).y - Math.max(...levels));
     coms.push(h.pose.com(new Vector3()).y);
     hips.push(h.pose.position(0).y);
     out.xcom = Math.max(out.xcom, xcomPast(h));
@@ -131,6 +135,8 @@ describe('a person on a floor', () => {
       expect(walk.up).toBeLessThan(0.55);
     }
     expect(walk.pelvis).toBeLessThan(0.75);
+    // (its legs bent over the treads, not sat down on them: the lead knee bent up a flight, the stance knee lowering it down one)
+    expect(walk.seat).toBeGreaterThan(from < to ? 0.55 : 0.45);
   });
 
   it.each([0.4, 1.3])('climbs them at %s m/s asked too, a walk no faster than a stair pace on them', (speed) => {
