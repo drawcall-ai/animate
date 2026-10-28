@@ -54,7 +54,7 @@ export const SOLVED = (proportions: Proportions): Keeping => ({ depth: -AIR * pr
  * push, the joints turned toward it as little as clears the arm and within `NUDGE` — so the brakes' work is not undone in a jerk */
 export const NUDGED: Keeping = { depth: DEPTH / 2, swivel: 1, push: 0.2, back: false, nudge: NUDGE };
 
-/** Re-solve a colliding arm within joint limits, minimizing forward push and elbow swivel. Return push in metres; leave an infeasible pose for the dev check. */
+/** Re-solve a colliding arm toward world-space `tip` within joint limits, minimizing forward push and elbow swivel. Return push in metres; leave an infeasible pose for the dev check. */
 export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: { position: Vector3; quaternion?: Quaternion }, keeping: Keeping): number {
   const pose = f.current, chain = `${side}Arm`;
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = keeping.depth;
@@ -126,7 +126,7 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
   return hi;
 }
 
-/** Clear the wrist and elbow with minimum swivel from `near`. Cross-body reaches stay in front; return forward push (m), or -1 without changing an infeasible goal. */
+/** Clear the world-space wrist in place and write the elbow to `pole`, with minimum swivel from `near`. Cross-body reaches stay in front; return forward push (m), or -1 without changing an infeasible goal. */
 export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height;
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
@@ -169,7 +169,7 @@ function swivels(proportions: Proportions, shoulder: Readonly<Vector3>, wrist: R
   return false;
 }
 
-/** Stage cross-body or rearward goals in front until the trunk turns. A hand on backswing first comes forward on its own side; return null when a direct reach is clear. */
+/** Stage world-space cross-body or rearward goals in `out`, in front until the trunk turns. A hand on backswing first comes forward on its own side; return null when a direct reach is clear. */
 export function waitingFor(pose: ReadonlyPose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, goal: Readonly<Vector3>, near: Readonly<Vector3>, out: Vector3): Vector3 | null {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), turn = pose.rotation(INDEX.chest);
   const front = _wFront.set(0, 0, 1).applyQuaternion(turn), inside = _wIn.set(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(turn);

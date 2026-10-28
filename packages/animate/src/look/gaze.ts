@@ -48,7 +48,7 @@ const GLANCE = { turnAccel: 40, turnSpeed: 6 };
  */
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
-/** Keep the eyes on a world target, sharing the braked head turn evenly over the neck chain within joint limits; EYES takes the remainder. */
+/** Keep the eyes on a world target (rest: +Z forward, +Y up), sharing the braked head turn evenly over the neck chain within joint limits; EYES takes the remainder. The history-followed head turn uses headPace, capped by motion. */
 export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, motion: HeadMotion = GLANCE): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');

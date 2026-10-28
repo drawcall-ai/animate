@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 
-/** Humanoid bone names in parent-first order. Rest convention: +Y up, +Z forward, left +X, identity T-pose rotations.
- * No independent upperChest, jaw, eyes or finger motion. */
+/** VRM 1.0 humanoid bone names in parent-first order. Rest convention: +Y up, +Z forward, left +X, identity T-pose rotations.
+ * upperChest has no separate degree of freedom and stays at identity; VRM lookAt handles jaw/eyes, and nothing drives fingers. */
 export const BONES = [
   'hips', 'spine', 'chest', 'neck', 'head',
   'leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand', 'rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand',

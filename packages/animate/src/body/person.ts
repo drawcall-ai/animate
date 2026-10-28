@@ -130,7 +130,8 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
   }
 }
 
-/** Check final grip distance after fitting. Report carried-load separation once per hold. */
+/** Check final grip distance after fitting. Report carried-load separation once per hold.
+ * Worn grips have one rigid owner; unreachable carries draw the wrists together and off their grips. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];

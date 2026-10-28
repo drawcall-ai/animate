@@ -47,7 +47,8 @@ export interface SelfOptions {
   dev?: boolean | { notes?: boolean };
 }
 
-/** Body state and arbitration. Each fixed sub-step applies balance, request staging, part claims, then carried things. */
+/** Body state and arbitration. Each 1/60 s sub-step applies balance, request staging, part claims, then carried things.
+ * Balance reads the previous sub-step’s asks; after all writes, final poses advance current → prev → prev2. */
 export class Self implements Holder {
   readonly skeleton: Skeleton;
   readonly scale: number;
@@ -172,7 +173,7 @@ export class Self implements Holder {
     return yawOf(this.pose.local(0));
   }
 
-  /** Self reads the pose being written; a body ahead of another reader exposes its update-start pose. */
+  /** Self reads the pose being written (the last final pose between sub-steps); a body ahead of another reader exposes its update-start pose. */
   poseFor(reader: Resolving): ReadonlyPose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
     return this.updates > reader.updates ? this.before[0] : this.frame.prev;

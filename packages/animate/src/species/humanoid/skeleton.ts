@@ -44,7 +44,7 @@ export const CHAINS = {
   neck: ['neck', 'head'],
 } satisfies Record<string, readonly BoneName[]>;
 
-/** Bones in BONES/INDEX order at rest offsets; mass defaults to massFor(height). */
+/** Bones in BONES/INDEX order at rest offsets; hips are relative to the ground point beneath them; mass defaults to massFor(height). */
 export function skeletonOf(proportions: Proportions, mass = massFor(proportions.height)): BoneDef[] {
   return BONES.map((name) => {
     const segment = SEGMENT[name], speed = snapSpeed(name);

@@ -280,7 +280,7 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
   pose.setLocal(bone, limited(pose.skeleton, bone, q));
 }
 
-/** Blend elbow poles in the chest frame. Overhead, prefer outward: a forward pole makes a nearly straight arm swivel. */
+/** Blend elbow poles in the chest frame and return `out` in world coordinates. Overhead, prefer outward: a forward pole makes a nearly straight arm swivel. */
 function elbowPole(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
   const sign = side === 'left' ? 1 : -1;
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);

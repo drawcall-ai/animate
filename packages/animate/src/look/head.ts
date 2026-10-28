@@ -35,7 +35,7 @@ const SPOT_RATE = 10;
 /** how fast the body walks round and over under a head (m/s, m/s²) */
 const UNDER = { speed: 1.0, accel: 1.2 };
 
-/** Follow tracked eyes and orientation. Run `under` before `look`, and both before the hands, which depend on the posed chest. */
+/** Follow tracked eye-midpoint position and orientation (default: level, facing with the pelvis). Run `under` before `look`, and both before the hands, which depend on the posed chest. */
 export function heading(person: Led, eyes: (f: Frame) => Goal, pace: Motion = HEADSET): { under: (f: Frame) => Go; look: Step } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
@@ -104,7 +104,7 @@ function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => G
 
 const SPINE = [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head];
 
-/** Share the target turn over SPINE, then alternate head-position and head-orientation solves within joint limits. */
+/** With `eyes` in the head frame and `at`/`q` in world coordinates, share the target turn over SPINE, then alternate head-position and head-orientation solves within joint limits. */
 function place(pose: Pose, eyes: Vector3, at: Vector3, q: Quaternion) {
   const [spine, chest, neck, head] = SPINE;
   const rel = _rel.copy(pose.rotation(0)).invert().multiply(q);

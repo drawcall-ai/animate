@@ -14,7 +14,7 @@ export interface ReadonlyPose {
   load(bone: number): Readonly<{ mass: number; at: Readonly<Vector3> }>;
 }
 
-/** Root world position and parent-relative bone rotations, with lazy forward kinematics. Weighted writes blend from the current pose, so repeated blends depend on the sub-step. */
+/** Root world position and parent-relative bone rotations (the root rotation is world-relative), with lazy forward kinematics. Weighted writes blend from the current pose, so repeated blends depend on the sub-step. */
 export class Pose implements ReadonlyPose {
   private readonly root = new Vector3();
   private readonly locals: Quaternion[];

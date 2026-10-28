@@ -4,7 +4,7 @@ import { SIDES, createRest, type Rest } from './bones';
 /** the standing height (m) the default proportions and every tuned distance are given for */
 export const DEFAULT_HEIGHT = 1.75;
 
-/** Measures derived once from the rest skeleton (+Y up, +Z forward, left +X; metres), with left-side landmarks mirrored on the right. */
+/** Measures derived once from the rest skeleton (VRM normalized axes: +Y up, +Z forward, left +X; metres), with left-side landmarks mirrored on the right. */
 export interface Proportions extends Rest {
   /** floor to the top of the head, standing */
   readonly height: number;
@@ -76,7 +76,7 @@ export function proportionsFor(height: number): Proportions {
   return derive(r, H);
 }
 
-/** Derive measures from rest geometry; estimate height from the head unless given, and place missing toes at the ball of the foot. */
+/** Derive measures from rest geometry; estimate height from the head unless given, and place missing toes (zero offsets) at the ball of the foot on the floor; landmarks scale with standing height. */
 export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT): Proportions {
   const H = height, o = rest.offsets, ankle = ankleHeight(rest);
   for (const n of SIDES) {
