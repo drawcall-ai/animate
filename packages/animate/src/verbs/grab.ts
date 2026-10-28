@@ -11,16 +11,20 @@ export interface GrabOptions {
   speed?: number;
   /** the hands' acceleration with `speed` (m/s²) */
   accel?: number;
+  /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
+   * rising on its toes for the grips as far as its arms and trunk allow, and ends `false` if that is not far enough */
+  step?: boolean;
   /** ends on this instead of holding */
   until?: Until;
 }
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
- * origin): it walks up to stand in reach (borrowed legs), its eyes find the grips first (borrowed), its hands rise before it arrives and
- * reach them as it does (asked), the body bowing and bending as low as they are. A mover, it ends holding. A loose thing with a mass (on
- * no body) is lifted clear of what it rests on; anything else stays where it is, and the hands follow it. It returns `false` if no stand
- * reaches the grips or the hand position or turn remains unmet after the planned reach plus four seconds. Grips set position only by default:
+ * origin): it walks up to stand in reach (borrowed legs; with `step: false` it stays where it stands), its eyes find the grips first
+ * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. A mover,
+ * it ends holding. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else stays where it is, and the
+ * hands follow it. It returns `false` if no stand reaches the grips (with `step: false`: if they are out of reach from where it stands) or
+ * the hand position or turn remains unmet after the planned reach plus four seconds. Grips set position only by default:
  * `userData.handTurn = true` takes the empty’s orientation; an axis [x, y, z] allows roll about that line in its frame.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {

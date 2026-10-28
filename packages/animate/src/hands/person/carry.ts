@@ -13,7 +13,7 @@ import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold
 import type { Thing } from '../../things/thing';
 import { resolve } from '../../things/resolve';
 import type { Reacher } from './reacher';
-import type { Pace } from '../handling';
+import type { Manner } from '../handling';
 import type { Clearance, Way } from '../route';
 import { floorUnder } from '../../legs/person/legged';
 import { handStep, HOLD } from './arms';
@@ -43,7 +43,7 @@ const ALONG = { speed: 0.5, least: 0.4 };
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
 /** Carry the route, retaining a fresh aim at each travel/hold boundary. */
-export function* carrying(person: Reacher, request: Request, thing: Thing, way: Way, options: Pace) {
+export function* carrying(person: Reacher, request: Request, thing: Thing, way: Way, options: Manner) {
   const sides = handsOn(person, thing).map(sideOf);
   const resting = supported(thing);
   yield* lifting(person, request, thing);
@@ -54,7 +54,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
     hold.keep = undefined;
     return { side, at: hold.goal.position };
   });
-  const plan = way.own ? 'there' : footing(person, { place: end, held });
+  const plan = way.own ? 'there' : footing(person, { place: end, held }, options.step ?? true);
   if (plan === 'nowhere') {
     request.fail();
     return;

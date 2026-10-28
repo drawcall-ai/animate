@@ -11,15 +11,16 @@ import { backingOut } from './release';
 /** Human hand staging; the right hand leads coordinated reaches. */
 export function personHands(person: Reacher): Handling {
   return {
-    take: function* (request, thing, grips, pace) {
+    take: function* (request, thing, grips, manner) {
       const loose = thing.massive && !bodyOf(thing.object);
       const takes = grips.map(({ hand, grip }) => ({ side: sideOf(hand), thing, grip, goal: goalOn(thing.grip(grip), person.restOf(person.hands[hand])) }));
-      if (!(yield* grabbing(person, request, takes, pace.speed === undefined ? undefined : { speed: pace.speed, accel: pace.accel }))) return;
+      const motion = manner.speed === undefined ? undefined : { speed: manner.speed, accel: manner.accel };
+      if (!(yield* grabbing(person, request, takes, manner.step ?? true, motion))) return;
       if (loose) yield* liftingClear(person, request, thing);
       request.met();
     },
-    bring: (request, thing, points, end, pace) => carrying(person, request, thing, wayOf(person, thing, points, end), pace),
-    reach: (request, aims, pace) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), pace),
+    bring: (request, thing, points, end, manner) => carrying(person, request, thing, wayOf(person, thing, points, end), manner),
+    reach: (request, aims, manner) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), manner),
     backOut(hands) {
       const sides = hands.map(sideOf);
       person.own('release', '', (request) => () => backingOut(person, request, sides));

@@ -9,16 +9,20 @@ export interface ReachOptions {
   speed?: number;
   /** its acceleration with `speed` (m/s²) */
   accel?: number;
+  /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
+   * rising on its toes for the targets as far as its arms and trunk allow, and ends `false` if that is not far enough */
+  step?: boolean;
   /** ends on this instead of arriving: a target that moves is followed until then */
   until?: Until;
 }
 
 /**
  * Reaches each hand named to its target (an `Object3D` turns the hand as it is turned), taking nothing: from where it stands if it can
- * reach, else, if it can walk and is not driven, it walks up first (borrowed legs), its eyes on the targets (borrowed), the hands
- * going as it arrives (asked), the body turning, bowing, bending or rising on its toes for them. A mover, it ends once the hands are
- * there. It returns `false` if it can stand nowhere in reach
- * or the hand position or turn remains unmet after the planned reach plus four seconds, excluding balance-support steps.
+ * reach (each target within `armLength`'s reach of its shoulder, as the trunk turns it), else, if it can walk, is not driven and `step`
+ * allows, it walks up first (borrowed legs) and stays where it stood, its eyes on the targets (borrowed), the hands going as it arrives
+ * (asked), the body turning, bowing, bending or rising on its toes for them. A mover, it ends once the hands are there. It returns `false`
+ * if it can stand nowhere in reach (with `step: false`: if it cannot reach from where it stands), or the hand position or turn remains
+ * unmet after the planned reach plus four seconds, excluding balance-support steps.
  */
 export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Target>, options: ReachOptions = {}): Verb {
   const named = Object.entries<Target | undefined>(targets).flatMap(([hand, target]) => target === undefined ? [] : [{ hand, target }]);

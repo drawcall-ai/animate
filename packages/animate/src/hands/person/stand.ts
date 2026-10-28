@@ -5,7 +5,7 @@ import { loadFactor } from '../../kernel/load';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../kernel/math';
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
-import { ARM_REACH } from './bend';
+import { ARM_REACH, PROTRACTION } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { floorUnder } from '../../legs/person/legged';
@@ -54,8 +54,11 @@ function shoulderOf(person: Reacher, side?: Side): Vector3 {
     : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
 }
 
-/** Find a comfortable stand clear of bodies and support: there already, nowhere it could, or a walk there. */
-export function footing(person: Reacher, to: Stand) {
+/**
+ * Find a comfortable stand clear of bodies and support: there already, nowhere it could, or a walk there (noted in development). Without
+ * `step`, the feet stay where they stand: there if the hands reach from it (`planted`), else nowhere.
+ */
+export function footing(person: Reacher, to: Stand, step = true) {
   const f0 = person.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
   if (start?.carriedBy === person) return 'there' as const;
@@ -88,6 +91,10 @@ export function footing(person: Reacher, to: Stand) {
   const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - (standing + TIPTOE * proportions.scale);
   if (above > reach) return nowhere('approach: grip above the shoulders on tiptoe (m)', above);
   if (person.drive) return 'there' as const;
+  if (!step) {
+    const short = Math.max(...grips.map((grip) => planted(person, grip)));
+    return short > 0 ? nowhere('approach: beyond reach with the feet planted (m short)', short, 0) : 'there' as const;
+  }
   const at = middle.clone(), there = new Vector3();
   // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
   const feetOut = Math.max(proportions.hipHalfWidth, defaultStance(proportions).width);
@@ -152,6 +159,7 @@ export function footing(person: Reacher, to: Stand) {
     via.push((f) => moved(beside, f));
   }
   const walk = new Walk(person, { to: destination, face: facing, within: ahead, via });
+  f0.dev?.note(f0.time, { check: 'approach: walks up to stand in reach, staying there (m to walk; `step: false` keeps the feet)', value: flat(body, there), limit: 0, where: `${grips.length} grips` });
   return {
     walk,
     arrived: (f: Frame) => {
@@ -170,6 +178,21 @@ export function* walking(request: Request, plan: WalkUp, after?: number) {
     return go;
   }, (f, _, time) => time > 0 && (walk.stalled || arrived(f)));
   return !walk.stalled;
+}
+
+/**
+ * how far (m) a grip is beyond the hand's reach from where the body stands (≤ 0: within it): from its shoulder (the shoulders' middle for
+ * a placing point) as it comes down, bowed and crouched, for a grip lower than `LOWERED_BELOW` of the reach below it, or up on its toes for
+ * one above, the trunk turning that shoulder up to its half-width further toward it and the clavicle drawing it out (`PROTRACTION`) — as
+ * `footing` judges a placing point's reach
+ */
+function planted(person: Reacher, grip: { side?: Side; at: Vector3 }): number {
+  const proportions = person.proportions, reach = ARM_REACH * proportions.armLength;
+  const standing = floorUnder(person) + proportions.shoulderHeight, height = grip.at.y;
+  const { drop, forward } = stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach));
+  const shoulders = standing - drop + Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing));
+  const across = Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2)) + forward + proportions.shoulderHalfWidth + PROTRACTION * proportions.height;
+  return Math.max(Math.abs(height - shoulders) - reach, flat(shoulderOf(person, grip.side), grip.at) - across);
 }
 
 /** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */

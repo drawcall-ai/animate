@@ -85,7 +85,9 @@ export function derive(rest: Rest, height = headHeight(rest) / HEAD_HEIGHT) {
     toeFront: toes.z + sole.bigToe.z,
     upperArm,
     forearm,
-    /** upper-arm joint to wrist */
+    /** upper-arm joint to wrist. A hand reaches 0.95 of it from its shoulder (the trunk turning that shoulder up to `shoulderHalfWidth`
+     * further toward it), so a reach within that goes from where the body stands; one beyond walks up to stand about 0.8 of it from its
+     * targets (bowing and crouching for low ones), unless its verb's `step` is false */
     armLength: upperArm + forearm,
     /** upper-arm joint above the floor, standing */
     shoulderHeight: rest.hips.y + o.spine.y + o.chest.y + o.leftShoulder.y + o.leftUpperArm.y,

@@ -1,10 +1,14 @@
 // The verbs a story asks a body's goals with, recorded as they run (`asking.ts`): the metrics judge the eyes and hands against them.
+import { Vector3 } from 'three';
 import { vi } from 'vitest';
 
 vi.mock('@drawcall/animate', async (original) => {
   const actual = await original<typeof import('@drawcall/animate')>();
   const { asking } = await import('./asking');
-  const lookAt: typeof actual.lookAt = (body, target, options) => asking(body, { gaze: target }, actual.lookAt(body, target, options));
+  // (another body as the target is its eyes, as lookAt reads them; lookAt itself says when it has none)
+  const eyesOf = (seen: import('@drawcall/animate').Body) => () => seen.species.gaze?.eyes(seen.pose, new Vector3()) ?? seen.position;
+  const lookAt: typeof actual.lookAt = (body, target, options) =>
+    asking(body, { gaze: target instanceof actual.Body ? eyesOf(target) : target }, actual.lookAt(body, target, options));
   const reach: typeof actual.reach = (body, targets, options) => {
     const { left, right } = targets as { left?: import('@drawcall/animate').Target; right?: import('@drawcall/animate').Target };
     return asking(body, { leftWrist: left, rightWrist: right }, actual.reach(body, targets, options));
