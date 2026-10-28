@@ -2,7 +2,7 @@ import { Group, Quaternion, Vector3, type Bone, type Object3D } from 'three';
 import { action, parallel, type NonReuseableTimeline } from '@pmndrs/timeline';
 import { arriving, Body, humanoid, lookAt, track, wait, walkTo } from '@drawcall/animate';
 import type { Dress } from './cast';
-import { HALL } from './hall';
+import { floorAt, HALL } from './hall';
 import { SOLDIER } from './skeletons/soldier';
 
 // The Rebel troops: blocks of soldiers either side of the aisle, facing it at attention, with an officer before each block.
@@ -50,7 +50,7 @@ export function createTroops(dress: Dress, dev = true): Troops {
   let seed = 100;
 
   const enlist = (at: Vector3, face: number, name: string) => {
-    const trooper = { body: new Body(species, { at, face, model: dress(SOLDIER), life: { seed }, dev }), seed: seed++ };
+    const trooper = { body: new Body(species, { at, face, floor: floorAt, model: dress(SOLDIER), life: { seed }, dev }), seed: seed++ };
     trooper.body.object.name = name;
     troopers.push(trooper);
     return trooper;

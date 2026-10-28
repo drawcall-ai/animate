@@ -44,7 +44,6 @@ export function play(beat: Beat, dress?: Dress): Playing {
     step(seconds) {
       update(undefined, seconds);
       for (const body of playing.bodies) body.update(seconds);
-      staged.afterStep?.(seconds);
       playing.time += seconds;
     },
     finished: () => finished,

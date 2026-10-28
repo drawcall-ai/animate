@@ -1,11 +1,8 @@
 import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { wait } from '@drawcall/animate';
-import { castBodies } from '../cast';
 import { droidsLife, type Cue } from '../droids/life';
-import { createFloor } from '../floor';
 import { roar } from '../gestures';
-import { floorAt } from '../hall';
 import type { Beat } from './index';
 
 // The droids on the dais through the ceremony, the heroes already before Leia: R2-D2 and C-3PO look down the hall the heroes came up,
@@ -19,8 +16,6 @@ export const beat: Beat & { order: number } = {
   duration: 30,
   starts: { luke: 'lukeDecorated', han: 'hanDecorated', chewbacca: 'chewbaccaDecorated' },
   stage({ cast }) {
-    const floor = createFloor(castBodies(cast), floorAt);
-    const seen = (body: Parameters<typeof floor.seenBy>[0], point: Vector3) => floor.seenBy(body, point);
     const { artoo, threepio, luke, han, chewbacca } = cast;
     const hall = new Vector3(0, 1.7, 8);
     const cues: Cue[] = [
@@ -35,13 +30,12 @@ export const beat: Beat & { order: number } = {
     let finished = false;
     return {
       story: function* () {
-        yield* parallel('all', droidsLife(artoo, threepio, seen, cues), function* () {
+        yield* parallel('all', droidsLife(artoo, threepio, cues), function* () {
           yield* wait(14.5);
           yield* roar(chewbacca);
         });
         finished = true;
       },
-      afterStep: floor.update,
       done: () => finished,
     };
   },

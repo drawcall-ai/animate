@@ -16,16 +16,11 @@ export function besides(body: Body, x: number, y: number, z: number, out = new V
   return out.set(x, y, z).applyAxisAngle(UP, body.facing).add(body.position);
 }
 
-/**
- * where `body`'s eyes are, as `seer` must aim to look into them (world). The library stands every body on y = 0, and this scene lifts
- * each one by the floor under it (`floorAt`) only to be seen; so the 0.2 m between the heroes' step and Leia's dais is added here.
- */
-export function eyesOf(body: Body, seer?: Body, out = new Vector3()): Vector3 {
+/** where `body`'s eyes are (world) */
+export function eyesOf(body: Body, out = new Vector3()): Vector3 {
   const gaze = body.species.gaze;
   if (!gaze) throw new Error(`${body.species.name ?? 'body'} has no eyes to look at`);
-  gaze.eyes(body.pose, out);
-  if (seer) out.y += floorAt(body.position.z) - floorAt(seer.position.z);
-  return out;
+  return gaze.eyes(body.pose, out);
 }
 
 /**
@@ -40,7 +35,7 @@ export function bowForMedal(luke: Body, leia: Body, { until, proud = 2.4 }: { un
     // he straightens before he looks up at her: a look aims from where the eyes are as it begins, so one begun while still bowed
     // (the eyes 0.1 m low) holds the head 15 degrees too high at her face 0.6 m away
     yield* wait(0.35);
-    const face = (out: Vector3) => eyesOf(leia, luke, out).add(LIFT);
+    const face = (out: Vector3) => eyesOf(leia, out).add(LIFT);
     yield* lookAt(luke, follow(face), { until: proud * 0.4 });
     // the shy part: his eyes drop a little and come back up to her
     yield* lookAt(luke, follow((out) => face(out).add(SHY_DROP)), { until: 0.45 });
@@ -56,7 +51,7 @@ export function bowForMedal(luke: Body, leia: Body, { until, proud = 2.4 }: { un
 export function cockyWink(han: Body, leia: Body, { seconds = 2.6 }: { seconds?: number } = {}): Verb {
   return (function* () {
     const start = eyesOf(han);
-    const toLeia = eyesOf(leia, han).sub(start);
+    const toLeia = eyesOf(leia).sub(start);
     // how far round from his facing she is (+ left), at most 45 degrees of it taken by the head and shoulders
     const turn = clamp(Math.atan2(toLeia.x, toLeia.z) - han.facing, -0.8, 0.8);
     const head = new Object3D();
@@ -132,6 +127,7 @@ export function stepBackAndNod(leia: Body, hero: Body, { distance = 0.35 }: { di
   return (function* () {
     const place = new Object3D();
     place.position.copy(besides(leia, 0, 0, -distance));
+    place.position.y = floorAt(place.position.x, place.position.z);
     place.rotation.y = leia.facing;
     let walked = true;
     yield* parallel(
@@ -140,7 +136,7 @@ export function stepBackAndNod(leia: Body, hero: Body, { distance = 0.35 }: { di
         walked = yield* walkTo(leia, place, { speed: 0.6 });
       })(),
       (function* () {
-        yield* lookAt(leia, follow((out) => eyesOf(hero, leia, out)), { until: arriving(leia, 0.5) });
+        yield* lookAt(leia, hero, { until: arriving(leia, 0.5) });
         yield* graciousNod(leia, hero);
       })(),
     );
@@ -155,9 +151,9 @@ export function graciousNod(body: Body, toward: Body, { seconds = 1.2, depth = 0
   const target = (time: number) => {
     began ??= time;
     const [dip] = sample(NOD, (time - began) / seconds);
-    const eyes = eyesOf(toward, body, NODDING);
+    const eyes = eyesOf(toward, NODDING);
     // the target drops `depth` × the distance per unit dip: tan of about 14 degrees
-    const distance = eyesOf(body, undefined, from).distanceTo(eyes);
+    const distance = eyesOf(body, from).distanceTo(eyes);
     return eyes.setY(eyes.y - dip * depth * distance);
   };
   return lookAt(body, target, { until: seconds });

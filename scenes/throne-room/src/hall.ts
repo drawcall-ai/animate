@@ -21,10 +21,13 @@ export const DAIS = {
   top: HALL.steps.start + HALL.steps.count * HALL.steps.tread,
 };
 
-/** the floor height at `z` along the aisle (the steps' tops; 0 on the hall floor) */
-export function floorAt(z: number): number {
+/** the width of the steps and the dais (m); the troop blocks stand on the floor either side of them */
+const DAIS_WIDTH = 16;
+
+/** the floor's height under a world point (m): the steps' tops across their width, 0 on the hall floor. Every body's `floor`. */
+export function floorAt(x: number, z: number): number {
   const { start, count, rise, tread } = HALL.steps;
-  if (z < start) return 0;
+  if (z < start || Math.abs(x) > DAIS_WIDTH / 2) return 0;
   return Math.min(count, Math.floor((z - start) / tread) + 1) * rise;
 }
 
@@ -46,16 +49,17 @@ export function createMarks(): Record<MarkName, Object3D> {
 
 type MarkName = (typeof MARKS)[number][0];
 const TOWARD_DAIS = 0, TOWARD_DOORS = Math.PI;
-/** where the heroes stand to be decorated: on the step below the dais top, a tread before Leia's floor */
-const DECORATED = DAIS.top - HALL.steps.tread - 0.2;
+/** where the heroes stand to be decorated: on the step below the dais top, the ankles 0.13 m from its riser so the whole foot is on the
+ * tread (Chewbacca's toes reach 0.25 m ahead of his ankle) */
+const DECORATED = DAIS.top - 2 * HALL.steps.tread + 0.13;
 const MARKS = [
   // the heroes at the doors (Han on Luke's left, Chewbacca on his right), and where they stand to be decorated
   ['lukeEnter', [0, 0, 1.5], TOWARD_DAIS],
   ['hanEnter', [1.1, 0, 1.2], TOWARD_DAIS],
   ['chewbaccaEnter', [-1.2, 0, 1.2], TOWARD_DAIS],
-  ['lukeDecorated', [0, floorAt(DECORATED), DECORATED], TOWARD_DAIS],
-  ['hanDecorated', [1.1, floorAt(DECORATED), DECORATED], TOWARD_DAIS],
-  ['chewbaccaDecorated', [-1.25, floorAt(DECORATED), DECORATED], TOWARD_DAIS],
+  ['lukeDecorated', [0, floorAt(0, DECORATED), DECORATED], TOWARD_DAIS],
+  ['hanDecorated', [1.1, floorAt(1.1, DECORATED), DECORATED], TOWARD_DAIS],
+  ['chewbaccaDecorated', [-1.25, floorAt(-1.25, DECORATED), DECORATED], TOWARD_DAIS],
   // the dais party: Leia at the centre, the officer holding the medals beside her, the droids to her left
   ['leia', [0, DAIS.height, DAIS.top + 1.0], TOWARD_DOORS],
   ['medalBearer', [1.1, DAIS.height, DAIS.top + 1.4], TOWARD_DOORS],
@@ -74,8 +78,6 @@ const WALLS = {
   door: { width: 8, height: 14 },
   pillar: { size: 1.4, spacing: 6 },
 };
-/** the width of the steps and the dais (m); the troop blocks stand on the floor either side of them */
-const DAIS_WIDTH = 16;
 /** the world size (m) one copy of a stone texture covers */
 const TILE = 4;
 

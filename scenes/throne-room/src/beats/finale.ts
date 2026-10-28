@@ -1,9 +1,6 @@
 import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { lookAt, wait, walkTo } from '@drawcall/animate';
-import { castBodies } from '../cast';
-import { floorAt } from '../hall';
-import { createFloor } from '../floor';
 import type { Beat } from './index';
 
 // The finale: decorated, the trio turns around on the step to face the hall. Each head goes first, over the shoulder toward the
@@ -33,32 +30,28 @@ export const beat: Beat & { order: number } = {
   duration: 20,
   starts: { luke: 'lukeDecorated', han: 'hanDecorated', chewbacca: 'chewbaccaDecorated' },
   stage({ cast, marks }) {
-    const floor = createFloor(castBodies(cast), floorAt);
-
     function* turnAround(hero: Hero) {
       const body = cast[hero], { after, over } = TURNS[hero];
       const mark = marks[`${hero}Decorated`].position;
       yield* wait(after);
       // the troops across the hall, a little to the side the head turns over: the gaze leads, the trunk and feet follow it
       const troops = new Vector3(mark.x + over, 1.7, 18);
-      const look = new Vector3();
       const turn = function* () {
         yield* wait(0.35);
         // turning on the spot: a walk to where it stands, arriving faced the other way
-        if (!(yield* walkTo(body, new Vector3(mark.x, 0, mark.z), { face: TOWARD_DOORS, speed: 0.4 }))) return false;
+        if (!(yield* walkTo(body, mark.clone(), { face: TOWARD_DOORS, speed: 0.4 }))) return false;
         yield* wait(() => body.settled);
         return yield* wait(FACING_THE_HALL);
       };
-      return yield* parallel('race', lookAt(body, () => floor.seenBy(body, look.copy(troops))), turn());
+      return yield* parallel('race', lookAt(body, troops), turn());
     }
 
     return {
       story: () => parallel('all', ...HEROES.map(turnAround)),
-      afterStep: floor.update,
       done: () => HEROES.every((hero) => {
         const body = cast[hero];
         const off = Math.abs(Math.atan2(Math.sin(body.facing - TOWARD_DOORS), Math.cos(body.facing - TOWARD_DOORS)));
-        return body.settled && off < 0.15 && floor.heightOf(body) > 0.75;
+        return body.settled && off < 0.15 && body.position.y > 0.75;
       }),
     };
   },

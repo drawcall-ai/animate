@@ -6,8 +6,6 @@ import type { Beat } from './index';
 // The medals: the officer beside Leia holds out each medal, Leia takes it from him and hangs it on the hero before her, Luke first,
 // then Han. Each medal changes hands without teleporting (the bearer keeps hold until Leia has it) and ends worn: attached to an empty
 // at the front of the hero's chest, which follows his chest bone.
-//
-// The bodies stand on the plane y = 0: the library has no raised floor, so the dais (1 m) and the heroes' step are not stood on.
 
 /**
  * a medal on its ribbon: 0.1 kg. The bearer holds it near the medal (empties `inner left` and `inner right`, 0.08 m apart); Leia takes
@@ -72,7 +70,7 @@ export const beat: Beat & { order: number } = {
       });
       // he holds it out toward her from where he stands, 0.4 m his way to her; she takes it by the ribbon's outer ends (her right on
       // its left, facing him) and he lets go. Placed halfway between them, he walked into her space and her hands could not get in.
-      const offer = new Vector3().subVectors(leia.position, bearer.position).setY(0).setLength(0.4).add(bearer.position).setY(1.1);
+      const offer = new Vector3().subVectors(leia.position, bearer.position).setY(0).setLength(0.4).add(bearer.position).setY(bearer.position.y + 1.1);
       yield* parallel('race', carry(bearer, medal, offer, { until: Infinity }), function* () {
         yield* wait(0.8);
         if (!(yield* grab(leia, medal, { left: 'outer right', right: 'outer left' }))) throw new Error(`Leia could not take ${medal.name}`);

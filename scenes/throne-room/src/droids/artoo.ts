@@ -2,6 +2,7 @@ import { Vector3, type Object3D } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, powerGait, species, type Range } from '@drawcall/animate';
 import type { Dress } from '../cast';
+import { floorAt } from '../hall';
 
 // Measured on public/models/artoo.glb (1.09 m to the dome's top, facing +Z): absolute model-space positions in metres, +Y up, +Z forward,
 // +X left. The barrel hangs between its two struts on the shoulder axle; the dome spins on the barrel's top. The model has no centre foot.
@@ -94,7 +95,7 @@ const EASE = 2.5;
 export function createArtoo(mark: Object3D, dress: Dress, dev: boolean): Artoo {
   const aim: Rocking = { ...IDLE };
   const now: Rocking = { ...IDLE };
-  const home = mark.position.clone().setY(0);
+  const home = mark.position.clone();
   const face = mark.rotation.y;
   const left = new Vector3(Math.cos(face), 0, -Math.sin(face));
   let phase = 0;
@@ -109,7 +110,7 @@ export function createArtoo(mark: Object3D, dress: Dress, dev: boolean): Artoo {
     phase += 2 * Math.PI * now.rate * dt;
     return { position: home.clone().addScaledVector(left, now.sway * Math.sin(phase)), yaw: face + now.turn * Math.sin(phase + 1) };
   };
-  const artoo = new Body(artooSpecies, { at: home.clone(), face, drive, model: dress(ARTOO), dev });
+  const artoo = new Body(artooSpecies, { at: home.clone(), face, drive, floor: floorAt, model: dress(ARTOO), dev });
   rockings.set(artoo, aim);
   return artoo;
 }

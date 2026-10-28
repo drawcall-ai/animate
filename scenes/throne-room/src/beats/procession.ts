@@ -1,9 +1,7 @@
 import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { lookAt, wait, walkTo } from '@drawcall/animate';
-import { castBodies } from '../cast';
-import { floorAt, HALL } from '../hall';
-import { createFloor } from '../floor';
+import { HALL } from '../hall';
 import type { Beat } from './index';
 
 // The entrance: Luke, Han (on his left) and Chewbacca (on his right) walk up the aisle side by side at a slow ceremonial pace,
@@ -41,7 +39,6 @@ export const beat: Beat & { order: number } = {
   order: 1,
   duration: 75,
   stage({ cast, marks }) {
-    const floor = createFloor(castBodies(cast), floorAt);
     const mark = (hero: Hero) => marks[`${hero}Decorated`];
     const leia = cast.leia;
 
@@ -73,21 +70,19 @@ export const beat: Beat & { order: number } = {
       // the glances over again, until the steps are near; each follows the walker, so it stays ahead as he goes
       for (let glance = 0; !nearSteps(); glance++) {
         const [x, y, z, seconds] = LANES[hero].glances[glance % LANES[hero].glances.length];
-        yield* parallel('race', lookAt(body, () => floor.seenBy(body, point.set(body.position.x + x, y, body.position.z + z)), { until: seconds }), wait(nearSteps));
+        yield* parallel('race', lookAt(body, () => point.set(body.position.x + x, y, body.position.z + z), { until: seconds }), wait(nearSteps));
       }
       // nearing the steps, the eyes find Leia before the feet stop (the anticipation of standing before her)
-      const face = new Vector3();
-      yield* lookAt(body, () => floor.seenBy(body, floor.eyesOf(leia, face)));
+      yield* lookAt(body, leia);
     }
 
     // each hero walks and looks about at once; the look is an aimer, so it ends when that hero is on its mark
     const story = () => parallel('all', ...HEROES.map((hero) => parallel('race', walkUp(hero), lookAbout(hero))));
     return {
       story,
-      afterStep: floor.update,
       done: () => HEROES.every((hero) => {
         const body = cast[hero], target = mark(hero).position;
-        return body.settled && Math.hypot(body.position.x - target.x, body.position.z - target.z) < 0.15 && floor.heightOf(body) > target.y - 0.02;
+        return body.settled && Math.hypot(body.position.x - target.x, body.position.z - target.z) < 0.15 && body.position.y > target.y - 0.02;
       }),
     };
   },

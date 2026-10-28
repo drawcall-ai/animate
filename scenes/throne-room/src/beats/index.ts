@@ -28,8 +28,6 @@ export interface Staged {
   story: ReusableTimeline<unknown, unknown>;
   /** bodies the beat added besides the cast (they are stepped and drawn like the cast) */
   extras?: Body[];
-  /** runs after every body has updated, each step (s): the library stands bodies on y = 0, so a beat that raises them does it here */
-  afterStep?(seconds: number): void;
   /** whether the beat reached its end state */
   done(): boolean;
 }
