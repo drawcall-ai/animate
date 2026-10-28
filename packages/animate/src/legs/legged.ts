@@ -11,7 +11,7 @@ import type { Floor } from './floor';
 
 /** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
 export interface Root {
-  /** its point on the floor (m) */
+  /** its point on the floor (m): x and z; the body stands on its floor there, whatever the y */
   position: Vector3;
   /** its velocity over the floor (m/s); default read off its moves */
   velocity?: Vector3;

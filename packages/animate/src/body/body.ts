@@ -35,6 +35,7 @@ export interface Owners {
 
 /** A foot as it stands or, swinging, where it lands. */
 export interface Foot {
+  /** its ankle, standing flat on the floor there */
   position: Vector3;
   /** which way it points (rad about +Y) */
   yaw: number;

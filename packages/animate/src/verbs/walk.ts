@@ -10,7 +10,7 @@ import { verb, type Until, type Verb } from './story';
 export interface WalkOptions {
   /** the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else the way it comes */
   face?: number | Target;
-  /** its top speed (m/s; default a stroll's 1.3, slower with a load) */
+  /** its top speed (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7) */
   speed?: number;
   /** how quickly it speeds up (m/s²; default 1.2) */
   accel?: number;
@@ -19,8 +19,8 @@ export interface WalkOptions {
 }
 
 /**
- * Walks to `target` (exactly there: to stand within reach of something, `grab` or `reach` it), turning to arrive facing as asked: a
- * mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls: no nearer for 6 s.
+ * Walks to `target` (exactly there, on the floor under it: to stand within reach of something, `grab` or `reach` it), turning to
+ * arrive facing as asked: a mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls: no nearer for 6 s.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
   const { face, speed, accel, until } = options;
