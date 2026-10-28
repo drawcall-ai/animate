@@ -29,10 +29,10 @@ const NOD_SHIFT = 0.1;
 const ENTRAIN = 4;
 /** how far the pelvis goes up for a body asked onto its toes, at most (m, default body) */
 export const TIPTOE = 0.07;
-/** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; of an arch back, the share the pelvis tips
- * back (tuned: the spine extends, the hips keep the range a walk's trailing leg extends into — at 0.6 a walk arched 0.25 slides its
- * planted feet) */
-const HINGE = 0.6, ARCH_HINGE = 0.25;
+/** of a bow, the share the hips take (the pelvis tipping forward), the lower back the rest; arched back, the pelvis tips back by that
+ * share up to `ARCHED` (rad), the spine extending the rest (tuned: the hips keep the range a walk's trailing leg extends into — tipped
+ * 0.15 back, a walk arched 0.25 slides its planted feet) */
+const HINGE = 0.6, ARCHED = 0.08;
 // Tuned quiet shift: unload one knee while keeping both soles planted.
 const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
 /** how far the knees let the pelvis down at most (m): a squat, the hip joints over the ankles, the knees folded as far as the default
@@ -142,7 +142,7 @@ export class Posture {
     // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
     const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
     // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
-    const tilt = 0.5 * nod + Math.max(hingeOf(proportions, lower, bow) * bow, bow - TRUNK_PITCH * Math.PI / 180) + TILT * run;
+    const tilt = 0.5 * nod + pelvisTilt(proportions, lower, bow) + TILT * run;
     quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade, tilt, roll, upright.pelvisRotation);
     pelvis.y = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
@@ -165,11 +165,15 @@ export class Posture {
 }
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
-const hingeOf = (proportions: Proportions, lower: number, bow: number) => bow < 0 ? ARCH_HINGE : lerp(HINGE, -0.2, smoothstep(0, squatOf(proportions), lower));
+const hingeOf = (proportions: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, squatOf(proportions), lower));
+/** how far (rad, + forward) the pelvis tips for a bow of `bow` let down `lower` (m) */
+const pelvisTilt = (proportions: Proportions, lower: number, bow: number) => bow < 0
+  ? Math.max(hingeOf(proportions, lower) * bow, -ARCHED)
+  : Math.max(hingeOf(proportions, lower) * bow, bow - TRUNK_PITCH * Math.PI / 180);
 
 /** Shoulder height at a given squat and bow, using the articulated trunk rather than a single lever. */
 export function shoulderHeight(proportions: Proportions, lower: number, bow: number): number {
-  const tilt = Math.max(hingeOf(proportions, lower, bow) * bow, bow - TRUNK_PITCH * Math.PI / 180), offsets = proportions.offsets;
+  const tilt = pelvisTilt(proportions, lower, bow), offsets = proportions.offsets;
   const height = (offset: Vector3, pitch: number) => offset.y * Math.cos(pitch) - offset.z * Math.sin(pitch);
   return proportions.hipHeight - lower + height(offsets.spine, tilt) + height(offsets.chest, (tilt + bow) / 2)
     + height(offsets.leftShoulder, bow) + height(offsets.leftUpperArm, bow);
