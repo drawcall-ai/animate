@@ -6,6 +6,7 @@ export { dog, type DogBone } from './species/dog';
 export { species, type Species, type Temperament } from './species/define';
 export { walkTo, arriving, type WalkOptions } from './verbs/walk';
 export { lookAt, type LookOptions } from './verbs/look';
+export { pose, type PoseOptions } from './verbs/pose';
 export { track, type Tracked } from './verbs/track';
 export { grab, type GrabOptions } from './verbs/grab';
 export { reach, type ReachOptions } from './verbs/reach';
@@ -15,6 +16,7 @@ export { wait, watch, type Until, type Verb } from './verbs/story';
 export type { Target } from './verbs/targets';
 export type { LogEntry, Problem } from './kernel/dev';
 export type { ReadonlyPose } from './kernel/pose';
+export type { Posture } from './kernel/poise';
 
 export type { BoneNames, Gazer, Having, LegRole, Range, Roles, Tuning, Vec3 } from './species/define';
 export type { Inertial } from './kernel/inertia';

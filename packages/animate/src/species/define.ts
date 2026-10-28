@@ -13,6 +13,8 @@ import type { Proportions } from './humanoid/proportions';
 export interface Gazer {
   /** the chain that turns the head; without one, the species' posture turns it toward where the eyes are asked (`look`) */
   neck?: string;
+  /** the bone the eyes ride on: the head */
+  head: number;
   /** the point the eyes look from (world), into `out` */
   eyes(pose: ReadonlyPose, out: Vector3): Vector3;
   /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
@@ -175,6 +177,7 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
     turns: new Map(),
     gaze: gaze && eyes && {
       neck: gaze.neck ? 'neck' : undefined,
+      head: eyes.bone,
       eyes: (pose, out) => pose.point(eyes.bone, eyes.at, out),
       range: gaze.range,
       pitch: gaze.pitch,

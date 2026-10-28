@@ -25,11 +25,13 @@ export interface Owner {
   tier: Tier;
 }
 
-/** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's turn (`trunk`) and each hand. */
+/** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
+ * the eyes (`head`) and each hand. */
 export interface Owners {
   go?: Owner;
   look?: Owner;
   trunk?: Owner;
+  head?: Owner;
   hands: Partial<Record<string, Owner>>;
 }
 
@@ -43,7 +45,8 @@ export interface Foot {
 
 /**
  * A body of a species: a person (`humanoid(skeleton)`) or a creature (`horse(skeleton)`, `dog(skeleton)`, `species(…)`). Asked nothing,
- * it lives: it stands, breathes, looks about. Add `object` to your scene and call `update(seconds)` every frame; your stories move it
+ * it lives: a person, or a creature with a carriage or a posture of its own, stands, breathes and looks about; any other creature stands
+ * still but for its lean into its acceleration (`inertia`). Add `object` to your scene and call `update(seconds)` every frame; your stories move it
  * with the verbs (`walkTo`, `grab`, …), run on your own timeline runner.
  */
 export class Body<S extends AnySpecies = AnySpecies> {
@@ -132,7 +135,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
       const held = owner(`hand.${hand}`);
       return held ? [[hand, held]] : [];
     });
-    return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), hands: Object.fromEntries(hands) };
+    return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), head: owner('head'), hands: Object.fromEntries(hands) };
   }
 
   /** its last final pose: bone rotations and positions by index, its centre of mass, what its bones carry

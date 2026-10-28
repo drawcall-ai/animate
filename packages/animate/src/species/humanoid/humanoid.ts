@@ -32,7 +32,7 @@ export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & 
     skeleton: new Skeleton(skeletonOf(proportions), { limits: ranges(), chains: CHAINS }),
     turns: new Map(BONES.map((bone) => [bone, turns[bone]])),
     // (the neck chain turns the head, the eyes the rest; looking low, the body bows)
-    gaze: { neck: 'neck', eyes: (pose, out) => pose.point(INDEX.head, eyes, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180 },
+    gaze: { neck: 'neck', head: INDEX.head, eyes: (pose, out) => pose.point(INDEX.head, eyes, out), range: EYES, pitch: NECK_PITCH * Math.PI / 180 },
     hands: new Map([['left', 'leftArm'], ['right', 'rightArm']]),
     inertia: INERTIA,
     scale: proportions.scale,
