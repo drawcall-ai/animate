@@ -9,15 +9,15 @@ const up = () => fetch(BASE).then((r) => r.ok, () => false);
 
 /**
  * An already running dev server is reused, otherwise one is started and stopped again when
- * the handle is disposed. usage: `await using server = await devServer();` then load pages from `BASE`
+ * the returned stop function is called in finally. Load pages from `BASE`.
  */
 export async function devServer() {
-  if (await up()) return { [Symbol.asyncDispose]: async () => {} };
+  if (await up()) return async () => {};
   const child = spawn('pnpm', ['--filter', 'examples', 'exec', 'vite', '--port', String(PORT)], { stdio: 'ignore', detached: true });
   const stop = () => process.kill(-child.pid);
   for (let i = 0; i < 100; i++) {
     await new Promise((r) => setTimeout(r, 200));
-    if (await up()) return { [Symbol.asyncDispose]: async () => stop() };
+    if (await up()) return async () => stop();
   }
   stop();
   throw new Error(`the dev server did not come up on ${BASE} within 20 s`);

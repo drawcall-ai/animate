@@ -1,5 +1,5 @@
 // Frame-exact video of an example, as seen in live playback (orbit view by default).
-// Usage: node scripts/video.mjs --example hand-over [--size 1280x720] [--fps 60] [--view three] [--out captures/hand-over.mp4]
+// Usage: pnpm video --example hand-over [--size 1280x720] [--fps 60] [--view three] [--out captures/hand-over.mp4]
 //        --stills 2,6.5,11  saves PNG frames at those times instead of a video
 //        --blur 4           film motion blur: 4 subframes per frame, 180° shutter (half of them blended)
 // Needs ffmpeg for videos.
@@ -31,9 +31,10 @@ const query = new URLSearchParams({ example: args.example, video: '1' });
 if (args.view) query.set('view', args.view);
 mkdirSync(dirname(out), { recursive: true });
 
-await using server = await devServer();
-const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu'] });
+const stopServer = await devServer();
+let browser;
 try {
+  browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu'] });
   const page = await browser.newPage({ viewport: { width: w, height: h } });
   const failed = pageError(page);
   await page.goto(`${BASE}?${query}`);
@@ -64,5 +65,5 @@ try {
   await done;
   console.log(`\n${out}: ${stills ? `stills at ${stills.join(', ')} s` : `${Math.round(frames / blur)} frames`}, ${w}x${h} @ ${fps} fps`);
 } finally {
-  await browser.close();
+  await Promise.all([browser?.close(), stopServer()]);
 }

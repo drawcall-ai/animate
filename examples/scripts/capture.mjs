@@ -1,5 +1,5 @@
 // Renders contact sheets (rows = times, columns = camera views) for review.
-// usage: node scripts/capture.mjs [--examples a,b] [--times 1,2,3 | --frames 6] [--views front,side,three,top]
+// usage: pnpm capture [--examples a,b] [--times 1,2,3 | --frames 6] [--views front,side,three,top]
 //        [--size 360] [--mode 3d|2d] [--trail <seconds>] [--zoom k] [--turn rad] [--cols N] [--each] [--out captures]
 //        [--body soldier|person|outlier]  (the skeleton people stand on where an example names none: the soldier wears its
 //                                         model, the others are drawn as OpenPose skeletons; default soldier)
@@ -36,9 +36,10 @@ const extra = new URLSearchParams({ mode: args.mode });
 for (const k of ['trail', 'zoom', 'turn', 'body']) if (args[k]) extra.set(k, args[k]);
 mkdirSync(args.out, { recursive: true });
 
-await using server = await devServer();
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const stopServer = await devServer();
+let browser;
 try {
+  browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: size, height: size } });
   const failed = pageError(page);
   const ready = () => Promise.race([page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 }), failed]);
@@ -77,7 +78,7 @@ try {
     console.log(`${file}  times=${times.join(',')}  views=${views.join(',')}`);
   }
 } finally {
-  await browser.close();
+  await Promise.all([browser?.close(), stopServer()]);
 }
 
 /** the shots `cells` (data URLs) laid out `cols` wide, saved to `file` */
