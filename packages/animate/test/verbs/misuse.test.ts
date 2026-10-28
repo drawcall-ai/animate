@@ -1,8 +1,8 @@
 import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, reach, release, Body, dog } from '../../src/index';
+import { carry, grab, reach, release, walkTo, Body, dog } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { person, play } from '../bodies';
+import { person, play, run } from '../bodies';
 import { box, empty, roomOf } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
@@ -129,4 +129,30 @@ it('lifts an attached item when a creature starts carrying it', () => {
   }, [body], 12, () => finished);
   expect(finished).toBe(true);
   expect(load.parent).toBe(body.bones.jaw);
+});
+
+// (the floor is the plane y = 0: a height asked of where a body stands is ignored, and the dev log says so, once)
+describe('a height off the floor is said, once, and ignored', () => {
+  it.each([
+    ['a person', () => person({ dev: true, at: new Vector3(0, 1, 0) })],
+    ['a creature', () => new Body(dog(DOG), { dev: true, at: new Vector3(0, 1, 0) })],
+  ])('%s made to stand above it', (_, make) => {
+    const body = make();
+    run(body, 0.5);
+    expect(body.log).toEqual([expect.objectContaining({ check: 'start off the floor, its height ignored (m)', value: 1, where: 'at' })]);
+    expect(body.feet.every((foot) => foot.planted)).toBe(true);
+    expect(body.position.y).toBe(0);
+  });
+
+  it.each(['a point', 'an empty'])('a walk to %s above it', (what) => {
+    const body = person({ dev: true }), mark = empty(roomOf(body), 'mark', new Vector3(0, 0.5, 1));
+    play(function* () { yield* walkTo(body, what === 'a point' ? mark.position.clone() : mark); }, [body], 6);
+    expect(body.log).toEqual([expect.objectContaining({ check: 'walk target off the floor, its height ignored (m)', value: 0.5 })]);
+  });
+
+  it('a driven root above it', () => {
+    const body = person({ dev: true, drive: (time) => ({ position: new Vector3(0, 0.3, time * 0.1), yaw: 0 }) });
+    run(body, 1);
+    expect(body.log.filter((entry) => entry.check === 'driven root off the floor, its height ignored (m)')).toEqual([expect.objectContaining({ value: expect.closeTo(0.3, 6) })]);
+  });
 });

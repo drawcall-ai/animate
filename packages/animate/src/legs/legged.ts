@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
+import { OFF_FLOOR } from '../kernel/dev';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Poise } from '../kernel/poise';
 import type { Go } from '../kernel/go';
@@ -10,7 +11,7 @@ import type { Steering } from './step/state';
 
 /** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
 export interface Root {
-  /** its point on the floor (m) */
+  /** its point on the floor (m): the floor is the plane y = 0, so a height here is ignored (a dev log says so) */
   position: Vector3;
   /** its velocity over the floor (m/s); default read off its moves */
   velocity?: Vector3;
@@ -58,6 +59,9 @@ export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise'>): (
   let last: Vector3 | null = null;
   return (f) => {
     const root = drive(f.time);
+    // (the floor is the plane y = 0: a root driven above or below it stands on it)
+    const height = Math.abs(root.position.y);
+    if (height > OFF_FLOOR) f.dev?.once(f.time, { check: 'driven root off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'root' });
     const position = root.position.clone().setY(0);
     const velocity = root.velocity?.clone().setY(0) ?? (last ? position.clone().sub(last).divideScalar(f.dt) : new Vector3());
     last = position.clone();
