@@ -73,12 +73,13 @@ function stooping(self: Handed, bones: readonly number[]) {
     return Math.max(1e-3, _v.subVectors(f.prev.position(bones[0]), root).dot(forward) - (tops.length ? Math.min(...tops) : 0));
   };
   const bowed = (f: { prev: ReadonlyPose }) => legs.length ? lever(f) * Math.sin(STOOPING.bow) : 0;
+  // (its base's height over the floor at rest; over the floor under its root as it stands)
   const standing = new Pose(self.pose.skeleton).position(bones[0]).y;
   let pressing = 0;
   return {
     most: (f: { prev: ReadonlyPose }) => bowed(f) + lowest,
     to(f: Frame, goal: Readonly<Vector3>, arrived = true) {
-      const short = standing - goal.y - OUT * length, most = bowed(f) + lowest;
+      const root = f.prev.position(0), short = standing + self.floor(root.x, root.z) - goal.y - OUT * length, most = bowed(f) + lowest;
       if (arrived) pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(tip).y - goal.y - REACHED.distance) * PRESSING * f.dt));
       const drop = short > 0 ? Math.min(most, short + pressing) : 0, bow = drop * bowed(f) / most;
       if (drop > 0) self.poise.add({ bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });

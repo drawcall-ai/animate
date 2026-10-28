@@ -64,3 +64,18 @@ export function headingOfTurn(quaternion: Readonly<Quaternion>): number {
   const forward = new Vector3(0, 0, 1).applyQuaternion(quaternion);
   return headingOf(forward.x, forward.z);
 }
+
+/** the minimum-jerk quintic from `x` (`v`, `a`) to `x1` at rate `v1` and zero acceleration in `T` s, `t` s on: its value, rate and acceleration (at or past its end: its end) */
+export function quintic(x: number, v: number, a: number, x1: number, v1: number, T: number, t: number): [number, number, number] {
+  if (T <= t) return [x1, v1, 0];
+  const d = x1 - x;
+  const c2 = a / 2;
+  const c3 = (20 * d - (12 * v + 8 * v1) * T - 3 * a * T * T) / (2 * T ** 3);
+  const c4 = (-30 * d + (16 * v + 14 * v1) * T + 3 * a * T * T) / (2 * T ** 4);
+  const c5 = (12 * d - (6 * v + 6 * v1) * T - a * T * T) / (2 * T ** 5);
+  return [
+    x + t * (v + t * (c2 + t * (c3 + t * (c4 + t * c5)))),
+    v + t * (2 * c2 + t * (3 * c3 + t * (4 * c4 + t * 5 * c5))),
+    2 * c2 + t * (6 * c3 + t * (12 * c4 + t * 20 * c5)),
+  ];
+}

@@ -5,6 +5,8 @@ import type { ReadonlyPose } from '../../kernel/pose';
 import { lerp, minimumJerk } from '../../kernel/math';
 import { type Spot } from '../support';
 import { type Gait } from '../../species/gait';
+import { foothold, type Floor } from '../floor';
+import { Ground } from './ground';
 
 /**
  * The root the stepper steps under, a sub-step at a time: its point on the floor, its velocity over it (m/s), its facing (rad about +Y),
@@ -66,7 +68,7 @@ export interface Stepping {
 
 /**
  * A species' feet: each leg's side (+1 left) and bones, its hip's half width and the leg's lengths (m), the knee's most bend; where the
- * ankle is for a foot planted at `anchor` turned `yaw` and rolled `pitch`, the foot's turn, its sole's lowest point posed so, the shank's
+ * ankle is for a foot planted at `anchor` turned `yaw` and rolled `pitch`, the foot's turn, its sole's points posed so, the shank's
  * lean over it in a pose.
  */
 export interface Feet {
@@ -91,7 +93,8 @@ export interface Feet {
   fold: number;
   ankle(i: number, anchor: Readonly<Vector3>, yaw: number, pitch: number, out: Vector3): Vector3;
   rotation(yaw: number, pitch: number, out: Quaternion): Quaternion;
-  sole(i: number, ankle: Vector3, foot: Quaternion, toes: Quaternion): number;
+  /** the points of its sole (its heel and toes) with its ankle at `ankle`, the foot and toes turned so (world) */
+  soles(i: number, ankle: Readonly<Vector3>, foot: Quaternion, toes: Quaternion): Vector3[];
   lean(i: number, pose: ReadonlyPose, yaw: number): number;
   /** the corners of the sole standing flat with its ankle at `anchor`, heading `yaw`, on the floor */
   print(i: number, anchor: Readonly<Vector3>, yaw: number): Spot[];
@@ -135,9 +138,10 @@ export interface Timing {
   C: number; duty: number; Ts: number; Tsw: number; most: number; lead: number;
 }
 
-/** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), its standing height (m). */
+/** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), the ground under it, how
+ * fast that rises (m/s) and the height its pelvis stands at over it (m, both world heights). */
 export interface Body extends Reading, Timing {
-  yaw: number; width: number; moving: number; standing: number;
+  yaw: number; width: number; moving: number; ground: number; climb: number; standing: number;
   /** where the centre of mass is over the floor from the root (m) */
   over: Vector3;
 }
@@ -206,6 +210,8 @@ export const SETTLING = 0.1;
 
 export interface Swing {
   capture: boolean; u: number; age: number; rest: number; T: number;
+  /** the floor's height it stood on, and how far its sole's lowest point hangs below its ankle as it has been posed (m, eased) */
+  level: number; drop: number;
   x: Vector3; v: Vector3; a: Vector3; turn: { x: number; v: number; a: number };
   fromPitch: number; toes: Quaternion; strike: number; lift: number; run: number;
   rel: { x: number; v: number; a: number } | null;
@@ -231,7 +237,9 @@ export class Steps {
   readonly pair: number[]; readonly apart: number[];
   /** the pelvis' last two facings (rad) */
   readonly yaws: number[];
-  asked: number | undefined; stand = NaN; last: number; rootYaw: number;
+  /** how high the pelvis stands over the ground (m), as it first stood; the ground's height last sub-step (m) */
+  stand = NaN; under = NaN;
+  asked: number | undefined; last: number; rootYaw: number;
   readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
   low = NaN; most = Infinity; sense = 0; paused = 0;
   readonly hips = new Vector3();
@@ -266,9 +274,14 @@ export class Steps {
   /** the last `move`'s sub-step: what `pose` plants the feet by and `reachable` re-aims their landings for */
   now: Now | undefined;
 
-  constructor(readonly st: Stepping, readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number) {
+  /** the ground its pelvis stands over: the floor under its way, smoothed over its stride */
+  readonly ground: Ground;
+
+  /** `floor`: what the feet stand on, each landing fitted onto one level of it */
+  constructor(readonly st: Stepping, readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number, readonly floor: Floor) {
+    this.ground = new Ground(floor, feet.length);
     this.legs = at.map((foot, i) => ({
-      i, sign: feet.legs[i].sign, anchor: foot.position.clone(), yaw: foot.yaw, pitch: 0, heel: true, free: true,
+      i, sign: feet.legs[i].sign, anchor: foothold(floor, feet, i, foot.position.clone(), foot.yaw), yaw: foot.yaw, pitch: 0, heel: true, free: true,
       planted: 1, lifted: 1, strike: 0, landed: false, swing: null,
     }));
     // (each leg's one before it: the one whose offset comes round last before its own)
@@ -284,6 +297,13 @@ export class Steps {
     const furthest = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
     const sweeps = st.gait && strays.every((stray) => stray !== undefined && stray > 0);
     this.sweep = sweeps ? furthest / (2 * Math.min(...strays.map((stray) => stray ?? Infinity))) : Infinity;
+  }
+
+  /** how far the lowest of a sole's `points` is above the floor under it (m; − in it) */
+  above(points: readonly Vector3[]): number {
+    let least = Infinity;
+    for (const p of points) least = Math.min(least, p.y - this.floor(p.x, p.z));
+    return least;
   }
 
   /** whether the feet keep a gait's clock (a four-legged one's) */

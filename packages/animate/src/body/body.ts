@@ -47,7 +47,8 @@ export interface Foot {
  * with the verbs (`walkTo`, `grab`, …), run on your own timeline runner.
  */
 export class Body<S extends AnySpecies = AnySpecies> {
-  /** a group on the floor, turned by the body's facing alone, holding its model: add it to your scene (and move it only through the body) */
+  /** a group on the floor under the body's root, turned by its facing alone, holding its model: add it to your scene (and move it only
+   * through the body) */
   readonly object: Group;
   /** its bones by name: the very bones its model was rigged with, or library objects in a bare body's place — parent empties to them */
   readonly bones: Readonly<Record<BoneOf<S>, Object3D>>;
@@ -79,9 +80,10 @@ export class Body<S extends AnySpecies = AnySpecies> {
     }
   }
 
-  /** where it stands: its root over the floor (m) */
+  /** where it stands: its root's point on the floor (m; its y the floor's height there) */
   get position(): Vector3 {
-    return this.pose.position(0).clone().setY(0);
+    const root = this.pose.position(0);
+    return new Vector3(root.x, selfOf(this).floor(root.x, root.z), root.z);
   }
 
   /** its ground velocity: its centre of mass's over the last sub-step, horizontal (m/s) */

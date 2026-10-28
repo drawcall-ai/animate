@@ -131,7 +131,7 @@ function* lifting(person: Reacher, request: Request, thing: Thing) {
   const f = person.frame;
   if (!thing.massive) f.dev?.append(f.time, { check: 'lifted a thing without userData.mass (kg)', value: 0, limit: 0, where: thing.object.name });
   // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
-  const hips = person.proportions.hipHeight;
+  const hips = floorUnder(person) + person.proportions.hipHeight;
   if (supported(thing) && thing.mass > PREPARED && (thing.object.getWorldPosition(_v).y >= hips || hips - person.pose.position(0).y < 0.005 * person.scale)) {
     let since = NaN;
     yield* during(request, 'trunk', 'borrowed', () => person.poise.add({ lower: 0.005 * person.scale }),

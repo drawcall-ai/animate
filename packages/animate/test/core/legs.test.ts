@@ -5,7 +5,7 @@ import { Body, horse, walkTo, wait, type Temperament, type Verb } from '../../sr
 import { selfOf } from '../../src/body/body';
 import type { Frame } from '../../src/kernel/frame';
 import { strideAt } from '../../src/species/gait';
-import { quintic } from '../../src/legs/step/swing';
+import { quintic } from '../../src/kernel/math';
 import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, person, scene } from '../bodies';

@@ -1,6 +1,5 @@
 // A leap: the dip and push off, the flight and the landing the knees take.
-import { GRAVITY } from '../../kernel/math';
-import { quintic } from './swing';
+import { GRAVITY, quintic } from '../../kernel/math';
 import type { Leap } from './state';
 
 /**

@@ -12,6 +12,7 @@ import { followRotation } from '../kernel/follow';
 import { clampRotation } from '../kernel/limits';
 import type { Feet, FootPose, Stepping } from './step/state';
 import type { Spot } from './support';
+import type { Floor } from './floor';
 
 /** A foot's turn: heading `yaw`, pitched `pitch` (rad, + toes up). */
 const yawPitch = (yaw: number, pitch: number, out: Quaternion) => out.setFromEuler(_e.set(-pitch, yaw, 0, 'YXZ'));
@@ -56,9 +57,9 @@ export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths: 
       return out.copy(pivot).applyQuaternion(yawPitch(yaw, 0, _a)).add(anchor).sub(_v.copy(pivot).applyQuaternion(yawPitch(yaw, pitch, _b)));
     },
     rotation: (yaw, pitch, out) => yawPitch(yaw, pitch, out),
-    sole(i, ankle, foot) {
+    soles(i, ankle, foot) {
       const { heel, toe } = chains[i];
-      return ankle.y + Math.min(_v.copy(heel).applyQuaternion(foot).y, _v.copy(toe).applyQuaternion(foot).y);
+      return [heel, toe].map((end) => end.clone().applyQuaternion(foot).add(ankle));
     },
     lean: () => 0,
     turnAbout(i, anchor, from, to, pitch) {
@@ -167,8 +168,8 @@ export class ChainLeg {
   check(f: Frame) {
     const dev = f.dev, terminal = this.solver.bones[this.solver.bones.length - 1], where = f.prev.skeleton.bones[terminal].name, time = f.time - f.dt;
     if (!dev || !this.posed) return;
-    const low = Math.min(...this.sole.map((point) => f.prev.point(terminal, point, _v).y));
-    if (low < -CONTACT.distance) dev.append(time, { check: 'leg ground (m)', value: -low, limit: CONTACT.distance, where });
+    const sunk = Math.max(...this.sole.map((point) => this.below(f.prev.point(terminal, point, _v))));
+    if (sunk > CONTACT.distance) dev.append(time, { check: 'leg ground (m)', value: sunk, limit: CONTACT.distance, where });
     if (!this.held) return;
     const miss = f.prev.position(terminal).distanceTo(this.held.position), turn = f.prev.rotation(terminal).angleTo(this.held.rotation);
     if (miss > CONTACT.distance) dev.append(time, { check: 'leg contact (m)', value: miss, limit: CONTACT.distance, where });
@@ -192,7 +193,8 @@ export class ChainLeg {
 
   private readonly sign: number; private readonly length: number;
 
-  constructor(private readonly chain: LegChain, private readonly start: ReadonlyPose) {
+  /** `floor`: what its foot stands on */
+  constructor(private readonly chain: LegChain, private readonly start: ReadonlyPose, private readonly floor: Floor) {
     const top = chain.joints[0].bone, terminal = chain.joints[chain.joints.length - 1].bone;
     this.sign = start.position(terminal).x - start.position(0).x >= 0 ? 1 : -1;
     this.length = start.position(top).distanceTo(start.position(terminal));
@@ -212,6 +214,11 @@ export class ChainLeg {
     this.contact = chain.heel.clone().add(chain.toe).multiplyScalar(0.5);
     this.ball = Math.min(0, ...chain.rocker.map(([, pitch]) => pitch)) * Math.PI / 180;
   }
+  /** how far `point` is below the floor under it (m; − above it) */
+  private below(point: Readonly<Vector3>): number {
+    return this.floor(point.x, point.z) - point.y;
+  }
+
   /** the furthest its foot rolls over its toe (rad, − toes down): its rocker's breakover */
   readonly ball: number;
 
@@ -344,7 +351,7 @@ export class ChainLeg {
         f.current.setLocal(b, braked.slerp(solved[k], handed));
       }
       // (but never into the floor: there the solution stands)
-      if (Math.min(...this.sole.map((point) => f.current.point(terminal, point, _v).y)) < 0) solver.bones.forEach((b, k) => f.current.setLocal(b, solved[k]));
+      if (this.sole.some((point) => this.below(f.current.point(terminal, point, _v)) > 0)) solver.bones.forEach((b, k) => f.current.setLocal(b, solved[k]));
     }
   }
 }

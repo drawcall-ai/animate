@@ -7,6 +7,7 @@ import type { AnySpecies, Temperament } from '../species/define';
 import type { Locomotion } from './locomotion';
 import type { Stepper } from './step/stepper';
 import type { Steering } from './step/state';
+import type { Floor } from './floor';
 
 /** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
 export interface Root {
@@ -37,6 +38,8 @@ export interface Legged {
   readonly tempo: number;
   readonly life: Temperament;
   readonly drive?: (time: number) => Root;
+  /** what it stands on */
+  readonly floor: Floor;
   /** its stepping legs, made with its balance */
   stepper: Stepper | null;
   readonly poise: Poise;

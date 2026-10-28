@@ -56,8 +56,10 @@ const LOWERED = 0.02;
  * (with its toe-out); tuned: eased in over this share of the swing
  */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
-/** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m). */
-const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1 };
+/** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m), a
+ * planted sole's sink into its floor and its lowest point's rise off it (m: rolling over its heel or ball, a rigged sole's points stand
+ * up to ~1.1 cm off a flat floor). */
+const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1, sunk: 0.01, raised: 0.02 };
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
 const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
@@ -96,18 +98,17 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       const at = point.clone().applyQuaternion(footRotation(yaw, 0)).add(anchor);
       return [at.x, at.z];
     }),
-    sole: (i, ankle, foot, toes) => {
+    soles: (i, ankle, foot, toes) => {
       const ball = ballOf(proportions, SIDES[i], _b).applyQuaternion(foot).add(ankle);
       const sign = i === 0 ? 1 : -1;
-      const heel = heelOf(proportions, _a).applyQuaternion(foot).y + ankle.y;
-      const tips = [proportions.sole.bigToe, proportions.sole.smallToe].map((tip) => _a.copy(tip).setX(tip.x * sign).applyQuaternion(toes).y + ball.y);
-      return Math.min(heel, ...tips);
+      const heel = heelOf(proportions).applyQuaternion(foot).add(ankle);
+      return [heel, ...[proportions.sole.bigToe, proportions.sole.smallToe].map((tip) => tip.clone().setX(tip.x * sign).applyQuaternion(toes).add(ball))];
     },
   };
   // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
   // (the feet where they stand as it is made: in its stance under it)
   const standing = standingFeet(proportions, person.pose.position(0).x, person.pose.position(0).z, person.yaw);
-  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen), feet, standing, person.yaw));
+  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen), feet, standing, person.yaw, person.floor));
   let stepper = stepperFor(true), first = true;
   const { toeOut, crouch: crouching } = humanStepping(proportions);
   const poise = new Poise();
@@ -256,7 +257,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       // (a swinging foot the ankle's range turned off its plan — toes down past it, behind a crouch — lifted as far as that put it into the
       // floor, again as the lift turns the shank and the ankle's range with it)
       for (let pass = 0, lift = 0; leg.swing && pass < 4; pass++) {
-        const sunk = -feet.sole(i, f.current.position(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`]));
+        const sunk = -stepper.above(feet.soles(i, f.current.position(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Foot`]), f.current.rotation(INDEX[`${side}Toes`])));
         if (sunk <= 0) break;
         place(_lift.copy(pose.ankle).setY(pose.ankle.y + (lift += sunk)));
       }
@@ -284,11 +285,17 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
   const proportions = person.proportions, time = f.time - f.dt;
   legs.forEach((leg, i) => {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];
+    // (each sole point against the floor under it: a swinging sole never in it; a planted one on it — the whole sole on one level — no
+    // deeper than `LIMIT.sunk`, its lowest no higher than `LIMIT.raised`)
+    const above = solePoints(person.proportions, f.prev, side).map((at) => at.y - person.floor(at.x, at.z));
     if (leg.swing) {
-      const sink = -Math.min(...solePoints(person.proportions, f.prev, side).map((at) => at.y));
+      const sink = -Math.min(...above);
       if (sink > 0.002) dev.append(time, { check: 'driven swing sole sink (m)', value: sink, limit: 0.002, where: `${side}Foot` });
       return;
     }
+    const sunk = -Math.min(...above), raised = Math.min(...above);
+    if (sunk > LIMIT.sunk) dev.append(time, { check: 'planted sole in the floor (m)', value: sunk, limit: LIMIT.sunk, where: `${side}Foot` });
+    if (raised > LIMIT.raised) dev.append(time, { check: 'planted sole off the floor (m)', value: raised, limit: LIMIT.raised, where: `${side}Foot` });
     const pivots = leg.pitch > 0 ? [heelOf(proportions)] : leg.pitch < 0 ? [ballOf(proportions, side)] : [heelOf(proportions), ballOf(proportions, side)];
     for (const pivot of pivots) {
       const at = f.prev.point(bone, pivot, new Vector3());
