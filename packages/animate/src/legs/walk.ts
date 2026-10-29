@@ -78,7 +78,6 @@ export class Walk {
   constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;
     this.go.settles = arrives;
-    this.go.backs = way.backs;
   }
 
   /** where it asks the legs to take the body this sub-step (none: a goal that is no point) */
@@ -142,7 +141,10 @@ export class Walk {
     const yaw = asked ?? (within > 0 ? toward : null);
     this.end.copy(to).setY(0).addScaledVector(forwardOf(yaw ?? toward, _v), -within);
     go.to.copy(this.leg < via.length ? via[this.leg](f) : this.end).setY(0);
-    if (stepped(self, body, go.to)) go.speed = Math.min(go.speed, STAIRS.pace * self.scale);
+    // (on stairs at a stair's pace, and facing the way it goes: nobody backs up or down a flight)
+    const stairs = stepped(self, body, go.to);
+    if (stairs) go.speed = Math.min(go.speed, STAIRS.pace * self.scale);
+    go.backs = way.backs && !stairs;
     return this.leg < via.length ? null : yaw;
   }
 
