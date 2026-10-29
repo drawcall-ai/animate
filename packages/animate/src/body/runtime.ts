@@ -33,7 +33,8 @@ export interface SelfOptions {
   /**
    * the floor's height under a world point (x, z) (m; default 0 everywhere): what it stands and steps on — a raised stage, a dais, a
    * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
-   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (0.35 m for the default body) and steps
+   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (`species.person.heelBack + toeFront`; 0.35 m
+   * of tread for the default body) and steps
    * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled.
    * A person's step length against a tread decides whether it puts one foot or both on each; between the two it mixes them from tread to
    * tread, which reads as hesitation. Give every body on a set the same function, or they disagree on where its floor is.
