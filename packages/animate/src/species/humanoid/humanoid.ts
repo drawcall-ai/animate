@@ -9,12 +9,12 @@ import { CHAINS, massFor, skeletonOf } from './skeleton';
 
 /**
  * How a person strides, as multipliers on its defaults (1: as it is): its `cadence` (below 1 slower, so longer strides at a pace — its
- * balance may still quicken a step it must catch; at a given speed, step length is speed over step rate, so it sets a walk's step length
- * too), the `width` its feet land apart walking (the pelvis swaying and listing that much
+ * balance may still quicken a step it must catch), the `width` its feet land apart walking (the pelvis swaying and listing that much
  * further over each foot), its pelvis's `bob`, and its feet's `toeOut`. A swagger: `{ cadence: 0.85, width: 1.3, toeOut: 1.3 }`; a
  * lumber: `{ cadence: 0.85, width: 1.25, bob: 1.4 }`.
  */
 export interface Stride {
+  /** at a given speed, step length is speed over step rate, so this sets a walk's step length too */
   cadence?: number;
   width?: number;
   bob?: number;
