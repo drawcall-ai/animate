@@ -189,9 +189,9 @@ export const STOOPING = { lowest: 0.3, bow: 0.5 };
  * legs follow with their hooves planted and flat (a horse's fore legs lose their hooves' contact past ~0.2 of a turn or a roll); a
  * task's bow adds onto it
  */
-const POSED = { bow: 0.25, twist: 0.15, lean: 0.15 };
+export const POSED = { bow: 0.25, twist: 0.15, lean: 0.15 };
 /** Tuned (1/s): how quickly it lets itself down or bows and comes back up: critically damped */
-const EASING = 6;
+export const EASING = 6;
 type Eased = [value: number, rate: number];
 /** `[value, rate]` a step on toward `goal`, critically damped */
 function ease([x, v]: Eased, goal: number, dt: number): Eased {

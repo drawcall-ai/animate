@@ -79,7 +79,7 @@ export function shooter(): Scenario {
     stage: (cast) => {
       const scene = new Group();
       const root: Root & { velocity: Vector3 } = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-      const person = cast.person({ drive: () => root });
+      const person = cast.person({ drive: () => root, life: { steady: () => smooth(aiming) } });
       root.position.copy(person.position);
       root.yaw = person.facing;
       const proportions = person.species.person;
@@ -137,7 +137,6 @@ export function shooter(): Scenario {
         root.crouch = input.crouch && !sprinting() ? 1 : 0;
         root.jump = input.jump && !jumped && !person.airborne ? 2.5 : undefined;
         jumped = input.jump;
-        root.steady = smooth(aiming);
       };
 
       /** the rifle where the aim holds it: in the look's frame from the eye, as the poses' weights have it, kicked by a shot; the chest's turn does not alter that world placement */

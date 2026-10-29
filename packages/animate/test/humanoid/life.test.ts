@@ -1,6 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Body, carry, grab, humanoid, lookAt, reach, walkTo } from '../../src/index';
+import { Body, carry, dog, grab, humanoid, lookAt, reach, walkTo } from '../../src/index';
+import { DOG } from '../../skills/animate/references/dog';
 import { INDEX, SIDES, type Side } from '../../src/species/humanoid/bones';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { TROOPER } from '../skeletons/trooper';
@@ -199,4 +200,36 @@ it('glances about on its own schedule: bodies without a seed do not look aside i
   };
   const a = headYaws(new Vector3(0, 0, 0)), b = headYaws(new Vector3(3, 0, 1));
   expect(Math.max(...a.map((yaw, i) => Math.abs(yaw - b[i])))).toBeGreaterThan(0.2);
+});
+
+// (the trial that asked for it: soldiers at attention, scripted, who glanced about and shifted their weight like bystanders)
+it.each([['the default person', 1.75], ['a 2.3 m skeleton', 0]])('holds still as its life asks, scripted: %s', (_name, height) => {
+  const stood = (steady: number) => {
+    const body = height ? person({ dev: true, life: { seed: 3, steady } }) : new Body(humanoid(CHEWBACCA), { dev: true, life: { seed: 3, steady } });
+    const h = insides(body), yaws: number[] = [], xs: number[] = [];
+    run(body, 40, (t) => {
+      if (t < 2) return;
+      yaws.push(yawOf(h.pose.rotation(INDEX.head)));
+      xs.push(h.pose.com(new Vector3()).x);
+    });
+    const range = (values: number[]) => Math.max(...values) - Math.min(...values);
+    return { glances: range(yaws), sway: range(xs), log: body.log };
+  };
+  const ease = stood(0), attention = stood(1), half = stood(0.5);
+  // (at ease: glances up to 0.7 rad aside and weight shifts of several centimetres; at attention: eyes ahead, the weight where it is)
+  expect(ease.glances).toBeGreaterThan(0.3);
+  expect(attention.glances).toBeLessThan(0.05);
+  expect(half.glances).toBeLessThan(0.6 * ease.glances);
+  expect(ease.sway).toBeGreaterThan(0.03);
+  expect(attention.sway).toBeLessThan(0.01);
+  expect([...ease.log, ...attention.log, ...half.log]).toEqual([]);
+}, 20000);
+
+it('takes its steadiness as a function of its time, and says what it cannot take', () => {
+  let asked = 0;
+  const body = person({ dev: true, life: { steady: () => asked } });
+  run(body, 1);
+  asked = 2;
+  expect(() => run(body, 0.1)).toThrow('life.steady 2');
+  expect(() => new Body(dog(DOG), { life: { steady: 1 } })).toThrow("a person's");
 });

@@ -12,7 +12,7 @@ import type { Go } from '../kernel/go';
 import { createLocomotion, type Locomotion } from '../legs/locomotion';
 import type { Root } from '../legs/legged';
 import type { Stepper } from '../legs/step/stepper';
-import type { AnySpecies, Gazer, Temperament } from '../species/define';
+import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
 import { yawOf } from '../kernel/math';
 import { Binding } from './model';
@@ -33,7 +33,8 @@ export interface SelfOptions {
   /**
    * the floor's height under a world point (x, z) (m; default 0 everywhere): what it stands and steps on — a raised stage, a dais, a
    * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
-   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (0.35 m for the default body) and steps
+   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (`species.person.heelBack + toeFront`; 0.35 m
+   * of tread for the default body) and steps
    * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled.
    * A person's step length against a tread decides whether it puts one foot or both on each; between the two it mixes them from tread to
    * tread, which reads as hesitation. Give every body on a set the same function, or they disagree on where its floor is.
@@ -41,7 +42,8 @@ export interface SelfOptions {
   floor?: (x: number, z: number) => number;
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
-  /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
+  /** its root driven by the app (a player's, or a scripted path a walk cannot take), read every sub-step with the body's time (s): its legs
+   * keep up, and nothing borrows them; give `at` and `face` as the drive starts, or the first sub-step jumps there */
   drive?: (time: number) => Root;
   /** its quiet life: a seed that fixes its variation (unseeded, it varies with where the body is made), what tethers it and what startles it */
   life?: Temperament;
@@ -90,6 +92,8 @@ export class Self implements Holder {
   readonly gazer?: Gazer;
   /** each hand's tip bone, by name */
   readonly hands: Readonly<Record<string, number>>;
+  /** each hand's arm, as a pose asks for it */
+  private readonly arms: readonly `arm.${string}`[];
   readonly holding: Record<string, Hold | null>;
   readonly drive?: (time: number) => Root;
   /** what it stands on: the floor's height under a world point */
@@ -127,12 +131,14 @@ export class Self implements Holder {
     this.drive = options.drive;
     this.floor = options.floor ?? FLAT;
     this.life = options.life ?? {};
+    if (this.life.steady !== undefined && !species.person) throw new Error(`life.steady: a person's; a ${species.name ?? 'custom species'} has no such setting`);
     // (a body stands on its floor wherever it is asked to start)
     const at = options.at, height = at ? Math.abs(at.y - this.floor(at.x, at.z)) : 0;
     if (height > OFF_FLOOR) dev?.append(0, { check: 'start off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'at' });
     const pose = start?.(this.skeleton, this.floor) ?? restPose(this.skeleton, this.floor, options.at, options.face);
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
+    this.arms = Object.keys(this.hands).map((hand) => `arm.${hand}` as const);
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
     this.before = [this.poses[3], this.poses[4]];
@@ -265,6 +271,19 @@ export class Self implements Holder {
     return carrier;
   }
 
+  /**
+   * `bones` as its pose being written has them, written into its earlier poses too: as if they had always stood so, so nothing reads
+   * the change as motion — only as it starts, before its first update ends (none of its poses has been shown)
+   */
+  startAs(bones: readonly number[]): void {
+    if (this.updates > 0) throw new Error('a body already shown cannot start otherwise');
+    const current = this.frame.current;
+    for (const pose of this.poses) {
+      if (pose === current) continue;
+      for (const bone of bones) pose.setLocal(bone, current.local(bone));
+    }
+  }
+
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
   file(verb: string, site: string, staging: Staging, aimer = false): Request {
     const request = new Request(this, verb, site, staging, aimer);
@@ -385,6 +404,8 @@ export class Self implements Holder {
     const behaviours = (this.behaviours ??= this.behave());
     // (balance first, on what was asked last sub-step; then the requests' staging, reading the body as balance has it now)
     behaviours.balance?.(f);
+    // (how still its life holds it, asked for balance's next sub-step as its parts ask)
+    if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
     for (const request of [...this.requests]) {
@@ -408,6 +429,7 @@ export class Self implements Holder {
     this.run('head', f);
     this.headOffset.write(f);
     this.run('trunk', f);
+    for (const arm of this.arms) this.run(arm, f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
       if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);

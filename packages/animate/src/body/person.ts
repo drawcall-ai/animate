@@ -15,7 +15,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, checkParents, inHand, move, worn } from '../things/hold';
+import { bear, bodyOf, checkParents, inHand, move, worn, type Kept } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
@@ -30,6 +30,10 @@ import { stride } from '../legs/person/stride';
 import { hanging, handStep, HOLD } from '../hands/person/arms';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
+import type { ArmPosture } from '../kernel/poise';
+
+/** an arm posed nowhere off its hang */
+const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0 });
 
 /** Humanoid balance, idle gaze and arms, and held-object fitting. */
 export class Person extends Self {
@@ -38,6 +42,8 @@ export class Person extends Self {
   readonly carrying = new Map<Object3D, Carrier>();
   readonly proportions: Proportions;
   readonly stride: Stride;
+  /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
+  readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;
@@ -60,7 +66,7 @@ export class Person extends Self {
   protected behave(): Behaviours {
     const seed = this.life.seed;
     const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') }, held = { left: keptOnBody(this, 'left'), right: keptOnBody(this, 'right') };
-    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
+    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>(), kept = new WeakMap<Thing, Kept>();
     return {
       balance: this.drive ? driven(this, seed) : stride(this, { seed }),
       // (unseeded, glances vary with where the body was made, as its balance does: a crowd does not look aside in step)
@@ -79,7 +85,7 @@ export class Person extends Self {
       things: (f) => {
         checkParents(this, f);
         if (f.dev) checkTaking(this, f, taking);
-        move(this, f, this.carrying);
+        move(this, f, this.carrying, kept);
         if (f.dev) checkHeld(this, f, noted);
         this.carrying.clear();
         bear(this, f, this.worn, this.borne);

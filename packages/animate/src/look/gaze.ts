@@ -53,12 +53,14 @@ const GLANCE = { turnAccel: 40, turnSpeed: 6 };
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
 /** Keep the eyes on a world target (rest: +Z forward, +Y up), sharing the braked head turn over the neck chain within joint limits (`shareOver`); EYES
- * takes the remainder. The history-followed head turn uses headPace, capped by motion. `recentring`: the eyes re-centre in the head
- * once the body is still under the look (a look asked for; one borrowed by the hands, or idle, leaves the head where it is).
+ * takes the remainder — or, given `head`, all of a turn aside but that share, as far as the eyes' comfortable range. The history-followed
+ * head turn uses headPace, capped by motion. `recentring`: the eyes re-centre in the head once the body is still under the look (a look
+ * asked for; one borrowed by the hands, or idle, leaves the head where it is).
  */
-export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false }: { motion?: HeadMotion; recentring?: boolean } = {}): Step {
+export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false, head }: { motion?: HeadMotion; recentring?: boolean; head?: number } = {}): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
+  if (neck === undefined && head !== undefined) throw new Error('lookAt: a head share needs a neck to turn the head (its posture turns it)');
   if (neck === undefined) return (f) => void (self.look = target(f));
   let over: boolean | null = null;
   /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
@@ -136,10 +138,11 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     const strained = strainOf(kept);
     if (strainOf(other) < strained - HYSTERESIS) over = !over;
     // (the head's line, the way taken: the eyes take the rest of a turn aside, EYES of it and no more than EYES_MOST of what is left
-    // of their range where the neck stops short; up or down, and over the top, the head all the way: the eyes have little to spare
-    // there)
+    // of their range where the neck stops short — given the head's share, the rest of it, as far as all that is left of their range;
+    // up or down, and over the top, the head all the way: the eyes have little to spare there)
     const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
-    const eyes = Math.min(EYES * Math.abs(aside), EYES_MOST * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2)));
+    const room = (share: number) => share * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2));
+    const eyes = head === undefined ? Math.min(EYES * Math.abs(aside), room(EYES_MOST)) : Math.min((1 - head) * Math.abs(aside), room(1));
     if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
     // Follow in world space so the trunk can move beneath a steady gaze.
     const whole = _whole.copy(over ? _o : _q);

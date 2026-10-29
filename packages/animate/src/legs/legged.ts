@@ -10,7 +10,7 @@ import type { Stepper } from './step/stepper';
 import type { Steering } from './step/state';
 import type { Floor } from './floor';
 
-/** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, steadiness, a leap. */
+/** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, a leap. */
 export interface Root {
   /** its point on the floor (m): x and z — the body stands on its floor there; a y off that floor is ignored (a dev log says so) */
   position: Vector3;
@@ -20,8 +20,6 @@ export interface Root {
   yaw: number;
   /** how far it crouches (0 standing … 1 a deep crouch): a key's 0 or 1 as it is, the legs ease it */
   crouch?: number;
-  /** how still it holds itself (0 at ease … 1 aiming): its breathing and sway fade by it */
-  steady?: number;
   /** leap at this speed (m/s up) as soon as the feet can */
   jump?: number;
 }
@@ -54,7 +52,7 @@ export interface Legged {
 
 /**
  * A body's root as its app drives it (`drive`), a sub-step at a time: where it is, its velocity (read off its moves when not given),
- * facing and crouch; a leap it asks is passed to the legs, and how still it holds itself to its balance (`steady`).
+ * facing and crouch; a leap it asks is passed to the legs.
  */
 export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise' | 'floor'>): (f: Frame) => Steering {
   const drive = self.drive;
@@ -70,7 +68,6 @@ export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise' | 'f
     last = position.clone();
     if (![position.x, position.z, velocity.x, velocity.z, root.yaw].every(Number.isFinite)) throw new Error('drive: a root that is not finite');
     if (root.jump !== undefined) self.stepper?.jump(root.jump);
-    if (root.steady !== undefined) self.poise.add({ steady: root.steady });
     return { position, velocity, yaw: root.yaw, crouch: root.crouch };
   };
 }

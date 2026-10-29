@@ -8,7 +8,9 @@ import { Carrier } from '../kernel/carrier';
 
 /**
  * Where a verb goes: a point (`Vector3`), a place that moves with its parent and sets the orientation too (an `Object3D`: an empty, a
- * bone), or either as it is at each of the body's sub-steps (a function of the body's time, s). An object is read eased across the
+ * bone), or either as it is at each of the body's sub-steps (a function of the body's time, s). An `Object3D` turns a person's hand to its
+ * own world turn as from the T-pose: unturned, the fingers point out along the arm (+X for the left hand, −X for the right), palm down;
+ * turned ±π/2 about +Y (left −, right +), they point ahead. An object is read eased across the
  * update from where the app last left it; an object a function returns is read as the function leaves it, each sub-step. A target the
  * body walks to (or a placement it stands at) is on the body's floor: its x and z say where, the floor's height there is where it
  * stands; one it reaches or looks at is the world point it is. A body is no target — a hand or a walk goes to a place on it (one of its

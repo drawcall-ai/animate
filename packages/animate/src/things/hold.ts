@@ -129,12 +129,18 @@ export function take(self: Holder, thing: Thing): void {
 }
 
 /**
- * Where `self` moves what it carries in both hands, after its hands: a thing a carry aims this sub-step fitted to the wrists holding it
+ * Where `self` moves what it holds, after its hands: a thing in both hands a carry aims this sub-step fitted to the wrists holding it
  * (their middle, turned so the line between its grips lies along the line between them), as the aim turns it; one nothing aims going
- * along with the root bone; each written into its object relative to the bone it hangs from.
+ * along with the root bone; each written into its object relative to the bone it hangs from. A thing in one hand by a free grip turns
+ * as a carry aims it, and else keeps its turn in the world, turning only with the body's facing: a grip that sets no turn leaves it free
+ * of the hand's (the arm's solve leaves a free wrist's twist to itself, and a long thing on it would swing with it).
  */
-export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier>): void {
-  for (const [object, aim] of aims) pivot(self, f, Thing.of(object), aim);
+export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier>, kept: WeakMap<Thing, Kept>): void {
+  for (const [object, aim] of aims) pivot(self, f, Thing.of(object), aim.current.quaternion);
+  for (const hand in self.holding) {
+    const thing = self.holding[hand]?.thing;
+    if (thing && !aims.has(thing.object)) pivot(self, f, thing, keptTurn(self, f, thing, kept));
+  }
   for (const [object, carrier] of self.carried) {
     const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
     if (aim && hands.length === 2) fit(self, f, aim, hands, carrier);
@@ -143,13 +149,36 @@ export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier
   }
 }
 
-/** a thing hanging from the one hand that holds it by a free grip, turned as a carry aims it about that grip, which stays on the wrist */
-function pivot(self: Holder, f: Frame, thing: Thing, aim: Carrier): void {
+/** whether `thing` hangs from the one hand that holds it by a free grip (one that sets no turn): its hand, if so */
+function freeHand(self: Holder, thing: Thing): string | null {
   const [hand, ...others] = handsOn(self, thing), hold = hand === undefined ? null : self.holding[hand];
-  const parent = thing.object.parent;
-  if (!hold || others.length || hold.goal.quaternion !== undefined || !inHand(self, thing) || !parent) return;
-  const grip = _g1.copy(hold.goal.position).applyQuaternion(aim.current.quaternion);
-  placeUnder(self, thing.object, parent, _at.copy(f.current.position(self.hands[hand])).sub(grip), aim.current.quaternion);
+  return hold && !others.length && hold.goal.quaternion === undefined && inHand(self, thing) && thing.object.parent ? hand : null;
+}
+
+/** a thing hanging from the one hand that holds it by a free grip, turned `quaternion` (world) about that grip, which stays on the wrist */
+function pivot(self: Holder, f: Frame, thing: Thing, quaternion: Readonly<Quaternion> | null): void {
+  const hand = quaternion && freeHand(self, thing), hold = hand && self.holding[hand], parent = thing.object.parent;
+  if (!quaternion || !hand || !hold || !parent) return;
+  const grip = _g1.copy(hold.goal.position).applyQuaternion(quaternion);
+  placeUnder(self, thing.object, parent, _at.copy(f.current.position(self.hands[hand])).sub(grip), quaternion);
+}
+
+/** A free-gripped thing's kept turn (world) and the sub-step it was last kept at. */
+export interface Kept {
+  quaternion: Quaternion;
+  time: number;
+}
+
+/** the turn a free-gripped thing in one hand keeps this sub-step: the one it had, turned with the body's facing since — taken afresh where it
+ * is when it was not kept the sub-step before (a carry aimed it, or the hand took it just now); null for any other thing */
+function keptTurn(self: Holder, f: Frame, thing: Thing, kept: WeakMap<Thing, Kept>): Quaternion | null {
+  if (!freeHand(self, thing)) return null;
+  let turn = kept.get(thing);
+  if (!turn) kept.set(thing, (turn = { quaternion: new Quaternion(), time: -Infinity }));
+  if (f.time - turn.time > 1.5 * f.dt) turn.quaternion.copy(resolve(self, thing.object, _placed).quaternion);
+  else turn.quaternion.premultiply(_turn.setFromAxisAngle(UP, f.current.facing - f.prev.facing));
+  turn.time = f.time;
+  return turn.quaternion;
 }
 
 /** a carried thing nothing aims, moved with the root bone as it moved this sub-step */
@@ -270,7 +299,7 @@ export function wornOf(self: Holder): Thing[] {
 }
 
 const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const ZERO = new Vector3(), _scale = new Vector3();
+const ZERO = new Vector3(), UP = new Vector3(0, 1, 0), _scale = new Vector3();
 const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
 const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();

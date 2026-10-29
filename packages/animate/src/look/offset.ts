@@ -100,6 +100,6 @@ const ANGLES = ['pitch', 'yaw', 'roll'] as const satisfies readonly (keyof Angle
  * How briskly a head's offset is taken up and given back (rad/s², rad/s): a nod's ~15° down in about a quarter of a second, a head thrown
  * back half a radian in under half a second (tuned; a voluntary nod's peak ~100–150°/s, recalled, not checked)
  */
-const NOD = { accel: 14, speed: 2.5 };
+export const NOD = { accel: 14, speed: 2.5 };
 const _euler = new Euler(), _turn = new Quaternion(), _share = new Quaternion(), _local = new Quaternion();
 const _below = new Quaternion(), _under = new Quaternion(), _conjugated = new Quaternion(), _inverse = new Quaternion();

@@ -83,8 +83,8 @@ it.each([
 // the feet; holding still to aim, its breathing and sway keep 30% (Era et al. 1996, as `Life` has it) — the hips within that share of
 // quiet stance's ≤ 1 cm sway (Winter 1995), no weight shift)
 it.each([[0], [1]] as const)('stands alive, holding still as asked (steady %s)', (steady) => {
-  const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, steady };
-  const body = person({ drive: () => root, life: { seed: 3 }, dev: true }), h = insides(body);
+  const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const body = person({ drive: () => root, life: { seed: 3, steady }, dev: true }), h = insides(body);
   let lowest = Infinity, highest = -Infinity, left = 0, right = 0, over = -Infinity;
   for (let t = dt; t <= 40; t += dt) {
     body.update(dt);
