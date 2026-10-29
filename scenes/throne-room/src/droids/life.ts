@@ -65,9 +65,9 @@ export function* threepioFuss(threepio: Body, seed = 3): Verb {
   for (;;) {
     yield* reach(threepio, { left: held(threepio, 1), right: held(threepio, -1) }, { until: 1.4 + 1.8 * rand() });
     const pick = rand();
-    if (pick < 0.4) yield* reach(threepio, { right: besides(threepio, -0.2, 1.36, 0.3) }, { until: 0.7 });
-    else if (pick < 0.8) yield* reach(threepio, { left: besides(threepio, 0.2, 1.36, 0.3) }, { until: 0.7 });
-    else yield* reach(threepio, { left: besides(threepio, 0.1, 1.32, 0.3), right: besides(threepio, -0.1, 1.32, 0.3) }, { until: 0.9 });
+    if (pick < 0.4) yield* reach(threepio, { right: besides(threepio, -0.2, 1.36, 0.25) }, { until: 0.7 });
+    else if (pick < 0.8) yield* reach(threepio, { left: besides(threepio, 0.2, 1.36, 0.25) }, { until: 0.7 });
+    else yield* reach(threepio, { left: besides(threepio, 0.12, 1.32, 0.24), right: besides(threepio, -0.12, 1.32, 0.24) }, { until: 0.9 });
   }
 }
 

@@ -30,6 +30,8 @@ export const beat: Beat & { order: number } = {
   duration: 20,
   starts: { luke: 'lukeDecorated', han: 'hanDecorated', chewbacca: 'chewbaccaDecorated' },
   stage({ cast, marks }) {
+    /** the heroes who have turned and settled facing the hall (idle life may shift their weight afterwards) */
+    const turned = new Set<Hero>();
     function* turnAround(hero: Hero) {
       const body = cast[hero], { after, over } = TURNS[hero];
       const mark = marks[`${hero}Decorated`].position;
@@ -41,6 +43,7 @@ export const beat: Beat & { order: number } = {
         // turning on the spot: a walk to where it stands, arriving faced the other way
         if (!(yield* walkTo(body, mark.clone(), { face: TOWARD_DOORS, speed: 0.4 }))) return false;
         yield* wait(() => body.settled);
+        turned.add(hero);
         return yield* wait(FACING_THE_HALL);
       };
       return yield* parallel('race', lookAt(body, troops), turn());
@@ -51,7 +54,7 @@ export const beat: Beat & { order: number } = {
       done: () => HEROES.every((hero) => {
         const body = cast[hero];
         const off = Math.abs(Math.atan2(Math.sin(body.facing - TOWARD_DOORS), Math.cos(body.facing - TOWARD_DOORS)));
-        return body.settled && off < 0.15 && body.position.y > 0.75;
+        return turned.has(hero) && off < 0.15 && body.position.y > 0.75;
       }),
     };
   },
