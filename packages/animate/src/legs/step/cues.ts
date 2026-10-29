@@ -143,8 +143,11 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   // (a planned walk keeps its supporting foot down even when short of reach: the pelvis gives, not both feet at once)
   if (other.swing && r.forecast && !steps.clocked) return false;
   // (short of the height asked — but not stepped down ahead of its hip, below a foot standing behind: the hip comes over it, let down
-  // to it — a foot stepped down a stair stepped on again at once for it)
-  const down = aheadOf(steps, now, leg) < 0 && steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE);
+  // to it — a foot stepped down a stair stepped on again at once for it
+  // — nor a walker's foot just landed ahead of its hip: the hip comes over it as it takes the weight, the pelvis given down to it; stepped on
+  // again at once it left the other a stance's travel behind, the body falling past the one foot down)
+  const ahead = aheadOf(steps, now, leg) < 0;
+  const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (!!r.forecast && leg.planted < SETTLING * now.C));
   if (!down && reach(steps, now, leg) < nominal(steps, now) + Math.max(0, vy) * RISING - STEP.short * s) return true;
   if (leg.landed) return false;
   if (leg === cues.catcher) return true;
