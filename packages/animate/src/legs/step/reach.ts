@@ -40,9 +40,27 @@ function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Ve
  * nearer — a tread's edge before it — is home where it fits, and does not step again for it) */
 export function offHome(steps: Steps, now: Now, leg: Leg, ahead: number): number {
   const at = home(steps, now, leg, ahead, _v);
-  if (steps.floor !== FLAT) foothold(steps.floor, steps.feet, leg.i, at, now.yaw + leg.sign * steps.st.toeOut);
+  if (steps.floor !== FLAT) {
+    // (where the body stands, its home on the level the foot stands on — over its edge, a tread shorter than the foot: not the one below)
+    const level = leg.anchor.y - steps.feet.ankleHeight, stays = staysOn(steps, now, level, ahead);
+    foothold(steps.floor, steps.feet, leg.i, at, now.yaw + leg.sign * steps.st.toeOut, undefined, stays ? level : undefined, stays);
+  }
   return at.sub(leg.anchor).setY(0).length();
 }
+
+/** whether a foot on level `level` steps where the body stands: its root over that level, now and `ahead` s on, gone no further than
+ * `IN_PLACE` (m, default body) — turning, squaring, not a step up or down a flight */
+export function staysOn(steps: Steps, now: Body, level: number, ahead: number): boolean {
+  if (steps.floor === FLAT) return false;
+  const here = now.r.position, at = travelOf(steps, now, ahead, _stay);
+  const on = (x: number, z: number) => Math.abs(steps.floor(x, z) - level) <= SAME_LEVEL;
+  return on(here.x, here.z) && on(at.x, at.z) && Math.hypot(at.x - here.x, at.z - here.z) < IN_PLACE * steps.st.scale;
+}
+/** Tuned (m): a level within this of another is the same */
+const SAME_LEVEL = 0.002;
+/** Tuned (m, default body): a root going no further than this as a foot lands steps it where it stands (a stair's tread is ~0.25–0.45) */
+const IN_PLACE = 0.15;
+const _stay = new Vector3();
 
 /** a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends */
 function rolled(steps: Steps, now: Now, leg: Leg): number {

@@ -1,7 +1,7 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { arriving, grab, reach, release, wait, walkTo } from '../../src/index';
+import { arriving, grab, lookAt, reach, release, wait, walkTo } from '../../src/index';
 import { insides, person, play } from '../bodies';
 import { box, roomOf } from '../things';
 
@@ -154,6 +154,26 @@ it('given until, walks after a target that moves, and stops with it', () => {
   });
   expect(done).toBe(true);
   expect(body.position.distanceTo(lead.position)).toBeLessThan(0.15);
+  expect(body.log).toEqual([]);
+});
+
+// (people turn into their gaze: an about-turn goes round the side the head is turned to — recalled: Hollands et al. 2001, gaze and head
+// lead a turn; exactly opposite, with the head ahead, it goes to the right)
+it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it looks to: %i, %s', (side) => {
+  const body = person({ dev: true }), h = insides(body);
+  let turned = 0, done = false;
+  play(function* () {
+    yield* parallel('race', lookAt(body, new Vector3(side * 2, 1.6, -0.5)), function* () {
+      yield* wait(1);
+      yield* walkTo(body, new Vector3(), { face: Math.PI });
+      done = true;
+    });
+  }, [body], 10, () => {
+    if (h.frame.time > 1 && !turned && Math.abs(h.locomotion.facing) > 0.3) turned = Math.sign(h.locomotion.facing);
+    return done;
+  });
+  expect(done).toBe(true);
+  expect(turned).toBe(side);
   expect(body.log).toEqual([]);
 });
 

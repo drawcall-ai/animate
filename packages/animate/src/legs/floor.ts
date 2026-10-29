@@ -42,21 +42,31 @@ export function levelUnder(floor: Floor, print: readonly Spot[]): number | null 
  * forward or back as little as it takes (a heel on one tread and a toe on the next lands on one of them), and `FIT.clear` back from
  * the edge of a higher level fore or aft where that fits too (a toe off the riser it next swings over, a heel off the nosing it steps
  * down from) — its ankle its height above that; of those, the nearest that `keeps` (the balance a landing keeps), if one does, and first
- * of those on the level it is aimed `onto` (a swing keeps to the tread it set off for as its landing moves on). A sole that fits nowhere
- * within `FIT.most` stands as it is on the highest floor under it.
+ * of those on the level it is aimed `onto` (a swing keeps to the tread it set off for as its landing moves on). One that `stays` on that
+ * level — a foot turning or squaring where the body stands — stands on it over its edge if the whole sole fits there nowhere (toes over a
+ * nosing: a tread shorter than the foot), never on a level below. A sole that fits nowhere within `FIT.most` stands as it is on the highest
+ * floor under it.
  */
-export function foothold(floor: Floor, feet: Feet, i: number, anchor: Vector3, yaw: number, keeps?: (at: Readonly<Vector3>) => boolean, onto?: number): Vector3 {
+export function foothold(floor: Floor, feet: Feet, i: number, anchor: Vector3, yaw: number, keeps?: (at: Readonly<Vector3>) => boolean, onto?: number, stays = false): Vector3 {
   if (floor === FLAT) return anchor.setY(feet.ankleHeight);
   const forward = forwardOf(yaw, _forward);
   let found: Vector3 | null = null, level = 0;
-  for (const kept of onto === undefined ? [false] : [true, false]) for (const clear of [FIT.clear, 0]) for (let moved = 0; moved <= FIT.most + 1e-9; moved += FIT.step) for (const way of moved ? [1, -1] : [1]) {
-    const at = _at.copy(anchor).addScaledVector(forward, way * moved), on = levelOf(floor, feet.print(i, at, yaw), forward, clear);
-    if (on === null || (kept && Math.abs(on - (onto ?? on)) > LEVEL)) continue;
+  const modes = onto === undefined ? ['any'] as const : stays ? ['kept', 'over'] as const : ['kept', 'any'] as const;
+  for (const mode of modes) for (const clear of mode === 'over' ? [0] : [FIT.clear, 0]) for (let moved = 0; moved <= FIT.most + 1e-9; moved += FIT.step) for (const way of moved ? [1, -1] : [1]) {
+    const at = _at.copy(anchor).addScaledVector(forward, way * moved), print = feet.print(i, at, yaw);
+    // (over its edge: the level it stays on the highest under the sole, and under its ankle)
+    const on = mode === 'over' ? over(floor, print, at, onto ?? 0) : levelOf(floor, print, forward, clear);
+    if (on === null || (mode !== 'any' && Math.abs(on - (onto ?? on)) > LEVEL)) continue;
     if (!keeps || keeps(at)) return anchor.copy(at).setY(on + feet.ankleHeight);
     if (!found) [found, level] = [_found.copy(at), on];
   }
   if (found) return anchor.copy(found).setY(level + feet.ankleHeight);
   return anchor.setY(highestUnder(floor, feet.print(i, anchor, yaw)) + feet.ankleHeight);
+}
+
+/** `level` if a print `at` an ankle stands on it over its edge — no floor under the print higher, the floor under the ankle on it — else null */
+function over(floor: Floor, print: readonly Spot[], at: Readonly<Vector3>, level: number): number | null {
+  return Math.abs(highestUnder(floor, print) - level) <= LEVEL && Math.abs(floor(at.x, at.z) - level) <= LEVEL ? level : null;
 }
 
 /** the level a print stands on (m), if it is all on one and no higher floor is within `clear` (m) of it along `forward`; else null */

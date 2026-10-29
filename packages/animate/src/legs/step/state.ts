@@ -237,6 +237,9 @@ export interface Swing {
   capture: boolean; u: number; age: number; rest: number; T: number;
   /** it lifted once the weight was off it: the body stands on the others through it */
   unloaded: boolean;
+  /** it steps where the body stands — the root over the level it lifts from as it lands: turning, squaring — and keeps to that level, its
+   * sole over the edge if it must (`foothold`'s `stays`) */
+  stays: boolean;
   /** the floor's height it stood on, and how far its sole's lowest point hangs below its ankle as it has been posed (m, eased) */
   level: number; drop: number;
   x: Vector3; v: Vector3; a: Vector3; turn: { x: number; v: number; a: number };

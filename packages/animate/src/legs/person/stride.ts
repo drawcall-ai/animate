@@ -1,7 +1,8 @@
-import { Vector3 } from 'three';
+import { Vector3, type Quaternion } from 'three';
 import type { Step } from '../../kernel/frame';
 import { offTheWay, Planner, stanceYaw } from '../planner';
-import { forwardOf, wrapAngle } from '../../kernel/math';
+import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
+import { INDEX } from '../../species/humanoid/bones';
 import type { Stance } from '../../kernel/go';
 import type { Stepper } from '../step/stepper';
 import { hullOf, past } from '../support';
@@ -76,7 +77,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
-    const yaw = face?.yaw ?? (moving ? travelYaw : plan.root.yaw);
+    const yaw = face ? halfTurn(f.prev.rotation(INDEX.head), plan.root.yaw, face.yaw) : moving ? travelYaw : plan.root.yaw;
     const faced = !!face || !moving || offTheWay(heading, plan.root.yaw);
     const stance = stanceYaw(stepper.legs, plan.root.yaw, toeOut);
     // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
@@ -97,8 +98,9 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const rest = settling ? over : null;
     const edging = go && over ? stop.clone().sub(over).clampLength(0, EDGING * s).add(over) : stop;
     // (edged onto a still goal, it is there: held, not chased to and fro — so its feet are judged standing, as they will be once the walk
-    // ends; a goal on the move, or one followed, it keeps edging after it)
-    const edged = edging.distanceTo(root) > LEAN.back * s || velocity.length() >= STOP.goalSpeed || go?.settles === false ? edging : null;
+    // ends; a goal on the move, it keeps edging after it. One followed that stands still is a still goal: chased within a millimetre, a
+    // walk ended on `until` crept round it at 1 cm/s and never settled)
+    const edged = edging.distanceTo(root) > LEAN.back * s || velocity.length() >= STOP.goalSpeed ? edging : null;
     // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
     const behind = feetBehind(stepper, s);
     const goal = {
@@ -120,6 +122,19 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     return { ...planned, centre: true, underway: moving, arriving: moving && !!go && go.settles !== false && velocity.length() < STOP.goalSpeed };
   }, { ...options, individual });
 }
+
+/**
+ * The facing to turn toward for one asked, `to`, from `from` (rad): about-turning, round the side the head is turned to — people turn
+ * into their gaze; with it straight ahead the shorter way, exactly opposite to the right — as far as `HALF` short of the way round, till
+ * the shorter way is that side's (`head`: the head's world rotation)
+ */
+function halfTurn(head: Readonly<Quaternion>, from: number, to: number): number {
+  const left = wrapAngle(to - from), looking = wrapAngle(yawOf(head) - from);
+  if (Math.abs(left) < Math.PI - HALF || Math.abs(looking) < LOOKING || Math.sign(looking) === Math.sign(left)) return to;
+  return from + Math.sign(looking) * (Math.PI - HALF);
+}
+/** Tuned: a turn within `HALF` (rad) of the way round goes round the side the head is turned to, by `LOOKING` (rad) or more */
+const HALF = 0.35, LOOKING = 0.15;
 
 /** how hard a walk let go of brakes (m/s², default body): a walk's own acceleration, as a goal still asked is walked to */
 const BRAKING = 1.2;

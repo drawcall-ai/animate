@@ -13,8 +13,9 @@ export interface WalkOptions {
   /**
    * the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else
    * the way it comes. The body faces the way it walks and turns to this only over its last step or so, so a step back or aside much
-   * longer than that turns it away and round again. A walk to where the body stands turns it on the spot; a target to face that moves
-   * re-aims the steps mid-swing, so turn to a fixed angle or point.
+   * longer than that turns it away and round again. A walk to where the body stands turns it on the spot (on a tread, its feet keep to it,
+   * toes over the nosing if the tread is shorter than the foot); an about-turn goes round the side the body looks to (its head turned
+   * past ~9°), else to the right. A target to face that moves re-aims the steps mid-swing, so turn to a fixed angle or point.
    */
   face?: number | Target;
   /** its top speed (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7 ×
