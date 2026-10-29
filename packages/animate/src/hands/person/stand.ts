@@ -45,8 +45,26 @@ export type WalkUp = Exclude<ReturnType<typeof footing>, string>;
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
   const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight);
-  return shoulder.distanceTo(at) < ARM_REACH * proportions.armLength + (free ? proportions.shoulderHalfWidth : 0);
+  const reach = ARM_REACH * proportions.armLength;
+  if (!free || !side) return shoulder.distanceTo(at) < reach;
+  // (the trunk turned toward it, as far as a hand held off its goal turns it (45°: the thoracolumbar spine's, AAOS; recalled), carries the
+  // shoulder round the spine, and the clavicle draws it on toward the hand: as near as that brings it, within `TURNED` of it — the turn and
+  // the draw are not all had at once — and a target straight overhead or ahead comes no nearer for the turn)
+  // (from the shoulder as it stands square to the body's facing: one already turned toward an earlier target turns no further for it)
+  const middle = shoulderOf(person).setY(shoulder.y), drawn = TURNED * (reach + PROTRACTION * proportions.height);
+  const arm = leftOf(person.locomotion.facing, _arm).multiplyScalar((side === 'left' ? 1 : -1) * proportions.shoulderHalfWidth);
+  for (let k = -TURNS; k <= TURNS; k++) {
+    const turned = _turned.copy(arm).applyAxisAngle(_up, (k / TURNS) * TRUNK_TURN).add(middle);
+    if (turned.distanceTo(at) < drawn) return true;
+  }
+  return false;
 }
+/** how far the trunk turns a shoulder toward a free hand's target (rad), read at `TURNS` angles each way */
+const TRUNK_TURN = Math.PI / 4, TURNS = 6;
+/** Tuned: a free hand's reach with the trunk turned and the shoulder drawn is checked within this share of it (measured: a cross-body
+ * target 0.594 m from the turned shoulder of the default body, 0.613 m of reach, stopped 3.6 cm short) */
+const TURNED = 0.95;
+const _arm = new Vector3(), _turned = new Vector3(), _up = new Vector3(0, 1, 0);
 
 function shoulderOf(person: Reacher, side?: Side): Vector3 {
   return side
@@ -78,7 +96,9 @@ export function footing(person: Reacher, to: Stand, step = true) {
   const reach = ARM_REACH * proportions.armLength;
   const { drop, forward } = point ? stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach)) : { drop: 0, forward: 0 };
   const shoulders = standing - drop + (point ? Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing)) : 0);
-  const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2)) + forward : Infinity;
+  // (a point taken in one hand, faced: its shoulder stands its half width aside of the line to it)
+  const aside = point && grips.length === 1 && grips[0].side ? proportions.shoulderHalfWidth : 0;
+  const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) + forward : Infinity;
   // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
   const distance = !point && grips.length === 2 && height < proportions.hipHeight ? LOW_STAND / Math.sqrt(loadFactor('mass' in to ? to.mass : 0)) : WITHIN;
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;

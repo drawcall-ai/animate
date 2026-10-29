@@ -107,3 +107,10 @@ describe('a person\'s stride', () => {
   });
 });
 
+
+it('zz', () => {
+  for (const stride of [{}, { cadence: 0.85, width: 1.3, toeOut: 1.3 }, { cadence: 0.8, width: 1.3, toeOut: 1.3 }, { cadence: 0.85, width: 1.2, toeOut: 1.3 }, { cadence: 0.85, width: 1.3 }, { cadence: 0.85 }]) {
+    const body = sized(1.75, 0, stride), [g] = walked([body], 1.2);
+    console.log('Z', JSON.stringify(stride), g.cadence.toFixed(1), g.width.toFixed(3), g.toeOut.toFixed(3), g.sway.toFixed(3), body.log.length);
+  }
+});

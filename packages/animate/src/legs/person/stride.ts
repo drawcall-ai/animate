@@ -41,7 +41,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
   return drivenBy(person, (f, go, poise, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
     if (f.dev) checkSupport(person, f, f.dev);
-    const dt = f.dt, face = go?.face;
+    const dt = f.dt, asking = go?.face;
     if (!planner) {
       planner = new Planner(f.prev.com(new Vector3()), person.yaw, humanGait(proportions), proportions.hipHalfWidth);
       stop.copy(planner.root.position);
@@ -62,11 +62,13 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     still = moving ? null : leaning ? still : root.clone();
     // (a walk is under way while the body turns to a facing asked too: turning on the spot, a goal moving off is walked after at once, not
     // once it is a start's distance away)
-    const unturned = face ? Math.abs(wrapAngle(face.yaw - plan.root.yaw)) : 0;
+    const unturned = asking ? Math.abs(wrapAngle(asking.yaw - plan.root.yaw)) : 0;
     const off = (still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced;
     if (moving || !off) asked = NaN;
     else if (Number.isNaN(asked)) asked = f.time;
     if (!moving && off && f.time - asked >= individual.delay) [moving, starting, still, leaning] = [true, true, null, false];
+    // (waiting its moment to set off, it stands as it is: it turns and goes as it sets off)
+    const waiting = !moving && !Number.isNaN(asked), face = waiting ? undefined : asking;
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
@@ -95,12 +97,12 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
     const behind = feetBehind(stepper, s);
     const goal = {
-      position: moving ? stop : go ? edged ?? root.clone() : leaned ?? rest ?? root.clone(),
+      position: moving ? stop : waiting ? root.clone() : go ? edged ?? root.clone() : leaned ?? rest ?? root.clone(),
       velocity: moving ? velocity : new Vector3(),
       yaw: faced ? yaw : undefined,
     };
     const walking = Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity);
-    const speed = moving ? walking : go ? (edged ? EDGE * s : 0) : leaned || rest ? LEAN.speed * s : 0;
+    const speed = moving ? walking : waiting ? 0 : go ? (edged ? EDGE * s : 0) : leaned || rest ? LEAN.speed * s : 0;
     const motion = { accel: go?.accel ?? 1.2 * s, speed, turnSpeed: face?.rate };
     // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
     const holds: Parameters<Planner['step']>[4] = (forecast) => stepper.reachable((t) => {

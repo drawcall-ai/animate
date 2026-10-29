@@ -42,7 +42,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   // (past its planned end, a hand off its grip that has stopped there fails the reach at once; one still moving, `REACHING` s on. The
   // legs stepping under it, it is watched afresh after)
   const stopped = (f: Frame) => takes.some((take, k) => {
-    if (!person.locomotion.settled) progress[k].reset();
+    if (stepping(person)) progress[k].reset();
     const off = unmet(f, person.hands[take.side], take.goal, person.track(take.thing.object));
     return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, person.hands[take.side], off.at);
   });
@@ -211,8 +211,9 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
     return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, person.hands[side], off.at);
   });
   const eta = (f: Frame) => {
-    // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach.
-    if (!person.locomotion.settled) {
+    // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
+    // whole of a stance that never settles (a weight shifted toward the hand, wanting a step it does not take, held the timer forever)
+    if (stepping(person)) {
       setOff += f.dt;
       progress.forEach((hand) => hand.reset());
     }
@@ -277,3 +278,6 @@ const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
 const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3();
+
+/** whether a foot is in the air under `person`: a support step under way */
+const stepping = (person: Reacher) => person.stepper?.legs.some((leg) => leg.swing) ?? false;
