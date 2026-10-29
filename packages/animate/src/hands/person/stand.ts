@@ -103,7 +103,11 @@ export function footing(person: Reacher, to: Stand, step = true) {
   const distance = !point && grips.length === 2 && height < proportions.hipHeight ? LOW_STAND / Math.sqrt(loadFactor('mass' in to ? to.mass : 0)) : WITHIN;
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
   const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
-  let ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up);
+  // (two grips taken: no further than the arms reach them with `TURNED` to spare, as far as the body bows and lowers: stood at the arms'
+  // whole reach, a box under the hips was 1.1 cm out of it as the walk arrived a centimetre short)
+  const bowed = stoop(proportions, Math.max(0, standing - height)), spare = TURNED * reach;
+  const both = !point && grips.length === 2 ? Math.sqrt(Math.max(0, spare ** 2 - (height - standing + bowed.drop) ** 2)) + bowed.forward : Infinity;
+  let ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both);
   const nowhere = (check: string, value: number, limit = reach) => {
     f0.dev?.append(f0.time, { check, value, limit, where: `${grips.length} grips` });
     return 'nowhere' as const;

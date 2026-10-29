@@ -56,7 +56,11 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
         velocity.lerp(moved, 1 - Math.exp(-GOAL_VELOCITY_RATE * dt));
       }
       stop.copy(go.to).setY(0);
-    } else velocity.set(0, 0, 0);
+    } else {
+      velocity.set(0, 0, 0);
+      // (a walk let go of under way stops as soon as it brakes to rest, not at the goal it was walking to: it walked on there)
+      if (seen) stop.copy(root).addScaledVector(plan.root.velocity, plan.root.velocity.length() / (2 * BRAKING * s)).setY(0);
+    }
     seen = !!go;
     // (where it rests: its weight shifted from there as a reach asks, back there after)
     still = moving ? null : leaning ? still : root.clone();
@@ -86,9 +90,10 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const planted = !moving && stepper.legs.every((leg) => !leg.swing);
     const anchors = () => stepper.legs.reduce((sum, leg) => sum.add(leg.anchor), new Vector3()).divideScalar(stepper.legs.length);
     const over = planted ? anchors().setY(0).addScaledVector(forwardOf(stance), OVER_ANKLES * s) : null;
-    // (within `EDGING` of it — where a walk's arrival edged it onto its goal — it stands as it is: going back over its feet would shift
-    // its weight under a stance squared for where it stands, and step again; further off, it settles all the way back)
-    settling = !go && !!over && root.distanceTo(over) > (settling ? LEAN.back : EDGING) * s;
+    // (within `EDGING` of it — where a walk's arrival edged it onto its goal, held within `LEAN.back` of that — it stands as it is: going
+    // back over its feet would shift its weight under a stance squared for where it stands, and step again; further off, it settles all
+    // the way back)
+    settling = !go && !!over && root.distanceTo(over) > (settling ? LEAN.back : EDGING + LEAN.back) * s;
     const rest = settling ? over : null;
     const edging = go && over ? stop.clone().sub(over).clampLength(0, EDGING * s).add(over) : stop;
     // (edged onto a still goal, it is there: held, not chased to and fro — so its feet are judged standing, as they will be once the walk
@@ -103,7 +108,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     };
     const walking = Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity);
     const speed = moving ? walking : waiting ? 0 : go ? (edged ? EDGE * s : 0) : leaned || rest ? LEAN.speed * s : 0;
-    const motion = { accel: go?.accel ?? 1.2 * s, speed, turnSpeed: face?.rate };
+    const motion = { accel: go?.accel ?? BRAKING * s, speed, turnSpeed: face?.rate };
     // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
     const holds: Parameters<Planner['step']>[4] = (forecast) => stepper.reachable((t) => {
       const at = forecast(t);
@@ -116,6 +121,8 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
   }, { ...options, individual });
 }
 
+/** how hard a walk let go of brakes (m/s², default body): a walk's own acceleration, as a goal still asked is walked to */
+const BRAKING = 1.2;
 /** how quickly the goal's own velocity is picked up (1/s) */
 const GOAL_VELOCITY_RATE = 9;
 /** a goal moving faster than this (m/s) was re-planned, not carried: it jumped */

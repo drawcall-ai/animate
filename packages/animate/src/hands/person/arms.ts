@@ -76,10 +76,10 @@ export function hanging(person: Reacher): Step {
       f.current.setLocal(limb[2], IDENTITY);
       keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, HUNG, seen[side]);
       for (const bone of limb) set(f, goals, bone, f.current.local(bone).clone());
-      // A hand returning from a task above the hips must stay clear as its braked joints descend with the turning trunk.
-      if (person.holding[SIDES[1 - s]] || f.current.position(limb[2]).y > hips.y) {
-        keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, NUDGED, seen[side]);
-      }
+      // A hand returning from a task must stay clear as its braked joints descend with the turning trunk — below the hips too: back from
+      // an across-body reach, the hand under the hips, the upper arm swept 2 cm into the hips–chest (its clearance is judged again only
+      // as the arm or the trunk moves: a hanging arm at rest is not)
+      keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, NUDGED, seen[side]);
     });
   };
 }
