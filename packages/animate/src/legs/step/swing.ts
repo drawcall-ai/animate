@@ -75,7 +75,7 @@ function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3
   if (capture === undefined || airborne) return;
   const other = legs[pair[leg.i]];
   const yawed = turned + leg.sign * st.toeOut, others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw);
-  const past = (at: Vector3, centre: Vector3) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > capture * s;
+  const past = (at: Vector3, centre: Vector3, margin = capture) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > margin * s;
   // (as it will be: carried toward the landing foot as far as the pelvis sways over it beyond the midline — a wide stride's)
   const centre = xcomAhead(steps, now, remaining, new Vector3()).addScaledVector(side, leg.sign * (st.width.sway ?? 0) * s * smoothstep(0, 1, speed));
   const under = (c: Vector3) => c.clone().addScaledVector(side, leg.sign * st.width.narrowest * s / 2);
@@ -88,7 +88,13 @@ function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3
     const within = (c: Vector3) => outside(hullOf([...feet.print(leg.i, narrower, yawed), ...others]), c) <= WIDE.within * s;
     if (within(centre) && (!present || within(present))) to.copy(narrower);
   }
-  if (past(to, centre)) to.copy(under(centre));
+  // (a landing that would leave it past the feet goes on as far ahead as it is first, as wide as it lands, if that has it within them; under
+  // it, just to its side, only if not: else a stride a little longer than tuned — a person's own, slower cadence — brings the feet into one
+  // line)
+  if (past(to, centre)) {
+    const way = forwardOf(turned, _way), ahead = _ahead.copy(to).addScaledVector(way, Math.max(0, _v.subVectors(centre, to).dot(way)));
+    to.copy(past(ahead, centre, 0) ? under(centre) : ahead);
+  }
   if (!present || other.swing || !past(to, present)) return;
   const from = to.clone(), toward = under(present);
   let [lo, hi] = [0, 1];
@@ -284,4 +290,4 @@ const BEND_SPAN = 0.1;
 /** Tuned: a walker's slow step lands at most `WIDE.stances` standing stances aside of the other
  * foot, as balance lets it (1.1: within the metrics' 0.15 H for a straight stop), its extrapolated centre of mass kept within `within` (m) */
 const WIDE = { stances: 1.1, within: 0.03 };
-const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion();
+const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion(), _ahead = new Vector3(), _way = new Vector3();

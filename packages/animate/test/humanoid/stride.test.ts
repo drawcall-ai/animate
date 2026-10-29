@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Body, humanoid, walkTo, type Stride } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { insides, play } from '../bodies';
+import { individualOf } from '../../src/legs/person/individual';
 
 // A person's cadence is dynamically similar to its legs' length, and its stride can be styled.
 
@@ -53,11 +54,14 @@ function walked(bodies: readonly Body[], speed: number, from = 3, to = 15): Gait
  */
 const target = (speed: number, legs: number) => 60 * (1.75 + 0.3 * speed / Math.sqrt(legs)) / Math.sqrt(legs);
 
+/** the life seed the people here are made with: their individual cadence is `individualOf(SEED)`'s */
+const SEED = 7;
+
 /** a person `height` m tall (the default person scaled, its legs × height / 1.75), `x` m to the side, striding as `stride` has it */
 function sized(height: number, x = 0, stride?: Stride): Body {
   const k = height / 1.75;
   const skeleton = PERSON.map((bone) => ({ ...bone, position: [bone.position[0] * k, bone.position[1] * k, bone.position[2] * k] as const }));
-  return new Body(humanoid(skeleton, { stride }), { dev: true, at: new Vector3(x, 0, 0), life: { seed: 7 } });
+  return new Body(humanoid(skeleton, { stride }), { dev: true, at: new Vector3(x, 0, 0), life: { seed: SEED } });
 }
 
 describe('a person\'s cadence', () => {
@@ -78,7 +82,7 @@ describe('a person\'s cadence', () => {
 
   it.each([[1.75, 0.6], [1.75, 1.3], [1.55, 0.9], [2.1, 0.9], [2.1, 1.4]])('keeps the dynamically similar cadence: %s m tall at %s m/s', (height, speed) => {
     const body = sized(height), [gait] = walked([body], speed);
-    expect(gait.cadence / target(speed, height / 1.75)).toBeCloseTo(1, 1);
+    expect(gait.cadence / (target(speed, height / 1.75) * individualOf(SEED).cadence)).toBeCloseTo(1, 1);
     expect(body.log).toEqual([]);
   });
 });
@@ -89,7 +93,7 @@ describe('a person\'s stride', () => {
 
   // (a style's cadence is a multiplier on the cadence its balance may still quicken: a wider landing is caught sooner)
   it('swaggers: slower steps, wider apart and turned out, the pelvis swaying further', () => {
-    const body = sized(1.75, 0, { cadence: 0.85, width: 1.3, toeOut: 1.3 }), [gait] = walked([body], 1.2);
+    const body = sized(1.75, 0, { cadence: 0.8, width: 1.3, toeOut: 1.3 }), [gait] = walked([body], 1.2);
     expect(gait.cadence).toBeLessThan(plain.cadence * 0.98);
     expect(gait.width).toBeGreaterThan(plain.width + 0.03);
     expect(gait.toeOut).toBeGreaterThan(plain.toeOut * 1.2);
@@ -108,9 +112,42 @@ describe('a person\'s stride', () => {
 });
 
 
-it('zz', () => {
-  for (const stride of [{}, { cadence: 0.85, width: 1.3, toeOut: 1.3 }, { cadence: 0.8, width: 1.3, toeOut: 1.3 }, { cadence: 0.85, width: 1.2, toeOut: 1.3 }, { cadence: 0.85, width: 1.3 }, { cadence: 0.85 }]) {
-    const body = sized(1.75, 0, stride), [g] = walked([body], 1.2);
-    console.log('Z', JSON.stringify(stride), g.cadence.toFixed(1), g.width.toFixed(3), g.toeOut.toFixed(3), g.sway.toFixed(3), body.log.length);
-  }
+
+describe('people of one build', () => {
+  // (each its own: its individuality seeded by where it was made, as its idle life is, unless a life seed is given)
+  it('walk side by side out of step: their cadences differ and their touchdowns drift across each other', () => {
+    const person = (x: number) => new Body(humanoid(PERSON), { dev: true, at: new Vector3(x, 0, 0) });
+    const bodies = [person(0.7), person(-0.7)];
+    const [a, b] = walked(bodies, 1.2);
+    expect(Math.abs(a.cadence - b.cadence) / a.cadence).toBeGreaterThan(0.01);
+    const offsets = b.touchdowns.map((t) => Math.min(...a.touchdowns.map((m) => Math.abs(t - m))));
+    expect(Math.max(...offsets) - Math.min(...offsets)).toBeGreaterThan(0.1);
+    for (const body of bodies) expect(body.log).toEqual([]);
+  });
+
+  it('stand in a crowd without swaying or glancing in step', () => {
+    const bodies = [0, 1, 2, 3, 4].map((k) => new Body(humanoid(PERSON), { dev: true, at: new Vector3(k * 0.8, 0, 0) }));
+    const sways = bodies.map(() => [] as number[]), heads = bodies.map(() => [] as number[]);
+    play(function* () { yield* (function* () {})(); }, bodies, 25, () => {
+      bodies.forEach((body, i) => {
+        const h = insides(body);
+        sways[i].push(h.pose.com(new Vector3()).x);
+        heads[i].push(new Vector3(0, 0, 1).applyQuaternion(h.pose.rotation(h.pose.skeleton.index('head'))).x);
+      });
+    });
+    /** the correlation of how two series move, sub-step to sub-step, over their last 20 s (a weight shift each, made at its own moment,
+     * is a step each way that would correlate whenever made) */
+    const correlation = (p: number[], q: number[]) => {
+      const moves = (v: number[]) => v.slice(-1201).slice(1).map((a, k) => a - v.slice(-1201)[k]);
+      const [x, y] = [moves(p), moves(q)], mean = (v: number[]) => v.reduce((sum, a) => sum + a, 0) / v.length;
+      const [mx, my] = [mean(x), mean(y)];
+      const cov = x.reduce((sum, a, k) => sum + (a - mx) * (y[k] - my), 0);
+      return cov / Math.sqrt(x.reduce((sum, a) => sum + (a - mx) ** 2, 0) * y.reduce((sum, a) => sum + (a - my) ** 2, 0));
+    };
+    for (let i = 0; i < bodies.length; i++) for (let j = i + 1; j < bodies.length; j++) {
+      expect(Math.abs(correlation(sways[i], sways[j])), `sway ${i}–${j}`).toBeLessThan(0.6);
+      expect(Math.abs(correlation(heads[i], heads[j])), `glances ${i}–${j}`).toBeLessThan(0.6);
+    }
+    for (const body of bodies) expect(body.log).toEqual([]);
+  });
 });
