@@ -19,7 +19,8 @@ export type Tracked = Partial<Record<'head' | Side, Target>>;
 /**
  * A person following tracked poses (a headset and controllers, `Object3D`s as XR gives them, or any targets): the head goes where its
  * target is, turned as it is, the spine bending under it and the feet stepping round and under it; each hand keeps to its target, turned
- * as it is, as briskly as a hand keeps to what it holds (`HOLD`: a controller is where the hand is). An aimer, it keeps on until `until`.
+ * as it is, as briskly as a hand keeps to what it holds (`HOLD`: a controller is where the hand is). Scripted targets make gestures that
+ * must move at once (a clap, a wave, a fist pump). An aimer, it keeps on until `until`.
  * It asks for the eyes, the legs and the trunk with a head, and for each hand it is given.
  */
 export function track(body: Body, tracked: Tracked, options: { until?: Until } = {}): Verb {

@@ -14,6 +14,7 @@ import { CHAINS, massFor, skeletonOf } from './skeleton';
  * lumber: `{ cadence: 0.85, width: 1.25, bob: 1.4 }`.
  */
 export interface Stride {
+  /** at a given speed, step length is speed over step rate, so this sets a walk's step length too */
   cadence?: number;
   width?: number;
   bob?: number;

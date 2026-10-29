@@ -20,15 +20,17 @@ const FOOT_OF_STEPS = HALL.steps.start - 0.4;
 interface Lane {
   x: number;
   ahead: number;
+  /** how long after the others it sets off (s): three people never start in step */
+  after: number;
   glances: readonly (readonly [x: number, y: number, z: number, seconds: number])[];
 }
 const LANES = {
   // Luke is awed: up at the banners, across at the ranks, up again
-  luke: { x: 0, ahead: 0, glances: [[0, 1.6, 8, 2.5], [9, 7, 6, 3], [-6, 1.6, 5, 2.5], [-10, 8, 7, 3], [6, 1.7, 4, 2.5], [0, 4, 12, 3]] },
+  luke: { x: 0, ahead: 0, after: 0.25, glances: [[0, 1.6, 8, 2.5], [9, 7, 6, 3], [-6, 1.6, 5, 2.5], [-10, 8, 7, 3], [6, 1.7, 4, 2.5], [0, 4, 12, 3]] },
   // Han is at ease: a look ahead, one over the ranks to his left, a glance at Luke
-  han: { x: 1.1, ahead: 0.15, glances: [[0, 1.6, 10, 4], [7, 1.7, 3, 2.5], [-1.1, 1.5, 0.6, 1.2], [0, 1.7, 10, 4], [6, 2.5, 6, 2.5]] },
+  han: { x: 1.1, ahead: 0.15, after: 0, glances: [[0, 1.6, 10, 4], [7, 1.7, 3, 2.5], [-1.1, 1.5, 0.6, 1.2], [0, 1.7, 10, 4], [6, 2.5, 6, 2.5]] },
   // Chewbacca takes it in slowly
-  chewbacca: { x: -1.2, ahead: -0.2, glances: [[0, 2, 9, 4], [-8, 4, 5, 4], [0, 2.2, 10, 3], [-6, 1.8, 2, 3]] },
+  chewbacca: { x: -1.2, ahead: -0.2, after: 0.6, glances: [[0, 2, 9, 4], [-8, 4, 5, 4], [0, 2.2, 10, 3], [-6, 1.8, 2, 3]] },
 } as const satisfies Record<string, Lane>;
 type Hero = keyof typeof LANES;
 const HEROES = Object.keys(LANES) as Hero[];
@@ -56,6 +58,7 @@ export const beat: Beat & { order: number } = {
       const body = cast[hero], lane = LANES[hero];
       const point = new Vector3();
       const ahead = (time: number) => point.set(lane.x, 0, pacer(time) + lane.ahead);
+      yield* wait(lane.after);
       yield* walkTo(body, ahead, { speed: AISLE_PACE * 1.1, until: () => body.position.z > FOOT_OF_STEPS - 1.2 + lane.ahead });
       // the climb: shorter strides, each hero onto its own mark, arriving turned toward the dais (the mark's +Z)
       if (!(yield* walkTo(body, mark(hero), { speed: STEPS_PACE, accel: 0.8 }))) return false;
@@ -76,14 +79,16 @@ export const beat: Beat & { order: number } = {
       yield* lookAt(body, leia);
     }
 
-    // each hero walks and looks about at once; the look is an aimer, so it ends when that hero is on its mark
-    const story = () => parallel('all', ...HEROES.map((hero) => parallel('race', walkUp(hero), lookAbout(hero))));
-    return {
-      story,
-      done: () => HEROES.every((hero) => {
-        const body = cast[hero], target = mark(hero).position;
-        return body.settled && Math.hypot(body.position.x - target.x, body.position.z - target.z) < 0.15 && body.position.y > target.y - 0.02;
-      }),
+    const onMarks = () => HEROES.every((hero) => {
+      const body = cast[hero], target = mark(hero).position;
+      return body.settled && Math.hypot(body.position.x - target.x, body.position.z - target.z) < 0.15 && body.position.y > target.y - 0.02;
+    });
+    // each hero walks and looks about at once; the look is an aimer, so it ends when that hero is on its mark. The beat ends once all
+    // three stand there together: one that settled first may still shift its weight with a step while the last comes to rest.
+    const story = function* () {
+      yield* parallel('all', ...HEROES.map((hero) => parallel('race', walkUp(hero), lookAbout(hero))));
+      yield* parallel('race', wait(onMarks), ...HEROES.map((hero) => lookAt(cast[hero], leia)));
     };
+    return { story, done: onMarks };
   },
 };

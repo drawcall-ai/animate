@@ -35,13 +35,15 @@ export interface SelfOptions {
    * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
    * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (0.35 m for the default body) and steps
    * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled.
+   * A person's step length against a tread decides whether it puts one foot or both on each; between the two it mixes them from tread to
+   * tread, which reads as hesitation. Give every body on a set the same function, or they disagree on where its floor is.
    */
   floor?: (x: number, z: number) => number;
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
   /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
   drive?: (time: number) => Root;
-  /** its quiet life: a seed that fixes its variation, what tethers it and what startles it */
+  /** its quiet life: a seed that fixes its variation (unseeded, it varies with where the body is made), what tethers it and what startles it */
   life?: Temperament;
   /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces — a walk given a `speed` keeps
    * that speed, tempo or not; how it steps at a pace is its species' (a person's `stride`) */

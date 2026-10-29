@@ -24,9 +24,9 @@ import type { Beat } from './index';
 // troops come from the story functions their modules export. Where the beats' setups disagree, this beat reconciles them:
 // - the heroes start outside the doors (no beat starts them there), so `arrange` moves their entrance marks back through the doorway;
 // - the gestures beat places Leia before each hero from where he stands when it is staged, so it is staged once they are on their marks;
-// - the beats' stories do not say when their moments happen (the wink, the roar), so the film reads them off the bodies (`owners`);
-// - the medal moment's gestures are given the ceremony's real medals: the bearer takes each off his cushion and hands it over to Leia
-//   (the ceremony's `handOver`), and she carries it onto the hero's chest and lets go of it there.
+// - the medal moment says when its moments happen (the medal on, the wink, the roar) and the film marks them, for its cuts and sounds;
+// - the medal moment's gestures are given the ceremony's real medals: the bearer takes both off his cushion and hands each over to
+//   Leia (the ceremony's `handOver`), and she lifts it over the hero's head and lets go of it on his chest.
 
 /** how long the doors take to open, and when the heroes set off through them (s) */
 const DOORS = 6;
@@ -59,15 +59,17 @@ export const beat: Beat & { order: number } = {
     const turn = finale.stage(setting);
     let medalMoment: ReturnType<typeof stageMedalMoment> | undefined;
 
-    const troops = createTroops(dress);
+    const troops = createTroops(dress, setting.checkCrowds);
     scene.add(troops.echoes);
     const doors = closeDoors(hall);
     const director = new Director(camera);
     // the medals lie on a cushion on a stand before the bearer's mark, each to be worn before its hero's chest
     const tray = cushion(bearer);
     const lukeMedal = dressMedal(createMedal('luke medal')), hanMedal = dressMedal(createMedal('han medal'));
-    lukeMedal.position.set(0.08, 0.03, 0);
-    hanMedal.position.set(-0.08, 0.03, 0);
+    // each lies face up, its ribbon toward the bearer
+    lukeMedal.position.set(0.08, 0.005, 0.04);
+    hanMedal.position.set(-0.08, 0.005, 0.04);
+    lukeMedal.rotation.x = hanMedal.rotation.x = -Math.PI / 2;
     tray.add(lukeMedal, hanMedal);
     const worn = { luke: createWornPlace(luke, 'luke medal place'), han: createWornPlace(han, 'han medal place') };
     scene.add(tray, threshold());
@@ -93,22 +95,6 @@ export const beat: Beat & { order: number } = {
     const mark = (name: string) => void (events[name] ??= director.time);
     const has = (name: string) => () => events[name] !== undefined;
     const since = (name: string, seconds: number) => () => events[name] !== undefined && director.time >= events[name] + seconds;
-    /** waits until `condition` has held for `seconds` on end, and marks `name` at the moment it began to hold */
-    function* holds(name: string, condition: () => boolean, seconds: number) {
-      let began: number | undefined;
-      yield* wait(() => {
-        if (!condition()) began = undefined;
-        else began ??= director.time;
-        return began !== undefined && director.time - began >= seconds;
-      });
-      events[name] ??= began!;
-    }
-    /** whether a verb named `verb` holds any of `body`'s parts (`hands`: its hands only), as the stories asked it */
-    const doing = (body: Body, verb: string, part: 'hands' | 'any' = 'hands') => {
-      const { go, look, trunk, hands } = body.owners;
-      return [hands.left, hands.right, ...(part === 'any' ? [go, look, trunk] : [])].some((owner) => owner?.verb === verb);
-    };
-
     const hallPoint = new Vector3(0, 1.7, 14);
     const onMark = (hero: 'luke' | 'han' | 'chewbacca') => {
       const target = marks[`${hero}Decorated`].position, body = cast[hero];
@@ -128,27 +114,32 @@ export const beat: Beat & { order: number } = {
       });
     }
 
-    /** the bearer takes Luke's medal off the cushion, steps up beside Leia and hands it over to her while the trio climbs */
+    /**
+     * the bearer takes both medals off the cushion while the trio climbs, Luke's in his right hand and Han's in his left (as the film's
+     * officer stands ready with them), steps up beside Leia and hands her Luke's; he waits there with Han's until she has that too
+     */
     function* leiaTakesTheMedal() {
-      yield* wait(() => luke.position.z > 32.2);
+      // (early enough that Leia holds Luke's medal as the trio comes to stand before her)
+      yield* wait(() => luke.position.z > 26);
       mark('bearer steps up');
-      if (!(yield* grab(bearer, lukeMedal, INNER))) throw new Error('the bearer could not take Luke\'s medal');
+      if (!(yield* grab(bearer, lukeMedal, { right: INNER.right }))) throw new Error('the bearer could not take Luke\'s medal');
+      if (!(yield* grab(bearer, hanMedal, { left: INNER.left }))) throw new Error('the bearer could not take Han\'s medal');
       const spot = place(0.65, 36.15, Math.PI + 0.5); // at her right, turned a little toward her
       yield* parallel('all', walkTo(bearer, spot, { speed: 0.5 }), lookAt(leia, luke, { until: 1.2 }));
       yield* parallel('race', lookAt(bearer, leia), function* () {
         yield* handOver(bearer, leia, lukeMedal);
         mark('Leia takes Luke\'s medal');
       });
-      // he waits for the next one, a step behind the line she will walk to Han, and goes back to his mark once she has it
-      yield* parallel('race', walkTo(bearer, place(0.62, 36.0, Math.PI), { speed: 0.5 }), wait(has('bearer takes Han\'s medal')));
-      yield* wait(has('Leia takes Han\'s medal'));
+      mark('bearer holds Han\'s medal');
+      yield* parallel('race', lookAt(bearer, luke), wait(has('Leia takes Han\'s medal')));
       yield* walkTo(bearer, marks.medalBearer, { speed: 0.5 });
     }
-    /** on her way from Luke to Han: the bearer takes Han's medal off the cushion and hands it over to her */
+    /** on her way from Luke to Han: the bearer, waiting with Han's medal, hands it over to her */
     function* takeHan() {
-      mark('bearer takes Han\'s medal');
-      if (!(yield* grab(bearer, hanMedal, INNER))) throw new Error('the bearer could not take Han\'s medal');
-      yield* handOver(bearer, leia, hanMedal);
+      yield* wait(has('bearer holds Han\'s medal'));
+      yield* parallel('race', lookAt(bearer, leia), function* () {
+        yield* handOver(bearer, leia, hanMedal);
+      });
       mark('Leia takes Han\'s medal');
       return true;
     }
@@ -164,29 +155,11 @@ export const beat: Beat & { order: number } = {
     /** the gestures beat (Leia to Luke, his bow, to Han, his wink, Chewbacca's roar), staged once the trio stands on its marks */
     function* medals() {
       yield* wait(() => onMark('luke') && onMark('han') && onMark('chewbacca') && has('Leia takes Luke\'s medal')());
-      medalMoment = stageMedalMoment(setting, { luke: { medal: lukeMedal, place: worn.luke }, han: { medal: hanMedal, place: worn.han }, takeHan });
+      // (the moment says when its moments happen: the film marks them, for its cuts and sounds)
+      medalMoment = stageMedalMoment(setting, { luke: { medal: lukeMedal, place: worn.luke }, han: { medal: hanMedal, place: worn.han }, takeHan }, mark);
       mark('medals');
-      yield* parallel('all', medalMoment.story(), watchTheMoments());
+      yield* medalMoment.story();
       mark('medals done');
-    }
-
-    /** what the medal moment does, read off the bodies and the medals: the film marks the moments */
-    function* watchTheMoments() {
-      const nearer = (hero: Body) => leia.position.distanceTo(hero.position) < 0.9;
-      yield* wait(() => doing(leia, 'carry') && nearer(luke));
-      mark('Leia hangs Luke\'s medal');
-      yield* wait(() => lukeMedal.parent === worn.luke);
-      mark('Luke medal hung');
-      yield* wait(() => doing(leia, 'carry') && nearer(han));
-      mark('Leia hangs Han\'s medal');
-      yield* wait(() => hanMedal.parent === worn.han);
-      mark('Han medal hung');
-      yield* wait(() => doing(han, 'track', 'any'));
-      mark('wink');
-      // the roar's arms going out: his head is going back
-      yield* wait(() => doing(chewbacca, 'reach'));
-      mark('roar');
-      yield* holds('roared', () => !doing(chewbacca, 'reach'), 0.2);
     }
 
     function* theFinale() {
@@ -198,8 +171,8 @@ export const beat: Beat & { order: number } = {
           yield* wait(TROOPS_AFTER_TURN);
           mark('troops cheer');
         })(),
-        // Leia steps back to the middle of the dais behind them, her eyes on the hall
-        parallel('race', walkTo(leia, marks.leia, { speed: 0.6 }), lookAt(leia, hallPoint)),
+        // Leia steps back up behind them, between Luke and Han (where the hall sees her), her eyes on the hall
+        parallel('race', walkTo(leia, place(0.55, 35.95, Math.PI), { speed: 0.6 }), lookAt(leia, hallPoint)),
       );
       mark('facing the hall');
       yield* wait(FINAL_HOLD);
@@ -223,11 +196,20 @@ export const beat: Beat & { order: number } = {
 
     // ---- the rest of the hall: the dais party, the droids, the troops -------------------------------------------------------------
 
+    /** `body` looks at each of `glances` in turn for its seconds, over and over (race it) */
+    function* glancing(body: Body, glances: readonly (readonly [Body, number])[]) {
+      for (let glance = 0; ; glance++) {
+        const [at, seconds] = glances[glance % glances.length];
+        yield* lookAt(body, at, { until: seconds });
+      }
+    }
+
     function* daisParty() {
       yield* parallel(
         'all',
-        // Leia and the bearer watch the trio come up; once he steps up to her, their eyes are the medals' story
-        parallel('race', wait(has('bearer steps up')), lookAt(leia, luke), lookAt(bearer, luke)),
+        // Leia and the bearer watch the trio come up, each glancing over them in their own time; once he steps up to her, their eyes
+        // are the medals' story
+        parallel('race', wait(has('bearer steps up')), glancing(leia, [[luke, 4.2], [han, 1.6], [luke, 2.8], [chewbacca, 1.3]]), glancing(bearer, [[luke, 2.6], [chewbacca, 1.4], [han, 2.2], [leia, 0.9]])),
         (function* () {
           // Dodonna follows each hero in turn, then looks out over the hall with them
           yield* lookAt(dodonna, luke, { until: has('Luke medal hung') });
@@ -292,9 +274,10 @@ export const beat: Beat & { order: number } = {
         seconds: 7,
         until: lukeZ(0.6),
       });
-      // the wide from high in the doorway, down the aisle between the troops: the trio walks away under the camera, which cranes up
-      yield* d.shot('wide from the doorway down the aisle', fixed([0, 10.5, 3], [0, 0.5, 26], 50), {
-        from: fixed([0, 9.4, -0.6], [0, 0, 9], 50),
+      // the wide from high behind the trio in the doorway, down the aisle between the troops: the camera cranes up and back as they
+      // walk away from it, keeping them in the lower half of the frame
+      yield* d.shot('wide from the doorway down the aisle', fixed([0, 9.5, -2], [0, 0, 13], 50), {
+        from: fixed([0, 6, -4.5], [0, 1, 8], 50),
         seconds: 11,
         until: lukeZ(10),
       });
@@ -326,9 +309,11 @@ export const beat: Beat & { order: number } = {
       yield* d.shot('close-up: Han\'s wink', onFace(han, { distance: 1.5, around: 0.6, fov: 24 }), { until: since('wink', 2.7), lag: 0.15 });
       yield* d.shot('close-up: Chewbacca roars', onFace(chewbacca, { distance: 2.3, around: -1.15, up: 0.1, lift: 0.1, fov: 30 }), { until: since('roar', 1.3), lag: 0.3 });
       yield* d.shot('cutaway: C-3PO startles, R2-D2 cheers', onFace(threepio, { distance: 3.3, around: 0.45, up: -0.5, lift: -0.3, fov: 34 }), { until: since('roar', 2.8), lag: 0.2 });
-      yield* d.shot('close: Leia smiles', onFace(leia, { distance: 1.7, around: 0.3, fov: 24 }), { until: since('turn', 0.3), lag: 0.3 });
+      // (from a little to her left, where she looks, and high enough to clear Han's head before her)
+      yield* d.shot('close: Leia smiles', onFace(leia, { distance: 1.6, around: 0.5, up: 0.3, lift: 0, fov: 24 }), { until: since('turn', 0.3), lag: 0.3 });
       yield* d.shot('the trio turns to the hall', fixed([0, 2.3, 28.8], [0, 2.15, 34.6], 30), { until: since('turn', 4.5) });
-      yield* d.shot('final wide: the hall cheers the heroes', fixed([0, 10.5, 9], [0, 1.8, 34], 46), {
+      // the closing shot: down the aisle at the trio on the steps with Leia behind them, the cheering ranks either side
+      yield* d.shot('final wide: the hall cheers the heroes', fixed([0, 6.5, 13], [0, 2.2, 34], 40), {
         from: fixed([0, 3.0, 26.5], [0, 2.2, 34], 36),
         seconds: 14,
         until: Infinity,

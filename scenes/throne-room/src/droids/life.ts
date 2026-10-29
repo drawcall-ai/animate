@@ -1,6 +1,6 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { lookAt, reach, wait, type Body, type Until, type Verb } from '@drawcall/animate';
+import { lookAt, pose, reach, wait, type Body, type Until, type Verb } from '@drawcall/animate';
 import { IDLE, rockingOf, type Rocking } from './artoo';
 
 // R2-D2 and C-3PO beside Leia's party through the ceremony. Each mood is a story piece that ends on `until`; `droidsLife` runs a list of
@@ -38,17 +38,12 @@ export function* artooWatch(artoo: Body, focus: Focus, until: Until): Verb {
 
 /**
  * R2 cheers at `focus`: its dome on it, it rocks quickly from side to side and bobs, its barrel tipping forward and back on its axle
- * (a look with the trunk, switching between low and high points toward the focus at `bobs` a second: the only way the library pitches
- * a creature's body).
+ * `bobs` times a second (a pose of its trunk: a creature takes one by turning its whole body over its planted legs).
  */
 export function* artooCheer(artoo: Body, focus: Focus, until: Until, { bobs = 0.8 } = {}): Verb {
-  const at = new Vector3();
-  const bob = (time: number) => {
-    const point = focus instanceof Vector3 ? focus : focus.getWorldPosition(at);
-    at.subVectors(point, artoo.position).setY(0).normalize().multiplyScalar(3).add(artoo.position);
-    return at.setY(artoo.position.y + (Math.sin(2 * Math.PI * bobs * time) > 0 ? -2.5 : 1.5));
-  };
-  yield* parallel('race', wait(until), rocking(artoo, EXCITED), lookAt(artoo, bob, { trunk: true }));
+  yield* parallel('race', wait(until), rocking(artoo, EXCITED), lookAt(artoo, focus), function* () {
+    for (let bob = 0; ; bob++) yield* pose(artoo, { bow: bob % 2 ? -0.08 : 0.14 }, { until: 0.5 / bobs });
+  });
   return true;
 }
 
@@ -76,16 +71,37 @@ export function* threepioFuss(threepio: Body, seed = 3): Verb {
   }
 }
 
-/** C-3PO watches `focus`: his head turns to it, stiff and upright, fussing with his hands */
+/**
+ * C-3PO's stiffness: a protocol droid stands bolt upright, chest out and chin a touch high, and turns his head on a stiff neck: his
+ * chest turns a little with it (`turn`, rad to his left) where a person's neck would take it all
+ */
+const upright = (turn = 0) => ({ bow: -0.05, twist: turn, head: { pitch: -0.06 } });
+
+/** how far round from `threepio`'s facing `focus` is (rad, + to his left), at most `most` */
+function towards(threepio: Body, focus: Focus, most: number): number {
+  const point = focus instanceof Vector3 ? focus : focus.getWorldPosition(new Vector3());
+  const off = Math.atan2(point.x - threepio.position.x, point.z - threepio.position.z) - threepio.facing;
+  return Math.max(-most, Math.min(most, Math.atan2(Math.sin(off), Math.cos(off))));
+}
+
+/** C-3PO watches `focus`: his head turns to it, stiff and upright, his chest turning with it, fussing with his hands */
 export function* threepioWatch(threepio: Body, focus: Focus, until: Until, seed?: number): Verb {
-  yield* parallel('race', wait(until), lookAt(threepio, focus), threepioFuss(threepio, seed));
+  const turn = 0.4 * towards(threepio, focus, 0.6);
+  yield* parallel('race', wait(until), lookAt(threepio, focus), pose(threepio, upright(turn)), threepioFuss(threepio, seed));
   return true;
 }
 
-/** C-3PO startled by `focus` (Chewbacca's roar): his head goes to it and his hands fly up before his chest, then he watches it warily */
+/**
+ * C-3PO startled by `focus` (Chewbacca's roar): his head goes to it, he jerks back from the hips with his hands flying up before his
+ * chest, then he watches it warily, upright again
+ */
 export function* threepioStartle(threepio: Body, focus: Focus, until: Until): Verb {
   const hands = { left: besides(threepio, 0.14, 1.42, 0.2), right: besides(threepio, -0.14, 1.42, 0.2) };
+  const turn = 0.4 * towards(threepio, focus, 0.6);
   yield* parallel('race', wait(until), lookAt(threepio, focus), function* () {
+    yield* pose(threepio, { bow: -0.16, twist: turn, head: { pitch: -0.15 } }, { until: 0.7 });
+    yield* pose(threepio, upright(turn));
+  }, function* () {
     yield* reach(threepio, hands, { until: 1.6, speed: 1.6 });
     yield* threepioFuss(threepio, 11);
   });

@@ -14,8 +14,8 @@ export const beat: Beat & { order: number } = {
   order: 2,
   duration: ATTENTION + APPLAUSE + 2,
   starts: { luke: 'lukeDecorated', han: 'hanDecorated', chewbacca: 'chewbaccaDecorated' },
-  stage({ scene, dress }) {
-    const troops = createTroops(dress);
+  stage({ scene, dress, checkCrowds }) {
+    const troops = createTroops(dress, checkCrowds);
     scene.add(troops.echoes);
     const bodies = troops.troopers.map((trooper) => trooper.body);
     let cued = false;

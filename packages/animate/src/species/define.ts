@@ -79,14 +79,15 @@ export interface Attention {
 
 /** What a body's legs are asked by the scene and its quiet life: a seed, a tether, a startle. */
 export interface Temperament extends Attention {
-  /** fixes its variation: sway, breathing, weight shifts, glances */
+  /** fixes its variation: sway, breathing, weight shifts, glances (a creature without a carriage or posture of its own has none) */
   seed?: number;
 }
 
 /** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */
 export interface Posture { prepare(f: Frame, legs: Striding, attention: Attention, look: Readonly<Vector3> | null): void }
 
-/** A joint's range of motion, as `Limit` has it, for a bone named so. */
+/** A joint's range of motion, as `Limit` has it, for a bone named so: without a `neutral`, measured from the rest pose, so a joint bent at
+ * rest needs range to straighten. A + turn about +X (the body's left) swings a leg bone's lower end back: a knee flexes +, a hip −. */
 export type Range = Omit<Limit, 'bone'>;
 
 /** `range` on the right side, from the left's: the reflection across x negates turns about y and z (and its neutral's) */
@@ -102,7 +103,10 @@ export function mirrored(range: Range): Range {
 }
 
 /** A leg by its bones' names, as `LegChain` has it by their indices: each joint top first, the last the foot — which must keep flat on the
- * floor as the leg bends, or the legs reach no step — and its sole's `heel` and `toe` in the foot's frame. */
+ * floor as the leg bends, or the legs reach no step — and its sole's `heel` and `toe` in the foot's frame. Every leg must be able to step,
+ * even a creature's that never walks: a top joint turning every way (`'yzx'`: without its twist the sole cannot stay flat), and a rest
+ * pose bent enough to keep spare reach once the gait lowers the hips (a rigid strut needs a hinge partway down for it); `new Body` says by
+ * how much a leg falls short. */
 export interface LegRole<Name extends string> extends Omit<LegChain<Name, Vec3>, 'toeOut' | 'rocker'> {
   toeOut?: number;
   rocker?: LegChain['rocker'];
@@ -111,8 +115,9 @@ export interface LegRole<Name extends string> extends Omit<LegChain<Name, Vec3>,
 /**
  * What each of a species' bones does, by name: the `root` it moves from (default the skeleton's), its `legs` (fore-left, fore-right,
  * hind-left, hind-right for four), the `gaze` (a neck chain from its base to the head, one bone or more: the head's turn shared over them,
- * each within its limit, what a limit cuts off going on up; and the eyes, on the head), its `hands` (a chain each, from its first joint to
- * the hand or jaw), and the `carriage` its gait carries over its legs.
+ * each within its limit, what a limit cuts off going on up; and the eyes, on the head; a rigid head is a one-bone neck), its `hands` (a chain
+ * each, from its first joint to the hand or jaw), and the `carriage` its gait carries over its legs (four legs only), which gives it its
+ * quiet life: without one it stands still but for its `inertia` lean, so a story gives it life with `pose` and `lookAt`.
  */
 export interface Roles<Name extends string, Hand extends string> {
   root?: Name;

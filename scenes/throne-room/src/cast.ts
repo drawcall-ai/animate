@@ -1,7 +1,7 @@
 import type { Object3D } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, humanoid } from '@drawcall/animate';
-import { SOLDIER } from './skeletons/soldier';
+import { Body, humanoid, type Stride } from '@drawcall/animate';
+import { PERSON } from './skeletons/person';
 import { LUKE } from './skeletons/luke';
 import { HAN } from './skeletons/han';
 import { CHEWBACCA } from './skeletons/chewbacca';
@@ -32,16 +32,19 @@ export interface Cast {
 
 /**
  * Every character standing at its mark, each on the skeleton measured for its own model (see models.ts).
- * R2-D2 is still a scaled person; the owner of a character replaces its line here (its skeleton, species and options).
+ * R2-D2 is a creature of its own (droids/artoo.ts).
  */
 export function createCast(marks: Marks, dress: Dress = () => undefined, starts: Partial<Record<keyof Cast, keyof Marks>> = {}, dev = true): Cast {
   const at = (name: keyof Cast, fallback: keyof Marks) => marks[starts[name] ?? fallback];
-  const person = (mark: Object3D, skeleton: readonly SkeletonBone[]) =>
-    new Body(humanoid(skeleton as typeof SOLDIER), { at: mark.position.clone(), face: mark.rotation.y, floor: floorAt, model: dress(skeleton), dev });
+  // each with a seed of its own, so no two sway, breathe, shift their weight or glance about in step
+  let seed = 1;
+  const person = (mark: Object3D, skeleton: readonly SkeletonBone[], stride?: Stride) =>
+    new Body(humanoid(skeleton as typeof PERSON, { stride }), { at: mark.position.clone(), face: mark.rotation.y, floor: floorAt, model: dress(skeleton), life: { seed: seed++ }, dev });
   return {
     luke: person(at('luke', 'lukeEnter'), LUKE),
-    han: person(at('han', 'hanEnter'), HAN),
-    chewbacca: person(at('chewbacca', 'chewbaccaEnter'), CHEWBACCA),
+    // Han swaggers (longer, wider strides, toes out); Chewbacca lumbers (slow, wide, bobbing)
+    han: person(at('han', 'hanEnter'), HAN, { cadence: 0.85, width: 1.3, toeOut: 1.3 }),
+    chewbacca: person(at('chewbacca', 'chewbaccaEnter'), CHEWBACCA, { cadence: 0.85, width: 1.25, bob: 1.4 }),
     leia: person(at('leia', 'leia'), LEIA),
     medalBearer: person(at('medalBearer', 'medalBearer'), MEDAL_BEARER),
     dodonna: person(at('dodonna', 'dodonna'), DODONNA),

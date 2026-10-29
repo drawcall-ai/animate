@@ -11,6 +11,8 @@ export interface View {
   camera: PerspectiveCamera;
   sound: Sound;
   hall?: Object3D;
+  /** whether crowds' bodies run their development checks (default true) */
+  checkCrowds?: boolean;
 }
 
 /** A beat set up and ready to step: the same for the viewer and headless runs. */
@@ -41,7 +43,7 @@ export function play(beat: Beat, dress?: Dress, view: View = { camera: new Persp
   for (const body of castBodies(cast)) scene.add(body.object);
   scene.updateMatrixWorld(true);
   view.sound.reset(scene);
-  const staged = beat.stage({ scene, marks, cast, dress: dress ?? (() => undefined), camera: view.camera, sound: view.sound, hall: view.hall });
+  const staged = beat.stage({ scene, marks, cast, dress: dress ?? (() => undefined), camera: view.camera, sound: view.sound, hall: view.hall, checkCrowds: view.checkCrowds ?? true });
   const extras = staged.extras ?? [];
   for (const body of extras) if (!body.object.parent) scene.add(body.object);
   scene.updateMatrixWorld(true);

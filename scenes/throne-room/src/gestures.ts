@@ -1,14 +1,11 @@
-import { Euler, Object3D, Vector3 } from 'three';
+import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { floorAt } from './hall';
-import { arriving, lookAt, reach, track, wait, walkTo, type Body, type Verb } from '@drawcall/animate';
+import { arriving, lookAt, pose, reach, wait, walkTo, type Body, type Verb } from '@drawcall/animate';
 
 // The small, character-defining gestures of the medal moment, each a story function on one body (and whom it is for).
-// The library has no verb that turns a joint directly, so every gesture is a gaze, a head pose or a hand target that moves over time:
-// - a bow is a look, trunk and all, at a point low in front (the body bows from the hips to see it);
-// - a nod is a look whose target dips below the eyes it is aimed at and comes back;
-// - a head tilt (roll) is only reachable through `track`, whose head target sets where the eyes are and how the head is turned;
-// - arms lifted from the body are a reach of each wrist to a point out to the side.
+// Each is a gaze (`lookAt`: where the eyes go, its `roll` and `pitch` tipping the head as it looks) beside a `pose`: trunk and head angles
+// added on top of whatever the body does, eased in and out, so poses one after another flow into each other and a short one is a nod.
 // When a gesture ends the body takes its head and hands back into its own standing life, so each one blends out by itself.
 
 /** a point in `body`'s own frame (m: x its left, y up from its floor, z ahead) as a world point */
@@ -24,94 +21,75 @@ export function eyesOf(body: Body, out = new Vector3()): Vector3 {
 }
 
 /**
- * Luke's bow as the medal goes over his head: his head and upper body dip a little toward the ribbon in front of his chest, held
- * until `until` (Leia has hung it), then he straightens and looks up at her, proud and a little shy: on her face, a quick drop of the
- * eyes, and back to her for `proud` seconds.
+ * Luke's bow as the medal goes over his head: his eyes drop to the ribbon in front of his chest and his head bows to it, the shoulders
+ * following a little, held until `until` (Leia has hung it); then he straightens and looks up at her, proud and a little shy: his chin
+ * up on her face, a quick drop of the head, and back to her for `proud` seconds.
  */
 export function bowForMedal(luke: Body, leia: Body, { until, proud = 2.4 }: { until: number | (() => boolean); proud?: number }): Verb {
   return (function* () {
-    // the ribbon's height, in front of his chest: a look there bows him about 15 degrees at the chest and 30 at the neck
-    yield* lookAt(luke, besides(luke, 0, 1.12, 0.6), { trunk: true, until });
-    // he straightens before he looks up at her: a look aims from where the eyes are as it begins, so one begun while still bowed
-    // (the eyes 0.1 m low) holds the head 15 degrees too high at her face 0.6 m away
-    yield* wait(0.35);
-    const face = (out: Vector3) => eyesOf(leia, out).add(LIFT);
-    yield* lookAt(luke, follow(face), { until: proud * 0.4 });
-    // the shy part: his eyes drop a little and come back up to her
-    yield* lookAt(luke, follow((out) => face(out).add(SHY_DROP)), { until: 0.45 });
-    yield* lookAt(luke, follow(face), { until: proud * 0.6 - 0.45 });
+    yield* parallel('race', lookAt(luke, besides(luke, 0, 1.15, 0.5)), pose(luke, { bow: 0.12, head: { pitch: 0.3 } }, { until }));
+    yield* lookAt(luke, leia, { pitch: -0.08, until: proud * 0.4 });
+    // the shy part: his head dips a little under his eyes, still on her, and comes back up
+    yield* parallel('race', lookAt(luke, leia), pose(luke, { head: { pitch: 0.22 } }, { until: 0.45 }));
+    yield* lookAt(luke, leia, { pitch: -0.08, until: proud * 0.6 - 0.45 });
     return true;
   })();
 }
 
 /**
- * Han's wink: he turns his head and shoulders to Leia, his head tipping toward her as he gives her a slow, cocky half-nod (down and
- * back up, the chin finishing a touch high), held a moment, then he faces front again. About `seconds` in all.
+ * Han's wink: his eyes go to Leia, his head tipped toward her with a cocky tilt and his shoulders coming round a little, and he gives
+ * her a slow half-nod (down, and back up with the chin finishing a touch high), held a moment, then he faces front again. About
+ * `seconds` in all.
  */
 export function cockyWink(han: Body, leia: Body, { seconds = 2.6 }: { seconds?: number } = {}): Verb {
   return (function* () {
-    const start = eyesOf(han);
-    const toLeia = eyesOf(leia).sub(start);
-    // how far round from his facing she is (+ left), at most 45 degrees of it taken by the head and shoulders
-    const turn = clamp(Math.atan2(toLeia.x, toLeia.z) - han.facing, -0.8, 0.8);
-    const head = new Object3D();
-    const pose = new Euler(0, 0, 0, 'YXZ');
-    // keyframes [share of `seconds`, turned toward her (0…1), nod (rad, + chin down), tilt (rad, + toward her)]
-    const keys: Key[] = [
-      [0, 0, 0, 0],
-      [0.22, 0.85, -0.04, 0.1],
-      [0.42, 0.9, 0.22, 0.2],
-      [0.6, 0.9, -0.06, 0.16],
-      [0.78, 0.85, -0.04, 0.12],
-      [1, 0, 0, 0],
-    ];
-    let began: number | undefined;
-    const target = (time: number) => {
-      began ??= time;
-      const [toward, nod, tilt] = sample(keys, (time - began) / seconds);
-      // the eyes move a little toward her and down with the nod, so the shoulders come round under the head
-      head.position.copy(start).addScaledVector(toLeia.clone().setY(0).normalize(), 0.03 * toward);
-      head.position.y -= 0.02 * Math.max(0, nod) / 0.22;
-      pose.set(nod, han.facing + turn * toward, -Math.sign(turn) * tilt);
-      head.quaternion.setFromEuler(pose);
-      head.updateMatrixWorld();
-      return head;
-    };
-    return yield* track(han, { head: target }, { until: seconds });
+    // she is to his left or right: the head tips toward her (+ roll lifts his left side, tipping him toward his right shoulder)
+    const toLeia = eyesOf(leia).sub(eyesOf(han));
+    const left = Math.sin(Math.atan2(toLeia.x, toLeia.z) - han.facing) > 0;
+    const roll = left ? -0.2 : 0.2;
+    const twist = left ? 0.15 : -0.15;
+    yield* parallel('race', lookAt(han, leia, { roll, until: seconds }), function* () {
+      yield* pose(han, { twist, head: { pitch: 0 } }, { until: seconds * 0.22 });
+      yield* pose(han, { twist, head: { pitch: 0.24 } }, { until: seconds * 0.2 });
+      yield* pose(han, { twist, head: { pitch: -0.08 } }, { until: seconds * 0.36 });
+      yield* wait(Infinity);
+    });
+    return true;
   })();
 }
 
 /**
- * Chewbacca's roar: a heavy wind-up (the chin drops, the chest fills), then the head thrown back to the ceiling with the arms coming
- * a little away from his sides, a shake of the head through the roar, and a slow settle. About `seconds` in all.
+ * Chewbacca's roar: a heavy wind-up (the chin drops, the chest gathers), then his back arches and his head is thrown back to the
+ * ceiling with the arms coming a little away from his sides, a shake of the head through the roar, and a slow settle. About `seconds`
+ * in all; `thrown` is told as the head goes back (the roar's sound).
  */
-export function roar(chewbacca: Body, { seconds = 3 }: { seconds?: number } = {}): Verb {
+export function roar(chewbacca: Body, { seconds = 3, thrown }: { seconds?: number; thrown?: () => void } = {}): Verb {
   return (function* () {
     const person = chewbacca.species.person;
     if (!person) throw new Error('roar needs a person-shaped body (its arms and shoulders)');
-    // the wind-up: a glance down, as a big creature gathers itself
-    yield* lookAt(chewbacca, besides(chewbacca, 0, person.eyeHeight - 0.35, 1.2), { until: 0.4 });
-    // head back: a point high above, just ahead (any further back and the gaze turns round instead)
-    let began: number | undefined;
-    const shake = (time: number) => {
-      began ??= time;
-      const side = 0.6 * Math.sin((time - began) * 2 * Math.PI * 1.6) * Math.min(1, (time - began) / 0.5);
-      return besides(chewbacca, side, person.eyeHeight + 6, 1.1, SHAKE);
-    };
+    const ahead = besides(chewbacca, 0, person.eyeHeight + 0.6, 4);
+    // the wind-up: a gathering, the head and chest down
+    yield* parallel('race', lookAt(chewbacca, ahead), pose(chewbacca, { bow: 0.12, head: { pitch: 0.3 } }, { until: 0.4 }));
     // the arms: each wrist about 30 degrees out from the side and a little forward, the elbow kept soft (90% of the arm's length from
-    // the shoulder): a wrist any further than the arm reaches bends the chest down to it, against the head thrown back
+    // the shoulder): a wrist any further than the arm reaches bends the chest down to it, against the back arched
     const span = person.armLength * 0.9, out = Math.sin(0.5) * span, low = person.shoulderHeight - Math.cos(0.5) * span;
     const arms = {
       left: besides(chewbacca, person.shoulderHalfWidth + out, low, 0.1),
       right: besides(chewbacca, -person.shoulderHalfWidth - out, low, 0.1),
     };
     const roaring = seconds - 0.4 - 0.6;
+    thrown?.();
     yield* parallel(
       'all',
-      lookAt(chewbacca, shake, { until: roaring }),
       reach(chewbacca, arms, { speed: 0.6, until: roaring }),
+      parallel('race', lookAt(chewbacca, ahead), function* () {
+        // head back, then shaken from side to side through the roar (each pose flows into the next)
+        yield* pose(chewbacca, { bow: -0.22, head: { pitch: -0.75 } }, { until: 0.5 });
+        for (let shake = 0; shake < 4; shake++)
+          yield* pose(chewbacca, { bow: -0.22, head: { pitch: -0.7, yaw: shake % 2 ? -0.18 : 0.18 } }, { until: (roaring - 0.5) / 4 });
+      }),
     );
-    // the settle: head down to level, slowly
+    // the settle: the head comes down to level, slowly
     yield* lookAt(chewbacca, besides(chewbacca, 0, person.eyeHeight, 4), { until: 0.6 });
     return true;
   })();
@@ -144,50 +122,12 @@ export function stepBackAndNod(leia: Body, hero: Body, { distance = 0.35 }: { di
   })();
 }
 
-/** a small nod to `toward`: the head dips about 14 degrees and comes back up over 1.2 s, the eyes staying on them */
+/** a small nod to `toward`: the head dips about 14 degrees and comes back up, about `seconds` in all, the eyes staying on them */
 export function graciousNod(body: Body, toward: Body, { seconds = 1.2, depth = 0.25 }: { seconds?: number; depth?: number } = {}): Verb {
-  let began: number | undefined;
-  const from = new Vector3();
-  const target = (time: number) => {
-    began ??= time;
-    const [dip] = sample(NOD, (time - began) / seconds);
-    const eyes = eyesOf(toward, NODDING);
-    // the target drops `depth` × the distance per unit dip: tan of about 14 degrees
-    const distance = eyesOf(body, from).distanceTo(eyes);
-    return eyes.setY(eyes.y - dip * depth * distance);
-  };
-  return lookAt(body, target, { until: seconds });
+  return (function* () {
+    yield* parallel('race', lookAt(body, toward, { until: seconds }), pose(body, { head: { pitch: depth } }, { until: seconds * 0.45 }));
+    return true;
+  })();
 }
 
-// a keyframe: its time (share of the gesture, rising from 0 to 1), then its values
-type Key = readonly [number, ...number[]];
-const NOD: Key[] = [
-  [0, 0],
-  [0.35, 1],
-  [0.55, 1],
-  [1, 0],
-];
-
-/** the values of `keys` at share `at` of the way, eased in and out between neighbouring keys */
-function sample(keys: readonly Key[], at: number): number[] {
-  const u = clamp(at, 0, 1);
-  let next = keys.findIndex(([time]) => time >= u);
-  if (next <= 0) return keys[Math.max(0, next)].slice(1);
-  const [t0, ...a] = keys[next - 1], [t1, ...b] = keys[next];
-  const s = (u - t0) / (t1 - t0), eased = s * s * (3 - 2 * s);
-  return a.map((value, i) => value + (b[i] - value) * eased);
-}
-
-/** a target that reads `point` afresh each sub-step (it follows a moving body) */
-function follow(point: (out: Vector3) => Vector3): (time: number) => Vector3 {
-  const out = new Vector3();
-  return () => point(out);
-}
-
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 const UP = new Vector3(0, 1, 0);
-/** looking at someone's face, a touch above the eyes: the chin up, proud */
-const LIFT = new Vector3(0, 0.04, 0);
-const SHY_DROP = new Vector3(0, -0.22, 0);
-const SHAKE = new Vector3();
-const NODDING = new Vector3();
