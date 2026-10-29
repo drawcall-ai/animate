@@ -22,7 +22,7 @@ The `film` beat (the viewer's default) plays the whole scene as one film, cut an
 ## Code
 
 - [src/cast.ts](src/cast.ts) creates the named characters, each on the skeleton measured for its own model ([src/skeletons/](src/skeletons/), models under `public/models/`); Han swaggers and Chewbacca lumbers (`stride`). R2-D2 is a creature of its own ([src/droids/](src/droids/)).
-- [src/troops.ts](src/troops.ts) fills the ranks: khaki troopers (`trooper.glb`, a light 6k-triangle model) with an officer before each block. Only the officers and half the front rank are simulated; the rest replay their poses a little later.
+- [src/troops.ts](src/troops.ts) fills the ranks: khaki troopers (`trooper.glb`, a light 6k-triangle model) with an officer before each block. The officers, the front rank and half the second are simulated bodies, each with its own seed, reaction and clapping; the rest replay a random one of their block's poses up to 1.2 s later. The viewer runs the troops without development checks (the headless tests keep them) to hold 60 Hz.
 - [src/gestures.ts](src/gestures.ts) holds the medal moment's gestures (bow, wink, roar, nod), each a look beside a `pose`.
 - [src/models.ts](src/models.ts) lists each skeleton with the model measured for it.
 - [src/beats/](src/beats/): each module exports one `beat` (see [src/beats/index.ts](src/beats/index.ts)) that the viewer lists and the headless test plays.
