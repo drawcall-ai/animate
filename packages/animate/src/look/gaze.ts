@@ -141,8 +141,8 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     // of their range where the neck stops short — given the head's share, the rest of it, as far as all that is left of their range;
     // up or down, and over the top, the head all the way: the eyes have little to spare there)
     const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
-    const room = gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2));
-    const eyes = head === undefined ? Math.min(EYES * Math.abs(aside), EYES_MOST * room) : Math.min((1 - head) * Math.abs(aside), room);
+    const room = (share: number) => share * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2));
+    const eyes = head === undefined ? Math.min(EYES * Math.abs(aside), room(EYES_MOST)) : Math.min((1 - head) * Math.abs(aside), room(1));
     if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
     // Follow in world space so the trunk can move beneath a steady gaze.
     const whole = _whole.copy(over ? _o : _q);

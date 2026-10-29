@@ -94,21 +94,25 @@ export class Person extends Self {
   }
 }
 
-/** An idle holding hand keeps its last pose relative to the chest, the arm's base, while the body walks, turns and bows: held in the
- * pelvis's frame, a hand would stay put as the trunk bows over it for the other hand, its shoulder carried off, the arm swivelling round */
+/**
+ * An idle holding hand keeps its last pose relative to the pelvis while the body walks and turns — and relative to the chest, the arm's
+ * base, while a task bows or turns the trunk (another hand's): kept on the pelvis then, the shoulder would be carried off it as the trunk
+ * bowed, the arm swivelling round after it. Changing frame, it is kept from where it is.
+ */
 function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
-  const bone = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
-  let time = -Infinity;
+  const hand = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
+  let time = -Infinity, frame = -1;
   return (f) => {
-    // (let be since the last sub-step it was kept: from where it is now)
-    if (f.time - time > 1.5 * f.dt) {
-      const back = _q.copy(f.prev.rotation(INDEX.chest)).invert();
-      kept.position.copy(f.prev.position(bone)).sub(f.prev.position(INDEX.chest)).applyQuaternion(back);
-      kept.quaternion.copy(back).multiply(f.prev.rotation(bone));
+    const on = person.owner('trunk') ? INDEX.chest : 0;
+    // (let be since the last sub-step it was kept, or kept on another frame: from where it is now)
+    if (f.time - time > 1.5 * f.dt || on !== frame) {
+      const back = _q.copy(f.prev.rotation(on)).invert();
+      kept.position.copy(f.prev.position(hand)).sub(f.prev.position(on)).applyQuaternion(back);
+      kept.quaternion.copy(back).multiply(f.prev.rotation(hand));
     }
-    time = f.time;
-    const turn = f.current.rotation(INDEX.chest);
-    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(INDEX.chest)), quaternion: turn.clone().multiply(kept.quaternion) };
+    [time, frame] = [f.time, on];
+    const turn = f.current.rotation(on);
+    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(on)), quaternion: turn.clone().multiply(kept.quaternion) };
   };
 }
 

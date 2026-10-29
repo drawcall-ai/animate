@@ -72,7 +72,8 @@ export function hanging(person: Reacher): Step {
       // (posed: swung forward, lifted out and twisted about its own length over that, as `ArmPosture` has them)
       const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1))) + spread;
       const swung = _h.setFromAxisAngle(X, -a - forward), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
-      const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted).multiply(_t.setFromAxisAngle(X, -twist));
+      const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted);
+      if (twist !== 0) hang.multiply(_t.setFromAxisAngle(X, -twist));
       // (the hanging pose kept out of the trunk as it turns — the hand forward, the elbow as it swings — and then followed)
       const limb = [INDEX[`${side}UpperArm`], INDEX[`${side}LowerArm`], INDEX[`${side}Hand`]];
       f.current.setLocal(limb[0], hang.premultiply(_h.copy(f.current.rotation(INDEX[`${side}Shoulder`])).invert()));

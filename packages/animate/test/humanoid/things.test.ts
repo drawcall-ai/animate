@@ -157,7 +157,8 @@ describe('a thing in one hand by a grip that sets no turn', () => {
       medal.position.set(-0.25 * scale, hips + 0.1 * scale, 0.3 * scale);
       empty(medal, 'loop', new Vector3(0, 0.34, 0));
       room.add(medal);
-      const low = box(room, new Vector3(0.25, 0.3, 0.45).multiplyScalar(scale), { size: new Vector3(0.1, 0.1, 0.1), mass: 0.3, name: 'low' });
+      // (low, half the hips' height: a bow down for it)
+      const low = box(room, new Vector3(0.2 * scale, 0.5 * hips, 0.4 * scale), { size: new Vector3(0.1, 0.1, 0.1), mass: 0.3, name: 'low' });
       let took = false, kept: Quaternion | null = null, turned = 0, forearm = 0, before: Quaternion | null = null;
       // (its turn with the body's facing taken out)
       const unfaced = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -body.facing).multiply(medal.getWorldQuaternion(new Quaternion()));
@@ -174,6 +175,7 @@ describe('a thing in one hand by a grip that sets no turn', () => {
         before = turn;
         return took;
       });
+      expect(body.log).toEqual([]);
       expect(took).toBe(true);
       expect(body.holds(medal)).toBe(true);
       expect(turned).toBeLessThan(0.01);
