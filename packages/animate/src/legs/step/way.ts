@@ -68,11 +68,11 @@ const LANDING = 0.75;
 const BRAKING = 0.1, CLEAR = 0.1, HOLDING = 0.5;
 /** Tuned: up or down a step, a swing's height leads its way across, or its way across its height, by the step's height over `STAIR.speed`
  * (m/s), at most `share` of the swing */
-const STAIR = { speed: 1, share: 0.25 };
+const STAIR = { speed: 1, share: 0.35 };
 /** the least time a swing's way is planned over (s): a sub-step */
 const STEP_TIME = 1 / 60;
 /** Tuned: a floor this much higher (m) than the one a swing left is a rise it waits to clear */
-const RISE = 0.01;
+export const RISE = 0.01;
 /** how many moments to come a swing's way over the floor is read at */
 const AHEAD = 10;
 /** Tuned: a foot landing this far (m, default body) or more above or below the floor it left steps up or down: up, it lands flat; down,

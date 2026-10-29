@@ -219,6 +219,10 @@ export interface Swing {
   x: Vector3; v: Vector3; a: Vector3; turn: { x: number; v: number; a: number };
   fromPitch: number; toes: Quaternion; strike: number; lift: number; run: number;
   rel: { x: number; v: number; a: number } | null;
+  /** how far through it (u) its landing first stood below the floor it left, stepping down (NaN: not yet) */
+  lowering: number;
+  /** the floor's level its landing was first aimed onto (m; NaN until it is) */
+  onto: number;
 }
 
 /** What a stepper keeps from one sub-step to the next: its legs, its gait's clock and the pelvis it carries. */

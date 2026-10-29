@@ -5,6 +5,7 @@ import { offsetAt, strideAt } from '../../species/gait';
 import { SETTLING, SHUFFLING, STANDING, STEP, TOGETHER, _b, _centre, _f, _v, mod, remaining, strayed, type Leg, type Now, type Steps, type Timing } from './state';
 import { aheadOf, hipOf, nominal, offHome, reach, xcomAhead } from './reach';
 import { landing, liftLeg } from './swing';
+import { RISE } from './way';
 
 /** What prompts a foot to step steps sub-step: a fall to catch, how far it is turned off the facing. */
 export function cue(steps: Steps, now: Now): Cues {
@@ -105,7 +106,9 @@ function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolea
   // (nor just after one its gait sets apart from it, out of reach or not: the feet leave the floor one by one, `TOGETHER` apart)
   if (steps.clocked && !airborne && legs.some((o) => o !== leg && o.lifted < TOGETHER * C && !together(steps, leg, o))) return false;
   if (urgent) return true;
-  if (leg.landed || !wants(steps, now, cues, leg)) return false;
+  // (nor, unless it must, a walker's foot just put down: it bears weight before it is wanted again — one landed ahead of its hip on the
+  // tread below stepped again the next sub-step, the pelvis bouncing up 14 cm)
+  if (leg.landed || (r.forecast && leg.planted < SETTLING * C) || !wants(steps, now, cues, leg)) return false;
   // alternate: lift once the other foot has stood (walking) or before it lands (running, a flight)
   const otherLands = other.swing ? remaining(other.swing) : -other.planted;
   const alternates = steps.clocked || otherLands + Ts - C * steps.apart[leg.i] <= 1e-9;
@@ -119,7 +122,10 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   if (airborne) return !leg.swing && air > 0;
   // (a planned walk keeps its supporting foot down even when short of reach: the pelvis gives, not both feet at once)
   if (other.swing && r.forecast && !steps.clocked) return false;
-  if (reach(steps, now, leg) < nominal(steps, now) + Math.max(0, vy) * RISING - STEP.short * s) return true;
+  // (short of the height asked — but not stepped down ahead of its hip, below a foot standing behind: the hip comes over it, let down
+  // to it — a foot stepped down a stair stepped on again at once for it)
+  const down = aheadOf(steps, now, leg) < 0 && steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE);
+  if (!down && reach(steps, now, leg) < nominal(steps, now) + Math.max(0, vy) * RISING - STEP.short * s) return true;
   if (leg.landed) return false;
   if (leg === cues.catcher) return true;
   return strayed(st, feet, leg, _v.subVectors(hipOf(steps, now, leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;

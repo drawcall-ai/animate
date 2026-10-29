@@ -41,16 +41,17 @@ export function levelUnder(floor: Floor, print: readonly Spot[]): number | null 
  * Foot `i`'s ankle `anchor`, standing flat heading `yaw`, fitted onto the floor: its whole sole on one level — moved along the foot,
  * forward or back as little as it takes (a heel on one tread and a toe on the next lands on one of them), and `FIT.clear` back from
  * the edge of a higher level fore or aft where that fits too (a toe off the riser it next swings over, a heel off the nosing it steps
- * down from) — its ankle its height above that; of those, the nearest that `keeps` (the balance a landing keeps), if one does. A sole that
- * fits nowhere within `FIT.most` stands as it is on the highest floor under it.
+ * down from) — its ankle its height above that; of those, the nearest that `keeps` (the balance a landing keeps), if one does, and first
+ * of those on the level it is aimed `onto` (a swing keeps to the tread it set off for as its landing moves on). A sole that fits nowhere
+ * within `FIT.most` stands as it is on the highest floor under it.
  */
-export function foothold(floor: Floor, feet: Feet, i: number, anchor: Vector3, yaw: number, keeps?: (at: Readonly<Vector3>) => boolean): Vector3 {
+export function foothold(floor: Floor, feet: Feet, i: number, anchor: Vector3, yaw: number, keeps?: (at: Readonly<Vector3>) => boolean, onto?: number): Vector3 {
   if (floor === FLAT) return anchor.setY(feet.ankleHeight);
   const forward = forwardOf(yaw, _forward);
   let found: Vector3 | null = null, level = 0;
-  for (const clear of [FIT.clear, 0]) for (let moved = 0; moved <= FIT.most + 1e-9; moved += FIT.step) for (const way of moved ? [1, -1] : [1]) {
+  for (const kept of onto === undefined ? [false] : [true, false]) for (const clear of [FIT.clear, 0]) for (let moved = 0; moved <= FIT.most + 1e-9; moved += FIT.step) for (const way of moved ? [1, -1] : [1]) {
     const at = _at.copy(anchor).addScaledVector(forward, way * moved), on = levelOf(floor, feet.print(i, at, yaw), forward, clear);
-    if (on === null) continue;
+    if (on === null || (kept && Math.abs(on - (onto ?? on)) > LEVEL)) continue;
     if (!keeps || keeps(at)) return anchor.copy(at).setY(on + feet.ankleHeight);
     if (!found) [found, level] = [_found.copy(at), on];
   }

@@ -41,7 +41,7 @@ export class Ground {
     passed.length = back + 1;
     [heights.length, times.length] = [0, 0];
     for (let k = Math.round((behind + SPAN / 2) / dt); k >= 0; k--) [heights[heights.length], times[times.length]] = [passed[k], -k * dt];
-    for (let t = AHEAD * dt; t <= ahead + SPAN / 2 + 1e-9; t += AHEAD * dt) {
+    for (let t = dt; t <= ahead + SPAN / 2 + 1e-9; t += dt) {
       heights.push(floor(r.position.x + r.velocity.x * t, r.position.z + r.velocity.z * t));
       times.push(t);
     }
@@ -51,8 +51,9 @@ export class Ground {
       if (Math.abs(t) > SPAN / 2) continue;
       let lowest = Infinity;
       for (let j = 0; j < times.length; j++) if (times[j] >= t - behind - 1e-9 && times[j] <= t + ahead + 1e-9) lowest = Math.min(lowest, heights[j]);
-      // (each weighed for the sub-steps it stands for)
-      const w = Math.cos(Math.PI * t / SPAN) ** 2 * (t > 0 ? AHEAD : 1);
+      // (read every sub-step: read every other one ahead, a tread's edge entered each sample's lowest in jumps of a centimetre every
+      // other sub-step, the pelvis' speed alternating with them)
+      const w = Math.cos(Math.PI * t / SPAN) ** 2;
       [sum, weights] = [sum + w * lowest, weights + w];
     }
     return sum / weights;
@@ -67,8 +68,8 @@ const SPAN = 1.2;
 /**
  * Tuned: how far behind and ahead the ground takes the lowest floor, in legs' lengths of its way (at no slower than `slow` m/s), at most
  * `most` s: a little behind — a rise lifts the body once its stance leg stands on the tread above, the lead knee bent; well ahead — a
- * drop lets it down as its swinging foot reaches for the tread below, the stance knee bending to lower it
+ * drop lets it down as its swinging foot reaches for the tread below, the stance knee bending to lower it (a step down's swing lets the
+ * pelvis down the rest: the farther ahead, the earlier and deeper the body crouches — at 0.7 its knees bent 105° on the landing above
+ * the flight before its first step down, 100° as a foot landed on a tread — the nearer, the faster it is let down through each swing)
  */
-const LOW = { rise: 0.25, drop: 0.7, slow: 0.3, most: 1 };
-/** sub-steps between the heights to come it reads */
-const AHEAD = 2;
+const LOW = { rise: 0.25, drop: 0.45, slow: 0.3, most: 1 };
