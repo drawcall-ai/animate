@@ -53,7 +53,7 @@ export function hanging(person: Reacher): Step {
       if (person.holding[side]) return;
       const sign = s === 0 ? 1 : -1;
       // (the left arm in front as the left foot lifts, the right behind; growing in as the walk does)
-      const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) + 0.02) * locomotion.walk;
+      const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) * locomotion.arms + 0.02) * locomotion.walk;
       const a = swing(lead);
       const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
       const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a));

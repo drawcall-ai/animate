@@ -148,7 +148,7 @@ export class Stepper extends Steps {
     const along = v > 1e-6 ? r.velocity.dot(forward) / v : 1, across = v > 1e-6 ? r.velocity.dot(left) / v : 0;
     // (side-stepping, quicker: short open-and-close steps rather than long straddles)
     const sideways = Math.abs(across) * smoothstep(0, SIDE_SPEED * s, v);
-    let C = 1 / (stride ? stride.frequency : st.cadence(pacing, sideways));
+    let C = 1 / (stride ? stride.frequency : st.cadence(pacing, sideways, root.f.time));
     const duty = stride ? stride.duty : lerp(lerp(st.duty.walk, st.duty.side, Math.abs(across)), st.duty.run, run);
     const travel = along > 0 ? lerp(st.travel.forward, st.travel.run, run) : st.travel.back;
     const most = (1 - st.crouch.travel * k) * s / Math.hypot(along / travel, across / st.travel.side);

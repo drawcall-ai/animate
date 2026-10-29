@@ -12,6 +12,7 @@ import { TrackedPoint, TrackedRotation } from '../../kernel/track';
 import { Poise } from '../../kernel/poise';
 import type { Go, Stance } from '../../kernel/go';
 import { seedOf } from '../../kernel/random';
+import { individualOf, type Individual } from './individual';
 import { Quiet } from './quiet';
 import { ankleFor, ballOf, footprint, footRotation, heelOf } from './foot';
 import { kneePole, shankTilt } from './leg';
@@ -76,7 +77,14 @@ const PELVIS = { accel: 30 }, TURN = { accel: 60 };
  * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
  */
 export function driven(person: PersonLegged, seed?: number): Step {
-  return drivenBy(person, drivenRoot(person), { seed });
+  return drivenBy(person, drivenRoot(person), { individual: individualOf(seedFor(person, seed)), seed });
+}
+
+/** the seed a person's life and individuality are drawn from: `seed` if given, else one from its build and where it was made */
+export function seedFor(person: Pick<PersonLegged, 'proportions' | 'pose' | 'yaw'>, seed?: number): number {
+  if (seed !== undefined) return seed;
+  const root = person.pose.position(0), standing = standingFeet(person.proportions, root.x, root.z, person.yaw);
+  return seedOf(person.proportions.height, standing[0].position.x, standing[0].position.z);
 }
 
 /**
@@ -85,9 +93,10 @@ export function driven(person: PersonLegged, seed?: number): Step {
  * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
  * to (`PACE`), nodding, bowed and twisted as asked, the thorax counter-rotating. Let down as asked (`lower`) or as the root crouches it,
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
- * less as it holds still (`steady`).
+ * less as it holds still (`steady`). It steps, swings its arms and sways as the `individual` it is.
  */
-export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
+export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number; individual: Individual }): Step {
+  const individual = options.individual;
   const proportions = person.proportions, s = proportions.scale;
   const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
     .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(proportions, side)))]);
@@ -113,7 +122,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
   // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
   // (the feet where they stand as it is made: in its stance under it)
   const standing = standingFeet(proportions, person.pose.position(0).x, person.pose.position(0).z, person.yaw);
-  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen, person.stride), feet, standing, person.yaw, person.floor));
+  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen, person.stride, individual), feet, standing, person.yaw, person.floor));
   let stepper = stepperFor(true), first = true;
   const { toeOut, crouch: crouching } = humanStepping(proportions, true, person.stride);
   const poise = new Poise();
@@ -125,7 +134,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false,
   };
   const posture = new Posture(person.species.inertia);
-  const life = new Quiet(options.seed ?? seedOf(proportions.height, standing[0].position.x, standing[0].position.z));
+  const life = new Quiet(seedFor(person, options.seed), individual.sway);
   const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
   const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0], lean: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()], tilts = [new Quaternion(), new Quaternion()];
@@ -280,6 +289,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     legs.forEach((leg, i) => upright.feet[i].anchor.copy(leg.anchor));
     const locomotion = person.locomotion, stepping = legs.some((leg) => leg.swing);
     locomotion.phase = stepper.phase;
+    locomotion.arms = individual.arms;
     locomotion.walk = moving;
     locomotion.run = run;
     locomotion.facing = wrapAngle(yaw);

@@ -27,7 +27,8 @@ export class Quiet {
   private time = 0; private amount = 0; private quietTime = 0;
   private readonly rhythms: Rhythms<'weight'>;
 
-  constructor(seed: number) {
+  /** `sway`: how strongly it sways, as the person it is (1: as tuned) */
+  constructor(seed: number, private readonly sway = 1) {
     this.rhythms = new Rhythms(seed, [['weight', WEIGHT]]);
   }
 
@@ -51,7 +52,7 @@ export class Quiet {
     const t = this.time, phase = this.rhythms.phase;
     // Seeded smooth drift: incommensurate components, 5–10 mm of quiet CoM travel.
     const noise = (a: number, b: number, c: number) => irregular(t, phase, a, b, c);
-    this.drift.set(0.007 * noise(0.79, 1.37, 2.11), 0, 0.009 * noise(0.93, 1.61, 2.47)).multiplyScalar(this.amount);
+    this.drift.set(0.007 * noise(0.79, 1.37, 2.11), 0, 0.009 * noise(0.93, 1.61, 2.47)).multiplyScalar(this.amount * this.sway);
     // Recalled: breathing 12–20/min (PMC5973601). Tuned: 1° active, 1.5° after 1–2 s quiet.
     this.breath = Math.sin(2 * Math.PI * 0.25 * t + phase) * (1 + 0.5 * smoothstep(1, 2, this.quietTime)) * Math.PI / 180 * this.amount;
   }

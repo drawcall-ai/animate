@@ -6,7 +6,8 @@ import type { Stance } from '../../kernel/go';
 import type { Stepper } from '../step/stepper';
 import { hullOf, past } from '../support';
 import { footprint } from './foot';
-import { checkSupport, drivenBy, feetBehind } from './balance';
+import { checkSupport, drivenBy, feetBehind, seedFor } from './balance';
+import { individualOf } from './individual';
 import type { PersonLegged } from './legged';
 import { humanGait, humanStepping } from './stepping';
 import { OVER_ANKLES } from '../../species/humanoid/stance';
@@ -20,6 +21,9 @@ import { OVER_ANKLES } from '../../species/humanoid/stance';
  */
 export function stride(person: PersonLegged, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
   const proportions = person.proportions, s = proportions.scale, toeOut = humanStepping(proportions, true, person.stride).toeOut;
+  const individual = individualOf(seedFor(person, options.seed));
+  // (asked off, it sets off its own moment later: since when it was asked, s)
+  let asked = NaN;
   const stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, still: Vector3 | null = null;
   let moving = false, starting = false, seen = false, leaning = false, settling = false;
@@ -60,7 +64,9 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     // once it is a start's distance away)
     const unturned = face ? Math.abs(wrapAngle(face.yaw - plan.root.yaw)) : 0;
     const off = (still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced;
-    if (!moving && off) [moving, starting, still, leaning] = [true, true, null, false];
+    if (moving || !off) asked = NaN;
+    else if (Number.isNaN(asked)) asked = f.time;
+    if (!moving && off && f.time - asked >= individual.delay) [moving, starting, still, leaning] = [true, true, null, false];
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
@@ -105,7 +111,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const stopped = root.distanceTo(stop) < STOP.distance * s && planned.velocity.length() < STOP.speed;
     if (stopped && velocity.length() < STOP.goalSpeed && unturned < STOP.yaw) moving = false;
     return { ...planned, centre: true, underway: moving };
-  }, options);
+  }, { ...options, individual });
 }
 
 /** how quickly the goal's own velocity is picked up (1/s) */

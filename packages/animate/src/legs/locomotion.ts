@@ -26,9 +26,11 @@ export interface Locomotion {
   pelvisYaw: number; thoraxYaw: number;
   /** the requested quiet stance displacement from the centred stance (m, world) */
   quiet: Vector3;
+  /** how far its arms swing walking, as its legs have it (1: as tuned) */
+  arms: number;
 }
 
 export const createLocomotion = (facing: number): Locomotion => ({
   eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0,
-  pelvisYaw: 0, thoraxYaw: 0, quiet: new Vector3(),
+  pelvisYaw: 0, thoraxYaw: 0, quiet: new Vector3(), arms: 1,
 });

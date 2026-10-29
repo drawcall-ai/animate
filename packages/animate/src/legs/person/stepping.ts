@@ -7,6 +7,7 @@ import { squatOf, STANDING_REACH } from './posture';
 import { lerp } from '../../kernel/math';
 import { defaultStance } from '../../species/humanoid/stance';
 import type { Stride } from '../../species/humanoid/humanoid';
+import { TUNED, type Individual } from './individual';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992); tuned: below 0.5 m/s the stride
  * shortens instead of its cadence slowing. */
@@ -17,7 +18,7 @@ export const humanGait = (proportions: Proportions): Gait => powerGait({
 
 /**
  * A person's stepping (m: the default body's, × its legs' length over theirs: the legs set its steps, stance and lift), striding as
- * `style` has it. Its `cadence` is `cadenceOf`'s; recalled (Perry 1992): stance ~60% of the cycle walking; tuned: running between 2 and
+ * `style` has it and as the `individual` it is. Its `cadence` is `cadenceOf`'s; recalled (Perry 1992): stance ~60% of the cycle walking; tuned: running between 2 and
  * 3 m/s, the `travel`, the `lead` and `width` (never closer than `narrowest`). Requested: a 3–4 cm pelvis `bob` (tuned ~4 cm, lowest in
  * the double support; side-stepping and running `drop` lower for the leg's reach); an 8–12 cm `lift` walking (tuned: a runner's heel
  * kicks higher, peaking at 60% of the swing). Recalled: the heel `strike`s ~10–15° toes-up (Perry 1992; tuned: toes first behind the
@@ -33,11 +34,11 @@ export const humanGait = (proportions: Proportions): Gait => powerGait({
  * 1991), its bob 3.5 cm, its knees a little softer, its side-steps at the walking cadence and no push-off: tuned to keep such a root's
  * steps clean; its `crouch` a player's crouch key's (0.37 m, the feet 4 cm wider), not a squat.
  */
-export const humanStepping = (proportions: Proportions, foreseen = true, style: Stride = {}): Stepping => {
+export const humanStepping = (proportions: Proportions, foreseen = true, style: Stride = {}, individual: Individual = TUNED): Stepping => {
   const { cadence = 1, width = 1, bob = 1, toeOut = 1 } = style;
   const walker: Stepping = {
     scale: proportions.legs, offsets: [0, 0.5], toeOut: defaultStance(proportions).toeOut * toeOut, duty: { walk: 0.6, side: 0.5, run: 0.32 }, run: [2, 3],
-    cadence: (speed, sideways) => cadence * cadenceOf(speed, foreseen ? sideways : 0, proportions.legs),
+    cadence: (speed, sideways, time) => cadence * individual.cadenceAt(time) * cadenceOf(speed, foreseen ? sideways : 0, proportions.legs),
     travel: { forward: 0.85, run: 0.75, back: 0.6, side: 0.3 }, lead: { share: 0.4, side: 0.5, most: 0.3, run: 0.22 },
     width: { stand: defaultStance(proportions).width, walk: 0.09 * width, run: 0.07 * width, narrowest: 0.1, sway: 0.09 * (width - 1) }, bob: 0.042 * bob, drop: { walk: 0, side: 0.03, run: 0.06 },
     lift: { walk: 0.09, run: 0.25, jump: 0.2 }, arc: 4.5, strike: { walk: 0.2, run: 0.08, ahead: 0.15 }, pitch: { heel: 0.35, ball: -0.95 }, dorsiflexion: 0.6, plantarflexion: 0.75,
