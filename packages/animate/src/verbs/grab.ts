@@ -16,9 +16,11 @@ import type { HandOptions } from '../hands/handling';
  * gives a stand for where they were; with no particular place to stand, leave the walking to it. A mover,
  * it ends holding. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else stays where it is, and the
  * hands follow it. It returns `false` if no stand reaches the grips (with `step: false`: if they are out of reach from where it stands) or
- * the hand position or turn remains unmet after the planned reach plus four seconds. Grips set position only by default (a thing held
- * so in one hand keeps its own turn, the hand's free twist not turning it): `userData.handTurn = true` turns the hand as the empty is
- * turned, as an `Object3D` target does (`Target`); an axis [x, y, z] allows roll about that line in its frame.
+ * the hand position or turn remains unmet after the planned reach plus four seconds. A person holds a grip in its palm: the empty is
+ * where the palm's centre goes (0.043 of the body's height past the wrist, along the hand), so put it where the hand closes on the prop
+ * (on a handle's axis, half the hand's thickness out from a box's side), not where the wrist would be. Grips set position only by default (a
+ * thing held so in one hand keeps its own turn, the hand's free twist not turning it): `userData.handTurn = true` turns the hand as the
+ * empty is turned, as an `Object3D` target does (`Target`); an axis [x, y, z] allows roll about that line in its frame.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);

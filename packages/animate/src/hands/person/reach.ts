@@ -153,10 +153,13 @@ function outside(bounds: Box3, grip: Goal, from: Vector3, hand: Hand): Vector3[]
   const size = bounds.getSize(new Vector3());
   if (size.x * size.y * size.z === 0) return [];
   const at = grip.position;
-  let axis = 0, end = 0, gap = Infinity;
+  let axis = 0, end = 0, gap = Infinity, seen = false;
   for (let i = 0; i < 3; i++) for (const side of [0, 1]) {
-    const distance = Math.abs(at.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
-    if (distance < gap) [gap, axis, end] = [distance, i, side];
+    const face = (side ? bounds.max : bounds.min).getComponent(i), distance = Math.abs(at.getComponent(i) - face);
+    // (a grip on a face the hand is outside of already — a ribbon's end on the front of a thin medal — is taken from that side, not
+    // round the thing to whichever face is nearest it)
+    const facing = distance <= hand.radius + hand.reserve && (side ? 1 : -1) * (from.getComponent(i) - face) > 0;
+    if ((facing && !seen) || (facing === seen && distance < gap)) [gap, axis, end, seen] = [distance, i, side, facing];
   }
   const sign = end ? 1 : -1;
   const face = (end ? bounds.max : bounds.min).getComponent(axis);

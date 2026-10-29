@@ -5,7 +5,7 @@ import { aroundTheTrunk } from './clearance';
 
 /**
  * How closely the eyes are on what the script asks them to look at, and the hands stay on what
- * they hold or track: each wrist off its grip (the item's grip in the world as the item is now) or
+ * they hold or track: each palm off its grip (the item's grip in the world as the item is now), each wrist off
  * its tracked target (`leftWrist`, `rightWrist`), while that is within reach (the arm's length +
  * 0.35 m of the shoulder: one further off is walked to, by design); the eyes' midpoint off a
  * tracked head's (`head`: a headset).
@@ -86,7 +86,7 @@ export class Targets {
       const grip = h.holding[s]?.grip;
       if (!grip) continue;
       if (jointOf(h, `${s}UpperArm`).distanceTo(grip) >= h.proportions.armLength + 0.35) continue;
-      this.wristPeak.see(jointOf(h, `${s}Hand`, _v).distanceTo(grip), t);
+      this.wristPeak.see(jointOf(h, `${s}Palm`, _v).distanceTo(grip), t);
     }
   }
 

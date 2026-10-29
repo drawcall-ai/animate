@@ -117,8 +117,12 @@ export function* takingAtOnce(person: Reacher, request: Request, takes: readonly
   let placed = false;
   yield* parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked', (f) => {
     const frame = person.track(take.thing.object).at(f.time).current;
-    placeArm(person, f, take.side, { position: gripAt(person, take, f), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
-    person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
+    // (posed again until the wrist stays put: on a grip that sets no turn the wrist is a palm back from it along the hand as last posed)
+    const wrist = new Vector3(Infinity, 0, 0);
+    for (let pass = 0; pass < 8 && wrist.distanceTo(gripAt(person, take, f)) > 1e-4; pass++) {
+      placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
+      person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
+    }
     grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
     placed = true;
   }, () => placed)));

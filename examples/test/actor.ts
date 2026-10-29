@@ -88,6 +88,8 @@ export class Actor {
 /** The named points that are not bone origins (OpenPose BODY_25 needs them), each fixed in a bone's frame; the right mirrors the left's x. */
 function pointsOf(proportions: Proportions): Record<string, { bone: BoneName; at: Vector3 }> {
   const { head, sole, eyes } = proportions, mirror = (at: Vector3) => new Vector3(-at.x, at.y, at.z);
+  // (the palm's centre, where a hand holds a grip: 0.043 of the height past the wrist along the hand, as the library has it)
+  const palm = (side: Side) => proportions.offsets[`${side}Hand`].clone().setLength(0.043 * proportions.height);
   return {
     nose: { bone: 'head', at: head.nose },
     headTop: { bone: 'head', at: head.top },
@@ -104,6 +106,8 @@ function pointsOf(proportions: Proportions): Record<string, { bone: BoneName; at
     rightSmallToe: { bone: 'rightToes', at: mirror(sole.smallToe) },
     leftWrist: { bone: 'leftHand', at: new Vector3() },
     rightWrist: { bone: 'rightHand', at: new Vector3() },
+    leftPalm: { bone: 'leftHand', at: palm('left') },
+    rightPalm: { bone: 'rightHand', at: palm('right') },
   };
 }
 

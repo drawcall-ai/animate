@@ -66,9 +66,9 @@ export const beat: Beat & { order: number } = {
     // the medals lie on a cushion on a stand before the bearer's mark, each to be worn before its hero's chest
     const tray = cushion(bearer);
     const lukeMedal = dressMedal(createMedal('luke medal')), hanMedal = dressMedal(createMedal('han medal'));
-    // each lies face up, its ribbon toward the bearer
-    lukeMedal.position.set(0.08, 0.005, 0.04);
-    hanMedal.position.set(-0.08, 0.005, 0.04);
+    // each lies face up toward the cushion's far edge, its ribbon on the cushion toward the bearer
+    lukeMedal.position.set(0.08, 0.005, 0.1);
+    hanMedal.position.set(-0.08, 0.005, 0.1);
     lukeMedal.rotation.x = hanMedal.rotation.x = -Math.PI / 2;
     tray.add(lukeMedal, hanMedal);
     const worn = { luke: createWornPlace(luke, 'luke medal place'), han: createWornPlace(han, 'han medal place') };

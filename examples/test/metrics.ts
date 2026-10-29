@@ -105,7 +105,7 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   add('slow step width (share of its bound)', m.landings.wide.value, 'max', 1, m.landings.wide.at);
   add('leg-crossing frames', m.crossings, 'max', 0);
   // (what is held or tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
-  if (limit.wrist !== undefined) add('wrist off the grip it holds (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
+  if (limit.wrist !== undefined) add('palm off the grip it holds (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
   // (a tracked target is judged by its course — held, moving, within reach — not one fixed margin: `Targets.judge`)
   if (m.targets.tracked.judged || m.targets.tracked.head) add(`tracked target past its course's bound (m): ${m.targets.over.what}`, m.targets.over.value, 'max', 0, m.targets.over.at);
   add('tracked wrists: frames judged (share of those asked)', m.targets.tracked.asked ? m.targets.tracked.judged / m.targets.tracked.asked : 1, 'min', TRACKED);
