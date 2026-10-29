@@ -35,7 +35,8 @@ export interface Owners {
   hands: Partial<Record<string, Owner>>;
 }
 
-/** A foot as it stands or, swinging, where it lands. */
+/** A foot as it stands or, swinging, where it lands. A planted foot turning on the spot pivots about its sole's middle, between heel and
+ * toe, so its ankle shifts a little. */
 export interface Foot {
   /** its ankle, standing flat on the floor there */
   position: Vector3;
@@ -84,7 +85,8 @@ export class Body<S extends AnySpecies = AnySpecies> {
     }
   }
 
-  /** where it stands: its root's point on the floor (m; its y the floor's height there) */
+  /** its root's point on the floor (m; its y the floor's height there): a person's hips, which sway several centimetres over planted feet,
+   * so judge where a body stands by its `feet` */
   get position(): Vector3 {
     const root = this.pose.position(0);
     return new Vector3(root.x, selfOf(this).floor(root.x, root.z), root.z);

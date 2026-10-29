@@ -4,7 +4,9 @@ import type { Carriage, Gait } from './gait';
 /**
  * A gait from a few numbers, dynamically similar across sizes (recalled: Alexander & Jayes 1983, stride
  * λ/h = c·Fr^0.3; Hodson et al., stance time ∝ v^−0.7). Only `height`, `slowest` and `clearance` carry units: a body
- * scaled by hand keeps `stride` and `stance` as they are (or use `scaled`).
+ * scaled by hand keeps `stride` and `stance` as they are (or use `scaled`). A `stance` that does not suit the legs can leave a foot only a
+ * frame or two to swing, which reads as a teleport and which the dev log does not always report: count the frames each of `body.feet`
+ * spends unplanted, walking and turning on the spot.
  */
 export function powerGait({ height, slowest, offsets, stride, stance, clearance }: {
   /** hip height (m) */
