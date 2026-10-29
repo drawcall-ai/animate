@@ -7,10 +7,6 @@ import { SOLDIER, OUTLIER } from '../src/skeletons';
 import { cases } from '../../packages/animate/test/open';
 
 const test = cases([
-  // (the reach on its toes for targets 10 cm higher: XCoM 10.5 cm outside the support at life seed 0, an open breach)
-  ['reach: higher final-pose dev checks', [0]],
-  ['reach: higher with -0.000001 m target perturbation', [0]],
-  ['reach: higher with 0.000001 m target perturbation', [0]],
   // (its varied body stepping at its own legs' cadence: a touchdown 0.1002 m/s, over the 0.1 m/s limit, at life seed 2)
   ['reach: variation #2 final-pose dev checks', [2]],
   'shooter on the soldier: final-pose dev checks', // Grip/leg-rate violations.
@@ -19,7 +15,6 @@ const test = cases([
   'vr on the soldier: final-pose dev checks', // The same; at life seed 1 also a tracking joint-rate violation.
   'reach on the soldier: final-pose dev checks', // Reach diagnostics.
   'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
-  'look-around: final-pose dev checks', // Upper arm penetrates the trunk.
 ]);
 for (const scenario of SCENARIOS) {
   const bodies = [{ on: '', skeleton: undefined },

@@ -84,8 +84,8 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const rest = settling ? over : null;
     const edging = go && over ? stop.clone().sub(over).clampLength(0, EDGING * s).add(over) : stop;
     // (edged onto a still goal, it is there: held, not chased to and fro — so its feet are judged standing, as they will be once the walk
-    // ends; a goal on the move, it keeps edging after it)
-    const edged = edging.distanceTo(root) > LEAN.back * s || velocity.length() >= STOP.goalSpeed ? edging : null;
+    // ends; a goal on the move, or one followed, it keeps edging after it)
+    const edged = edging.distanceTo(root) > LEAN.back * s || velocity.length() >= STOP.goalSpeed || go?.settles === false ? edging : null;
     // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
     const behind = feetBehind(stepper, s);
     const goal = {

@@ -75,6 +75,7 @@ export class Walk {
 
   constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;
+    this.go.settles = arrives;
   }
 
   /** where it asks the legs to take the body this sub-step (none: a goal that is no point) */

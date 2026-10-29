@@ -25,6 +25,9 @@ export interface Go {
   accel: number;
   /** arriving, the feet are squared into the stance (default true; false: they stay as they land) */
   plant?: boolean;
+  /** edged onto a goal that has stopped, the body stands as it is (default true: a walk that ends there); false: it keeps edging after
+   * it (a walk that follows its goal, which may move off again any moment) */
+  settles?: boolean;
   face?: { yaw: number; rate?: number };
   stance?: Partial<Stance>;
 }

@@ -2,6 +2,7 @@
 import { Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep } from '../../kernel/math';
 import { xcomOf } from '../support';
+import { FLAT, foothold } from '../floor';
 import { ROLL, _a, _b, _f, _l, _m, _o, _v, _x, dropOf, rollOf, type Body, type Leg, type Now, type Reading, type Steps, type Timing } from './state';
 
 /** the place of a leg's hip, the pelvis turned with the stride */
@@ -35,9 +36,12 @@ function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Ve
   return root.addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forwardOf(yaw), sitting + homeOf(steps, leg)).setY(steps.feet.ankleHeight);
 }
 
-/** how far a foot is from its home `ahead` s on (m) */
+/** how far a foot is from its home `ahead` s on (m): on a floor that is not level, from where that home fits onto it (a foot that cannot go
+ * nearer — a tread's edge before it — is home where it fits, and does not step again for it) */
 export function offHome(steps: Steps, now: Now, leg: Leg, ahead: number): number {
-  return home(steps, now, leg, ahead, _v).sub(leg.anchor).setY(0).length();
+  const at = home(steps, now, leg, ahead, _v);
+  if (steps.floor !== FLAT) foothold(steps.floor, steps.feet, leg.i, at, now.yaw + leg.sign * steps.st.toeOut);
+  return at.sub(leg.anchor).setY(0).length();
 }
 
 /** a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends */

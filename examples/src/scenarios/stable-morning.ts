@@ -11,6 +11,8 @@ export const TIED = new Vector3(-1.2, 0, 3);
 /** the saddle rack: where the saddle rests astride its bar, along x, and its legs either side (m) */
 const RACK = new Vector3(1.1, 0.88, 2);
 const RACK_LEGS = [-0.25, 0.25];
+/** how far back from the rack (m) the handler steps with the saddle before turning for the horse */
+const BACK_OFF = 0.7;
 /** the tie rail: along x = −0.35 between its posts at z 3.2 and 4.5, 1.12 m high; the knot on its horse's side (m) */
 export const RAIL = { x: -0.35, from: 3.2, to: 4.5, height: 1.12 };
 const KNOT = new Vector3(-0.45, 1.12, 3.6);
@@ -100,6 +102,9 @@ export function stableMorning(): Scenario {
             // (its eyes on the saddle's place from when its hands close on the saddle until it is there)
             yield* parallel('race', function* () {
               yield* grab(handler, saddle, { left: 'left', right: 'right' });
+              // (lifted off, it is backed out from between the rack's legs before the handler turns for the horse: the body keeps no
+              // clearance of its own from the rack)
+              yield* walkTo(handler, () => new Vector3(handler.position.x, 0, RACK.z - BACK_OFF), { face: 0, speed: 0.8, until: () => handler.position.z < RACK.z - BACK_OFF + 0.1 });
               yield* carry(handler, saddle, saddled);
             }, function* () {
               yield* wait(() => handler.holds(saddle));
