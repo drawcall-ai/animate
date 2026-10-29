@@ -16,7 +16,7 @@ export { wait, watch, type Until, type Verb } from './verbs/story';
 export type { Target } from './verbs/targets';
 export type { LogEntry, Problem } from './kernel/dev';
 export type { ReadonlyPose } from './kernel/pose';
-export type { Posture } from './kernel/poise';
+export type { ArmPosture, Posture } from './kernel/poise';
 
 export type { BoneNames, Gazer, Having, LegRole, Range, Roles, Tuning, Vec3 } from './species/define';
 export type { Inertial } from './kernel/inertia';

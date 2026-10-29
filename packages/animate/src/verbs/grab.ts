@@ -9,7 +9,8 @@ import { verb, type Until, type Verb } from './story';
 
 /** How a grab goes. */
 export interface GrabOptions {
-  /** the hands' speed to the grips (m/s; default the time a calm reach that far takes, Fitts') */
+  /** the hands' speed to the grips (m/s; default the time a calm reach that far takes, Fitts'); `Infinity` puts them there at once, for a
+   * body that starts a story already holding the thing — only as it starts, the grips within its arms' reach from where it stands */
   speed?: number;
   /** the hands' acceleration with `speed` (m/s²) */
   accel?: number;
@@ -34,6 +35,8 @@ export interface GrabOptions {
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
   if (!named.length) throw new Error('grab: name a grip for a hand');
+  if (options.speed !== undefined && !(options.speed > 0)) throw new Error(`grab: a speed of ${options.speed}`);
+  if (options.speed === Infinity && !body.species.person) throw new Error('grab: `speed: Infinity` is a person’s');
   return verb(body, 'grab', (request) => function* () {
     const self = selfOf(body), held = Thing.of(thing), on = bodyOf(thing);
     if (on) self.meet(on);

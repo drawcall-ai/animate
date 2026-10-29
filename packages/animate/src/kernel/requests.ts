@@ -6,8 +6,8 @@ import type { Go } from './go';
 export type Tier = 'borrowed' | 'asked';
 
 /** A body part a request takes: the legs (`go`, with the facing), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
- * the eyes (`head`), a hand by name. */
-export type Channel = 'go' | 'look' | 'trunk' | 'head' | `hand.${string}`;
+ * the eyes (`head`), a hand by name, and the pose of a free hand's arm (`arm.` its hand). */
+export type Channel = 'go' | 'look' | 'trunk' | 'head' | `hand.${string}` | `arm.${string}`;
 
 /** A claimed part poses the body; a leg claim returns its requested motion. */
 export interface Claim {

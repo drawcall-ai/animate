@@ -2,7 +2,7 @@ import type { Handling } from '../handling';
 import { bodyOf, goalOn } from '../../things/hold';
 import { sideOf } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { grabbing } from './grab';
+import { grabbing, takingAtOnce } from './grab';
 import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
@@ -14,6 +14,10 @@ export function personHands(person: Reacher): Handling {
     take: function* (request, thing, grips, manner) {
       const loose = thing.massive && !bodyOf(thing.object);
       const takes = grips.map(({ hand, grip }) => ({ side: sideOf(hand), thing, grip, goal: goalOn(thing.grip(grip), person.restOf(person.hands[hand])) }));
+      if (manner.speed === Infinity) {
+        yield* takingAtOnce(person, request, takes);
+        return request.met();
+      }
       const motion = manner.speed === undefined ? undefined : { speed: manner.speed, accel: manner.accel };
       if (!(yield* grabbing(person, request, takes, manner.step ?? true, motion))) return;
       if (loose) yield* liftingClear(person, request, thing);

@@ -6,6 +6,7 @@ import { Glide } from '../../kernel/glide';
 import { type Live, type Motion, type Goal } from '../../kernel/goal';
 import { limited } from '../../kernel/limits';
 import { ChainTip } from '../../kernel/tip';
+import { solveChain } from '../../kernel/chain';
 import { TrackedRotation } from '../../kernel/track';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
@@ -26,14 +27,14 @@ const ABDUCTION = (8 * Math.PI) / 180;
  * (mid-thigh 0.034, hand 0.012) and a little air */
 const CLEAR = 0.055;
 /** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it
- * kinks; let go of, it comes down calmly */
-const SWING = { accel: 25, speed: 2.5 };
+ * kinks; let go of, it comes down calmly — and posed, it goes there so */
+export const SWING = { accel: 25, speed: 2.5 };
 /** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
 export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 
-/** Free arms follow their own histories back into stride swing; holding hands keep their grips. */
+/** Free arms follow their own histories back into stride swing, posed over it as asked (`armPose`, cleared); holding hands keep their grips. */
 export function hanging(person: Reacher): Step {
   const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
   let phase = person.locomotion.phase;
@@ -50,25 +51,28 @@ export function hanging(person: Reacher): Step {
     const hips = f.current.position(0);
     const left = leftOf(yaw, _left);
     SIDES.forEach((side, s) => {
+      const posed = person.armPose[side], { shrug, forward, out: spread, twist, elbow } = posed;
+      [posed.shrug, posed.forward, posed.out, posed.twist, posed.elbow] = [0, 0, 0, 0, 0];
       if (person.holding[side]) return;
       const sign = s === 0 ? 1 : -1;
       // (the left arm in front as the left foot lifts, the right behind; growing in as the walk does)
       const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) * locomotion.arms + 0.02) * locomotion.walk;
       const a = swing(lead);
       const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
-      const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a));
+      const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a)) + elbow;
       // the arm hanging plumb from the shoulder, out as far as keeps the hand clear of the thigh beside it (the hip's or the knee's, as
       // the legs stand now) however the trunk bows, leans or twists, swung forward about that frame's left; the forearm forward
-      set(f, goals, INDEX[`${side}Shoulder`], IDENTITY);
+      set(f, goals, INDEX[`${side}Shoulder`], shrug === 0 ? IDENTITY : _s2.setFromAxisAngle(Z, sign * shrug));
       const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
       const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
       const handY = f.current.position(INDEX[`${side}UpperArm`]).y - proportions.armLength;
       const rest = _w.copy(hips).addScaledVector(left, sign * (thigh + CLEAR * proportions.height)).setY(handY);
       clearArm(person, f, side, rest, yaw);
       const clear = (outward(rest) - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / proportions.armLength;
-      const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1)));
-      const swung = _h.setFromAxisAngle(X, -a), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
-      const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted);
+      // (posed: swung forward, lifted out and twisted about its own length over that, as `ArmPosture` has them)
+      const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1))) + spread;
+      const swung = _h.setFromAxisAngle(X, -a - forward), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
+      const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted).multiply(_t.setFromAxisAngle(X, -twist));
       // (the hanging pose kept out of the trunk as it turns — the hand forward, the elbow as it swings — and then followed)
       const limb = [INDEX[`${side}UpperArm`], INDEX[`${side}LowerArm`], INDEX[`${side}Hand`]];
       f.current.setLocal(limb[0], hang.premultiply(_h.copy(f.current.rotation(INDEX[`${side}Shoulder`])).invert()));
@@ -266,6 +270,11 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   }
 }
 
+/** arm `side` posed onto `goal` (world) at once, its elbow bent the way a reach there bends it */
+export function placeArm(person: Reacher, f: Frame, side: Side, goal: Goal): void {
+  solveChain(f, `${side}Arm`, { tip: { position: goal.position, quaternion: goal.quaternion }, pole: elbowPole(f, person.proportions, side, goal.position, _pole) });
+}
+
 /** the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward toward one far out */
 function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
   const pose = f.current;
@@ -313,7 +322,7 @@ function elbowPole(f: Frame, proportions: Proportions, side: Side, hand: Readonl
 const ARM = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const;
 const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 1), ONE = new Vector3(1, 1, 1), ZERO = new Vector3();
 const _q = new Quaternion(), _p = new Quaternion(), _r = new Quaternion(), _h = new Quaternion(), _c = new Quaternion(), _g = new Quaternion();
-const IDENTITY = new Quaternion(), _frame = new Quaternion();
+const IDENTITY = new Quaternion(), _frame = new Quaternion(), _s2 = new Quaternion(), _t = new Quaternion();
 const _left = new Vector3(), _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3();

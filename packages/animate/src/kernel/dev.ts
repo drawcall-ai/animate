@@ -45,5 +45,5 @@ export class Dev {
   }
 }
 
-/** how far off the floor (m) a height asked of where a body stands may be unsaid: the floor is the plane y = 0, a height off it ignored */
+/** how far off its floor (m) a height asked of where a body stands may be unsaid: a height off it is ignored */
 export const OFF_FLOOR = 0.01;

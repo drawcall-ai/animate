@@ -1,13 +1,14 @@
 import { Box3, Quaternion, Ray, Vector3 } from 'three';
-import { held as heldThings, onBody } from '../../things/hold';
+import { grasp, held as heldThings, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
 import { leftOf, smoothstep } from '../../kernel/math';
 import type { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
-import { clearArm, reaching } from './arms';
+import { clearArm, placeArm, reaching } from './arms';
 import { INDEX } from '../../species/humanoid/bones';
+import { ARM_REACH } from './bend';
 import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
@@ -94,6 +95,33 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     held = true;
   });
   return request.outcome !== 'failed';
+}
+
+/**
+ * The hands on their grips at once, as the body starts (`grab`'s `speed: Infinity`): each arm posed onto its grip as if it had always
+ * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
+ * the arm's reach from where the body stands fails it, said in development.
+ */
+export function* takingAtOnce(person: Reacher, request: Request, takes: readonly Taking[]) {
+  if (person.updates > 0) throw new Error('grab: `speed: Infinity` takes hold at once only as a body starts (in its first update): a body already shown reaches for it');
+  const f = person.frame, reach = ARM_REACH * person.proportions.armLength;
+  for (const take of takes) {
+    const short = person.pose.position(INDEX[`${take.side}UpperArm`]).distanceTo(gripAt(person, take, f)) - reach;
+    if (short <= 0) continue;
+    f.dev?.append(f.time, { check: 'grab at once: a grip beyond the arm’s reach from where the body stands (m short)', value: short, limit: 0,
+      where: `${take.thing.object.name} ${take.side} ${take.grip}`, detail: `the arm ${person.proportions.armLength.toFixed(2)} m (species.person.armLength)` });
+    request.fail();
+  }
+  if (request.outcome === 'failed') return;
+  let placed = false;
+  yield* parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked', (f) => {
+    const frame = person.track(take.thing.object).at(f.time).current;
+    placeArm(person, f, take.side, { position: gripAt(person, take, f), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
+    person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
+    grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
+    placed = true;
+  }, () => placed)));
+  for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !onBody(person, thing)) lift(person, thing);
 }
 
 /**

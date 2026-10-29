@@ -1,6 +1,9 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { grab, reach, release, wait } from '../../src/index';
+import { Body, dog, grab, humanoid, reach, release, wait } from '../../src/index';
+import { CHEWBACCA } from '../skeletons/chewbacca';
+import { DOG } from '../../skills/animate/references/dog';
+import { run } from '../bodies';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
 import { insides, person, play, feetOf, gazeOff } from '../bodies';
@@ -234,4 +237,47 @@ for (const verb of ['grab', 'reach'] as const) it(`${verb} fails an unreachable 
     if (dev) expect(angles[0].value).toBeGreaterThan(angles[0].limit);
     expect(body.log.filter(({ check }) => check.startsWith('late reach: distance'))).toEqual([]);
   }
+});
+
+// (the trial that asked for it: a bearer who had to be seen picking both medals up, 9 s of the beat, to start it holding them)
+describe('grab at once (speed: Infinity)', () => {
+  const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
+
+  it.each(BODIES)('starts the body holding a cushion before it in both hands, as if it always had: %s', (_name, make) => {
+    const body = make(), room = roomOf(body), scale = body.species.scale;
+    // (where the arms hold it out before the chest, as far as they are long: the tall skeleton's are short for its height)
+    const arm = body.species.person?.armLength ?? 0, at = new Vector3(0, (body.species.person?.shoulderHeight ?? 0) - 0.6 * arm, 0.55 * arm);
+    const cushion = box(room, at, { size: new Vector3(0.36, 0.06, 0.24).multiplyScalar(scale), mass: 0.5, name: 'cushion' });
+    let took: boolean | null = null, first = NaN, fastest = 0, last: Vector3 | null = null;
+    play(function* () {
+      took = yield* grab(body, cushion, BOTH, { speed: Infinity });
+      yield* wait(3);
+    }, [body], 3, (time) => {
+      if (Number.isNaN(first) && body.holds(cushion)) first = time;
+      const hand = worldOf(body.bones.rightHand);
+      if (last) fastest = Math.max(fastest, hand.distanceTo(last) * 60);
+      last = hand;
+    });
+    expect(took).toBe(true);
+    expect(first).toBeCloseTo(1 / 60, 6);
+    // (the hands as still as standing holds them: no reach, no jump onto the grips)
+    expect(fastest).toBeLessThan(0.05);
+    expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.02 * scale);
+    expect(worldOf(body.bones.leftHand).distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
+    expect(body.log).toEqual([]);
+  });
+
+  it('fails, saying so, for a grip out of reach of where the body stands; throws once the body has been shown, or for a creature', () => {
+    const far = person({ dev: true }), room = roomOf(far);
+    const thing = box(room, new Vector3(0, 1, 1.5), { mass: 0.5 });
+    let took: boolean | null = null;
+    play(function* () { took = yield* grab(far, thing, BOTH, { speed: Infinity }); }, [far], 0.5);
+    expect(took).toBe(false);
+    expect(far.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: 'grab at once: a grip beyond the arm’s reach from where the body stands (m short)' })]));
+    const shown = person(), near = box(roomOf(shown), new Vector3(0, 1, 0.35), { mass: 0.5 });
+    run(shown, 0.1);
+    expect(() => play(function* () { yield* grab(shown, near, BOTH, { speed: Infinity }); }, [shown], 0.1)).toThrow('only as a body starts');
+    const pup = new Body(dog(DOG));
+    expect(() => grab(pup, near, { jaw: 'left' }, { speed: Infinity })).toThrow('a person’s');
+  });
 });

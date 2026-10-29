@@ -30,6 +30,10 @@ import { stride } from '../legs/person/stride';
 import { hanging, handStep, HOLD } from '../hands/person/arms';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
+import type { ArmPosture } from '../kernel/poise';
+
+/** an arm posed nowhere off its hang */
+const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0 });
 
 /** Humanoid balance, idle gaze and arms, and held-object fitting. */
 export class Person extends Self {
@@ -38,6 +42,8 @@ export class Person extends Self {
   readonly carrying = new Map<Object3D, Carrier>();
   readonly proportions: Proportions;
   readonly stride: Stride;
+  /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
+  readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;

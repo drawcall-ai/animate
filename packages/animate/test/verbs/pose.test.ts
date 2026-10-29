@@ -1,7 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { Body, dog, horse, lookAt, pose, reach, wait, walkTo, type Posture, type Species } from '../../src/index';
+import { Body, dog, horse, humanoid, lookAt, pose, reach, track, wait, walkTo, type ArmPosture, type Posture, type Species } from '../../src/index';
+import { CHEWBACCA } from '../skeletons/chewbacca';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { hullOf, outside, xcomOf } from '../../src/legs/support';
 import { footprint } from '../../src/legs/person/foot';
@@ -9,6 +10,7 @@ import { insides, person, play } from '../bodies';
 import { HORSE } from '../../skills/animate/references/horse';
 import { DOG } from '../../skills/animate/references/dog';
 import { droid } from '../skeletons/droid';
+import { worldOf } from '../things';
 
 /** `bone`'s turn in `posed` off its turn in `still` (in its own frame, as yaw, pitch and roll: Euler YXZ) */
 function off(posed: Body, still: Body, bone: number): Euler {
@@ -156,6 +158,7 @@ describe('pose', () => {
     const body = person();
     expect(() => pose(body, { bow: Number.NaN })).toThrow(/bow NaN/);
     expect(() => pose(body, { head: { roll: Infinity } })).toThrow(/roll Infinity/);
+    expect(() => pose(body, { arms: { left: { elbow: Number.NaN } } })).toThrow(/left elbow NaN/);
   });
 
   it('leans a creature without a carriage into its acceleration, as its inertia has it', () => {
@@ -170,6 +173,85 @@ describe('pose', () => {
     expect(most[1]).toBe(0);
     // (this droid's stepping has faults of its own, lean or none: the lean adds none)
     expect(new Set(leaning.log.map((entry) => entry.check))).toEqual(new Set(upright.log.map((entry) => entry.check)));
+  });
+});
+
+// (the trials that asked for it: arms spread in a roar, a droid's wave, rebuilt by hand as rotations of the hanging arm about the shoulder)
+describe('pose of the arms', () => {
+  const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
+  /** where the right hand ends (× the arm's length off the shoulder, in the body's frame: +X its left, +Z ahead) after `arm` held 2.5 s,
+   * and 1.5 s after it ends, and the log */
+  const posedArm = (make: () => Body, arm: ArmPosture) => {
+    const body = make(), length = body.species.person?.armLength ?? 1;
+    const hand = () => worldOf(body.bones.rightHand).sub(worldOf(body.bones.rightUpperArm)).divideScalar(length);
+    let held = new Vector3();
+    play(function* () {
+      yield* pose(body, { arms: { right: arm } }, { until: 2.5 });
+      held = hand();
+      yield* wait(1.5);
+    }, [body], 4);
+    return { held, after: hand(), log: body.log };
+  };
+  const CASES: [string, ArmPosture, Partial<Record<'x' | 'y' | 'z', number>>][] = [
+    ['held out ahead', { forward: Math.PI / 2 }, { y: 0.1, z: 1 }],
+    ['held out sideways', { out: Math.PI / 2 }, { x: -1, y: 0.1 }],
+    ['raised overhead', { forward: 2.8 }, { y: 0.95 }],
+    ['waving: out, bent, the forearm turned up', { out: 1.3, elbow: 1.6, twist: 1.4 }, { x: -0.5, y: 0.4 }],
+    ['a hand on the heart: forward, bent, turned in', { forward: 0.5, elbow: 2.2, twist: -0.9 }, { x: 0.2, y: -0.1 }],
+  ];
+  describe.each(BODIES)('%s', (_name, make) => {
+    it.each(CASES)('%s, and back to its hang once the pose ends', (_case, arm, at) => {
+      const { held, after, log } = posedArm(make, arm);
+      for (const [axis, value] of Object.entries(at)) expect(held[axis as 'x' | 'y' | 'z']).toBeCloseTo(value, 0);
+      // (hanging again: straight down from the shoulder, the hand at the thigh)
+      expect(after.y).toBeLessThan(-0.9);
+      expect(log).toEqual([]);
+    });
+  });
+
+  it('gives way to a hand verb, the other arm keeping its pose, and takes the arm back once the hand is free', () => {
+    const body = person({ dev: true }), at = new Vector3(-0.25, 1.1, 0.45);
+    let reached = false, gap = Infinity, other = 0;
+    play(function* () {
+      yield* parallel('race', pose(body, { arms: { left: { out: 1.2 }, right: { forward: 1.5 } } }), function* () {
+        yield* wait(1);
+        reached = yield* reach(body, { right: at }, { until: 2 });
+        gap = worldOf(body.bones.rightHand).distanceTo(at);
+        other = worldOf(body.bones.leftHand).y;
+        yield* wait(1.5);
+      });
+    }, [body], 6);
+    expect(reached).toBe(true);
+    expect(gap).toBeLessThan(0.02);
+    // (the left arm still spread to shoulder height, near enough, as the right reaches)
+    expect(other).toBeGreaterThan(1.1);
+    expect(body.log).toEqual([]);
+  });
+
+  it('gives way to a tracked hand at once, and is no creature\'s', () => {
+    const body = person({ dev: true }), at = new Vector3(-0.2, 1.2, 0.35);
+    play(function* () {
+      yield* parallel('race', pose(body, { arms: { right: { out: 1.5 } } }), track(body, { right: at }), wait(2));
+    }, [body], 2);
+    expect(worldOf(body.bones.rightHand).distanceTo(at)).toBeLessThan(0.02);
+    expect(body.log).toEqual([]);
+    expect(() => pose(new Body(horse(HORSE)), { arms: { left: { out: 1 } } })).toThrow("arms are a person's");
+  });
+});
+
+describe('pose pace', () => {
+  it('notes a pose that ends well short of an angle for its part\'s pace, and not one held long enough', () => {
+    const noted = (posture: Posture, seconds: number, make: () => Body = () => person({ dev: { notes: true } })) => {
+      const body = make();
+      play(function* () { yield* pose(body, posture, { until: seconds }); }, [body], seconds + 0.5);
+      return body.notes.filter((note) => note.check.startsWith('pose ended short'));
+    };
+    // (a person's bow at 1.2 rad/s: 0.6 rad comes about half its way in 0.4 s; a creature's lean, rocked 0.3 s each way, ~0.065 of 0.12)
+    expect(noted({ bow: 0.6 }, 0.4)).toEqual([expect.objectContaining({ where: 'bow', limit: 2 / 3 })]);
+    expect(noted({ bow: 0.6 }, 1.5)).toEqual([]);
+    expect(noted({ head: { pitch: 0.3 } }, 0.3)).toEqual([]);
+    expect(noted({ arms: { right: { out: 2 } } }, 0.3)).toEqual([expect.objectContaining({ where: 'right arm out' })]);
+    expect(noted({ lean: 0.12 }, 0.3, () => new Body(droid(), { dev: { notes: true } }))).toEqual([expect.objectContaining({ where: 'lean' })]);
   });
 });
 

@@ -266,6 +266,18 @@ export class Self implements Holder {
     return carrier;
   }
 
+  /**
+   * `bones` as its pose being written has them, written into its earlier poses too: as if they had always stood so, so nothing reads
+   * the change as motion — only as it starts, before its first update ends (none of its poses has been shown)
+   */
+  startAs(bones: readonly number[]): void {
+    if (this.updates > 0) throw new Error('a body already shown cannot start otherwise');
+    const current = this.frame.current;
+    for (const pose of this.poses) {
+      if (pose === current) continue;
+      for (const bone of bones) pose.setLocal(bone, current.local(bone));
+    }
+  }
 
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
   file(verb: string, site: string, staging: Staging, aimer = false): Request {
@@ -412,6 +424,7 @@ export class Self implements Holder {
     this.run('head', f);
     this.headOffset.write(f);
     this.run('trunk', f);
+    for (const hand of Object.keys(this.hands)) this.run(`arm.${hand}`, f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
       if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);

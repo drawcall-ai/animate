@@ -18,10 +18,27 @@ export interface Posture {
   /** the head turned on its neck over where its eyes look (rad): `pitch` + chin down (a nod), `yaw` + to its left, `roll` + its left
    * side up (tipped toward its right shoulder) */
   head?: { pitch?: number; yaw?: number; roll?: number };
+  /** a person's arms posed over their hang and swing, each its own (`ArmPosture`) */
+  arms?: { left?: ArmPosture; right?: ArmPosture };
+}
+
+/**
+ * An arm posed over its hang and swing (rad, each the same way for either arm), a person's: a hand verb (`reach`, `grab`, `carry`,
+ * `track`) or a thing in the hand takes the arm over, and it comes back to the pose once the hand is free. Raised, the arm's upper part
+ * turns from hanging: `forward` + ahead and up (flexion: π/2 holds it out level ahead), `out` + away from the side and up (abduction: π/2
+ * holds it out level sideways), then `twist` + about its own length so a bent forearm turns out and up (external rotation; − across the
+ * body); `elbow` + bends the forearm (0 straight … about 2.5 fully bent), `shrug` + lifts the shoulder (≲ 0.5).
+ */
+export interface ArmPosture {
+  shrug?: number;
+  forward?: number;
+  out?: number;
+  twist?: number;
+  elbow?: number;
 }
 
 /** A `Posture`'s trunk, each field given. */
-export type TrunkPosture = Required<Omit<Posture, 'head'>>;
+export type TrunkPosture = Required<Omit<Posture, 'head' | 'arms'>>;
 
 /** What a body is asked to do with its stance this sub-step (see `Poise`), each field as it combines with the others asked. */
 export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'twist' | 'twistRate' | 'shift' | 'steady'>> & { posture?: TrunkPosture };
