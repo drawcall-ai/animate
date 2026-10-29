@@ -1,4 +1,4 @@
-import { expect } from 'vitest';
+import { expect, it } from 'vitest';
 import { bone, type SkeletonBone } from '@drawcall/rig';
 import { Group, type Object3D } from 'three';
 import { Actor } from './actor';
@@ -7,7 +7,6 @@ import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { SCENARIOS } from '../src/scenarios';
 import { SOLDIER } from '../src/skeletons';
-import { cases } from '../../packages/animate/test/open';
 
 // Wardrobe skins these same named bones; meshes do not participate in the solver. Keep the rig's bone hierarchy and the live
 // viewer's restore/blend path here, rather than testing only the default bare body or advancing a simulation without rendering.
@@ -22,13 +21,6 @@ function dress(skeleton: readonly SkeletonBone[]): Object3D {
   }
   return model;
 }
-
-const it = cases([
-  // (open: lowering the helm onto his head as he bows it into it (~22.1 s), the helm in his hands lags the head it is carried onto: its
-  // crown 1.3–2.9 cm into his head at life seeds 0–2 (seed 0 now just within 1.5 cm), its rim 4.9 cm into his left forearm at seed 3 as
-  // the hands go under the chin — the body keeps no clearance between its own head and arms and what its hands carry onto it)
-  ['knight-arming finishes cleanly in the SOLDIER viewer', [1, 2, 3]],
-]);
 
 for (const id of ['stable-morning', 'knight-arming']) {
   it(`${id} finishes cleanly in the SOLDIER viewer`, () => {

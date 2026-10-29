@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Box3, Quaternion, Ray, Vector3 } from 'three';
 import { held as heldThings, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
@@ -11,8 +11,9 @@ import { INDEX } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
-import { BODY_RADIUS } from './clearance';
+import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { gripAt, reachFor, type Taking } from './reach';
+import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
@@ -31,6 +32,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
     grips: takes.map((take) => ({ side: take.side, at: gripAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
+    things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.track(thing.object).current })),
   }, step);
   if (plan === 'nowhere') {
     request.fail();
@@ -53,7 +55,9 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(person, f.prev, ahead);
   };
   const raisedHand = (f: Frame, take: Taking) => {
-    const at = f.prev.position(INDEX[`${take.side}UpperArm`]).clone().lerp(gripAt(person, take, f, _grip), 0.5);
+    const shoulder = f.prev.position(INDEX[`${take.side}UpperArm`]);
+    const at = shoulder.clone().lerp(gripAt(person, take, f, _grip), 0.5);
+    shortOf(person, take, shoulder, at);
     const left = leftOf(person.locomotion.facing), sign = take.side === 'left' ? 1 : -1;
     const out = at.clone().sub(f.prev.position(0)).dot(left) * sign;
     // Prepare on the hand's own side while turning. Paired hands may come inward below the torso's rounded lower boundary.
@@ -92,4 +96,24 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   return request.outcome !== 'failed';
 }
 
-const _grip = new Vector3(), _middle = new Vector3();
+/**
+ * `at` (world), on the way from `shoulder` to what `take` takes, drawn back along that way so far as the hand held out along it (its
+ * length, half-thickness and reserve) is short of that thing's envelope — the hands rising toward it as the body comes up do not go into
+ * it — in place
+ */
+function shortOf(person: Reacher, take: Taking, shoulder: Vector3, at: Vector3): void {
+  const frame = person.track(take.thing.object).current, back = _back.copy(frame.quaternion).invert();
+  const box = _box.copy(take.thing.bounds).expandByScalar(ARM.hand * person.proportions.height + LOAD_RESERVE * person.scale);
+  if (box.isEmpty()) return;
+  const from = _from.copy(shoulder).sub(frame.position).applyQuaternion(back), to = _to.copy(at).sub(frame.position).applyQuaternion(back);
+  if (box.containsPoint(from)) return;
+  const way = _way.subVectors(to, from), length = way.length(), hand = ARM.length * person.proportions.height;
+  const hit = _ray.set(from, way.normalize()).intersectBox(box, _hit);
+  if (!hit) return;
+  const most = Math.max(0, from.distanceTo(hit) - hand);
+  if (length <= most) return;
+  at.copy(from).addScaledVector(way, most).applyQuaternion(frame.quaternion).add(frame.position);
+}
+
+const _grip = new Vector3(), _middle = new Vector3(), _back = new Quaternion(), _box = new Box3(), _from = new Vector3(), _to = new Vector3();
+const _way = new Vector3(), _hit = new Vector3(), _ray = new Ray();

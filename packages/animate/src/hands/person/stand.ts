@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { type Box3, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
@@ -6,6 +6,7 @@ import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '.
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
 import { ARM_REACH, PROTRACTION } from './bend';
+import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { floorUnder } from '../../legs/person/legged';
@@ -36,8 +37,11 @@ const LOWERED_BELOW = 0.7;
 
 /** What a person stands to: grips to take (by the hand that takes each, where each is now, the heaviest load's mass), or a placing point. */
 type Stand =
-  | { grips: readonly { side: Side; at: Vector3 }[]; mass: number }
+  | { grips: readonly { side: Side; at: Vector3 }[]; mass: number; things?: readonly Placed[] }
   | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[] };
+
+/** a thing's envelope (its own frame) where it is */
+interface Placed { bounds: Box3; position: Vector3; quaternion: Quaternion }
 
 /** A walk to where a person stands, and when it has arrived there. */
 export type WalkUp = Exclude<ReturnType<typeof footing>, string>;
@@ -107,7 +111,11 @@ export function footing(person: Reacher, to: Stand, step = true) {
   // whole reach, a box under the hips was 1.1 cm out of it as the walk arrived a centimetre short)
   const bowed = stoop(proportions, Math.max(0, standing - height)), spare = TURNED * reach;
   const both = !point && grips.length === 2 ? Math.sqrt(Math.max(0, spare ** 2 - (height - standing + bowed.drop) ** 2)) + bowed.forward : Infinity;
-  let ahead = Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both);
+  // (what the hands take stands clear of the trunk: the body no nearer it than its envelope's back reaches toward the body, but for what
+  // lies below the hips, which the trunk bows over)
+  const clearOf = point ? 0 : backOf(to.things ?? [], middle, forwardOf(face), floor + proportions.hipHeight);
+  const trunk = clearOf > -Infinity ? clearOf + BODY_RADIUS * proportions.height + LOAD_RESERVE * proportions.scale : 0;
+  let ahead = Math.max(trunk, Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both));
   const nowhere = (check: string, value: number, limit = reach) => {
     f0.dev?.append(f0.time, { check, value, limit, where: `${grips.length} grips` });
     return 'nowhere' as const;
@@ -237,7 +245,18 @@ function facingFor(person: Reacher, grips: { side?: Side; at: Vector3 }[]): numb
   return headingOf(at.x - body.x, at.z - body.z);
 }
 
+/** how far back toward the body (against `forward`, from `middle`) the parts of `things` above `above` (m, world height) reach: -Infinity for none */
+function backOf(things: readonly Placed[], middle: Vector3, forward: Vector3, above: number): number {
+  let back = -Infinity;
+  for (const { bounds, position, quaternion } of things) for (let k = 0; k < 8; k++) {
+    const corner = _corner.set(k & 1 ? bounds.max.x : bounds.min.x, k & 2 ? bounds.max.y : bounds.min.y, k & 4 ? bounds.max.z : bounds.min.z)
+      .applyQuaternion(quaternion).add(position);
+    if (corner.y > above) back = Math.max(back, -_corner.sub(middle).setY(0).dot(forward));
+  }
+  return back;
+}
+
 /** the distance between `a` and `b` on the floor's plane */
 export const flat = (a: Readonly<Vector3>, b: Readonly<Vector3>) => Math.hypot(a.x - b.x, a.z - b.z);
 
-const _com = new Vector3();
+const _com = new Vector3(), _corner = new Vector3();

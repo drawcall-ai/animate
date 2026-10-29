@@ -12,7 +12,7 @@ import type { Proportions } from '../../species/humanoid/proportions';
 // the wrist along the forearm, Drillis & Contini).
 
 const TRUNK = [['hips', 'chest', 0.06], ['chest', 'neck', 0.045]] as const;
-const ARM = { upper: 0.026, fore: 0.022, hand: 0.013, length: 0.08 };
+export const ARM = { upper: 0.026, fore: 0.022, hand: 0.013, length: 0.08 };
 /** Tuned: the air an arm keeps from the trunk (× height), over the joints' lag behind their solve */
 const AIR = 0.005;
 /** how far an arm may be seen in the trunk (m) */
