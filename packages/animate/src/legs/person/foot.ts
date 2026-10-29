@@ -8,6 +8,11 @@ const FOOT_HALF_WIDTH = 0.04;
 
 /** the heel (on the sole) in the foot bone's frame */
 export const heelOf = (proportions: Proportions, out = new Vector3()) => out.copy(proportions.sole.heel);
+/** the heel's two sides (on the sole) in the foot bone's frame: a sole supports as wide as its heel, not its heel's middle alone */
+export const heelSides = (proportions: Proportions): Vector3[] =>
+  [-1, 1].map((side) => heelOf(proportions).setX(proportions.sole.heel.x + side * HEEL * proportions.height));
+/** Recalled (adult anthropometry: heel breadth ~6–7 cm at 1.75 m): half a heel's width (× height) */
+const HEEL = 0.019;
 /** the ball of the foot (the toes bone's origin) in the foot bone's frame */
 export const ballOf = (proportions: Proportions, side: Side, out = new Vector3()) => out.copy(proportions.offsets[`${side}Toes`]);
 /** a foot heading `yaw`, pitched by `pitch` (+ toes up, − heel up), as a world rotation */

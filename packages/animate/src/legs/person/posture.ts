@@ -36,6 +36,12 @@ export const TIPTOE = 0.07;
 const HINGE = 0.6, ARCHED = 0.08;
 // Tuned quiet shift: unload one knee while keeping both soles planted.
 const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
+/**
+ * How quickly (1/s, critically damped: 90% in ~0.4 s) the weight goes off a foot before it lifts, standing: recalled (Jian et al. 1993,
+ * Gait Posture 1:9; Halliday et al. 1998): gait initiation's anticipatory postural adjustment moves the body toward the stance limb over
+ * ~0.3–0.5 s before the swing foot leaves the floor, a few cm. The foot lifts once the weight is no longer on it (cues.ts `bears`).
+ */
+const UNLOAD = 10;
 /** how far the knees let the pelvis down at most (m): a squat, the hip joints over the ankles, the knees folded as far as the default
  * body's let its pelvis down 0.38 of its height (tuned; 154°, a degree short of their range) — `FOLD`, the cosine between thigh and shin */
 export const squatOf = (proportions: Proportions) => proportions.legLength - Math.sqrt(proportions.thigh ** 2 + proportions.shin ** 2 - 2 * proportions.thigh * proportions.shin * FOLD);
@@ -74,6 +80,9 @@ export interface Upright {
   offset: Vector3; yaw: number; walk: number; run: number; moving: boolean; stance: Stance;
   /** where the feet stood or, swinging, were to land as the sub-step began */
   feet: readonly { readonly anchor: Vector3 }[];
+  /** the weight going off a foot, standing, for it to lift and as it swings: where the centre of mass goes (`Steps.onto`), whether the
+   * foot has lifted; none */
+  unloading: { onto: Vector3; lifted: boolean } | null;
   pelvis: Vector3; pelvisRotation: Quaternion;
   /** neither arm free to swing: both hands hold something */
   held: boolean;
@@ -92,6 +101,8 @@ export class Posture {
   /** a runner's leg compression through stance (0 … 1) */
   private comp = 0;
   private readonly weight = new Vector3();
+  /** the pelvis shifted off a foot to lift it, standing (m, on the floor) */
+  readonly unloaded: Shift = { at: new Vector3(), speed: new Vector3() };
   private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
   /** how far (rad) the pelvis is rolled onto a foot as the weight shifts onto it, standing (its share of the pelvis's roll) */
@@ -138,9 +149,17 @@ export class Posture {
       weight.subVectors(upright.feet[onto === 'left' ? 0 : 1].anchor, weight).multiplyScalar(SHIFT.share);
     }
     this.weight.lerp(weight, 1 - Math.exp(-dt));
-    pelvis.add(this.quiet.add(this.weight));
+    // (and off a foot for it to lift, standing — an anticipatory shift, quicker — onto the others: the centre of mass carried toward where
+    // it goes, from wherever it stands — a reach's lean, a stance aside — not by a set share, till the foot lifts; then held where it is
+    // through the swing: recalled, gait initiation moves it only a few cm toward the stance foot; carried on, it swung the body about the
+    // stance foot, and the feet landed by a body swung aside, re-stepping)
+    const unloading = upright.unloading, goal = _g.copy(this.unloaded.at);
+    if (!unloading) goal.set(0, 0, 0);
+    else if (!unloading.lifted) goal.add(_s.subVectors(unloading.onto, f.prev.com(_s)).setY(0));
+    followShift(this.unloaded, goal, UNLOAD, dt);
+    pelvis.add(this.quiet.add(this.weight)).add(this.unloaded.at);
     // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
-    const shifted = this.weight.dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
+    const shifted = _s.addVectors(this.weight, this.unloaded.at).dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
     this.shiftRoll = SHIFT.roll * shifted;
     roll += this.shiftRoll;
     const onward = smoothstep(0, 1, Math.max(0, upright.velocity.dot(fwd)));
@@ -246,4 +265,13 @@ function loadLean(pose: ReadonlyPose, proportions: Proportions, forward: Readonl
   // capped at 10.3 degrees; the study is not an 8 kg dose-response law.
   return clamp(Math.atan2(moment, mass * (proportions.eyeHeight - proportions.hipHeight) * 0.8), -0.18, 0.18);
 }
-const UP = new Vector3(0, 1, 0), _twist = new Quaternion(), _f = new Vector3(), _l = new Vector3(), _v = new Vector3(), _o = new Vector3();
+const UP = new Vector3(0, 1, 0), _twist = new Quaternion(), _f = new Vector3(), _l = new Vector3(), _v = new Vector3(), _o = new Vector3(), _s = new Vector3(), _g = new Vector3();
+
+/** a shift of the pelvis (m, on the floor) followed to `goal`, critically damped at `rate` (1/s): its speed carried on from one to the next */
+function followShift(weight: Shift, goal: Vector3, rate: number, dt: number) {
+  weight.speed.addScaledVector(goal.sub(weight.at).multiplyScalar(rate * rate).addScaledVector(weight.speed, -2 * rate), dt);
+  weight.at.addScaledVector(weight.speed, dt).setY(0);
+}
+
+/** a shift of the pelvis and how fast it goes (m, m/s; on the floor) */
+interface Shift { at: Vector3; speed: Vector3 }

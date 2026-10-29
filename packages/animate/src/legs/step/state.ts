@@ -3,7 +3,7 @@ import { Quaternion, Vector3 } from 'three';
 import { type Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { lerp, minimumJerk } from '../../kernel/math';
-import { type Spot } from '../support';
+import { hullOf, past, type Spot } from '../support';
 import { type Gait } from '../../species/gait';
 import { foothold, type Floor } from '../floor';
 import { Ground } from './ground';
@@ -17,6 +17,9 @@ export interface Steering {
   /** where the hips are over the floor from the root, if not over it (m): swaying, sitting back or leaning over the toes from it; by
    * default the hips are the root */
   hips?: Vector3;
+  /** how far the pelvis is shifted over the floor onto a foot, the weight going off another to lift it (m, past `hips`): placed so, the
+   * legs reaching from it, but landing as from where it would be without it — a moment's */
+  unloaded?: Vector3;
   /** where the centre of mass is over the floor from the root, if the body keeps it there (m; a walker's: a little ahead of its feet's
    * middle, the root); by default over the root — the hips swaying about it, not the mass — the feet a crouch's `ahead` of the hips
    * as they sit back */
@@ -181,6 +184,9 @@ export const SHUFFLING = 0.6;
 const BEND = 0.15;
 /** Tuned: the feet let the pelvis down at most `LOWEST` (m: a foot past reach leaves the leg straight instead) */
 export const LOWEST = 0.12;
+/** Tuned: the weight going off a foot, the centre of mass goes this far (m, default body) inside the other feet's prints */
+const INSIDE = 0.01;
+const _away = new Vector3();
 /** Tuned: past `SETTLE` of a swing even a hard stop no longer moves its landing */
 export const SETTLE = 0.8;
 /** Tuned: a walker's landing moves no more past `AIMED` of its swing */
@@ -229,6 +235,8 @@ export const SETTLING = 0.1;
 
 export interface Swing {
   capture: boolean; u: number; age: number; rest: number; T: number;
+  /** it lifted once the weight was off it: the body stands on the others through it */
+  unloaded: boolean;
   /** the floor's height it stood on, and how far its sole's lowest point hangs below its ankle as it has been posed (m, eased) */
   level: number; drop: number;
   x: Vector3; v: Vector3; a: Vector3; turn: { x: number; v: number; a: number };
@@ -246,6 +254,24 @@ export class Steps {
   /** the pelvis' facing (rad), how far it walks and runs (0 … 1), the gait's phase (rad), the stance's and cycle's durations (s); still
    * and squared up; off the floor (a leap's flight) */
   yaw: number; moving = 0; run = 0; phase = 0; Ts = 1; cycle = 2; settled = true; airborne = false;
+  /** the leg whose foot the weight is going off (index): one waiting to lift till the weight is on the others, or one swinging from a body
+   * slow enough to stand on the others meanwhile; none */
+  unloading: number | null = null;
+  /** how far the pelvis is shifted off a foot to lift it, a moment (m, on the floor: `Steering.unloaded`) */
+  readonly unloaded = new Vector3();
+  /**
+   * where the centre of mass at `com` goes as the weight goes off `unloading`: just inside the other planted feet's prints (`INSIDE` m), on
+   * the floor — no further than it must to stand on them; none: not going
+   */
+  onto(com: Readonly<Vector3>): Vector3 | null {
+    const off = this.unloading;
+    if (off === null) return null;
+    const points = this.legs.filter((leg) => leg.i !== off && !leg.swing).flatMap((leg) => this.feet.print(leg.i, leg.anchor, leg.yaw));
+    if (!points.length) return null;
+    const at = this.ontoScratch.set(com.x, 0, com.z), beyond = past(hullOf(points), at, _away) + INSIDE * this.st.scale;
+    return beyond > 0 ? at.addScaledVector(_away, -beyond) : at;
+  }
+  private readonly ontoScratch = new Vector3();
   /** the pelvis' height its planted feet alone hold it at (m): its swinging ones not holding it down — what a running body's ride is let down from */
   held = 0;
   /** how far down it is crouched (0 … 1): the root's `crouch`, eased in and out no faster than legs bend and straighten */

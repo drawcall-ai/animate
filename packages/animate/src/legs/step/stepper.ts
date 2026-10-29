@@ -116,7 +116,8 @@ export class Stepper extends Steps {
     [this.crouches[0], this.crouches[1], this.crouch] = [this.crouches[1], k, k];
     const sitting = r.com ? 0 : st.crouch.ahead * s * k, tiptoe = Math.max(0, r.tiptoe ?? 0);
     const hips = this.hips.copy(r.hips ?? ZERO).setY(0);
-    this.pelvis.copy(r.position).add(hips);
+    this.unloaded.copy(r.unloaded ?? ZERO);
+    this.pelvis.copy(r.position).add(hips).add(this.unloaded);
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)
     leap(jump, this.asked, smoothstep(st.run[0], st.run[1], v), s, dt);
     this.asked = undefined;

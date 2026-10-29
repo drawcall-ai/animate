@@ -210,7 +210,12 @@ function stepped(self: Legged, from: Readonly<Vector3>, to: Readonly<Vector3>): 
   return most - least >= STAIRS.rise * s;
 }
 
-/** where a walk takes the body: a species' legs carry its root there, a person's balance its centre of mass */
-const placeOf = (self: Legged, f: Frame) => (self.species.legs ? _com.copy(f.prev.position(0)) : f.prev.com(_com)).setY(0);
+/** where a walk takes the body: a species' legs carry its root there, a person's balance its centre of mass — as it stands without the
+ * moment's shift off a foot it lifts (`Steps.unloaded`): edged back for it, the body stepped where it would not */
+const placeOf = (self: Legged, f: Frame) => {
+  if (self.species.legs) return _com.copy(f.prev.position(0)).setY(0);
+  const com = f.prev.com(_com).setY(0);
+  return self.stepper ? com.sub(self.stepper.unloaded) : com;
+};
 const _com = new Vector3(), _way = new Vector3();
 const _v = new Vector3();

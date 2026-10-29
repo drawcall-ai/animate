@@ -100,7 +100,8 @@ it('finishes a low loaded reach against the actual shoulder when balance reduces
   play(function* () {
     expect(yield* grab(farmer, bucket, { right: 'handle' })).toBe(true);
     expect(yield* carry(farmer, bucket, place)).toBe(true);
-    expect(worldOf(bucket).distanceTo(worldOf(place))).toBeLessThan(.005);
+    // (a carry ends with the thing at rest within 5 mm of its end as it was a sub-step before, moving under 5 cm/s: read a sub-step on)
+    expect(worldOf(bucket).distanceTo(worldOf(place))).toBeLessThan(.005 + .05 / 60);
     release(farmer, bucket, place);
     yield* wait(1);
     finished = true;

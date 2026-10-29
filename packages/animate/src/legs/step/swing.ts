@@ -203,7 +203,7 @@ export function swingOn(steps: Steps, now: Now, leg: Leg, w: Swing) {
 }
 
 /** A foot lifted: its swing set off from where it is, moving as it does, toward its landing. */
-export function liftLeg(steps: Steps, now: Now, leg: Leg, capture: boolean) {
+export function liftLeg(steps: Steps, now: Now, leg: Leg, { capture, unloaded }: Pick<Swing, 'capture' | 'unloaded'>) {
   const { st, feet } = steps, s = st.scale, { f, dt, airborne, air, Tsw, run, crouch: k } = now;
   const { foot: bone, toes: toesBone } = feet.legs[leg.i];
   const x = f.prev.position(bone).clone(), velocity = x.clone().sub(f.prev2.position(bone)).divideScalar(dt);
@@ -212,7 +212,7 @@ export function liftLeg(steps: Steps, now: Now, leg: Leg, capture: boolean) {
   steps.owed[leg.i] = false;
   const turn = { x: leg.yaw, v: wrapAngle(yawOf(f.prev.rotation(bone)) - yawOf(f.prev2.rotation(bone))) / dt, a: 0 };
   const lift = (airborne ? st.lift.jump : lerp(st.lift.walk, st.lift.run, run) * (1 - st.crouch.lift * k)) * s;
-  leg.swing = { capture, u: dt / T, age: dt, rest: T, T, level: leg.anchor.y - feet.ankleHeight, drop: feet.ankleHeight, x, v: velocity, a: new Vector3(), turn, fromPitch: leg.pitch, toes, strike: 0, lift, run, rel: null, lowering: NaN, onto: NaN };
+  leg.swing = { capture, unloaded, u: dt / T, age: dt, rest: T, T, level: leg.anchor.y - feet.ankleHeight, drop: feet.ankleHeight, x, v: velocity, a: new Vector3(), turn, fromPitch: leg.pitch, toes, strike: 0, lift, run, rel: null, lowering: NaN, onto: NaN };
   [leg.anchor, leg.yaw] = landing(steps, now, leg, T - dt);
   leg.swing.onto = leg.anchor.y - feet.ankleHeight;
   settle(steps, now, leg, leg.swing);

@@ -3,6 +3,7 @@ import { expect, it } from 'vitest';
 import { Body, carry, grab, humanoid, lookAt, reach, walkTo } from '../../src/index';
 import { INDEX, SIDES, type Side } from '../../src/species/humanoid/bones';
 import { CHEWBACCA } from '../skeletons/chewbacca';
+import { TROOPER } from '../skeletons/trooper';
 import { Quiet } from '../../src/legs/person/quiet';
 import { insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
@@ -68,6 +69,15 @@ it('keeps a shifted stance in reach: an idle step lands on a bent knee, standing
     });
   });
   expect(straightest).toBeGreaterThan(0.05);
+  expect(body.log).toEqual([]);
+});
+
+it.each([0, 1, 2])('keeps its loaded foot down through its weight shifts, standing 40 s on its feet under its hips (life seed %i)', (seed) => {
+  // (the trooper's feet stand right under its hips: shifted onto one, the hips are over it; lifted, the body stood on the other alone)
+  const body = new Body(humanoid(TROOPER), { dev: true, life: { seed } }), h = insides(body);
+  let lifted = 0;
+  run(body, 40, () => { lifted += Number(h.stepper?.legs.some((leg) => leg.swing) ?? false); });
+  expect(lifted).toBe(0);
   expect(body.log).toEqual([]);
 });
 

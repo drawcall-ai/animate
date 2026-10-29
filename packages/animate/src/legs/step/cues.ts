@@ -80,15 +80,23 @@ export function inTurn(steps: Steps, leg: Leg): boolean {
 
 /** The feet that are due lifted, the furthest from home first. */
 export function liftFeet(steps: Steps, now: Now, cues: Cues) {
-  for (const leg of furthestOf(steps, now, now.lead)) {
+  // (a foot that waited for the weight to go off it — `ready` keeps `unloading` for it — lifts unloaded)
+  const was = steps.unloading;
+  steps.unloading = null;
+  // (the one the weight goes off first, so another due does not turn the shift back while it goes)
+  const order = furthestOf(steps, now, now.lead).sort((a, b) => Number(b.i === was) - Number(a.i === was));
+  for (const leg of order) {
     const other = steps.legs[steps.pair[leg.i]];
-    if (ready(steps, now, cues, leg, other)) liftLeg(steps, now, leg, leg === cues.catcher);
+    if (ready(steps, now, cues, leg, other, was === leg.i)) liftLeg(steps, now, leg, { capture: leg === cues.catcher, unloaded: was === leg.i });
   }
+  // (and the body stands on the others through its swing, slow: the weight stays off it till it lands)
+  const unloaded = steps.legs.find((leg) => leg.swing?.unloaded);
+  if (steps.unloading === null && unloaded && slow(steps, now)) steps.unloading = unloaded.i;
 }
 
-/** whether `leg` lifts now, `other` the leg across from it */
-function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
-  const { legs } = steps, { r, dt, airborne, C, Ts } = now;
+/** whether `leg` lifts now, `other` the leg across from it (the weight already going off it: `unloading`) */
+function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg, unloading: boolean): boolean {
+  const { legs } = steps, { r, dt, airborne, C } = now;
   const urgent = isUrgent(steps, now, cues, leg, other);
   if (airborne && !urgent) return false;
   // (a gait's body never leaves fewer than `STANDING` feet on the floor — nor than its gait has down as steps one lifts: a trot quicker
@@ -105,7 +113,19 @@ function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolea
   if (leg.swing || (!airborne && r.forecast && leg.landed)) return false;
   // (nor just after one its gait sets apart from it, out of reach or not: the feet leave the floor one by one, `TOGETHER` apart)
   if (steps.clocked && !airborne && legs.some((o) => o !== leg && o.lifted < TOGETHER * C && !together(steps, leg, o))) return false;
-  if (urgent) return true;
+  const due = urgent || lifts(steps, now, cues, leg, other);
+  // (nor, slow, one the weight is on: it goes onto the others first — an anticipatory shift — then the foot lifts, the shift once begun
+  // carried through; a catch steps the foot furthest from it, at once)
+  if (due && leg !== cues.catcher && (unloading || slow(steps, now)) && bears(steps, now, leg)) {
+    steps.unloading ??= leg.i;
+    return false;
+  }
+  return due;
+}
+
+/** whether a foot that need not step at once lifts now: it wants to, bearing weight a while since it landed, in its turn after the other */
+function lifts(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boolean {
+  const { r, C, Ts } = now;
   // (nor, unless it must, a walker's foot just put down: it bears weight before it is wanted again — one landed ahead of its hip on the
   // tread below stepped again the next sub-step, the pelvis bouncing up 14 cm)
   if (leg.landed || (r.forecast && leg.planted < SETTLING * C) || !wants(steps, now, cues, leg)) return false;
@@ -129,6 +149,29 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   if (leg.landed) return false;
   if (leg === cues.catcher) return true;
   return strayed(st, feet, leg, _v.subVectors(hipOf(steps, now, leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;
+}
+
+/**
+ * whether the weight is on `leg`: its extrapolated centre of mass `BORNE` (m) nearer that foot's print than the other planted feet's —
+ * lifted, the body would stand on them with its weight beside them
+ */
+function bears(steps: Steps, now: Now, leg: Leg): boolean {
+  const { st, feet, legs } = steps;
+  if (st.capture === undefined) return false;
+  const others = legs.filter((o) => o !== leg && !o.swing);
+  if (!others.length) return true;
+  const centre = now.r.xcom ? _centre.copy(now.r.xcom).setY(0) : xcomAhead(steps, now, 0, _centre);
+  const off = (on: Leg[]) => outside(hullOf(on.flatMap((o) => feet.print(o.i, o.anchor, o.yaw))), centre);
+  return off([leg]) + BORNE * st.scale < off(others);
+}
+
+/**
+ * whether a walker — a foreseen root's — stands, its root slower than `UNLOADED` (m/s): a foot lifts only once the weight is off it (an
+ * anticipatory shift, as gait initiation's — squaring up, turning on the spot, stepping aside); going, its momentum carries it over to each
+ * landing; a followed root's feet keep up with it as it goes
+ */
+function slow(steps: Steps, now: Now): boolean {
+  return !now.airborne && !!now.r.forecast && steps.st.capture !== undefined && now.v < UNLOADED * steps.st.scale;
 }
 
 /** whether a foot that would step lets `other`, standing, step first: the two ways of stepping part here */
@@ -259,6 +302,13 @@ const BLOCKED = 0.05;
 const SIDE = 0.5;
 /** Tuned: still, the feet step only to even out feet `STAGGERED` (m) apart fore and aft */
 const STAGGERED = 0.08;
+/** Tuned (m, default body): a foot bears the weight with the extrapolated centre of mass this much nearer it than the other feet (the dev
+ * check's `BORNE`, `checkSupport`) */
+const BORNE = 0.05;
+/** Tuned: a root slower than `UNLOADED` (m/s, × scale) stands: a foot lifts only once the weight is off it (a little quicker than the
+ * dev check's still body, `checkSupport`, whose centre of mass lags its root setting off; quicker, walk starts held back slipped a step on
+ * stairs) */
+const UNLOADED = 0.15;
 /** Tuned: a gait's footfalls shift toward another gait's at most this share of a cycle a cycle: a change of gait over a stride or two */
 const SHIFT = 0.5;
 /** Tuned: a root rising (getting up from a landing) asks `RISING` s sooner for a foot out of reach: it steps before its leg goes straight */
