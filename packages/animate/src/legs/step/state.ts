@@ -194,9 +194,14 @@ export const PASSING = 0.4;
  * `STEP.medial`; a leg with its own `stray`, that far either way from where it stands under its hip
  */
 export function strayed(st: Stepping, feet: Feet, leg: Leg, inward: number): boolean {
+  return strayPast(st, feet, leg, inward) > 0;
+}
+
+/** how far (m) a planted foot `inward` from its hip is past straying (≤ 0: within) */
+export function strayPast(st: Stepping, feet: Feet, leg: Leg, inward: number): number {
   const stray = feet.legs[leg.i].stray;
-  if (stray === undefined) return inward > STEP.medial * st.scale;
-  return Math.abs(inward - ((feet.legs[leg.i].hip ?? feet.hip) - st.width.stand)) > stray;
+  if (stray === undefined) return inward - STEP.medial * st.scale;
+  return Math.abs(inward - ((feet.legs[leg.i].hip ?? feet.hip) - st.width.stand)) - stray;
 }
 
 /** how far in under the body (m) a foot `out` m out from the body's middle line may land and not be `strayed` there */

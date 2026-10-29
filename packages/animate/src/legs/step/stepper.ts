@@ -11,7 +11,7 @@ import { strideAt } from '../../species/gait';
 import {
   AIMED, LOWEST, PASSING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
   _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
-  dropOf, mod, remaining, strayed, Steps,
+  dropOf, mod, remaining, strayPast, Steps,
   type Body, type FootPose, type Leg, type Now, type Reading, type Steering, type Timing,
 } from './state';
 import { lengthOf, nominal, pace, widthAt } from './reach';
@@ -258,17 +258,25 @@ export class Stepper extends Steps {
   reachable(forecast: (ahead: number) => { position: Vector3; yaw: number }): boolean {
     const { st, feet, legs, pair } = this;
     if (Number.isNaN(this.low)) return true;
+    const hipAt = (leg: Leg, at: { position: Vector3; yaw: number }) => {
+      const build = feet.legs[leg.i];
+      return _w.copy(at.position).add(this.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))
+        .addScaledVector(forwardOf(at.yaw, _o), build.ahead ?? 0).setY(0);
+    };
+    const inwardOf = (leg: Leg, at: { position: Vector3; yaw: number }) => _b.subVectors(hipAt(leg, at), leg.anchor).dot(leftOf(at.yaw, _l)) * leg.sign;
+    // (each planted foot strayed from its hip no further than it is now — walking, `STRAYED` of its stray at most past it: one already past
+    // steps in its turn; held back for it, the body stood waiting on a foot that waits on its turn, a slow horse curving after its groom
+    // stopping and going. A trot's diagonals, a quarter cycle quicker, keep to it: let on, a dog's hoof lost its contact)
+    const current = forecast(0), walking = isWalking(this);
+    const strays = legs.map((leg) => leg.swing || !walking ? 0 : Math.min(STRAYED * (feet.legs[leg.i].stray ?? STEP.medial * st.scale), Math.max(0, strayPast(st, feet, leg, inwardOf(leg, current)))));
     const within = (leg: Leg, ahead: number, pitches: readonly number[]) => {
       const at = forecast(ahead), build = feet.legs[leg.i], up = build.up ?? 0;
-      const hip = _w.copy(at.position).add(this.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))
-        .addScaledVector(forwardOf(at.yaw, _o), build.ahead ?? 0).setY(0);
       // (and turned no further from a planted foot than the pelvis may — a gait's pivots in place on the floor as far as the body turns
       // — the hip not in over it nor a stance's travel past it)
       if (!st.gait && !leg.swing && Math.abs(wrapAngle(at.yaw - leg.yaw + leg.sign * st.toeOut)) > this.pelvisTurn) return false;
-      if (!leg.swing) {
-        const inward = _b.subVectors(hip, leg.anchor).dot(leftOf(at.yaw, _l)) * leg.sign;
-        if (strayed(st, feet, leg, inward) || _b.subVectors(hip, leg.anchor).dot(forwardOf(leg.yaw, _f)) > this.most) return false;
-      }
+      if (!leg.swing && strayPast(st, feet, leg, inwardOf(leg, at)) > strays[leg.i] + 1e-6) return false;
+      const hip = hipAt(leg, at);
+      if (!leg.swing && _b.subVectors(hip, leg.anchor).dot(forwardOf(leg.yaw, _f)) > this.most) return false;
       // (a gait's planted foot that pivots will have turned in place with the body by then)
       const pivot = !leg.swing && st.gait ? feet.turnAbout : undefined;
       const anchor = pivot ? _pivot.copy(leg.anchor) : leg.anchor, yaw = pivot ? at.yaw + leg.sign * st.toeOut : leg.yaw;
@@ -368,6 +376,8 @@ export class Stepper extends Steps {
   }
 }
 
+/** Tuned: a planted foot already strayed from its hip goes on no further past it than it is, up to `STRAYED` of its stray */
+const STRAYED = 0.25;
 /** Tuned: how far ahead (s) a gait's cadence takes the speed it will be going */
 const PACING = 0.4;
 /** Derived: a walk's swing quickened by a turn is at most this share of its stance — its feet half a cycle apart on a girdle never in the

@@ -196,7 +196,10 @@ export function swingOn(steps: Steps, now: Now, leg: Leg, w: Swing) {
   const aiming = w.age < remaining(w);
   if (airborne || (w.u < settling && (aiming || w.capture))) [leg.anchor, leg.yaw] = landing(steps, now, leg, remaining(w));
   if (w.u < settling && !airborne) settle(steps, now, leg, w, aiming);
-  if (w.u >= 1 - 1e-9) [leg.swing, leg.planted, leg.landed, leg.strike, leg.leapt] = [null, 0, true, w.strike, !!w.rel];
+  // (landed at the pitch it was last posed coming down at — its strike, the heel let down as far as the shank leans past the ankle's bend
+  // — the planted foot rolls on from there: from the strike as planned, a foot rising out of a crouch toes first came down 3 mm onto its heel
+  // in the frame it landed)
+  if (w.u >= 1 - 1e-9) [leg.swing, leg.planted, leg.landed, leg.strike, leg.leapt] = [null, 0, true, leg.pitch, !!w.rel];
 }
 
 /** A foot lifted: its swing set off from where it is, moving as it does, toward its landing. */
