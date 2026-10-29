@@ -56,14 +56,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   // (judged from the shoulder standing upright, not as low as the reach has let it down, so a lowering reach keeps asking while it is short
   // standing — but from the shoulder as it is for a goal on the body, which falls with it, and before the legs' first sub-step)
   const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(floor + proportions.shoulderHeight) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
-  // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it,
-  // as far as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it)
-  const short = shoulder.distanceTo(hand) - ARM_REACH * proportions.armLength;
   const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
-  if (!person.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
-    const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
-    if (toward.lengthSq() > 1e-12) person.poise.add({ shift: toward.setLength(short * share) });
-  }
   if (person.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back: every reach is planned from the support station, so that shift cannot make a shoulder ask for more bow.
   const from = _v.copy(hand).sub(carried ? f.current.position(0) : f.prev.com(_station));
@@ -73,6 +66,16 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   const reach = 0.98 * ARM_REACH * proportions.armLength;
   const { lower, bow } = handLowering(proportions, { ahead, lateral, height, reach, bowLimit });
   if (share > 0) person.poise.add({ lower: lower * share });
+  // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it, as far
+  // as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it. Short of it from the
+  // shoulder as low as the knees are asked to let it: a crouch still coming closes the reach by itself — leaning for it meanwhile, the
+  // weight came back as the crouch closed it, the shoulder drawn back from the hands on their way)
+  const coming = Math.max(0, lower * share - (floor + proportions.hipHeight - f.current.position(0).y));
+  const short = _lowered.copy(shoulder).setY(shoulder.y - coming).distanceTo(hand) - ARM_REACH * proportions.armLength;
+  if (!person.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
+    const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
+    if (toward.lengthSq() > 1e-12) person.poise.add({ shift: toward.setLength(short * share) });
+  }
   // The standing lever leaves a residual on hip-high grips (hands.test.ts).
   const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (proportions.shoulderHeight - proportions.hipHeight) : 0;
   // (the bow exhausted, the knees close the reach it leaves unmet: below the hips by a quarter thigh, past what the load lets it bow;
@@ -113,4 +116,4 @@ export function gazeAsks(person: Reacher, pose: ReadonlyPose, point: Readonly<Ve
   const bow = Math.max(0, Math.min(needed, MOST_BOW));
   person.poise.add({ bow });
 }
-const _station = new Vector3(), _upright = new Vector3(), _v = new Vector3(), _forward = new Vector3(), _left = new Vector3();
+const _lowered = new Vector3(), _station = new Vector3(), _upright = new Vector3(), _v = new Vector3(), _forward = new Vector3(), _left = new Vector3();
