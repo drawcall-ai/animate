@@ -132,6 +132,9 @@ interface HandOptions extends Partial<Motion> {
   seconds?: number;
   /** with `seconds`: the reach sets off this long after (s), the arm kept as it is till then */
   after?: number;
+  /** with `seconds`: the glide keeps to the straight line to its target, setting off with only the part of the hand's motion along it (a
+   * way round something, whose legs the hand must not cut across) */
+  straight?: boolean;
 }
 
 /** Reach by a timed glide or pace, borrowing posture when leading. */
@@ -188,7 +191,12 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       return void handStep(person, f, side, { position: wait }, { ...options, on: undefined }, arm, toward);
     }
     glide ??= new Glide(Math.max(seconds / 2, seconds - waited));
-    glide.step(from, _m.subVectors(from, was).divideScalar(f.dt), end, aim.velocity ?? ZERO, f.dt, _glided);
+    const moving = _m.subVectors(from, was).divideScalar(f.dt);
+    if (options.straight) {
+      const line = _line.subVectors(end, from), length = line.length();
+      moving.copy(length > 1e-9 ? line.multiplyScalar(Math.max(0, moving.dot(line) / length) / length) : ZERO);
+    }
+    glide.step(from, moving, end, aim.velocity ?? ZERO, f.dt, _glided);
     // (the arm as it stood when the hand set off turning to what the reach wants as the hand goes: aimed at once where the hand goes,
     // the solve would swing the arm round, drawing the hand back, before it sets off)
     const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
@@ -307,7 +315,7 @@ const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 
 const _q = new Quaternion(), _p = new Quaternion(), _r = new Quaternion(), _h = new Quaternion(), _c = new Quaternion(), _g = new Quaternion();
 const IDENTITY = new Quaternion(), _frame = new Quaternion();
 const _left = new Vector3(), _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
-const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3(), _bend = new Vector3(), _m = new Vector3();
+const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

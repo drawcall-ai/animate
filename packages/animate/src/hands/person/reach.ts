@@ -16,6 +16,7 @@ import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { paceOf, type Manner } from '../handling';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
+import { ARM } from './trunk';
 
 /** An outside guide beyond the arm's reach is followed this long after its planned arrival before closing on the exact grip. */
 const STAGING = 0.4;
@@ -59,7 +60,8 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   };
   const plan = takes.map((take) => {
     const frame = person.track(take.thing.object).current, seed = frame.position;
-    const from = person.pose.position(person.hands[take.side]).clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
+    const local = (point: Vector3) => point.clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
+    const from = local(person.pose.position(person.hands[take.side]));
     // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly; and a corner behind the hips as
     // the body stands now, the way on from which passes them within twice the trunk's radius, is no way round it — tuned: a hand starting
     // back at the side of a body still turning to the thing would come forward through the trunk)
@@ -68,10 +70,8 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const through = (corner: Vector3, next: Vector3) => world(corner).sub(hips).dot(toward) < 0 && pointSegmentDistance(hips, world(corner), world(next)) < trunk;
     const detour = onBody(person, take.thing) ? [] : aroundHeld(person, take.side, world(from), world(take.goal.position))
       .map((point) => point.sub(frame.position).applyQuaternion(frame.quaternion.clone().invert()));
-    // The wrist path leaves room for the whole palm as its orientation changes during the reach.
-    const reserve = LOAD_RESERVE * person.scale + (0.08 + 0.013) * person.proportions.height;
     const route = [...detour, ...(onBody(person, take.thing) ? []
-      : outside(take.thing.bounds, take.goal.position, detour.at(-1) ?? from, reserve))]
+      : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`])))))]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
     const points = route.length ? route : [take.goal.position];
     let was = from;
@@ -87,6 +87,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   ends = began + Math.max(...plan.map(lasts));
   request.eta = ends - began;
   for (const take of takes) grasp(person, take.side, null);
+  let staged = 0;
   yield* parallel<Frame>('all', ...plan.map((hand) => function* () {
     for (const [i, position] of hand.points.entries()) {
       const began = person.frame.time;
@@ -100,9 +101,13 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
           : reached(f, person.hands[hand.side], { position }, person.track(hand.thing.object)) || f.time >= began + seconds + after + STAGING)
         : until(there);
       const on = person.track(hand.thing.object);
-      const pace = motion ? { accel: motion.accel ?? CALM.accel, speed: motion.speed } : { seconds, after };
+      const pace = motion ? { accel: motion.accel ?? CALM.accel, speed: motion.speed } : { seconds, after, straight: hand.route.length > 0 };
       yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, goal, { on, thing: hand.thing, lead: !worn(hand.thing), ...pace }), ready);
     }
+    staged++;
+    // (staged first, it is held there for the other: let go, it would fall toward its hang and set off for its grip from that fall)
+    if (hand.route.length) yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, { ...hand.goal, position: hand.points[hand.points.length - 1] },
+      { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), () => staged === plan.length);
   }));
   // (both hands reach the outside staging points before closing on the actual grips)
   if (plan.some(({ route }) => route.length)) {
@@ -122,7 +127,7 @@ function aroundHeld(person: Reacher, side: Side, from: Vector3, target: Vector3)
     const frame = person.track(thing.object).current;
     const position = frame.position.clone().sub(root).applyQuaternion(back), rotation = back.clone().multiply(frame.quaternion);
     const box = thing.bounds.clone().applyMatrix4(new Matrix4().compose(position, rotation, new Vector3(1, 1, 1)))
-      .expandByScalar(LOAD_RESERVE * person.scale + (0.08 + 0.013) * person.proportions.height);
+      .expandByScalar(LOAD_RESERVE * person.scale + (ARM.length + ARM.hand) * person.proportions.height);
     const hit = ray.intersectBox(box, new Vector3());
     if (!hit || hit.distanceTo(start) > length) continue;
     const edge = side === 'left' ? box.max.x : box.min.x;
@@ -131,24 +136,44 @@ function aroundHeld(person: Reacher, side: Side, from: Vector3, target: Vector3)
   return [];
 }
 
-/** Route around the envelope to its nearest grip face; the final closure is separate. */
-function outside(bounds: Box3, grip: Vector3, from: Vector3, reserve: number): Vector3[] {
+/** a hand as `outside` keeps it off what it reaches for: its fingers' way in its own frame, its length and half-thickness from the wrist,
+ * the room it keeps (m; Drillis & Contini's hand, as `trunk.ts` has it), and where its shoulder is (the thing's frame) */
+interface Hand { fingers: Vector3; length: number; radius: number; reserve: number; shoulder: Vector3 }
+
+function handOf(person: Reacher, side: Side, shoulder: Vector3): Hand {
+  const { height, offsets } = person.proportions;
+  return { fingers: offsets[`${side}Hand`].clone().normalize(), length: ARM.length * height, radius: ARM.hand * height, reserve: LOAD_RESERVE * person.scale, shoulder };
+}
+
+/**
+ * The way round the thing's envelope to the face nearest its grip, the wrist ending outside that face as far as the hand turned as it
+ * will hold the grip (it turns so on the way round) is then clear of it by its reserve; the final closure onto the grip is separate.
+ */
+function outside(bounds: Box3, grip: Goal, from: Vector3, hand: Hand): Vector3[] {
   const size = bounds.getSize(new Vector3());
   if (size.x * size.y * size.z === 0) return [];
-  const box = bounds.clone().expandByScalar(reserve);
+  const at = grip.position;
   let axis = 0, end = 0, gap = Infinity;
   for (let i = 0; i < 3; i++) for (const side of [0, 1]) {
-    const distance = Math.abs(grip.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
+    const distance = Math.abs(at.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
     if (distance < gap) [gap, axis, end] = [distance, i, side];
   }
   const sign = end ? 1 : -1;
-  const edge = (end ? box.max : box.min).getComponent(axis);
-  const outer = grip.clone().setComponent(axis, sign > 0 ? Math.max(grip.getComponent(axis), edge) : Math.min(grip.getComponent(axis), edge));
-  // Keep the same reserve toward the starting height, rather than lowering to grip height before closure; the outside wrist still has
+  const face = (end ? bounds.max : bounds.min).getComponent(axis);
+  // (how far inward of its wrist the hand reaches along the face's outward normal: to its fingers' end as it holds the grip — a grip
+  // that sets no turn, the hand on in line with the arm held out from its shoulder to it)
+  const fingers = grip.quaternion ? _fingers.copy(hand.fingers).applyQuaternion(grip.quaternion) : _fingers.subVectors(at, hand.shoulder).normalize();
+  const inward = Math.max(0, -sign * fingers.getComponent(axis) * hand.length);
+  const room = inward + hand.radius + hand.reserve;
+  const out = Math.max(0, room - sign * (at.getComponent(axis) - face));
+  const outer = at.clone().setComponent(axis, at.getComponent(axis) + sign * out);
+  // Keep the same room toward the starting height, rather than lowering to grip height before closure; the outside wrist still has
   // to settle within REACHED.
-  if (axis !== 1) outer.y = grip.y + Math.max(-reserve, Math.min(reserve, from.y - grip.y));
+  if (axis !== 1) outer.y = at.y + Math.max(-room, Math.min(room, from.y - at.y));
+  // (a hand already outside that face goes straight on to it: the line stays outside it; one within, out to it first. A corner already
+  // reached must not restart the arm on a near-zero-duration glide)
+  if (sign * (from.getComponent(axis) - outer.getComponent(axis)) >= 0) return [outer];
   const corner = from.clone().setComponent(axis, outer.getComponent(axis));
-  // A corner already reached must not restart the arm on a near-zero-duration glide.
   return from.distanceTo(corner) <= REACHED.distance ? [outer] : [corner, outer];
 }
 
@@ -277,7 +302,7 @@ const STRAIGHT = 0.98;
 const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
-const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3();
+const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3(), _fingers = new Vector3();
 
 /** whether a foot is in the air under `person`: a support step under way */
 const stepping = (person: Reacher) => person.stepper?.legs.some((leg) => leg.swing) ?? false;
