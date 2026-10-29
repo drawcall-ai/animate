@@ -12,10 +12,10 @@ describe('bodies together', () => {
     const giver = person({ dev: true }), taker = person({ dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
     const room = roomOf(giver, taker);
     const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 2, solid: false });
-    // (grips of the taker's own, nearer it: the giver's hands are still on theirs as it takes hold — its palms by the box's near edge, a
-    // hand's breadth from the giver's. Facing each other, the taker's left hand goes to the side that is the giver's right)
-    empty(load, 'taker left', new Vector3(-0.15, 0, 0.1));
-    empty(load, 'taker right', new Vector3(0.15, 0, 0.1));
+    // (grips of the taker's own, nearer it: the giver's hands are still on theirs as it takes hold. Facing each other, the taker's left
+    // hand goes to the side that is the giver's right)
+    empty(load, 'taker left', new Vector3(-0.15, 0, 0.08));
+    empty(load, 'taker right', new Vector3(0.15, 0, 0.08));
     const shelf = empty(room, 'shelf', new Vector3(0.8, 1.0, 1.2));
     const steps: string[] = [];
     play(function* () {

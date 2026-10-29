@@ -32,7 +32,7 @@ box.userData.mass = 2;
 box.position.set(0, 0.9, 0.45);
 // (where each palm closes: the giver's at the box's sides, the receiver's beside them by its own end; facing the giver, its left is the
 // giver's right)
-for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.1], ['receiver right', 0.15, 0.1]] as const) {
+for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.08], ['receiver right', 0.15, 0.08]] as const) {
   const grip = new Object3D();
   grip.name = name;
   grip.position.set(x, 0, z);

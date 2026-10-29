@@ -56,12 +56,12 @@ function cupIn(room: Object3D, at: Vector3) {
   thing.userData.mass = 0.3;
   return thing;
 }
-/** a 2 kg box in `room` at `at`, a grip on each side taken as the hands come */
+/** a 2 kg box in `room` at `at`, a grip on each side taken as the hands come: where the palms close, a hand's half-thickness out */
 function boxIn(room: Object3D, at: Vector3) {
   const thing = box(room, 'box', new Vector3(0.3, 0.2, 0.2), at);
   thing.userData.mass = 2;
-  empty(thing, 'left', new Vector3(0.15, 0, 0));
-  empty(thing, 'right', new Vector3(-0.15, 0, 0));
+  empty(thing, 'left', new Vector3(0.165, 0, 0));
+  empty(thing, 'right', new Vector3(-0.165, 0, 0));
   return thing;
 }
 

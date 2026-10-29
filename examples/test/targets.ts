@@ -11,7 +11,7 @@ import { aroundTheTrunk } from './clearance';
  * tracked head's (`head`: a headset).
  */
 export class Targets {
-  private readonly wristPeak = new Peak();
+  private readonly palmPeak = new Peak();
   /** the most the eyes turn in the head to the gaze target (°), and the longest the target stays past the comfortable turn by `PAST` (s) */
   readonly eyesPeak = new Peak();
   readonly pastPeak = new Peak();
@@ -27,12 +27,12 @@ export class Targets {
   tracked = { asked: 0, judged: 0, head: 0 };
   /** the gaze target asked (as it was last step), and since when (s) */
   private goal: { target: Vector3; since: number } | null = null;
-  /** the largest error of a hand off the grip of what it holds (m) */
-  get wrist() {
-    return this.wristPeak.value;
+  /** the largest error of a palm off the grip of what it holds (m) */
+  get palm() {
+    return this.palmPeak.value;
   }
-  get wristAt() {
-    return this.wristPeak.at;
+  get palmAt() {
+    return this.palmPeak.at;
   }
 
   see({ t, h, asked }: Frame) {
@@ -86,7 +86,7 @@ export class Targets {
       const grip = h.holding[s]?.grip;
       if (!grip) continue;
       if (jointOf(h, `${s}UpperArm`).distanceTo(grip) >= h.proportions.armLength + 0.35) continue;
-      this.wristPeak.see(jointOf(h, `${s}Palm`, _v).distanceTo(grip), t);
+      this.palmPeak.see(jointOf(h, `${s}Palm`, _v).distanceTo(grip), t);
     }
   }
 

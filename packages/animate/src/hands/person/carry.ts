@@ -329,12 +329,12 @@ class CarryAim {
   private setOut = false;
   private readonly unpushed = [new Vector3(), new Vector3()];
 
-  /** the middle of the grips both its hands hold it by (its frame; held in one, its origin) */
+  /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
   private readonly pivot = new Vector3();
 
   constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: Clearance) {
     const own = person.track(thing.object);
-    const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [hold.goal.position] : []);
+    const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its course has it, the hand with it)
     if (grips.length > 1) for (const grip of grips) this.pivot.addScaledVector(grip, 1 / grips.length);
     this.nominal = new Carrier(own.current.position, own.current.quaternion);

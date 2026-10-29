@@ -37,13 +37,13 @@ export function personHands(person: Reacher): Handling {
 }
 
 /**
- * `side`'s palm on `thing`: its centre beyond the wrist, and the hand's turn in the thing's frame as the body is posed now — read as the arm
- * is solved, not as it was a sub-step before: a goal a sub-step behind the hand's turn trailed a box turned with the body 8 cm off the palms
+ * `side`'s palm on `thing`: its centre beyond the wrist, and the hand's turn in the thing's frame as the body was last posed (mid-update,
+ * the hand's turn may be the free arm's hang's, written before the hand's own step: a reach read so never met its grip)
  */
 function palm(person: Reacher, side: Side, thing: Thing): Palm {
   const bone = person.hands[side], turn = new Quaternion();
   return {
     at: palmOf(person.proportions, side),
-    turn: () => turn.copy(person.track(thing.object).at(person.frame.time).current.quaternion).invert().multiply(person.frame.current.rotation(bone)),
+    turn: () => turn.copy(person.track(thing.object).at(person.frame.time).current.quaternion).invert().multiply(person.frame.prev.rotation(bone)),
   };
 }
