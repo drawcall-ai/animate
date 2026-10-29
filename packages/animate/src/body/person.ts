@@ -94,25 +94,20 @@ export class Person extends Self {
   }
 }
 
-/**
- * An idle holding hand keeps its last pose relative to the pelvis while the body walks and turns — and relative to the chest, the arm's
- * base, while a task bows or turns the trunk (another hand's): kept on the pelvis then, the shoulder would be carried off it as the trunk
- * bowed, the arm swivelling round after it. Changing frame, it is kept from where it is.
- */
+/** An idle holding hand keeps its last root-relative pose while the body walks and turns. */
 function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
-  const hand = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
-  let time = -Infinity, frame = -1;
+  const bone = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
+  let time = -Infinity;
   return (f) => {
-    const on = person.owner('trunk') ? INDEX.chest : 0;
-    // (let be since the last sub-step it was kept, or kept on another frame: from where it is now)
-    if (f.time - time > 1.5 * f.dt || on !== frame) {
-      const back = _q.copy(f.prev.rotation(on)).invert();
-      kept.position.copy(f.prev.position(hand)).sub(f.prev.position(on)).applyQuaternion(back);
-      kept.quaternion.copy(back).multiply(f.prev.rotation(hand));
+    // (let be since the last sub-step it was kept: from where it is now)
+    if (f.time - time > 1.5 * f.dt) {
+      const back = _q.copy(f.prev.rotation(0)).invert();
+      kept.position.copy(f.prev.position(bone)).sub(f.prev.position(0)).applyQuaternion(back);
+      kept.quaternion.copy(back).multiply(f.prev.rotation(bone));
     }
-    [time, frame] = [f.time, on];
-    const turn = f.current.rotation(on);
-    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(on)), quaternion: turn.clone().multiply(kept.quaternion) };
+    time = f.time;
+    const turn = f.current.rotation(0);
+    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(0)), quaternion: turn.clone().multiply(kept.quaternion) };
   };
 }
 
