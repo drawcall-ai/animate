@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Throne Room</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0a09; color: #e8e2d6; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+      canvas { display: block; }
+      #hud { position: fixed; left: 12px; top: 10px; display: flex; gap: 8px; align-items: center; }
+      #hud select, #hud button { background: #1d1a17; color: inherit; border: 1px solid #4a4238; border-radius: 4px; padding: 3px 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="hud"><select id="beat"></select><button id="play">Pause</button><button id="restart">Restart</button><span id="time"></span></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
