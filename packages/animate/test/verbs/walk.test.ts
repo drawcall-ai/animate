@@ -159,7 +159,7 @@ it('given until, walks after a target that moves, and stops with it', () => {
 
 // (people turn into their gaze: an about-turn goes round the side the head is turned to — recalled: Hollands et al. 2001, gaze and head
 // lead a turn; exactly opposite, with the head ahead, it goes to the right)
-it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it looks to: %i, %s', (side) => {
+it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it looks to: %i, %s', (side, _name) => {
   const body = person({ dev: true }), h = insides(body);
   let turned = 0, done = false;
   play(function* () {
