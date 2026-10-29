@@ -5,7 +5,7 @@ import type { Dev } from '../../kernel/dev';
 import { solveChain } from '../../kernel/chain';
 import { follow } from '../../kernel/follow';
 import { clampRotation } from '../../kernel/limits';
-import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
+import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import { Stepper } from '../step/stepper';
 import { type Feet, type Leg, type Steering } from '../step/state';
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
@@ -195,12 +195,16 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     const tilt = rotation.follow(tilts[0], tilts[1], square, TURN, dt, new Quaternion());
     [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
     stepper.turn = yawOf(tilt) * upright.run;
-    // Rotate the hip offsets below the pelvis with its bow; lateral spacing and gait yaw remain the stepper's.
+    // Rotate the hip offsets below the pelvis with its bow; lateral spacing and gait yaw remain the stepper's. Each hip's height takes the
+    // pelvis's roll onto a foot as the weight shifts too: that hip rises and its leg must reach from there (else it stands over-reached,
+    // its foot rolled up off its sole, and a foot stepped in place beside it lands on a straight knee that snaps bent). The walking list
+    // turns the pelvis about the stance hip (recalled: Perry 1992, the swing side drops ~4°), where the stepper already plans the leg from.
+    const shift = quatYXZ(0, 0, posture.shiftRoll, _shift);
     feet.legs.forEach((leg, i) => {
-      const hip = proportions.offsets[`${SIDES[i]}UpperLeg`].clone().setX(0).applyQuaternion(tilt)
-        .applyAxisAngle(UP, -stepper.turn);
-      leg.hip = (proportions.offsets[`${SIDES[i]}UpperLeg`].x + hip.x) * leg.sign;
-      leg.up = hip.y;
+      const offset = proportions.offsets[`${SIDES[i]}UpperLeg`];
+      const hip = offset.clone().setX(0).applyQuaternion(tilt).applyAxisAngle(UP, -stepper.turn);
+      leg.hip = (offset.x + hip.x) * leg.sign;
+      leg.up = hip.y + _v.copy(offset).applyQuaternion(shift).y - offset.y;
       leg.ahead = hip.z;
     });
     // (the stepper given the feet's middle — a centre of mass's `behind` it, the hips that far ahead of it again; let down as asked or
@@ -378,3 +382,4 @@ function crouchFor(share: number): number {
 
 const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), _local = new Quaternion();
 const [_a, _b, _pole, _v, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+const _shift = new Quaternion();

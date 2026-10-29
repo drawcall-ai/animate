@@ -1,7 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { carry, grab, lookAt, reach, walkTo } from '../../src/index';
-import { INDEX, type Side } from '../../src/species/humanoid/bones';
+import { Body, carry, grab, humanoid, lookAt, reach, walkTo } from '../../src/index';
+import { INDEX, SIDES, type Side } from '../../src/species/humanoid/bones';
+import { CHEWBACCA } from '../skeletons/chewbacca';
 import { Quiet } from '../../src/legs/person/quiet';
 import { insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
@@ -50,6 +51,23 @@ it.each(['an across-body reach', 'an over-shoulder look'])('turns the trunk on t
   expect(most).toBeGreaterThan(0.12);
   run(body, 3);
   expect(twist()).toBeLessThan(0.05);
+  expect(body.log).toEqual([]);
+});
+
+// (a weight shift rolls the pelvis onto the loaded leg, raising that hip: the legs are planned from it, so the loaded foot stays on its
+// sole and a foot stepped in place beside it lands bent — before, the 2.28 m Chewbacca skeleton's loaded leg stood over-reached, its foot
+// rolled 6 mm up, and an idle step landed on a straight knee that snapped bent at 2800°/s)
+it('keeps a shifted stance in reach: an idle step lands on a bent knee, standing 25 s on a tall rigged skeleton', () => {
+  const body = new Body(humanoid(CHEWBACCA), { dev: true, at: new Vector3(1.1, 0, 10) }), h = insides(body);
+  let straightest = Infinity;
+  run(body, 25, () => {
+    h.stepper?.legs.forEach((leg, i) => {
+      if (!leg.landed) return;
+      const side = SIDES[i], hip = h.pose.position(INDEX[`${side}UpperLeg`]), knee = h.pose.position(INDEX[`${side}LowerLeg`]), ankle = h.pose.position(INDEX[`${side}Foot`]);
+      straightest = Math.min(straightest, knee.clone().sub(hip).angleTo(ankle.clone().sub(knee)));
+    });
+  });
+  expect(straightest).toBeGreaterThan(0.05);
   expect(body.log).toEqual([]);
 });
 

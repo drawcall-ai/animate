@@ -94,6 +94,8 @@ export class Posture {
   private readonly weight = new Vector3();
   private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
+  /** how far (rad) the pelvis is rolled onto a foot as the weight shifts onto it, standing (its share of the pelvis's roll) */
+  shiftRoll = 0;
   private readonly turn: Turn = { pelvis: 0, thorax: 0, roll: 0 };
   private readonly leans = [0, 0];
   private readonly inertia: Inertia | null;
@@ -139,7 +141,8 @@ export class Posture {
     pelvis.add(this.quiet.add(this.weight));
     // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
     const shifted = this.weight.dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
-    roll += SHIFT.roll * shifted;
+    this.shiftRoll = SHIFT.roll * shifted;
+    roll += this.shiftRoll;
     const onward = smoothstep(0, 1, Math.max(0, upright.velocity.dot(fwd)));
     const pace = follow(this.leans[0], this.leans[1], lerp(LEAN.walk * walk, LEAN.run, run) * onward, LEANING, dt);
     [this.leans[0], this.leans[1]] = [this.leans[1], pace];
