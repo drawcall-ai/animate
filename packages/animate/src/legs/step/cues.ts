@@ -1,6 +1,6 @@
 // When a foot steps: what prompts it, the gait's clock and which foot goes first.
 import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../../kernel/math';
-import { hullOf, outside } from '../support';
+import { bears, hullOf, outside } from '../support';
 import { offsetAt, strideAt } from '../../species/gait';
 import { SETTLING, SHUFFLING, STANDING, STEP, TOGETHER, _b, _centre, _f, _v, mod, remaining, strayed, type Leg, type Now, type Steps, type Timing } from './state';
 import { aheadOf, hipOf, nominal, offHome, reach, xcomAhead } from './reach';
@@ -116,7 +116,7 @@ function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg, unloadi
   const due = urgent || lifts(steps, now, cues, leg, other);
   // (nor, slow, one the weight is on: it goes onto the others first — an anticipatory shift — then the foot lifts, the shift once begun
   // carried through; a catch steps the foot furthest from it, at once)
-  if (due && leg !== cues.catcher && (unloading || slow(steps, now)) && bears(steps, now, leg)) {
+  if (due && leg !== cues.catcher && (unloading || slow(steps, now)) && loaded(steps, now, leg)) {
     steps.unloading ??= leg.i;
     return false;
   }
@@ -151,18 +151,16 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   return strayed(st, feet, leg, _v.subVectors(hipOf(steps, now, leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;
 }
 
-/**
- * whether the weight is on `leg`: its extrapolated centre of mass `BORNE` (m) nearer that foot's print than the other planted feet's —
- * lifted, the body would stand on them with its weight beside them
- */
-function bears(steps: Steps, now: Now, leg: Leg): boolean {
+/** whether the weight is on `leg` (`bears`), as the forecast's extrapolated centre of mass and the planted feet's prints have it: `FORESEEN`
+ * sooner than the dev check finds it */
+function loaded(steps: Steps, now: Now, leg: Leg): boolean {
   const { st, feet, legs } = steps;
   if (st.capture === undefined) return false;
   const others = legs.filter((o) => o !== leg && !o.swing);
   if (!others.length) return true;
   const centre = now.r.xcom ? _centre.copy(now.r.xcom).setY(0) : xcomAhead(steps, now, 0, _centre);
-  const off = (on: Leg[]) => outside(hullOf(on.flatMap((o) => feet.print(o.i, o.anchor, o.yaw))), centre);
-  return off([leg]) + BORNE * st.scale < off(others);
+  const prints = (on: Leg[]) => on.flatMap((o) => feet.print(o.i, o.anchor, o.yaw));
+  return bears(centre, prints([leg]), prints(others), st.scale, FORESEEN);
 }
 
 /**
@@ -302,9 +300,10 @@ const BLOCKED = 0.05;
 const SIDE = 0.5;
 /** Tuned: still, the feet step only to even out feet `STAGGERED` (m) apart fore and aft */
 const STAGGERED = 0.08;
-/** Tuned (m, default body): a foot bears the weight with the extrapolated centre of mass this much nearer it than the other feet (the dev
- * check's `BORNE`, `checkSupport`) */
-const BORNE = 0.05;
+/** Tuned (m, default body): how much sooner the stepper finds the weight on a foot than the dev check does (`bears`): its forecast and
+ * prints part from the final pose and its heel-wide soles by ~5 mm at the margin (measured: the heroes' turn on a tread, finale); 2 cm holds
+ * every lift the check finds borne in the scenes and suites */
+const FORESEEN = 0.02;
 /** Tuned: a root slower than `UNLOADED` (m/s, × scale) stands: a foot lifts only once the weight is off it (a little quicker than the
  * dev check's still body, `checkSupport`, whose centre of mass lags its root setting off; quicker, walk starts held back slipped a step on
  * stairs) */

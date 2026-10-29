@@ -37,6 +37,18 @@ export function hullOf(points: readonly Spot[]): Spot[] {
   return [...half(P), ...half([...P].reverse())];
 }
 
+/**
+ * Whether a foot standing on `sole` bears a still body's weight, its extrapolated centre of mass (`xcomOf`) at `centre` and the other
+ * planted feet on `others`: `centre` `BORNE` (m, × `scale`) nearer that sole than theirs — lifted, the body would stand on them with its
+ * weight beside them. The dev check reads it off the final pose; the stepper decides it ahead, from its forecast and its feet's prints,
+ * `sooner` (m) sooner: the two readings part by a few mm at the margin, and a foot the check finds borne must have waited for the weight.
+ */
+export function bears(centre: Readonly<Vector3>, sole: readonly Spot[], others: readonly Spot[], scale: number, sooner = 0): boolean {
+  return outside(hullOf(sole), centre) + (BORNE - sooner) * scale < outside(hullOf(others), centre);
+}
+/** Tuned (m, default body): how much nearer one foot than the others a still body's centre of mass is with its weight on that foot */
+const BORNE = 0.05;
+
 /** how far `q` (x, z) lies outside the convex polygon `hull` (0 inside); `away` gets the unit direction out toward `q` */
 export function outside(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
   return Math.max(0, past(hull, q, away));

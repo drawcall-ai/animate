@@ -144,7 +144,7 @@ export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier
   for (const [object, carrier] of self.carried) {
     const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
     if (aim && hands.length === 2) fit(self, f, aim, hands, carrier);
-    else along(f, carrier);
+    else if (!carrier.moved(f.time)) along(f, carrier);
     if (object.parent) placeUnder(self, object, object.parent, carrier.current.position, carrier.current.quaternion);
   }
 }
@@ -179,6 +179,16 @@ function keptTurn(self: Holder, f: Frame, thing: Thing, kept: WeakMap<Thing, Kep
   else turn.quaternion.premultiply(_turn.setFromAxisAngle(UP, f.current.facing - f.prev.facing));
   turn.time = f.time;
   return turn.quaternion;
+}
+
+/**
+ * `object`, if `self` carries it and nothing aims it, moved on with the root bone this sub-step already (the root has moved by the time
+ * the hands keep to it): they go where it is, not where its last motion would have carried it on — a turn braking, which it overshot by
+ * the hands' whole reach of it
+ */
+export function carryAlong(self: Holder, f: Frame, object: Object3D): void {
+  const carrier = self.carried.get(object);
+  if (carrier && !carrier.moved(f.time)) along(f, carrier);
 }
 
 /** a carried thing nothing aims, moved with the root bone as it moved this sub-step */

@@ -18,7 +18,7 @@ import { ankleFor, ballOf, footprint, footRotation, heelOf, heelSides } from './
 import { kneePole, shankTilt } from './leg';
 import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './posture';
 import { armsHeld } from './turn';
-import { hullOf, outside, xcomOf, xcomOfPoses } from '../support';
+import { bears, hullOf, outside, xcomOf, xcomOfPoses } from '../support';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { PersonLegged } from './legged';
 import { drivenRoot } from '../legged';
@@ -372,7 +372,7 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
 
 /**
  * XCoM from the final pose; the support includes a swing's committed landing (Hof's next-step capture) — but not that of a foot lifted from
- * under a still body's weight (slower than `MOVING`, its centre of mass `BORNE` nearer that foot than the others) till the body moves:
+ * under a still body's weight (slower than `MOVING`, the weight on it: `bears`) till the body moves:
  * falling toward no landing, it stood on the other foot alone meanwhile. A planted sole supports as wide as its heel (`heelSides`).
  */
 export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
@@ -392,7 +392,7 @@ export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
     if (!w || seen.has(w)) return;
     seen.add(w);
     const planted = legs.flatMap((other, k) => other.swing ? [] : soles(k));
-    if (!moving && planted.length && outside(hullOf(soles(i)), com) + BORNE * s < outside(hullOf(planted), com)) borne.add(w);
+    if (!moving && planted.length && bears(xcom, soles(i), planted, s)) borne.add(w);
   });
   for (const leg of legs) if (leg.swing && moving) borne.delete(leg.swing);
   const support = legs.flatMap((leg, i) => leg.swing ? borne.has(leg.swing) ? [] : footprint(proportions, leg.anchor, leg.yaw) : soles(i));
@@ -431,7 +431,5 @@ const _shift = new Quaternion(), _solved = new Quaternion(), _unclamped = new Qu
 const seen = new WeakSet<Swing>(), borne = new WeakSet<Swing>();
 /** Tuned (m/s, × scale): a body this slow is still (quiet stance sways a few mm/s — read: Winter 1995, Gait Posture 3:193) */
 const MOVING = 0.1;
-/** Tuned (m, × scale): a foot bears a still body's weight with its centre of mass this much nearer it than the other feet */
-const BORNE = 0.05;
 /** Tuned: a swinging foot more than this (rad) off its planned turn about the vertical, as its knee leaves it, is twisted the rest of the way */
 const TWISTED = 0.02;
