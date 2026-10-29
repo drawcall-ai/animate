@@ -66,8 +66,10 @@ export const beat: Beat & { order: number } = {
     // the medals lie on a cushion on a stand before the bearer's mark, each to be worn before its hero's chest
     const tray = cushion(bearer);
     const lukeMedal = dressMedal(createMedal('luke medal')), hanMedal = dressMedal(createMedal('han medal'));
-    lukeMedal.position.set(0.08, 0.03, 0);
-    hanMedal.position.set(-0.08, 0.03, 0);
+    // each lies face up, its ribbon toward the bearer
+    lukeMedal.position.set(0.08, 0.005, 0.04);
+    hanMedal.position.set(-0.08, 0.005, 0.04);
+    lukeMedal.rotation.x = hanMedal.rotation.x = -Math.PI / 2;
     tray.add(lukeMedal, hanMedal);
     const worn = { luke: createWornPlace(luke, 'luke medal place'), han: createWornPlace(han, 'han medal place') };
     scene.add(tray, threshold());
@@ -105,8 +107,8 @@ export const beat: Beat & { order: number } = {
     }
     /** whether a verb named `verb` holds any of `body`'s parts (`hands`: its hands only), as the stories asked it */
     const doing = (body: Body, verb: string, part: 'hands' | 'any' = 'hands') => {
-      const { go, look, trunk, hands } = body.owners;
-      return [hands.left, hands.right, ...(part === 'any' ? [go, look, trunk] : [])].some((owner) => owner?.verb === verb);
+      const { go, look, trunk, head, hands } = body.owners;
+      return [hands.left, hands.right, ...(part === 'any' ? [go, look, trunk, head] : [])].some((owner) => owner?.verb === verb);
     };
 
     const hallPoint = new Vector3(0, 1.7, 14);
@@ -128,27 +130,31 @@ export const beat: Beat & { order: number } = {
       });
     }
 
-    /** the bearer takes Luke's medal off the cushion, steps up beside Leia and hands it over to her while the trio climbs */
+    /**
+     * the bearer takes both medals off the cushion while the trio climbs, Luke's in his right hand and Han's in his left (as the film's
+     * officer stands ready with them), steps up beside Leia and hands her Luke's; he waits there with Han's until she has that too
+     */
     function* leiaTakesTheMedal() {
       yield* wait(() => luke.position.z > 32.2);
       mark('bearer steps up');
-      if (!(yield* grab(bearer, lukeMedal, INNER))) throw new Error('the bearer could not take Luke\'s medal');
+      if (!(yield* grab(bearer, lukeMedal, { right: INNER.right }))) throw new Error('the bearer could not take Luke\'s medal');
+      if (!(yield* grab(bearer, hanMedal, { left: INNER.left }))) throw new Error('the bearer could not take Han\'s medal');
       const spot = place(0.65, 36.15, Math.PI + 0.5); // at her right, turned a little toward her
       yield* parallel('all', walkTo(bearer, spot, { speed: 0.5 }), lookAt(leia, luke, { until: 1.2 }));
       yield* parallel('race', lookAt(bearer, leia), function* () {
         yield* handOver(bearer, leia, lukeMedal);
         mark('Leia takes Luke\'s medal');
       });
-      // he waits for the next one, a step behind the line she will walk to Han, and goes back to his mark once she has it
-      yield* parallel('race', walkTo(bearer, place(0.62, 36.0, Math.PI), { speed: 0.5 }), wait(has('bearer takes Han\'s medal')));
-      yield* wait(has('Leia takes Han\'s medal'));
+      mark('bearer holds Han\'s medal');
+      yield* parallel('race', lookAt(bearer, luke), wait(has('Leia takes Han\'s medal')));
       yield* walkTo(bearer, marks.medalBearer, { speed: 0.5 });
     }
-    /** on her way from Luke to Han: the bearer takes Han's medal off the cushion and hands it over to her */
+    /** on her way from Luke to Han: the bearer, waiting with Han's medal, hands it over to her */
     function* takeHan() {
-      mark('bearer takes Han\'s medal');
-      if (!(yield* grab(bearer, hanMedal, INNER))) throw new Error('the bearer could not take Han\'s medal');
-      yield* handOver(bearer, leia, hanMedal);
+      yield* wait(has('bearer holds Han\'s medal'));
+      yield* parallel('race', lookAt(bearer, leia), function* () {
+        yield* handOver(bearer, leia, hanMedal);
+      });
       mark('Leia takes Han\'s medal');
       return true;
     }
@@ -181,7 +187,8 @@ export const beat: Beat & { order: number } = {
       mark('Leia hangs Han\'s medal');
       yield* wait(() => hanMedal.parent === worn.han);
       mark('Han medal hung');
-      yield* wait(() => doing(han, 'track', 'any'));
+      // his wink's half-nod: a pose of his head
+      yield* wait(() => doing(han, 'pose', 'any'));
       mark('wink');
       // the roar's arms going out: his head is going back
       yield* wait(() => doing(chewbacca, 'reach'));

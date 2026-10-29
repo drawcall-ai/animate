@@ -1,8 +1,8 @@
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, type Object3D } from 'three';
+import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3, type Object3D } from 'three';
 import type { Body } from '@drawcall/animate';
 
 // How the film shows the ceremony's medals and the cushion they wait on: the medals are the ceremony beat's props (their mass and
-// grips), given a gold disc on a short red ribbon to be seen; the cushion lies on a slim stand before the bearer.
+// grips), given a gold disc on its red ribbon to be seen; the cushion lies on a slim stand before the bearer.
 
 // (polished metal: it mirrors the viewer's environment, the hall's colours)
 const GOLD = new MeshStandardMaterial({ color: 0xf0c050, metalness: 1, roughness: 0.25 });
@@ -10,14 +10,23 @@ const RED = new MeshStandardMaterial({ color: 0xb8322a, roughness: 0.8 });
 const VELVET = new MeshStandardMaterial({ color: 0x3b2c55, roughness: 1 });
 const BRASS = new MeshStandardMaterial({ color: 0x8a6a2e, metalness: 0.4, roughness: 0.5 });
 
-/** `medal` given a gold disc on a short red ribbon, its face toward its +Z (it is returned) */
+/** `medal` given a gold disc, its face toward its +Z, on a red ribbon: a strip from the disc up to each of its outer grips (it is returned) */
 export function dressMedal(medal: Object3D): Object3D {
   const disc = new Mesh(new CylinderGeometry(0.04, 0.04, 0.008, 24), GOLD);
   disc.rotation.x = Math.PI / 2;
-  const ribbon = new Mesh(new BoxGeometry(0.03, 0.11, 0.004), RED);
-  ribbon.position.y = 0.075;
-  disc.castShadow = ribbon.castShadow = true;
-  medal.add(disc, ribbon);
+  disc.castShadow = true;
+  medal.add(disc);
+  for (const side of ['left', 'right']) {
+    const end = medal.getObjectByName(`outer ${side}`);
+    if (!end) throw new Error(`${medal.name} has no grip "outer ${side}" for its ribbon to rise to`);
+    const strip = new Mesh(new BoxGeometry(0.025, 1, 0.003), RED);
+    const from = new Vector3(0, 0.035, 0);
+    strip.position.lerpVectors(from, end.position, 0.5);
+    strip.scale.y = from.distanceTo(end.position);
+    strip.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), end.position.clone().sub(from).normalize());
+    strip.castShadow = true;
+    medal.add(strip);
+  }
   return medal;
 }
 

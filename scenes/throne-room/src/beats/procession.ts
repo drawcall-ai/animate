@@ -76,14 +76,16 @@ export const beat: Beat & { order: number } = {
       yield* lookAt(body, leia);
     }
 
-    // each hero walks and looks about at once; the look is an aimer, so it ends when that hero is on its mark
-    const story = () => parallel('all', ...HEROES.map((hero) => parallel('race', walkUp(hero), lookAbout(hero))));
-    return {
-      story,
-      done: () => HEROES.every((hero) => {
-        const body = cast[hero], target = mark(hero).position;
-        return body.settled && Math.hypot(body.position.x - target.x, body.position.z - target.z) < 0.15 && body.position.y > target.y - 0.02;
-      }),
+    const onMarks = () => HEROES.every((hero) => {
+      const body = cast[hero], target = mark(hero).position;
+      return body.settled && Math.hypot(body.position.x - target.x, body.position.z - target.z) < 0.15 && body.position.y > target.y - 0.02;
+    });
+    // each hero walks and looks about at once; the look is an aimer, so it ends when that hero is on its mark. The beat ends once all
+    // three stand there together: one that settled first may still shift its weight with a step while the last comes to rest.
+    const story = function* () {
+      yield* parallel('all', ...HEROES.map((hero) => parallel('race', walkUp(hero), lookAbout(hero))));
+      yield* parallel('race', wait(onMarks), ...HEROES.map((hero) => lookAt(cast[hero], leia)));
     };
+    return { story, done: onMarks };
   },
 };

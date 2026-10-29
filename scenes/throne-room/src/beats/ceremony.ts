@@ -1,6 +1,8 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { carry, grab, lookAt, release, wait, walkTo, type Body } from '@drawcall/animate';
+import { hangMedal } from './gestures';
+import { roar } from '../gestures';
 import type { Beat } from './index';
 
 // The medals: the officer beside Leia holds out each medal, Leia takes it from him and hangs it on the hero before her, Luke first,
@@ -8,29 +10,31 @@ import type { Beat } from './index';
 // at the front of the hero's chest, which follows his chest bone.
 
 /**
- * a medal on its ribbon: 0.1 kg. The bearer holds it near the medal (empties `inner left` and `inner right`, 0.08 m apart); Leia takes
- * the ribbon further out (`outer left` and `outer right`, 0.3 m apart), so two people's hands never share a grip.
+ * a medal on its ribbon: 0.1 kg, its origin the medal itself, the ribbon's loop rising from it to two ends 0.26 m above it, which lie
+ * either side of the neck once it is worn (a little behind the medal). The bearer holds the ribbon low, near the medal (empties
+ * `inner left` and `inner right`); Leia takes it by its ends (`outer left` and `outer right`, 0.24 m apart), so two people's hands never
+ * share a grip, and she can lift the loop over a head.
  */
 export function createMedal(name: string): Object3D {
   const medal = new Object3D();
   medal.name = name;
   medal.userData.mass = 0.1;
-  for (const [name, x] of [['inner left', 0.04], ['inner right', -0.04], ['outer left', 0.15], ['outer right', -0.15]] as const) {
+  for (const [name, x, y, z] of [['inner left', 0.05, 0.1, -0.02], ['inner right', -0.05, 0.1, -0.02], ['outer left', 0.12, 0.26, -0.04], ['outer right', -0.12, 0.26, -0.04]] as const) {
     const grip = new Object3D();
     grip.name = name;
-    grip.position.x = x;
+    grip.position.set(x, y, z);
     medal.add(grip);
   }
   return medal;
 }
 
-/** where a medal hangs on `hero`: an empty 0.15 m in front of his chest bone, turned as he faces, attached to that bone */
+/** where a medal hangs on `hero`: an empty 0.13 m in front of his chest bone, turned as he faces, attached to that bone */
 export function createWornPlace(hero: Body, name: string): Object3D {
   const place = new Object3D();
   place.name = name;
   const chest = hero.bones.chest;
   chest.updateWorldMatrix(true, false);
-  chest.getWorldPosition(place.position).add(new Vector3(Math.sin(hero.facing), 0, Math.cos(hero.facing)).multiplyScalar(0.15));
+  chest.getWorldPosition(place.position).add(new Vector3(Math.sin(hero.facing), 0, Math.cos(hero.facing)).multiplyScalar(0.13));
   place.rotation.y = hero.facing;
   chest.attach(place);
   return place;
@@ -77,7 +81,7 @@ export const beat: Beat & { order: number } = {
     });
     const worn = [createWornPlace(luke, 'luke medal place'), createWornPlace(han, 'han medal place')];
 
-    /** the bearer offers `medal`, Leia takes it from him and hangs it on `hero` while he bows his head to it */
+    /** the bearer offers `medal`, Leia takes it from him and hangs it over `hero`'s head while he bows it */
     function* decorate(hero: Body, medal: Object3D, place: Object3D) {
       // the bearer takes the medal up while Leia comes back to her place beside him (from the hero she decorated before)
       yield* parallel('all', walkTo(leia, marks.leia), function* () {
@@ -85,10 +89,7 @@ export const beat: Beat & { order: number } = {
       });
       yield* handOver(bearer, leia, medal);
       // she hangs it on him; he bows his head to the ribbon as it comes and looks up at her once it is on
-      yield* parallel('race', lookAt(hero, ahead(hero, 0.5, 1.1)), function* () {
-        if (!(yield* carry(leia, medal, place))) throw new Error(`Leia could not hang ${medal.name}`);
-      });
-      release(leia, medal, place);
+      yield* parallel('race', lookAt(hero, ahead(hero, 0.5, 1.1)), hangMedal(leia, hero, { medal, place }));
       yield* lookAt(hero, leia.bones.head, { until: 1.2 });
     }
 
@@ -99,7 +100,7 @@ export const beat: Beat & { order: number } = {
         yield* decorate(han, medals[1], worn[1]);
       });
       // Chewbacca throws his head back and roars
-      yield* lookAt(chewbacca, ahead(chewbacca, 1, 4), { until: 1.5 });
+      yield* roar(chewbacca);
     };
 
     return {
