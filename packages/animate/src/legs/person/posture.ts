@@ -205,6 +205,14 @@ export function shoulderHeight(proportions: Proportions, lower: number, bow: num
     + height(offsets.leftShoulder, bow) + height(offsets.leftUpperArm, bow);
 }
 
+/** how far (m, + ahead) a standing bow of `bow` brings the shoulder joint ahead of its hip joint off where it stands upright */
+export function shoulderAhead(proportions: Proportions, bow: number): number {
+  const tilt = pelvisTilt(proportions, 0, bow), offsets = proportions.offsets;
+  const ahead = (offset: Vector3, pitch: number) => offset.y * Math.sin(pitch) + offset.z * (Math.cos(pitch) - 1);
+  return ahead(offsets.spine, tilt) + ahead(offsets.chest, (tilt + bow) / 2) + ahead(offsets.leftShoulder, bow) + ahead(offsets.leftUpperArm, bow)
+    - ahead(offsets.leftUpperLeg, tilt);
+}
+
 /** Posture needed to bring a shoulder within hand reach. */
 export function handLowering(proportions: Proportions, request: { ahead: number; lateral: number; height: number; reach: number; bowLimit: number }): { lower: number; bow: number } {
   const { ahead, lateral, height, reach, bowLimit } = request;

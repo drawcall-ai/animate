@@ -197,7 +197,8 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     // `CROUCH_LEAN`, as the legs take the crouch)
     const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch;
     const cycle = { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle };
-    posture.carry(f, upright, { ...requested, bow: requested.bow + stoop }, trunk, life, cycle);
+    const bow = requested.bow + stoop;
+    posture.carry(f, upright, { ...requested, bow }, trunk, life, cycle);
     const offset = hips.follow(offsets[0], offsets[1], upright.pelvis.clone().sub(upright.root).setY(0), PELVIS, dt, new Vector3());
     [offsets[0], offsets[1]] = [offsets[1], offset];
     // (the pelvis's turn with the stride followed off the facing; running, the legs are told of it before they reach from its hips —
@@ -317,6 +318,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     locomotion.moving = (root.underway ?? Math.hypot(root.velocity.x, root.velocity.z) > 0.05) || stepping;
     locomotion.pelvisYaw = trunk.pelvisYaw;
     locomotion.thoraxYaw = trunk.thoraxYaw;
+    locomotion.bow = bow;
     locomotion.velocity.copy(root.velocity).setY(0);
     locomotion.planted = locomotion.moving ? 0 : locomotion.planted + dt;
     locomotion.settled = stepper.settled;
