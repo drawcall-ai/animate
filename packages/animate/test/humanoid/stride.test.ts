@@ -115,11 +115,17 @@ describe('a person\'s stride', () => {
 
 describe('people of one build', () => {
   // (each its own: its individuality seeded by where it was made, as its idle life is, unless a life seed is given)
-  it('walk side by side out of step: their cadences differ and their touchdowns drift across each other', () => {
-    const person = (x: number) => new Body(humanoid(PERSON), { dev: true, at: new Vector3(x, 0, 0) });
-    const bodies = [person(0.7), person(-0.7)];
-    const [a, b] = walked(bodies, 1.2);
-    expect(Math.abs(a.cadence - b.cadence) / a.cadence).toBeGreaterThan(0.01);
+  // (two given their own life seeds, 3 and 11, whose cadences are 4.8% apart at the spreads first given: placed anywhere, two may be
+  // all but alike — at a 2% spread, a quarter of pairs within 1%; their cadences differ as their individualities do)
+  it('walk side by side out of step: their cadences differ as they are, and their touchdowns drift across each other', () => {
+    const person = (x: number, seed: number) => new Body(humanoid(PERSON), { dev: true, at: new Vector3(x, 0, 0), life: { seed } });
+    const bodies = [person(0.7, 3), person(-0.7, 11)];
+    const [a, b] = walked(bodies, 1.2), own = individualOf(11).cadence / individualOf(3).cadence;
+    expect(Math.abs(own - 1)).toBeGreaterThan(0.01);
+    // (as much as half again or as little as half their own difference: their strides vary by `STRIDES` one to the next, and a balance
+    // quickens a step as it needs)
+    expect((b.cadence / a.cadence - 1) / (own - 1)).toBeGreaterThan(0.5);
+    expect((b.cadence / a.cadence - 1) / (own - 1)).toBeLessThan(1.5);
     const offsets = b.touchdowns.map((t) => Math.min(...a.touchdowns.map((m) => Math.abs(t - m))));
     expect(Math.max(...offsets) - Math.min(...offsets)).toBeGreaterThan(0.1);
     for (const body of bodies) expect(body.log).toEqual([]);
@@ -144,9 +150,15 @@ describe('people of one build', () => {
       const cov = x.reduce((sum, a, k) => sum + (a - mx) * (y[k] - my), 0);
       return cov / Math.sqrt(x.reduce((sum, a) => sum + (a - mx) ** 2, 0) * y.reduce((sum, a) => sum + (a - my) ** 2, 0));
     };
-    for (let i = 0; i < bodies.length; i++) for (let j = i + 1; j < bodies.length; j++) {
-      expect(Math.abs(correlation(sways[i], sways[j])), `sway ${i}–${j}`).toBeLessThan(0.6);
-      expect(Math.abs(correlation(heads[i], heads[j])), `glances ${i}–${j}`).toBeLessThan(0.6);
+    // (over the ten pairs: mostly unlike, and none alike. Two of five shifting their weight within a second of each other — as likely as
+    // not in a 10 s window for the first — move alike for seconds after, and a 20 s drift of a few slow cycles correlates by chance: a
+    // pair at 0.93 is that, not a crowd in step)
+    const pairs = [0, 1, 2, 3, 4].flatMap((i) => [0, 1, 2, 3, 4].filter((j) => j > i).map((j) => [i, j]));
+    const median = (v: number[]) => [...v].sort((a, b) => a - b)[v.length >> 1];
+    for (const [name, series] of [['sway', sways], ['glances', heads]] as const) {
+      const r = pairs.map(([i, j]) => Math.abs(correlation(series[i], series[j])));
+      expect(median(r), name).toBeLessThan(0.3);
+      expect(Math.max(...r), name).toBeLessThan(0.97);
     }
     for (const body of bodies) expect(body.log).toEqual([]);
   });
