@@ -172,7 +172,7 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, late = false, dip = 0;
+  let began = NaN, since = NaN, stood = NaN, late = false, dip = 0;
   const left = (f: Frame) => Math.max(0, (Number.isNaN(began) ? f.time : began) + lag.delay + total - f.time);
   const rested = restingAt(near);
   const seconds = 2.4 * load;
@@ -186,13 +186,15 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
   const there = (f: Frame) => {
     if (!path.over(f)) return false;
     if (Number.isNaN(since)) since = f.time;
+    // (its lateness timed from when the body stands where it carries it from: not while it still walks there)
+    if (Number.isNaN(stood) && !person.locomotion.moving) stood = f.time;
     aim.read(f, to);
     const goal = aim.goal.position;
     // Load compliance: https://pmc.ncbi.nlm.nih.gov/articles/PMC4443842/ (F = k × displacement).
     // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
     dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
     if (rested(f, carrier, goal) && (dip === 0 || f.time - since >= seconds)) return true;
-    if (!late && f.time - since > RESTING) {
+    if (!late && f.time - stood > RESTING) {
       late = true;
       f.dev?.append(f.time, { check: `late carry: course end distance after ${RESTING} s (m)`, value: carrier.current.position.distanceTo(goal), limit: near, where: thing.object.name });
     }
