@@ -13,7 +13,7 @@ import type { Reacher } from './reacher';
 import type { Step } from '../../kernel/frame';
 import type { Thing } from '../../things/thing';
 import { hangsFrom, onBody } from '../../things/hold';
-import { bringShoulder, PROTRACTION, twistToward } from './bend';
+import { bringShoulder, ELEVATION, PROTRACTION, twistToward } from './bend';
 import { ArmClear, checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -33,6 +33,8 @@ const ABDUCTION = (8 * Math.PI) / 180;
  * arms hang plumb. So the arm turns back at the shoulder as far as keeps the palm beside the thigh as the shoulder comes ahead of the hip,
  * but for a share (`DRAPED`) of that it slides down the thigh's front — tuned: ~1 cm at 0.3 rad, ~3 at 0.6, whatever the build's arms —
  * and past a keirei's (`STOOP.from`, rad) it hangs toward the plumb, all plumb at `STOOP.to` (the deepest saikeirei's; a reach's low bow).
+ * But not while the other hand works standing: bowed over a table to take something in one hand, the other is held in by the side, its
+ * palm by the thigh however deep the bow, not dangled under the shoulder beside what the first hand takes (`held`).
  */
 const DRAPED = 0.1, STOOP = { from: 0.5, to: 1.2 };
 /**
@@ -43,11 +45,12 @@ const DRAPED = 0.1, STOOP = { from: 0.5, to: 1.2 };
  */
 const SWAY = { frequency: 1.5, damping: 0.7 };
 
-/** how far a free arm turns back off the plumb (rad, about the trunk's left) as the trunk bows `bow` (rad, + forward): `DRAPED`, `STOOP` */
-function drawnBack(proportions: Proportions, bow: number): number {
+/** how far a free arm turns back off the plumb (rad, about the trunk's left) as the trunk bows `bow` (rad, + forward), `held` (0–1) by the
+ * side as the other hand works standing: `DRAPED`, `STOOP` */
+function drawnBack(proportions: Proportions, bow: number, held: number): number {
   const reach = proportions.armLength + palmOf(proportions, 'left').length();
   const beside = Math.asin(clamp((1 - DRAPED) * shoulderAhead(proportions, bow) / reach, -1, 1));
-  return beside * (1 - smoothstep(STOOP.from, STOOP.to, Math.abs(bow)));
+  return beside * (1 - (1 - held) * smoothstep(STOOP.from, STOOP.to, Math.abs(bow)));
 }
 
 /** how far a hanging hand keeps out past the thigh beside it, from axis to axis (× height): the thigh's and the hand's thickness
@@ -65,8 +68,9 @@ const CLAVICLE = { accel: 30 };
 export function hanging(person: Reacher): Step {
   const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
   let phase = person.locomotion.phase;
-  // (the arms' turn back with the bow (rad) and its rate, swaying after `drawnBack` as `SWAY` has it)
-  const back = { angle: drawnBack(person.proportions, person.locomotion.bow), rate: 0 }, omega = 2 * Math.PI * SWAY.frequency;
+  // (each arm's turn back with the bow (rad) and its rate, swaying after `drawnBack` as `SWAY` has it)
+  const start = drawnBack(person.proportions, person.locomotion.bow, 0);
+  const back = { left: { angle: start, rate: 0 }, right: { angle: start, rate: 0 } }, omega = 2 * Math.PI * SWAY.frequency;
   return (f) => {
     if (f.dev && f.time > f.dt) checkArms(f.prev, person.proportions, f.time - f.dt, f.dev);
     const locomotion = person.locomotion;
@@ -79,8 +83,6 @@ export function hanging(person: Reacher): Step {
     const yaw = yawOf(_h.copy(f.current.local(0))) + locomotion.run * (locomotion.thoraxYaw - locomotion.pelvisYaw);
     const hips = f.current.position(0);
     const left = leftOf(yaw, _left);
-    back.rate += (omega ** 2 * (drawnBack(proportions, locomotion.bow) - back.angle) - 2 * SWAY.damping * omega * back.rate) * f.dt;
-    back.angle += back.rate * f.dt;
     SIDES.forEach((side, s) => {
       const posed = person.armPose[side], { shrug, forward, out: spread, twist, elbow } = posed;
       [posed.shrug, posed.forward, posed.out, posed.twist, posed.elbow] = [0, 0, 0, 0, 0];
@@ -91,9 +93,9 @@ export function hanging(person: Reacher): Step {
       const a = swing(lead);
       const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
       const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a)) + elbow;
-      // the arm hanging from the shoulder — plumb, but as far back as the bow carries it — out as far as keeps the hand clear of the
-      // thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or twists, swung forward about
-      // that frame's left; the forearm forward
+      // the arm hanging from the shoulder — plumb, but as far back as the bow carries it (held in as the other hand works) — out as far
+      // as keeps the hand clear of the thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or
+      // twists, swung forward about that frame's left; the forearm forward
       set(f, goals, INDEX[`${side}Shoulder`], shrug === 0 ? IDENTITY : _s2.setFromAxisAngle(Z, sign * shrug));
       const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
       const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
@@ -103,7 +105,11 @@ export function hanging(person: Reacher): Step {
       const clear = (outward(rest) - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / proportions.armLength;
       // (posed: swung forward, lifted out and twisted about its own length over that, as `ArmPosture` has them)
       const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1))) + spread;
-      const swung = _h.setFromAxisAngle(X, back.angle - a - forward), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
+      const other = SIDES[1 - s], working = person.holding[other] !== null || person.owner(`hand.${other}`) !== undefined;
+      const turn = back[side], held = working ? 1 - locomotion.walk : 0;
+      turn.rate += (omega ** 2 * (drawnBack(proportions, locomotion.bow, held) - turn.angle) - 2 * SWAY.damping * omega * turn.rate) * f.dt;
+      turn.angle += turn.rate * f.dt;
+      const swung = _h.setFromAxisAngle(X, turn.angle - a - forward), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
       const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted);
       if (twist !== 0) hang.multiply(_t.setFromAxisAngle(X, -twist));
       // (the hanging pose kept out of the trunk as it turns — the hand forward, the elbow as it swings — and then followed)
@@ -323,7 +329,7 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
   v.applyQuaternion(chest);
   const elevation = smoothstep(-0.05, 0.6, v.dot(up) / L);
   const reach = v.length();
-  const want = shoulder.addScaledVector(up, elevation * 0.03 * proportions.height);
+  const want = shoulder.addScaledVector(up, elevation * ELEVATION * proportions.height);
   if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, PROTRACTION * proportions.height) / reach);
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(proportions.offsets[`${side}UpperArm`]).normalize(), to);

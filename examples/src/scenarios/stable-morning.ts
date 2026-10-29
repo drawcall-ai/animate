@@ -70,10 +70,12 @@ export function stableMorning(): Scenario {
       const glance = empty(saddle, 'glance', new Vector3());
       const skirt = empty(saddle, 'near skirt', new Vector3(0, -0.2, -0.32));
       // (where the hands keep the lead walking out, steady as the body goes: the near hand forward of the chest toward the horse, the
-      // slack in front of the hip; where the eyes go; and where the horse walks led, in its lane at the handler's side a little behind)
+      // slack in front of the hip, held up a little below the elbow — the forearm forward, not the arm hanging at its full length, which
+      // a short-armed body could only hold by bowing and squatting; where the eyes go; and where the horse walks led, in its lane at the
+      // handler's side a little behind)
       const height = (bone: Object3D) => bone.getWorldPosition(new Vector3()).y;
       const nearHand = empty(handler.object, 'near hand', new Vector3(-0.5, height(handler.bones.chest) + 0.1, 0.35));
-      const slackHand = empty(handler.object, 'slack hand', new Vector3(0.22, height(handler.bones.hips) - 0.08, 0.16));
+      const slackHand = empty(handler.object, 'slack hand', new Vector3(0.22, height(handler.bones.leftLowerArm) - 0.08, 0.22));
       const ahead = empty(handler.object, 'ahead', new Vector3(0, height(handler.bones.head), 4));
       const horseDestination = empty(scene, 'led', TIED);
       const besideHandler = () => {
