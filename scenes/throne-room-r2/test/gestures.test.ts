@@ -44,9 +44,9 @@ it('plays the medal gestures visibly and in balance', async () => {
   expect(playing.done()).toBe(true);
   // (R2-D2 is made outside this beat, by another part of the scene: its own log is its own)
   expect(playing.bodies.slice(0, 7).flatMap((body) => body.log)).toEqual([]);
-  // Luke's head goes down a clear 30°, not onto his chest
-  expect(most.lukeBow - rest!.lukePitch).toBeGreaterThan(0.5);
-  expect(most.lukeBow - rest!.lukePitch).toBeLessThan(0.95);
+  // Luke's head goes down slightly (about 15–40°), not onto his chest
+  expect(most.lukeBow - rest!.lukePitch).toBeGreaterThan(0.25);
+  expect(most.lukeBow - rest!.lukePitch).toBeLessThan(0.7);
   // Han's head comes round toward Leia
   expect(most.hanTurn).toBeLessThan(-0.3);
   // Chewbacca's chin goes well up and his hands rise

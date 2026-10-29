@@ -431,7 +431,9 @@ function applause(body: Body, seconds: number, random: () => number): Partial<Re
       const t = time - start;
       const up = MathUtils.smoothstep(Math.min(t, seconds - t), 0, raise);
       if (pumps && sign < 0) {
-        gesture.set(-0.2, person.shoulderHeight + 0.3 + 0.3 * (0.5 + 0.5 * Math.sin(t * rate * 2 * Math.PI)), 0.15);
+        // pumped between a bent arm and nearly straight overhead, within the arm's reach above the shoulder
+        const top = 0.9 * person.armLength;
+        gesture.set(-0.2, person.shoulderHeight + top * (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * rate * 2 * Math.PI))), 0.1);
       } else {
         const phase = (t * rate) % 1;
         gesture.set(sign * (0.02 + 0.16 * (phase < 0.3 ? 1 - phase / 0.3 : (phase - 0.3) / 0.7) ** 2), chest, forward);
