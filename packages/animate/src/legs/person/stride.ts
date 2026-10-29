@@ -107,6 +107,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
       position: moving ? stop : waiting ? root.clone() : go ? edged ?? root.clone() : leaned ?? rest ?? root.clone(),
       velocity: moving ? velocity : new Vector3(),
       yaw: faced ? yaw : undefined,
+      backs: go?.backs,
     };
     const walking = Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity);
     const speed = moving ? walking : waiting ? 0 : go ? (edged ? EDGE * s : 0) : leaned || rest ? LEAN.speed * s : 0;

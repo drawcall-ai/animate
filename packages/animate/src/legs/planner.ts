@@ -8,7 +8,8 @@ import { strideAt, type Gait } from '../species/gait';
 import type { Steering } from './step/state';
 
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
-interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number }
+/** where to go, how fast it moves, the facing to arrive with, and whether a few steps back or aside keep the facing (`KEPT`) */
+interface PlannerGoal { position: Vector3; velocity?: Vector3; yaw?: number; backs?: boolean }
 
 /** a root as planned: its point on the floor, its turn, its velocity (m/s) and turn rate (rad/s) */
 interface RootState { position: Vector3; yaw: number; velocity: Vector3; angular: number }
@@ -40,7 +41,7 @@ export class Planner {
     const targets = [goal.position.clone()];
     // (at rest on a still goal, facing as asked, it stays as it is however far ahead it is read, at any share: a standing body's plan)
     const still = resting(goal.position, velocity, acceleration, goalTurn, this.state, facing) ? keptAt(this.state) : null;
-    const planned = (share: number) => still ?? rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance, targets);
+    const planned = (share: number) => still ?? rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance, targets, !!goal.backs);
     let accepted: ReturnType<typeof planned> | undefined;
     const kept = (plan: ReturnType<typeof planned>) => {
       const fits = holds((ahead) => plan(f.time + ahead));
@@ -83,7 +84,7 @@ export class Planner {
  */
 function rootPlan(
   f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, previous: RootState, acceleration: number,
-  facing: Quaternion | undefined, share: number, goalTurn: number, stanceYaw: number, targets: Vector3[],
+  facing: Quaternion | undefined, share: number, goalTurn: number, stanceYaw: number, targets: Vector3[], backs: boolean,
 ): (time: number) => RootState {
   const accel = motion.accel;
   const speed = share === 0 ? 0 : (motion.speed ?? Infinity) * share;
@@ -92,6 +93,10 @@ function rootPlan(
   const stride = strideAt(gait, cruise, 0);
   const midstance = cruise * stride.duty / (2 * stride.frequency);
   const states: RootState[] = [], goalSpeed = velocity.length(), facingYaw = facing ? yawOf(facing) : 0;
+  // (a short move to a still goal, asked to face about as it faces now — a step or three back or aside — keeps its facing all the way,
+  // backing or side-stepping, slower)
+  const keeps = backs && !!facing && goalSpeed < STILL && Math.abs(wrapAngle(facingYaw - previous.yaw)) <= KEPT.turn
+    && Math.hypot(goal.x - previous.position.x, goal.z - previous.position.z) <= KEPT.far * midstance;
   const advance = (from: RootState, ahead: number): RootState => {
     const yaw = from.yaw;
     const accelerating = acceleration === 0 ? ahead : Math.min(ahead, Math.max(0,
@@ -126,9 +131,11 @@ function rootPlan(
     // Keep translating until the remaining turn can finish, rather than exhaust the approach first (derived).
     // (never held still to turn first: a goal far off the facing — further than it may face off its way, `sidelong`: near a still goal,
     // any way — is walked to more and more slowly, then turned to first)
-    const sidelong = lerp(Math.PI, SIDELONG, Math.max(smoothstep(ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance, distance), smoothstep(STILL, 2 * STILL, goalSpeed)));
+    const sidelong = keeps ? Math.PI : lerp(Math.PI, SIDELONG, Math.max(smoothstep(ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance, distance), smoothstep(STILL, 2 * STILL, goalSpeed)));
     const first = 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], Math.abs(wrapAngle(heading - yaw)) - sidelong + SIDELONG);
-    const closing = (arrival > 0 && untilFacing > 0 ? Math.min(speed, distance / untilFacing) : speed) * first;
+    const off = keeps ? Math.cos(wrapAngle(heading - yaw)) : 1;
+    const paced = speed * (off >= 0 ? lerp(KEPT.aside, 1, off) : lerp(KEPT.aside, KEPT.back, -off));
+    const closing = (arrival > 0 && untilFacing > 0 ? Math.min(paced, distance / untilFacing) : paced) * first;
     const wanted = delta.setLength(distance > 1e-9 ? Math.sqrt(2 * Math.max(0, accel + Math.min(0, acceleration)) * distance) : 0)
       .add(futureVelocity).clampLength(0, closing);
     const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * STEP));
@@ -139,7 +146,7 @@ function rootPlan(
     const holding = smoothstep(0, ARRIVING, arrival);
     const progress = Math.max(Math.abs(goalAngle) * arrival, holding * direction * wrapAngle(stanceYaw - travelYaw), holding * direction * wrapAngle(yaw - travelYaw));
     // (and turns from the way it goes no further than `sidelong`: nobody walks off sideways or backward but for the last steps)
-    const bearing = facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress, sidelong) : travelYaw;
+    const bearing = keeps ? facingYaw : facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress, sidelong) : travelYaw;
     // (asked to face about and its way about too, it turns round the side the facing lies: within `ABOUT` of a half turn either side
     // reads alike, and it would set off one way only to come back round the other)
     const direct = wrapAngle(bearing - yaw), toFacing = facing ? wrapAngle(facingYaw - yaw) : direct;
@@ -198,6 +205,13 @@ const PRECISION = 1 / 64;
  * stride's mid-stance travel: ~0.45–1.1 m walking) it faces no further than `SIDELONG` (rad) off the way it goes
  */
 const ARRIVING = 0.2, ARRIVAL_TURN = [1, 2.5] as const, SIDELONG = 0.3;
+/**
+ * A move to a still goal no further than `far` × mid-stance travel (~1.45 m at a stroll's 1.3 m/s: a few steps), asked to face within `turn` (rad)
+ * of how it faces, keeps its facing, backing or side-stepping at `back`/`aside` of its pace. Recalled: people back or side-step a few
+ * steps rather than turn round (the turn costs more than it saves); backward walking's self-selected speed is ~60–70% of forward, on
+ * shorter steps at a like cadence (Thorstensson 1986, Acta Physiol Scand; Laufer 2005, Gait Posture 22:96); side-stepping's ~75% tuned.
+ */
+const KEPT = { far: 4.5, turn: 0.8, back: 0.65, aside: 0.75 };
 /** Tuned: a goal this far off the facing (rad) is walked to more and more slowly, then turned to first */
 const TURN_FIRST = [0.6, 1.3] as const;
 /** Tuned: how near a half turn (rad) its way and the facing asked are each taken as about */

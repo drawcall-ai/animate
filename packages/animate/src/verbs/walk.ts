@@ -12,8 +12,9 @@ import { verb, type Until, type Verb } from './story';
 export interface WalkOptions {
   /**
    * the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else
-   * the way it comes. The body faces the way it walks and turns to this only over its last step or so, so a step back or aside much
-   * longer than that turns it away and round again. A walk to where the body stands turns it on the spot (on a tread, its feet keep to it,
+   * the way it comes. The body faces the way it walks and turns to this only over its last step or so — but a few steps back or aside
+   * (under ~1.45 m at a stroll's pace, a few steps: less at a slower `speed`) asked to face within ~45° of how it faces keeps its facing all
+   * the way, backing or side-stepping at ~⅔–¾ of its pace. A walk to where the body stands turns it on the spot (on a tread, its feet keep to it,
    * toes over the nosing if the tread is shorter than the foot); an about-turn goes round the side the body looks to (its head turned
    * past ~9°), else to the right. A target to face that moves re-aims the steps mid-swing, so turn to a fixed angle or point.
    */
@@ -65,7 +66,7 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       }
       return found.position;
     };
-    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, accel }, until === undefined);
+    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, accel, backs: true }, until === undefined);
     const step = (f: Frame) => {
       const go = walk.step(f);
       request.eta = walk.ends;
@@ -78,7 +79,7 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
     else request.met();
     // (there, the legs are its, standing, till its story moves on)
     yield* during(request, 'go', 'asked', () => {});
-  }, until);
+  }, until, false, true);
 }
 
 /**

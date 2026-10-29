@@ -25,9 +25,12 @@ export interface Go {
   accel: number;
   /** arriving, the feet are squared into the stance (default true; false: they stay as they land) */
   plant?: boolean;
-  /** edged onto a goal that has stopped, the body stands as it is (default true: a walk that ends there); false: it keeps edging after
-   * it (a walk that follows its goal, which may move off again any moment) */
+  /** the walk ends on arriving there (default true); false: it follows its goal, which may move off again any moment — not arrived at, a
+   * closing step keeping the margin of a foot further on */
   settles?: boolean;
+  /** a few steps back or aside, asked to face about as the body faces, it keeps its facing, backing or side-stepping (a person's walk's;
+   * default false: it faces the way it goes) */
+  backs?: boolean;
   face?: { yaw: number; rate?: number };
   stance?: Partial<Stance>;
 }
