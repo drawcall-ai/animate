@@ -11,7 +11,7 @@ import type { Beat } from './index';
  * a medal on its ribbon: 0.1 kg. The bearer holds it near the medal (empties `inner left` and `inner right`, 0.08 m apart); Leia takes
  * the ribbon further out (`outer left` and `outer right`, 0.3 m apart), so two people's hands never share a grip.
  */
-function createMedal(name: string): Object3D {
+export function createMedal(name: string): Object3D {
   const medal = new Object3D();
   medal.name = name;
   medal.userData.mass = 0.1;
@@ -25,7 +25,7 @@ function createMedal(name: string): Object3D {
 }
 
 /** where a medal hangs on `hero`: an empty 0.15 m in front of his chest bone, turned as he faces, attached to that bone */
-function createWornPlace(hero: Body, name: string): Object3D {
+export function createWornPlace(hero: Body, name: string): Object3D {
   const place = new Object3D();
   place.name = name;
   const chest = hero.bones.chest;
@@ -39,6 +39,21 @@ function createWornPlace(hero: Body, name: string): Object3D {
 /** a point in front of `body` (m ahead, m up from its floor) */
 function ahead(body: Body, distance: number, height: number): Vector3 {
   return new Vector3(Math.sin(body.facing) * distance, height, Math.cos(body.facing) * distance).add(body.position);
+}
+
+/**
+ * `bearer`, holding `medal` by its inner grips, holds it out toward `leia` from where he stands (0.4 m his way to her, at his chest's
+ * height); she takes it by the ribbon's outer ends (her right on its left, facing him) and he lets go. Placed halfway between them, he
+ * walked into her space and her hands could not get in.
+ */
+export function* handOver(bearer: Body, leia: Body, medal: Object3D) {
+  const offer = new Vector3().subVectors(leia.position, bearer.position).setY(0).setLength(0.4).add(bearer.position).setY(bearer.position.y + 1.1);
+  yield* parallel('race', carry(bearer, medal, offer, { until: Infinity }), function* () {
+    yield* wait(0.8);
+    if (!(yield* grab(leia, medal, { left: 'outer right', right: 'outer left' }))) throw new Error(`Leia could not take ${medal.name}`);
+    if (!leia.holds(medal)) throw new Error(`Leia has no hold of ${medal.name}`);
+  });
+  release(bearer, medal);
 }
 
 export const beat: Beat & { order: number } = {
@@ -68,15 +83,7 @@ export const beat: Beat & { order: number } = {
       yield* parallel('all', walkTo(leia, marks.leia), function* () {
         if (!(yield* grab(bearer, medal, { left: 'inner left', right: 'inner right' }))) throw new Error(`the bearer could not take ${medal.name}`);
       });
-      // he holds it out toward her from where he stands, 0.4 m his way to her; she takes it by the ribbon's outer ends (her right on
-      // its left, facing him) and he lets go. Placed halfway between them, he walked into her space and her hands could not get in.
-      const offer = new Vector3().subVectors(leia.position, bearer.position).setY(0).setLength(0.4).add(bearer.position).setY(bearer.position.y + 1.1);
-      yield* parallel('race', carry(bearer, medal, offer, { until: Infinity }), function* () {
-        yield* wait(0.8);
-        if (!(yield* grab(leia, medal, { left: 'outer right', right: 'outer left' }))) throw new Error(`Leia could not take ${medal.name}`);
-        if (!leia.holds(medal)) throw new Error(`Leia has no hold of ${medal.name}`);
-      });
-      release(bearer, medal);
+      yield* handOver(bearer, leia, medal);
       // she hangs it on him; he bows his head to the ribbon as it comes and looks up at her once it is on
       yield* parallel('race', lookAt(hero, ahead(hero, 0.5, 1.1)), function* () {
         if (!(yield* carry(leia, medal, place))) throw new Error(`Leia could not hang ${medal.name}`);
