@@ -7,8 +7,6 @@ import { SOLDIER, OUTLIER } from '../src/skeletons';
 import { cases } from '../../packages/animate/test/open';
 
 const test = cases([
-  // (its varied body stepping at its own legs' cadence: a touchdown 0.1002 m/s, over the 0.1 m/s limit, at life seed 2)
-  ['reach: variation #2 final-pose dev checks', [2]],
   'shooter on the soldier: final-pose dev checks', // Grip/leg-rate violations.
   'pickup-shelf on the soldier: final-pose dev checks', // Unreachable placement.
   'vr: final-pose dev checks', // Hands ~14 cm short of the floor controllers in the crouch (tracked hand short of a target out of reach).
