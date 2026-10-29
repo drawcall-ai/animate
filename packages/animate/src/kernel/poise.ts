@@ -12,7 +12,8 @@ export interface Posture {
   twist?: number;
   /** the trunk bent sideways (rad, + its left side up: leaning to its right) */
   lean?: number;
-  /** let down on its legs (m; − up onto its toes, a person's) */
+  /** let down on its legs in balance, upright (m; − up onto its toes, a person's), as far as they bend: about 0.6 m for the default
+   * person, a deep crouch on both feet and the nearest a body comes to kneeling */
   lower?: number;
   /** the head turned on its neck over where its eyes look (rad): `pitch` + chin down (a nod), `yaw` + to its left, `roll` + its left
    * side up (tipped toward its right shoulder) */

@@ -10,9 +10,15 @@ import { verb, type Until, type Verb } from './story';
 
 /** How a walk goes. */
 export interface WalkOptions {
-  /** the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else the way it comes */
+  /**
+   * the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else
+   * the way it comes. The body faces the way it walks and turns to this only over its last step or so, so a step back or aside much
+   * longer than that turns it away and round again. A walk to where the body stands turns it on the spot; a target to face that moves
+   * re-aims the steps mid-swing, so turn to a fixed angle or point.
+   */
   face?: number | Target;
-  /** its top speed (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7) */
+  /** its top speed (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7 ×
+   * its scale, a person's height over the default 1.75 m, so a group sharing a climbing speed keeps under its smallest body's cap) */
   speed?: number;
   /** how quickly it speeds up (m/s²; default 1.2) */
   accel?: number;
@@ -22,7 +28,8 @@ export interface WalkOptions {
 
 /**
  * Walks to `target` (exactly there, on the floor under it: to stand within reach of something, `grab` or `reach` it), turning to
- * arrive facing as asked: a mover, it ends once there, turned and settled. It asks for the legs. It returns `false` if the walk stalls:
+ * arrive facing as asked: a mover, it ends once there, turned and settled — its feet squared, a second or two after the body is there; end
+ * it on `until: arriving(body, 0.5)` to start what follows sooner. It asks for the legs. It returns `false` if the walk stalls:
  * no nearer for 6 s. A point or an empty off the floor under it is said once in the dev log.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {

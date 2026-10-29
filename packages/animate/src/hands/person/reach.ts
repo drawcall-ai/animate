@@ -258,7 +258,7 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
  * shoulder, or nearer the trunk than the arm is kept clear of it; else something within reach (a joint's range, the other hand, the
  * body's balance)
  */
-function limitOf(person: Reacher, side: Side): (at: Vector3) => string {
+export function limitOf(person: Reacher, side: Side): (at: Vector3) => string {
   return (at) => {
     const pose = person.pose, arm = person.proportions.armLength, shoulder = pose.position(INDEX[`${side}UpperArm`]).distanceTo(at);
     if (shoulder > STRAIGHT * arm) return `beyond the arm’s reach: the shoulder ${shoulder.toFixed(2)} m from it, the arm ${arm.toFixed(2)} m`;

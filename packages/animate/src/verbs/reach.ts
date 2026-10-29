@@ -20,7 +20,8 @@ export interface ReachOptions {
  * Reaches each hand named to its target (an `Object3D` turns the hand as it is turned), taking nothing: from where it stands if it can
  * reach (each target within `armLength`'s reach of its shoulder, as the trunk turns it), else, if it can walk, is not driven and `step`
  * allows, it walks up first (borrowed legs) and stays where it stood, its eyes on the targets (borrowed), the hands going as it arrives
- * (asked), the body turning, bowing, bending or rising on its toes for them. A mover, it ends once the hands are there. It returns `false`
+ * (asked), the body turning, bowing, bending or rising on its toes for them. It picks where to stand as it starts, and again whenever a target has
+ * moved about 10 cm from where it planned for. A mover, it ends once the hands are there. It returns `false`
  * if it can stand nowhere in reach (with `step: false`: if it cannot reach from where it stands), or the hand position or turn remains
  * unmet after the planned reach plus four seconds, excluding balance-support steps.
  */

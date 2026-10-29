@@ -23,7 +23,9 @@ export interface GrabOptions {
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
  * origin): it walks up to stand in reach (borrowed legs; with `step: false` it stays where it stands), its eyes find the grips first
- * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. A mover,
+ * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. It
+ * picks where to stand once, as it starts, from where its feet and the grips are then: a thing still moving, or feet still walking,
+ * gives a stand for where they were; with no particular place to stand, leave the walking to it. A mover,
  * it ends holding. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else stays where it is, and the
  * hands follow it. It returns `false` if no stand reaches the grips (with `step: false`: if they are out of reach from where it stands) or
  * the hand position or turn remains unmet after the planned reach plus four seconds. Grips set position only by default:
