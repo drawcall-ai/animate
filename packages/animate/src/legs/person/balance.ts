@@ -257,17 +257,32 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(proportions.thigh).add(thigh);
       // The pole guides the free swing; the chain progressively takes the foot orientation needed for contact.
       const place = (at: Vector3) => {
+        const shank = INDEX[`${side}LowerLeg`], ankleRange = f.current.skeleton.limits[INDEX[`${side}Foot`]];
+        // (the ankle turning the foot as planned under the shank as it is now, within its range (into `_local`; unclamped, `_unclamped`))
+        const ankled = () => {
+          _unclamped.copy(f.current.rotation(shank)).invert().multiply(pose.foot);
+          _local.copy(_unclamped);
+          if (ankleRange) clampRotation(_local, ankleRange);
+          return _local;
+        };
         solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole });
-        const ankle = _local.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(pose.foot);
-        const ankleRange = f.current.skeleton.limits[INDEX[`${side}Foot`]];
-        const unrestricted = leg.swing ? ankle.clone() : null;
-        if (ankleRange) clampRotation(ankle, ankleRange);
+        // (swinging, a foot turned further about the vertical than the ankle's range leaves it, off the way its knee points, is turned
+        // there by the knee's own twist — the tibia rotates in its flexion — as far as the knee's range lets: left turned with the knee, a
+        // foot turning about on a tread swept its toes 16° off its way into the riser it was planned clear of)
+        let twist: number | undefined;
+        if (leg.swing) {
+          const off = wrapAngle(yawOf(pose.foot) - yawOf(_solved.copy(f.current.rotation(shank)).multiply(ankled())));
+          if (Math.abs(off) > TWISTED) {
+            twist = (off - Math.sign(off) * TWISTED) * _axis.copy(f.current.skeleton.bones[INDEX[`${side}Foot`]].offset).normalize().applyQuaternion(f.current.rotation(shank)).y;
+            solveChain(f, `${side}Leg`, { tip: { position: at }, pole, twist });
+          }
+        }
+        const ankle = ankled().clone();
         // Prepare the planted orientation during terminal swing instead of changing the chain's constraints at contact.
-        if (leg.swing && leg.swing.u > 0.5 && unrestricted && ankle.angleTo(unrestricted) > 1e-6) {
-          const landing = f.current.rotation(INDEX[`${side}LowerLeg`]).clone().multiply(ankle)
-            .slerp(pose.foot, minimumJerk((leg.swing.u - 0.5) / 0.5));
-          solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: landing }, pole, twist: 0 });
-          ankle.copy(f.current.rotation(INDEX[`${side}LowerLeg`])).invert().multiply(landing);
+        if (leg.swing && leg.swing.u > 0.5 && ankle.angleTo(_unclamped) > 1e-6) {
+          const landing = f.current.rotation(shank).clone().multiply(ankle).slerp(pose.foot, minimumJerk((leg.swing.u - 0.5) / 0.5));
+          solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: landing }, pole, twist: twist ?? 0 });
+          ankle.copy(f.current.rotation(shank)).invert().multiply(landing);
           if (ankleRange) clampRotation(ankle, ankleRange);
         }
         f.current.setLocal(INDEX[`${side}Foot`], ankle);
@@ -392,4 +407,6 @@ function crouchFor(share: number): number {
 
 const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), _local = new Quaternion();
 const [_a, _b, _pole, _v, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
-const _shift = new Quaternion();
+const _shift = new Quaternion(), _solved = new Quaternion(), _unclamped = new Quaternion(), _axis = new Vector3();
+/** Tuned: a swinging foot more than this (rad) off its planned turn about the vertical, as its knee leaves it, is twisted the rest of the way */
+const TWISTED = 0.02;

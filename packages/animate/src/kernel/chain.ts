@@ -125,13 +125,12 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     };
     const tip = () => quaternion ? shared(_upper, bent, a, quaternion, limits, twist) : 0;
     const strain = (angle: number) => first(angle) + tip();
-    // as the pole has it, unless a swivel searched with the preferred twist fits better, by more than the swivel costs (`SWIVEL`)
+    // as the pole has it, unless a swivel searched with the preferred twist fits better, by more than the swivel costs (`SWIVEL`): the
+    // least of the two together, which grows with the excess it saves (chosen whole once it saved more than it cost, the swivel leapt
+    // 0 → 29° and back in alternate sub-steps of a swing as a hip's excess at the pole's side rose and fell about that)
     let swivel = 0;
     let left = strain(0);
-    if (left >= FITS && swivels) {
-      const [searched, there] = least(first, tip, -Math.PI, Math.PI, 0);
-      if (left - there > SWIVEL * searched * searched) [swivel, left] = [searched, there];
-    }
+    if (left >= FITS && swivels) [swivel, left] = least(first, tip, -Math.PI, Math.PI, 0, (x) => SWIVEL * x * x);
     swivelled(swivel);
     return left;
   };
@@ -218,12 +217,13 @@ function nearest(a: number, b: number, hinge: Hinge): number {
   return Math.abs(a - hinge.now) <= Math.abs(b - hinge.now) ? a : b;
 }
 
-/** the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) is least, `start` if it is (all
- * but) 0 there: sampled, then refined; of x where it is (all but) as little, the nearest `start` (a swivel moves no further than it
- * must), and `f` there. An x whose `part` alone is no less than the least yet is passed over without its `rest`: `f` there is no less. */
-function least(part: (x: number) => number, rest: () => number, lo: number, hi: number, start: number): [x: number, f: number] {
+/** the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) plus what leaving `start` for
+ * it `cost`s is least, `start` if `f` is (all but) 0 there: sampled, then refined; of x where it is (all but) as little, the nearest
+ * `start` (a swivel moves no further than it must), and `f` there. An x whose `part` alone, with its cost, is no less than the least yet
+ * is passed over without its `rest`: `f` there is no less. */
+function least(part: (x: number) => number, rest: () => number, lo: number, hi: number, start: number, cost = (_x: number) => 0): [x: number, f: number] {
   start = Math.min(hi, Math.max(lo, start));
-  const near = (x: number) => NEAREST * Math.abs(x - start);
+  const near = (x: number) => NEAREST * Math.abs(x - start) + cost(x);
   let best = start;
   let value = part(start) + rest();
   let low = value + near(start);

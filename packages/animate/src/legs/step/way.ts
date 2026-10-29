@@ -1,8 +1,7 @@
 // A swing's way over a floor that is not level: up a stair the foot rises before it swings on, down one it comes over the tread first.
-import type { Vector3 } from 'three';
-import { lerp, minimumJerk, quintic, smoothstep } from '../../kernel/math';
+import { Vector3 } from 'three';
+import { lerp, minimumJerk, quintic, smoothstep, wrapAngle } from '../../kernel/math';
 import { FLAT, highestUnder, lowestUnder } from '../floor';
-import type { Spot } from '../support';
 import type { Leg, Steps, Swing } from './state';
 
 /** how high a swing's arc lifts its foot over its path `u` through it (m): it peaks mid-swing walking; a runner's heel stays up later, the
@@ -42,7 +41,10 @@ function wayOf(steps: Steps, leg: Leg, w: Swing, land: Readonly<Vector3>): { acr
   const { floor, feet, st } = steps, level = leg.anchor.y - feet.ankleHeight, climb = level - w.level;
   const lead = Math.min(STAIR.share * w.T, Math.abs(climb) / STAIR.speed);
   const across = climb < 0 ? Math.max(STEP_TIME, w.rest - lead) : w.rest, up = climb > 0 ? Math.max(STEP_TIME, w.rest - lead) : w.rest;
-  const print = feet.print(leg.i, w.x, leg.yaw);
+  // (the sole read as it turns on its way, not as it will land: a foot turning about on a tread sweeps its toes over the riser behind
+  // its landing's print — read at the landing's yaw, the toes went into it and the swing was lifted out of it in one sub-step, 14 cm)
+  const yawAt = (t: number) => quintic(w.turn.x, w.turn.v, w.turn.a, w.turn.x + wrapAngle(leg.yaw - w.turn.x), 0, w.rest, t)[0];
+  const print = feet.print(leg.i, w.x, w.turn.x);
   // (up onto a tread, its sole kept its clearance over it till it is all over the tread: its heel clear of the nosing it lands past)
   // (its sole's lowest point — a toe hanging down — kept its clearance over the floor it passes, let go over its last stretch onto its landing)
   const over = feet.ankleHeight + (w.drop - feet.ankleHeight + st.clearance * st.scale) * (1 - minimumJerk((w.u - LANDING) / (1 - LANDING)));
@@ -50,7 +52,7 @@ function wayOf(steps: Steps, leg: Leg, w: Swing, land: Readonly<Vector3>): { acr
   for (let k = 0; k <= AHEAD; k++) {
     const t = w.rest * k / AHEAD, u = Math.min(1, w.u + t / w.T);
     const dx = quintic(w.x.x, w.v.x, w.a.x, land.x, 0, across, t)[0] - w.x.x, dz = quintic(w.x.z, w.v.z, w.a.z, land.z, 0, across, t)[0] - w.x.z;
-    const there = highestUnder(floor, print.map(([x, z]): Spot => [x + dx, z + dz]));
+    const there = highestUnder(floor, feet.print(leg.i, _at.set(w.x.x + dx, 0, w.x.z + dz), yawAt(t)));
     if (there > level + RISE) pass = Math.max(pass, there + over);
     if (k === 0 || climb <= RISE || t > CLEAR || w.u > HOLDING || there <= w.level + RISE) continue;
     const sole = quintic(w.x.y, w.v.y, w.a.y, land.y, 0, up, t)[0] + arcOf(steps, w, u) - w.drop;
@@ -77,3 +79,5 @@ const AHEAD = 10;
  * toes first, the heel kept up over the edge it leaves (recalled: stair ascent lands on the forefoot or the whole foot, descent on the
  * forefoot), and with no arc: it only comes over the edge */
 const STEP = 0.08;
+
+const _at = new Vector3();
