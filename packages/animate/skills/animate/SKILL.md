@@ -111,7 +111,7 @@ A body costs roughly a tenth of a millisecond of CPU a frame, and `update` alway
 
 Use a body's `drive` for a player-controlled root with procedural legs, and `track` for its headset and controllers; scripted hands and eyes can still act on that body.
 
-For a custom creature, combine a skeleton with `species(skeleton, roles, tuning)`; [lion-species.ts](references/lion-species.ts) is a complete four-legged species to start from. Every leg must be able to lift and place its foot, even on a creature that never walks (`LegRole` says what that takes). A creature without a `carriage` has no idle life of its own, so give it life from the story: `pose` for its trunk and `lookAt` for its head. For mouth contact (a horse's or dog's `jaw`), use `reach` with a point, not `lookAt`, which directs gaze. Check a new gait by counting the frames each foot of `body.feet` spends unplanted (`powerGait` says why).
+For a custom creature, combine a skeleton with `species(skeleton, roles, tuning)`; [lion-species.ts](references/lion-species.ts) is a complete four-legged species to start from; a species may have two legs or four, and only four carry a `carriage`. Every leg must be able to lift and place its foot, even on a creature that never walks (`LegRole` says what that takes). A creature without a `carriage` has no idle life of its own, so give it life from the story: `pose` for its trunk and `lookAt` for its head. For mouth contact (a horse's or dog's `jaw`), use `reach` with a point, not `lookAt`, which directs gaze. Check a new gait by counting the frames each foot of `body.feet` spends unplanted (`powerGait` says why).
 
 ## Check the story
 

@@ -79,7 +79,7 @@ export interface Attention {
 
 /** What a body's legs are asked by the scene and its quiet life: a seed, a tether, a startle. */
 export interface Temperament extends Attention {
-  /** fixes its variation: sway, breathing, weight shifts, glances */
+  /** fixes its variation: sway, breathing, weight shifts, glances (a creature without a carriage or posture of its own has none) */
   seed?: number;
 }
 

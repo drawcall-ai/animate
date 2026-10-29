@@ -119,7 +119,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return { phase, walk, run };
   }
 
-  /** its feet, as they stand or, swinging, where they land */
+  /** its feet, as they stand or, swinging, where they land (none before its first `update`) */
   get feet(): readonly Foot[] {
     return (selfOf(this).stepper?.legs ?? []).map((leg) => ({ position: leg.anchor.clone(), yaw: leg.yaw, planted: !leg.swing }));
   }

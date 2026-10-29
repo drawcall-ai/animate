@@ -23,7 +23,8 @@ export interface CarryOptions {
 /**
  * Carries `thing`, which the body holds, to `target` — or through each of a list of targets, one smooth way: off whatever it is in first
  * (its hip, a pouch, a well; a heavy one after a knee dip), out the way its empty's approach comes in (from the point of it nearest the
- * thing), and in to the last target the way that target's approach comes (`userData.approach`, slowing to its `userData.speed`); an
+ * thing), and in to the last target the way that target's approach comes (`userData.approach`: the names of empties beside it, under its
+ * parent, outermost first; slowing to its `userData.speed`); an
  * `Object3D` target turns it as the target is turned, reached by the start of the last straight. When it must walk there (and `step`
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
  * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, and keeps it there. It
