@@ -13,7 +13,7 @@ import type { Reacher } from './reacher';
 import type { Step } from '../../kernel/frame';
 import type { Thing } from '../../things/thing';
 import { hangsFrom, onBody } from '../../things/hold';
-import { bringShoulder, PROTRACTION, twistToward } from './bend';
+import { bringShoulder, ELEVATION, PROTRACTION, twistToward } from './bend';
 import { ArmClear, checkArms, clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -23,6 +23,10 @@ import type { Proportions } from '../../species/humanoid/proportions';
 const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
 /** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
 const ABDUCTION = (8 * Math.PI) / 180;
+/** Tuned: how much of the trunk's bow a standing body's free arm keeps to the trunk, rather than hanging plumb, while the other hand
+ * works — bowed over a table to take something in one hand, the other is held in by the side, not dangled out under the shoulder beside
+ * what the first hand takes (walking, the arm swings from its hang as it is) */
+const TUCK = 0.5;
 /** how far a hanging hand keeps out past the thigh beside it, from axis to axis (× height): the thigh's and the hand's thickness
  * (mid-thigh 0.034, hand 0.012) and a little air */
 const CLEAR = 0.055;
@@ -60,8 +64,9 @@ export function hanging(person: Reacher): Step {
       const a = swing(lead);
       const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
       const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a)) + elbow;
-      // the arm hanging plumb from the shoulder, out as far as keeps the hand clear of the thigh beside it (the hip's or the knee's, as
-      // the legs stand now) however the trunk bows, leans or twists, swung forward about that frame's left; the forearm forward
+      // the arm hanging plumb from the shoulder (drawn in toward the trunk as it bows while the other hand works, `TUCK`), out as far as
+      // keeps the hand clear of the thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or
+      // twists, swung forward about that frame's left; the forearm forward
       set(f, goals, INDEX[`${side}Shoulder`], shrug === 0 ? IDENTITY : _s2.setFromAxisAngle(Z, sign * shrug));
       const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
       const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
@@ -71,7 +76,10 @@ export function hanging(person: Reacher): Step {
       const clear = (outward(rest) - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / proportions.armLength;
       // (posed: swung forward, lifted out and twisted about its own length over that, as `ArmPosture` has them)
       const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1))) + spread;
-      const swung = _h.setFromAxisAngle(X, -a - forward), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
+      const other = SIDES[1 - s], working = person.holding[other] !== null || person.owner(`hand.${other}`) !== undefined;
+      const bow = working ? Math.max(0, Math.asin(-_d.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y)) : 0;
+      const swung = _h.setFromAxisAngle(X, TUCK * (1 - locomotion.walk) * bow - a - forward);
+      const lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
       const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted);
       if (twist !== 0) hang.multiply(_t.setFromAxisAngle(X, -twist));
       // (the hanging pose kept out of the trunk as it turns — the hand forward, the elbow as it swings — and then followed)
@@ -291,7 +299,7 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
   v.applyQuaternion(chest);
   const elevation = smoothstep(-0.05, 0.6, v.dot(up) / L);
   const reach = v.length();
-  const want = shoulder.addScaledVector(up, elevation * 0.03 * proportions.height);
+  const want = shoulder.addScaledVector(up, elevation * ELEVATION * proportions.height);
   if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, PROTRACTION * proportions.height) / reach);
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(proportions.offsets[`${side}UpperArm`]).normalize(), to);
