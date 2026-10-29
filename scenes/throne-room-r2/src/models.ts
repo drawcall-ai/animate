@@ -10,6 +10,7 @@ import { THREEPIO } from './skeletons/threepio';
 import { MEDAL_BEARER } from './skeletons/bearer';
 import { DODONNA } from './skeletons/dodonna';
 import { TROOPER } from './skeletons/trooper';
+import { ARTOO } from './droids/artoo';
 
 /** Each skeleton with the model measured for it (under public/). A body whose skeleton is listed wears that model. */
 export const MODELS: readonly (readonly [skeleton: readonly SkeletonBone[], url: string])[] = [
@@ -21,6 +22,7 @@ export const MODELS: readonly (readonly [skeleton: readonly SkeletonBone[], url:
   [MEDAL_BEARER, '/models/bearer.glb'],
   [DODONNA, '/models/dodonna.glb'],
   [TROOPER, '/models/trooper.glb'],
+  [ARTOO, '/models/artoo.glb'],
 ];
 
 /** loads and rigs every listed model once (cached weights for unchanged meshes and skeletons), and dresses bodies in copies */

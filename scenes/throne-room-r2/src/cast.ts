@@ -1,6 +1,6 @@
 import type { Object3D } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, humanoid } from '@drawcall/animate';
+import { Body, humanoid, type Stride } from '@drawcall/animate';
 import { PERSON } from './skeletons/person';
 import { LUKE } from './skeletons/luke';
 import { HAN } from './skeletons/han';
@@ -9,7 +9,7 @@ import { LEIA } from './skeletons/leia';
 import { THREEPIO } from './skeletons/threepio';
 import { MEDAL_BEARER } from './skeletons/bearer';
 import { DODONNA } from './skeletons/dodonna';
-import type { Marks } from './hall';
+import { floorAt, type Marks } from './hall';
 import { createArtoo } from './droids/artoo';
 
 /**
@@ -36,12 +36,13 @@ export interface Cast {
  */
 export function createCast(marks: Marks, dress: Dress = () => undefined, starts: Partial<Record<keyof Cast, keyof Marks>> = {}, dev = true): Cast {
   const at = (name: keyof Cast, fallback: keyof Marks) => marks[starts[name] ?? fallback];
-  const person = (mark: Object3D, skeleton: readonly SkeletonBone[]) =>
-    new Body(humanoid(skeleton as typeof PERSON), { at: mark.position.clone(), face: mark.rotation.y, model: dress(skeleton), dev });
+  // every body stands on the hall's stepped floor; a stride styles a walk in character (Han's swagger, Chewbacca's lumber)
+  const person = (mark: Object3D, skeleton: readonly SkeletonBone[], stride?: Stride) =>
+    new Body(humanoid(skeleton as typeof PERSON, { stride }), { at: mark.position.clone(), face: mark.rotation.y, floor: floorAt, model: dress(skeleton), dev });
   return {
     luke: person(at('luke', 'lukeEnter'), LUKE),
-    han: person(at('han', 'hanEnter'), HAN),
-    chewbacca: person(at('chewbacca', 'chewbaccaEnter'), CHEWBACCA),
+    han: person(at('han', 'hanEnter'), HAN, { cadence: 0.85, width: 1.25, toeOut: 1.3 }),
+    chewbacca: person(at('chewbacca', 'chewbaccaEnter'), CHEWBACCA, { cadence: 0.85, width: 1.25, bob: 1.4 }),
     leia: person(at('leia', 'leia'), LEIA),
     medalBearer: person(at('medalBearer', 'medalBearer'), MEDAL_BEARER),
     dodonna: person(at('dodonna', 'dodonna'), DODONNA),
