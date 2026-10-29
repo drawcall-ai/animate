@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, AudioListener, Clock, Color, DirectionalLight, FogExp2, HemisphereLight, PCFSoftShadowMap, PerspectiveCamera, Scene, SRGBColorSpace, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, AudioListener, BackSide, BufferAttribute, Clock, Color, DirectionalLight, FogExp2, HemisphereLight, Mesh, MeshBasicMaterial, PCFSoftShadowMap, PerspectiveCamera, PMREMGenerator, Scene, SphereGeometry, SRGBColorSpace, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { BEATS } from './beats';
 import { createHall, DAIS, HALL, SUN } from './hall';
@@ -23,7 +23,9 @@ const world = new Scene();
 const haze = new Color(0xb9a585);
 world.background = haze;
 world.fog = new FogExp2(haze, 0.016);
-world.add(new HemisphereLight(0xffe9c4, 0x8a7458, 1.5));
+world.add(new HemisphereLight(0xffe9c4, 0x8a7458, 1.1));
+world.environment = hallReflections();
+world.environmentIntensity = 0.6;
 const sun = new DirectionalLight(0xffe3b5, 3);
 sun.target.position.set(0, 0, HALL.length / 2);
 sun.position.copy(sun.target.position).addScaledVector(SUN, 60);
@@ -131,10 +133,46 @@ picker.onchange = () => {
 playButton.onclick = () => setPaused(!paused);
 document.querySelector<HTMLButtonElement>('#restart')!.onclick = start;
 start();
+// (development: scripts/shot.mjs plays on to each of several times in one page with this)
+if (import.meta.env.DEV) Object.assign(window, {
+  seekTo(seconds: number) {
+    if (!playing || playing.time > seconds) start();
+    sound.setMuted(true);
+    while (playing && playing.time < seconds - STEP / 2) playing.step(STEP);
+    sound.setMuted(false);
+    setPaused(true);
+    return playing?.time;
+  },
+});
 // a filmed beat waits for its first click, so its sound can start with it (screenshots at ?at= play silent); one step places its camera
 if (playing?.staged.filmed && !(seek >= 0)) {
   playing.step(STEP);
   setPaused(true);
+}
+
+/**
+ * What polished surfaces mirror (C-3PO's gold plating, R2's dome, the medals): the hall seen from its middle, as a sphere of the hall's
+ * colours — sand floor, warm stone walls, bright windows high up. Without an environment a metallic surface reflects nothing, and shows black.
+ */
+function hallReflections() {
+  const sphere = new SphereGeometry(10, 32, 16);
+  const position = sphere.getAttribute('position');
+  const colors = new Float32Array(position.count * 3);
+  const floor = new Color(0xc9b48c), wall = new Color(0x9c8668), window = new Color(0xfff0d0), at = new Color();
+  for (let i = 0; i < position.count; i++) {
+    const up = position.getY(i) / 10; // -1 straight down … 1 straight up
+    if (up < -0.05) at.copy(floor);
+    else if (up < 0.55) at.lerpColors(wall, floor, Math.max(0, 0.25 - up) * 2);
+    else at.lerpColors(wall, window, Math.min(1, (up - 0.55) * 4));
+    at.toArray(colors, i * 3);
+  }
+  sphere.setAttribute('color', new BufferAttribute(colors, 3));
+  const room = new Scene();
+  room.add(new Mesh(sphere, new MeshBasicMaterial({ vertexColors: true, side: BackSide })));
+  const generator = new PMREMGenerator(renderer);
+  const map = generator.fromScene(room, 0.02).texture;
+  generator.dispose();
+  return map;
 }
 
 const clock = new Clock();

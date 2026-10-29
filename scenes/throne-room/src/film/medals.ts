@@ -4,8 +4,8 @@ import type { Body } from '@drawcall/animate';
 // How the film shows the ceremony's medals and the cushion they wait on: the medals are the ceremony beat's props (their mass and
 // grips), given a gold disc on a short red ribbon to be seen; the cushion lies on a slim stand before the bearer.
 
-// (half metallic: the hall has no environment map, so a fully metallic medal would show black)
-const GOLD = new MeshStandardMaterial({ color: 0xe8b445, metalness: 0.55, roughness: 0.3, emissive: 0x3a2808 });
+// (polished metal: it mirrors the viewer's environment, the hall's colours)
+const GOLD = new MeshStandardMaterial({ color: 0xf0c050, metalness: 1, roughness: 0.25 });
 const RED = new MeshStandardMaterial({ color: 0xb8322a, roughness: 0.8 });
 const VELVET = new MeshStandardMaterial({ color: 0x3b2c55, roughness: 1 });
 const BRASS = new MeshStandardMaterial({ color: 0x8a6a2e, metalness: 0.4, roughness: 0.5 });
