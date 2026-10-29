@@ -100,16 +100,21 @@ describe('requests', () => {
     expect(legs).toBe(false);
   });
 
-  it('a verb ends true once met, false once it cannot be; until ends it true whatever its goal', () => {
+  it('a verb ends true once met, false once it cannot be; until ends it true, met or not, and a failure still false at once', () => {
     const body = person(), room = roomOf(body);
     const high = box(room, new Vector3(0, 4, 0.5));
     const outcomes: boolean[] = [];
+    let failed = NaN;
     play(function* () {
       outcomes.push(yield* walkTo(body, new Vector3(0, 0, 1)));
       outcomes.push(yield* grab(body, high, { right: 'right' }));
       outcomes.push(yield* walkTo(body, new Vector3(0, 0, 9), { until: 0.5 }));
-    }, [body], 10, () => outcomes.length === 3);
-    expect(outcomes).toEqual([true, false, true]);
+      const asked = insides(body).frame.time;
+      outcomes.push(yield* grab(body, high, { right: 'right' }, { until: 5 }));
+      failed = insides(body).frame.time - asked;
+    }, [body], 15, () => outcomes.length === 4);
+    expect(outcomes).toEqual([true, false, true, false]);
+    expect(failed).toBeLessThan(1);
   });
 });
 

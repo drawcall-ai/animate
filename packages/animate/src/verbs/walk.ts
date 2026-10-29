@@ -22,15 +22,18 @@ export interface WalkOptions {
   speed?: number;
   /** how quickly it speeds up (m/s²; default 1.2) */
   accel?: number;
-  /** ends on this instead of arriving: a target that moves is followed until then */
+  /** ends on this instead of arriving (`true`, arrived or not): a target that moves is followed until then; still `false` if the walk stalls
+   * short of a target standing still */
   until?: Until;
 }
 
 /**
  * Walks to `target` (exactly there, on the floor under it: to stand within reach of something, `grab` or `reach` it), turning to
  * arrive facing as asked: a mover, it ends once there, turned and settled — its feet squared, a second or two after the body is there; end
- * it on `until: arriving(body, 0.5)` to start what follows sooner. It asks for the legs. It returns `false` if the walk stalls:
- * no nearer for 6 s. A point or an empty off the floor under it is said once in the dev log.
+ * it on `until: arriving(body, 0.5)` to start what follows sooner. Given `until`, it returns `true` once that holds, arrived or not —
+ * still walking after a target that moves, it stops where it is. It returns `false` if it stalls, `until` or not: no nearer a target
+ * standing still for 6 s (said once in the dev log, with whether the body stood there and its feet never settled). It asks for the legs.
+ * A point or an empty off the floor under it is said once in the dev log.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
   const { face, speed, accel, until } = options;
@@ -67,9 +70,9 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       request.eta = walk.ends;
       return go;
     };
-    // (given `until`, it follows its target, however it moves, until then)
-    if (until !== undefined) yield* during(request, 'go', 'asked', step);
-    yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stalled));
+    // (given `until`, it follows its target, however it moves, until then — or it stalls short of one standing still)
+    if (until !== undefined) yield* during(request, 'go', 'asked', step, () => walk.stalled);
+    else yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stalled));
     if (walk.stalled) request.fail();
     else request.met();
     // (there, the legs are its, standing, till its story moves on)

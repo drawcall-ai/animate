@@ -20,8 +20,8 @@ export type Verb = Generator<TimelineYield<unknown>, boolean, unknown>;
 
 /**
  * A verb's request on `body`, filed when the story reaches it and kept until it ends (its `finally` runs on a race's cancel too): ends
- * `true` once its staging has met its goal and `false` once that staging fails — or, given `until`, `true` once that holds, whatever
- * the goal. Each frame the story steps it renews the request. An aimer (it never meets a goal of its own) never ends without `until`. With
+ * `true` once its staging has met its goal and `false` once that staging fails — or, given `until`, `true` once that holds, met or not
+ * (a goal met keeps on: a target followed), still `false` at once if it fails. Each frame the story steps it renews the request. An aimer (it never meets a goal of its own) never ends without `until`. With
  * development on, the request is labelled by where the story asked for it (`file:line`, as the engine's stack shows it; a bundle's own
  * frames are not told apart from the library's).
  */
@@ -36,8 +36,8 @@ function* run(self: Self, name: string, site: string, staging: Staging, until: U
   try {
     yield (_state, clock) => {
       request.renewed = self.time;
+      if (request.outcome === 'failed') return 'finished';
       met = ends ? ends(clock.delta) : request.outcome === 'met';
-      if (!ends && request.outcome === 'failed') return 'finished';
       return met ? 'finished' : 'running';
     };
     return met;
