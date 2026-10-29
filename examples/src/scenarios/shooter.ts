@@ -180,12 +180,11 @@ export function shooter(): Scenario {
         const spent = magazines.find((magazine) => magazine.parent === well)!, full = magazines.find((magazine) => magazine !== spent)!;
         const free = pouches.find((pouch) => pouch !== full.parent)!;
         steps.push('to magazine');
-        let cancelled = false;
-        yield* parallel('race', grab(person, spent, { left: 'base' }, QUICK), function* () {
+        const taken = yield* parallel('race', grab(person, spent, { left: 'base' }, QUICK), function* () {
           yield* wait(sprinting);
-          cancelled = true;
+          return 'cancelled' as const;
         });
-        if (cancelled) steps.push('cancelled');
+        if (taken === 'cancelled') steps.push('cancelled');
         else {
           pulled = true;
           steps.push('stow');

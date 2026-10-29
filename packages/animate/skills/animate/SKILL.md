@@ -30,8 +30,9 @@ const box = new Object3D();
 box.name = 'box';
 box.userData.mass = 2;
 box.position.set(0, 0.9, 0.45);
-// (the giver's grips at the box's sides, the receiver's beside them on its own end: facing the giver, its left is the giver's right)
-for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.08], ['receiver right', 0.15, 0.08]] as const) {
+// (where each palm closes: the giver's at the box's sides, the receiver's beside them by its own end; facing the giver, its left is the
+// giver's right)
+for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.1], ['receiver right', 0.15, 0.1]] as const) {
   const grip = new Object3D();
   grip.name = name;
   grip.position.set(x, 0, z);
@@ -82,7 +83,7 @@ For a nod, a bow, an arched back, a head tilt or a gesture of the arms (raised, 
 
 ## Stories that compose
 
-Write each beat as a generator function (`function* (…): Verb`) that takes the bodies and props it acts on and returns whether it succeeded. Make the bodies, props and marks once, outside every beat: a beat that builds its own cast, or works out its marks from where the bodies stand when it is set up, cannot follow another beat that has moved them, so work out such marks inside the story, when the beat reaches them. `parallel` discards its branches' outcomes, so a branch whose outcome matters stores it in a variable for the beat to check. When other parts of the scene key off a moment (a camera cut when the medal is hung), signal it from the beat with a callback or flag after the verb that does it, rather than reading `body.owners`, which empties once a race ends.
+Write each beat as a generator function (`function* (…): Verb`) that takes the bodies and props it acts on and returns whether it succeeded. Make the bodies, props and marks once, outside every beat: a beat that builds its own cast, or works out its marks from where the bodies stand when it is set up, cannot follow another beat that has moved them, so work out such marks inside the story, when the beat reaches them. `yield* parallel('race', …)` returns what the branch that ended it returned, and `'all'` returns `false` if any branch returned `false`, so check a branch's outcome on the `parallel` itself rather than through a variable. When other parts of the scene key off a moment (a camera cut when the medal is hung), signal it from the beat with a callback or flag after the verb that does it, rather than reading `body.owners`, which empties once a race ends.
 
 ## Bodies
 
