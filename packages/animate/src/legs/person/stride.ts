@@ -22,7 +22,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
   const proportions = person.proportions, s = proportions.scale, toeOut = humanStepping(proportions, true, person.stride).toeOut;
   const stop = new Vector3(), velocity = new Vector3();
   let planner: Planner | null = null, still: Vector3 | null = null;
-  let moving = false, starting = false, seen = false, leaning = false;
+  let moving = false, starting = false, seen = false, leaning = false, settling = false;
   // (`from` shifted by `shift` as far as the planted feet hold it, `LEAN.inside` within their edge)
   const within = (from: Vector3, shift: Vector3 | null, stepper: Stepper) => {
     if (!shift) return from;
@@ -78,17 +78,23 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const planted = !moving && stepper.legs.every((leg) => !leg.swing);
     const anchors = () => stepper.legs.reduce((sum, leg) => sum.add(leg.anchor), new Vector3()).divideScalar(stepper.legs.length);
     const over = planted ? anchors().setY(0).addScaledVector(forwardOf(stance), OVER_ANKLES * s) : null;
-    const rest = over && root.distanceTo(over) > LEAN.back * s ? over : null;
-    const edged = go && over ? stop.clone().sub(over).clampLength(0, EDGING * s).add(over) : stop;
+    // (within `EDGING` of it — where a walk's arrival edged it onto its goal — it stands as it is: going back over its feet would shift
+    // its weight under a stance squared for where it stands, and step again; further off, it settles all the way back)
+    settling = !go && !!over && root.distanceTo(over) > (settling ? LEAN.back : EDGING) * s;
+    const rest = settling ? over : null;
+    const edging = go && over ? stop.clone().sub(over).clampLength(0, EDGING * s).add(over) : stop;
+    // (edged onto a still goal, it is there: held, not chased to and fro — so its feet are judged standing, as they will be once the walk
+    // ends; a goal on the move, it keeps edging after it)
+    const edged = edging.distanceTo(root) > LEAN.back * s || velocity.length() >= STOP.goalSpeed ? edging : null;
     // (the feet stand with their ankles a little behind the centre of mass: a person stands with it over the middle of the feet)
     const behind = feetBehind(stepper, s);
     const goal = {
-      position: moving ? stop : go ? edged : leaned ?? rest ?? root.clone(),
+      position: moving ? stop : go ? edged ?? root.clone() : leaned ?? rest ?? root.clone(),
       velocity: moving ? velocity : new Vector3(),
       yaw: faced ? yaw : undefined,
     };
     const walking = Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity);
-    const speed = moving ? walking : go ? EDGE * s : leaned || rest ? LEAN.speed * s : 0;
+    const speed = moving ? walking : go ? (edged ? EDGE * s : 0) : leaned || rest ? LEAN.speed * s : 0;
     const motion = { accel: go?.accel ?? 1.2 * s, speed, turnSpeed: face?.rate };
     // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
     const holds: Parameters<Planner['step']>[4] = (forecast) => stepper.reachable((t) => {

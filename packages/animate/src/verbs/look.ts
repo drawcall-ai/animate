@@ -31,7 +31,7 @@ export function lookAt(body: Body, target: Target | Body, options: LookOptions =
   if (!Number.isFinite(roll) || !Number.isFinite(pitch)) throw new Error(`lookAt: a roll of ${roll} and a pitch of ${pitch}, not radians`);
   const self = selfOf(body), point = target instanceof Body ? eyesOf(self, target) : located(finder(self, target));
   return verb(body, 'lookAt', (request) => function* () {
-    const look = looking(self, point);
+    const look = looking(self, point, { recentring: true });
     const tipped = roll !== 0 || pitch !== 0 ? { roll, pitch } : null;
     yield* parallel('all', during(request, 'look', 'asked', (f) => {
       look(f);

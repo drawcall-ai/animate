@@ -67,7 +67,9 @@ export class Stepper extends Steps {
     this.phase += Math.PI * now.dt / (now.C / 2) * Number(stepping);
     [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, now.moving, run, now.Ts, now.C];
     const still = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > SETTLED_AFTER);
-    this.settled = still && legs.every((leg) => !wants(this, now, cues, leg));
+    // (and no foot would step once the root is at rest: a root creeping to its rest is not yet settled on feet that would square up there)
+    const resting = { ...now, v: 0 };
+    this.settled = still && legs.every((leg) => !wants(this, resting, cues, leg));
     // (a gait's body as low as its running lets it down)
     const drop = this.clocked ? lerp(st.drop.walk, st.drop.run, run) : 0;
     [this.low, this.most] = [now.standing - (drop + st.bob + STEP.short) * s, now.most];

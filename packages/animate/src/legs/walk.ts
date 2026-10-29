@@ -115,7 +115,8 @@ export class Walk {
     const body = placeOf(this.self, f), locomotion = this.self.locomotion;
     const there = Math.hypot(body.x - this.go.to.x, body.z - this.go.to.z) < ARRIVED.distance * this.self.scale || locomotion.there;
     const turned = yaw === null || Math.abs(wrapAngle(yaw - locomotion.facing)) < ARRIVED.yaw;
-    return there && turned && locomotion.settled;
+    // (and come to rest: settled feet under a body still edging onto its goal would have it shift its weight, and step, as the walk ends)
+    return there && turned && locomotion.settled && locomotion.velocity.lengthSq() === 0;
   }
 
   /** where it goes this sub-step (`go.to`), and the facing it arrives with (null: none) */

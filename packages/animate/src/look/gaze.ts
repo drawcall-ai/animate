@@ -38,7 +38,7 @@ export function inView(self: Looker, point: Readonly<Vector3>, f: Frame): boolea
 /** Borrow gaze only once `seen` (default: target) is visible, unless `anyway` permits it sooner. */
 export function* noticing(self: Looker, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean } = {}) {
   yield* action<Frame>({ until: (f) => anyway?.() || inView(self, seen(f), f) });
-  yield* during(request, 'look', 'borrowed', looking(self, target, SHIFT));
+  yield* during(request, 'look', 'borrowed', looking(self, target, { motion: SHIFT }));
 }
 
 /** how fast a head may turn (rad/s², rad/s) */
@@ -53,9 +53,10 @@ const GLANCE = { turnAccel: 40, turnSpeed: 6 };
 export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
 /** Keep the eyes on a world target (rest: +Z forward, +Y up), sharing the braked head turn over the neck chain within joint limits (`shareOver`); EYES
- * takes the remainder. The history-followed head turn uses headPace, capped by motion.
+ * takes the remainder. The history-followed head turn uses headPace, capped by motion. `recentring`: the eyes re-centre in the head
+ * once the body is still under the look (a look asked for; one borrowed by the hands, or idle, leaves the head where it is).
  */
-export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, motion: HeadMotion = GLANCE): Step {
+export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false }: { motion?: HeadMotion; recentring?: boolean } = {}): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   if (neck === undefined) return (f) => void (self.look = target(f));
@@ -104,13 +105,17 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, m
     const down = Math.max(0, Math.atan2(-local.y, Math.hypot(local.x, local.z)));
     const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
     const worldDown = pitchAlong(d, facing);
-    if (jumped || !seen) eyePitch = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
+    const resting = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
+    if (jumped || !seen) eyePitch = resting;
     else if (gazer.pitch !== undefined && aimed) {
       const targetTurn = wrapAngle(worldDown - pitchAlong(_line.subVectors(aimed, origin), facing));
       const change = wrapAngle(worldDown - declination);
-      // Moving eyes absorb body travel; target pursuit keeps the usual eye/head share.
+      // Moving eyes absorb body travel; target pursuit keeps the usual eye/head share. Once the body is still under the look they
+      // re-centre on their resting share, the head taking back what they absorbed (else a look begun as a bow straightens keeps the
+      // head up by all of the bow's change).
       const share = clamp(change - (1 - EYES) * targetTurn, Math.min(EYES * change, change), Math.max(EYES * change, change));
       eyePitch = clamp(eyePitch + share, 0, gazer.range.down);
+      if (recentring && Math.abs(change - targetTurn) < STILL * f.dt) eyePitch += (resting - eyePitch) * (1 - Math.exp(-f.dt / RECENTRE));
     }
     declination = worldDown;
     (aimed ??= new Vector3()).copy(point);
@@ -217,6 +222,11 @@ export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>): Step 
 /** how much of a gaze shift the eyes take (the head turns the rest: 70–80% of a large shift), and how much of their comfortable range at most */
 const EYES = 0.25;
 const EYES_MOST = 0.3;
+/** how slowly the eyes, having absorbed the body's travel under a steady look, re-centre on their resting share once it is still (s,
+ * time constant; tuned: a few hundred ms, as the eyes re-centre in the head after the vestibulo-ocular phase — recalled, not checked) */
+const RECENTRE = 0.3;
+/** how slowly the line of sight may turn with the body's travel for the body to count as still under the look (rad/s; tuned: ~3°/s) */
+const STILL = 0.05;
 /** a gaze shift is over once the head is this near where it goes (rad): the next sets its own pace */
 const SETTLED = (2 * Math.PI) / 180;
 /** how fast a target moves at most and is still pursued (m/s): faster, it jumped (5 cm in a 60 Hz step) */

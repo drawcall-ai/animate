@@ -128,7 +128,7 @@ describe('looking', () => {
     const look = (yaw: number) => {
       const eyes = new Vector3(0, 1.65, 0.08);
       const body = gazing(), point = eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3));
-      claim(body, 'look', looking(selfOf(body), () => point, SHIFT));
+      claim(body, 'look', looking(selfOf(body), () => point, { motion: SHIFT }));
       const speeds: number[] = [];
       let last = new Quaternion();
       for (let k = 0; k < 180; k++) {

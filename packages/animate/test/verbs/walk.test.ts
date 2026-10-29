@@ -70,6 +70,38 @@ it.each([
   expect(ended - foreseen).toBeLessThan(0.4 + 0.25);
 });
 
+/** an empty on the floor at (`x`, `z`), unturned */
+function markAt(x: number, z: number): Object3D {
+  const mark = new Object3D();
+  mark.position.set(x, 0, z);
+  mark.updateMatrixWorld();
+  return mark;
+}
+
+// (the stance a walk squares its feet into is the one the body then stands in: no shuffle follows its arrival)
+it.each([
+  ['a point', new Vector3(0.3, 0, 3), 1.3],
+  ['a mark, facing as it does', markAt(0.3, 3), 1.3],
+  ['a mark, slowly', markAt(0.3, 3), 0.5],
+] as const)('stands as it arrived after a walk to %s', (_, to, speed) => {
+  const body = person({ dev: true }), h = insides(body);
+  let ended = NaN, unsettled = 0, moved = 0;
+  const feet: Vector3[] = [];
+  play(function* () {
+    yield* walkTo(body, to, { speed, accel: speed });
+    ended = h.frame.time;
+    feet.push(...h.stepper!.legs.map((leg) => leg.anchor.clone()));
+  }, [body], 15, () => {
+    if (Number.isNaN(ended)) return false;
+    if (!body.settled) unsettled += 1;
+    h.stepper!.legs.forEach((leg, i) => moved = Math.max(moved, leg.anchor.distanceTo(feet[i])));
+    return h.frame.time > ended + 2;
+  });
+  expect(unsettled).toBe(0);
+  expect(moved).toBeLessThan(0.005);
+  expect(body.log).toEqual([]);
+});
+
 it('arriving foresees every mover: a reach before its hands get there, a grab while it walks up; what the body does itself after a release holds it up not', () => {
   const body = person(), h = insides(body), room = roomOf(body);
   const near = box(room, new Vector3(-0.2, 1.1, 0.4), { mass: 1, solid: false, name: 'near' });
