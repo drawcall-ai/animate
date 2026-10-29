@@ -14,7 +14,7 @@ import { forwardOf, minimumJerk } from '../../kernel/math';
 import { followRotation } from '../../kernel/follow';
 import type { Handed } from '../handed';
 import { wayOf } from '../route';
-import { paceOf, type Handling, type Pace } from '../handling';
+import { paceAt, type Handling, type Pace } from '../handling';
 
 // A creature's hands, by name (`Species.hands`): the tip of the skeleton's chain named for each (a jaw, a trunk) reaches; what it takes
 // it holds rigidly (attached to the tip's bone).
@@ -96,10 +96,10 @@ const REST = new Quaternion(), _q = new Quaternion(), _q2 = new Quaternion();
 const _v = new Vector3(), _t = new Vector3();
 
 /** how long a creature's hand takes to go `distance` (s) at a calm dip's pace */
-const dipping = (distance: number, pace: Required<Pace>) => distance / pace.speed + pace.speed / pace.accel;
+const dipping = (distance: number, pace: Pace) => distance / pace.speed + pace.speed / pace.accel;
 
 /** Borrow walking to a stand within chain reach (with `step`: without it, the feet stay put); fail unreachable heights, points out of reach without a step and stalled walks. */
-function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Required<Pace>, step: boolean) {
+function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Pace, step: boolean) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
   if (!self.species.legs || self.drive) return { chain, bones, stoop };
   const at = point(self.frame), lowered = stoop.most(self.frame), base = self.pose.position(bones[0]), out = OUT * chainLength(self, bones);
@@ -132,7 +132,7 @@ function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Fra
 }
 
 /** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */
-function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) => Goal, pace: Required<Pace>, on?: Carrier) {
+function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) => Goal, pace: Pace, on?: Carrier) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new ChainTip(chain);
   const first = goal(self.frame), at = on ? on.toWorld(first, _world, self.frame.time).position : first.position;
   const ends = self.frame.time + dipping(self.pose.position(bone).distanceTo(at), pace);
@@ -158,7 +158,7 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
 }
 
 /** A creature's hand walked up to `point`, then its tip (`bone`) onto the goal `aim` gives, at a calm dip's pace: met once there, it keeps there */
-function* holdingOn(self: Handed, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Required<Pace>, step: boolean) {
+function* holdingOn(self: Handed, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Pace, step: boolean) {
   const reach = yield* walkingUp(self, request, hand, point, where, pace, step);
   if (!reach) return;
   const goal = aim(reach.bones[reach.bones.length - 1]);
@@ -181,23 +181,23 @@ export function creatureHands(self: Handed): Handling {
     return uses[0];
   };
   return {
-    take: function* (request, thing, grips, manner) {
-      const motion = paceOf(manner, DIP);
+    take: function* (request, thing, grips, options) {
+      const motion = paceAt(options.speed, DIP);
       const { hand, grip } = only('grab', grips);
       const goal = goalOn(thing.grip(grip), self.restOf(self.hands[hand])), frame = self.track(thing.object);
       const point = (f: Frame) => frame.toWorld({ position: goal.position }, _world, f.time).position.clone();
-      if (!(yield* walkingUp(self, request, hand, point, thing.object.name, motion, manner.step ?? true))) return;
+      if (!(yield* walkingUp(self, request, hand, point, thing.object.name, motion, options.step ?? true))) return;
       yield* tipping(self, request, hand, () => goal, motion, frame);
       grasp(self, hand, { thing, grip, goal });
       if (thing.massive && !bodyOf(thing.object)) lift(self, thing);
       yield* handingBack(self, request, [hand], 'asked');
       request.met();
     },
-    bring: function* (request, thing, points, end, manner) {
-      const motion = paceOf(manner, DIP);
+    bring: function* (request, thing, points, end, options) {
+      const motion = paceAt(options.speed, DIP);
       const way = wayOf(self, thing, points, end);
       if (way.points.length !== 1) throw new Error('carry: creature hands do not support waypoints or approach routes');
-      if (end?.userData.speed !== undefined) throw new Error('carry: creature hands do not support approach speed; use the pace option');
+      if (end?.userData.speed !== undefined) throw new Error('carry: creature hands do not support approach speed; give the carry a `speed`');
       const to = way.points[0];
       lift(self, thing);
       yield* holdingOn(self, request, handsOn(self, thing)[0], thing.object.name, (f) => to(f).position, (bone) => {
@@ -209,13 +209,13 @@ export function creatureHands(self: Handed): Handling {
           const position = inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position);
           return at.quaternion ? { position, quaternion } : { position };
         };
-      }, motion, manner.step ?? true);
+      }, motion, options.step ?? true);
     },
-    reach: function* (request, aims, manner) {
-      const motion = paceOf(manner, DIP);
+    reach: function* (request, aims, options) {
+      const motion = paceAt(options.speed, DIP);
       const { hand, target } = only('reach', aims);
       try {
-        yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion, manner.step ?? true);
+        yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion, options.step ?? true);
       } finally {
         self.own('reach', '', (returning) => () => handingBack(self, returning, [hand], 'borrowed'));
       }

@@ -207,10 +207,10 @@ function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<
   });
 }
 
-/** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned and pitched toward `at`, a sub-step.
- * Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine and neck. Tuned torso shares: 65% yaw, 25% pitch; the
- * base shares them over spine/chest, gaze handles neck/head/eyes. Pitch recruits less trunk so looking down does not become a bow. */
-export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>): Step {
+/** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned `share` of the bearing to `at` (at most 45°)
+ * and pitched `PITCHED` × `share` of its pitch, a sub-step. Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine
+ * and neck; the base shares it over spine/chest, gaze handles neck/head/eyes. */
+export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>, share: number): Step {
   if (!self.gazer) throw new Error('lookAt: the body has no gaze');
   return (f) => {
     const direction = at(f).clone().sub(self.headOffset.eyes(f.prev, new Vector3()));
@@ -218,9 +218,13 @@ export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>): Step 
     const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
     // (derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at once, as an aim offset follows the look:
     // the trunk's joints alone pace it, a player's flick turned within them, not at a squat's pace)
-    self.poise.add({ twist: Math.max(-Math.PI / 4, Math.min(Math.PI / 4, 0.65 * yaw)), twistRate: Infinity, bow: 0.25 * pitch });
+    self.poise.add({ twist: clamp(share * yaw, -Math.PI / 4, Math.PI / 4), twistRate: Infinity, bow: PITCHED * share * pitch });
   };
 }
+
+/** Tuned: an aiming trunk takes this much less of its pitch than of its bearing (25% of the pitch at 65% of the bearing), so looking
+ * down does not become a bow */
+const PITCHED = 0.25 / 0.65;
 
 /** how much of a gaze shift the eyes take (the head turns the rest: 70–80% of a large shift), and how much of their comfortable range at most */
 const EYES = 0.25;

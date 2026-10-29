@@ -121,7 +121,6 @@ export function* serve(trooper: Trooper, cue: () => boolean): NonReuseableTimeli
     'race',
     lookAt(body, HEROES),
     parallel('all', walkTo(body, body.position.clone(), { face: heroesOnTheFloor }), function* () {
-      yield* wait(0.3); // lets the turn begin before asking how soon it ends
       yield* wait(arriving(body, 0.4));
       if (random(seed + 0.25) < 0.2) yield* cheer(body, seed);
       else yield* applaud(body, seed);

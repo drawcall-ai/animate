@@ -103,6 +103,7 @@ export function medalMoment({ scene, cast }: Setting, medals?: Medals, on: (mome
     // Luke: Leia comes down to him; he watches her come, then bows as her hands go to his neck, and looks up at her as she steps back
     yield* parallel('race', lookAt(han, leia), lookAt(chewbacca, leia), function* () {
       // her hands go up as she arrives: the walk's own settling (about 1.5 s after the last step) need not hold them back
+      const leiaArriving = arriving(leia, 0.4);
       yield* parallel('all', walkTo(leia, marks.luke, { speed: 0.7 }), (function* () {
         // he bows his head as she comes up to him, and her hands rise with the ribbon as she arrives
         yield* lookAt(luke, leia, { until: () => leia.position.distanceTo(luke.position) < 0.8 });
@@ -111,7 +112,7 @@ export function medalMoment({ scene, cast }: Setting, medals?: Medals, on: (mome
           'all',
           bowForMedal(luke, leia, { until: () => hung }),
           (function* () {
-            yield* wait(arriving(leia, 0.4));
+            yield* wait(leiaArriving);
             on('Leia hangs Luke\'s medal');
             yield* hangMedal(leia, luke, medals?.luke);
             on('Luke medal hung');

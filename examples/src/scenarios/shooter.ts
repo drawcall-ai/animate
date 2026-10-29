@@ -36,8 +36,8 @@ const RELOADING = { at: new Vector3(0.12, 0.02, -0.06), turn: new Vector3(-0.05,
 const EASE = 0.25;
 /** a shot's kick (m back, rad up) over its recovery (s), and the least time between shots (s) */
 const RECOIL = { back: 0.012, up: 0.012, seconds: 0.2, between: 0.24 };
-/** a reload's hands: quick, as a drilled one is (m/s, m/s²) */
-const QUICK = { speed: 1.2, accel: 20 };
+/** a reload's hands: quick, as a drilled one is (m/s) */
+const QUICK = { speed: 1.8 };
 /** at ease, the rifle breathes with the body: how far (m, rad) at what rate (Hz); at ease once still this long (s) */
 const BREATH = { drift: 0.004, roll: 0.03, rate: 0.25, after: 1 };
 
@@ -220,7 +220,7 @@ export function shooter(): Scenario {
           // (the eyes and the trunk on the aim; at ease or reloading they are free: they look about, or go with the magazine)
           function* () {
             for (;;) {
-              yield* lookAt(person, ahead, { trunk: true, until: () => atEase() || reloading });
+              yield* lookAt(person, ahead, { trunk: 0.65, until: () => atEase() || reloading });
               yield* wait(() => !atEase() && !reloading);
             }
           },

@@ -1,6 +1,6 @@
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { arriving, type Body, carry, grab, lookAt, release, type Until, type Verb, wait, walkTo } from '@drawcall/animate';
+import { arriving, type Body, carry, grab, lookAt, pose, release, type Until, type Verb, wait, walkTo } from '@drawcall/animate';
 import { HALL } from './hall';
 import { overHeadPlace, wornPlace } from './medal';
 
@@ -185,7 +185,6 @@ export function* hangMedal(leia: Body, hero: Body, medal: Object3D, back: Object
       back_ = yield* stepBack(leia, back, hero);
     },
     function* () {
-      yield* wait(0.2);
       yield* wait(arriving(leia, 0.8));
       yield* receive(() => hung);
     },
@@ -207,7 +206,10 @@ function* walkBack(leia: Body, back: Object3D, hero: Body): Verb {
 
 /** a hero's plain part as his medal is hung: his eyes on Leia and his head inclined a little toward her until it is on */
 export function lookingAtGiver(hero: Body, giver: Body): Receiving {
-  return (hung) => lookAt(hero, giver, { pitch: 0.25, until: hung });
+  return function* (hung) {
+    yield* parallel('race', lookAt(hero, giver), pose(hero, { head: { pitch: 0.25 } }, { until: hung }));
+    return true;
+  };
 }
 
 /**

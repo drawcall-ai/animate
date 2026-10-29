@@ -98,7 +98,7 @@ it('rejects creature carry routes it cannot traverse', () => {
 });
 
 it.each(['reach', 'grab', 'carry'] as const)('uses creature %s pace in its motion', (verb) => {
-  const after = (pace: { speed: number; accel: number }) => {
+  const after = (speed: number) => {
     const body = new Body(dog(DOG)), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
     if (verb === 'carry') {
@@ -106,14 +106,13 @@ it.each(['reach', 'grab', 'carry'] as const)('uses creature %s pace in its motio
       expect(body.holds(load)).toBe(true);
     }
     play(function* () {
-      if (verb === 'reach') yield* reach(body, { jaw: new Vector3(0, 0.4, 0.48) }, pace);
-      else if (verb === 'grab') yield* grab(body, load, { jaw: 'left' }, pace);
-      else yield* carry(body, load, new Vector3(0, 0.4, 0.48), pace);
+      if (verb === 'reach') yield* reach(body, { jaw: new Vector3(0, 0.4, 0.48) }, { speed });
+      else if (verb === 'grab') yield* grab(body, load, { jaw: 'left' }, { speed });
+      else yield* carry(body, load, new Vector3(0, 0.4, 0.48), { speed });
     }, [body], 0.3);
     return body.bones.jaw.getWorldPosition(new Vector3());
   };
-  expect(after({ speed: 0.2, accel: 2 })).not.toEqual(after({ speed: 0.8, accel: 2 }));
-  expect(after({ speed: 0.5, accel: 0.2 })).not.toEqual(after({ speed: 0.5, accel: 2 }));
+  expect(after(0.2)).not.toEqual(after(0.8));
 });
 
 it('lifts an attached item when a creature starts carrying it', () => {

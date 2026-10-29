@@ -104,6 +104,8 @@ export class Self implements Holder {
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
   readonly requests: Request[] = [];
+  /** the body's time when a story last filed a mover with it (s; −∞: never) */
+  lastMover = -Infinity;
   /** what it wears (things on its bones its hands do not hold), as of its update's start */
   worn: Thing[] = [];
   private readonly claims = new Map<Channel, Claim[]>();
@@ -285,17 +287,17 @@ export class Self implements Holder {
   }
 
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
-  file(verb: string, site: string, staging: Staging, aimer = false): Request {
+  file(verb: string, site: string, staging: Staging, aimer = false, owned = false): Request {
     const request = new Request(this, verb, site, staging, aimer);
+    request.owned = owned;
+    if (!aimer && !owned) this.lastMover = this.time;
     this.requests.push(request);
     return request;
   }
 
   /** a request of the body's own (a hand backing out of what it let go): no story renews it; it ends with its staging */
   own(verb: string, site: string, staging: Staging): Request {
-    const request = this.file(verb, site, staging);
-    request.owned = true;
-    return request;
+    return this.file(verb, site, staging, false, true);
   }
 
   /** a request's verb has ended: its staging stops, its claims let go */

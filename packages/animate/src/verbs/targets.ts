@@ -14,7 +14,7 @@ import { Carrier } from '../kernel/carrier';
  * update from where the app last left it; an object a function returns is read as the function leaves it, each sub-step. A target the
  * body walks to (or a placement it stands at) is on the body's floor: its x and z say where, the floor's height there is where it
  * stands; one it reaches or looks at is the world point it is. A body is no target — a hand or a walk goes to a place on it (one of its
- * bones, an empty parented to one) — but `lookAt` takes one, meaning its eyes.
+ * bones, an empty parented to one) — but `lookAt` takes one (or a function giving one), meaning its eyes.
  */
 export type Target = Vector3 | Object3D | ((time: number) => Vector3 | Object3D);
 

@@ -54,7 +54,6 @@ export function* handOver(bearer: Body, leia: Body, medal: Object3D) {
   const offer = new Vector3().subVectors(leia.position, bearer.position).setY(0).setLength(0.4).add(bearer.position).setY(bearer.position.y + 1.1);
   yield* parallel('race', carry(bearer, medal, offer, { until: Infinity }), function* () {
     // (her grab starts once the offer is at rest: begun while it moves, it goes for where it was)
-    yield* wait(0.3);
     yield* wait(arriving(bearer, 0));
     if (!(yield* grab(leia, medal, { left: 'outer right', right: 'outer left' }))) throw new Error(`Leia could not take ${medal.name}`);
     if (!leia.holds(medal)) throw new Error(`Leia has no hold of ${medal.name}`);

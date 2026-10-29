@@ -1,6 +1,6 @@
 import { Object3D } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { arriving, type Body, lookAt, type Verb, wait, walkTo } from '@drawcall/animate';
+import { arriving, type Body, lookAt, pose, type Verb, wait, walkTo } from '@drawcall/animate';
 import type { Beat } from '.';
 import { DAIS } from '../hall';
 import { bowForMedal, cockyWink, roar, stepBackAndNod } from '../gestures';
@@ -40,13 +40,12 @@ export const beat: Beat & { order: number } = {
         'all',
         function* () {
           yield* walkTo(leia, before(hero), { speed: 0.6, until: arriving(leia, 0.3) });
-          yield* parallel('race', lookAt(leia, hero, { pitch: 0.15 }), wait(HANGING_SECONDS));
+          yield* parallel('race', lookAt(leia, hero), pose(leia, { head: { pitch: 0.15 } }), wait(HANGING_SECONDS));
           hung = true;
           stepped = yield* stepBackAndNod(leia, marks.leia, hero);
         },
         function* () {
-          // he readies himself as she comes up to him (once her walk has begun: a body at rest is `arriving` too)
-          yield* wait(0.2);
+          // he readies himself as she comes up to him
           yield* wait(arriving(leia, 0.6));
           yield* receive(() => hung);
         },

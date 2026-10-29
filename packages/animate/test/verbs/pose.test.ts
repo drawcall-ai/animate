@@ -1,7 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { Body, dog, horse, humanoid, lookAt, pose, reach, track, wait, walkTo, type ArmPosture, type Posture, type Species } from '../../src/index';
+import { Body, dog, horse, humanoid, lookAt, pose, reach, track, wait, walkTo, type Posture, type Species } from '../../src/index';
+import type { ArmPosture } from '../../src/kernel/poise';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { hullOf, outside, xcomOf } from '../../src/legs/support';
@@ -256,27 +257,22 @@ describe('pose pace', () => {
 });
 
 describe('lookAt', () => {
-  it('tips the head as asked over the look, the eyes still on the target, and eases it back after', () => {
+  it("takes a pose's head tilt over the look, the eyes still on the target, and eases it back after: the look keeps the eyes, the pose the head", () => {
     const tipped = person({ dev: true }), plain = person({ dev: true }), at = new Vector3(0.6, 1.5, 1.5);
-    let held: ReturnType<typeof measure> | null = null;
+    let held: ReturnType<typeof measure> | null = null, owners: Body['owners'] | null = null;
     play(function* () {
-      yield* parallel('all', lookAt(tipped, at, { roll: 0.3, pitch: 0.15, until: 2 }), lookAt(plain, at, { until: 2 }));
-    }, [tipped, plain], 3.5, (t) => void (Math.abs(t - 2) < 1e-6 && (held = measure(tipped, plain, INDEX.head))));
+      yield* parallel('all', lookAt(tipped, at, { until: 2 }), pose(tipped, { head: { roll: 0.3, pitch: 0.15 } }, { until: 2 }), lookAt(plain, at, { until: 2 }));
+    }, [tipped, plain], 3.5, (t) => {
+      if (Math.abs(t - 2) > 1e-6) return;
+      held = measure(tipped, plain, INDEX.head);
+      owners = tipped.owners;
+    });
     expect(held).not.toBeNull();
     expect(held!.roll).toBeCloseTo(0.3, 2);
     expect(held!.pitch).toBeCloseTo(0.15, 2);
+    expect(owners).toMatchObject({ look: { verb: 'lookAt' }, head: { verb: 'pose' } });
     expect(Math.abs(measure(tipped, plain, INDEX.head).roll)).toBeLessThan(0.01);
     expect([...tipped.log, ...plain.log]).toEqual([]);
-  });
-
-  it("adds a pose's head onto a look's: the look keeps the eyes, the pose the head's tilt", () => {
-    const body = person({ dev: true }), plain = person({ dev: true }), at = new Vector3(-0.8, 1.6, 2);
-    let roll = 0;
-    play(function* () {
-      yield* parallel('all', lookAt(body, at, { roll: 0.1, until: 2 }), pose(body, { head: { roll: 0.15 } }, { until: 2 }), lookAt(plain, at, { until: 2 }));
-    }, [body, plain], 2, (t) => void (Math.abs(t - 2) < 1e-6 && (roll = measure(body, plain, INDEX.head).roll)));
-    expect(roll).toBeCloseTo(0.25, 2);
-    expect(body.owners).toMatchObject({ look: { verb: 'lookAt' }, head: { verb: 'pose' } });
   });
 });
 

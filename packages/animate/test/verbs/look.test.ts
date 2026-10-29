@@ -36,7 +36,37 @@ describe('lookAt with a head share', () => {
 
   it('throws for a share outside 0 … 1, and for a body whose posture turns its head', () => {
     expect(() => lookAt(person(), new Vector3(0, 1.6, 3), { head: 1.5 })).toThrow('head share');
+    expect(() => lookAt(person(), new Vector3(0, 1.6, 3), { trunk: -0.1 })).toThrow('trunk share');
     const neckless = new Body({ ...dog(DOG), gaze: { ...dog(DOG).gaze!, neck: undefined } });
     expect(() => play(function* () { yield* lookAt(neckless, new Vector3(0, 0.5, 3), { head: 0.5 }); }, [neckless], 0.1)).toThrow('needs a neck');
   });
+});
+
+/** the yaw (rad, + to its left) of `bone` off the body's facing */
+const yawOff = (body: Body, bone: number) => new Euler().setFromQuaternion(new Quaternion().copy(body.pose.rotation(bone)), 'YXZ').y - body.facing;
+
+describe('lookAt with a trunk share', () => {
+  it('turns the chest that share of the bearing, and leaves it be without one', () => {
+    const chest = (trunk?: number) => {
+      const body = person({ dev: true });
+      play(function* () { yield* lookAt(body, new Vector3(3 * Math.sin(0.6), 1.4, 3 * Math.cos(0.6)), { trunk }); }, [body], 2);
+      expect(body.log).toEqual([]);
+      return yawOff(body, INDEX.chest);
+    };
+    expect(chest(0.5)).toBeCloseTo(0.3, 1);
+    expect(Math.abs(chest())).toBeLessThan(0.05);
+  });
+});
+
+it("follows a function that gives a body: its eyes, then the next body's as the focus changes", () => {
+  const body = person({ dev: true });
+  const left = person({ at: new Vector3(2, 0, 2), face: -Math.PI / 2 }), right = person({ at: new Vector3(-2, 0, 2), face: Math.PI / 2 });
+  const turns: number[] = [];
+  play(function* () { yield* lookAt(body, (time) => time < 1.5 ? left : right); }, [body, left, right], 3, (t) => {
+    if (Math.abs(t - 1.4) < 1e-6 || Math.abs(t - 3) < 1e-6) turns.push(yawOff(body, INDEX.head));
+  });
+  // (each 45° aside: the head takes most of it)
+  expect(turns[0]).toBeGreaterThan(0.5);
+  expect(turns[1]).toBeLessThan(-0.5);
+  expect(body.log).toEqual([]);
 });

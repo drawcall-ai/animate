@@ -1,7 +1,7 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { floorAt } from './hall';
-import { arriving, lookAt, pose, reach, wait, walkTo, type Body, type Verb } from '@drawcall/animate';
+import { arriving, lookAt, pose, reach, walkTo, type Body, type Verb } from '@drawcall/animate';
 
 // The small, character-defining gestures of the medal moment, each a story function on one body (and whom it is for).
 // Each is a gaze (`lookAt`: where the eyes go, its `roll` and `pitch` tipping the head as it looks) beside a `pose`: trunk and head angles
@@ -28,10 +28,12 @@ export function eyesOf(body: Body, out = new Vector3()): Vector3 {
 export function bowForMedal(luke: Body, leia: Body, { until, proud = 2.4 }: { until: number | (() => boolean); proud?: number }): Verb {
   return (function* () {
     yield* parallel('race', lookAt(luke, besides(luke, 0, 1.15, 0.5)), pose(luke, { bow: 0.12, head: { pitch: 0.3 } }, { until }));
-    yield* lookAt(luke, leia, { pitch: -0.08, until: proud * 0.4 });
-    // the shy part: his head dips a little under his eyes, still on her, and comes back up
-    yield* parallel('race', lookAt(luke, leia), pose(luke, { head: { pitch: 0.22 } }, { until: 0.45 }));
-    yield* lookAt(luke, leia, { pitch: -0.08, until: proud * 0.6 - 0.45 });
+    yield* parallel('race', lookAt(luke, leia), function* () {
+      yield* pose(luke, { head: { pitch: -0.08 } }, { until: proud * 0.4 });
+      // the shy part: his head dips a little under his eyes, still on her, and comes back up
+      yield* pose(luke, { head: { pitch: 0.22 } }, { until: 0.45 });
+      yield* pose(luke, { head: { pitch: -0.08 } }, { until: proud * 0.6 - 0.45 });
+    });
     return true;
   })();
 }
@@ -48,11 +50,11 @@ export function cockyWink(han: Body, leia: Body, { seconds = 2.6 }: { seconds?: 
     const left = Math.sin(Math.atan2(toLeia.x, toLeia.z) - han.facing) > 0;
     const roll = left ? -0.2 : 0.2;
     const twist = left ? 0.15 : -0.15;
-    yield* parallel('race', lookAt(han, leia, { roll, until: seconds }), function* () {
-      yield* pose(han, { twist, head: { pitch: 0 } }, { until: seconds * 0.22 });
-      yield* pose(han, { twist, head: { pitch: 0.24 } }, { until: seconds * 0.2 });
-      yield* pose(han, { twist, head: { pitch: -0.08 } }, { until: seconds * 0.36 });
-      yield* wait(Infinity);
+    yield* parallel('race', lookAt(han, leia, { until: seconds }), function* () {
+      yield* pose(han, { twist, head: { pitch: 0, roll } }, { until: seconds * 0.22 });
+      yield* pose(han, { twist, head: { pitch: 0.24, roll } }, { until: seconds * 0.2 });
+      yield* pose(han, { twist, head: { pitch: -0.08, roll } }, { until: seconds * 0.36 });
+      yield* pose(han, { head: { roll } });
     });
     return true;
   })();

@@ -1,17 +1,7 @@
 import { Group, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { lookAt, pose, wait, type Body } from '@drawcall/animate';
+import { lookAt, pose, wait } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-
-/** where `body`'s eyes are now (world): what another looks at to look it in the eye */
-function eyesOf(body: Body): () => Vector3 {
-  const eyes = new Vector3();
-  return () => {
-    const gaze = body.species.gaze;
-    if (!gaze) throw new Error('a body with no eyes to look into');
-    return gaze.eyes(body.pose, eyes);
-  };
-}
 
 export const gestures: Scenario = {
   id: 'gestures',
@@ -26,9 +16,9 @@ export const gestures: Scenario = {
       scene: new Group(),
       bodies: [greeter, watcher],
       story: function* () {
-        yield* parallel('race', lookAt(watcher, eyesOf(greeter)), function* () {
+        yield* parallel('race', lookAt(watcher, greeter), function* () {
           // (its eyes on the other's through the greeting and the bow, whatever its head and trunk do)
-          yield* parallel('race', lookAt(greeter, eyesOf(watcher)), function* () {
+          yield* parallel('race', lookAt(greeter, watcher), function* () {
             yield* wait(1);
             // a nod: the head dips 0.3 rad (17°) and comes back as the pose ends
             yield* pose(greeter, { head: { pitch: 0.3 } }, { until: 0.4 });
@@ -41,7 +31,7 @@ export const gestures: Scenario = {
           yield* pose(greeter, { bow: -0.3, head: { pitch: -0.7 } }, { until: 2 });
           yield* wait(1.2);
           // a cocky tilt as it looks at the other again: the head tipped 0.3 rad toward its right shoulder, the chin a little up
-          yield* lookAt(greeter, eyesOf(watcher), { roll: 0.3, pitch: -0.1, until: 2 });
+          yield* parallel('race', lookAt(greeter, watcher), pose(greeter, { head: { roll: 0.3, pitch: -0.1 } }, { until: 2 }));
           yield* wait(1);
           finished = true;
         });

@@ -44,7 +44,7 @@ it('re-centres its eyes on a near look begun as a bow straightens', () => {
     const person = new Body(humanoid(PERSON), { dev: true }), gaze = person.species.gaze!;
     const face = new Vector3(0, gaze.eyes(person.pose, new Vector3()).y + 0.05, 0.6);
     const updateStory = runTimeline(function* () {
-      if (bowFirst) yield* lookAt(person, new Vector3(0, 1.12, 0.6), { trunk: true, until: 2 });
+      if (bowFirst) yield* lookAt(person, new Vector3(0, 1.12, 0.6), { trunk: 0.65, until: 2 });
       yield* lookAt(person, face, { until: Infinity });
     });
     for (let time = 0; time < (bowFirst ? 2 : 0) + 3; time += FIXED_DT) {
