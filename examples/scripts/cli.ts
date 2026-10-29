@@ -1,4 +1,7 @@
-import type { LogEntry } from '@drawcall/animate';
+import type { Body } from '@drawcall/animate';
+
+/** a development problem a body logged */
+type LogEntry = Body['log'][number];
 import { SCENARIOS } from '../src/scenarios';
 import { knownFailure, run, seeded } from './run';
 

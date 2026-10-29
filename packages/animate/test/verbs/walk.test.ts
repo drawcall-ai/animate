@@ -32,21 +32,32 @@ it('a grab waiting on the walk starts before the walk ends, without taking the l
   expect(body.log).toEqual([]);
 });
 
-it('arriving reads what the body moves toward: its walk while it walks, its rest once nothing moves', () => {
-  const body = person();
-  const seen: boolean[] = [];
+it('arriving reads what the body begins to move toward once it is made: false till then, its walk while it walks, true once that ends', () => {
+  const body = person(), h = insides(body);
+  const seen: boolean[] = [], at = { arriving: NaN, walked: NaN };
   play(function* () {
-    seen.push(arriving(body, 0.5)());
+    const soon = arriving(body, 0.5);
+    // (at rest, nothing begun since it was made)
+    seen.push(soon());
     yield* parallel('race', walkTo(body, new Vector3(0, 0, 5)), function* () {
       yield* wait(0.5);
-      seen.push(arriving(body, 0.5)());
+      // (walking, still far off; and one made after the walk began does not count it)
+      seen.push(soon(), arriving(body, 0.5)());
     });
-    // (the walk cancelled under way: nothing moves toward anything, and the body is not yet at rest)
-    seen.push(arriving(body, 0.5)());
-    yield* wait(arriving(body, 0.5));
-    seen.push(insides(body).locomotion.settled);
-  }, [body], 8, () => seen.length === 4);
-  expect(seen).toEqual([true, false, false, true]);
+    // (the walk cancelled under way: nothing it began moves toward anything now)
+    seen.push(soon());
+    // (made beside a walk, ahead of it in the branches, it waits for that walk)
+    yield* parallel('all', function* () {
+      yield* wait(arriving(body, 0.5));
+      at.arriving = h.frame.time;
+    }, function* () {
+      yield* walkTo(body, new Vector3(0, 0, 3));
+      at.walked = h.frame.time;
+    });
+  }, [body], 15, () => !Number.isNaN(at.walked));
+  expect(seen).toEqual([false, false, false, true]);
+  expect(at.walked - at.arriving).toBeGreaterThan(0.25);
+  expect(at.walked - at.arriving).toBeLessThan(0.75);
 });
 
 // (a walk ends once there, turned and settled: its feet squared and held still; `arriving` foresees that end, not the moment it is there)
@@ -113,22 +124,21 @@ it('arriving foresees every mover: a reach before its hands get there, a grab wh
       yield* reach(body, { right: new Vector3(-0.25, 1.2, 0.45) });
       yield* mark('reached')();
     }, function* () {
-      yield* wait(0.1);
       yield* wait(arriving(body, 0.6));
       yield* mark('reach arriving')();
     });
+    const grabbed = arriving(body, 0.1);
     yield* grab(body, near, { right: 'right' });
     yield* wait(() => h.locomotion.settled);
     release(body, near);
     yield* wait(0.1);
     // (the hands backing out — the body's own request — while what its stories moved has arrived: as settled as the body is)
     at.backing = h.requests.some((request) => request.owned) ? 1 : 0;
-    at.unheld = arriving(body, 0.1)() && h.locomotion.settled ? 1 : 0;
+    at.unheld = grabbed() && h.locomotion.settled ? 1 : 0;
     yield* parallel('all', function* () {
       yield* grab(body, far, { left: 'left', right: 'right' });
       yield* mark('grabbed')();
     }, function* () {
-      yield* wait(0.1);
       yield* wait(arriving(body, 0.6));
       yield* mark('grab arriving')();
       at.walking = insides(body).locomotion.moving ? 1 : 0;

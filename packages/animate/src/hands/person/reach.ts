@@ -14,7 +14,7 @@ import { armReaches, footing, walking } from './stand';
 import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { paceOf, type Manner } from '../handling';
+import { paceAt, type HandOptions, type Pace } from '../handling';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { ARM } from './trunk';
 
@@ -33,7 +33,7 @@ export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f:
 }
 
 /** Hands close together after reaching every grip; route staging is separate from final closure. */
-export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: { speed: number; accel?: number }) {
+export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: Pace) {
   const began = person.frame.time;
   const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
   const close = () => takes.forEach((take) => grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal }));
@@ -83,7 +83,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     return { ...take, points, lengths, distance, route, delay, seconds };
   });
   const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
-  const lasts = (hand: (typeof plan)[number]) => motion ? hand.distance / motion.speed + motion.speed / (motion.accel ?? CALM.accel) : Math.max(hand.delay, finish - hand.seconds) + hand.seconds;
+  const lasts = (hand: (typeof plan)[number]) => motion ? hand.distance / motion.speed + motion.speed / motion.accel : Math.max(hand.delay, finish - hand.seconds) + hand.seconds;
   ends = began + Math.max(...plan.map(lasts));
   request.eta = ends - began;
   for (const take of takes) grasp(person, take.side, null);
@@ -101,7 +101,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
           : reached(f, person.hands[hand.side], { position }, person.track(hand.thing.object)) || f.time >= began + seconds + after + STAGING)
         : until(there);
       const on = person.track(hand.thing.object);
-      const pace = motion ? { accel: motion.accel ?? CALM.accel, speed: motion.speed } : { seconds, after, straight: hand.route.length > 0 };
+      const pace = motion ? { accel: motion.accel, speed: motion.speed } : { seconds, after, straight: hand.route.length > 0 };
       yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, goal, { on, thing: hand.thing, lead: !worn(hand.thing), ...pace }), ready);
     }
     staged++;
@@ -203,8 +203,8 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 }
 
 /** Follow targets with borrowed walking; replan after movement while keeping each hand's motion history. */
-export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: Manner) {
-  const motion = paceOf(pace, CALM);
+export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: HandOptions) {
+  const motion = paceAt(pace.speed, CALM);
   aims = aims.map(({ side, target }) => {
     const sample = new PointVelocity();
     let velocity = new Vector3();

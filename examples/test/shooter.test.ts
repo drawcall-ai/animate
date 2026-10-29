@@ -1,6 +1,6 @@
 import { Euler, Group, PerspectiveCamera, Quaternion, Vector3, type Object3D } from 'three';
 import { expect } from 'vitest';
-import { carry, grab, release, wait, type LogEntry, type Root } from '@drawcall/animate';
+import { carry, grab, release, wait, type Body, type Root } from '@drawcall/animate';
 import { shooter } from '../src/scenarios/shooter';
 import { Simulation } from '../src/simulation';
 import { Playback } from '../src/playback';
@@ -48,7 +48,7 @@ const lookTurn = ({ yaw, pitch }: { yaw: number; pitch: number }) => new Quatern
 /** the rifle's sight (its frame, m) */
 const SIGHT = new Vector3(0, 0.12, 0);
 /** a dev log's first entries, readable */
-const logged = (log: readonly LogEntry[]) => log.slice(0, 4).map((entry) => `${entry.check} ${entry.where} ${entry.value.toFixed(3)} (limit ${entry.limit}) @${entry.time.toFixed(2)}`);
+const logged = (log: Body['log']) => log.slice(0, 4).map((entry) => `${entry.check} ${entry.where} ${entry.value.toFixed(3)} (limit ${entry.limit}) @${entry.time.toFixed(2)}`);
 /** the player's keys and buttons all let go (the look where it is) */
 const idle = (player: Player) => Object.assign(player.input, { move: { x: 0, z: 0 }, ads: false, sprint: false, fire: false, crouch: false, jump: false, reload: false });
 

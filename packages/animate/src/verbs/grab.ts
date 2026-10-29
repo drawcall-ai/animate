@@ -5,21 +5,8 @@ import type { Holder } from '../things/resolve';
 import type { Frame } from '../kernel/frame';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
-import { verb, type Until, type Verb } from './story';
-
-/** How a grab goes. */
-export interface GrabOptions {
-  /** the hands' speed to the grips (m/s; default the time a calm reach that far takes, Fitts'); `Infinity` puts them there at once, for a
-   * body that starts a story already holding the thing — only as it starts, the grips within its arms' reach from where it stands */
-  speed?: number;
-  /** the hands' acceleration with `speed` (m/s²) */
-  accel?: number;
-  /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
-   * rising on its toes for the grips as far as its arms and trunk allow, and ends `false` if that is not far enough */
-  step?: boolean;
-  /** ends on this instead of holding */
-  until?: Until;
-}
+import { verb, type Verb } from './story';
+import type { HandOptions } from '../hands/handling';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
@@ -33,7 +20,7 @@ export interface GrabOptions {
  * so in one hand keeps its own turn, the hand's free twist not turning it): `userData.handTurn = true` turns the hand as the empty is
  * turned, as an `Object3D` target does (`Target`); an axis [x, y, z] allows roll about that line in its frame.
  */
-export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {
+export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
   if (!named.length) throw new Error('grab: name a grip for a hand');
   if (options.speed !== undefined && !(options.speed > 0)) throw new Error(`grab: a speed of ${options.speed}`);

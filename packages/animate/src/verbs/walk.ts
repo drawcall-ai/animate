@@ -83,14 +83,14 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
 }
 
 /**
- * A condition for `wait` and `until`: true once what `body`'s stories move it toward (its walk, its hands, what it carries) will arrive
- * within `seconds` — or, moving nothing, once it has come to rest. What the body does of itself (its hands backing out of what they let
- * go) does not hold it up.
+ * A condition for `wait` and `until`: true once what `body`'s stories have begun moving it toward since the condition was made (that
+ * instant included: a walk asked beside it counts) — its walk, its hands, what it carries — will arrive within `seconds`, or has (each
+ * mover that has ended counts as there). False until one begins: made before or beside a walk, it waits for that walk, so it reads the
+ * same however the story's branches are ordered. What the body does of itself (its hands backing out of what they let go) does not hold
+ * it up. To wait until the body is at rest, `wait(() => body.settled)`.
  */
 export function arriving(body: Body, seconds: number): () => boolean {
-  const self = selfOf(body);
-  return () => {
-    const movers = self.requests.filter((request) => !request.aimer && !request.owned && request.outcome === 'running');
-    return movers.length ? movers.every((request) => request.eta <= seconds) : self.locomotion.settled;
-  };
+  const self = selfOf(body), since = self.time;
+  return () => self.lastMover >= since && self.requests.every((request) =>
+    request.aimer || request.owned || request.filed < since || request.outcome !== 'running' || request.eta <= seconds);
 }

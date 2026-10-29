@@ -5,20 +5,8 @@ import { Thing } from '../things/thing';
 import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import { finder, type Target } from './targets';
-import { verb, type Until, type Verb } from './story';
-
-/** How a carry goes. */
-export interface CarryOptions {
-  /** the thing's mean speed along its way (m/s; default a calm 0.5, a transfer walked somewhere its own pace) */
-  speed?: number;
-  /** the hands' acceleration (m/s²) */
-  accel?: number;
-  /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
-   * rising on its toes for the target as far as its arms and trunk allow, and ends `false` if that is not far enough */
-  step?: boolean;
-  /** ends on this instead of arriving */
-  until?: Until;
-}
+import { verb, type Verb } from './story';
+import type { HandOptions } from '../hands/handling';
 
 /**
  * Carries `thing`, which the body holds, to `target` — or through each of a list of targets, one smooth way: off whatever it is in first
@@ -33,9 +21,10 @@ export interface CarryOptions {
  * head holding it off a target too near them (a target on its own head, a cup put to the mouth, is held in front of it by design); the
  * dev log's entry says which, and by how much. It holds the thing where it got to either way.
  */
-export function carry(body: Body, thing: Object3D, target: Target | readonly Target[], options: CarryOptions = {}): Verb {
+export function carry(body: Body, thing: Object3D, target: Target | readonly Target[], options: HandOptions = {}): Verb {
   const targets = Array.isArray(target) ? target : [target];
   if (!targets.length) throw new Error('carry: give a target');
+  if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`carry: a speed of ${options.speed}`);
   return verb(body, 'carry', (request) => function* () {
     const self = selfOf(body), carried = Thing.of(thing);
     if (!handsOn(self, carried).length) throw new Error(`carry: no hand of the body holds "${thing.name}" (grab it first)`);

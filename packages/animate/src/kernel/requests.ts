@@ -35,6 +35,8 @@ export class Request {
   outcome: 'running' | 'met' | 'failed' = 'running';
   /** seconds until what it moves arrives (∞: it moves nothing, or does not know) */
   eta = Infinity;
+  /** the body's time when it was filed (s) */
+  readonly filed: number;
   /** the body's time when its story last stepped it (s) */
   renewed: number;
   /** whether development has said it went unrenewed */
@@ -48,7 +50,7 @@ export class Request {
   /** `aimer`: it keeps on at its goal (a look, a tracked pose) rather than moving something somewhere: no arrival to foresee, it ends only
    * when its story says */
   constructor(readonly body: Filed, readonly verb: string, readonly site: string, private readonly staging: Staging, readonly aimer = false) {
-    this.renewed = body.time;
+    this.filed = this.renewed = body.time;
   }
 
   get finished(): boolean {

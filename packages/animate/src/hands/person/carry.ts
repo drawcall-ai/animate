@@ -13,7 +13,7 @@ import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold
 import type { Thing } from '../../things/thing';
 import { resolve } from '../../things/resolve';
 import type { Reacher } from './reacher';
-import type { Manner } from '../handling';
+import { paceAt, type HandOptions } from '../handling';
 import type { Clearance, Way } from '../route';
 import { floorUnder } from '../../legs/person/legged';
 import { handStep, HOLD } from './arms';
@@ -45,7 +45,7 @@ const ALONG = { speed: 0.5, least: 0.4 };
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
 /** Carry the route, retaining a fresh aim at each travel/hold boundary. */
-export function* carrying(person: Reacher, request: Request, thing: Thing, way: Way, options: Manner) {
+export function* carrying(person: Reacher, request: Request, thing: Thing, way: Way, options: HandOptions) {
   const sides = handsOn(person, thing).map(sideOf);
   const resting = supported(thing);
   yield* lifting(person, request, thing);
@@ -61,7 +61,8 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
     request.fail();
     return;
   }
-  const aim = aimsFor(person, thing, { ...CARRYING, accel: options.accel ?? CARRYING.accel }, way.clear);
+  // (the hands as brisk as the way is quick: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
+  const aim = aimsFor(person, thing, { ...CARRYING, accel: paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel }, way.clear);
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, aim, resting, options.speed));
   else yield* transferring(person, request, thing, way, plan, aim, resting);
   request.met();

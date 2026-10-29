@@ -1,4 +1,7 @@
-import type { LogEntry } from '@drawcall/animate';
+import type { Body } from '@drawcall/animate';
+
+/** a development problem a body logged */
+type LogEntry = Body['log'][number];
 import type { CastOptions, Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 /** a random source seeded by `seed` (mulberry32): the same numbers every run */
