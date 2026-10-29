@@ -12,7 +12,7 @@ import type { Go } from '../kernel/go';
 import { createLocomotion, type Locomotion } from '../legs/locomotion';
 import type { Root } from '../legs/legged';
 import type { Stepper } from '../legs/step/stepper';
-import type { AnySpecies, Gazer, Temperament } from '../species/define';
+import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
 import { yawOf } from '../kernel/math';
 import { Binding } from './model';
@@ -127,6 +127,7 @@ export class Self implements Holder {
     this.drive = options.drive;
     this.floor = options.floor ?? FLAT;
     this.life = options.life ?? {};
+    if (this.life.steady !== undefined && !species.person) throw new Error(`life.steady: a person's; a ${species.name ?? 'custom species'} has no such setting`);
     // (a body stands on its floor wherever it is asked to start)
     const at = options.at, height = at ? Math.abs(at.y - this.floor(at.x, at.z)) : 0;
     if (height > OFF_FLOOR) dev?.append(0, { check: 'start off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'at' });
@@ -265,6 +266,7 @@ export class Self implements Holder {
     return carrier;
   }
 
+
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
   file(verb: string, site: string, staging: Staging, aimer = false): Request {
     const request = new Request(this, verb, site, staging, aimer);
@@ -385,6 +387,8 @@ export class Self implements Holder {
     const behaviours = (this.behaviours ??= this.behave());
     // (balance first, on what was asked last sub-step; then the requests' staging, reading the body as balance has it now)
     behaviours.balance?.(f);
+    // (how still its life holds it, asked for balance's next sub-step as its parts ask)
+    if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
     for (const request of [...this.requests]) {

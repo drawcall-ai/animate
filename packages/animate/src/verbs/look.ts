@@ -16,6 +16,12 @@ export interface LookOptions {
   roll?: number;
   /** the head pitched over the line of sight as it looks (rad, + chin down): a shy look from under the brows, or − the chin up, proud */
   pitch?: number;
+  /**
+   * how much of a turn aside the head takes (0 … 1; default all but a few degrees): the eyes take the rest, as far as they turn
+   * comfortably (a person's 20° each way), and past that the head turns on for them — so 0.3 is a glance with the eyes, the head
+   * following slightly: a soldier at attention watching someone pass. Up and down the head turns all the way.
+   */
+  head?: number;
   /** ends on this; without it, it keeps looking until its story moves on */
   until?: Until;
 }
@@ -27,11 +33,12 @@ export interface LookOptions {
  * posture with `trunk`). A body to look at needs eyes (a gaze), and is not the body looking.
  */
 export function lookAt(body: Body, target: Target | Body, options: LookOptions = {}): Verb {
-  const { roll = 0, pitch = 0 } = options;
+  const { roll = 0, pitch = 0, head } = options;
   if (!Number.isFinite(roll) || !Number.isFinite(pitch)) throw new Error(`lookAt: a roll of ${roll} and a pitch of ${pitch}, not radians`);
+  if (head !== undefined && !(head >= 0 && head <= 1)) throw new Error(`lookAt: a head share of ${head}: give 0 … 1`);
   const self = selfOf(body), point = target instanceof Body ? eyesOf(self, target) : located(finder(self, target));
   return verb(body, 'lookAt', (request) => function* () {
-    const look = looking(self, point, { recentring: true });
+    const look = looking(self, point, { recentring: true, head });
     const tipped = roll !== 0 || pitch !== 0 ? { roll, pitch } : null;
     yield* parallel('all', during(request, 'look', 'asked', (f) => {
       look(f);

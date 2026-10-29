@@ -77,10 +77,23 @@ export interface Attention {
   startle?: (time: number) => Readonly<Vector3> | undefined;
 }
 
-/** What a body's legs are asked by the scene and its quiet life: a seed, a tether, a startle. */
+/** What a body's legs are asked by the scene and its quiet life: a seed, how still it holds itself, a tether, a startle. */
 export interface Temperament extends Attention {
   /** fixes its variation: sway, breathing, weight shifts, glances (a creature without a carriage or posture of its own has none) */
   seed?: number;
+  /**
+   * how still a person holds itself (0 at ease, the default … 1: at attention, aiming), or that at the body's time (s) — a soldier at
+   * attention, a guard, a player aiming down sights: any steadiness holds its weight where it is (no weight shifts), and by 1 its
+   * breathing and sway fade to 0.3 of their ease and its idle glances aside to none. A person's (a creature has no such setting).
+   */
+  steady?: number | ((time: number) => number);
+}
+
+/** how still `life` holds its body at `time` (s): its `steady`, 0 … 1 */
+export function steadiness(life: Temperament, time: number): number {
+  const steady = typeof life.steady === 'function' ? life.steady(time) : life.steady ?? 0;
+  if (!(steady >= 0 && steady <= 1)) throw new Error(`life.steady ${steady}: give 0 (at ease) … 1 (at attention)`);
+  return steady;
 }
 
 /** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */
