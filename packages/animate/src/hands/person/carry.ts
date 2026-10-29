@@ -248,7 +248,7 @@ function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim,
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
     ? [{ side: sideOf(hand), hold, tip: new ChainTip(`${hand}Arm`) }] : []);
   const single = hands.length === 1 ? inHandOf(person, hands[0].side, thing) : null;
-  // A position-only grip lets the thing keep its turn about the wrist.
+  // A position-only grip lets the thing keep its turn about the palm.
   const free = single && hands[0].hold.goal.quaternion === undefined;
   const step = ({ side, tip }: (typeof hands)[number]) => (f: Frame) => {
     const carrier = aim.read(f, to), hold = person.holding[side], carried = carrier.carriedBy === person;
