@@ -1,6 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, release, wait, type Body } from '../../src/index';
+import { arriving, Body, carry, grab, humanoid, release, wait } from '../../src/index';
+import { CHEWBACCA } from '../skeletons/chewbacca';
 import { insides, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -140,6 +141,29 @@ describe('carry', () => {
     expect(held.most).toBeLessThan(0.03);
     expect(body.log).toEqual([]);
   }, 20000);
+
+  // (the trial that found it: a bearer who walks a medal to the princess; `arriving` said he was all but there while he lifted it, 1.9 m
+  // off, and her grab went for a medal still on its way)
+  it.each([['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]])(
+    'is not arriving while it still has to walk the thing there: %s', (_name, make) => {
+      const body = make(), room = roomOf(body), scale = body.species.scale;
+      const load = box(room, new Vector3(-0.15, 1, 0.4).multiplyScalar(scale), { size: new Vector3(0.08, 0.08, 0.08), mass: 0.15 });
+      const there = empty(room, 'there', new Vector3(0, 1, 2.2).multiplyScalar(scale));
+      const near = arriving(body, 0.6);
+      let carrying = false, carried = false, far = 0;
+      play(function* () {
+        yield* grab(body, load, { right: 'right' });
+        carrying = true;
+        carried = yield* carry(body, load, there);
+      }, [body], 15, () => {
+        if (carrying && !carried && near()) far = Math.max(far, worldOf(load).distanceTo(worldOf(there)));
+        return carried;
+      });
+      expect(carried).toBe(true);
+      // (arriving within 0.6 s, as the walk ends and the raise begins: the thing within about a stride of its place, not across the room)
+      expect(far).toBeLessThan(0.8 * scale);
+      expect(body.log).toEqual([]);
+    }, 20000);
 
   // (the trial that found it: a princess standing on a kneeling hero hung a medal at his neck, inside her own trunk; the carry said true
   // with the medal 36 cm off his neck)

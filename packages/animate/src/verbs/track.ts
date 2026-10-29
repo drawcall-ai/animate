@@ -9,9 +9,12 @@ import { INDEX, type Side } from '../species/humanoid/bones';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
-/** how far a tracked hand may be off a target past `reach` × its arm's length (m, default body) — as far as a reach is let end — and how
- * long (s) it may come no nearer by `closing` (m) before it is said */
-const OFF = { distance: 0.02, reach: 0.98, seconds: 0.5, closing: 0.002 };
+/** how far a tracked hand may be off a target past `reach` × its arm's length (m, default body) — as far as a reach is let end — and for
+ * how much of the last few seconds: its time short, each second of it counting less by e⁻¹ every `window` s, up to what `seconds` short at
+ * a stretch comes to (so a target out of reach for a fifth or more of each stroke of a gesture is said, as one out of reach for half a
+ * second is) */
+const OFF = { distance: 0.02, reach: 0.98, seconds: 0.5, window: 3 };
+const SHORT = OFF.window * (1 - Math.exp(-OFF.seconds / OFF.window));
 
 /** What a tracked person follows: its head (the eyes' middle, turned as the head is) and its hands (the wrists), each a target. */
 export type Tracked = Partial<Record<'head' | Side, Target>>;
@@ -35,20 +38,20 @@ export function track(body: Body, tracked: Tracked, options: { until?: Until } =
       if (!target) continue;
       const find = finder(person, target), keep = reaching(person, side, find, { ...HOLD, lead: false });
       // (development: a hand `OFF.distance` off where its target was a sub-step before, the target past the arm held out straight from
-      // the shoulder, and no nearer it for `OFF.seconds` is said once, as a reach that falls short is; a hand lagging a target in reach
-      // is not)
-      let since = 0, nearest = Infinity, said = false;
+      // the shoulder, for long enough of the last few seconds (`OFF`), is said once, as a reach that falls short is; a hand lagging a
+      // target in reach is not)
+      let short = 0, said = false;
       const shoulder = INDEX[`${side}UpperArm`];
       let last: Vector3 | null = null;
       branches.push(during(request, `hand.${side}`, 'asked', (f) => {
         if (f.dev && !said && last) {
           const gap = f.prev.position(person.hands[side]).distanceTo(last);
           const from = f.prev.position(shoulder).distanceTo(last), beyond = from > OFF.reach * person.proportions.armLength;
-          if (!beyond || gap <= OFF.distance * person.scale || gap < nearest - OFF.closing * person.scale) [since, nearest] = [f.time, gap];
-          if (f.time - since > OFF.seconds) {
+          short = short * Math.exp(-f.dt / OFF.window) + (beyond && gap > OFF.distance * person.scale ? f.dt : 0);
+          if (short >= SHORT) {
             said = true;
             f.dev.append(f.time, { check: 'tracked hand short of a target out of reach (m)', value: gap, limit: OFF.distance * person.scale, where: side,
-              detail: `the shoulder ${from.toFixed(2)} m from it, the arm ${person.proportions.armLength.toFixed(2)} m` });
+              detail: `the shoulder ${from.toFixed(2)} m from it, the arm ${person.proportions.armLength.toFixed(2)} m (species.person.armLength)` });
           }
         }
         keep(f);

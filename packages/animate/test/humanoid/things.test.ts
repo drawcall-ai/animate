@@ -1,6 +1,7 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, release, wait } from '../../src/index';
+import { Body, carry, grab, humanoid, release, wait } from '../../src/index';
+import { CHEWBACCA } from '../skeletons/chewbacca';
 import { insides, person, play, run, feetOf } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -141,4 +142,43 @@ describe('hands that cannot get there', () => {
     expect(body.log.filter(({ check }) => check.startsWith('late carry')).map(({ where }) => where)).toEqual(['near']);
     expect(h.holding.left?.thing.object).toBe(near);
   });
+});
+
+// (the trial that found it: a bearer's medal hanging from his still right hand by its ribbon's loop swung at 6 m/s as his left hand took
+// the next one, riding the free twist of his wrist; and a forearm holding a thing flailed at ~1200°/s as the trunk bowed over a hand kept
+// in the pelvis's frame)
+describe('a thing in one hand by a grip that sets no turn', () => {
+  it.each([['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]])(
+    'keeps its turn in the world, but for the facing, as the other hand bows for something low, the arm holding it calm: %s', (_name, make) => {
+      const body = make(), room = roomOf(body), scale = body.species.scale, hips = body.species.person?.hipHeight ?? 0;
+      const medal = new Object3D();
+      medal.name = 'medal';
+      medal.userData.mass = 0.1;
+      medal.position.set(-0.25 * scale, hips + 0.1 * scale, 0.3 * scale);
+      empty(medal, 'loop', new Vector3(0, 0.34, 0));
+      room.add(medal);
+      const low = box(room, new Vector3(0.25, 0.3, 0.45).multiplyScalar(scale), { size: new Vector3(0.1, 0.1, 0.1), mass: 0.3, name: 'low' });
+      let took = false, kept: Quaternion | null = null, turned = 0, forearm = 0, before: Quaternion | null = null;
+      // (its turn with the body's facing taken out)
+      const unfaced = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -body.facing).multiply(medal.getWorldQuaternion(new Quaternion()));
+      play(function* () {
+        yield* grab(body, medal, { right: 'loop' });
+        kept = unfaced();
+        took = yield* grab(body, low, { left: 'right' });
+      }, [body], 12, () => {
+        const turn = body.bones.rightLowerArm.getWorldQuaternion(new Quaternion());
+        if (kept && before) {
+          turned = Math.max(turned, unfaced().angleTo(kept));
+          forearm = Math.max(forearm, turn.angleTo(before) * 60);
+        }
+        before = turn;
+        return took;
+      });
+      expect(took).toBe(true);
+      expect(body.holds(medal)).toBe(true);
+      expect(turned).toBeLessThan(0.01);
+      // (an idle holding arm goes along with the trunk: ~130–220°/s as it bows, against 420–460 kept in the pelvis's frame — rad/s here)
+      expect(forearm).toBeLessThan(5);
+      expect(body.log).toEqual([]);
+    }, 20000);
 });

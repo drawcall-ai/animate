@@ -75,4 +75,16 @@ describe('track', () => {
     expect(short[0].value).toBeGreaterThan(0.05);
     expect(logged(new Vector3(-0.25, 1.35, 0.4))).toEqual([]);
   });
+
+  // (the trial that found it: a fist pump whose top went 0.2 m past the arm each stroke, never for half a second at a stretch, unsaid)
+  it('says so too of a gesture out of reach only part of each stroke, and not of one within reach throughout', () => {
+    const pumped = (top: number) => {
+      const body = person({ dev: true });
+      const right = (time: number) => new Vector3(-0.25, 1.35 + top * Math.max(0, Math.sin(2 * Math.PI * time)), 0.3);
+      play(function* () { yield* track(body, { right }); }, [body], 4);
+      return body.log;
+    };
+    expect(pumped(0.75)).toEqual([expect.objectContaining({ check: 'tracked hand short of a target out of reach (m)', where: 'right' })]);
+    expect(pumped(0.25)).toEqual([]);
+  });
 });

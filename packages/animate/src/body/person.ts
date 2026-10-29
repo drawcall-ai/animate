@@ -15,7 +15,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, checkParents, inHand, move, worn } from '../things/hold';
+import { bear, bodyOf, checkParents, inHand, move, worn, type Kept } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
@@ -60,7 +60,7 @@ export class Person extends Self {
   protected behave(): Behaviours {
     const seed = this.life.seed;
     const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') }, held = { left: keptOnBody(this, 'left'), right: keptOnBody(this, 'right') };
-    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
+    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>(), kept = new WeakMap<Thing, Kept>();
     return {
       balance: this.drive ? driven(this, seed) : stride(this, { seed }),
       // (unseeded, glances vary with where the body was made, as its balance does: a crowd does not look aside in step)
@@ -79,7 +79,7 @@ export class Person extends Self {
       things: (f) => {
         checkParents(this, f);
         if (f.dev) checkTaking(this, f, taking);
-        move(this, f, this.carrying);
+        move(this, f, this.carrying, kept);
         if (f.dev) checkHeld(this, f, noted);
         this.carrying.clear();
         bear(this, f, this.worn, this.borne);
@@ -88,20 +88,21 @@ export class Person extends Self {
   }
 }
 
-/** An idle holding hand keeps its last root-relative pose while the body walks and turns. */
+/** An idle holding hand keeps its last pose relative to the chest, the arm's base, while the body walks, turns and bows: held in the
+ * pelvis's frame, a hand would stay put as the trunk bows over it for the other hand, its shoulder carried off, the arm swivelling round */
 function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
   const bone = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
   let time = -Infinity;
   return (f) => {
     // (let be since the last sub-step it was kept: from where it is now)
     if (f.time - time > 1.5 * f.dt) {
-      const back = _q.copy(f.prev.rotation(0)).invert();
-      kept.position.copy(f.prev.position(bone)).sub(f.prev.position(0)).applyQuaternion(back);
+      const back = _q.copy(f.prev.rotation(INDEX.chest)).invert();
+      kept.position.copy(f.prev.position(bone)).sub(f.prev.position(INDEX.chest)).applyQuaternion(back);
       kept.quaternion.copy(back).multiply(f.prev.rotation(bone));
     }
     time = f.time;
-    const turn = f.current.rotation(0);
-    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(0)), quaternion: turn.clone().multiply(kept.quaternion) };
+    const turn = f.current.rotation(INDEX.chest);
+    return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(INDEX.chest)), quaternion: turn.clone().multiply(kept.quaternion) };
   };
 }
 

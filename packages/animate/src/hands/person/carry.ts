@@ -80,8 +80,11 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
   // facing ahead of the body, its grips swung out of the hands' reach)
   const near = () => plan.walk.there <= RAISE_LEAD && plan.walk.unturned <= RAISE_TURN;
   const eyes = (f: Frame) => lifted ? end(f).position : watched;
+  // (the time to its end, `lift` s of the lift still to go: the walk up to the raise, alongside the lift, then the raise — unknown, ∞,
+  // before the walk has first stepped)
+  const onward = (lift = 0) => Math.max(lift, plan.walk.there - RAISE_LEAD) + RAISE / loadFactor(thing.mass);
   const walked = (f: Frame) => {
-    request.eta = Math.max(0, plan.walk.there - RAISE_LEAD) + RAISE / loadFactor(thing.mass);
+    request.eta = onward();
     return atBody(f);
   };
   yield* parallel<Frame>('race', noticing(person, request, eyes), function* () {
@@ -92,7 +95,7 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
       if (!(yield* walking(request, plan))) request.fail();
       approached = true;
     }, function* () {
-      yield* travel(person, request, thing, [[LIFT, atBody]], aim, resting);
+      yield* travel(person, request, thing, [[LIFT, atBody]], aim, resting, { eta: onward });
       lifted = true;
       yield* holding(person, request, thing, aim(), walked, near);
       yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), aim, false);
@@ -165,10 +168,11 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
 /**
  * Follow a course with load compliance only on support take-up, until the thing rests within `near` of its course's end; report a late
  * settling endpoint. The `end` of a carry fails it instead of waiting on: once late, or once at rest where the body's own trunk and head
- * hold it off its end (a carry ends true only with the thing in place).
+ * hold it off its end (a carry ends true only with the thing in place). Its request's eta is `eta` of the course's time left (s; default
+ * that time): what the carry does besides the course counted in.
  */
 function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], makeAim: Aim, resting: boolean,
-  { near = END.distance, on, end = false }: { near?: number; on?: (f: Frame) => Goal; end?: boolean } = {}) {
+  { near = END.distance, on, end = false, eta = (left) => left }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; eta?: (left: number) => number } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
   const lag = grips[LEADING] === undefined && person.holding[LEADING] ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
@@ -219,9 +223,9 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
     }
     return false;
   };
-  request.eta = left(person.frame);
+  request.eta = eta(left(person.frame));
   yield* holding(person, request, thing, aim, (f) => {
-    request.eta = left(f);
+    request.eta = eta(left(f));
     return to(f);
   }, there);
 }
