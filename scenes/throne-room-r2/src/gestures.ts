@@ -21,7 +21,7 @@ export function* bowForMedal(body: Body, giver: Body, hung: Until, proudSeconds 
   yield* parallel('race', lookAt(body, medal, { until: Infinity }), pose(body, { bow: 0.1, head: { pitch: 0.2 } }, { until: hung }));
   body.object.remove(medal);
   // straightening up, the chest a little lifted, the chin slightly down: a proud, shy look up at her
-  yield* parallel('race', lookAt(body, giver, { pitch: 0.12, roll: -0.05, until: proudSeconds }), pose(body, { bow: -0.05 }, { until: proudSeconds }));
+  yield* parallel('race', lookAt(body, giver), pose(body, { bow: -0.05, head: { pitch: 0.12, roll: -0.05 } }, { until: proudSeconds }));
   return true;
 }
 
@@ -40,13 +40,13 @@ export function* cockyWink(body: Body, at: Body, holdSeconds = 2): Verb {
   const shoulders = clamp(toward * 0.5, -0.3, 0.3);
   yield* parallel(
     'race',
-    // the look tipped toward his right shoulder: the cocky tilt
-    lookAt(body, at, { roll: 0.14, until: Infinity }),
-    pose(body, { twist: shoulders, lean: 0.03 }, { until: Infinity }),
+    lookAt(body, at),
+    // the head tipped toward his right shoulder: the cocky tilt
+    pose(body, { twist: shoulders, lean: 0.03, head: { roll: 0.14 } }),
     function* () {
       yield* wait(0.6); // the head comes round first
       // the half-nod as he winks: chin down 0.35 rad (20°) and back up (a shorter pose does not get the head that far down)
-      yield* pose(body, { twist: shoulders, lean: 0.03, head: { pitch: 0.35 } }, { until: 0.35 });
+      yield* pose(body, { twist: shoulders, lean: 0.03, head: { pitch: 0.35, roll: 0.14 } }, { until: 0.35 });
       yield* wait(holdSeconds);
     },
   );

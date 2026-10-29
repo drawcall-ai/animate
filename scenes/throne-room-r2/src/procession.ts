@@ -69,9 +69,12 @@ function* hanWalking(body: Body): Verb {
   yield* parallel('race', pose(body, { twist: 0.04, head: { roll: 0.06 } }), function* () {
     yield* wait(4);
     for (;;) {
-      yield* lookAt(body, around(body, 14, 0, 1.7), { until: 4, roll: 0.08 });
-      yield* lookAt(body, around(body, 3, 5, 1.7), { until: 1.8, roll: 0.08 }); // a glance at the troops on his side
-      yield* lookAt(body, around(body, 14, 0, 1.7), { until: 3.5, roll: 0.08 });
+      // (his head cocked a little more as he takes the troops in)
+      yield* parallel('race', pose(body, { head: { roll: 0.14 } }), function* () {
+        yield* lookAt(body, around(body, 14, 0, 1.7), { until: 4 });
+        yield* lookAt(body, around(body, 3, 5, 1.7), { until: 1.8 }); // a glance at the troops on his side
+        yield* lookAt(body, around(body, 14, 0, 1.7), { until: 3.5 });
+      });
       yield* lookAt(body, around(body, 6, -2, 1.7), { until: 1.6 }); // across at Luke and Chewie's side
     }
   });
@@ -108,7 +111,7 @@ export function* faceHall(cast: Cast, hold: Until = 4): Verb {
     const x = body.position.x;
     // (the troops at eye height down the hall, a little off to its own side, so its head leads round the way the turn goes)
     const hall = new Vector3(x + (x >= 0 ? 3 : -3), 1.7, 20);
-    yield* parallel('race', lookAt(body, hall, { pitch: -0.05 }), pose(body, { bow: -0.07, head: { pitch: -0.08 } }), function* () {
+    yield* parallel('race', lookAt(body, hall), pose(body, { bow: -0.07, head: { pitch: -0.13 } }), function* () {
       // the eyes and head lead; the feet start round a beat later and the gaze settles out over the troops as the body comes round
       yield* wait(0.35);
       const spot = new Vector3(x, floorAt(x, FACING_HALL_Z), FACING_HALL_Z);
