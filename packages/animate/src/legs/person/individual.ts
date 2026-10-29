@@ -42,5 +42,5 @@ export function individualOf(seed: number): Individual {
 /** the default person, as tuned: no individual difference */
 export const TUNED: Individual = { cadence: 1, cadenceAt: () => 1, arms: 1, sway: 1, delay: 0 };
 
-const SPREAD = { cadence: 0.04, arms: 0.15, sway: 0.2, delay: 0.15 };
-const STRIDES = 0.02;
+const SPREAD = { cadence: 0.02, arms: 0.05, sway: 0.1, delay: 0 };
+const STRIDES = 0.01;
