@@ -117,7 +117,7 @@ export function stride(person: PersonLegged, options: { stance?: Partial<Stance>
     const planned = plan.step(f, goal, motion, stance, holds);
     const stopped = root.distanceTo(stop) < STOP.distance * s && planned.velocity.length() < STOP.speed;
     if (stopped && velocity.length() < STOP.goalSpeed && unturned < STOP.yaw) moving = false;
-    return { ...planned, centre: true, underway: moving };
+    return { ...planned, centre: true, underway: moving, arriving: moving && !!go && go.settles !== false && velocity.length() < STOP.goalSpeed };
   }, { ...options, individual });
 }
 

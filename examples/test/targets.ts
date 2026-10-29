@@ -79,7 +79,8 @@ export class Targets {
       jointOf(h, `${s}Hand`, _v);
       // (judged on as much of it as a hand reaches standing: no lower than the floor lets the wrist, no higher than the arm raised flat-footed)
       const p = h.proportions, reached = _r.copy(target).setY(Math.min(Math.max(target.y, FLOOR * p.scale), p.shoulderHeight + p.armLength));
-      this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm), aroundTheTrunk(h, s, reached));
+      const stepping = h.locomotion.moving || h.feet.some((foot) => foot.phase === 'swing');
+      this.judge(course, target, _v.distanceTo(reached), shoulder <= REACHABLE * arm, t, `${s}Wrist`, Math.max(0, shoulder - REACHABLE * arm), aroundTheTrunk(h, s, reached), stepping);
     }
     for (const s of ['left', 'right'] as const) {
       const grip = h.holding[s]?.grip;
@@ -97,10 +98,10 @@ export class Targets {
    * within `LAG.within` too once it has been there `LAG.settle` s; held out of that reach, as near as the arm goes plus `LAG.within`.
    * A tracked head is placed by the whole body, bowing and turning: held, within `HOLD.head`.
    */
-  private judge(course: Course, target: Vector3, error: number, reachable: boolean, t: number, what: string, beyond = 0, around = 0) {
+  private judge(course: Course, target: Vector3, error: number, reachable: boolean, t: number, what: string, beyond = 0, around = 0, stepping = false) {
     const held = what === 'head' ? HOLD.head : reachable ? HOLD.within : undefined;
     // (one that appears or jumps is a new one: reached for afresh, judged once a reach's time is up)
-    if (!course.at || course.at.distanceTo(target) > JUMP) [course.fresh, course.still, course.reachable] = [t, t, NaN];
+    if (!course.at || course.at.distanceTo(target) > JUMP) [course.fresh, course.still, course.reachable, course.walked] = [t, t, NaN, false];
     const speed = course.at ? course.at.distanceTo(target) / Math.max(1e-6, t - course.t) : 0;
     course.at ??= new Vector3();
     course.at.copy(target);
@@ -110,6 +111,12 @@ export class Targets {
     else if (Number.isNaN(course.still)) course.still = t;
     if (!reachable) course.reachable = NaN;
     else if (Number.isNaN(course.reachable)) course.reachable = t;
+    // (one held still that the body steps toward is walked to: the hand sets off for it in the last step — read, abstracts only: reach
+    // onset after an ipsilateral heel contact, the last step before the grasp the one it changes; Rinaldi & Moraes 2015, Hum Mov Sci
+    // 40:38, and later work — and it is judged once the body has stood `HOLD.after` s, as a hold is once its target stops)
+    if (stepping) [course.stood, course.walked] = [NaN, true];
+    else if (Number.isNaN(course.stood)) course.stood = t;
+    if (course.walked && !Number.isNaN(course.still) && !(t - course.stood >= HOLD.after)) return;
     let bound = speed * LAG.time + LAG.within + around, kind = 'lag';
     if (t - course.reachable >= LAG.settle) [bound, kind] = [LAG.within, 'reachable'];
     // (held still out of reach without a step, it is reached for as far as the arm goes while the body comes)
@@ -142,7 +149,10 @@ class Course {
   fresh = NaN;
   still = NaN;
   reachable = NaN;
-  reset() { [this.at, this.still, this.reachable] = [null, NaN, NaN]; }
+  /** since when the body has stood, no foot stepping (NaN: stepping), and whether it has stepped since the target was asked */
+  stood = NaN;
+  walked = false;
+  reset() { [this.at, this.still, this.reachable, this.stood, this.walked] = [null, NaN, NaN, NaN, false]; }
 }
 
 /**

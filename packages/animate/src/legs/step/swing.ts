@@ -2,7 +2,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, smoothstep, softplus, wrapAngle, yawOf } from '../../kernel/math';
 import { hullOf, outside } from '../support';
-import { AIMED, PASSING, SETTLE, SHUFFLING, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, beyond, remaining, type FootPose, type Leg, type Now, type Steps, type Swing } from './state';
+import { AIMED, PASSING, SETTLE, SHUFFLING, strayRoom, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, beyond, remaining, type FootPose, type Leg, type Now, type Steps, type Swing } from './state';
 import { hipOf, homeOf, pace, shankLean, travelOf, widthAt, xcomAhead } from './reach';
 import { FLAT, foothold } from '../floor';
 import { arcOf, stepping, swingOver, RISE } from './way';
@@ -27,12 +27,16 @@ export function landing(steps: Steps, now: Now, leg: Leg, remaining: number): [V
   // (as wide as the speed it will land at: a stopping step lands in the standing stance)
   const landed = pace(steps, now, remaining, _w), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
   // (along the way it will go, round its curve, but as far as it goes now: a stop is caught by a foot further on — ahead only: one
-  // stopping a step aside or back lands where the body stops, beside it)
-  const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, far = Math.max(chord?.length() ?? 0, v * (remaining + lead));
-  const on = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
+  // stopping a step aside or back lands where the body stops, beside it. Arriving on a still mark, no further on than the extrapolated
+  // centre of mass as it lands, braking where it brakes: carried on at the speed it went, a closing step landed 9–13 cm past the mark and
+  // stepped back — Hof's foot placement at the XCoM, recalled: Hof, Gazendam & Sinke 2005, J Biomech 38:1. A goal followed, which may
+  // move off any moment, keeps the margin of a foot further on)
+  const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, along = chord?.length() ?? 0, on = v * (remaining + lead);
+  const far = Math.max(along, r.arriving ? Math.min(on, along + speed * Math.sqrt(feet.length / GRAVITY)) : on);
+  const past = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
   const forward = forwardOf(turned, _f);
-  const to = chord && on
-    ? new Vector3().copy(r.position).add(chord).addScaledVector(forward, Math.max(0, on.dot(forward)))
+  const to = chord && past
+    ? new Vector3().copy(r.position).add(chord).addScaledVector(forward, Math.max(0, past.dot(forward)))
     : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead);
   to.addScaledVector(side, leg.sign * widthAt(steps, now, speed)).addScaledVector(forward, sitting + homeOf(steps, leg));
   if (forecast && then) bend(steps, forecast, remaining + lead, then.position, to);
@@ -83,10 +87,12 @@ function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3
   const under = (c: Vector3) => c.clone().addScaledVector(side, leg.sign * st.width.narrowest * s / 2);
   const present = r.xcom;
   // (a walker's slow step lands no further aside of the other foot than `WIDE.stances`, its extrapolated centre of mass, as it will be
-  // and is, kept within `WIDE.within` of the feet: it shuffles rather than straddles)
+  // and is, kept within `WIDE.within` of the feet: it shuffles rather than straddles — but not in under the body past where it would
+  // stray from its hip, `WIDE.room` of that to spare: there it would step again at once, to the same place, beside a foot standing wide)
   const gap = _v.subVectors(to, other.anchor).dot(side) * leg.sign, most = WIDE.stances * 2 * st.width.stand;
   if (r.forecast && !other.swing && speed < SHUFFLING * s && gap > most) {
-    const narrower = to.clone().addScaledVector(side, -leg.sign * (gap - most));
+    const room = WIDE.room * strayRoom(st, feet, leg, widthAt(steps, now, speed));
+    const narrower = to.clone().addScaledVector(side, -leg.sign * Math.min(gap - most, room));
     const within = (c: Vector3) => outside(hullOf([...feet.print(leg.i, narrower, yawed), ...others]), c) <= WIDE.within * s;
     if (within(centre) && (!present || within(present))) to.copy(narrower);
   }
@@ -295,6 +301,7 @@ const PUSHED = 0.5;
 /** a bend a foot lands on is read off the root's forecast `BEND_SPAN` s either side of its landing */
 const BEND_SPAN = 0.1;
 /** Tuned: a walker's slow step lands at most `WIDE.stances` standing stances aside of the other
- * foot, as balance lets it (1.1: within the metrics' 0.15 H for a straight stop), its extrapolated centre of mass kept within `within` (m) */
-const WIDE = { stances: 1.1, within: 0.03 };
+ * foot, as balance lets it (1.1: within the metrics' 0.15 H for a straight stop), its extrapolated centre of mass kept within `within` (m),
+ * and in under the body no further than `room` of how far it may before it strays */
+const WIDE = { stances: 1.1, within: 0.03, room: 0.5 };
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion(), _ahead = new Vector3(), _way = new Vector3();

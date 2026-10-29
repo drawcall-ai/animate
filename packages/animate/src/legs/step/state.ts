@@ -37,6 +37,9 @@ export interface Steering {
   centre?: boolean;
   /** a person's: whether a walk is under way on it (a planner's, from its start till it stops); none, as the body moves */
   underway?: boolean;
+  /** a walker's: its walk ends on a still goal it comes to rest on (its closing step lands where the body can stop over it); not one it
+   * follows, which may move off again any moment */
+  arriving?: boolean;
 }
 
 /**
@@ -194,6 +197,13 @@ export function strayed(st: Stepping, feet: Feet, leg: Leg, inward: number): boo
   const stray = feet.legs[leg.i].stray;
   if (stray === undefined) return inward > STEP.medial * st.scale;
   return Math.abs(inward - ((feet.legs[leg.i].hip ?? feet.hip) - st.width.stand)) > stray;
+}
+
+/** how far in under the body (m) a foot `out` m out from the body's middle line may land and not be `strayed` there */
+export function strayRoom(st: Stepping, feet: Feet, leg: Leg, out: number): number {
+  const stray = feet.legs[leg.i].stray, hip = feet.legs[leg.i].hip ?? feet.hip;
+  if (stray === undefined) return Math.max(0, STEP.medial * st.scale - (hip - out));
+  return Math.max(0, stray - (hip - out - (hip - st.width.stand)));
 }
 
 /** how far the pelvis is let down moving (× scale): walking, side-stepping, running */
