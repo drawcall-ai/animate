@@ -137,7 +137,10 @@ export function take(self: Holder, thing: Thing): void {
  */
 export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier>, kept: WeakMap<Thing, Kept>): void {
   for (const [object, aim] of aims) pivot(self, f, Thing.of(object), aim.current.quaternion);
-  for (const thing of held(self)) if (!aims.has(thing.object)) pivot(self, f, thing, keptTurn(self, f, thing, kept));
+  for (const hand in self.holding) {
+    const thing = self.holding[hand]?.thing;
+    if (thing && !aims.has(thing.object)) pivot(self, f, thing, keptTurn(self, f, thing, kept));
+  }
   for (const [object, carrier] of self.carried) {
     const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
     if (aim && hands.length === 2) fit(self, f, aim, hands, carrier);

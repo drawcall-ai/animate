@@ -92,6 +92,8 @@ export class Self implements Holder {
   readonly gazer?: Gazer;
   /** each hand's tip bone, by name */
   readonly hands: Readonly<Record<string, number>>;
+  /** each hand's arm, as a pose asks for it */
+  private readonly arms: readonly `arm.${string}`[];
   readonly holding: Record<string, Hold | null>;
   readonly drive?: (time: number) => Root;
   /** what it stands on: the floor's height under a world point */
@@ -136,6 +138,7 @@ export class Self implements Holder {
     const pose = start?.(this.skeleton, this.floor) ?? restPose(this.skeleton, this.floor, options.at, options.face);
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
+    this.arms = Object.keys(this.hands).map((hand) => `arm.${hand}` as const);
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
     this.before = [this.poses[3], this.poses[4]];
@@ -426,7 +429,7 @@ export class Self implements Holder {
     this.run('head', f);
     this.headOffset.write(f);
     this.run('trunk', f);
-    for (const hand of Object.keys(this.hands)) this.run(`arm.${hand}`, f);
+    for (const arm of this.arms) this.run(arm, f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
       if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);
