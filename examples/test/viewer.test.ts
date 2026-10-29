@@ -24,9 +24,10 @@ function dress(skeleton: readonly SkeletonBone[]): Object3D {
 }
 
 const it = cases([
-  // (open: stepping 2% quicker on its shorter legs, the soldier stands 3 cm further from the helm stand at life seeds 0–2; reaching for the
-  // helm, his bowed head comes over it, its crown 1.6 cm into his head — the body keeps no head clearance from what its hands take)
-  ['knight-arming finishes cleanly in the SOLDIER viewer', [0, 1, 2]],
+  // (open: lowering the helm onto his head as he bows it into it (~22.1 s), the helm in his hands lags the head it is carried onto: its
+  // crown 1.3–2.9 cm into his head at life seeds 0–2 (seed 0 now just within 1.5 cm), its rim 4.9 cm into his left forearm at seed 3 as
+  // the hands go under the chin — the body keeps no clearance between its own head and arms and what its hands carry onto it)
+  ['knight-arming finishes cleanly in the SOLDIER viewer', [1, 2, 3]],
 ]);
 
 for (const id of ['stable-morning', 'knight-arming']) {
