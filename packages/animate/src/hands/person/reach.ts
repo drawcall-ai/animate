@@ -26,10 +26,16 @@ export interface Taking extends Hold {
   side: Side;
 }
 
-/** where a grip is in the world this sub-step, as the person tracks its thing */
+/** where the hand bone goes on a grip in the world this sub-step (its goal: a palm back from the empty), as the person tracks its thing */
 export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
   const frame = person.track(take.thing.object).at(f.time).current;
   return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
+}
+
+/** where a grip's empty is in the world this sub-step (where the palm closes), as the person tracks its thing */
+export function emptyAt(person: Reacher, take: Pick<Taking, 'thing' | 'grip'>, f: Frame, out = new Vector3()): Vector3 {
+  const frame = person.track(take.thing.object).at(f.time).current;
+  return out.copy(take.thing.grip(take.grip).at.position).applyQuaternion(frame.quaternion).add(frame.position);
 }
 
 /** Hands close together after reaching every grip; route staging is separate from final closure. */

@@ -31,8 +31,8 @@ export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
 }
 
-/** A person's palm, as a grip takes it: its centre in the hand bone's frame, and the hand bone's turn in the thing's frame as the body was
- * last posed. */
+/** A person's palm, as a grip takes it: its centre in the hand bone's frame, and the hand bone's turn in the thing's frame as the body is
+ * posed now. */
 export interface Palm {
   at: Readonly<Vector3>;
   turn: () => Quaternion;
@@ -41,7 +41,7 @@ export interface Palm {
 /**
  * Where a hand bone goes on `grip` (the thing's frame): turned as the empty is, its `rest` undone; or rolling about its free line; or turned
  * as the hand comes. A person's hand holds a grip in its `palm`: the bone, at the wrist, goes as far back from the empty as the palm's
- * centre is from the wrist, along the hand turned as it holds it — turned as the empty is, once; else as the hand was last turned, so
+ * centre is from the wrist, along the hand turned as it holds it — turned as the empty is, once; else as the hand is turned now, so
  * read afresh: the goal moves on the thing as the hand turns or rolls. A creature's tip, with no palm, goes on the empty.
  */
 export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goal {

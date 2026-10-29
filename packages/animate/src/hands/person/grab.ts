@@ -14,7 +14,7 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { gripAt, reachFor, type Taking } from './reach';
+import { emptyAt, gripAt, reachFor, type Taking } from './reach';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 
@@ -33,7 +33,8 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
-    grips: takes.map((take) => ({ side: take.side, at: gripAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
+    // (stood to as if the wrist went on the empty: the hand still hangs, so the palm's way back from it is not yet the reach's)
+    grips: takes.map((take) => ({ side: take.side, at: emptyAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
     things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.track(thing.object).current })),
   }, step);
   if (plan === 'nowhere') {
