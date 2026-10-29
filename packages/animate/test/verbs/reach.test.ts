@@ -201,3 +201,17 @@ it('grab and a creature reach keep the feet planted with step false, ending fals
   expect(farmer.log.map(entry => entry.check)).toEqual(['approach: beyond reach with the feet planted (m short)']);
   expect(pet.log.map(entry => entry.check)).toEqual(['out of reach with the feet planted (m short)']);
 });
+
+it('an empty parented to a body on a raised floor is read where the scene has it', () => {
+  // the same reach on a floor 1 m up must play exactly as on the ground, 1 m higher (the body's object stands at the floor's height)
+  const handAt = (floor: number) => {
+    const body = person({ floor: () => floor });
+    const target = empty(body.object, 'target', new Vector3(-0.2, 1.3, 0.35));
+    play(function* () {
+      yield* reach(body, { right: target }, { step: false, until: 2 });
+    }, [body], 2);
+    body.object.updateMatrixWorld(true);
+    return worldOf(body.bones.rightHand);
+  };
+  expect(handAt(1).distanceTo(handAt(0).add(new Vector3(0, 1, 0)))).toBeLessThan(0.005);
+});

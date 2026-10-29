@@ -20,6 +20,8 @@ export interface Resolving {
   /** a moving bone's rest frame in the scene (`turn⁻¹ · rest`), and its scale */
   restOf(bone: number): Readonly<Quaternion>;
   scaleOf(bone: number): number;
+  /** the floor's height under a world point (x, z): a body's object stands on it */
+  readonly floor: (x: number, z: number) => number;
 }
 
 /** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame). */
@@ -89,7 +91,7 @@ export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh
 function frameOf(pose: ReadonlyPose, body: Resolving, bone: number): Matrix4 {
   if (bone < 0) {
     const root = pose.position(0);
-    return _anchor.compose(_p.set(root.x, 0, root.z), _q.setFromAxisAngle(UP, pose.facing), ONE);
+    return _anchor.compose(_p.set(root.x, body.floor(root.x, root.z), root.z), _q.setFromAxisAngle(UP, pose.facing), ONE);
   }
   const scale = body.scaleOf(bone);
   return _anchor.compose(pose.position(bone), _q.copy(pose.rotation(bone)).multiply(body.restOf(bone)), _s.set(scale, scale, scale));
