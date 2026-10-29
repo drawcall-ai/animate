@@ -2,7 +2,6 @@ import type { Object3D } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RigLoader, type SkeletonBone } from '@drawcall/rig';
 import type { Dress } from './cast';
-import { SOLDIER } from './skeletons/soldier';
 import { LUKE } from './skeletons/luke';
 import { HAN } from './skeletons/han';
 import { CHEWBACCA } from './skeletons/chewbacca';
@@ -15,7 +14,6 @@ import { ARTOO } from './droids/artoo';
 
 /** Each skeleton with the model measured for it (under public/). A body whose skeleton is listed wears that model. */
 export const MODELS: readonly (readonly [skeleton: readonly SkeletonBone[], url: string])[] = [
-  [SOLDIER, '/models/soldier.glb'],
   [LUKE, '/models/luke.glb'],
   [HAN, '/models/han.glb'],
   [CHEWBACCA, '/models/chewbacca.glb'],

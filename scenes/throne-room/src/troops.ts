@@ -3,12 +3,14 @@ import { action, parallel, type NonReuseableTimeline } from '@pmndrs/timeline';
 import { arriving, Body, humanoid, lookAt, track, wait, walkTo } from '@drawcall/animate';
 import type { Dress } from './cast';
 import { floorAt, HALL } from './hall';
-import { SOLDIER } from './skeletons/soldier';
+import { TROOPER } from './skeletons/trooper';
+import { MEDAL_BEARER } from './skeletons/bearer';
 
-// The Rebel troops: blocks of soldiers either side of the aisle, facing it at attention, with an officer before each block.
+// The Rebel troops: blocks of soldiers in khaki and helmets (the light trooper model) either side of the aisle, facing it at attention, with an
+// officer in his tunic (the medal bearer's model and build) before each block.
 //
 // A simulated body costs about 0.1 ms a frame standing and 0.3 ms clapping, so hundreds of them would not keep 60 Hz. Only the officers
-// and every other soldier of each block's front rank are bodies. Every other soldier is an "echo": a copy of the soldier model that
+// and every other soldier of each block's front rank are bodies. Every other soldier is an "echo": a copy of the trooper model that
 // replays the pose of a body in its block a little later (each echo with its own delay), so neighbours never move in lockstep and a
 // turn ripples back through the ranks. Echoes exist only when the viewer dresses bodies in models; headless runs have the bodies alone.
 
@@ -41,7 +43,7 @@ export interface Troops {
 
 /** Creates each block's officer and simulated front-rank soldiers, and (dressed) the echoes that fill the ranks behind them. */
 export function createTroops(dress: Dress, dev = true): Troops {
-  const species = humanoid(SOLDIER);
+  const soldier = humanoid(TROOPER), officer = humanoid(MEDAL_BEARER);
   const troopers: Trooper[] = [];
   const echoes = new Group();
   echoes.name = 'troop echoes';
@@ -49,8 +51,9 @@ export function createTroops(dress: Dress, dev = true): Troops {
   const followers: (() => void)[] = [];
   let seed = 100;
 
-  const enlist = (at: Vector3, face: number, name: string) => {
-    const trooper = { body: new Body(species, { at, face, floor: floorAt, model: dress(SOLDIER), life: { seed }, dev }), seed: seed++ };
+  const enlist = (at: Vector3, face: number, name: string, rank: 'officer' | 'soldier') => {
+    const [species, skeleton] = rank === 'officer' ? [officer, MEDAL_BEARER] : [soldier, TROOPER];
+    const trooper = { body: new Body(species, { at, face, floor: floorAt, model: dress(skeleton), life: { seed }, dev }), seed: seed++ };
     trooper.body.object.name = name;
     troopers.push(trooper);
     return trooper;
@@ -62,17 +65,17 @@ export function createTroops(dress: Dress, dev = true): Troops {
     const sideName = side > 0 ? 'left' : 'right';
     for (const [block, start] of BLOCK_STARTS.entries()) {
       const middle = start + ((BLOCK.files - 1) * SPACING.file) / 2;
-      enlist(new Vector3(side * HALL.troops.inner, 0, middle), face, `officer ${sideName} ${block}`);
+      enlist(new Vector3(side * HALL.troops.inner, 0, middle), face, `officer ${sideName} ${block}`, 'officer');
       const front: Leader[] = [];
       for (let file = 0; file < BLOCK.files; file += 2) {
         const at = new Vector3(side * (HALL.troops.inner + 0.9), 0, start + file * SPACING.file);
-        front.push({ body: enlist(at, face, `soldier ${sideName} ${block}.${file}`).body, history: [] });
+        front.push({ body: enlist(at, face, `soldier ${sideName} ${block}.${file}`, 'soldier').body, history: [] });
       }
       leaders.push(...front);
       for (let file = 0; file < BLOCK.files; file++) {
         for (let rank = 0; rank < BLOCK.ranks; rank++) {
           if (rank === 0 && file % 2 === 0) continue; // a simulated soldier stands here
-          const model = dress(SOLDIER);
+          const model = dress(TROOPER);
           if (!model) continue;
           const at = new Vector3(side * (HALL.troops.inner + 0.9 + rank * SPACING.rank), 0, start + file * SPACING.file);
           const delay = 1 + Math.round((random(seed++) * LONGEST_DELAY) / FRAME);
@@ -180,7 +183,7 @@ function echo(model: Object3D, at: Vector3, leader: Leader, delay: number) {
   });
   const bones = Object.keys(leader.body.bones).map((name) => {
     const bone = byName.get(name);
-    if (!bone) throw new Error(`the soldier model has no bone "${name}" to echo`);
+    if (!bone) throw new Error(`the trooper model has no bone "${name}" to echo`);
     return bone;
   });
   const home = leader.body.position.clone();
