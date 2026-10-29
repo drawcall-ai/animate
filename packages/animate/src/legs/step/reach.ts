@@ -47,7 +47,10 @@ export function offHome(steps: Steps, now: Now, leg: Leg, ahead: number): number
 /** a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends */
 function rolled(steps: Steps, now: Now, leg: Leg): number {
   const s = steps.st.scale, limit = pivotLimit(steps, now, leg);
-  return lerp(rollOf(leg), limit, Math.max(Number(now.tiptoe > 0), smoothstep(PIVOT * s, 2 * PIVOT * s, Math.abs(aheadOf(steps, now, leg)))));
+  // (standing, from further: a quiet stance holds its centre of mass ~4–6 cm ahead of the ankles and sways about it — read: Winter 1995 —
+  // which would roll the feet up and down, the pelvis bobbing with them)
+  const from = lerp(STANDING_PIVOT, PIVOT, now.moving) * s;
+  return lerp(rollOf(leg), limit, Math.max(Number(now.tiptoe > 0), smoothstep(from, from + PIVOT * s, Math.abs(aheadOf(steps, now, leg)))));
 }
 
 /** the most a planted foot rolls to help the hip reach it: onto its heel when it is ahead, its ball when behind */
@@ -136,3 +139,5 @@ export function widthAt(steps: Steps, { across, Ts, crouch }: Reading & Timing, 
 const STAIRS = { bob: 0.6, slope: 0.3, slow: 0.3 };
 /** Tuned: within `PIVOT` (m) of being over a planted foot the hip lets it settle flat to change the end it rolls on */
 const PIVOT = 0.03;
+/** Tuned: standing, a planted foot rolls only with the hip this far (m, default body) off it: past a quiet stance's sway over the feet */
+const STANDING_PIVOT = 0.08;
