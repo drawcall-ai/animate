@@ -9,10 +9,11 @@ import { MEDAL_BEARER } from './skeletons/bearer';
 // The Rebel troops: blocks of soldiers in khaki and helmets (the light trooper model) either side of the aisle, facing it at attention, with an
 // officer in his tunic (the medal bearer's model and build) before each block.
 //
-// A simulated body costs about 0.1 ms a frame standing and 0.3 ms clapping, so hundreds of them would not keep 60 Hz. Only the officers
-// and every other soldier of each block's front rank are bodies. Every other soldier is an "echo": a copy of the trooper model that
-// replays the pose of a body in its block a little later (each echo with its own delay), so neighbours never move in lockstep and a
-// turn ripples back through the ranks. Echoes exist only when the viewer dresses bodies in models; headless runs have the bodies alone.
+// A simulated body costs about 0.1 ms a frame standing and 0.3 ms clapping, so hundreds of them would not keep 60 Hz. The officers, the
+// whole front rank and every other soldier of the second are bodies (78 in all), each with its own seed, reaction and clapping. Every
+// other soldier is an "echo": a copy of the trooper model that replays the pose of one of its block's soldier bodies (picked at random)
+// a little later (each echo with its own delay), so neighbours never move in lockstep and a turn ripples back through the ranks. Echoes
+// exist only when the viewer dresses bodies in models; headless runs have the bodies alone.
 
 const SPACING = { file: 0.9, rank: 1.0 };
 /** soldiers per rank along the aisle, and ranks from the aisle outward, in each block */
@@ -20,7 +21,7 @@ const BLOCK = { files: 8, ranks: 6 };
 /** each block's first file along the aisle (z): three blocks a side between the troops' back and front */
 const BLOCK_STARTS = [HALL.troops.back + 0.5, HALL.troops.back + 8.5, HALL.troops.back + 16.5];
 /** how far behind its leader an echo may replay (s) */
-const LONGEST_DELAY = 0.6;
+const LONGEST_DELAY = 1.2;
 const FRAME = 1 / 60;
 
 /** where the troops look when the trio stands decorated: a person's eyes on the step below the dais (1.6 m up on the 0.8 m step) */
@@ -66,20 +67,25 @@ export function createTroops(dress: Dress, dev = true): Troops {
     for (const [block, start] of BLOCK_STARTS.entries()) {
       const middle = start + ((BLOCK.files - 1) * SPACING.file) / 2;
       enlist(new Vector3(side * HALL.troops.inner, 0, middle), face, `officer ${sideName} ${block}`, 'officer');
-      const front: Leader[] = [];
-      for (let file = 0; file < BLOCK.files; file += 2) {
-        const at = new Vector3(side * (HALL.troops.inner + 0.9), 0, start + file * SPACING.file);
-        front.push({ body: enlist(at, face, `soldier ${sideName} ${block}.${file}`, 'soldier').body, history: [] });
-      }
-      leaders.push(...front);
+      // the bodies: the front rank, and every other soldier of the second (staggered against the first's files)
+      const real = (file: number, rank: number) => rank === 0 || (rank === 1 && file % 2 === 1);
+      const bodies: Leader[] = [];
+      for (let file = 0; file < BLOCK.files; file++)
+        for (let rank = 0; rank < 2; rank++) {
+          if (!real(file, rank)) continue;
+          const at = new Vector3(side * (HALL.troops.inner + 0.9 + rank * SPACING.rank), 0, start + file * SPACING.file);
+          bodies.push({ body: enlist(at, face, `soldier ${sideName} ${block}.${file}.${rank}`, 'soldier').body, history: [] });
+        }
+      leaders.push(...bodies);
       for (let file = 0; file < BLOCK.files; file++) {
         for (let rank = 0; rank < BLOCK.ranks; rank++) {
-          if (rank === 0 && file % 2 === 0) continue; // a simulated soldier stands here
+          if (real(file, rank)) continue;
           const model = dress(TROOPER);
           if (!model) continue;
           const at = new Vector3(side * (HALL.troops.inner + 0.9 + rank * SPACING.rank), 0, start + file * SPACING.file);
+          const leader = bodies[Math.floor(random(seed++) * bodies.length)];
           const delay = 1 + Math.round((random(seed++) * LONGEST_DELAY) / FRAME);
-          const follower = echo(model, at, front[Math.floor(file / 2)], delay);
+          const follower = echo(model, at, leader, delay);
           echoes.add(follower.root);
           followers.push(follower.replay);
         }
@@ -109,7 +115,7 @@ export function* serve(trooper: Trooper, cue: () => boolean): NonReuseableTimeli
   const forward = new Vector3(Math.sin(body.facing), 0, Math.cos(body.facing));
   const across = body.position.clone().addScaledVector(forward, 10).setY(1.68);
   yield* lookAt(body, across, { until: cue });
-  yield* lookAt(body, across, { until: 0.1 + 0.5 * random(seed + 0.5) });
+  yield* lookAt(body, across, { until: 0.1 + 0.9 * random(seed + 0.5) });
   const heroesOnTheFloor = HEROES.clone().setY(0);
   yield* parallel(
     'race',
@@ -127,10 +133,12 @@ export function* serve(trooper: Trooper, cue: () => boolean): NonReuseableTimeli
 function applaud(body: Body, seed: number) {
   const rate = 2.4 + random(seed + 0.75) * 1.0; // claps a second
   const phase = random(seed + 0.9);
+  // each claps at its own height and reach, some higher and further out (cheering it on), and swings its hands its own way
+  const ahead = 0.28 + 0.08 * random(seed + 0.15), up = 1.12 + 0.16 * random(seed + 0.35), swing = 0.08 + 0.05 * random(seed + 0.45);
   const hand = (side: 1 | -1) => (time: number) => {
     const opening = 0.5 - 0.5 * Math.cos(2 * Math.PI * (rate * time + phase)); // 0 as the hands meet, 1 fully apart
-    const apart = 0.05 + 0.1 * Math.sqrt(opening); // half the wrists' distance: the palms touch with the wrists ~10 cm apart
-    return inFrontOf(body, 0.32, 1.2, side * apart);
+    const apart = 0.05 + swing * Math.sqrt(opening); // half the wrists' distance: the palms touch with the wrists ~10 cm apart
+    return inFrontOf(body, ahead, up, side * apart);
   };
   return track(body, { left: hand(1), right: hand(-1) });
 }

@@ -53,7 +53,8 @@ const seek = Number(params.get('at') ?? NaN);
 const storyCamera = new PerspectiveCamera(40, 1, 0.1, 200);
 world.add(storyCamera);
 const sound = new Sound();
-const view: View = { camera: storyCamera, sound, hall };
+// (the troops' development checks cost more than a frame has to spare; the headless tests run them)
+const view: View = { camera: storyCamera, sound, hall, checkCrowds: false };
 let orbiting = placed?.length === 6;
 
 const picker = document.querySelector<HTMLSelectElement>('#beat')!;

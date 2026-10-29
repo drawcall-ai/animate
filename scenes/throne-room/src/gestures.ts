@@ -61,9 +61,9 @@ export function cockyWink(han: Body, leia: Body, { seconds = 2.6 }: { seconds?: 
 /**
  * Chewbacca's roar: a heavy wind-up (the chin drops, the chest gathers), then his back arches and his head is thrown back to the
  * ceiling with the arms coming a little away from his sides, a shake of the head through the roar, and a slow settle. About `seconds`
- * in all.
+ * in all; `thrown` is told as the head goes back (the roar's sound).
  */
-export function roar(chewbacca: Body, { seconds = 3 }: { seconds?: number } = {}): Verb {
+export function roar(chewbacca: Body, { seconds = 3, thrown }: { seconds?: number; thrown?: () => void } = {}): Verb {
   return (function* () {
     const person = chewbacca.species.person;
     if (!person) throw new Error('roar needs a person-shaped body (its arms and shoulders)');
@@ -78,6 +78,7 @@ export function roar(chewbacca: Body, { seconds = 3 }: { seconds?: number } = {}
       right: besides(chewbacca, -person.shoulderHalfWidth - out, low, 0.1),
     };
     const roaring = seconds - 0.4 - 0.6;
+    thrown?.();
     yield* parallel(
       'all',
       reach(chewbacca, arms, { speed: 0.6, until: roaring }),

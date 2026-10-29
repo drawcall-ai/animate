@@ -18,6 +18,8 @@ export interface Setting {
   camera: PerspectiveCamera;
   sound: Sound;
   hall?: Object3D;
+  /** whether crowds' bodies run their development checks (headless runs check every body; the viewer only the cast, to keep 60 Hz) */
+  checkCrowds: boolean;
 }
 
 /** One beat of the scene, playable on its own in the viewer and headless. */

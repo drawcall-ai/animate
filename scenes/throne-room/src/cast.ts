@@ -36,8 +36,10 @@ export interface Cast {
  */
 export function createCast(marks: Marks, dress: Dress = () => undefined, starts: Partial<Record<keyof Cast, keyof Marks>> = {}, dev = true): Cast {
   const at = (name: keyof Cast, fallback: keyof Marks) => marks[starts[name] ?? fallback];
+  // each with a seed of its own, so no two sway, breathe, shift their weight or glance about in step
+  let seed = 1;
   const person = (mark: Object3D, skeleton: readonly SkeletonBone[], stride?: Stride) =>
-    new Body(humanoid(skeleton as typeof PERSON, { stride }), { at: mark.position.clone(), face: mark.rotation.y, floor: floorAt, model: dress(skeleton), dev });
+    new Body(humanoid(skeleton as typeof PERSON, { stride }), { at: mark.position.clone(), face: mark.rotation.y, floor: floorAt, model: dress(skeleton), life: { seed: seed++ }, dev });
   return {
     luke: person(at('luke', 'lukeEnter'), LUKE),
     // Han swaggers (longer, wider strides, toes out); Chewbacca lumbers (slow, wide, bobbing)

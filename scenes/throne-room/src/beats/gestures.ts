@@ -88,8 +88,11 @@ export const beat: Beat & { order: number } = {
   stage: (setting) => medalMoment(setting),
 };
 
-/** the medal moment staged in `setting`, with real `medals` or without */
-export function medalMoment({ scene, cast }: Setting, medals?: Medals): Staged {
+/** the moments of the medal moment, in order, as it says them to whoever composes it (the film cuts and plays sounds on them) */
+export type Moment = 'Leia hangs Luke\'s medal' | 'Luke medal hung' | 'Leia hangs Han\'s medal' | 'Han medal hung' | 'wink' | 'roar' | 'roared';
+
+/** the medal moment staged in `setting`, with real `medals` or without; it says each `Moment` to `on` as it happens */
+export function medalMoment({ scene, cast }: Setting, medals?: Medals, on: (moment: Moment) => void = () => {}): Staged {
   const { luke, han, chewbacca, leia } = cast;
   const marks = { luke: before(luke, leia), han: before(han, leia) };
   scene.add(marks.luke, marks.han);
@@ -109,7 +112,9 @@ export function medalMoment({ scene, cast }: Setting, medals?: Medals): Staged {
           bowForMedal(luke, leia, { until: () => hung }),
           (function* () {
             yield* wait(arriving(leia, 0.4));
+            on('Leia hangs Luke\'s medal');
             yield* hangMedal(leia, luke, medals?.luke);
+            on('Luke medal hung');
             hung = true;
             done.luke = yield* stepBackAndNod(leia, luke);
           })(),
@@ -118,12 +123,15 @@ export function medalMoment({ scene, cast }: Setting, medals?: Medals): Staged {
     });
     // Han: she moves on to him; as her hands come down from his neck he turns his wink on her
     yield* parallel('race', lookAt(luke, leia), lookAt(chewbacca, leia), function* () {
-      if (medals) yield* medals.takeHan();
+      if (medals && !(yield* medals.takeHan())) throw new Error('Leia was not handed Han\'s medal');
       const walk = walkTo(leia, marks.han, { speed: 0.7 });
       yield* parallel('all', walk, (function* () {
         yield* lookAt(han, leia, { until: arriving(leia, 0.4) });
+        on('Leia hangs Han\'s medal');
         yield* parallel('all', lookAt(han, leia, { until: HANGING - 0.6 }), hangMedal(leia, han, medals?.han));
+        on('Han medal hung');
       })());
+      on('wink');
       yield* parallel('all', cockyWink(han, leia), stepBackAndNod(leia, han));
       done.han = true;
     });
@@ -133,7 +141,8 @@ export function medalMoment({ scene, cast }: Setting, medals?: Medals): Staged {
       yield* parallel(
         'all',
         (function* () {
-          done.chewbacca = yield* roar(chewbacca);
+          done.chewbacca = yield* roar(chewbacca, { thrown: () => on('roar') });
+          on('roared');
         })(),
         (function* () {
           yield* lookAt(leia, chewbacca, { until: 2.4 });
