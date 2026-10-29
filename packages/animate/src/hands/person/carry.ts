@@ -21,7 +21,7 @@ import { SIDES, sideOf, type Side } from '../../species/humanoid/bones';
 import { ARM_REACH, bringShoulder, PROTRACTION } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { BODY_RADIUS, clearBody, LOAD_RESERVE } from './clearance';
-import { following, LEADING } from './reach';
+import { following, LEADING, limitOf } from './reach';
 import { footing, walking, type WalkUp } from './stand';
 
 /** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
@@ -112,8 +112,8 @@ function* along(person: Reacher, request: Request, thing: Thing, way: Way, aim: 
   }
   const straight = (way.last !== undefined || way.outside > 0) && points.length > 1;
   const first = straight ? points.slice(0, -1) : points;
-  yield* travel(person, request, thing, timed(person, thing, first, speed), aim, resting);
-  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed), aim, false, END.distance, points[points.length - 2]);
+  yield* travel(person, request, thing, timed(person, thing, first, speed), aim, resting, { end: !straight });
+  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed), aim, false, { on: points[points.length - 2], end: true });
 }
 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `ALONG.least` s */
@@ -157,11 +157,16 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
   const way: Waypoint[] = [[CLEAR.seconds / person.tempo, { position: up, quaternion }]];
   const out = Math.hypot(up.x - root.x, up.z - root.z), most = CLEAR.out * person.proportions.armLength;
   if (out > most) way.push([(out - most) / ALONG.speed / person.tempo, { position: new Vector3(root.x + (up.x - root.x) * most / out, up.y, root.z + (up.z - root.z) * most / out), quaternion }]);
-  yield* travel(person, request, thing, way, aimsFor(person, thing, CARRYING, true), resting, CLEAR.near * person.scale);
+  yield* travel(person, request, thing, way, aimsFor(person, thing, CARRYING, true), resting, { near: CLEAR.near * person.scale });
 }
 
-/** Follow a course with load compliance only on support take-up; report a late settling endpoint. */
-function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], makeAim: Aim, resting: boolean, near = END.distance, on?: (f: Frame) => Goal) {
+/**
+ * Follow a course with load compliance only on support take-up, until the thing rests within `near` of its course's end; report a late
+ * settling endpoint. The `end` of a carry fails it instead of waiting on: once late, or once at rest where the body's own trunk and head
+ * hold it off its end (a carry ends true only with the thing in place).
+ */
+function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], makeAim: Aim, resting: boolean,
+  { near = END.distance, on, end = false }: { near?: number; on?: (f: Frame) => Goal; end?: boolean } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
   const lag = grips[LEADING] === undefined && person.holding[LEADING] ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
@@ -172,7 +177,7 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, late = false, dip = 0;
+  let began = NaN, since = NaN, late = false, blocked = false, dip = 0;
   const left = (f: Frame) => Math.max(0, (Number.isNaN(began) ? f.time : began) + lag.delay + total - f.time);
   const rested = restingAt(near);
   const seconds = 2.4 * load;
@@ -191,10 +196,22 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
     // Load compliance: https://pmc.ncbi.nlm.nih.gov/articles/PMC4443842/ (F = k × displacement).
     // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
     dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
-    if (rested(f, carrier, goal) && (dip === 0 || f.time - since >= seconds)) return true;
+    if (rested(f, carrier, goal) && (dip === 0 || f.time - since >= seconds)) {
+      if (!end || aim.off <= near) return true;
+      // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
+      if (!blocked) {
+        blocked = true;
+        f.dev?.append(f.time, { check: 'carry: held clear of its own body, off its end (m)', value: aim.off, limit: near, where: thing.object.name, detail: inTheWay(aim) });
+        request.fail();
+      }
+      return false;
+    }
     if (!late && f.time - since > RESTING) {
       late = true;
-      f.dev?.append(f.time, { check: `late carry: course end distance after ${RESTING} s (m)`, value: carrier.current.position.distanceTo(goal), limit: near, where: thing.object.name });
+      const off = carrier.current.position.distanceTo(goal);
+      f.dev?.append(f.time, { check: `late carry: course end distance after ${RESTING} s (m)`, value: off, limit: near, where: thing.object.name,
+        detail: `stopped ${cm(off)} cm off it: ${aim.off > near ? inTheWay(aim) : limits(person, thing, aim)}` });
+      if (end) request.fail();
     }
     return false;
   };
@@ -204,6 +221,18 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
     return to(f);
   }, there);
 }
+
+/** what holds each hand off where the carried thing's grips would be at its goal, as a late reach says it */
+function limits(person: Reacher, thing: Thing, aim: CarryAim): string {
+  const goal = aim.goal;
+  return Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing
+    ? [`${side} hand ${limitOf(person, sideOf(side))(_g.copy(hold.goal.position).applyQuaternion(goal.quaternion).add(goal.position))}`] : []).join('; ');
+}
+
+/** why a carried thing its own body holds off its end is not there */
+const inTheWay = (aim: CarryAim) => `its own trunk and head hold it ${cm(aim.off)} cm off its end: the body stands too near it`;
+
+const cm = (m: number) => (100 * m).toFixed(1);
 
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
 function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
@@ -284,6 +313,9 @@ class CarryAim {
   private time = NaN;
   /** whether a goal moved clear of the head has been noted */
   private cleared = false;
+  /** how far (m) the body's own trunk and head held the last goal read off where it was asked to go: none for a goal on its own head
+   * (a cup put to the mouth stops in front of it by design), else the body stands in the way of its end */
+  off = 0;
   /** whether it has set out, and how much of the push clear of the body it set out with it has not yet taken up, the two sub-steps before */
   private setOut = false;
   private readonly unpushed = [new Vector3(), new Vector3()];
@@ -316,6 +348,7 @@ class CarryAim {
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned);
     // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front: noted once, so it is no silent change)
     const moved = this.clear ? clearBody(person, f, thing, goal.position, turned, current, this.clear !== 'head', this.clear === 'parts') : 0;
+    this.off = this.clear === 'head' ? 0 : goal.position.distanceTo(target.position);
     if (moved > CLEARED * person.scale && !this.cleared && f.dev) {
       this.cleared = true;
       f.dev.note(f.time, { check: 'held goal moved clear of the head (m)', value: moved, limit: CLEARED * person.scale, where: thing.object.name });
