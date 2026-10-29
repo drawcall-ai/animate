@@ -27,7 +27,8 @@ export interface Posture {
  * `track`) or a thing in the hand takes the arm over, and it comes back to the pose once the hand is free. Raised, the arm's upper part
  * turns from hanging: `forward` + ahead and up (flexion: π/2 holds it out level ahead), `out` + away from the side and up (abduction: π/2
  * holds it out level sideways), then `twist` + about its own length so a bent forearm turns out and up (external rotation; − across the
- * body); `elbow` + bends the forearm (0 straight … about 2.5 fully bent), `shrug` + lifts the shoulder (≲ 0.5).
+ * body); `elbow` + bends the forearm (0 straight … about 2.5 fully bent), `shrug` + lifts the shoulder (≲ 0.5). A wave: `out` 1.3,
+ * `twist` 1.4, the `elbow` swung between about 0.6 and 1.6 by poses of 0.4 s or more each (shorter ones come out smaller).
  */
 export interface ArmPosture {
   shrug?: number;

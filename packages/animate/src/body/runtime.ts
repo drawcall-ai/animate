@@ -42,7 +42,8 @@ export interface SelfOptions {
   floor?: (x: number, z: number) => number;
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
-  /** its root driven by the app (a player's), read every sub-step with the body's time (s): its legs keep up, and nothing borrows them */
+  /** its root driven by the app (a player's, or a scripted path a walk cannot take), read every sub-step with the body's time (s): its legs
+   * keep up, and nothing borrows them; give `at` and `face` as the drive starts, or the first sub-step jumps there */
   drive?: (time: number) => Root;
   /** its quiet life: a seed that fixes its variation (unseeded, it varies with where the body is made), what tethers it and what startles it */
   life?: Temperament;
