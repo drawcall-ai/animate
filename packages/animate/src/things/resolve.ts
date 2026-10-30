@@ -102,6 +102,27 @@ function frameOf(pose: ReadonlyPose, body: Resolving, bone: number): Matrix4 {
   return _anchor.compose(pose.position(bone), _q.copy(pose.rotation(bone)).multiply(body.restOf(bone)), _s.set(scale, scale, scale));
 }
 
+/**
+ * Where `node` was in the world (into `out`, scale and all) as the scene stood when `reader` last finished an update: below the nearest
+ * body's bone or thing a body moves (as last written to the scene), each local the app moves as `reader` read it at the end of its last
+ * update (one it did not read then, as it is now). An app-owned world matrix ends the chain.
+ */
+export function written(reader: Resolving, node: Object3D, out: Matrix4): Matrix4 {
+  out.identity();
+  for (let at: Object3D | null = node; at; at = at.parent) {
+    if (anchors.has(at) || movers.has(at)) {
+      at.updateWorldMatrix(true, false);
+      return out.premultiply(at.matrixWorld);
+    }
+    if (at.matrixAutoUpdate) at.updateMatrix();
+    const owned = !at.matrixWorldAutoUpdate, matrix = owned ? at.matrixWorld : at.matrix, seen = reader.frames.get(at);
+    const read = seen?.parent === (owned ? null : at.parent) ? seen : undefined;
+    out.premultiply(read?.update === reader.updates ? read.from : read?.update === reader.updates - 1 ? read.to : matrix);
+    if (owned) return out;
+  }
+  return out;
+}
+
 /** The app's matrix (local, or world if it owns that), eased across the update unless its frame changed; fresh reads are exact. */
 function matrixOf(reader: Resolving, node: Object3D, fresh = false): Matrix4 {
   if (node.matrixAutoUpdate) node.updateMatrix();

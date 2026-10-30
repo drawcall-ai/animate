@@ -73,16 +73,18 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   yield* holding(person, request, thing, aim(), end, undefined, way.own);
 }
 
-/** Tuned: how long (s) before a carry's course ends the hand holding it alone plans its grasp for its end (`planGrasp`): about where the
- * body will stand and how it will bow by then, with time for a regrip (`REGRIP`) before it comes there */
+/** Tuned: how long (s) before a carry's course ends the hand holding it alone weighs its grasp for its end (`planGrasp`): about where
+ * the body will stand and how it will bow by then, with time for a regrip (`REGRIP`) before it comes there */
 const PLANNED = 0.5;
 /** Tuned: how long (s) a carry's course may be over, its thing not yet at rest at its end, before its hand plans its grasp again */
 const SETTLING = 0.5;
 
 /**
  * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
- * the thing is now): as it nears its end (`nearing`), and once more, from the body as it then stands, if it has not come to rest there
- * `SETTLING` s after its course is over (`settling`).
+ * the thing is now): as it nears its end (`nearing`) — weighed each sub-step, the end and the body as they then stand, for as long as
+ * the grasp it has is kept as comfortable there: an end that moves on the body (a rifle's well, the rifle held up to the eye, as the
+ * head turns from the pouch to it) is weighed where it has gone, not only where it was half a second before — and once more, from the
+ * body as it then stands, if it has not come to rest there `SETTLING` s after its course is over (`settling`).
  */
 interface Grasping {
   nearing: (f: Frame) => void;
@@ -92,11 +94,17 @@ interface Grasping {
 function grasping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Grasping {
   const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
   const plan = (f: Frame) => {
-    if (!hold) return;
+    if (!hold) return false;
     const at = end(f);
-    planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion });
+    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion });
   };
-  return { nearing: once(plan), settling: once(plan) };
+  let kept = true;
+  return {
+    nearing: (f) => {
+      if (kept) kept = plan(f);
+    },
+    settling: once(plan),
+  };
 }
 
 /** `act`, done the first time only */

@@ -18,12 +18,13 @@ import type { Reacher } from './reacher';
  * is to be turned, and the arm — shoulder, elbow, forearm and wrist — finds how to put it there. Nothing reads the hand's own turn back
  * into where it goes: the thing's turn is the carry's, the hand's follows from the grasp.
  *
- * A grip that sets no hand turn says only where the palm closes, so the grasp may change. Half a second before a carry's course ends
- * (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end: solved there, how far its
- * joints are out of the middle of their ranges (`strainAt`). Comfortable enough (`STRAINED`), it is kept, the arm working for it (a lance
- * borne upright beside the hip); else the hand regrips onto the least turned of the grasps tried there that the arm holds clearly more
- * comfortably (strained by half `STRAINED` at most, and by `STRAINED` less) — the hand as the arm brings it (`broughtTurn`), turned
- * about the palm — as people choose a grasp for the posture it ends in (the end-state comfort effect, Rosenbaum et al. 1990, recalled);
+ * A grip that sets no hand turn says only where the palm closes, so the grasp may change. From half a second before a carry's course
+ * ends (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
+ * keeps it: solved there, how far its joints are out of the middle of their ranges (`strainAt`). Comfortable enough (`STRAINED`), it is
+ * kept, the arm working for it (a lance borne upright beside the hip); else the hand regrips onto the least turned of the grasps tried
+ * there that the arm holds clearly more comfortably (strained by half `STRAINED` at most, and by `STRAINED` less) — the hand as the arm
+ * brings it (`broughtTurn`), turned about the palm — as people choose a grasp for the posture it ends in (the end-state comfort effect,
+ * Rosenbaum et al. 1990, recalled);
  * if none is, onto the least strained, but only where the arm cannot hold the one it has at all (in the trunk: a belt's buckle taken
  * palm down off a table, held to the belly, its wrist a palm behind it; or far short of its turn). The hand turns the thing in its
  * fingers about the palm onto it (`REGRIP` s; an in-hand rotation, Exner 1992, recalled), and the thing still ends turned as the carry
@@ -95,9 +96,10 @@ function regripped(person: Reacher, side: Side, thing: Thing, regrip: Regrip, ti
  * holds it there comfortably enough (`strainAt`, `STRAINED`); else a regrip onto the least turned of the grasps tried that it holds
  * clearly more comfortably there — or, if none is and the arm cannot hold the one it has there at all (in the trunk, or far short of its
  * turn), onto the least strained of them; else still the one it has, the arm working for it (a lance borne upright beside the hip).
+ * Whether it kept the grasp as comfortable enough there: weighed again as the end or the body moves on, it may yet be regripped.
  */
-export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>): void {
-  if (hold.goal.quaternion || !inHand(person, thing)) return;
+export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>): boolean {
+  if (hold.goal.quaternion || !inHand(person, thing)) return false;
   const f = person.frame, bone = person.hands[side], restOf = person.restOf(bone);
   const prior = regrips.get(hold);
   const from: InHand = { position: new Vector3(), quaternion: new Quaternion() };
@@ -112,7 +114,7 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   trial.copy(posed);
   const strain = (hand: Readonly<Quaternion>) => strainAt(person, posed, trial, side, at, hand);
   const kept = strain(_kept.copy(end.quaternion).multiply(turn));
-  if (kept <= STRAINED) return;
+  if (kept <= STRAINED) return true;
   // (the hand as the arm brings it there, turned about the palm round the vertical, the body's left and its own length, the least first)
   const left = _left.set(1, 0, 0).applyQuaternion(_facing.setFromAxisAngle(UP, person.locomotion.facing));
   const along = _along.copy(palm).normalize().applyQuaternion(brought);
@@ -127,9 +129,10 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
     [least, chosen] = [strained, (chosen ?? new Quaternion()).copy(hand)];
     if (strained <= enough) break;
   }
-  if (!chosen) return;
+  if (!chosen) return false;
   const to = chosen.premultiply(_back.copy(end.quaternion).invert()).multiply(restOf);
   regrips.set(hold, { from: from.quaternion, to, palm: inThing.clone(), start: f.time });
+  return false;
 }
 
 /** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */

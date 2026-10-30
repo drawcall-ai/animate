@@ -1,9 +1,9 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Pose } from '../kernel/pose';
 import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
-import { anchors, movers, resolve, type Hold, type Holder, type Resolving } from './resolve';
+import { anchors, movers, resolve, written, type Hold, type Holder, type Resolving } from './resolve';
 import { Thing, type Grip } from './thing';
 import type { Goal, Placement } from '../kernel/goal';
 
@@ -114,17 +114,22 @@ export function supported(thing: Thing): boolean {
   return !thing.lifted && !bodyOf(thing.object);
 }
 
-/** `thing` attached under `parent` where it is (as `reader` finds both — a body re-parenting it mid-update — else as the scene has them), moved by no body */
+/**
+ * `thing` attached under `parent` where it is as the scene has them, moved by no body. A body re-parenting it mid-update (`reader`) takes
+ * it where it was as the scene stood when the body last wrote it: what the app moves read as the body last read it (`written`), not as
+ * the app has moved it since — the parent, a bone, still stands as the body last wrote it, and a rifle the app had moved 2 cm on took the
+ * magazine in the hand 2 cm off the palm, the grasp keeping it so.
+ */
 export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void {
   const object = thing.object, mover = movers.get(object);
+  const world = reader && written(reader, object, _world);
   mover?.leave(object);
   parent.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, false);
   parent.attach(object);
   thing.parent = parent;
-  if (!reader) return;
-  const at = resolve(reader, object, _placed);
-  placeUnder(reader, object, parent, at.position, at.quaternion);
+  if (!world) return;
+  world.premultiply(_parentInverse.copy(parent.matrixWorld).invert()).decompose(object.position, object.quaternion, object.scale);
 }
 
 /** `object` written relative to `parent` to be at `position`, turned `quaternion` (world), as `reader` finds `parent` */
@@ -298,7 +303,8 @@ export function wornOf(self: Holder): Thing[] {
   return worn;
 }
 
-const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const _world = new Matrix4(), _parentInverse = new Matrix4();
 const ZERO = new Vector3(), _scale = new Vector3();
 const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
