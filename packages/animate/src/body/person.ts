@@ -15,7 +15,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, carryAlong, checkParents, inHand, move, worn, type Kept } from '../things/hold';
+import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied, worn, type Kept } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import { palmOf } from '../species/humanoid/landmarks';
@@ -82,7 +82,7 @@ export class Person extends Self {
         // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
         if (inHand(this, thing)) return handStep(this, f, side, held[side](f), { ...HOLD, lead: false }, arms[side]);
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object);
-        handStep(this, f, side, hold.goal, { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
+        handStep(this, f, side, steadied(hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
         checkParents(this, f);

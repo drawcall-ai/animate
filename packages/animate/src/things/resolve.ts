@@ -29,6 +29,11 @@ export interface Hold {
   thing: Thing;
   grip: string;
   goal: Goal;
+  /** a person's hand on a grip that sets no turn: its turn in the thing's frame as it holds it, which the hand keeps while the thing is
+   * held by more than its hand (worn, on another body, resting) — the palm stays on the empty as the thing turns */
+  turn?: () => Quaternion;
+  /** where a person's hand holds the grip, in its bone's frame: its palm's centre (none: a creature's tip, on the empty) */
+  palm?: Readonly<Vector3>;
   keep?: (f: Frame) => void;
 }
 

@@ -6,8 +6,8 @@ import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
-import { grasp, held, onBody, worn } from '../../things/hold';
-import type { Hold } from '../../things/resolve';
+import { grasp, held, holdOn, onBody, worn, type Palm } from '../../things/hold';
+import type { Thing } from '../../things/thing';
 import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
@@ -22,8 +22,13 @@ import { ARM } from './trunk';
 const STAGING = 0.4;
 
 /** A hand's hold to take: the hand, and the hold it takes. */
-export interface Taking extends Hold {
+export interface Taking {
   side: Side;
+  thing: Thing;
+  grip: string;
+  goal: Goal;
+  /** the person's palm that takes it */
+  palm: Palm;
 }
 
 /** where the hand bone goes on a grip in the world this sub-step (its goal: a palm back from the empty), as the person tracks its thing */
@@ -42,7 +47,7 @@ export function emptyAt(person: Reacher, take: Pick<Taking, 'thing' | 'grip'>, f
 export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: Pace) {
   const began = person.frame.time;
   const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
-  const close = () => takes.forEach((take) => grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal }));
+  const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm)));
   if (there(person.frame)) return close();
   let late = false, ends = Infinity;
   const progress = takes.map(() => new Progress());

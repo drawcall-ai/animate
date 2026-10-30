@@ -1,5 +1,5 @@
 import { Box3, Quaternion, Ray, Vector3 } from 'three';
-import { grasp, held as heldThings, lift, onBody } from '../../things/hold';
+import { grasp, held as heldThings, holdOn, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
@@ -124,7 +124,7 @@ export function* takingAtOnce(person: Reacher, request: Request, takes: readonly
       placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
       person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
     }
-    grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
+    grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm));
     placed = true;
   }, () => placed)));
   for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !onBody(person, thing)) lift(person, thing);

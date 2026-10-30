@@ -17,7 +17,10 @@ export function personHands(person: Reacher): Handling {
   return {
     take: function* (request, thing, grips, options) {
       const loose = thing.massive && !bodyOf(thing.object);
-      const takes = grips.map(({ hand, grip }) => ({ side: sideOf(hand), thing, grip, goal: goalOn(thing.grip(grip), person.restOf(person.hands[hand]), palm(person, sideOf(hand), thing)) }));
+      const takes = grips.map(({ hand, grip }) => {
+        const side = sideOf(hand), at = thing.grip(grip), hold = palm(person, side, thing);
+        return { side, thing, grip, goal: goalOn(at, person.restOf(person.hands[hand]), hold), palm: hold };
+      });
       if (options.speed === Infinity) {
         yield* takingAtOnce(person, request, takes);
         return request.met();
@@ -44,6 +47,6 @@ function palm(person: Reacher, side: Side, thing: Thing): Palm {
   const bone = person.hands[side], turn = new Quaternion();
   return {
     at: palmOf(person.proportions, side),
-    turn: () => turn.copy(person.track(thing.object).at(person.frame.time).current.quaternion).invert().multiply(person.frame.prev.rotation(bone)),
+    turn: () => turn.copy(person.track(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(bone)),
   };
 }

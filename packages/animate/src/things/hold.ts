@@ -56,6 +56,17 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goa
   return { get position() { return wrist.copy(palm.at).applyQuaternion(palm.turn()).negate().add(empty); }, ...turns };
 }
 
+/** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
+export function holdOn(thing: Thing, grip: string, goal: Goal, palm?: Palm): Hold {
+  if (!palm) return { thing, grip, goal };
+  return { thing, grip, goal, palm: palm.at, ...(!goal.quaternion && { turn: palm.turn }) };
+}
+
+/** where a hand holding `hold` goes on its thing: its goal, turned as the hand holds it (`Hold.turn`) when the grip sets no turn */
+export function steadied(hold: Hold): Goal {
+  return hold.turn && !hold.goal.quaternion ? { position: hold.goal.position, quaternion: hold.turn().clone() } : hold.goal;
+}
+
 /** hand `hand` of `self` holding `hold` (null: letting go), the thing's holders kept */
 export function grasp(self: Holder, hand: string, hold: Hold | null): void {
   const was = self.holding[hand];
@@ -176,8 +187,11 @@ function freeHand(self: Holder, thing: Thing): string | null {
 function pivot(self: Holder, f: Frame, thing: Thing, quaternion: Readonly<Quaternion> | null): void {
   const hand = quaternion && freeHand(self, thing), hold = hand && self.holding[hand], parent = thing.object.parent;
   if (!quaternion || !hand || !hold || !parent) return;
-  const grip = _g1.copy(hold.goal.position).applyQuaternion(quaternion);
-  placeUnder(self, thing.object, parent, _at.copy(f.current.position(self.hands[hand])).sub(grip), quaternion);
+  // (its empty on the palm as the hand is posed now: placed by the wrist's goal, a palm back from it as the hand was turned before, it
+  // swung off the palm as the hand turned)
+  const grip = _g1.copy(thing.grip(hold.grip).at.position).applyQuaternion(quaternion);
+  const palm = hold.palm ? f.current.point(self.hands[hand], _at.copy(hold.palm), _at) : _at.copy(f.current.position(self.hands[hand]));
+  placeUnder(self, thing.object, parent, palm.sub(grip), quaternion);
 }
 
 /** A free-gripped thing's kept turn (world) and the sub-step it was last kept at. */
@@ -330,3 +344,4 @@ const ZERO = new Vector3(), UP = new Vector3(0, 1, 0), _scale = new Vector3();
 const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
 const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();
+
