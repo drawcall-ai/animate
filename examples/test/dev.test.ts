@@ -13,6 +13,7 @@ const test = cases([
   'vr on the soldier: final-pose dev checks', // The same; at life seed 1 also a tracking joint-rate violation.
   'reach on the soldier: final-pose dev checks', // Reach diagnostics.
   'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
+  ['reach: faster final-pose dev checks', [0]], // XCoM ~0.11 m: the trailing leg lifts late as the body rises out of the reach's crouch (the owner's accepted open breach "reach hand faster").
 ]);
 for (const scenario of SCENARIOS) {
   const bodies = [{ on: '', skeleton: undefined },
