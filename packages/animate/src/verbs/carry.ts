@@ -13,7 +13,10 @@ import type { HandOptions } from '../hands/handling';
  * (its hip, a pouch, a well; a heavy one after a knee dip), out the way its empty's approach comes in (from the point of it nearest the
  * thing), and in to the last target the way that target's approach comes (`userData.approach`: the names of empties beside it, under its
  * parent, outermost first; slowing to its `userData.speed`); an
- * `Object3D` target turns it as the target is turned, reached by the start of the last straight. When it must walk there (and `step`
+ * `Object3D` target turns it as the target is turned, reached by the start of the last straight; a point keeps it turned as it is. In one
+ * hand by a grip that sets no turn it goes as the hand holds it, the arm turning it: if the arm cannot hold it so at the end — in the
+ * trunk, past a joint's range, or strained — the hand regrips it in its fingers as it comes there, onto a grasp the arm holds there
+ * comfortably (people choose a grasp for the posture it ends in), the thing still ending turned as asked. When it must walk there (and `step`
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
  * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, and keeps it there. It
  * returns `false` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried

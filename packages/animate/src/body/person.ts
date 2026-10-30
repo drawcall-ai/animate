@@ -15,7 +15,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied, worn, type Kept } from '../things/hold';
+import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied, worn } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import { palmOf } from '../species/humanoid/landmarks';
@@ -67,7 +67,7 @@ export class Person extends Self {
   protected behave(): Behaviours {
     const seed = this.life.seed;
     const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') }, held = { left: keptOnBody(this, 'left'), right: keptOnBody(this, 'right') };
-    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>(), kept = new WeakMap<Thing, Kept>();
+    const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
     return {
       balance: this.drive ? driven(this, seed) : stride(this, { seed }),
       // (unseeded, glances vary with where the body was made, as its balance does: a crowd does not look aside in step)
@@ -89,7 +89,7 @@ export class Person extends Self {
       things: (f) => {
         checkParents(this, f);
         if (f.dev) checkTaking(this, f, taking);
-        move(this, f, this.carrying, kept);
+        move(this, f, this.carrying);
         if (f.dev) checkHeld(this, f, noted);
         this.carrying.clear();
         bear(this, f, this.worn, this.borne);

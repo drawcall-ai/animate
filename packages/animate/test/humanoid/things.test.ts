@@ -148,7 +148,7 @@ describe('hands that cannot get there', () => {
 // the next one, riding the free twist of his wrist)
 describe('a thing in one hand by a grip that sets no turn', () => {
   it.each([['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]])(
-    'keeps its turn in the world, but for the facing, as the other hand bows for something low: %s', (_name, make) => {
+    'stays in the hand as it took it, turning no faster than the body, as the other hand bows for something low: %s', (_name, make) => {
       const body = make(), room = roomOf(body), scale = body.species.scale, hips = body.species.person?.hipHeight ?? 0;
       const medal = new Object3D();
       medal.name = 'medal';
@@ -158,21 +158,30 @@ describe('a thing in one hand by a grip that sets no turn', () => {
       room.add(medal);
       // (low, half the hips' height: a bow down for it)
       const low = box(room, new Vector3(0.2 * scale, 0.5 * hips, 0.4 * scale), { size: new Vector3(0.1, 0.1, 0.1), mass: 0.3, name: 'low' });
-      let took = false, kept: Quaternion | null = null, turned = 0;
-      // (its turn with the body's facing taken out)
-      const unfaced = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -body.facing).multiply(medal.getWorldQuaternion(new Quaternion()));
+      let took = false, kept: Quaternion | null = null, slipped = 0, fastest = 0;
+      const was = new Quaternion();
+      // (its turn in the hand it hangs from, and in the world)
+      const inHand = () => medal.parent ? medal.parent.getWorldQuaternion(new Quaternion()).invert().multiply(medal.getWorldQuaternion(new Quaternion())) : new Quaternion();
       play(function* () {
         yield* grab(body, medal, { right: 'loop' });
-        kept = unfaced();
+        kept = inHand();
+        was.setFromAxisAngle(new Vector3(0, 1, 0), -body.facing).multiply(medal.getWorldQuaternion(new Quaternion()));
         took = yield* grab(body, low, { left: 'right' });
       }, [body], 12, () => {
-        if (kept) turned = Math.max(turned, unfaced().angleTo(kept));
+        if (!kept) return false;
+        slipped = Math.max(slipped, inHand().angleTo(kept));
+        const now = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -body.facing).multiply(medal.getWorldQuaternion(new Quaternion()));
+        fastest = Math.max(fastest, now.angleTo(was) * 60);
+        was.copy(now);
         return took;
       });
       expect(body.log).toEqual([]);
       expect(took).toBe(true);
       expect(body.holds(medal)).toBe(true);
-      expect(turned).toBeLessThan(0.01);
-      expect(body.log).toEqual([]);
+      // (held as taken: the grasp fixes the hand on it)
+      expect(slipped).toBeLessThan(0.01);
+      // (turning with the hand kept on the bowing body: 0.7 rad/s at most for the default body, 3–5.7 for the 2.3 m one as the hand settles
+      // from the take into its keep; not spun on a free wrist, 12 rad/s for the 2.3 m body when the medal kept its own turn)
+      expect(fastest).toBeLessThan(8);
     }, 20000);
 });

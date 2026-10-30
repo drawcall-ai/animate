@@ -9,7 +9,7 @@ import type { Proportions } from '../../species/humanoid/proportions';
 
 // An arm keeps out of its own trunk. The trunk is two capsules up the spine, from the hips to the chest and on to the neck, and the arm
 // three (radii × height: a lean adult's girths, Winter's, as examples/test/clearance.ts measures them; the hand reaching on from
-// the wrist along the forearm, Drillis & Contini).
+// the wrist along the forearm, Drillis & Contini; where a reach asks its hand a turn, as turned).
 
 const TRUNK = [['hips', 'chest', 0.06], ['chest', 'neck', 0.045]] as const;
 export const ARM = { upper: 0.026, fore: 0.022, hand: 0.013, length: 0.08 };
@@ -194,23 +194,34 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
   return hi;
 }
 
-/** Clear the world-space wrist in place and write the elbow to `pole`, with minimum swivel from `near`. Cross-body reaches stay in front;
- * return forward push (m), or -1 without changing an infeasible goal.
+/**
+ * whether some elbow of arm `side`, about the shoulder–wrist line from `near` round, holds its wrist at `wrist` clear of the trunk as
+ * `pose` stands it, the hand on from it along `along` (world, unit; none: along the forearm, an unbent wrist): the elbow into `pole`
  */
-export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3): number {
-  const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height;
-  const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
+function holds(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, near: Readonly<Vector3>, along?: Readonly<Vector3>, pole?: Vector3): boolean {
+  const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height, length = ARM.length * proportions.height;
   const upper = Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth);
-  const fits = (push: number) => {
-    const at = _pushed.copy(wrist).addScaledVector(forward, push);
-    return swivels(proportions, shoulder, at, near, SWIVEL.steps, (elbow, end) => {
-      const hand = _hand.subVectors(end, elbow).setLength(ARM.length * proportions.height).add(end);
-      if (deepest(pose, proportions, shoulder, elbow, ARM.upper).depth > upper) return false;
-      if (deepest(pose, proportions, elbow, end, ARM.fore).depth > clear || deepest(pose, proportions, end, hand, ARM.hand).depth > clear) return false;
-      pole.copy(elbow);
-      return true;
-    });
-  };
+  return swivels(proportions, shoulder, wrist, near, SWIVEL.steps, (elbow, end) => {
+    const hand = along ? _hand.copy(along).multiplyScalar(length).add(end) : _hand.subVectors(end, elbow).setLength(length).add(end);
+    if (deepest(pose, proportions, shoulder, elbow, ARM.upper).depth > upper) return false;
+    if (deepest(pose, proportions, elbow, end, ARM.fore).depth > clear || deepest(pose, proportions, end, hand, ARM.hand).depth > clear) return false;
+    pole?.copy(elbow);
+    return true;
+  });
+}
+
+/** whether arm `side` can hold its wrist at `wrist`, the hand on toward `palm` (world), clear of the trunk as `pose` stands it (`holds`) */
+export function holdsClear(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, palm: Readonly<Vector3>, near: Readonly<Vector3>): boolean {
+  return holds(pose, proportions, side, wrist, near, _along.subVectors(palm, wrist).normalize());
+}
+
+/** Clear the world-space wrist in place and write the elbow to `pole`, with minimum swivel from `near`, the hand on from the wrist along
+ * `along` (world, unit: a hand turned on the wrist) or else the forearm. Cross-body reaches stay in front; return forward push (m), or -1
+ * without changing an infeasible goal.
+ */
+export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3, along?: Readonly<Vector3>): number {
+  const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
+  const fits = (push: number) => holds(pose, proportions, side, _pushed.copy(wrist).addScaledVector(forward, push), near, along, pole);
   const pushed = leastPush(fits, ahead(pose, proportions, side, wrist), AIR * proportions.height, PUSH * proportions.armLength, 12, 1e-4);
   if (pushed === null) return -1;
   wrist.copy(_pushed);
@@ -322,5 +333,5 @@ const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), 
 const _was = [new Quaternion(), new Quaternion(), new Quaternion()], _fit = [new Quaternion(), new Quaternion(), new Quaternion()], _blend = new Quaternion();
 const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3(), _goal = new Vector3(), _swivel = new Vector3();
 const _elbow = new Vector3(), _hand = new Vector3(), _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
-const _points: Readonly<Vector3>[] = [], _handEnd = new Vector3();
+const _points: Readonly<Vector3>[] = [], _handEnd = new Vector3(), _along = new Vector3();
 const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3(), _sp = new Vector3(), _sq = new Vector3();
