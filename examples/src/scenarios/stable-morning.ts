@@ -152,13 +152,16 @@ export function stableMorning(): Scenario {
   };
 }
 
-/** the saddle on its rack under `scene`: its seat, a skirt hanging on each side, a grip at its front and back (taken as the hands come) */
+/**
+ * the saddle on its rack under `scene`: its seat, a skirt hanging on each side, a grip at its front and back where the palms close on it,
+ * a hand's half-thickness out from the seat (taken as the hands come)
+ */
 function saddleOn(scene: Group): Object3D {
   const saddle = box(scene, 'saddle', SEAT, RACK);
   saddle.userData.mass = MASS;
   for (const side of [-1, 1]) box(saddle, 'skirt', SKIRT, new Vector3(0, -0.13, side * 0.27));
-  empty(saddle, 'left', new Vector3(0.22, 0, 0));
-  empty(saddle, 'right', new Vector3(-0.22, 0, 0));
+  empty(saddle, 'left', new Vector3(SEAT.x / 2 + 0.015, 0, 0));
+  empty(saddle, 'right', new Vector3(-SEAT.x / 2 - 0.015, 0, 0));
   return saddle;
 }
 

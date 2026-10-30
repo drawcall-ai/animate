@@ -33,7 +33,7 @@ const HELM = { radius: 0.12, height: 0.22 };
 
 /**
  * A bascinet (2.5 kg): a round-topped cap over the skull down below the ears, open at the face, a nasal before the nose; its frame the
- * head's when worn (origin at its middle, +Z where the face is). Held low on its sides, toward the front (`left`, `right`: worn, the wrists by the cheeks); its chin
+ * head's when worn (origin at its middle, +Z where the face is). Held low on its sides, toward the front (`left`, `right`: worn, the palms by the jaw); its chin
  * strap's ends hang by the jaw (`strapLeft`, `strapRight`) and are buckled under the chin (`chinLeft`, `chinRight`). Its crown and rim
  * keep off the head (the rim may rest on the shoulders and upper arms).
  */
@@ -54,16 +54,20 @@ export function helm(): Group {
   return helm;
 }
 
+/** where a hand's palm is, past its wrist along the hand (m, the default body's: 0.043 of its height) */
+const PALM = 0.075;
+
 /**
- * A gauntlet (0.6 kg) for hand `side`: its frame the hand's when worn (origin at the wrist). Grips: `inside`, the wrist in it (the hand turned as
- * the arm brings it); `cuff`, the top of the cuff, where the other hand holds it open.
+ * A gauntlet (0.6 kg) for hand `side`, for a wearer `scale` times the default body's height: its frame the hand's when worn (origin at the
+ * wrist). Grips: `inside`, where the palm goes in it (the hand turned as the arm brings it); `cuff`, the top of the cuff, where the other
+ * hand holds it open.
  */
-export function gauntlet(side: 'left' | 'right'): Group {
+export function gauntlet(side: 'left' | 'right', scale: number): Group {
   const out = side === 'left' ? 1 : -1;
   const gauntlet = piece(`${side} gauntlet`, 0.6);
   box(gauntlet, 'gauntlet fingers', new Vector3(0.17, 0.045, 0.1), new Vector3(0.085 * out, -0.005, 0.005));
   turned(cylinder(gauntlet, 'gauntlet cuff', 0.055, 0.12, new Vector3(-0.05 * out, 0, 0)), 0, 0, Math.PI / 2);
-  empty(gauntlet, 'inside', new Vector3());
+  empty(gauntlet, 'inside', new Vector3(PALM * scale * out, 0, 0));
   empty(gauntlet, 'cuff', new Vector3(-0.08 * out, 0.065, 0));
   return gauntlet;
 }
