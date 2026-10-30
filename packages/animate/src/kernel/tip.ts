@@ -36,8 +36,12 @@ export class ChainTip {
   /** each joint contact or clearance moved after its brakes in its last call, and its step then as the brakes are to read it (a rotation vector, its
    * parent's frame) */
   private readonly nudged = new Map<number, Vector3>();
-  /** where it moved the tip the last two sub-steps (world) and when last; on a carrier, where it took the carrier to be then */
-  private readonly moved = { before: new Vector3(), last: new Vector3(), placed: new Vector3(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
+  /** where it moved and turned the tip the last two sub-steps (world), where it left it, and when last; on a carrier, where it took the
+   * carrier to be then */
+  private readonly moved = { before: new Vector3(), last: new Vector3(), turnedBefore: new Quaternion(), turned: new Quaternion(), placed: new Vector3(),
+    placedTurn: new Quaternion(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
+  /** whether its last solve, a fit kept (`keep`), left the tip short of the turn it asked (`moved.turned`): held there by the limits */
+  private short = false;
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
   private on?: Carrier;
@@ -58,9 +62,10 @@ export class ChainTip {
     const placed = on?.at(f.time);
     // (the intended path on a carrier, moved with it from where it was foreseen to be to where it was: one worn by a body still posing
     // was carried on as it moved, its actual placement known only once it has moved)
-    if (own && placed) for (const [point, at, then] of [[moved.last, moved.frames[1], placed.prev], [moved.before, moved.frames[0], placed.prev2]] as const) {
+    if (own && placed) for (const [point, turn, at, then] of [[moved.last, moved.turned, moved.frames[1], placed.prev], [moved.before, moved.turnedBefore, moved.frames[0], placed.prev2]] as const) {
       if (at.position.equals(then.position) && at.quaternion.equals(then.quaternion)) continue;
       point.sub(at.position).applyQuaternion(_r.copy(at.quaternion).invert()).applyQuaternion(then.quaternion).add(then.position);
+      turn.premultiply(_r).premultiply(then.quaternion);
     }
     const prev2 = own ? moved.before : f.prev2.position(tip);
     const prev = own ? moved.last : f.prev.position(tip);
@@ -69,7 +74,17 @@ export class ChainTip {
     if (target.quaternion) {
       if (turnAccel === undefined) throw new Error(`chain "${chain}": a target rotation needs a turnAccel`);
       const goal = target.axis ? rolled(target.quaternion, target.axis, near(f.prev.rotation(tip), placed)) : target.quaternion;
-      quaternion = followRotation(f.prev2.rotation(tip), f.prev.rotation(tip), goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
+      // (a fit kept (`keep`) whose limits held the tip short of the turn it asked turns on along that turn, while the tip is turned as
+      // it was left: read back from the tip as the limits left it, it was asked only a sub-step's turn on from there each time, never
+      // enough for the fit to give way (`HELD`, chain.ts) to one that turns it there — a bucket by its handle set down stuck 2.3 rad
+      // short, turned half round. Else it turns on from the tip as its joints left it: an intended turn run on ahead of a reach the
+      // brakes hold back had the arm solved into the trunk. 1 − |dot|, not `angleTo`, for "as it was left": acos loses the precision
+      // near zero, ~1e-8 rad for an unchanged turn)
+      const resumed = own && this.short && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
+      const before = resumed ? moved.turnedBefore : f.prev2.rotation(tip), last = resumed ? moved.turned : f.prev.rotation(tip);
+      quaternion = followRotation(before, last, goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
+      moved.turnedBefore.copy(last);
+      moved.turned.copy(quaternion);
     }
     moved.before.copy(prev);
     moved.last.copy(position);
@@ -87,6 +102,7 @@ export class ChainTip {
     const out = position.distanceTo(base);
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep });
+    this.short = options.keep === true && quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > SHORT;
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       const nudged = continued ? this.nudged : null;
@@ -125,6 +141,7 @@ export class ChainTip {
       });
     }
     moved.placed.copy(f.current.position(tip));
+    moved.placedTurn.copy(f.current.rotation(tip));
   }
 }
 
@@ -233,6 +250,8 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
   return _roll.setFromAxisAngle(a, angle).multiply(q);
 }
 
+/** how far (rad) a solve may leave its tip off the turn it asked and still have met it (the twist search settles far finer) */
+const SHORT = 1e-3;
 /** the share of a chain's length its tip is moved out to at most */
 const REACH = 0.98;
 const ZERO = new Vector3();
