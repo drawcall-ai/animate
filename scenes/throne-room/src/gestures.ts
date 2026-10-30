@@ -109,26 +109,17 @@ export function stepBackAndNod(leia: Body, hero: Body, { distance = 0.35 }: { di
     place.position.copy(besides(leia, 0, 0, -distance));
     place.position.y = floorAt(place.position.x, place.position.z);
     place.rotation.y = leia.facing;
-    let walked = true;
-    yield* parallel(
-      'all',
-      (function* () {
-        walked = yield* walkTo(leia, place, { speed: 0.6 });
-      })(),
-      (function* () {
-        yield* lookAt(leia, hero, { until: arriving(leia, 0.5) });
-        yield* graciousNod(leia, hero);
-      })(),
-    );
-    return walked;
+    return yield* parallel('all', walkTo(leia, place, { speed: 0.6 }), function* () {
+      yield* lookAt(leia, hero, { until: arriving(leia, 0.5) });
+      yield* graciousNod(leia, hero);
+    });
   })();
 }
 
 /** a small nod to `toward`: the head dips about 14 degrees and comes back up, about `seconds` in all, the eyes staying on them */
 export function graciousNod(body: Body, toward: Body, { seconds = 1.2, depth = 0.25 }: { seconds?: number; depth?: number } = {}): Verb {
   return (function* () {
-    yield* parallel('race', lookAt(body, toward, { until: seconds }), pose(body, { head: { pitch: depth } }, { until: seconds * 0.45 }));
-    return true;
+    return yield* parallel('race', lookAt(body, toward, { until: seconds }), pose(body, { head: { pitch: depth } }, { until: seconds * 0.45 }));
   })();
 }
 

@@ -30,13 +30,14 @@ export function dressMedal(medal: Object3D): Object3D {
   return medal;
 }
 
-/** the cushion the medals wait on: on a stand 0.35 m before `bearer`, its top 0.95 m above his floor, turned as he faces */
+/** the cushion the medals wait on: on a stand 0.35 m before `bearer`, its top 0.95 m above his floor, turned as he faces; deep enough
+ * (0.34 m) for a medal's ribbon to lie on it */
 export function cushion(bearer: Body): Group {
   const tray = new Group();
   tray.name = 'medal cushion';
   tray.position.set(Math.sin(bearer.facing) * 0.35, 0.95, Math.cos(bearer.facing) * 0.35).add(bearer.position);
   tray.rotation.y = bearer.facing;
-  const pad = new Mesh(new BoxGeometry(0.36, 0.035, 0.2), VELVET);
+  const pad = new Mesh(new BoxGeometry(0.36, 0.035, 0.34), VELVET);
   pad.position.y = -0.02;
   const stand = new Mesh(new CylinderGeometry(0.02, 0.05, 0.92, 12), BRASS);
   stand.position.y = -0.5;

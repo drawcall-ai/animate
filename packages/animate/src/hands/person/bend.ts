@@ -5,6 +5,7 @@ import { forwardOf, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../../legs/person/posture';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
+import type { Proportions } from '../../species/humanoid/proportions';
 import { NECK_PITCH, TRUNK_PITCH } from '../../species/humanoid/limits';
 import { heldMass } from '../../things/hold';
 import { loadFactor } from '../../kernel/load';
@@ -14,6 +15,12 @@ import { floorUnder } from '../../legs/person/legged';
 export const ARM_REACH = 0.95;
 /** how far the clavicle draws the shoulder joint toward a hand reaching out past 85% of the arm, at most (× height) */
 export const PROTRACTION = 0.035;
+/** how far the clavicle lifts the shoulder joint for a hand high overhead, at most (× height) */
+export const ELEVATION = 0.03;
+/** how far the clavicle has lifted the shoulder joint for a hand `height` up (m, on the floor): from a hand at the shoulder to one 0.6 of
+ * the arm above it */
+const elevationFor = (proportions: Proportions, height: number) =>
+  ELEVATION * proportions.height * smoothstep(-0.05, 0.6, (height - proportions.shoulderHeight) / proportions.armLength);
 
 /** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches within lumbar rotation and leaves the neck
  * to finish an over-shoulder look (requests combine by magnitude, so task order cannot cancel a stronger turn). A hand the trunk holds
@@ -51,11 +58,13 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   // Recalled: ≥10–15° knees under load. Tuned 30° ceiling on each leg segment (knee flexion is their sum), scaled by the same load law.
   if (low) person.poise.add({ lower: proportions.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
+  // (a hand high up reached for with the shoulder lifted as the arm lifts it, not on the toes)
+  const elevation = elevationFor(proportions, height);
   // (walking, the clavicle drawn toward the hand, `PROTRACTION`, takes up a small stride's deficit)
   const allowance = person.locomotion.moving ? PROTRACTION * proportions.height : 0;
   // (judged from the shoulder standing upright, not as low as the reach has let it down, so a lowering reach keeps asking while it is short
   // standing — but from the shoulder as it is for a goal on the body, which falls with it, and before the legs' first sub-step)
-  const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(floor + proportions.shoulderHeight) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
+  const deficit = (person.stepper && !carried ? _upright.copy(shoulder).setY(floor + proportions.shoulderHeight + elevation) : shoulder).distanceTo(hand) - proportions.armLength - allowance;
   const pitch = Math.asin(-_forward.set(0, 0, 1).applyQuaternion(f.current.rotation(INDEX.chest)).y);
   if (person.locomotion.moving && hand.y < shoulder.y && deficit <= 0 && !(low && mass > 0)) return;
   // A bow moves the pelvis back: every reach is planned from the support station, so that shift cannot make a shoulder ask for more bow.
@@ -64,7 +73,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   const lateral = _v.subVectors(hand, shoulder).dot(_left.set(Math.cos(person.locomotion.facing), 0, -Math.sin(person.locomotion.facing)));
   // Tuned 2% reserve for the articulated shoulder arc: its single lever overestimates the reach a deep squat's tucked pelvis leaves.
   const reach = 0.98 * ARM_REACH * proportions.armLength;
-  const { lower, bow } = handLowering(proportions, { ahead, lateral, height, reach, bowLimit });
+  const { lower, bow } = handLowering(proportions, { ahead, lateral, height: height - elevation, reach, bowLimit });
   if (share > 0) person.poise.add({ lower: lower * share });
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it, as far
   // as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it. Short of it from the

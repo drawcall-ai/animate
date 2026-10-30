@@ -24,6 +24,8 @@ export interface Locomotion {
   planted: number;
   /** the pelvis's and the thorax's turn with the stride (rad, + to the left) */
   pelvisYaw: number; thoraxYaw: number;
+  /** how far the trunk bows forward as the legs carry it (rad, + forward; − arched back): a story's, a reach's, a look's and a crouch's */
+  bow: number;
   /** the requested quiet stance displacement from the centred stance (m, world) */
   quiet: Vector3;
   /** how far its arms swing walking, as its legs have it (1: as tuned) */
@@ -32,5 +34,5 @@ export interface Locomotion {
 
 export const createLocomotion = (facing: number): Locomotion => ({
   eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0,
-  pelvisYaw: 0, thoraxYaw: 0, quiet: new Vector3(), arms: 1,
+  pelvisYaw: 0, thoraxYaw: 0, bow: 0, quiet: new Vector3(), arms: 1,
 });

@@ -43,8 +43,8 @@ export class Thing {
   }
 
   /**
-   * The named empty: position-only unless `userData.handTurn` is true (its axes are the hand bone's), or an axis
-   * ([x, y, z], the empty's frame) about which that turn may roll. Attached things' subtrees are not searched.
+   * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the
+   * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. Attached things' subtrees are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);

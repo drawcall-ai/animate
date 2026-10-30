@@ -6,7 +6,7 @@ import { DOG } from '../../skills/animate/references/dog';
 import { run } from '../bodies';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
-import { insides, person, play, feetOf, gazeOff } from '../bodies';
+import { insides, palmAt, person, play, feetOf, gazeOff } from '../bodies';
 import { box, roomOf, worldOf, named } from '../things';
 import { handSpeeds } from '../hands';
 
@@ -149,7 +149,7 @@ describe('grab, from where it stands', () => {
         yield* wait(1);
         yield* grab(body, thing, { right: 'right' });
       }, [body], 2.5, (time) => {
-        if (time > 1 + 1e-9) off.push(h.pose.position(h.hands.right).distanceTo(worldOf(grip)));
+        if (time > 1 + 1e-9) off.push(palmAt(h, 'right').distanceTo(worldOf(grip)));
       });
       // (the first 0.3 s: never further off than it set off from)
       expect(Math.max(...off.slice(0, 18)) - off[0]).toBeLessThan(0.001);
@@ -181,7 +181,7 @@ describe('grab, from where it stands', () => {
     expect(body.bones.rightHand.getWorldQuaternion(new Quaternion()).angleTo(grip.getWorldQuaternion(new Quaternion()))).toBeLessThan(0.05);
   });
 
-  it('takes a grip on a turned thing, the wrist on it', () => {
+  it('takes a grip on a turned thing, the palm on it', () => {
     const body = person(), h = insides(body), room = roomOf(body);
     const thing = box(room, new Vector3(-0.15, 1.0, 0.4), { turn: 0.6 });
     let held = false;
@@ -190,7 +190,7 @@ describe('grab, from where it stands', () => {
     }, [body], 3, () => held);
     expect(held).toBe(true);
     const grip = named(thing, 'right');
-    expect(h.pose.position(h.hands.right).distanceTo(worldOf(grip))).toBeLessThan(0.03);
+    expect(palmAt(h, 'right').distanceTo(worldOf(grip))).toBeLessThan(0.03);
     expect(h.holding.right?.grip).toBe('right');
   });
 
@@ -263,7 +263,7 @@ describe('grab at once (speed: Infinity)', () => {
     // (the hands as still as standing holds them: no reach, no jump onto the grips)
     expect(fastest).toBeLessThan(0.05);
     expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.02 * scale);
-    expect(worldOf(body.bones.leftHand).distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
+    expect(palmAt(insides(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
     expect(body.log).toEqual([]);
   });
 

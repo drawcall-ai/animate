@@ -1,7 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { arriving, carry, grab, release, wait, type Body } from '../../src/index';
-import { insides, person, play } from '../bodies';
+import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
@@ -19,7 +19,7 @@ function shelf(room: Object3D, height = 0.26): Object3D {
   return top;
 }
 
-/** the largest distance from each holding wrist to its grip over a run, as `check` reads them each frame */
+/** the largest distance from each holding palm to its grip over a run, as `check` reads them each frame */
 function grips(body: Body, thing: Object3D) {
   const h = insides(body);
   let most = 0;
@@ -28,7 +28,7 @@ function grips(body: Body, thing: Object3D) {
       for (const side of ['left', 'right'] as const) {
         const hold = h.holding[side];
         if (hold?.thing.object !== thing) continue;
-        most = Math.max(most, h.pose.position(h.hands[side]).distanceTo(worldOf(named(thing, hold.grip))));
+        most = Math.max(most, palmAt(h, side).distanceTo(worldOf(named(thing, hold.grip))));
       }
     },
     get most() { return most; },
@@ -75,10 +75,10 @@ describe('carry', () => {
         end = insides(body).frame.time;
       }, [body], 8, (time) => {
         if (Number.isNaN(taken) && body.holds(load)) taken = time;
-        // (found by event: the load first up at its highest, then its lowest after)
+        // (found by event while the grab lifts it clear, its hand the grab's: the load first up at its highest, then its lowest after)
         const y = worldOf(load).y;
         if (y > top) top = y;
-        else dip = Math.max(dip, top - y);
+        else if (body.owners.hands.right?.verb === 'grab') dip = Math.max(dip, top - y);
         return !Number.isNaN(end);
       });
       expect(body.log).toEqual([]);
@@ -93,7 +93,7 @@ describe('carry', () => {
     expect(heavy.dip).toBeGreaterThan(light.dip + 0.004);
   });
 
-  it('follows a target that moves and turns, holding the box on it once there, its wrists on the grips', () => {
+  it('follows a target that moves and turns, holding the box on it once there, its palms on the grips', () => {
     const body = person({ dev: true }), room = roomOf(body);
     const load = box(room, new Vector3(0, 1.0, 0.45), { size: new Vector3(0.36, 0.2, 0.25), mass: 2, solid: false });
     const goal = empty(room, 'goal', new Vector3(0, 1.15, 0.45));
@@ -185,8 +185,10 @@ describe('carry', () => {
     expect(inside.off).toBeGreaterThan(0.1);
     expect(inside.held).toBe(true);
     expect(inside.log).toEqual([{ check: 'carry: held clear of its own body, off its end (m)', detail: expect.stringContaining('stands too near it') }]);
-    // (out ahead, past where the planted feet let the arms come: within the planning's reach, not quite the arms')
-    const far = outcome(new Vector3(0, 1.1, 0.7));
+    // (out ahead at the chin, past where the planted feet let the arms come: within the planning's reach, not quite the arms'. Held in
+    // the palms, the box's middle goes a palm further than the wrists: at the chest's height the arms now place it wherever the
+    // planning lets them try)
+    const far = outcome(new Vector3(0, 1.3, 0.76));
     expect(far.carried).toBe(false);
     expect(far.off).toBeGreaterThan(0.01);
     expect(far.log).toEqual([{ check: 'late carry: course end distance after 2 s (m)', detail: expect.stringContaining('beyond the arm’s reach') }]);

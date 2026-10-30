@@ -30,8 +30,8 @@ importers:
         specifier: ^0.5.0
         version: 0.5.0(three@0.180.0)(vite@7.3.6(@types/node@24.19.0))
       '@pmndrs/timeline':
-        specifier: ^0.4.0
-        version: 0.4.0(three@0.180.0)
+        specifier: ^0.5.0
+        version: 0.5.0(three@0.180.0)
       three:
         specifier: ^0.180.0
         version: 0.180.0
@@ -62,8 +62,8 @@ importers:
         version: 0.5.0(three@0.180.0)(vite@7.3.6(@types/node@24.19.0))
     devDependencies:
       '@pmndrs/timeline':
-        specifier: ^0.4.0
-        version: 0.4.0(three@0.180.0)
+        specifier: ^0.5.0
+        version: 0.5.0(three@0.180.0)
       '@types/three':
         specifier: ^0.180.0
         version: 0.180.0
@@ -89,8 +89,8 @@ importers:
         specifier: ^0.5.0
         version: 0.5.0(three@0.180.0)(vite@7.3.6(@types/node@24.19.0))
       '@pmndrs/timeline':
-        specifier: ^0.4.0
-        version: 0.4.0(three@0.180.0)
+        specifier: ^0.5.0
+        version: 0.5.0(three@0.180.0)
       three:
         specifier: ^0.180.0
         version: 0.180.0
@@ -380,8 +380,8 @@ packages:
   '@oxc-project/types@0.151.0':
     resolution: {integrity: sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA==}
 
-  '@pmndrs/timeline@0.4.0':
-    resolution: {integrity: sha512-31fPjqFVLMmSfRLRjJQav73tbhfo2C+1CZoBRFGx3eDRXyZGuh9WV4oyLFdLQiQK0OXJY24JHgDlSW8Xb+9N1g==}
+  '@pmndrs/timeline@0.5.0':
+    resolution: {integrity: sha512-Nq5yCghl4NXgskGu38Cza35eOruEkXKicuaAWK3wQwqaaTypPhma0XgvvqbuJP6A4HFch8O8VT0yG0Ki6dyIfw==}
     peerDependencies:
       three: '*'
 
@@ -1475,7 +1475,7 @@ snapshots:
 
   '@oxc-project/types@0.151.0': {}
 
-  '@pmndrs/timeline@0.4.0(three@0.180.0)':
+  '@pmndrs/timeline@0.5.0(three@0.180.0)':
     dependencies:
       three: 0.180.0
 

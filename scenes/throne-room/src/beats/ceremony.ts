@@ -46,13 +46,21 @@ function ahead(body: Body, distance: number, height: number): Vector3 {
 }
 
 /**
- * `bearer`, holding `medal` by its inner grips, holds it out toward `leia` from where he stands (0.4 m his way to her, at his chest's
- * height); she takes it by the ribbon's outer ends (her right on its left, facing him) and he lets go. Placed halfway between them, he
- * walked into her space and her hands could not get in.
+ * `bearer`, holding `medal` by its inner grips, holds it out to `leia` at his chest's height, its face turned to her and its ribbon's ends
+ * up either side: before him (0.32 m ahead, 0.15 m over toward her) when she stands beside him, else 0.4 m his way to her. She takes it
+ * by those ends (her right on its left), stepping up to it as she must, and he lets go. (Held out toward her beside him, it came in to her
+ * shoulder and she bent double to get her hands to it; nearer him, his own trunk holds it off its place and the carry never ends.)
  */
 export function* handOver(bearer: Body, leia: Body, medal: Object3D) {
-  const offer = new Vector3().subVectors(leia.position, bearer.position).setY(0).setLength(0.4).add(bearer.position).setY(bearer.position.y + 1.1);
-  yield* parallel('race', carry(bearer, medal, offer, { until: Infinity }), function* () {
+  const forward = new Vector3(Math.sin(bearer.facing), 0, Math.cos(bearer.facing));
+  const toward = new Vector3().subVectors(leia.position, bearer.position).setY(0);
+  const beside = Math.abs(toward.dot(forward)) < 0.5 * toward.length();
+  const offer = new Object3D();
+  if (beside) offer.position.copy(toward).addScaledVector(forward, -toward.dot(forward)).setLength(0.15).addScaledVector(forward, 0.32);
+  else offer.position.copy(toward).setLength(0.4);
+  offer.position.add(bearer.position).setY(bearer.position.y + 1.1);
+  offer.rotation.y = Math.atan2(leia.position.x - offer.position.x, leia.position.z - offer.position.z);
+  yield* parallel('race', carry(bearer, medal, offer, { until: Infinity, step: false }), function* () {
     // (her grab starts once the offer is at rest: begun while it moves, it goes for where it was)
     yield* wait(arriving(bearer, 0));
     if (!(yield* grab(leia, medal, { left: 'outer right', right: 'outer left' }))) throw new Error(`Leia could not take ${medal.name}`);

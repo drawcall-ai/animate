@@ -9,7 +9,7 @@ import { Thing } from '../../src/things/thing';
 import { pointSegmentDistance } from '../../src/kernel/math';
 import type { Person } from '../../src/body/person';
 import { handSpeeds } from '../hands';
-import { dt, feetOf, insides, person, play, run } from '../bodies';
+import { dt, feetOf, insides, palmAt, person, play, run } from '../bodies';
 import { box, empty, roomOf, worldOf } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
@@ -142,15 +142,16 @@ describe('a load kept clear of the head', () => {
 });
 
 describe('a grip taken', () => {
-  it.each([false, true])('is checked against the wrist as the hand takes it (10 cm off: %s)', (off) => {
+  it.each([false, true])('is checked against the palm as the hand takes it (10 cm off: %s)', (off) => {
     const body = person({ dev: true }), h = insides(body), room = roomOf(body);
     run(body, 0.5);
-    const rope = new Object3D();
+    const rope = new Object3D(), palm = palmAt(h, 'left');
     rope.name = 'loose rope';
-    rope.position.copy(h.pose.position(h.hands.left)).add(new Vector3(off ? 0.1 : 0, 0, 0));
+    rope.position.copy(palm).add(new Vector3(off ? 0.1 : 0, 0, 0));
     room.add(rope);
     empty(rope, 'end', new Vector3());
-    grasp(h, 'left', { thing: Thing.of(rope), grip: 'end', goal: { position: new Vector3() } });
+    // (the hand bone a palm back from the end, as a person's grip has it)
+    grasp(h, 'left', { thing: Thing.of(rope), grip: 'end', goal: { position: h.pose.position(h.hands.left).clone().sub(palm) } });
     body.update(dt);
     const problems = body.log.filter((entry) => entry.check === 'grip activation distance (m)');
     if (off) expect(problems).toEqual([expect.objectContaining({ value: expect.closeTo(0.1, 1), where: 'loose rope left end' })]);

@@ -26,8 +26,8 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   // Hands on what they hold and item clearance; neither has a built-in check. (Tracked targets are judged by their course in
   // `Targets`, not by one fixed margin per scene.)
   if (sc.id === 'stable-morning') options.clearance = 0;
-  if (sc.id === 'pickup-shelf') options.wrist = 0.04;
-  if (sc.id === 'knight-arming') { options.wrist = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
+  if (sc.id === 'pickup-shelf') options.palm = 0.04;
+  if (sc.id === 'knight-arming') { options.palm = 0.03; options.clearance = 0.015; options.strides ??= { straight: 3, curve: 0 }; }
   expect(sim.stage.done(), `${sc.id} finished`).toBe(true);
   const fails = checks(m, options).filter(failed).map((c) => `${c.what}${c.where ? ` (${c.where})` : ''}: ${c.value} (${c.bound} ${c.limit}) @${c.at ?? 0}s`);
   expect(fails, fails.join('\n')).toEqual([]);

@@ -30,7 +30,8 @@ const box = new Object3D();
 box.name = 'box';
 box.userData.mass = 2;
 box.position.set(0, 0.9, 0.45);
-// (the giver's grips at the box's sides, the receiver's beside them on its own end: facing the giver, its left is the giver's right)
+// (where each palm closes: the giver's at the box's sides, the receiver's beside them by its own end; facing the giver, its left is the
+// giver's right)
 for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.08], ['receiver right', 0.15, 0.08]] as const) {
   const grip = new Object3D();
   grip.name = name;
@@ -82,7 +83,7 @@ For a nod, a bow, an arched back, a head tilt or a gesture of the arms (raised, 
 
 ## Stories that compose
 
-Write each beat as a generator function (`function* (…): Verb`) that takes the bodies and props it acts on and returns whether it succeeded. Make the bodies, props and marks once, outside every beat: a beat that builds its own cast, or works out its marks from where the bodies stand when it is set up, cannot follow another beat that has moved them, so work out such marks inside the story, when the beat reaches them. `parallel` discards its branches' outcomes, so a branch whose outcome matters stores it in a variable for the beat to check. When other parts of the scene key off a moment (a camera cut when the medal is hung), signal it from the beat with a callback or flag after the verb that does it, rather than reading `body.owners`, which empties once a race ends.
+Write each beat as a generator function (`function* (…): Verb`) that takes the bodies and props it acts on and returns whether it succeeded. Make the bodies, props and marks once, outside every beat: a beat that builds its own cast, or works out its marks from where the bodies stand when it is set up, cannot follow another beat that has moved them, so work out such marks inside the story, when the beat reaches them. `yield* parallel('race', …)` returns what the branch that ended it returned, and `'all'` returns `false` if any branch returned `false`, so check a branch's outcome on the `parallel` itself rather than through a variable. When other parts of the scene key off a moment (a camera cut when the medal is hung), signal it from the beat with a callback or flag after the verb that does it, rather than reading `body.owners`, which empties once a race ends.
 
 ## Bodies
 
@@ -102,7 +103,7 @@ A thing held before the body is comfortable where a walking carry holds it, for 
 
 To move bodies together (a line abreast, an escort, a horse led), give each the same explicit `speed`: left to their defaults, bodies of different sizes walk and climb at different paces and string out, and people of different heights fall out of sync on their own, as they should. A shared speed keeps every difference in start time or place as a gap, so start bodies level and stagger only look-alikes. To keep a formation on a leader, walk each follower to a target in its own lane (an empty parented to the leader's `object`, or a function of time moving at the shared pace), ending when the leader arrives. A walk to a moving target catches up at its `speed` and then matches the target's velocity, so give that speed a little headroom over the shared pace and start each body near its lane; a lane target behind where its follower starts turns the follower round. To lead a horse, take the rope first; a tether limits its head's reach but does not make it follow, and the scene draws the visible rope.
 
-Give movable props their mass and named grips. A hand can take hold of a worn prop (a sword in its scabbard) before carrying draws it.
+Give movable props their mass and named grips. A person holds a grip in its palm: put the empty where the hand closes on the prop (on a handle or ribbon, a hand's half-thickness out from a box's side), never where the wrist would be, and the wrist stays a palm's length back from it along the hand. A hand can take hold of a worn prop (a sword in its scabbard) before carrying draws it. A position-only grip takes the hand as the arm brings it, and the grasp then holds the prop as taken: in one hand it turns with the hand, and a carry whose end the arm cannot hold it at so regrips it in the fingers on the way; set `userData.handTurn` where the hand must sit one way on it.
 
 ## Many bodies
 

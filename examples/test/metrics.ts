@@ -9,8 +9,8 @@ import { Targets } from './targets';
 
 export interface MetricsOptions {
   strides?: { straight: number; curve: number };
-  /** the most a hand is off the grip of what it holds (m) */
-  wrist?: number;
+  /** the most a palm is off the grip of what it holds (m) */
+  palm?: number;
   /** setting off and stopping, the most the trunk and the pelvis pitch, against walking's own peak pitch rate (×) */
   startStop: { trunk: number; pelvis: number } | null;
   clearance?: number;
@@ -104,8 +104,8 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   // stopping and standing, no wide catching steps: the feet land at most as far apart as the step's kind allows (`SLOW_WIDTH`, × height)
   add('slow step width (share of its bound)', m.landings.wide.value, 'max', 1, m.landings.wide.at);
   add('leg-crossing frames', m.crossings, 'max', 0);
-  // (what is held or tracked is judged: a head every frame it is asked, the wrists on most frames, out of reach only while walked to)
-  if (limit.wrist !== undefined) add('wrist off the grip it holds (m)', m.targets.wrist, 'max', limit.wrist, m.targets.wristAt);
+  // (what is held or tracked is judged: a head every frame it is asked, the palms on their grips most frames, out of reach only while walked to)
+  if (limit.palm !== undefined) add('palm off the grip it holds (m)', m.targets.palm, 'max', limit.palm, m.targets.palmAt);
   // (a tracked target is judged by its course — held, moving, within reach — not one fixed margin: `Targets.judge`)
   if (m.targets.tracked.judged || m.targets.tracked.head) add(`tracked target past its course's bound (m): ${m.targets.over.what}`, m.targets.over.value, 'max', 0, m.targets.over.at);
   add('tracked wrists: frames judged (share of those asked)', m.targets.tracked.asked ? m.targets.tracked.judged / m.targets.tracked.asked : 1, 'min', TRACKED);

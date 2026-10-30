@@ -34,10 +34,10 @@ function staged(skeleton?: PersonSkeleton) {
 
 /** what `actor`'s hands hold, by side: the thing and the grip's name */
 const held = (actor: Actor, side: 'left' | 'right') => actor.insides.holding[side];
-/** the worst distance (m) of either wrist from the grip it holds */
+/** the worst distance (m) of either palm from the grip it holds */
 const gripError = (actor: Actor) => Math.max(0, ...(['left', 'right'] as const).map((side) => {
   const hold = actor.holding[side];
-  return hold ? actor.joint(`${side}Hand`).distanceTo(hold.grip) : 0;
+  return hold ? actor.joint(`${side}Palm`).distanceTo(hold.grip) : 0;
 }));
 /** `node`'s point `local` (its frame) in the world */
 const pointOn = (node: Object3D, local: Vector3) => node.localToWorld(local.clone());
@@ -495,7 +495,7 @@ test('a hand that puts one thing down and takes another keeps to the grip it tak
     };
   }, undefined, (_, actor) => {
     const hold = actor.holding.left;
-    if (hold?.thing.name === 'rod') worst = Math.max(worst, actor.joint('leftHand').distanceTo(hold.grip));
+    if (hold?.thing.name === 'rod') worst = Math.max(worst, actor.joint('leftPalm').distanceTo(hold.grip));
   });
   expect(worst).toBeLessThanOrEqual(0.01);
   expect(logged(person.log)).toEqual([]);

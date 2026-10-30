@@ -1,4 +1,4 @@
-import { Euler, Group, Object3D, Vector3 } from 'three';
+import { Euler, Group, Matrix4, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { arriving, carry, grab, lookAt, release, wait, walkTo, type Target } from '@drawcall/animate';
 import type { Scenario } from '../../scenario';
@@ -76,7 +76,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       // it), the sword sheathed in its scabbard leaning on the table's edge, the helm on its stand (its face away from him), the shield
       // on its peg (its back to the room), the lance upright in its rack
       const gear = { buckle: beltEnd('buckle'), tongue: beltEnd('tongue'), scabbard: scabbard(), sword: sword(),
-        helm: helm(), shield: shield(), lance: lance(), left: gauntlet('left'), right: gauntlet('right') };
+        helm: helm(), shield: shield(), lance: lance(), left: gauntlet('left', scale), right: gauntlet('right', scale) };
       lay(scene, gear.buckle, new Vector3(0.25, top + 0.006, 0.66));
       lay(scene, gear.tongue, new Vector3(-0.2, top + 0.004, 0.66));
       lay(scene, gear.left, new Vector3(-0.45, top + 0.03, 0.68), -Math.PI / 2);
@@ -116,7 +116,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
         helmed: scaledPlace(knight.bones.head, 'helmed', 0, 0.15, 0.02),
         bowed: scaledPlace(bodyFrame, 'bowed', 0, HIPS + 0.15, 1.6),
         level: scaledPlace(bodyFrame, 'level', 0, 1.6, 3),
-        // each gauntlet held open before the belly (fingers ahead and across, palm down), and worn on its hand
+        // each gauntlet held open before the belly (fingers ahead and across, palm down), and worn on its hand (set as it is put on)
         open: { left: scaledPlace(bodyFrame, 'held open left', 0.07, 1.055, 0.36, new Euler(0, -1.92, 0)), right: scaledPlace(bodyFrame, 'held open right', -0.07, 1.055, 0.36, new Euler(0, 1.92, 0)) },
         gloved: { left: scaledPlace(knight.bones.leftHand, 'gloved', 0, 0, 0), right: scaledPlace(knight.bones.rightHand, 'gloved', 0, 0, 0) },
         // the shield borne on the left forearm across the belly, its face out to the front and left; the lance upright by the right side
@@ -183,7 +183,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
             yield* grab(knight, worn, { [other]: 'cuff' });
             yield* carry(knight, worn, places.open[hand]);
             yield* grab(knight, worn, { [hand]: 'inside' }, { speed: 0.3 });
-            release(knight, worn, places.gloved[hand]);
+            release(knight, worn, placedAt(places.gloved[hand], worn));
           }
 
           // the shield off its peg: steadied by its edge, the left fist through its strap to the handle, borne on the forearm
@@ -212,6 +212,16 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
       };
     },
   };
+}
+
+/** `place` moved to where `thing` is now, turned as it is (`place`'s parent's frame): a thing put onto it stays as the hand holds it */
+function placedAt(place: Object3D, thing: Object3D): Object3D {
+  const parent = place.parent;
+  if (!parent) throw new Error(`"${place.name}" is on nothing`);
+  parent.updateWorldMatrix(true, false);
+  thing.updateWorldMatrix(true, false);
+  new Matrix4().copy(parent.matrixWorld).invert().multiply(thing.matrixWorld).decompose(place.position, place.quaternion, place.scale);
+  return place;
 }
 
 /** `thing` laid under `parent` at `position`, turned `yaw` (rad) */

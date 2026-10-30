@@ -9,6 +9,8 @@ import type { Frame } from '../src/kernel/frame';
 import type { Go } from '../src/kernel/go';
 import type { Person } from '../src/body/person';
 import { personOf } from '../src/body/person';
+import { palmOf } from '../src/species/humanoid/landmarks';
+import type { Side } from '../src/species/humanoid/bones';
 import { PERSON } from '../skills/animate/references/person';
 
 /** the sub-step (s) */
@@ -25,6 +27,9 @@ export const feetOf = (h: Person) => (h.stepper?.legs ?? []).map((leg) => ({ pos
 
 /** `body`'s runtime, as a person */
 export const insides = (body: Body): Person => personOf(selfOf(body));
+
+/** where `side`'s palm is (world) as `h` is posed: where its hand holds a grip */
+export const palmAt = (h: Person, side: Side) => h.pose.point(h.hands[side], palmOf(h.proportions, side), new Vector3());
 
 /** `body` updated `seconds` in sub-steps, `each` after every one */
 export function run(body: Body, seconds: number, each?: (time: number) => void): void {

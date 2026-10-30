@@ -1,5 +1,5 @@
 import { Box3, Quaternion, Ray, Vector3 } from 'three';
-import { grasp, held as heldThings, lift, onBody } from '../../things/hold';
+import { grasp, held as heldThings, holdOn, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
@@ -14,7 +14,7 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { gripAt, reachFor, type Taking } from './reach';
+import { emptyAt, gripAt, reachFor, type Taking } from './reach';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 
@@ -33,7 +33,8 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
-    grips: takes.map((take) => ({ side: take.side, at: gripAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
+    // (stood to as if the wrist went on the empty: the hand still hangs, so the palm's way back from it is not yet the reach's)
+    grips: takes.map((take) => ({ side: take.side, at: emptyAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
     things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.track(thing.object).current })),
   }, step);
   if (plan === 'nowhere') {
@@ -117,9 +118,13 @@ export function* takingAtOnce(person: Reacher, request: Request, takes: readonly
   let placed = false;
   yield* parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked', (f) => {
     const frame = person.track(take.thing.object).at(f.time).current;
-    placeArm(person, f, take.side, { position: gripAt(person, take, f), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
-    person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
-    grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal });
+    // (posed again until the wrist stays put: on a grip that sets no turn the wrist is a palm back from it along the hand as last posed)
+    const wrist = new Vector3(Infinity, 0, 0);
+    for (let pass = 0; pass < 8 && wrist.distanceTo(gripAt(person, take, f)) > 1e-4; pass++) {
+      placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
+      person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
+    }
+    grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm));
     placed = true;
   }, () => placed)));
   for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !onBody(person, thing)) lift(person, thing);

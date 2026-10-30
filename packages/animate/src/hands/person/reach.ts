@@ -6,8 +6,8 @@ import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
-import { grasp, held, onBody, worn } from '../../things/hold';
-import type { Hold } from '../../things/resolve';
+import { grasp, held, holdOn, onBody, worn, type Palm } from '../../things/hold';
+import type { Thing } from '../../things/thing';
 import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
@@ -22,21 +22,32 @@ import { ARM } from './trunk';
 const STAGING = 0.4;
 
 /** A hand's hold to take: the hand, and the hold it takes. */
-export interface Taking extends Hold {
+export interface Taking {
   side: Side;
+  thing: Thing;
+  grip: string;
+  goal: Goal;
+  /** the person's palm that takes it */
+  palm: Palm;
 }
 
-/** where a grip is in the world this sub-step, as the person tracks its thing */
+/** where the hand bone goes on a grip in the world this sub-step (its goal: a palm back from the empty), as the person tracks its thing */
 export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
   const frame = person.track(take.thing.object).at(f.time).current;
   return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
+}
+
+/** where a grip's empty is in the world this sub-step (where the palm closes), as the person tracks its thing */
+export function emptyAt(person: Reacher, take: Pick<Taking, 'thing' | 'grip'>, f: Frame, out = new Vector3()): Vector3 {
+  const frame = person.track(take.thing.object).at(f.time).current;
+  return out.copy(take.thing.grip(take.grip).at.position).applyQuaternion(frame.quaternion).add(frame.position);
 }
 
 /** Hands close together after reaching every grip; route staging is separate from final closure. */
 export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: Pace) {
   const began = person.frame.time;
   const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
-  const close = () => takes.forEach((take) => grasp(person, take.side, { thing: take.thing, grip: take.grip, goal: take.goal }));
+  const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm)));
   if (there(person.frame)) return close();
   let late = false, ends = Infinity;
   const progress = takes.map(() => new Progress());
@@ -153,10 +164,13 @@ function outside(bounds: Box3, grip: Goal, from: Vector3, hand: Hand): Vector3[]
   const size = bounds.getSize(new Vector3());
   if (size.x * size.y * size.z === 0) return [];
   const at = grip.position;
-  let axis = 0, end = 0, gap = Infinity;
+  let axis = 0, end = 0, gap = Infinity, seen = false;
   for (let i = 0; i < 3; i++) for (const side of [0, 1]) {
-    const distance = Math.abs(at.getComponent(i) - (side ? bounds.max : bounds.min).getComponent(i));
-    if (distance < gap) [gap, axis, end] = [distance, i, side];
+    const face = (side ? bounds.max : bounds.min).getComponent(i), distance = Math.abs(at.getComponent(i) - face);
+    // (a grip on a face the hand is outside of already — a ribbon's end on the front of a thin medal — is taken from that side, not
+    // round the thing to whichever face is nearest it)
+    const facing = distance <= hand.radius + hand.reserve && (side ? 1 : -1) * (from.getComponent(i) - face) > 0;
+    if ((facing && !seen) || (facing === seen && distance < gap)) [gap, axis, end, seen] = [distance, i, side, facing];
   }
   const sign = end ? 1 : -1;
   const face = (end ? bounds.max : bounds.min).getComponent(axis);

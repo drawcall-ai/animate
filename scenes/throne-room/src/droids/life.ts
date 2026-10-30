@@ -32,8 +32,7 @@ function* rocking(artoo: Body, aim: Rocking): Verb {
 
 /** R2 watches `focus`: its dome turns to follow it, rocking gently */
 export function* artooWatch(artoo: Body, focus: Focus, until: Until): Verb {
-  yield* parallel('race', wait(until), lookAt(artoo, focus));
-  return true;
+  return yield* parallel('race', wait(until), lookAt(artoo, focus));
 }
 
 /**
@@ -87,8 +86,7 @@ function towards(threepio: Body, focus: Focus, most: number): number {
 /** C-3PO watches `focus`: his head turns to it, stiff and upright, his chest turning with it, fussing with his hands */
 export function* threepioWatch(threepio: Body, focus: Focus, until: Until, seed?: number): Verb {
   const turn = 0.4 * towards(threepio, focus, 0.6);
-  yield* parallel('race', wait(until), lookAt(threepio, focus), pose(threepio, upright(turn)), threepioFuss(threepio, seed));
-  return true;
+  return yield* parallel('race', wait(until), lookAt(threepio, focus), pose(threepio, upright(turn)), threepioFuss(threepio, seed));
 }
 
 /**

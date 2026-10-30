@@ -31,12 +31,40 @@ export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
 }
 
-/** where a hand bone goes on `grip` (the thing's frame): on the empty turned as it is, its `rest` undone; or rolling about its free line; or turned as the hand comes */
-export function goalOn(grip: Grip, rest: Readonly<Quaternion>): Goal {
-  const position = grip.at.position.clone();
-  if (grip.turn === null) return { position };
-  const quaternion = grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
-  return grip.turn === true ? { position, quaternion } : { position, quaternion, axis: grip.turn.clone().applyQuaternion(grip.at.quaternion) };
+/** A person's palm, as a grip takes it: its centre in the hand bone's frame, and the hand bone's turn in the thing's frame as the body was
+ * last posed. */
+export interface Palm {
+  at: Readonly<Vector3>;
+  turn: () => Quaternion;
+}
+
+/**
+ * Where a hand bone goes on `grip` (the thing's frame): turned as the empty is, its `rest` undone; or rolling about its free line; or turned
+ * as the hand comes. A person's hand holds a grip in its `palm`: the bone, at the wrist, goes as far back from the empty as the palm's
+ * centre is from the wrist, along the hand as it was last turned — read afresh, so the goal moves on the thing as the hand turns or rolls,
+ * and a hand short of its asked turn (its wrist at the end of its range, or still turning) still has its palm on the empty, not the
+ * wrist on the place the turn would have put it (a pistol grip turned 0.4 rad past the wrist's range: the palm 3 cm off it). A
+ * creature's tip, with no palm, goes on the empty.
+ */
+export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goal {
+  const quaternion = grip.turn === null ? undefined : grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
+  const axis = grip.turn instanceof Vector3 ? grip.turn.clone().applyQuaternion(grip.at.quaternion) : undefined;
+  const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }) };
+  if (!palm) return { position: grip.at.position.clone(), ...turns };
+  // (the wrist, the palm on the empty, the hand turned `turn` in the thing's frame)
+  const empty = grip.at.position, wrist = new Vector3();
+  return { get position() { return wrist.copy(palm.at).applyQuaternion(palm.turn()).negate().add(empty); }, ...turns };
+}
+
+/** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
+export function holdOn(thing: Thing, grip: string, goal: Goal, palm?: Palm): Hold {
+  if (!palm) return { thing, grip, goal };
+  return { thing, grip, goal, palm: palm.at, ...(!goal.quaternion && { turn: palm.turn }) };
+}
+
+/** where a hand holding `hold` goes on its thing: its goal, turned as the hand holds it (`Hold.turn`) when the grip sets no turn */
+export function steadied(hold: Hold): Goal {
+  return hold.turn && !hold.goal.quaternion ? { position: hold.goal.position, quaternion: hold.turn().clone() } : hold.goal;
 }
 
 /** hand `hand` of `self` holding `hold` (null: letting go), the thing's holders kept */
@@ -131,70 +159,32 @@ export function take(self: Holder, thing: Thing): void {
 /**
  * Where `self` moves what it holds, after its hands: a thing in both hands a carry aims this sub-step fitted to the wrists holding it
  * (their middle, turned so the line between its grips lies along the line between them), as the aim turns it; one nothing aims going
- * along with the root bone; each written into its object relative to the bone it hangs from. A thing in one hand by a free grip turns
- * as a carry aims it, and else keeps its turn in the world, turning only with the body's facing: a grip that sets no turn leaves it free
- * of the hand's (the arm's solve leaves a free wrist's twist to itself, and a long thing on it would swing with it).
+ * along with the root bone; each written into its object relative to the bone it hangs from. A thing in one hand hangs from that hand's
+ * bone as the hand took it: it goes and turns with the hand (a grasp fixes the hand on the thing), and a carry turns it by turning the hand.
  */
-export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier>, kept: WeakMap<Thing, Kept>): void {
-  for (const [object, aim] of aims) pivot(self, f, Thing.of(object), aim.current.quaternion);
-  for (const hand in self.holding) {
-    const thing = self.holding[hand]?.thing;
-    if (thing && !aims.has(thing.object)) pivot(self, f, thing, keptTurn(self, f, thing, kept));
-  }
+export function move(self: Holder, f: Frame, aims: ReadonlyMap<Object3D, Carrier>): void {
   for (const [object, carrier] of self.carried) {
-    const thing = Thing.of(object), aim = aims.get(object), hands = handsOn(self, thing);
+    const aim = aims.get(object), hands = handsOn(self, Thing.of(object));
     if (aim && hands.length === 2) fit(self, f, aim, hands, carrier);
     else if (!carrier.moved(f.time)) along(f, carrier);
     if (object.parent) placeUnder(self, object, object.parent, carrier.current.position, carrier.current.quaternion);
   }
 }
 
-/** whether `thing` hangs from the one hand that holds it by a free grip (one that sets no turn): its hand, if so */
-function freeHand(self: Holder, thing: Thing): string | null {
-  const [hand, ...others] = handsOn(self, thing), hold = hand === undefined ? null : self.holding[hand];
-  return hold && !others.length && hold.goal.quaternion === undefined && inHand(self, thing) && thing.object.parent ? hand : null;
-}
-
-/** a thing hanging from the one hand that holds it by a free grip, turned `quaternion` (world) about that grip, which stays on the wrist */
-function pivot(self: Holder, f: Frame, thing: Thing, quaternion: Readonly<Quaternion> | null): void {
-  const hand = quaternion && freeHand(self, thing), hold = hand && self.holding[hand], parent = thing.object.parent;
-  if (!quaternion || !hand || !hold || !parent) return;
-  const grip = _g1.copy(hold.goal.position).applyQuaternion(quaternion);
-  placeUnder(self, thing.object, parent, _at.copy(f.current.position(self.hands[hand])).sub(grip), quaternion);
-}
-
-/** A free-gripped thing's kept turn (world) and the sub-step it was last kept at. */
-export interface Kept {
-  quaternion: Quaternion;
-  time: number;
-}
-
-/** the turn a free-gripped thing in one hand keeps this sub-step: the one it had, turned with the body's facing since — taken afresh where it
- * is when it was not kept the sub-step before (a carry aimed it, or the hand took it just now); null for any other thing */
-function keptTurn(self: Holder, f: Frame, thing: Thing, kept: WeakMap<Thing, Kept>): Quaternion | null {
-  if (!freeHand(self, thing)) return null;
-  let turn = kept.get(thing);
-  if (!turn) kept.set(thing, (turn = { quaternion: new Quaternion(), time: -Infinity }));
-  if (f.time - turn.time > 1.5 * f.dt) turn.quaternion.copy(resolve(self, thing.object, _placed).quaternion);
-  else turn.quaternion.premultiply(_turn.setFromAxisAngle(UP, f.current.facing - f.prev.facing));
-  turn.time = f.time;
-  return turn.quaternion;
-}
-
 /**
- * `object`, if `self` carries it and nothing aims it, moved on with the root bone this sub-step already (the root has moved by the time
- * the hands keep to it): they go where it is, not where its last motion would have carried it on — a turn braking, which it overshot by
- * the hands' whole reach of it
+ * `object`, if `self` carries it and nothing aims it, moved on with bone `bone` (the root, unless told) this sub-step already (it has
+ * moved by the time the hands keep to it): they go where it is, not where its last motion would have carried it on — a turn braking,
+ * which it overshot by the hands' whole reach of it
  */
-export function carryAlong(self: Holder, f: Frame, object: Object3D): void {
+export function carryAlong(self: Holder, f: Frame, object: Object3D, bone = 0): void {
   const carrier = self.carried.get(object);
-  if (carrier && !carrier.moved(f.time)) along(f, carrier);
+  if (carrier && !carrier.moved(f.time)) along(f, carrier, bone);
 }
 
-/** a carried thing nothing aims, moved with the root bone as it moved this sub-step */
-function along(f: Frame, carrier: Carrier): void {
-  const turn = _turn.copy(f.current.rotation(0)).multiply(_back.copy(f.prev.rotation(0)).invert());
-  const at = _at.copy(carrier.current.position).sub(f.prev.position(0)).applyQuaternion(turn).add(f.current.position(0));
+/** a carried thing nothing aims, moved with bone `bone` (the root's, unless the holder carries it by another) as it moved this sub-step */
+function along(f: Frame, carrier: Carrier, bone = 0): void {
+  const turn = _turn.copy(f.current.rotation(bone)).multiply(_back.copy(f.prev.rotation(bone)).invert());
+  const at = _at.copy(carrier.current.position).sub(f.prev.position(bone)).applyQuaternion(turn).add(f.current.position(bone));
   carrier.move(f.time, at, turn.multiply(carrier.current.quaternion));
 }
 
@@ -309,7 +299,8 @@ export function wornOf(self: Holder): Thing[] {
 }
 
 const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const ZERO = new Vector3(), UP = new Vector3(0, 1, 0), _scale = new Vector3();
+const ZERO = new Vector3(), _scale = new Vector3();
 const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
 const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();
+
