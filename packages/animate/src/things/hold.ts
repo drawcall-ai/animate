@@ -213,32 +213,19 @@ function keptTurn(self: Holder, f: Frame, thing: Thing, kept: WeakMap<Thing, Kep
 }
 
 /**
- * `object`, if `self` carries it and nothing aims it, moved on with the root bone this sub-step already (the root has moved by the time
- * the hands keep to it): they go where it is, not where its last motion would have carried it on — a turn braking, which it overshot by
- * the hands' whole reach of it
+ * `object`, if `self` carries it and nothing aims it, moved on with bone `bone` (the root, unless told) this sub-step already (it has
+ * moved by the time the hands keep to it): they go where it is, not where its last motion would have carried it on — a turn braking,
+ * which it overshot by the hands' whole reach of it
  */
-export function carryAlong(self: Holder, f: Frame, object: Object3D): void {
+export function carryAlong(self: Holder, f: Frame, object: Object3D, bone = 0): void {
   const carrier = self.carried.get(object);
-  if (!carrier || carrier.moved(f.time)) return;
-  along(f, carrier);
-  // (in both of a person's hands, it stays between its palms as they were: moved with the root alone, it stayed where the hips had it
-  // as the trunk straightened from taking it, and the palms came off its grips)
-  const hands = handsOn(self, Thing.of(object));
-  if (hands.length === 2) {
-    const shift = _at.set(0, 0, 0);
-    for (const hand of hands) {
-      const hold = self.holding[hand];
-      if (!hold?.palm) return;
-      shift.add(f.prev.point(self.hands[hand], _g1.copy(hold.palm), _g1)).sub(_g2.copy(hold.thing.grip(hold.grip).at.position).applyQuaternion(carrier.current.quaternion).add(carrier.current.position));
-    }
-    carrier.current.position.addScaledVector(shift, 0.5);
-  }
+  if (carrier && !carrier.moved(f.time)) along(f, carrier, bone);
 }
 
-/** a carried thing nothing aims, moved with the root bone as it moved this sub-step */
-function along(f: Frame, carrier: Carrier): void {
-  const turn = _turn.copy(f.current.rotation(0)).multiply(_back.copy(f.prev.rotation(0)).invert());
-  const at = _at.copy(carrier.current.position).sub(f.prev.position(0)).applyQuaternion(turn).add(f.current.position(0));
+/** a carried thing nothing aims, moved with bone `bone` (the root's, unless the holder carries it by another) as it moved this sub-step */
+function along(f: Frame, carrier: Carrier, bone = 0): void {
+  const turn = _turn.copy(f.current.rotation(bone)).multiply(_back.copy(f.prev.rotation(bone)).invert());
+  const at = _at.copy(carrier.current.position).sub(f.prev.position(bone)).applyQuaternion(turn).add(f.current.position(bone));
   carrier.move(f.time, at, turn.multiply(carrier.current.quaternion));
 }
 

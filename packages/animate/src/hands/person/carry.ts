@@ -263,7 +263,7 @@ function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim,
     const grip = _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(free ? carrier.current.position : aim.goal.position);
     bringShoulder(person, f, side, grip, 1, 0, carried);
     person.carrying.set(thing.object, carrier);
-    if (free) handStep(person, f, side, { position: hold.goal.position }, { ...HOLD, on: carrier, lead: true }, tip);
+    if (free) handStep(person, f, side, { position: hold.goal.position, ...(hold.turn && { quaternion: hold.turn().clone() }) }, { ...HOLD, on: carrier, lead: true }, tip);
     else handStep(person, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
   };
   return parallel<Frame>('race', ...hands.map((hand) => {

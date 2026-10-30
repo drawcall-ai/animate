@@ -81,7 +81,9 @@ export class Person extends Self {
         // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
         // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
         if (inHand(this, thing)) return handStep(this, f, side, held[side](f), { ...HOLD, lead: false }, arms[side]);
-        if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object);
+        // (what both hands hold before the body goes with the chest they hang from: with the hips, a saddle taken bowed stayed where they
+        // had it as the trunk straightened, and the palms came 5 cm off its grips)
+        if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);
         handStep(this, f, side, steadied(hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
