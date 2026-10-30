@@ -54,7 +54,8 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
     const hold = person.holding[side];
     if (!hold) throw new Error(`carry: the ${side} hand let go`);
     hold.keep = undefined;
-    return { side, at: hold.goal.position };
+    // (stood to as by its grip empties, as a grab is: a palm's way back from each turns with the hand on the way there)
+    return { side, at: thing.grip(hold.grip).at.position };
   });
   const plan = way.own ? 'there' : footing(person, { place: end, held }, options.step ?? true);
   if (plan === 'nowhere') {
