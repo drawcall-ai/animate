@@ -8,7 +8,7 @@ import { cases } from '../../packages/animate/test/open';
 
 const test = cases([
   'shooter on the soldier: final-pose dev checks', // Grip/leg-rate violations.
-  'pickup-shelf on the soldier: final-pose dev checks', // Unreachable placement.
+  ['pickup-shelf on the soldier: final-pose dev checks', [2]], // Unreachable placement (at life seed 2; held in the palms it places the box at the others).
   'vr: final-pose dev checks', // Hands ~14 cm short of the floor controllers in the crouch (tracked hand short of a target out of reach).
   'vr on the soldier: final-pose dev checks', // The same; at life seed 1 also a tracking joint-rate violation.
   'reach on the soldier: final-pose dev checks', // Reach diagnostics.
