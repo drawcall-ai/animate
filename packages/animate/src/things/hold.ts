@@ -219,7 +219,20 @@ function keptTurn(self: Holder, f: Frame, thing: Thing, kept: WeakMap<Thing, Kep
  */
 export function carryAlong(self: Holder, f: Frame, object: Object3D): void {
   const carrier = self.carried.get(object);
-  if (carrier && !carrier.moved(f.time)) along(f, carrier);
+  if (!carrier || carrier.moved(f.time)) return;
+  along(f, carrier);
+  // (in both of a person's hands, it stays between its palms as they were: moved with the root alone, it stayed where the hips had it
+  // as the trunk straightened from taking it, and the palms came off its grips)
+  const hands = handsOn(self, Thing.of(object));
+  if (hands.length === 2) {
+    const shift = _at.set(0, 0, 0);
+    for (const hand of hands) {
+      const hold = self.holding[hand];
+      if (!hold?.palm) return;
+      shift.add(f.prev.point(self.hands[hand], _g1.copy(hold.palm), _g1)).sub(_g2.copy(hold.thing.grip(hold.grip).at.position).applyQuaternion(carrier.current.quaternion).add(carrier.current.position));
+    }
+    carrier.current.position.addScaledVector(shift, 0.5);
+  }
 }
 
 /** a carried thing nothing aims, moved with the root bone as it moved this sub-step */
