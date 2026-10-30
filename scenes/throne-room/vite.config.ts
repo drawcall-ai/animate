@@ -10,5 +10,6 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@drawcall/rig'] },
   server: { port: 5290, strictPort: true, headers },
   preview: { port: 5290, strictPort: true, headers },
-  test: { testTimeout: 120_000 },
+  // (the film, 150 s of the scene stepped headless, takes ~50 s on an M-series laptop and 129 s on the CI runner, measured)
+  test: { testTimeout: 300_000 },
 });
