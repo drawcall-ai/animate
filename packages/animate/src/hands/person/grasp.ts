@@ -28,7 +28,8 @@ import type { Reacher } from './reacher';
  * if none is, onto the least strained, but only where the arm cannot hold the one it has at all (in the trunk: a belt's buckle taken
  * palm down off a table, held to the belly, its wrist a palm behind it; or far short of its turn). The hand turns the thing in its
  * fingers about the palm onto it (`REGRIP` s; an in-hand rotation, Exner 1992, recalled), and the thing still ends turned as the carry
- * asks. A thing not at rest half a second after its course is over is weighed again, from the body as it then stands. A grip that sets
+ * asks. A thing not at rest half a second after its course is over is weighed again, from the body as it then stands, and held turned
+ * off its end (`TURNED_OFF`) its grasp counts as one the arm does not hold there. A grip that sets
  * the hand's turn is never regripped: the author fixed the hand on it.
  */
 
@@ -38,6 +39,9 @@ const REGRIP = 0.6;
  * its side, at 0.37 lifted 20 cm, regripped; one carried beside another, at 0.33, kept: the joints near the ends of their ranges brake
  * into an unsteady hold) */
 const STRAINED = 0.35;
+
+/** how far (rad) a thing a carry has not brought to rest may be held turned off its end and its grasp still count as held there */
+const TURNED_OFF = 0.05;
 
 /** the hand bone's node in the thing's frame: how the hand holds it */
 type InHand = Placement;
@@ -98,7 +102,7 @@ function regripped(person: Reacher, side: Side, thing: Thing, regrip: Regrip, ti
  * turn), onto the least strained of them; else still the one it has, the arm working for it (a lance borne upright beside the hip).
  * Whether it kept the grasp as comfortable enough there: weighed again as the end or the body moves on, it may yet be regripped.
  */
-export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>): boolean {
+export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>, settling = false): boolean {
   if (hold.goal.quaternion || !inHand(person, thing)) return false;
   const f = person.frame, bone = person.hands[side], restOf = person.restOf(bone);
   const prior = regrips.get(hold);
@@ -113,7 +117,10 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   const brought = broughtTurn(person, f.prev, side, at, posed, _brought);
   trial.copy(posed);
   const strain = (hand: Readonly<Quaternion>) => strainAt(person, posed, trial, side, at, hand);
-  const kept = strain(_kept.copy(end.quaternion).multiply(turn));
+  // (settling, the thing held turned off its end: the arm as it stands does not hold this grasp there, whatever an arm brought there
+  // afresh would — a bucket by its handle held 0.15 rad off, 8 cm off its place, for as long as the carry waited)
+  const off = settling && resolve(person, thing.object, _placed).quaternion.angleTo(end.quaternion) > TURNED_OFF;
+  const kept = Math.max(strain(_kept.copy(end.quaternion).multiply(turn)), off ? UNHELD : 0);
   if (kept <= STRAINED) return true;
   // (the hand as the arm brings it there, turned about the palm round the vertical, the body's left and its own length, the least first)
   const left = _left.set(1, 0, 0).applyQuaternion(_facing.setFromAxisAngle(UP, person.locomotion.facing));

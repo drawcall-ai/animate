@@ -23,7 +23,7 @@ import { BODY_RADIUS, clearBody, LOAD_RESERVE } from './clearance';
 import { following, LEADING, limitOf } from './reach';
 import { footing, walking, type WalkUp } from './stand';
 import { grasped, planGrasp } from './grasp';
-import { resolve } from '../../things/resolve';
+import { resolve, type Hold } from '../../things/resolve';
 
 /** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
 const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
@@ -81,29 +81,31 @@ const SETTLING = 0.5;
 
 /**
  * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
- * the thing is now): as it nears its end (`nearing`) — weighed each sub-step, the end and the body as they then stand, for as long as
- * the grasp it has is kept as comfortable there: an end that moves on the body (a rifle's well, the rifle held up to the eye, as the
- * head turns from the pouch to it) is weighed where it has gone, not only where it was half a second before — and once more, from the
- * body as it then stands, if it has not come to rest there `SETTLING` s after its course is over (`settling`).
+ * the thing is now): as it nears its end (`nearing`) — weighed each sub-step until its course is over, the end and the body as they
+ * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a rifle's well, the rifle
+ * held up to the eye, as the head turns from the pouch to it) is weighed where it has gone, not only where it was half a second before
+ * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s after its course is over
+ * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
  */
 interface Grasping {
-  nearing: (f: Frame) => void;
+  /** weighed as the course nears its end, the last time as it is `over` */
+  nearing: (f: Frame, over: boolean) => void;
   settling: (f: Frame) => void;
 }
 
 function grasping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Grasping {
   const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
-  const plan = (f: Frame) => {
+  const plan = (f: Frame, settling = false) => {
     if (!hold) return false;
     const at = end(f);
-    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion });
+    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion }, settling);
   };
   let kept = true;
   return {
-    nearing: (f) => {
-      if (kept) kept = plan(f);
+    nearing: (f, over) => {
+      if (kept) kept = plan(f) && !over;
     },
-    settling: once(plan),
+    settling: once((f) => plan(f, true)),
   };
 }
 
@@ -244,7 +246,7 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
   const seconds = 2.4 * load;
   const to = (f: Frame) => {
     if (Number.isNaN(began)) began = f.time;
-    if (grasp && left(f) <= PLANNED) grasp.nearing(f);
+    if (grasp && left(f) <= PLANNED) grasp.nearing(f, left(f) === 0);
     const goal = path.to(f);
     const u = Number.isNaN(since) || seconds === 0 ? 0 : Math.min(1, (f.time - since) / seconds);
     if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
@@ -299,10 +301,19 @@ const inTheWay = (aim: CarryAim) => `its own trunk and head hold it ${cm(aim.off
 
 const cm = (m: number) => (100 * m).toFixed(1);
 
+/** each hold's arm as a carry moves it: one through all the carry's stages and its keeping after (a new one at each stage, its brakes
+ * and its fit taken afresh, threw the arm off the way it went — a belt's tongue held at its end drifted 7 mm off it as the carry ended) */
+const tips = new WeakMap<Hold, ChainTip>();
+function tipOf(hold: Hold, hand: string): ChainTip {
+  let tip = tips.get(hold);
+  if (!tip) tips.set(hold, (tip = new ChainTip(`${hand}Arm`)));
+  return tip;
+}
+
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
 function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
-    ? [{ side: sideOf(hand), hold, tip: new ChainTip(`${hand}Arm`) }] : []);
+    ? [{ side: sideOf(hand), hold, tip: tipOf(hold, hand) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
   const single = hands.length === 1 ? grasped(person, hands[0].side, thing) : null;
   const step = ({ side, tip }: (typeof hands)[number]) => (f: Frame) => {
