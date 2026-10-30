@@ -40,8 +40,10 @@ export class ChainTip {
    * carrier to be then */
   private readonly moved = { before: new Vector3(), last: new Vector3(), turnedBefore: new Quaternion(), turned: new Quaternion(), placed: new Vector3(),
     placedTurn: new Quaternion(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
-  /** whether its last solve, a fit kept (`keep`), left the tip short of the turn it asked (`moved.turned`): held there by the limits */
-  private short = false;
+  /** the chain's joints as its last solve left them, before the brakes */
+  private solved: Quaternion[] = [];
+  /** whether its last solve kept its fit (`keep`) and turned the tip (`moved.turned`) */
+  private kept = false;
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
   private on?: Carrier;
@@ -74,13 +76,14 @@ export class ChainTip {
     if (target.quaternion) {
       if (turnAccel === undefined) throw new Error(`chain "${chain}": a target rotation needs a turnAccel`);
       const goal = target.axis ? rolled(target.quaternion, target.axis, near(f.prev.rotation(tip), placed)) : target.quaternion;
-      // (a fit kept (`keep`) whose limits held the tip short of the turn it asked turns on along that turn, while the tip is turned as
-      // it was left: read back from the tip as the limits left it, it was asked only a sub-step's turn on from there each time, never
-      // enough for the fit to give way (`HELD`, chain.ts) to one that turns it there — a bucket by its handle set down stuck 2.3 rad
-      // short, turned half round. Else it turns on from the tip as its joints left it: an intended turn run on ahead of a reach the
-      // brakes hold back had the arm solved into the trunk. 1 − |dot|, not `angleTo`, for "as it was left": acos loses the precision
-      // near zero, ~1e-8 rad for an unchanged turn)
-      const resumed = own && this.short && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
+      // (a fit kept (`keep`) turns on along its intended turn, as the tip's position path does, while the tip is turned as it was left:
+      // read back from the tip as the limits and brakes left it, a hand held short of its turn was asked only a sub-step's turn on from
+      // there each time, never enough for the fit to give way (`HELD`, chain.ts) to one that turns it there — a bucket by its handle set
+      // down stuck 2.3 rad short, turned half round — and one braked behind its turn was asked on at the pace the brakes left it: the
+      // ask overshot, the brakes lagged it again, and a knot in the hand swung 3 cm about its end for a second. A fit chosen afresh (a
+      // reach) turns on from the tip as its joints left it: an intended turn run on ahead of a reach the brakes hold back had the arm
+      // solved into the trunk. 1 − |dot|, not `angleTo`, for "as it was left": acos loses the precision near zero, ~1e-8 rad.)
+      const resumed = own && this.kept && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
       const before = resumed ? moved.turnedBefore : f.prev2.rotation(tip), last = resumed ? moved.turned : f.prev.rotation(tip);
       quaternion = followRotation(before, last, goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
       moved.turnedBefore.copy(last);
@@ -101,8 +104,13 @@ export class ChainTip {
     const most = (this.most = options.letOut ? Math.max(REACH * length, Math.min(length, was, own ? this.most : Infinity)) : REACH * length);
     const out = position.distanceTo(base);
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
+    // (a fit kept is the last solve's, as production IK seeds a pole-vector solve from the last frame: seeded from the arm as its brakes
+    // left it, between the fit asked and the one before, the solve could settle into another — a belt's tongue held at its end swung 4 cm
+    // off it as the other hand's carry ended)
+    if (own && options.keep && this.solved.length === bones.length) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep });
-    this.short = options.keep === true && quaternion !== undefined && f.current.rotation(tip).angleTo(quaternion) > SHORT;
+    this.solved = bones.map((b, k) => (this.solved[k] ?? new Quaternion()).copy(f.current.local(b)));
+    this.kept = options.keep === true && quaternion !== undefined;
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       const nudged = continued ? this.nudged : null;
@@ -250,8 +258,6 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
   return _roll.setFromAxisAngle(a, angle).multiply(q);
 }
 
-/** how far (rad) a solve may leave its tip off the turn it asked and still have met it (the twist search settles far finer) */
-const SHORT = 1e-3;
 /** the share of a chain's length its tip is moved out to at most */
 const REACH = 0.98;
 const ZERO = new Vector3();
