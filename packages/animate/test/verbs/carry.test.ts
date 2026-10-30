@@ -68,18 +68,17 @@ describe('carry', () => {
     const lift = (mass: number) => {
       const body = person({ dev: true }), room = roomOf(body);
       const load = box(room, new Vector3(-0.15, 1, 0.35), { mass, solid: false });
-      let taken = NaN, end = NaN, top = -Infinity, dip = 0, lifted = false;
+      let taken = NaN, end = NaN, top = -Infinity, dip = 0;
       play(function* () {
         yield* grab(body, load, { right: 'right' });
-        lifted = true;
         yield* carry(body, load, new Vector3(-0.15, 1.25, 0.35));
         end = insides(body).frame.time;
       }, [body], 8, (time) => {
         if (Number.isNaN(taken) && body.holds(load)) taken = time;
-        // (found by event, as the grab lifts it clear: the load first up at its highest, then its lowest after)
+        // (found by event while the grab lifts it clear, its hand the grab's: the load first up at its highest, then its lowest after)
         const y = worldOf(load).y;
         if (y > top) top = y;
-        else if (!lifted) dip = Math.max(dip, top - y);
+        else if (body.owners.hands.right?.verb === 'grab') dip = Math.max(dip, top - y);
         return !Number.isNaN(end);
       });
       expect(body.log).toEqual([]);

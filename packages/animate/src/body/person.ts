@@ -10,7 +10,7 @@ import type { Carrier } from '../kernel/carrier';
 import { solveChain } from '../kernel/chain';
 import { REACHED, type Goal } from '../kernel/goal';
 import { ChainTip } from '../kernel/tip';
-import { forwardOf, yawOf } from '../kernel/math';
+import { forwardOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
@@ -96,23 +96,19 @@ export class Person extends Self {
   }
 }
 
-/**
- * An idle holding hand keeps its last pose relative to the root's place and heading while the body walks and turns — not to the pelvis's
- * tilt: between two verbs, the reach's bow let go of for a sub-step tilted a hand held before the body 3–9 mm down with it.
- */
+/** An idle holding hand keeps its last root-relative pose while the body walks and turns. */
 function keptOnBody(person: Person, side: Side): (f: Frame) => Goal {
   const bone = person.hands[side], kept = { position: new Vector3(), quaternion: new Quaternion() };
-  const heading = (pose: ReadonlyPose) => _heading.setFromAxisAngle(_up, yawOf(pose.rotation(0)));
   let time = -Infinity;
   return (f) => {
     // (let be since the last sub-step it was kept: from where it is now)
     if (f.time - time > 1.5 * f.dt) {
-      const back = _q.copy(heading(f.prev)).invert();
+      const back = _q.copy(f.prev.rotation(0)).invert();
       kept.position.copy(f.prev.position(bone)).sub(f.prev.position(0)).applyQuaternion(back);
       kept.quaternion.copy(back).multiply(f.prev.rotation(bone));
     }
     time = f.time;
-    const turn = heading(f.current);
+    const turn = f.current.rotation(0);
     return { position: kept.position.clone().applyQuaternion(turn).add(f.current.position(0)), quaternion: turn.clone().multiply(kept.quaternion) };
   };
 }
@@ -186,4 +182,4 @@ function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3
   return pose;
 }
 
-const _palm = new Vector3(), _q = new Quaternion(), _heading = new Quaternion(), _up = new Vector3(0, 1, 0), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };
+const _palm = new Vector3(), _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };
