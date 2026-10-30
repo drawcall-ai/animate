@@ -17,6 +17,9 @@ interface ChainGoal {
   /** whether a limb whose limits the pole's side does not fit may swivel off it, or bend the other way, as far as they need (default
    * true); false: it keeps to the pole's side, clamped within them (a re-solve that keeps an elbow where its brakes left it) */
   swivel?: boolean;
+  /** whether a limb whose limits the pole's side does not fit keeps the fit it has now — its swivel, its middle bone's twist and its bend's
+   * way — leaving it only for one clearly better (`HELD`); default false: the best fit wherever it is */
+  keep?: boolean;
 }
 
 /** the generic solver's sweeps at most; it stops sooner once a sweep brings the tip no closer than this (m) */
@@ -41,7 +44,7 @@ export function solveChain(frame: { current: Pose }, chain: string, goal: ChainG
   const parent = skeleton.bones[bones[0]].parent;
   const c: Solving = { skeleton, bones, base: parent >= 0 ? _base.copy(pose.rotation(parent)) : _base.identity(), start: _start.copy(pose.position(bones[0])), local: _local };
   bones.forEach((b, k) => _local[k].copy(pose.local(b)));
-  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true);
+  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true, goal.keep ?? false);
   else {
     if (goal.twist !== undefined) throw new Error(`chain "${chain}": a preferred twist applies only to a two-segment chain`);
     if (goal.pole) throw new Error(`chain "${chain}" has ${bones.length - 1} segments: a pole bends only a two-segment chain`);
@@ -65,7 +68,7 @@ interface Solving {
 }
 
 /** a limb: its middle joint as a hinge (bent to the distance), its first bone onto the goal and toward the pole, the middle joint aimed again */
-function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean) {
+function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean, keeps: boolean) {
   const { skeleton, bones, local, start } = c;
   const o1 = skeleton.bones[bones[1]].offset;
   const o2 = skeleton.bones[bones[2]].offset;
@@ -93,8 +96,17 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const r0 = _r0;
   // (a re-solve that keeps the limb's bend where its brakes left it keeps the middle bone's twist there too, unless asked another: split
   // afresh, a wrist at the edge of its range could take the twist the other way — the forearm turned 25° in one sub-step, and back)
-  if (!swivels && twist === undefined) twist = twistAbout(_q2.setFromAxisAngle(h, hinge.now).multiply(neutral).invert().multiply(local[1]), a);
+  const twisted = twistAbout(_q2.setFromAxisAngle(h, hinge.now).multiply(neutral).invert().multiply(local[1]), a);
+  if (!swivels && twist === undefined) twist = twisted;
+  const kept = keeps ? twisted : undefined;
 
+  /** how far the first bone is swivelled now about the line to the target from where `placed` (world) has it: its elbow round from there */
+  const swivelNow = (placed: Quaternion) => {
+    const from = _f.copy(o1).applyQuaternion(placed), to = _g.copy(o1).applyQuaternion(now);
+    from.addScaledVector(T, -from.dot(T));
+    to.addScaledVector(T, -to.dot(T));
+    return from.lengthSq() > 1e-12 && to.lengthSq() > 1e-12 ? signedAngle(from, to, T) : 0;
+  };
   /** the first bone placed (into `local[0]`, unclamped) for the middle joint bent `bend`: how far the limbs's limits are left out */
   const place = (bend: number) => {
     // the tip (in the first bone's frame) onto the target, the hinge axis toward the pole's side
@@ -123,14 +135,16 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
       _upper.copy(c.base).multiply(turned);
       return 100 * excess(turned, limits[0]);
     };
-    const tip = () => quaternion ? shared(_upper, bent, a, quaternion, limits, twist) : 0;
+    const tip = () => quaternion ? shared(_upper, bent, a, quaternion, limits, twist, kept) : 0;
     const strain = (angle: number) => first(angle) + tip();
     // as the pole has it, unless a swivel searched with the preferred twist fits better, by more than the swivel costs (`SWIVEL`): the
     // least of the two together, which grows with the excess it saves (chosen whole once it saved more than it cost, the swivel leapt
-    // 0 → 29° and back in alternate sub-steps of a swing as a hip's excess at the pole's side rose and fell about that)
+    // 0 → 29° and back in alternate sub-steps of a swing as a hip's excess at the pole's side rose and fell about that). Kept, the least
+    // about the swivel it has (the global least, as the goal moved on, leapt between two fits about as good: an elbow over a pouch went
+    // ±1 rad round by turns, the magazine in the hand whipped about)
     let swivel = 0;
     let left = strain(0);
-    if (left >= FITS && swivels) [swivel, left] = least(first, tip, -Math.PI, Math.PI, 0, (x) => SWIVEL * x * x);
+    if (left >= FITS && swivels) [swivel, left] = least(first, tip, -Math.PI, Math.PI, 0, (x) => SWIVEL * x * x, keeps ? swivelNow(r0) : undefined);
     swivelled(swivel);
     return left;
   };
@@ -139,7 +153,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const other = candidates[0] === bend ? candidates[1] : candidates[0];
   if (left >= FITS && swivels && other !== bend && clampBend(other, hinge) === other) {
     _kept.copy(local[0]);
-    if (place(other) < left) bend = other;
+    if (place(other) < left - (keeps ? HELD : 0)) bend = other;
     else local[0].copy(_kept);
   }
   limited(skeleton, bones[0], local[0]);
@@ -158,7 +172,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   // the tip's turn about the middle bone, shared between the middle bone and the tip
   // A contact re-solve keeps the braked twist too; searching it again can jump between wrist-limit solutions.
   if (!swivels && twist !== undefined) _twisted.copy(local[1]).multiply(_q2.setFromAxisAngle(a, twist));
-  else shared(r0, local[1], a, quaternion, limits, twist);
+  else shared(r0, local[1], a, quaternion, limits, twist, kept);
   limited(skeleton, bones[1], local[1].copy(_twisted));
   limited(skeleton, bones[2], local[2].copy(r0).multiply(local[1]).invert().multiply(quaternion));
 }
@@ -170,7 +184,7 @@ function tipped(upper: Quaternion, middle: Quaternion, axis: Vector3, twist: num
 }
 
 /** The best joint fit and cost of leaving the preferred twist, used by both twist and swivel searches. */
-function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], twist: number | undefined): number {
+function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion: Quaternion, limits: (Limit | undefined)[], twist: number | undefined, kept: number | undefined): number {
   // (the tip's limit first: it rules out more twists alone)
   // (the tip's rotation at a twist t is R(axis, −t) · (upper · middle)⁻¹ · quaternion: the part that does not turn with t taken once,
   // and the middle bone turned only where its limit is read — these run thousands of times in a limb's swivel search)
@@ -186,7 +200,7 @@ function shared(upper: Quaternion, middle: Quaternion, axis: Vector3, quaternion
   const whole = twistAbout(tipped(upper, middle, axis, 0, quaternion), axis);
   const [lo, hi] = limits[1]?.twist ?? [-Math.PI, Math.PI];
   const split = Math.min(hi, Math.max(lo, twist ?? whole / 2));
-  const [fitted, value] = least(tipOf, middleOf, lo, hi, split);
+  const [fitted, value] = least(tipOf, middleOf, lo, hi, split, undefined, kept);
   // (the middle bone turned as fitted, into `_twisted`)
   tipped(upper, middle, axis, fitted, quaternion);
   return value + NEAREST * Math.abs(fitted - split);
@@ -220,27 +234,43 @@ function nearest(a: number, b: number, hinge: Hinge): number {
 /** the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) plus what leaving `start` for
  * it `cost`s is least, `start` if `f` is (all but) 0 there: sampled, then refined; of x where it is (all but) as little, the nearest
  * `start` (a swivel moves no further than it must), and `f` there. An x whose `part` alone, with its cost, is no less than the least yet
- * is passed over without its `rest`: `f` there is no less. */
-function least(part: (x: number) => number, rest: () => number, lo: number, hi: number, start: number, cost = (_x: number) => 0): [x: number, f: number] {
-  start = Math.min(hi, Math.max(lo, start));
+ * is passed over without its `rest`: `f` there is no less. Given `from` (where the x is now), the least about it, settled in on from
+ * there, unless one elsewhere is less by more than `HELD`: a fit as good as another far off is not left for it, and two about as good
+ * are not taken by turns as they pass each other. */
+function least(part: (x: number) => number, rest: () => number, lo: number, hi: number, start: number, cost = (_x: number) => 0, from?: number): [x: number, f: number] {
+  const clamp = (x: number) => Math.min(hi, Math.max(lo, x));
+  start = clamp(start);
   const near = (x: number) => NEAREST * Math.abs(x - start) + cost(x);
-  let best = start;
-  let value = part(start) + rest();
-  let low = value + near(start);
-  if (low < FITS) return [start, value];
+  const there = part(start) + rest();
+  if (there < FITS) return [start, there];
+  let best = start, value = there, low = there + near(start), found = false;
   const see = (x: number) => {
-    x = Math.min(hi, Math.max(lo, x));
+    x = clamp(x);
     const cheap = part(x);
     if (cheap + near(x) >= low) return;
     const f = cheap + rest(), e = f + near(x);
-    if (e < low) [low, best, value] = [e, x, f];
+    if (e < low) [low, best, value, found] = [e, x, f, true];
   };
-  for (let k = 0; k <= 24; k++) see(lo + ((hi - lo) * k) / 24);
-  for (let step = (hi - lo) / 48; step > SETTLED; step /= 2) {
-    const at = best;
-    see(at - step);
-    see(at + step);
+  const refine = () => {
+    for (let step = (hi - lo) / 48; step > SETTLED; step /= 2) {
+      const at = best;
+      see(at - step);
+      see(at + step);
+    }
+  };
+  let kept: [x: number, f: number] | null = null;
+  if (from !== undefined) {
+    best = clamp(from);
+    value = part(best) + rest();
+    low = value + near(best);
+    refine();
+    kept = [best, value];
+    // (elsewhere, only what is less by more than `HELD`)
+    [best, value, low, found] = [start, there, Math.min(there + near(start), low - HELD), there + near(start) < low - HELD];
   }
+  for (let k = 0; k <= 24; k++) see(lo + ((hi - lo) * k) / 24);
+  if (kept && !found) return kept;
+  refine();
   return [best, value];
 }
 
@@ -257,6 +287,12 @@ const NEAREST = 1e-3;
  * grip turning it just past its range swivelled the elbow 86° for 0.5°) and given back as the goal moved on: braked toward each in
  * turn, the arm trembled. */
 const SWIVEL = 0.05;
+
+/** Tuned: how much more (rad of the joints' excess, as `least` weighs it, with what leaving the pole costs) a kept limb's fit about where
+ * it is now may leave its limits out than the best elsewhere, and still be kept: a hysteresis — the previous solution's basin is left only
+ * once it is clearly worse, as production IK keeps an elbow near its last swivel (a pole-vector solve seeded from the last frame). 0.02
+ * held a magazine's arm through its carry with no leap of its swivel or forearm twist; at 0.005 it leapt by turns again */
+const HELD = 0.02;
 
 const clampBend = (x: number, { range: [lo, hi] }: Hinge) => Math.min(hi, Math.max(lo, x));
 
@@ -324,5 +360,5 @@ const _joints = Array.from({ length: LONGEST }, () => new Vector3());
 const _rotations = Array.from({ length: LONGEST }, () => new Quaternion());
 const _coords = coordinates();
 const _m = new Matrix4();
-const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s, _start, _pole, _axis] = Array.from({ length: 15 }, () => new Vector3());
+const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s, _start, _pole, _axis, _f, _g] = Array.from({ length: 17 }, () => new Vector3());
 const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept, _fixed, _base] = Array.from({ length: 13 }, () => new Quaternion());

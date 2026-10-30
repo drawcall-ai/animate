@@ -298,6 +298,10 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     ...options,
     pole,
     contact,
+    // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better: chosen afresh as the goal
+    // moved on, the elbow leapt between two fits about as good by turns and the magazine in the hand whipped about; a hand on a thing
+    // something else moves is put back on it after its brakes, `contact`)
+    keep: Boolean(person.holding[side]) && !contact,
     letOut: toward !== undefined || contact,
     clear: (frame, tip, braked) => {
       held = Math.max(held, keepArmOut(frame, proportions, side, tip, braked ? NUDGED : SOLVED(proportions)));

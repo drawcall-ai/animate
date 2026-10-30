@@ -19,6 +19,9 @@ interface TipOptions extends Motion {
   /** a tip further out than all but the chain's full length as this sets off (an arm hanging all but straight) is not drawn in at once:
    * it is let out as far as it was, never further, until it comes in */
   letOut?: boolean;
+  /** a two-segment chain that cannot fit its goal on the pole's side keeps the swivel and middle-bone twist it has, unless another fit
+   * is clearly better (a hand holding something: the arm as it holds it, not chosen afresh as the goal moves on) */
+  keep?: boolean;
   /** Follow a contact from the actual pose, without extrapolating the IK goals back into its carrier. */
   contact?: boolean;
   /** after each solve, and again once its joints are braked (`braked`: where they have left the tip): puts the chain out of what it may
@@ -83,7 +86,7 @@ export class ChainTip {
     const most = (this.most = options.letOut ? Math.max(REACH * length, Math.min(length, was, own ? this.most : Infinity)) : REACH * length);
     const out = position.distanceTo(base);
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
-    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole });
+    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep });
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       const nudged = continued ? this.nudged : null;
