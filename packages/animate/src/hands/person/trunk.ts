@@ -8,7 +8,7 @@ import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
 
 // An arm keeps out of its own trunk. The trunk is two capsules up the spine, from the hips to the chest and on to the neck, and the arm
-// three (radii × height: a lean adult's girths, Winter's, as examples/test/clearance.ts measures them; the hand reaching on from
+// three (radii × height: a lean adult's girths, Winter's, as examples/viewer/test/clearance.ts measures them; the hand reaching on from
 // the wrist along the forearm, Drillis & Contini; where a reach asks its hand a turn, as turned).
 
 const TRUNK = [['hips', 'chest', 0.06], ['chest', 'neck', 0.045]] as const;
