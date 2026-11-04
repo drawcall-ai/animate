@@ -16,7 +16,8 @@ import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../sp
 import { Carrier } from '../kernel/carrier';
 import { yawOf } from '../kernel/math';
 import { Binding } from './model';
-import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
+import { PlatformFrame } from './platform';
+import { anchors, movers, oriented, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Placement } from '../kernel/goal';
@@ -35,11 +36,13 @@ export interface SelfOptions {
    * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
    * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (`species.person.heelBack + toeFront`; 0.35 m
    * of tread for the default body) and steps
-   * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled.
+   * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled for
+   * walks; with physics support the controller carries the root over them, given matching world-space heights. A height-only floor does
+   * not supply surface normals.
    * A person's step length against a tread decides whether it puts one foot or both on each; between the two it mixes them from tread to
    * tread, which reads as hesitation. Give every body on a set the same function, or they disagree on where its floor is.
    */
-  floor?: (x: number, z: number) => number;
+  floor?: Floor;
   /** the way it faces (rad about +Y; 0 faces +Z) */
   face?: number;
   /** its root driven by the app (a player's, or a scripted path a walk cannot take), read every sub-step with the body's time (s): its legs
@@ -96,6 +99,8 @@ export class Self implements Holder {
   private readonly arms: readonly `arm.${string}`[];
   readonly holding: Record<string, Hold | null>;
   readonly drive?: (time: number) => Root;
+  /** the root its app drove it to this sub-step: `drive` read once, as the sub-step starts */
+  driven: Root | undefined;
   /** what it stands on: the floor's height under a world point */
   readonly floor: Floor;
   readonly life: Temperament;
@@ -103,6 +108,8 @@ export class Self implements Holder {
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
+  /** the nodes on it its app keeps turned in the world (`orient`), each written so as it updates */
+  private readonly turned = new Map<Object3D, Quaternion>();
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
   lastMover = -Infinity;
@@ -112,6 +119,7 @@ export class Self implements Holder {
   /** what it tracks of the scene, a sub-step's placement each */
   private readonly tracked = new WeakMap<Object3D, Carrier>();
   private readonly snaps = new SnapChecks();
+  private readonly platform: PlatformFrame;
   private pending = 0;
   /** whether it is posing a sub-step (its current pose is being written) */
   private stepping = false;
@@ -143,6 +151,7 @@ export class Self implements Holder {
     this.arms = Object.keys(this.hands).map((hand) => `arm.${hand}` as const);
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
+    this.platform = new PlatformFrame(this.skeleton);
     this.before = [this.poses[3], this.poses[4]];
     this.frame = { dev, dt: STEP, time: 0, prev2: this.poses[0], prev: this.poses[1], current: this.poses[2] };
     anchors.set(this.binding.object, { body: this, bone: -1 });
@@ -368,6 +377,22 @@ export class Self implements Holder {
     }
     this.updates++;
     this.binding.write(this.pose, this.floor);
+    for (const [node, rotation] of this.turned) {
+      node.parent?.updateWorldMatrix(true, false);
+      node.quaternion.copy(node.parent ? node.parent.getWorldQuaternion(_turn).invert().multiply(rotation) : rotation);
+    }
+  }
+
+  /** keeps `node` turned to `rotation` in the world, its position following its parent (none: lets it go) */
+  orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
+    if (!rotation) {
+      oriented.delete(node);
+      this.turned.delete(node);
+      return;
+    }
+    const turned = (this.turned.get(node) ?? new Quaternion()).copy(rotation);
+    oriented.set(node, turned);
+    this.turned.set(node, turned);
   }
 
   /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
@@ -397,15 +422,19 @@ export class Self implements Holder {
 
   private step(): void {
     const { frame: f } = this, { prev, current } = f;
-    current.copy(prev);
     if (f.dev && f.time > 0) {
       checkLimits(f.prev, f.dev, f.time);
       this.snaps.check(f, f.dev);
     }
     f.time += f.dt;
+    const root = this.driven = this.drive?.(f.time);
+    const carried = this.platform.read(f, root?.support ? root.platform : undefined);
+    if (carried !== f) this.stepper?.transport(this.platform.delta);
+    current.copy(carried.prev);
     const behaviours = (this.behaviours ??= this.behave());
     // (balance first, on what was asked last sub-step; then the requests' staging, reading the body as balance has it now)
-    behaviours.balance?.(f);
+    // Gait follows its supporting frame; gaze and hand targets keep their world-space motion histories.
+    behaviours.balance?.(carried);
     // (how still its life holds it, asked for balance's next sub-step as its parts ask)
     if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
@@ -507,5 +536,5 @@ const IDENTITY = new Matrix4();
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
-const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _turn = new Quaternion();
 const EMPTY: readonly LogEntry[] = Object.freeze([]);

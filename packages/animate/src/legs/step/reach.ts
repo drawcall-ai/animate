@@ -2,7 +2,7 @@
 import { Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, minimumJerk, smoothstep } from '../../kernel/math';
 import { xcomOf } from '../support';
-import { FLAT, foothold } from '../floor';
+import { FLAT, foothold, LEVEL } from '../floor';
 import { ROLL, _a, _b, _f, _l, _m, _o, _v, _x, dropOf, rollOf, type Body, type Leg, type Now, type Reading, type Steps, type Timing } from './state';
 
 /** the place of a leg's hip, the pelvis turned with the stride */
@@ -30,7 +30,7 @@ export function lengthOf(steps: Steps, leg: Leg): number { return steps.feet.leg
 export function homeOf(steps: Steps, leg: Leg): number { return steps.feet.legs[leg.i].home ?? steps.feet.legs[leg.i].ahead ?? 0; }
 
 /** a foot's home `ahead` s on: under its hip as the root goes, the stance's width out */
-function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Vector3 {
+export function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Vector3 {
   const { r, yaw, width, sitting } = now;
   const root = r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead);
   return root.addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forwardOf(yaw), sitting + homeOf(steps, leg)).setY(steps.feet.ankleHeight);
@@ -52,12 +52,14 @@ export function offHome(steps: Steps, now: Now, leg: Leg, ahead: number): number
  * `IN_PLACE` (m, default body) — turning, squaring, not a step up or down a flight */
 export function staysOn(steps: Steps, now: Body, level: number, ahead: number): boolean {
   if (steps.floor === FLAT) return false;
-  const here = now.r.position, at = travelOf(steps, now, ahead, _stay);
-  const on = (x: number, z: number) => Math.abs(steps.floor(x, z) - level) <= SAME_LEVEL;
-  return on(here.x, here.z) && on(at.x, at.z) && Math.hypot(at.x - here.x, at.z - here.z) < IN_PLACE * steps.st.scale;
+  const { contact, r } = now, at = travelOf(steps, now, ahead, _stay);
+  const on = ({ x, z }: Vector3) => Math.abs(steps.floor(x, z) - level) <= LEVEL;
+  const near = Math.hypot(at.x - r.position.x, at.z - r.position.z) < IN_PLACE * steps.st.scale;
+  if (!contact) return near && on(r.position) && on(at);
+  // (standing on physics' support, the level it stands on; going on, the way it goes from there)
+  if (near) return Math.abs(contact.y - level) <= LEVEL;
+  return on(contact) && on(at.add(contact).sub(r.position));
 }
-/** Tuned (m): a level within this of another is the same */
-const SAME_LEVEL = 0.002;
 /** Tuned (m, default body): a root going no further than this as a foot lands steps it where it stands (a stair's tread is ~0.25–0.45) */
 const IN_PLACE = 0.15;
 const _stay = new Vector3();
@@ -120,11 +122,22 @@ export function nominal(steps: Steps, body: Body): number {
  */
 export function foldOf(steps: Steps, now: Now): number {
   const { feet, legs } = steps;
-  const folded = Math.sqrt(feet.thigh ** 2 + feet.shin ** 2 + 2 * feet.thigh * feet.shin * Math.cos(feet.fold));
+  const folded = foldLength(steps);
   return Math.max(-Infinity, ...legs.map((leg, i) => {
+    if (now.contact && leg.swing) return -Infinity;
     const ankle = steps.poses[i]?.ankle ?? feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), at = hipOf(steps, now, leg);
     return ankle.y + Math.sqrt(Math.max(0, folded ** 2 - (ankle.x - at.x) ** 2 - (ankle.z - at.z) ** 2)) - (feet.legs[i].up ?? 0);
   }));
+}
+
+/** The hip-to-ankle distance with the knee bent as far as its joints allow. */
+export function foldLength({ feet }: Steps): number {
+  return Math.sqrt(feet.thigh ** 2 + feet.shin ** 2 + 2 * feet.thigh * feet.shin * Math.cos(feet.fold));
+}
+
+/** How far the hips travel up and down over a planted foot (m): from the legs' reach to fully folded. */
+export function strokeOf(steps: Steps): number {
+  return steps.st.reach * steps.feet.length - foldLength(steps);
 }
 
 /** the extrapolated centre of mass `ahead` s on: the root carried on, the centre of mass where it is over it — as `r.xcom` is */
@@ -133,16 +146,23 @@ export function xcomAhead(steps: Steps, now: Body, ahead: number, out: Vector3):
   return xcomOf(at, pace(steps, now, ahead, _x), steps.feet.length, out);
 }
 
-/** where the root will be `ahead` s on, its speed changing as it does now: how far a hard stop or turn leaves a landing */
+/** Where the root will be `ahead` s on: follow its forecast, or keep its pace with braking bounded by a stop. */
 export function travelOf(steps: Steps, { r, accel }: Reading, ahead: number, out: Vector3): Vector3 {
   if (r.forecast) return out.copy(r.forecast(ahead).position);
-  return out.copy(r.position).addScaledVector(r.velocity, ahead).addScaledVector(accel, ahead * ahead / 2);
+  const changing = brakingTime(r.velocity, accel, ahead);
+  return out.copy(r.position).addScaledVector(r.velocity, ahead).addScaledVector(accel, changing * (ahead - changing / 2));
 }
 
-/** and its velocity then: a walker's as foreseen, braking where it brakes; else run on at its acceleration */
+/** Its velocity then: a walker's as foreseen, or its current pace bounded by a braking stop. */
 export function pace(steps: Steps, { r, accel, dt }: Reading, ahead: number, out: Vector3): Vector3 {
   if (r.forecast) return out.subVectors(r.forecast(ahead + dt).position, r.forecast(ahead).position).divideScalar(dt).setY(0);
-  return out.copy(r.velocity).addScaledVector(accel, ahead).setY(0);
+  return out.copy(r.velocity).addScaledVector(accel, brakingTime(r.velocity, accel, ahead)).setY(0);
+}
+
+/** Without a forecast, keep the current pace except for a braking stop; one frame's acceleration is not a sustained command. */
+function brakingTime(velocity: Vector3, accel: Vector3, ahead: number): number {
+  const slowing = -velocity.dot(accel), change = accel.lengthSq();
+  return slowing >= 0 && change > 0 ? Math.min(ahead, slowing / change) : 0;
 }
 
 /** half the feet's spread at `speed` (m): side-stepping, the feet open wider and close in to the narrowest: their travel never crosses */

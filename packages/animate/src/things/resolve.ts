@@ -57,6 +57,9 @@ export const anchors = new WeakMap<Object3D, { body: Holder; bone: number }>();
 /** the body that moves each thing it carries in both hands itself (one hand's hangs from that hand's bone) */
 export const movers = new WeakMap<Object3D, Holder>();
 
+/** each node its app keeps turned to a world rotation (`Body.orient`), its position following its parent */
+export const oriented = new WeakMap<Object3D, Quaternion>();
+
 /** a node's matrix from one update to the next, the update it was last read in, and its parent frame (null for world) */
 export interface Interpolated {
   update: number;
@@ -73,8 +76,23 @@ export interface Interpolated {
  * frames are metres) but carried through the chain. An app-owned world matrix (`matrixWorldAutoUpdate = false`) ends the chain.
  */
 export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh = false): Placement {
-  const chain = _chain.identity();
+  chainOf(reader, node, fresh, _chain).decompose(out.position, out.quaternion, _scale);
+  return out;
+}
+
+/** `node`'s world matrix as `resolve` finds it, scale and all, into `chain` */
+function chainOf(reader: Resolving, node: Object3D, fresh: boolean, chain: Matrix4): Matrix4 {
+  chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
+    const turned = oriented.get(at);
+    if (turned) {
+      // (turned in the world as its app keeps it, where its parent, as found now, carries its position)
+      const parent = at.parent ? chainOf(reader, at.parent, fresh, new Matrix4()) : new Matrix4();
+      matrixOf(reader, at, fresh).decompose(_p, _q, _s);
+      _sa.setFromMatrixScale(parent);
+      chain.premultiply(_anchor.compose(_p.applyMatrix4(parent), turned, _s.multiply(_sa)));
+      break;
+    }
     const moved = movers.get(at)?.movedFor(reader, at);
     if (moved) {
       chain.premultiply(_anchor.compose(moved.position, moved.quaternion, at.scale));
@@ -88,8 +106,7 @@ export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh
     chain.premultiply(matrixOf(reader, at, fresh));
     if (!at.matrixWorldAutoUpdate) break;
   }
-  chain.decompose(out.position, out.quaternion, _scale);
-  return out;
+  return chain;
 }
 
 /** a body's object (bone −1) or moving bone, as `pose` places it */

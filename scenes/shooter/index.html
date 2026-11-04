@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#172c34" />
+    <link rel="icon" href="data:," />
+    <title>Full-body shooter — FPS</title>
+  </head>
+  <body>
+    <canvas id="game" aria-label="Interactive first-person movement and shooting course"></canvas>
+    <header class="heading"><h1>Full-body shooter</h1><span>Movement &amp; combat course</span></header>
+    <div id="telemetry" class="telemetry" aria-label="Movement status"><span id="view">First person</span><span id="motion">Grounded</span><span id="speed">0.0 m/s</span></div>
+    <main id="menu" class="menu">
+      <h2>Controls</h2>
+      <p>Use the stairs, lift, and cover to outmaneuver an armed opponent. Aim through the rifle's sights and keep moving.</p>
+      <button id="play" disabled>Preparing the course…</button>
+      <p id="notice" role="status">Loading physics and procedural animation.</p>
+      <dl class="controls">
+        <div><dt>W A S D</dt><dd>Move</dd></div><div><dt>Mouse</dt><dd>Look</dd></div>
+        <div><dt>Shift</dt><dd>Sprint</dd></div><div><dt>Space</dt><dd>Jump</dd></div>
+        <div><dt>C</dt><dd>Hold to crouch</dd></div><div><dt>Right click</dt><dd>Hold to aim</dd></div>
+        <div><dt>Left click</dt><dd>Fire</dd></div><div><dt>R</dt><dd>Reload</dd></div>
+        <div><dt>Backspace</dt><dd>Reset course</dd></div><div><dt>Esc</dt><dd>Pause</dd></div>
+      </dl>
+      <p class="device-note">Play with a keyboard and mouse.</p>
+    </main>
+    <div id="reticle" class="reticle" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div id="hit" class="hit" aria-hidden="true"></div>
+    <div id="damage" class="damage" aria-hidden="true"></div>
+    <footer class="hud">
+      <div class="hint"><kbd>R</kbd> Reload <kbd>Esc</kbd> Controls</div>
+      <div class="combat">
+        <div class="vitals"><span>Health <strong id="health">100</strong></span><span>Enemy · <span id="enemy">Searching</span></span></div>
+        <div class="weapon"><span id="feedback">Range ready</span><strong><span id="ammo">30</span><small> / 30</small></strong><span id="reload">Practice rifle · unlimited magazines</span></div>
+      </div>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

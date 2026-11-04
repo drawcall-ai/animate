@@ -1,4 +1,4 @@
-import { Vector3, type Group, type Object3D } from 'three';
+import { Vector3, type Group, type Object3D, type Quaternion } from 'three';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
@@ -83,6 +83,21 @@ export class Body<S extends AnySpecies = AnySpecies> {
     } finally {
       reader = was;
     }
+  }
+
+  /** Keeps `node` — something on the body, such as the mount of a rifle on its chest — turned to `rotation` in the world, its position
+   * following its parent: read so as its hands take hold of what hangs from it, each sub-step, after the trunk is posed; `null` lets it go.
+   * Set it before each `update`; the node's own rotation is written to match as the update ends. */
+  orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
+    selfOf(this).orient(node, rotation);
+  }
+
+  /** A world-space impulse (N·s) at a world-space point: a humanoid's supported torso reacts and recovers before its hands are solved.
+   * Locomotion or the physics controller continues to own the root. */
+  applyImpulse(impulse: Readonly<Vector3>, point: Readonly<Vector3>): void {
+    const self = selfOf(this);
+    if (!(self instanceof Person)) throw new Error('applyImpulse: supported torso reactions require a humanoid');
+    self.impact.apply(self.pose, impulse, point);
   }
 
   /** its root's point on the floor (m; its y the floor's height there): a person's hips, which sway several centimetres over planted feet,

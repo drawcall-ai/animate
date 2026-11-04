@@ -1,0 +1,78 @@
+{
+  "license": "Drawcall Market license",
+  "terms": "https://drawcall.ai/terms/",
+  "assets": {
+    "step-a.ogg": {
+      "asset": "concrete-rooftop-step@1.0.0",
+      "source": "steps.mp3",
+      "start": 0,
+      "duration": 0.65,
+      "gainDb": -3,
+      "fadeOut": 0.02
+    },
+    "step-b.ogg": {
+      "asset": "concrete-rooftop-step@1.0.0",
+      "source": "steps.mp3",
+      "start": 1.08,
+      "duration": 0.65,
+      "gainDb": -5.4,
+      "fadeOut": 0.02
+    },
+    "land.mp3": {
+      "asset": "heavy-concrete-metal-scrape-landing-thud@1.0.0",
+      "duration": 1
+    },
+    "jump.mp3": {
+      "asset": "jump-launch@1.0.0",
+      "duration": 0.6
+    },
+    "shot.mp3": {
+      "asset": "military-rifle-bang@1.0.0",
+      "duration": 0.680249
+    },
+    "reload.mp3": {
+      "asset": "rifle-reload-bolt-action@1.0.0",
+      "duration": 1.36
+    },
+    "cloth.mp3": {
+      "asset": "soft-cloth-rustle@1.0.0",
+      "duration": 0.680249
+    },
+    "lift.mp3": {
+      "asset": "low-backstage-winch-hum@1.0.0",
+      "duration": 5
+    },
+    "ambient.ogg": {
+      "duration": 21,
+      "loopStart": 0.5,
+      "loopEnd": 20.5,
+      "padding": "Half a second of circular audio at each end keeps codec boundary padding outside the loop.",
+      "seam": "Wind overlaps its last and first 0.5 s with equal-power fades, making a 2.5 s loop repeated eight times. Canopy clips fade in and out inside the loop.",
+      "sources": [
+        {
+          "asset": "distant-rooftop-wind-loop@1.0.0",
+          "source": "wind.mp3",
+          "duration": 3,
+          "highpassHz": 20,
+          "lowpassHz": 3000,
+          "rmsDb": -24
+        },
+        {
+          "asset": "forest-canopy-wind-leaves-brushing-birds@1.0.0",
+          "source": "canopy.mp3",
+          "duration": 2,
+          "highpassHz": 150,
+          "lowpassHz": 6000,
+          "rmsDb": -24,
+          "gain": 0.3,
+          "fade": 0.15,
+          "at": [
+            1.7,
+            8.5,
+            15.2
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,8 +1,8 @@
 // A stepper's state and the shapes its parts share: the root it is given, the legs it moves, the sub-step's timing and body.
-import { Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3, type Object3D } from 'three';
 import { type Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
-import { lerp, minimumJerk } from '../../kernel/math';
+import { lerp, minimumJerk, wrapAngle } from '../../kernel/math';
 import { hullOf, past, type Spot } from '../support';
 import { type Gait } from '../../species/gait';
 import { foothold, type Floor } from '../floor';
@@ -14,6 +14,12 @@ import { Ground } from './ground';
  */
 export interface Steering {
   position: Vector3; velocity: Vector3; yaw: number; crouch?: number;
+  /** Physics contact on the supporting surface, null in flight, absent when animation owns movement. */
+  support?: Vector3 | null;
+  /** The object whose motion carries the supported root, when it moves (`Root.platform`). */
+  platform?: Object3D;
+  /** Physics' vertical speed; velocity stays horizontal for gait and foot placement. */
+  vertical?: number;
   /** where the hips are over the floor from the root, if not over it (m): swaying, sitting back or leaning over the toes from it; by
    * default the hips are the root */
   hips?: Vector3;
@@ -114,8 +120,14 @@ export interface Feet {
 export interface FootPose { ankle: Vector3; foot: Quaternion; toes: Quaternion; yaw: number }
 
 export interface Leg {
-  i: number; leapt?: boolean; sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean;
+  i: number;
+  /** its foot is coming down, or came down, from a flight (a leap, or a fall physics ended): its landing is fixed, it does not push off,
+   * and it does not lift again until it has landed; cleared when it next lifts */
+  leapt?: boolean;
+  sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean;
   planted: number; lifted: number; strike: number; landed: boolean; swing: Swing | null;
+  /** The planted foot or swing landing, in its own platform's frame. */
+  on?: { platform?: Object3D; anchor: Vector3; yaw: number };
 }
 
 /** A leap under way: its phase, how long it has been in it (s), its take-off speed (m/s), and the pelvis' rise and fall over it */
@@ -124,8 +136,17 @@ export type Leap = {
   since: number; speed: number; land: number; bottom: number; rise: number; vy: number; a: number;
 };
 
+/** Who moves the root this sub-step, read once off `Steering.support`: whether physics does (`physical`), and then the point it stands on
+ * (`contact`) or that it is in the air (`flight`), how high over the floor (`clearance`, m); neither when the animation does. */
+export interface Physics { physical: boolean; contact: Vector3 | undefined; flight: boolean; clearance: number }
+
+export function physicsOf({ support, position }: Steering, floor: Floor): Physics {
+  const flight = support === null;
+  return { physical: support !== undefined, contact: support ?? undefined, flight, clearance: flight ? Math.max(0, position.y - floor(position.x, position.z)) : 0 };
+}
+
 /** The root as a sub-step reads it, and the pelvis' own rise and fall over it. */
-export interface Reading {
+export interface Reading extends Physics {
   f: Frame; r: Steering; dt: number;
   /** its speed over the floor (m/s) and how far it runs (0 … 1) */
   v: number; run: number;
@@ -156,6 +177,19 @@ export interface Body extends Reading, Timing {
 
 /** A sub-step as its phases share it: the body, and the height a landing must hold the hip at (m) and how far out each foot may land so (m). */
 export interface Now extends Body { holding: number; reaches: number[] }
+
+/**
+ * The turn (rad) from facing `from` to `to`: the short way round, but for one more than a quarter turn the other way, the `way` (±1, 0:
+ * none) the root went round — spun faster than its feet let the body follow, the root came to lead it by more than half a turn, and turned
+ * the short way the body went back against it; but a root spun a little past a whole turn round is not followed the long way round.
+ */
+export function turnTo(from: number, to: number, way: number): number {
+  const turn = wrapAngle(to - from);
+  return turn * way < 0 && Math.abs(turn) > Math.PI / 2 ? turn + way * 2 * Math.PI : turn;
+}
+
+/** Tuned: a root turning slower than this (rad/s) sets no way round to follow it (`Steps.way`) */
+export const SPUN = 0.5;
 
 /** the fewest feet a gait's body leaves on the floor */
 export const STANDING = 2;
@@ -292,6 +326,8 @@ export class Steps {
   /** how high the pelvis stands over the ground (m), as it first stood */
   stand = NaN;
   asked: number | undefined; last: number; rootYaw: number;
+  /** the way (±1) the root went round, turning faster than `SPUN`, while it leads the pelvis by more than a quarter turn (`turnTo`); 0: none */
+  way = 0;
   readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
   low = NaN; most = Infinity; sense = 0; paused = 0;
   readonly hips = new Vector3();

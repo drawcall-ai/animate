@@ -1,0 +1,4 @@
+public/_vitecache/*
+# The soldier's precomputed rig (RigLoader output for SOLDIER on models/soldier.glb); regenerate it when skeleton.ts or soldier.glb changes.
+!public/_vitecache/479450a0b24b855ee927c27806a43676338ab26bbb9abc05dd0fcbf7cb707c1d.bin
+!public/_vitecache/479450a0b24b855ee927c27806a43676338ab26bbb9abc05dd0fcbf7cb707c1d.json

@@ -1,5 +1,6 @@
 // The height a body stands at over its floor: the floor under its way, kept low over its edges and smoothed over its stride.
 import { FLAT, type Floor } from '../floor';
+import { Matrix4, Vector3 } from 'three';
 import type { Steering } from './state';
 
 /**
@@ -12,10 +13,13 @@ import type { Steering } from './state';
  * there to the feet as they stand: the lead knee bent on the tread above, the stance leg lifting the body as the trailing foot leaves.
  */
 export class Ground {
-  /** the floor under the root each sub-step it has passed, the newest first */
-  private readonly passed: number[] = [];
+  /** the floor and actual distance travelled at each passed sub-step, newest first */
+  private readonly passed: { height: number; distance: number }[] = [];
   private readonly heights: number[] = [];
   private readonly times: number[] = [];
+  private readonly distances: number[] = [];
+  private distance = 0;
+  private previous: readonly [number, number] | undefined;
   /** how fast it rose over the last sub-step (m/s) */
   rising = 0;
   private last = NaN;
@@ -23,34 +27,70 @@ export class Ground {
   /** `length`: the legs' (m), which the floor's edges are kept low over in proportion to */
   constructor(private readonly floor: Floor, private readonly length: number) {}
 
-  /** the ground under root `r` this sub-step of `dt` s (m) */
-  at(r: Steering, dt: number): number {
-    const height = this.under(r, dt);
+  /** A new support after flight has no grounded path back to the take-off surface. */
+  reset() {
+    this.passed.length = 0;
+    this.distance = 0;
+    this.previous = undefined;
+    this.last = NaN;
+  }
+
+  /** Carry the remembered path with a level moving platform. */
+  transport(matrix: Matrix4) {
+    const height = matrix.elements[13];
+    for (const sample of this.passed) sample.height += height;
+    if (this.previous) {
+      const point = new Vector3(this.previous[0], this.last, this.previous[1]).applyMatrix4(matrix);
+      this.previous = [point.x, point.z];
+    }
+    this.last += height;
+  }
+
+  /** the ground under root `r` this sub-step of `dt` s (m), standing on physics' `contact` if it has one: a drop ahead deeper than the
+   * legs' `stroke` (m) is a fall, not ground */
+  at(r: Steering, dt: number, stroke: number, contact: Vector3 | undefined): number {
+    const height = this.under(r, dt, stroke, contact);
     this.rising = Number.isNaN(this.last) ? 0 : (height - this.last) / dt;
     this.last = height;
     return height;
   }
 
-  private under(r: Steering, dt: number): number {
-    const { floor, passed, heights, times } = this, here = floor(r.position.x, r.position.z);
+  private under(r: Steering, dt: number, stroke: number, contact: Vector3 | undefined): number {
+    const { floor, passed, heights, times, distances } = this, here = contact?.y ?? floor(r.position.x, r.position.z);
     if (floor === FLAT) return here;
+    if (this.previous) this.distance += Math.hypot(r.position.x - this.previous[0], r.position.z - this.previous[1]);
+    this.previous = [r.position.x, r.position.z];
     const speed = Math.hypot(r.velocity.x, r.velocity.z), back = Math.round((LOW.most + SPAN / 2) / dt);
-    const [behind, ahead] = [LOW.rise, LOW.drop].map((legs) => Math.min(LOW.most, legs * this.length / Math.max(speed, LOW.slow)));
-    if (passed.length === 0) passed.push(...Array.from({ length: back }, () => here));
-    passed.unshift(here);
+    const ahead = Math.min(LOW.most, LOW.drop * this.length / Math.max(speed, LOW.slow));
+    if (passed.length === 0) passed.push(...Array.from({ length: back }, () => ({ height: here, distance: this.distance })));
+    passed.unshift({ height: here, distance: this.distance });
     passed.length = back + 1;
-    [heights.length, times.length] = [0, 0];
-    for (let k = Math.round((behind + SPAN / 2) / dt); k >= 0; k--) [heights[heights.length], times[times.length]] = [passed[k], -k * dt];
+    [heights.length, times.length, distances.length] = [0, 0, 0];
+    for (let k = back; k >= 0; k--) {
+      heights.push(passed[k].height);
+      times.push(-k * dt);
+      distances.push(passed[k].distance);
+    }
     for (let t = dt; t <= ahead + SPAN / 2 + 1e-9; t += dt) {
-      heights.push(floor(r.position.x + r.velocity.x * t, r.position.z + r.velocity.z * t));
+      const at = contact ?? r.position;
+      const height = floor(at.x + r.velocity.x * t, at.z + r.velocity.z * t);
+      // Preview reachable steps. A drop beyond the knees' range is a fall for physics to begin.
+      heights.push(contact && here - height > stroke ? here : height);
       times.push(t);
+      distances.push(this.distance + speed * t);
     }
     let sum = 0, weights = 0;
     for (let i = 0; i < times.length; i++) {
       const t = times[i];
       if (Math.abs(t) > SPAN / 2) continue;
       let lowest = Infinity;
-      for (let j = 0; j < times.length; j++) if (times[j] >= t - behind - 1e-9 && times[j] <= t + ahead + 1e-9) lowest = Math.min(lowest, heights[j]);
+      for (let j = 0; j < times.length; j++) {
+        if (Math.abs(times[j] - t) > LOW.most + 1e-9) continue;
+        const distance = distances[j] - distances[i];
+        // Physics already advances the support down the stairs; eroding into future drops lowers the hips before the trailing foot clears.
+        if (distance >= -LOW.rise * this.length - 1e-9 && distance <= (contact ? 0 : LOW.drop * this.length) + 1e-9)
+          lowest = Math.min(lowest, heights[j]);
+      }
       // (read every sub-step: read every other one ahead, a tread's edge entered each sample's lowest in jumps of a centimetre every
       // other sub-step, the pelvis' speed alternating with them)
       const w = Math.cos(Math.PI * t / SPAN) ** 2;
@@ -66,8 +106,8 @@ export class Ground {
  */
 const SPAN = 1.2;
 /**
- * Tuned: how far behind and ahead the ground takes the lowest floor, in legs' lengths of its way (at no slower than `slow` m/s), at most
- * `most` s: a little behind — a rise lifts the body once its stance leg stands on the tread above, the lead knee bent; well ahead — a
+ * Tuned: how far behind and ahead the ground takes the lowest floor, in legs' lengths of its way, at most `most` s; `slow` bounds the
+ * future sampling window. A little behind — a rise lifts the body once its stance leg stands on the tread above, the lead knee bent; well ahead — a
  * drop lets it down as its swinging foot reaches for the tread below, the stance knee bending to lower it (a step down's swing lets the
  * pelvis down the rest: the farther ahead, the earlier and deeper the body crouches — at 0.7 its knees bent 105° on the landing above
  * the flight before its first step down, 100° as a foot landed on a tread — the nearer, the faster it is let down through each swing)

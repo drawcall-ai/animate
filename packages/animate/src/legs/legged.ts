@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Vector3, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import { OFF_FLOOR } from '../kernel/dev';
 import type { ReadonlyPose } from '../kernel/pose';
@@ -10,11 +10,12 @@ import type { Stepper } from './step/stepper';
 import type { Steering } from './step/state';
 import type { Floor } from './floor';
 
-/** What a body's root does when the app drives it (a player's): where it is on the floor, its velocity, facing, crouch, a leap. */
+/** What a body's root does when the app drives it (a player's): its position, velocity, facing and stance. */
 export interface Root {
-  /** its point on the floor (m): x and z — the body stands on its floor there; a y off that floor is ignored (a dev log says so) */
+  /** its point at the feet (m). Without support, y is ignored and the body stands on its floor at x/z. */
   position: Vector3;
-  /** its velocity over the floor (m/s); default read off its moves */
+  /** its velocity (m/s); default read off its moves. Required with support, relative to the supporting platform.
+   * Vertical velocity is used only with support. */
   velocity?: Vector3;
   /** its facing (rad about +Y; 0 faces +Z) */
   yaw: number;
@@ -22,6 +23,12 @@ export interface Root {
   crouch?: number;
   /** leap at this speed (m/s up) as soon as the feet can */
   jump?: number;
+  /** Physics-owned motion: a contact point on the supporting surface, or null in flight. Position.y and velocity.y follow physics;
+   * landing only bends the knees. Give the real floor for foot placement; do not also set jump. */
+  support?: Vector3 | null;
+  /** The supporting object's world frame, when it moves; switching to another carries the body with that one from the next
+   * sub-step. Omit it in flight. The body follows its actual transform, including while both feet swing. Without floor.platform, this also carries every foot. */
+  platform?: Object3D;
 }
 
 /**
@@ -37,6 +44,8 @@ export interface Legged {
   readonly tempo: number;
   readonly life: Temperament;
   readonly drive?: (time: number) => Root;
+  /** the root its app drove it to this sub-step */
+  readonly driven: Root | undefined;
   /** what it stands on */
   readonly floor: Floor;
   /** its stepping legs, made with its balance */
@@ -54,20 +63,32 @@ export interface Legged {
  * A body's root as its app drives it (`drive`), a sub-step at a time: where it is, its velocity (read off its moves when not given),
  * facing and crouch; a leap it asks is passed to the legs.
  */
-export function drivenRoot(self: Pick<Legged, 'drive' | 'stepper' | 'poise' | 'floor'>): (f: Frame) => Steering {
-  const drive = self.drive;
-  if (!drive) throw new Error('drivenRoot: the body is not driven');
+export function drivenRoot(self: Pick<Legged, 'drive' | 'driven' | 'stepper' | 'poise' | 'floor'>): (f: Frame) => Steering {
+  if (!self.drive) throw new Error('drivenRoot: the body is not driven');
   let last: Vector3 | null = null;
   return (f) => {
-    const root = drive(f.time);
-    // (a root driven above or below its floor stands on it)
+    const root = self.driven;
+    if (!root) throw new Error('drivenRoot: no root driven this sub-step');
+    // (without external support, a root driven above or below its floor stands on it)
+    const physical = root.support !== undefined;
+    if (root.platform && !physical) throw new Error('drive: a platform requires physics support');
+    if (physical && !root.velocity) throw new Error('drive: physics support requires velocity relative to its platform');
     const height = Math.abs(root.position.y - self.floor(root.position.x, root.position.z));
-    if (height > OFF_FLOOR) f.dev?.once(f.time, { check: 'driven root off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'root' });
-    const position = root.position.clone().setY(0);
-    const velocity = root.velocity?.clone().setY(0) ?? (last ? position.clone().sub(last).divideScalar(f.dt) : new Vector3());
+    if (!physical && height > OFF_FLOOR) f.dev?.once(f.time, { check: 'driven root off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'root' });
+    const position = root.position.clone();
+    if (!physical) position.y = 0;
+    const velocity = root.velocity?.clone() ?? (last ? position.clone().sub(last).divideScalar(f.dt) : new Vector3());
+    if (!physical) velocity.y = 0;
     last = position.clone();
-    if (![position.x, position.z, velocity.x, velocity.z, root.yaw].every(Number.isFinite)) throw new Error('drive: a root that is not finite');
+    if (![...position.toArray(), ...velocity.toArray(), root.yaw].every(Number.isFinite)) throw new Error('drive: a root that is not finite');
+    if (root.support && !root.support.toArray().every(Number.isFinite)) throw new Error('drive: a support that is not finite');
+    if (physical && root.jump !== undefined) throw new Error('drive: support owns vertical motion; do not also request jump');
     if (root.jump !== undefined) self.stepper?.jump(root.jump);
-    return { position, velocity, yaw: root.yaw, crouch: root.crouch };
+    const vertical = velocity.y;
+    return {
+      position, velocity: velocity.setY(0), vertical, yaw: root.yaw, crouch: root.crouch,
+      support: root.support?.clone() ?? root.support,
+      platform: root.platform,
+    };
   };
 }

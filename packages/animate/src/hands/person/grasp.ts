@@ -1,6 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
-import type { Carrier } from '../../kernel/carrier';
 import type { Goal, Placement } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
 import { Pose } from '../../kernel/pose';
@@ -66,18 +65,16 @@ function heldNow(person: Reacher, side: Side, thing: Thing, out: InHand): InHand
 }
 
 /**
- * Where hand `side` goes for `thing`, hanging from it, to be where a carrier has it: where its grasp has the hand bone in the thing, its
- * rest undone. Mid-regrip, the grasp the regrip has reached, the thing placed in the hand so.
+ * Where hand `side` goes for `thing`, hanging from it, in the thing's frame (to be where a carrier has it): where its grasp has the hand
+ * bone in the thing, its rest undone. Mid-regrip, the grasp the regrip has reached, the thing placed in the hand so.
  */
-export function grasped(person: Reacher, side: Side, thing: Thing): (f: Frame, carrier: Carrier) => Goal & { velocity: Vector3 } {
-  const bone = person.hands[side], rest = person.restOf(bone).clone().invert(), velocity = new Vector3();
+export function grasped(person: Reacher, side: Side, thing: Thing): (f: Frame) => Goal {
+  const bone = person.hands[side], rest = person.restOf(bone).clone().invert();
   const held = heldNow(person, side, thing, { position: new Vector3(), quaternion: new Quaternion() });
-  return (f, carrier) => {
+  return (f) => {
     const hold = person.holding[side], regrip = hold && regrips.get(hold);
     if (regrip) regripped(person, side, thing, regrip, f.time, held);
-    const position = held.position.clone().applyQuaternion(carrier.current.quaternion).add(carrier.current.position);
-    const quaternion = carrier.current.quaternion.clone().multiply(held.quaternion).multiply(rest);
-    return { position, quaternion, velocity: carrier.velocity(velocity) };
+    return { position: held.position.clone(), quaternion: held.quaternion.clone().multiply(rest) };
   };
 }
 

@@ -1,0 +1,57 @@
+:root { font-family: ui-sans-serif, system-ui, sans-serif; color: #f7faf9; background: #172c34; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; overflow: hidden; }
+#game { width: 100vw; height: 100dvh; display: block; }
+.heading, .telemetry, .hud, .menu { position: fixed; z-index: 1; }
+.heading { top: 28px; left: 32px; text-shadow: 0 2px 8px #152930a6; }
+h1 { font-size: 27px; line-height: 1.1; margin: 0 0 5px; font-weight: 800; letter-spacing: -0.03em; }
+.heading span { font-size: 13px; }
+.telemetry { top: 28px; right: 32px; display: flex; gap: 18px; padding: 12px 16px; background: #172c34e8; font-size: 13px; font-variant-numeric: tabular-nums; }
+.menu { top: 50%; left: 32px; transform: translateY(-46%); width: min(440px, calc(100vw - 64px)); padding: 30px; background: #172c34f5; box-shadow: 0 18px 60px #0b20284d; }
+h2 { margin: 0 0 12px; font-size: 32px; line-height: 1.1; letter-spacing: -0.025em; }
+p { font-size: 14px; line-height: 1.6; color: #c8d9dd; margin: 0 0 22px; }
+button { width: 100%; min-height: 48px; font: inherit; font-weight: 700; cursor: pointer; color: #152c32; background: #b9efd9; border: 0; border-radius: 3px; }
+button:hover { background: #dcffef; }
+button:disabled { background: #536e77; color: #edf4f5; cursor: wait; }
+button:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+#notice { margin: 10px 0 20px; font-size: 12px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin: 0; }
+.controls div { min-width: 0; }
+dt { color: #fff; font-size: 12px; font-weight: 700; }
+dd { margin: 2px 0 0; color: #b8cbd0; font-size: 12px; }
+.device-note { margin: 20px 0 0; font-size: 12px; color: #b8cbd0; }
+.hud { inset: auto 32px 26px; display: flex; align-items: end; justify-content: space-between; gap: 24px; pointer-events: none; text-shadow: 0 2px 6px #152930; }
+.hint { font-size: 12px; padding: 10px 14px; background: #172c34dc; }
+kbd { font-family: inherit; font-weight: 700; padding: 2px 5px; margin-left: 10px; border: 1px solid #82969b; border-radius: 3px; }
+kbd:first-child { margin-left: 0; }
+.weapon { text-align: right; }
+.combat { display: flex; align-items: end; gap: 30px; }
+.vitals { display: grid; gap: 5px; font-size: 12px; }
+.vitals strong { display: block; font-size: 28px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.weapon > span { display: block; font-size: 12px; }
+.weapon strong { display: block; font-size: 42px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.weapon small { font-size: 17px; font-weight: 400; }
+.reticle { position: fixed; z-index: 1; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; --gap: 7px; }
+.reticle i { position: absolute; background: #fff; box-shadow: 0 1px 3px #000b; }
+.reticle i:nth-child(1) { width: 6px; height: 2px; right: var(--gap); top: -1px; }
+.reticle i:nth-child(2) { width: 6px; height: 2px; left: var(--gap); top: -1px; }
+.reticle i:nth-child(3) { width: 2px; height: 6px; left: -1px; bottom: var(--gap); }
+.reticle i:nth-child(4) { width: 2px; height: 6px; left: -1px; top: var(--gap); }
+body.aiming .reticle { --gap: 3px; opacity: 0.3; }
+.hit { position: fixed; z-index: 2; left: 50%; top: 50%; width: 20px; height: 20px; transform: translate(-50%, -50%) rotate(45deg); opacity: 0; pointer-events: none; }
+.hit::before, .hit::after { content: ''; position: absolute; background: #ffdd8a; box-shadow: 0 1px 4px #152930; }
+.hit::before { width: 20px; height: 2px; top: 9px; }
+.hit::after { width: 2px; height: 20px; left: 9px; }
+.hit.kill::before, .hit.kill::after { background: #ff4b3e; }
+.damage { position: fixed; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, #d1201acc 100%); }
+#ammo.low { color: #ffb347; }
+body.paused .reticle, body.paused .hud { display: none; }
+body.playing .menu { display: none; }
+@media (max-width: 700px) {
+  .heading { top: 18px; left: 20px; }
+  .telemetry { top: auto; bottom: 18px; left: 20px; right: auto; gap: 12px; }
+  .menu { left: 20px; width: calc(100vw - 40px); padding: 22px; max-height: calc(100dvh - 170px); overflow-y: auto; }
+  .hud { inset: auto 20px 74px; }
+  .hint { display: none; }
+  .combat { margin-left: auto; gap: 18px; }
+}

@@ -2,13 +2,17 @@
 // Recalled: Unreal's CharacterMovement stands the capsule on the floor under it and steps up to MaxStepHeight, foot IK tracing down to
 // the floor under each foot; footstep planners on stairs keep each foothold inside one tread's polygon. Here the floor is a height
 // function, and a foothold is moved along the foot until its whole sole is on one level.
-import { Vector3 } from 'three';
-import { forwardOf } from '../kernel/math';
+import { Vector3, type Object3D } from 'three';
+import { forwardOf, leftOf } from '../kernel/math';
 import type { Spot } from './support';
 import type { Feet } from './step/state';
 
-/** the floor's height under a world point (x, z) (m) */
-export type Floor = (x: number, z: number) => number;
+/** The floor's height under a world point (x, z), in metres. */
+export interface Floor {
+  (x: number, z: number): number;
+  /** The object supporting that point. Supply this when feet can stand on independently moving surfaces. */
+  platform?(x: number, z: number): Object3D | undefined;
+}
 
 /** the plane y = 0: a body's floor unless it is given one */
 export const FLAT: Floor = () => 0;
@@ -61,6 +65,15 @@ export function foothold(floor: Floor, feet: Feet, i: number, anchor: Vector3, y
     if (!found) [found, level] = [_found.copy(at), on];
   }
   if (found) return anchor.copy(found).setY(level + feet.ankleHeight);
+  // A narrow support can lie beside the foot's forward line. Keep the ankle on it before reaching for a floor below.
+  if (stays && onto !== undefined) {
+    const inward = leftOf(yaw, _inward).multiplyScalar(-feet.legs[i].sign);
+    for (const partial of [false, true]) for (let moved = FIT.step; moved <= FIT.most + 1e-9; moved += FIT.step) {
+      const at = _at.copy(anchor).addScaledVector(inward, moved), print = feet.print(i, at, yaw);
+      const on = partial ? over(floor, print, at, onto) : levelUnder(floor, print);
+      if (on !== null && Math.abs(on - onto) <= LEVEL && (!keeps || keeps(at))) return anchor.copy(at).setY(on + feet.ankleHeight);
+    }
+  }
   return anchor.setY(highestUnder(floor, feet.print(i, anchor, yaw)) + feet.ankleHeight);
 }
 
@@ -78,8 +91,8 @@ function levelOf(floor: Floor, print: readonly Spot[], forward: Readonly<Vector3
 }
 
 /** Tuned: a print is on one level if the floor under it differs by no more than this (m) */
-const LEVEL = 0.002;
+export const LEVEL = 0.002;
 /** Tuned: a foothold is moved along its foot in `step`s (m) up to `most` (m: about a person's foot) to fit it onto one level, kept
  * `clear` (m) off a higher one where it can be */
 const FIT = { step: 0.01, most: 0.3, clear: 0.1 };
-const _forward = new Vector3(), _at = new Vector3(), _found = new Vector3();
+const _forward = new Vector3(), _inward = new Vector3(), _at = new Vector3(), _found = new Vector3();

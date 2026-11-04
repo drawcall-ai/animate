@@ -1,13 +1,14 @@
 // A leap: the dip and push off, the flight and the landing the knees take.
-import { GRAVITY, quintic } from '../../kernel/math';
+import { clamp, GRAVITY, quintic } from '../../kernel/math';
 import type { Leap } from './state';
 
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of
  * the press); how far below standing the feet meet the floor (m); the knees taking the landing over
- * `down` s, as deep as `depth` × the fall's speed × `down` (half that running), rising over `up` s.
+ * `down` s, as deep as `depth` × the fall's speed × `down` (half that running), rising over `up` s; a landing physics ends, as deep as
+ * `absorb` s of the fall's speed (half that running), within `least` … `most` (m).
  */
-const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3 };
+const JUMP = { launch: 0.1, contact: 0.02, down: 0.15, depth: 0.25, up: 0.3, absorb: 0.025, least: 0.025, most: 0.16 };
 
 /**
  * A leap asked (`asked`, its take-off speed) moved on `dt`: dipping, then in the air (landing on a sub-step), the knees taking it, rising
@@ -33,4 +34,21 @@ export function leap(j: Leap, asked: number | undefined, run: number, s: number,
     [j.rise, j.vy, j.a] = quintic(j.rise, j.vy, j.a, 0, 0, JUMP.up - j.since + dt, dt);
     if (j.since >= JUMP.up - 1e-9) [j.phase, j.rise, j.vy, j.a] = ['ground', 0, 0, 0];
   }
+}
+
+/** Physics supplies flight; the animation supplies only the knee response to its actual touchdown. */
+export function drivenLeap(j: Leap, grounded: boolean, velocity: number, run: number, s: number, dt: number) {
+  if (!grounded) {
+    j.since = j.phase === 'air' ? j.since + dt : dt;
+    j.phase = 'air';
+    j.rise = j.a = 0;
+    j.vy = velocity;
+    return;
+  }
+  if (j.phase === 'air') {
+    j.bottom = -clamp(-j.vy * JUMP.absorb * (1 - run / 2), JUMP.least * s, JUMP.most * s);
+    j.phase = 'down';
+    j.since = j.rise = j.vy = j.a = 0;
+  }
+  leap(j, undefined, run, s, dt);
 }

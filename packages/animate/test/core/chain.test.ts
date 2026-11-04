@@ -50,6 +50,39 @@ describe('solveChain', () => {
     expect(pose.position(3).distanceTo(new Vector3(0.1, 1, 0.85))).toBeLessThan(1e-9);
   });
 
+  it.each([1, -1])('keeps the bend plane when a limb extends through full reach from bend direction %s', (direction) => {
+    const skeleton = leg([hinge(2, -2.7, 2.7)]);
+    const pose = new Pose(skeleton);
+    pose.setLocal(2, turn(1, 0, 0, direction * 0.2));
+    const pole = new Vector3(0.1, 1, 1);
+    const target = new Vector3(0.1, 0.15 + 1e-6, 0);
+    solveChain({ current: pose }, 'leg', { tip: { position: target }, pole });
+    for (const y of [0.15 - 1e-6, 0.15 + 1e-6]) {
+      const before = pose.local(1).clone();
+      target.y = y;
+      solveChain({ current: pose }, 'leg', { tip: { position: target }, pole });
+      expect(pose.local(1).angleTo(before)).toBeLessThan(0.01);
+      expect(pose.position(3).distanceTo(target)).toBeLessThan(2e-6);
+    }
+  });
+
+  it('keeps a constrained knee folded when its target crosses the opposite hinge direction', () => {
+    const thigh = hinge(1, 0, 0);
+    thigh.swing[0] = [0, 0];
+    thigh.twist = [0, 0];
+    const knee = hinge(2, -5 * Math.PI / 180, 155 * Math.PI / 180);
+    const pose = new Pose(leg([thigh, knee]));
+    const pole = new Vector3(0.1, 1, 1), target = new Vector3(0.1, 0.8, -1e-6);
+    solveChain({ current: pose }, 'leg', { tip: { position: target }, pole, swivel: false });
+    const before = pose.local(2).clone(), ankle = pose.position(3).clone();
+    target.z = 1e-6;
+    solveChain({ current: pose }, 'leg', { tip: { position: target }, pole, swivel: false });
+    expect(beyond(pose.local(1), thigh)).toBeLessThan(1e-9);
+    expect(beyond(pose.local(2), knee)).toBeLessThan(1e-9);
+    expect(pose.local(2).angleTo(before), 'a 2 µm target move must not switch flexion to hyperextension').toBeLessThan(0.001);
+    expect(pose.position(3).distanceTo(ankle)).toBeLessThan(0.001);
+  });
+
   it('keeps every bone within its limit', () => {
     // the knee bends only back (+x), the pole asks for it forward
     const skeleton = leg([hinge(2, 0, 2.4)]);
@@ -57,6 +90,18 @@ describe('solveChain', () => {
     expect(Math.max(...excess(pose))).toBeLessThan(1e-9);
     const free = solve(leg(), { tip: { position: new Vector3(0.1, 0.5, 0.2) }, pole: new Vector3(0.1, 0.6, 2) });
     expect(beyond(free.local(2), hinge(2, 0, 2.4))).toBeGreaterThan(0.5);
+  });
+
+  it('can prioritize a leg bend plane over a foot rotation outside the ankle range', () => {
+    const skeleton = leg([hinge(2, 0, 2.4), hinge(3, -0.15, 0.15)]);
+    const position = new Vector3(0.1, 0.5, -0.2), pole = new Vector3(0.1, 0.6, -2);
+    const placed = solve(skeleton, { tip: { position }, pole });
+    for (const angle of [-1, 1]) {
+      const pose = solve(skeleton, { tip: { position, quaternion: turn(0, 0, 1, angle) }, pole, poleFirst: true });
+      expect(pose.position(2).distanceTo(placed.position(2))).toBeLessThan(1e-9);
+      expect(pose.position(3).distanceTo(position)).toBeLessThan(1e-9);
+      expect(Math.max(...excess(pose))).toBeLessThan(1e-9);
+    }
   });
 
   it('solves a longer chain (a horse’s hind leg) within its limits, onto a goal it can reach', () => {

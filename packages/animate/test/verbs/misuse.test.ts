@@ -1,8 +1,8 @@
 import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, reach, release, walkTo, Body, dog } from '../../src/index';
+import { carry, grab, reach, release, walkTo, Body, dog, type Root } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { person, play, run } from '../bodies';
+import { dt, person, play, run } from '../bodies';
 import { box, empty, roomOf } from '../things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
@@ -11,6 +11,18 @@ const BOTH = { left: 'left', right: 'right' } as const;
 const playing = (body: Body, story: Parameters<typeof play>[0]) => () => play(story, [body], 0.5);
 
 describe('a misuse throws, saying what is wrong', () => {
+  it('a driven root whose physics support and jump both own its vertical movement', () => {
+    const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3(), jump: 3 };
+    const body = person({ drive: () => root });
+    expect(() => body.update(dt)).toThrow('support owns vertical motion');
+  });
+
+  it('a driven root with physics support but no velocity relative to its platform', () => {
+    const root: Root = { position: new Vector3(), yaw: 0, support: new Vector3() };
+    const body = person({ drive: () => root });
+    expect(() => body.update(dt)).toThrow('physics support requires velocity relative to its platform');
+  });
+
   it('a grip the thing has no empty for', () => {
     const body = person(), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.9, 0.5));

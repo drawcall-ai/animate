@@ -246,10 +246,23 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     f.current.setLocal(0, tilt.premultiply(new Quaternion().setFromAxisAngle(UP, yaw)));
     const chest = new Quaternion().setFromAxisAngle(UP, yaw - upright.yaw).multiply(trunk.chest);
     const half = f.current.local(0).clone().invert().multiply(chest).slerp(new Quaternion(), 0.5);
+    const impact = person.impact;
+    impact.step(dt);
     [INDEX.spine, INDEX.chest].forEach((bone, k) => {
       const local = half.clone(), limit = f.current.skeleton.limits[bone];
       if (limit) clampRotation(local, limit);
-      f.current.setLocal(bone, back[k].follow(f.prev2.local(bone), f.prev.local(bone), local, TURN, dt, new Quaternion()));
+      // Follow posture intent in its own history; the impulse already has physical recovery.
+      const prev2 = f.prev2.local(bone).clone(), prev = f.prev.local(bone).clone();
+      if (impact.active) {
+        prev2.multiply(impact.prev2.clone().invert());
+        prev.multiply(impact.prev.clone().invert());
+      }
+      const turned = back[k].follow(prev2, prev, local, TURN, dt, new Quaternion());
+      if (impact.active) {
+        turned.multiply(impact.rotation);
+        if (limit) clampRotation(turned, limit);
+      }
+      f.current.setLocal(bone, turned);
     });
     // the legs down to the feet
     legs.forEach((leg, i) => {
@@ -260,7 +273,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       const along = stepper.yaw + leg.sign * toeOut, kept = along + clamp(wrapAngle(pose.yaw - along), -KNEE_OFF, KNEE_OFF);
       const yawed = leg.swing ? pose.yaw + wrapAngle(kept - pose.yaw) * minimumJerk(leg.swing.u / KNEE_EASE) : pose.yaw;
       const pole = kneePole(side, yawed, along, thigh, pose.ankle, _pole).multiplyScalar(proportions.thigh).add(thigh);
-      // The pole guides the free swing; the chain progressively takes the foot orientation needed for contact.
+      // Hip limits may move the knee off its pole; fitting the ankle's rotation must not choose a different knee plane.
       const place = (at: Vector3) => {
         const shank = INDEX[`${side}LowerLeg`], ankleRange = f.current.skeleton.limits[INDEX[`${side}Foot`]];
         // (the ankle turning the foot as planned under the shank as it is now, within its range (into `_local`; unclamped, `_unclamped`))
@@ -270,7 +283,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
           if (ankleRange) clampRotation(_local, ankleRange);
           return _local;
         };
-        solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole });
+        solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: leg.swing ? undefined : pose.foot }, pole, poleFirst: true });
         // (swinging, a foot turned further about the vertical than the ankle's range leaves it, off the way its knee points, is turned
         // there by the knee's own twist — the tibia rotates in its flexion — as far as the knee's range lets: left turned with the knee, a
         // foot turning about on a tread swept its toes 16° off its way into the riser it was planned clear of)
@@ -286,7 +299,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
         // Prepare the planted orientation during terminal swing instead of changing the chain's constraints at contact.
         if (leg.swing && leg.swing.u > 0.5 && ankle.angleTo(_unclamped) > 1e-6) {
           const landing = f.current.rotation(shank).clone().multiply(ankle).slerp(pose.foot, minimumJerk((leg.swing.u - 0.5) / 0.5));
-          solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: landing }, pole, twist: twist ?? 0 });
+          solveChain(f, `${side}Leg`, { tip: { position: at, quaternion: landing }, pole, twist: twist ?? 0, poleFirst: true });
           ankle.copy(f.current.rotation(shank)).invert().multiply(landing);
           if (ankleRange) clampRotation(ankle, ankleRange);
         }

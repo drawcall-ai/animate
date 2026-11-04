@@ -109,8 +109,8 @@ function ready(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg, unloadi
   if (steps.clocked && !airborne && isWalking(steps) && legs.some((o) => o.swing && exclusive(steps, leg, o, now))) return false;
   // (nor lifts a foot it has only just put down: a step lands and bears weight before the next)
   if (steps.clocked && !leg.swing && leg.planted < SETTLING * C) return false;
-  // With a planned root, touchdown bears weight before another swing; the planner can hold the root back.
-  if (leg.swing || (!airborne && r.forecast && leg.landed)) return false;
+  // A physical flight lands before stepping again; planned roots can also wait between ordinary strides.
+  if (leg.swing || (!airborne && leg.landed && (r.forecast || leg.leapt))) return false;
   // (nor just after one its gait sets apart from it, out of reach or not: the feet leave the floor one by one, `TOGETHER` apart)
   if (steps.clocked && !airborne && legs.some((o) => o !== leg && o.lifted < TOGETHER * C && !together(steps, leg, o))) return false;
   const due = urgent || lifts(steps, now, cues, leg, other);
@@ -140,15 +140,14 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   const { st, feet } = steps, s = st.scale, { r, airborne, air, vy, yaw, most } = now;
   // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
   if (airborne) return !leg.swing && air > 0;
-  // (a planned walk keeps its supporting foot down even when short of reach: the pelvis gives, not both feet at once)
-  if (other.swing && r.forecast && !steps.clocked) return false;
-  // (short of the height asked — but not stepped down ahead of its hip, below a foot standing behind: the hip comes over it, let down
-  // to it — a foot stepped down a stair stepped on again at once for it
-  // — nor a walker's foot just landed ahead of its hip: the hip comes over it as it takes the weight, the pelvis given down to it; stepped on
-  // again at once it left the other a stance's travel behind, the body falling past the one foot down)
+  // (a planned walk keeps its supporting foot down even when short of reach; so does a walking landing while its knees recover)
+  const recovering = !!now.contact && now.run === 0 && (steps.jumping.phase === 'down' || steps.jumping.phase === 'up');
+  if (other.swing && (r.forecast || recovering) && !steps.clocked) return false;
+  // A lower leading foot takes the weight as the pelvis descends. A foot already home cannot improve its reach by stepping in place.
   const ahead = aheadOf(steps, now, leg) < 0;
   const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (!!r.forecast && leg.planted < SETTLING * now.C));
-  if (!down && reach(steps, now, leg) < nominal(steps, now) + Math.max(0, vy) * RISING - STEP.short * s) return true;
+  if (!down && reach(steps, now, leg) < nominal(steps, now) + Math.max(0, vy) * RISING - STEP.short * s
+    && offHome(steps, now, leg, now.lead) > STEP.still * s) return true;
   if (leg.landed) return false;
   if (leg === cues.catcher) return true;
   return strayed(st, feet, leg, _v.subVectors(hipOf(steps, now, leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;

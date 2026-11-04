@@ -80,6 +80,46 @@ importers:
         specifier: ^3.2.0
         version: 3.2.7(@types/node@24.19.0)
 
+  scenes/shooter:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      '@drawcall/physics':
+        specifier: 0.19.0
+        version: 0.19.0(three@0.180.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.19.0
+        version: 0.19.0(@drawcall/physics@0.19.0(three@0.180.0))(three@0.180.0)
+      '@drawcall/rig':
+        specifier: ^0.5.0
+        version: 0.5.0(three@0.180.0)(vite@7.3.6(@types/node@24.19.0))
+      '@pmndrs/timeline':
+        specifier: ^0.5.0
+        version: 0.5.0(three@0.180.0)
+      navcat:
+        specifier: ^0.4.1
+        version: 0.4.1(three@0.180.0)
+      three:
+        specifier: ^0.180.0
+        version: 0.180.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.180.0
+        version: 0.180.0
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.6(@types/node@24.19.0)
+      vitecache:
+        specifier: ^0.1.1
+        version: 0.1.1(vite@7.3.6(@types/node@24.19.0))
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@24.19.0)
+
   scenes/throne-room:
     dependencies:
       '@drawcall/animate':
@@ -128,6 +168,20 @@ packages:
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
+
+  '@dimforge/rapier3d-compat@0.21.0':
+    resolution: {integrity: sha512-tCl1HPGwOhn5aCQbgqWbOH+Nx/5fnr3IPAnzQuR7zIhC/raqi2yxC6LhvZqjdI2El5hQgY5RDAwDrAjAi2FdPA==}
+
+  '@drawcall/physics-rapier@0.19.0':
+    resolution: {integrity: sha512-ksEMUyFhXKsoUm7sxAqgbK59i2FTfz1bEz9qiScF9WqmNlh7tLkKwPj+61bYQa3KC2sPX8SwxJ41GxspZuSBew==}
+    peerDependencies:
+      '@drawcall/physics': ^0.19.0
+      three: '>=0.177.0'
+
+  '@drawcall/physics@0.19.0':
+    resolution: {integrity: sha512-S66SkBZ0xvB7kracOgAPaNhdet7+7b/oxUCdgL1ZKjFjFxUWU8kucsVmZ7HvreP2K8myOQB/FsOp4KOK5eUtPg==}
+    peerDependencies:
+      three: '>=0.177.0'
 
   '@drawcall/rig@0.5.0':
     resolution: {integrity: sha512-N4N+MEcxe1RjR8DXQADyetWySJHUjrewUzH/ylC7puWPk/VusFwKOkHha2d8RujIfH61scILGPF+FKAZxvKWOQ==}
@@ -921,6 +975,9 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
+  mathcat@0.0.12:
+    resolution: {integrity: sha512-gUBe1U/sh7JQ+aSMJDiLG++B3t5rSGAYdEIqPBSEEFUHK9mAcC7yE0f7RZ1SjXI57bDLSYJyrA74XQPT1tJxoA==}
+
   meshoptimizer@0.22.0:
     resolution: {integrity: sha512-IebiK79sqIy+E4EgOr+CAw+Ke8hAspXKzBd0JdgEmPHiAwmvEj2S4h1rfvo+o/BnfEYd/jAOg5IeeIjzlzSnDg==}
 
@@ -938,6 +995,14 @@ packages:
     resolution: {integrity: sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
+
+  navcat@0.4.1:
+    resolution: {integrity: sha512-dMsXyMh06V5MZaDx93C+xO9GnGIU6TczsnNI8zD41EL1ybOxHgk0uqVTiVZel8cmysR2E+hJA4bK1EOTSM+S6Q==}
+    peerDependencies:
+      three: '>=0.180.0'
+    peerDependenciesMeta:
+      three:
+        optional: true
 
   npm@11.6.4:
     resolution: {integrity: sha512-ERjKtGoFpQrua/9bG0+h3xiv/4nVdGViCjUYA1AmlV24fFvfnSB7B7dIfZnySQ1FDLd0ZVrWPsLLp78dCtJdRQ==}
@@ -1326,6 +1391,18 @@ snapshots:
     optional: true
 
   '@dimforge/rapier3d-compat@0.12.0': {}
+
+  '@dimforge/rapier3d-compat@0.21.0': {}
+
+  '@drawcall/physics-rapier@0.19.0(@drawcall/physics@0.19.0(three@0.180.0))(three@0.180.0)':
+    dependencies:
+      '@dimforge/rapier3d-compat': 0.21.0
+      '@drawcall/physics': 0.19.0(three@0.180.0)
+      three: 0.180.0
+
+  '@drawcall/physics@0.19.0(three@0.180.0)':
+    dependencies:
+      three: 0.180.0
 
   '@drawcall/rig@0.5.0(three@0.180.0)(vite@7.3.6(@types/node@24.19.0))':
     dependencies:
@@ -1853,6 +1930,8 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
 
+  mathcat@0.0.12: {}
+
   meshoptimizer@0.22.0: {}
 
   meshoptimizer@1.3.0: {}
@@ -1863,6 +1942,12 @@ snapshots:
   ms@2.1.3: {}
 
   nanoid@3.3.19: {}
+
+  navcat@0.4.1(three@0.180.0):
+    dependencies:
+      mathcat: 0.0.12
+    optionalDependencies:
+      three: 0.180.0
 
   npm@11.6.4: {}
 

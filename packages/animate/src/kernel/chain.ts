@@ -17,6 +17,9 @@ interface ChainGoal {
   /** whether a limb whose limits the pole's side does not fit may swivel off it, or bend the other way, as far as they need (default
    * true); false: it keeps to the pole's side, clamped within them (a re-solve that keeps an elbow where its brakes left it) */
   swivel?: boolean;
+  /** whether a limb swivels for its first joint's limits alone, its tip's rotation fitted after (default false): a rotation outside the
+   * last joint's range does not turn the bend off the pole's plane */
+  poleFirst?: boolean;
   /** whether a limb whose limits the pole's side does not fit keeps the fit it has now — its swivel, its middle bone's twist and its bend's
    * way — leaving it only for one clearly better (`HELD`); default false: the best fit wherever it is */
   keep?: boolean;
@@ -27,6 +30,8 @@ const SWEEPS = 64;
 const PROGRESS = 1e-9;
 /** how far outside its limits (rad, summed) a solution still fits */
 const FITS = 1e-9;
+/** how near a limb's bend is to straight (the sine of its middle joint's angle) for its bend's way to be read off the hinge plane it had */
+const STRAIGHT = 1e-9;
 /** the most bones a chain has */
 const LONGEST = 16;
 
@@ -44,7 +49,7 @@ export function solveChain(frame: { current: Pose }, chain: string, goal: ChainG
   const parent = skeleton.bones[bones[0]].parent;
   const c: Solving = { skeleton, bones, base: parent >= 0 ? _base.copy(pose.rotation(parent)) : _base.identity(), start: _start.copy(pose.position(bones[0])), local: _local };
   bones.forEach((b, k) => _local[k].copy(pose.local(b)));
-  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true, goal.keep ?? false);
+  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true, goal.poleFirst ?? false, goal.keep ?? false);
   else {
     if (goal.twist !== undefined) throw new Error(`chain "${chain}": a preferred twist applies only to a two-segment chain`);
     if (goal.pole) throw new Error(`chain "${chain}" has ${bones.length - 1} segments: a pole bends only a two-segment chain`);
@@ -68,7 +73,7 @@ interface Solving {
 }
 
 /** a limb: its middle joint as a hinge (bent to the distance), its first bone onto the goal and toward the pole, the middle joint aimed again */
-function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean, keeps: boolean) {
+function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean, poleFirst: boolean, keeps: boolean) {
   const { skeleton, bones, local, start } = c;
   const o1 = skeleton.bones[bones[1]].offset;
   const o2 = skeleton.bones[bones[2]].offset;
@@ -91,6 +96,12 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   const now = _r.copy(c.base).multiply(local[0]);
   if (d < 1e-12) toTarget.copy(o1).add(v).applyQuaternion(now);
   const T = toTarget.normalize();
+  // At full extension the hinge angle loses its bend branch; the previous hinge plane still carries it.
+  if (pole && Math.abs(Math.sin(phi0 + hinge.now)) < STRAIGHT) {
+    const side = _f.crossVectors(T, _g.subVectors(pole, start)).dot(_g.copy(h).applyQuaternion(now));
+    const candidate = candidates[side < 0 ? 0 : 1];
+    if (Math.abs(side) > 1e-12 && clampBend(candidate, hinge) === candidate) bend = candidate;
+  }
   const limits = bones.map((b) => skeleton.limits[b]);
   const a = _axis.copy(o2).normalize();
   const r0 = _r0;
@@ -114,10 +125,10 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     const hl = _hl.copy(h).addScaledVector(pn, -h.dot(pn)).normalize();
     const n = _n;
     const P = pole ? _pole.subVectors(pole, start) : null;
-    if (P && n.crossVectors(T, P).lengthSq() > 1e-12) {
+    const side = o1.dot(_e.crossVectors(hl, pn));
+    if (P && Math.abs(side) > 1e-12 && n.crossVectors(T, P).lengthSq() > 1e-12) {
       // the middle joint's side of the line to the tip, as seen along the hinge axis
-      const side = Math.sign(o1.dot(_e.crossVectors(hl, pn))) || 1;
-      n.normalize().multiplyScalar(side);
+      n.normalize().multiplyScalar(Math.sign(side));
     } else n.copy(hl).applyQuaternion(now);
     n.addScaledVector(T, -n.dot(T));
     if (n.lengthSq() < 1e-12) perpendicular(T, n);
@@ -135,7 +146,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
       _upper.copy(c.base).multiply(turned);
       return 100 * excess(turned, limits[0]);
     };
-    const tip = () => quaternion ? shared(_upper, bent, a, quaternion, limits, twist, kept) : 0;
+    const tip = () => quaternion && !poleFirst ? shared(_upper, bent, a, quaternion, limits, twist, kept) : 0;
     const strain = (angle: number) => first(angle) + tip();
     // as the pole has it, unless a swivel searched with the preferred twist fits better, by more than the swivel costs (`SWIVEL`): the
     // least of the two together, which grows with the excess it saves (chosen whole once it saved more than it cost, the swivel leapt
@@ -226,9 +237,9 @@ function hingeOf(limit: Limit | undefined, q: Quaternion, offset: Vector3, end: 
 
 /** of two bends, the one within the hinge's range nearest how it is bent now, else the one nearest the range (clamped) */
 function nearest(a: number, b: number, hinge: Hinge): number {
-  const off = (x: number) => Math.abs(clampBend(x, hinge) - x);
+  const off = (x: number) => Math.abs(wrapAngle(clampBend(x, hinge) - x));
   if (off(a) !== off(b)) return clampBend(off(a) < off(b) ? a : b, hinge);
-  return Math.abs(a - hinge.now) <= Math.abs(b - hinge.now) ? a : b;
+  return Math.abs(wrapAngle(a - hinge.now)) <= Math.abs(wrapAngle(b - hinge.now)) ? a : b;
 }
 
 /** the x within lo…hi where `f` = `part(x) + rest()` (both ≥ 0; `rest` reads what `part` left for that x) plus what leaving `start` for
@@ -294,7 +305,10 @@ const SWIVEL = 0.05;
  * held a magazine's arm through its carry with no leap of its swivel or forearm twist; at 0.005 it leapt by turns again */
 const HELD = 0.02;
 
-const clampBend = (x: number, { range: [lo, hi] }: Hinge) => Math.min(hi, Math.max(lo, x));
+function clampBend(x: number, { range: [lo, hi] }: Hinge) {
+  const near = x + 2 * Math.PI * Math.round(((lo + hi) / 2 - x) / (2 * Math.PI));
+  return Math.min(hi, Math.max(lo, near));
+}
 
 /** cyclic coordinate descent: from the last joint to the first, each turned to point the tip at the target, within its limit */
 function descend(c: Solving, target: Vector3) {

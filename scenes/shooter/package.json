@@ -1,0 +1,85 @@
+{
+  "name": "shooter",
+  "private": true,
+  "dependencies": {
+    "@drawcall/animate": "workspace:*",
+    "@drawcall/physics": "0.19.0",
+    "@drawcall/physics-rapier": "0.19.0",
+    "@drawcall/rig": "^0.5.0",
+    "@pmndrs/timeline": "^0.5.0",
+    "navcat": "^0.4.1",
+    "three": "^0.180.0"
+  },
+  "assetDependencies": {
+    "concrete-rooftop-step": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/short-rooftop-concrete-footstep.mp3": "assets/audio/steps.mp3"
+      }
+    },
+    "heavy-concrete-metal-scrape-landing-thud": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/heavy-compact-concrete-and-metal-impact-with-a-hard-scrape-a-rooftop-landing-thud.mp3": "public/audio/land.mp3"
+      }
+    },
+    "jump-launch": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/jump-takeoff.mp3": "public/audio/jump.mp3"
+      }
+    },
+    "military-rifle-bang": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/assault-rifle-shot.mp3": "public/audio/shot.mp3"
+      }
+    },
+    "rifle-reload-bolt-action": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/assault-rifle-reload.mp3": "public/audio/reload.mp3"
+      }
+    },
+    "soft-cloth-rustle": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/cloth-rustle.mp3": "public/audio/cloth.mp3"
+      }
+    },
+    "low-backstage-winch-hum": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/seamless-low-backstage-winch-motor-and-damp-cable-hum.mp3": "public/audio/lift.mp3"
+      }
+    },
+    "distant-rooftop-wind-loop": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/looping-distant-rooftop-wind-ambience-no-voices.mp3": "assets/audio/wind.mp3"
+      }
+    },
+    "forest-canopy-wind-leaves-brushing-birds": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/loopable-forest-canopy-wind-with-leaves-brushing-and-distant-birds-no-melody.mp3": "assets/audio/canopy.mp3"
+      }
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "test:browser": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.0",
+    "vitecache": "^0.1.1",
+    "vitest": "^3.2.7"
+  }
+}

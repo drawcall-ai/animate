@@ -2,24 +2,26 @@
 // Recalled: the procedural stepping of games (e.g. Rain World, Overgrowth, Unreal "Control Rig"
 // foot placement): each foot has a home under its hip; it steps when it falls too far from it,
 // landing where the home will be.
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { STEP as SUB_STEP, type Frame } from '../../kernel/frame';
 import { follow } from '../../kernel/follow';
-import { clamp, forwardOf, leftOf, lerp, minimumJerk, quintic, smoothstep, wrapAngle } from '../../kernel/math';
+import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, smoothstep, wrapAngle } from '../../kernel/math';
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
 import {
   AIMED, LOWEST, PASSING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
   _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
-  dropOf, mod, remaining, strayPast, Steps,
-  type Body, type FootPose, type Leg, type Now, type Reading, type Steering, type Timing,
+  dropOf, mod, remaining, strayPast, Steps, SPUN, turnTo,
+  physicsOf, type Body, type FootPose, type Leg, type Now, type Physics, type Reading, type Steering, type Timing,
 } from './state';
-import { lengthOf, nominal, pace, widthAt } from './reach';
+import { lengthOf, nominal, pace, strokeOf, widthAt } from './reach';
 import { landing, settle, swingOn } from './swing';
 import { cue, exclusive, inTurn, isWalking, keepTime, liftFeet, together, wants } from './cues';
 import { placePelvis } from './pelvis';
 import { plantedPose } from './plant';
-import { leap } from './leap';
+import { drivenLeap, leap } from './leap';
+import { bindFeet, followFeet, transport } from './platform';
+import type { Floor } from '../floor';
 
 /**
  * Legs under a root the scene drives (`move`, read every sub-step): the pelvis exactly over it,
@@ -35,6 +37,9 @@ import { leap } from './leap';
  */
 export class Stepper extends Steps {
 
+  /** Carry all gait state with the physical support, before reading this sub-step's root. */
+  transport(matrix: Matrix4) { transport(this, matrix); }
+
   /** Ask for a leap at `speed` (m/s up): taken up on the next sub-step standing or rising from a landing. */
   jump(speed: number) { this.asked = speed; }
 
@@ -45,11 +50,24 @@ export class Stepper extends Steps {
    */
   move(f: Frame, r: Steering) {
     const { st, legs } = this, s = st.scale;
-    const root = this.read(f, r);
-    const timing = this.timing(root);
+    const physics = physicsOf(r, this.floor), stroke = strokeOf(this);
+    followFeet(this);
+    if (physics.flight && !Number.isNaN(this.stand)) {
+      const carried = r.position.y - this.pelvis.y;
+      this.heights[0] += carried;
+      this.heights[1] += carried;
+    }
+    if (physics.contact && this.airborne) {
+      this.ground.reset();
+      // Contact ends the physics fall; its remaining displacement is carried once, then the knees absorb the impact.
+      this.heights[1] += r.position.y - this.pelvis.y;
+      this.heights[0] = this.heights[1];
+    }
+    const root = this.read(f, r, physics);
+    const timing = this.timing(root, stroke);
     const yaw = this.face(root);
     const { v, crouch: k, run, tiptoe } = root;
-    const timed = { ...root, ...timing }, ground = this.ground.at(r, f.dt), climb = this.ground.rising;
+    const timed = { ...root, ...timing }, ground = this.ground.at(r, f.dt, stroke, physics.contact), climb = this.ground.rising;
     // (first moved: standing as high over the ground as it stands)
     if (Number.isNaN(this.stand)) this.stand = this.heights[1] - ground;
     const body: Body = {
@@ -62,6 +80,7 @@ export class Stepper extends Steps {
     const cues = cue(this, now);
     keepTime(this, now, cues);
     liftFeet(this, now, cues);
+    bindFeet(this, physics.contact && r.platform);
     placePelvis(this, now);
     const stepping = legs.some((leg) => leg.swing);
     this.phase += Math.PI * now.dt / (now.C / 2) * Number(stepping);
@@ -106,7 +125,7 @@ export class Stepper extends Steps {
   }
 
   /** The root read for this sub-step: the crouch eased in, the leap moved on, the root's speed, acceleration and turn. */
-  private read(f: Frame, r: Steering): Reading {
+  private read(f: Frame, r: Steering, physics: Physics): Reading {
     const { st, jumping: jump, yaws, heights, velocity } = this, s = st.scale, dt = f.dt;
     // (first moved: standing where it is, moving as the root already does — a body spawned on the move gets no jolt)
     if (Number.isNaN(this.stand)) { heights[0] = heights[1] = f.prev.position(0).y; velocity.copy(r.velocity); }
@@ -119,28 +138,40 @@ export class Stepper extends Steps {
     this.unloaded.copy(r.unloaded ?? ZERO);
     this.pelvis.copy(r.position).add(hips).add(this.unloaded);
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)
-    leap(jump, this.asked, smoothstep(st.run[0], st.run[1], v), s, dt);
+    const run = smoothstep(st.run[0], st.run[1], v);
+    if (!physics.physical) leap(jump, this.asked, run, s, dt);
+    else drivenLeap(jump, !physics.flight, r.vertical ?? 0, run, s, dt);
     this.asked = undefined;
-    const air = jump.phase === 'air' ? Math.max(0, jump.land - jump.since) : jump.phase === 'landed' ? 0 : undefined;
+    let air = jump.phase === 'air' ? Math.max(0, jump.land - jump.since) : jump.phase === 'landed' ? 0 : undefined;
+    if (physics.flight) {
+      // (a short contact horizon poses the feet toward the floor; only physics can end the flight)
+      const contact = (jump.vy + Math.sqrt(jump.vy ** 2 + 2 * GRAVITY * physics.clearance)) / GRAVITY;
+      air = Math.max(dt, Math.min(HORIZON, contact));
+    }
     this.airborne = air !== undefined;
     // (how its speed changes: how far a hard stop or turn leaves a landing)
     const accel = _accel.subVectors(r.velocity, velocity).divideScalar(dt);
     velocity.copy(r.velocity);
-    const run = smoothstep(st.run[0], st.run[1], v);
-    const wanted = yaws[1] + wrapAngle(r.yaw - yaws[1]);
     // (the root's turn rate, to foresee its facing as a foot lands)
     const spin = clamp(wrapAngle(r.yaw - this.rootYaw) / dt, -SPIN, SPIN);
+    // (the way round the root goes as it turns on ahead of the body — not as it turns back toward it — kept till the body has come within a
+    // quarter turn of it)
+    const lead = turnTo(yaws[1], r.yaw, this.way);
+    if (Math.abs(spin) > SPUN) {
+      if (Math.sign(spin) === Math.sign(lead)) this.way = Math.sign(spin);
+    } else if (Math.abs(lead) < Math.PI / 2) this.way = 0;
+    const wanted = yaws[1] + turnTo(yaws[1], r.yaw, this.way);
     // (a gait's feet step for the turn the body would make, held back by them: else it waits on feet that wait on it)
     const pressed = this.clocked && r.turning !== undefined ? clamp(r.turning, -SPIN, SPIN) : spin;
     this.rootYaw = r.yaw;
     return {
-      f, r, dt, v, run, accel, crouch: k, sitting, tiptoe, rise: jump.rise, vy: jump.vy,
+      ...physics, f, r, dt, v, run, accel, crouch: k, sitting, tiptoe, rise: jump.rise, vy: jump.vy,
       airborne: air !== undefined, air: air ?? 0, wanted, spin, pressed, held: pressed !== spin,
     };
   }
 
   /** The stance's duration (quicker turning), its travel kept within reach in the direction of travel. */
-  private timing(root: Reading): Timing {
+  private timing(root: Reading, stroke: number): Timing {
     const { st, yaws } = this, s = st.scale, { r, v, run, crouch: k, pressed, wanted } = root;
     const forward = forwardOf(yaws[1]), left = leftOf(yaws[1]);
     // (a gait's cadence as fast as it will be going by mid-stance: setting off, it steps as quickly as it is about to go, not as it stood)
@@ -166,9 +197,16 @@ export class Stepper extends Steps {
       swing = walking && duty >= 0.5 ? Math.min(swing, cut * PAIRED) : swing;
       C = cut + swing;
     }
-    const Ts = stride ? C - swing : duty * C, Tsw = C - Ts;
+    let Ts = stride ? C - swing : duty * C;
+    const Tsw = C - Ts;
+    const terrain = descent(this.floor, root.contact, r.velocity, C, stroke);
+    if (terrain < 1) {
+      // Lift sooner on a descent; the leg still needs its swing time to clear the upper tread.
+      Ts = Math.max(root.dt, C * terrain - Tsw);
+      C = Ts + Tsw;
+    }
     const lead = Math.min(lerp(st.lead.share, st.lead.side, Math.abs(across)) * Ts, (lerp(st.lead.most, st.lead.run, run) * s) / Math.max(v, 1e-6));
-    return { pacing, across, C, duty, Ts, Tsw, most, lead };
+    return { pacing, across, C, duty: terrain < 1 ? Ts / C : duty, Ts, Tsw, most, lead };
   }
 
   /** The pelvis' facing: the root's, within reach of the feet's (as they stand or will land). */
@@ -376,6 +414,29 @@ export class Stepper extends Steps {
     return pose;
   }
 }
+
+/** The cycle's share that keeps a descent within the legs' `stroke` (m), standing on `contact` and going at `velocity`. */
+export function descent(floor: Floor, contact: Vector3 | undefined, velocity: Vector3, cycle: number, stroke: number): number {
+  if (!contact || velocity.x === 0 && velocity.z === 0) return 1;
+  let last = contact.y, numerator = 0, denominator = 0;
+  for (let i = 0; i <= DESCENT_SAMPLES; i++) {
+    const at = i / DESCENT_SAMPLES, t = cycle * at;
+    const height = i === 0 ? contact.y : floor(contact.x + velocity.x * t, contact.z + velocity.z * t);
+    // A disconnected ledge needs flight, not a quicker step.
+    if (Math.abs(height - last) > stroke / 2) return 1;
+    // Fit the grade rather than count risers: moving past one nosing must not change cadence by a whole stair.
+    numerator += (at - 0.5) * (height - contact.y);
+    denominator += (at - 0.5) ** 2;
+    last = height;
+  }
+  const drop = -numerator / denominator;
+  return drop > stroke ? stroke / drop : 1;
+}
+
+/** Tuned: in a flight physics owns, the feet are posed for a landing no further off than this (s) */
+const HORIZON = 0.3;
+/** how many points along a cycle's travel `descent` reads the floor at */
+const DESCENT_SAMPLES = 16;
 
 /** Tuned: a planted foot already strayed from its hip goes on no further past it than it is, up to `STRAYED` of its stray */
 const STRAYED = 0.25;

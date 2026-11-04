@@ -32,12 +32,14 @@ import { hanging, handStep, HOLD } from '../hands/person/arms';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
 import type { ArmPosture } from '../kernel/poise';
+import { Impact } from '../legs/person/impact';
 
 /** an arm posed nowhere off its hang */
 const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0 });
 
 /** Humanoid balance, idle gaze and arms, and held-object fitting. */
 export class Person extends Self {
+  readonly impact = new Impact();
   declare readonly gazer: Gazer;
   /** what its hands carry this sub-step and along which aim: fitted to the wrists after the hands */
   readonly carrying = new Map<Object3D, Carrier>();

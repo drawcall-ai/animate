@@ -1,8 +1,8 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, carry, grab, humanoid, release, wait } from '../../src/index';
+import { Body, carry, grab, humanoid, release, wait, type Root } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
-import { insides, person, play, run, feetOf } from '../bodies';
+import { insides, palmAt, person, play, run, feetOf } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
 describe('what a body wears', () => {
@@ -62,6 +62,84 @@ describe('what a body wears', () => {
     expect(kg.carried).toBeCloseTo(4, 3);
     expect(kg.down).toBe(0);
     expect(h.borne.size).toBe(0);
+  });
+  /** a driven body holding a 3 kg rifle by its pistol grip and foregrip, the rifle on a mount at its chest that `orient` turns to `yaw`
+   * in the world (read each frame) */
+  const armed = (yaw: (body: Body, root: Root) => number) => {
+    const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+    const body = person({ dev: true, drive: () => root, life: { steady: 1 } }), h = insides(body);
+    roomOf(body);
+    const mount = empty(body.bones.chest, 'mount', new Vector3(-0.15, 0.1, 0.1)), rifle = new Object3D();
+    rifle.userData.mass = 3;
+    mount.add(rifle);
+    const grips = { right: empty(rifle, 'pistol', new Vector3(0, -0.08, 0.15)), left: empty(rifle, 'foregrip', new Vector3(0, -0.05, 0.45)) };
+    const aim = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw(body, root));
+    const orient = () => body.orient(mount, aim());
+    let held: boolean | undefined;
+    play(function* () { held = yield* grab(body, rifle, { right: 'pistol', left: 'foregrip' }); }, [body], 4, () => (orient(), held !== undefined));
+    expect(held).toBe(true);
+    return { root, body, h, rifle, grips, aim, orient };
+  };
+
+  it('keeps a rifle on its chest at the aim its app gives while it turns, both hands on its grips', () => {
+    const { root, body, h, rifle, grips, aim, orient } = armed((_, root) => root.yaw);
+    let aimed = 0, gripped = 0;
+    // (the chest turns within each update: a mount the app turned from the chest as it stood before it was off the aim by that turn)
+    for (let frame = 0; frame < 180; frame++) {
+      root.yaw += 2 / 60;
+      orient();
+      body.update(1 / 60);
+      aimed = Math.max(aimed, rifle.getWorldQuaternion(new Quaternion()).angleTo(aim()));
+      for (const side of ['left', 'right'] as const) gripped = Math.max(gripped, palmAt(h, side).distanceTo(worldOf(grips[side])));
+    }
+    expect(aimed).toBeLessThan(1e-6);
+    expect(gripped).toBeLessThan(0.005);
+  });
+
+  // (however fast its app spins it, a soldier turning on the spot takes a magazine from its chest and puts it into the well of the rifle
+  // it holds, aimed the way the body faces — spun faster than its feet let it follow, its root led it by more than half a turn and it
+  // turned back the other way, the well swinging off as the carry closed on it)
+  it('takes what it wears and carries it into a slot on what it holds while its app spins it', () => {
+    const { root, body, rifle, orient } = armed((body) => body.facing);
+    const well = empty(rifle, 'well', new Vector3(0, -0.1, 0.3)), magazine = new Object3D();
+    magazine.userData.mass = 0.5;
+    empty(body.bones.chest, 'pouch', new Vector3(0.1, -0.12, 0.14)).add(magazine);
+    empty(magazine, 'base', new Vector3(0, -0.05, 0));
+    const results: boolean[] = [];
+    play(function* () {
+      results.push(yield* grab(body, magazine, { left: 'base' }, { speed: 1.8 }));
+      results.push(yield* carry(body, magazine, well, { speed: 1.8 }));
+    }, [body], 8, () => {
+      root.yaw += 6 / 60;
+      orient();
+      return results.length === 2;
+    });
+    expect(results).toEqual([true, true]);
+    expect(body.log).toEqual([]);
+  });
+
+  // (a soldier sprinting takes the spent magazine out of its rifle's well and stows it in a pouch on its chest: the pouch goes on with the
+  // body faster than the hand carries it, and followed as a goal of its own speed, it was let go of as a jump and left behind)
+  it('carries a thing from what it holds to a pouch on its chest while its app runs it', () => {
+    const { root, body, rifle, orient } = armed((body) => body.facing);
+    const magazine = new Object3D();
+    magazine.userData.mass = 0.5;
+    empty(rifle, 'well', new Vector3(0, -0.1, 0.3)).add(magazine);
+    empty(magazine, 'base', new Vector3(0, -0.05, 0));
+    const pouch = empty(body.bones.chest, 'pouch', new Vector3(0.1, -0.12, 0.14));
+    const results: boolean[] = [];
+    play(function* () {
+      results.push(yield* grab(body, magazine, { left: 'base' }, { speed: 1.8 }));
+      results.push(yield* carry(body, magazine, pouch, { speed: 1.8 }));
+    }, [body], 4, () => {
+      // (set off as a runner does, at its acceleration, not at once)
+      root.velocity = new Vector3(0, 0, Math.min(3.5, (root.velocity?.z ?? 0) + 8 / 60));
+      root.position.addScaledVector(root.velocity, 1 / 60);
+      orient();
+      return results.length === 2;
+    });
+    expect(results).toEqual([true, true]);
+    expect(body.log).toEqual([]);
   });
 });
 

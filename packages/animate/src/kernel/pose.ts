@@ -1,4 +1,5 @@
-import { Quaternion, Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3 } from 'three';
+import { yawOf } from './math';
 import type { Skeleton } from './skeleton';
 
 /** A pose to read: by bone index, the transforms of `Pose`. */
@@ -99,6 +100,16 @@ export class Pose {
     this.facing = from.facing;
     this.locals.forEach((q, i) => q.copy(from.local(i)));
     this.loads.forEach((_, i) => this.setLoad(i, from.load(i).mass, from.load(i).at));
+    this.stale = 0;
+    return this;
+  }
+
+  /** Carry a pose into another rigid world frame, leaving its joint rotations and loads unchanged. */
+  transform(matrix: Matrix4): this {
+    this.root.applyMatrix4(matrix);
+    const rotation = new Quaternion().setFromRotationMatrix(new Matrix4().extractRotation(matrix));
+    this.locals[0].premultiply(rotation);
+    this.facing += yawOf(rotation);
     this.stale = 0;
     return this;
   }

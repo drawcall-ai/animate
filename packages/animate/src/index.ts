@@ -1,5 +1,6 @@
 export { Body, type BodyOptions } from './body/body';
 export type { Root } from './legs/legged';
+export type { Floor } from './legs/floor';
 export { humanoid, type HumanoidBone, type Stride } from './species/humanoid/humanoid';
 export { horse } from './species/horse';
 export { dog } from './species/dog';
