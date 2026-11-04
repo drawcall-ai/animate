@@ -315,7 +315,9 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     // (the thing's weight once the hand follows it — a glide toward it from afar, moving in the world, does not yet bear it)
     const mass = options.on && options.thing ? options.thing.mass : 0, carried = target.carriedBy === person || options.on?.carriedBy === person;
     bringShoulder(person, f, side, toward?.at ?? at, toward?.share ?? 1, mass, carried);
-    const goal = options.on?.current.position ?? toward?.center ?? toward?.at ?? at;
+    // (the trunk turns toward the middle of the thing the hands hold on to; a hand only riding on a carrier — what hangs from it carried
+    // — toward where the hand goes: a lance held upright turned it toward the lance's far origin, and the arm's fit was solved round)
+    const goal = (options.thing ? options.on?.current.position : undefined) ?? toward?.center ?? toward?.at ?? at;
     twistToward(person, f.current, goal, toward?.share ?? 1, held, carried);
   }
 }
