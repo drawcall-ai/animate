@@ -150,7 +150,10 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
     && offHome(steps, now, leg, now.lead) > STEP.still * s) return true;
   if (leg.landed) return false;
   if (leg === cues.catcher) return true;
-  return strayed(st, feet, leg, _v.subVectors(hipOf(steps, now, leg), leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;
+  // (strayed from its hip as the body stands, not as its weight is shifted over the feet: the far foot is not in under a body leaning its
+  // weight onto the other, and stepped for it, the shift off it to lift it took the hip back and the step with it, rocking the weight)
+  const hip = _v.subVectors(hipOf(steps, now, leg), steps.shifted);
+  return strayed(st, feet, leg, hip.sub(leg.anchor).dot(leftOf(yaw)) * leg.sign) || aheadOf(steps, now, leg) > most;
 }
 
 /** whether the weight is on `leg` (`bears`), as the forecast's extrapolated centre of mass and the planted feet's prints have it: `FORESEEN`

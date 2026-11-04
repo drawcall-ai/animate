@@ -255,7 +255,10 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     }
     const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(aim.position) / start.off) : 1;
     const bent = _bend.copy(start.elbow).applyQuaternion(chest).add(shoulder);
-    const pole = options.pole === undefined ? elbowPole(f.current, person.proportions, side, world.position, _pole).lerp(bent, 1 - share) : options.pole;
+    // (onto a thing, the elbow set off as it stood keeps the hand on a grip moving fast; to a point, the elbow goes as a reach there
+    // bends it: held to where it set off, a hand swept across the body asked the elbow round past the shoulder's range, and it leapt)
+    const reached = elbowPole(f.current, person.proportions, side, world.position, _pole);
+    const pole = options.pole ?? (options.thing ? reached.lerp(bent, 1 - share) : reached);
     const glided = { ...aim, position: _glided.position, velocity: _glided.velocity };
     const toward = { at: world.position, center: on?.current.position, clavicle: start.clavicle, share, held };
     handStep(person, f, side, glided, { ...options, on: own, pole }, arm, toward);

@@ -46,7 +46,6 @@ const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [[
 const test = cases([
   'gaze shifts between story tasks', // Task gaze reverses or exceeds its shift bound.
   'leading posture and clearance on the soldier', // Leading posture/clearance bound.
-  'gaze shifts between story tasks on the soldier', // Task gaze reverses or exceeds its shift bound.
 ]);
 
 for (const [on, skeleton] of BODIES) {

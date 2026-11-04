@@ -13,6 +13,7 @@ import type { Poise } from '../kernel/poise';
 import type { Gazer } from '../species/define';
 import type { Locomotion } from '../legs/locomotion';
 import type { HeadOffset } from './offset';
+import { EYES, EYES_MOST, EyePitch } from './eyes';
 
 /** A body as its eyes see it: its gaze, where a neckless species' posture turns its head, its poise and its walk. */
 export interface Looker {
@@ -74,7 +75,7 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
   const pursued = new Vector3();
   /** where the target was the sub-step before (null: not yet seen) */
   let aimed: Vector3 | null = null;
-  let eyePitch = 0, declination = 0;
+  const eyes = new EyePitch(gazer.range.down, gazer.pitch !== undefined, recentring);
   return (f) => {
     const pose = f.current;
     const bones = pose.skeleton.chain(neck);
@@ -108,25 +109,15 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
     const worldDown = pitchAlong(d, facing);
     const resting = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
-    if (jumped || !seen) eyePitch = resting;
-    else if (gazer.pitch !== undefined && aimed) {
-      const targetTurn = wrapAngle(worldDown - pitchAlong(_line.subVectors(aimed, origin), facing));
-      const change = wrapAngle(worldDown - declination);
-      // Moving eyes absorb body travel; target pursuit keeps the usual eye/head share. Once the body is still under the look they
-      // re-centre on their resting share, the head taking back what they absorbed (else a look begun as a bow straightens keeps the
-      // head up by all of the bow's change).
-      const share = clamp(change - (1 - EYES) * targetTurn, Math.min(EYES * change, change), Math.max(EYES * change, change));
-      eyePitch = clamp(eyePitch + share, 0, gazer.range.down);
-      if (recentring && Math.abs(change - targetTurn) < STILL * f.dt) eyePitch += (resting - eyePitch) * (1 - Math.exp(-f.dt / RECENTRE));
-    }
-    declination = worldDown;
+    if (jumped || !seen || !aimed) eyes.sight(worldDown, resting);
+    else eyes.step(f.dt, worldDown, pitchAlong(_line.subVectors(aimed, origin), facing), resting, shift >= SETTLED);
     (aimed ??= new Vector3()).copy(point);
     const ways = (line: Vector3) => {
       const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
       const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
       upright(line, facing + toward * vertical, _q);
       upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
-      _q.multiply(_p.setFromAxisAngle(X, -eyePitch));
+      _q.multiply(_p.setFromAxisAngle(X, -eyes.value));
       _o.multiply(_p);
     };
     ways(d);
@@ -141,25 +132,25 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     // of their range where the neck stops short — given the head's share, the rest of it, as far as all that is left of their range;
     // up or down, and over the top, the head all the way: the eyes have little to spare there)
     const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
-    const room = (share: number) => share * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyePitch / gazer.range.down) ** 2));
-    const eyes = head === undefined ? Math.min(EYES * Math.abs(aside), room(EYES_MOST)) : Math.min((1 - head) * Math.abs(aside), room(1));
-    if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * eyes));
+    const room = (share: number) => share * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyes.value / gazer.range.down) ** 2));
+    const glance = head === undefined ? Math.min(EYES * Math.abs(aside), room(EYES_MOST)) : Math.min((1 - head) * Math.abs(aside), room(1));
+    if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * glance));
     // Follow in world space so the trunk can move beneath a steady gaze.
     const whole = _whole.copy(over ? _o : _q);
     const used = strainOf(whole);
-    if (used > 1 && eyePitch > 0) {
-      // A close target can consume lateral and downward eye range together. Give the head the missing declination before asking the
-      // eyes beyond their ellipse.
-      const best = strainOf(_full.copy(whole).multiply(_p.setFromAxisAngle(X, eyePitch)));
+    if (used > 1 && eyes.value > 0) {
+      // A close target can consume lateral and downward eye range together. Past their ellipse, the head takes the declination back
+      // until the eyes are within their comfortable share of it (EYES_MOST) again.
+      const best = strainOf(_full.copy(whole).multiply(_p.setFromAxisAngle(X, eyes.value)));
       if (best < used) {
-        let lo = 0, hi = eyePitch;
+        let lo = 0, hi = eyes.value;
         while (hi - lo > SETTLED) {
           const middle = (lo + hi) / 2;
           if (strainOf(_candidate.copy(whole).multiply(_p.setFromAxisAngle(X, middle))) > Math.max(EYES_MOST, best)) lo = middle;
           else hi = middle;
         }
         whole.multiply(_p.setFromAxisAngle(X, hi));
-        eyePitch -= hi;
+        eyes.value -= hi;
       }
     }
     // The desired look depends on the last eye position. Differentiate over two steps so alternating errors in that feedback
@@ -226,14 +217,6 @@ export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>, share:
  * down does not become a bow */
 const PITCHED = 0.25 / 0.65;
 
-/** how much of a gaze shift the eyes take (the head turns the rest: 70–80% of a large shift), and how much of their comfortable range at most */
-const EYES = 0.25;
-const EYES_MOST = 0.3;
-/** how slowly the eyes, having absorbed the body's travel under a steady look, re-centre on their resting share once it is still (s,
- * time constant; tuned: a few hundred ms, as the eyes re-centre in the head after the vestibulo-ocular phase — recalled, not checked) */
-const RECENTRE = 0.3;
-/** how slowly the line of sight may turn with the body's travel for the body to count as still under the look (rad/s; tuned: ~3°/s) */
-const STILL = 0.05;
 /** a gaze shift is over once the head is this near where it goes (rad): the next sets its own pace */
 const SETTLED = (2 * Math.PI) / 180;
 /** how fast a target moves at most and is still pursued (m/s): faster, it jumped (5 cm in a 60 Hz step) */

@@ -377,9 +377,8 @@ class CarryAim {
   /** how far (m) the body's own trunk and head held the last goal read off where it was asked to go: none for a goal on its own head
    * (a cup put to the mouth stops in front of it by design), else the body stands in the way of its end */
   off = 0;
-  /** whether it has set out, and how much of the push clear of the body it set out with it has not yet taken up, the two sub-steps before */
-  private setOut = false;
-  private readonly unpushed = [new Vector3(), new Vector3()];
+  /** how much of the push clear of the body it has taken up, the two sub-steps before */
+  private readonly pushed = [new Vector3(), new Vector3()];
 
   /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
   private readonly pivot = new Vector3();
@@ -431,17 +430,13 @@ class CarryAim {
     aim.move(f.time, this.at, turned);
     const aimed = _aimed.copy(this.at);
     if (this.clear) clearBody(person, f, thing, this.at, turned, current, this.clear !== 'head', this.clear === 'parts');
-    // (a thing set out from against the body — taken there — is drawn off it at the aim's own pace, not snapped clear: the push it set
-    // out with is let go of from there to none)
-    const [prev2, prev] = this.unpushed;
-    if (!this.setOut) {
-      this.setOut = true;
-      prev.copy(prev2.subVectors(this.at, aimed));
-    }
-    const left = follow(prev2, prev, ZERO, motion, f.dt, _left);
+    // (the push clear of the body is taken up at the aim's own pace, not snapped: a thing set out from against the body — taken there —
+    // is drawn off it, and one that comes up against it on its way — a box lifted close in front of a bowed body — eases round it)
+    const [prev2, prev] = this.pushed;
+    const pushed = follow(prev2, prev, _push.subVectors(this.at, aimed), motion, f.dt, _pushed);
     prev2.copy(prev);
-    prev.copy(left);
-    this.carrier.move(f.time, this.at.sub(left), turned);
+    prev.copy(pushed);
+    this.carrier.move(f.time, this.at.copy(aimed).add(pushed), turned);
     return this.carrier;
   }
 }
@@ -486,5 +481,5 @@ function inReach(person: Reacher, thing: Thing, wideOnly = false): number {
 /** Tuned carry staging (m at default stature): how far ahead of the hips a load is carried, clear of the thighs with room for two hands,
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
-const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), ZERO = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() }, _v = new Vector3(), _g = new Vector3(), _aimed = new Vector3(), _left = new Vector3();
+const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), _placed = { position: new Vector3(), quaternion: new Quaternion() }, _v = new Vector3(), _g = new Vector3(), _aimed = new Vector3(), _push = new Vector3(), _pushed = new Vector3();
 const [_p1, _p2, _p3] = [new Vector3(), new Vector3(), new Vector3()];

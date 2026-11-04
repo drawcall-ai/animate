@@ -11,7 +11,7 @@ export function transport(steps: Steps, matrix: Matrix4) {
   steps.pelvis.applyMatrix4(matrix);
   steps.velocity.applyMatrix3(direction);
   steps.hips.applyMatrix3(direction);
-  steps.unloaded.applyMatrix3(direction);
+  steps.shifted.applyMatrix3(direction);
   steps.yaw += yaw;
   steps.last += yaw;
   steps.rootYaw += yaw;

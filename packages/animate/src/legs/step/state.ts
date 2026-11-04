@@ -23,9 +23,9 @@ export interface Steering {
   /** where the hips are over the floor from the root, if not over it (m): swaying, sitting back or leaning over the toes from it; by
    * default the hips are the root */
   hips?: Vector3;
-  /** how far the pelvis is shifted over the floor onto a foot, the weight going off another to lift it (m, past `hips`): placed so, the
-   * legs reaching from it, but landing as from where it would be without it — a moment's */
-  unloaded?: Vector3;
+  /** how far the pelvis is shifted over the floor standing: its weight onto a foot, or going off another to lift it (m, past `hips`): placed
+   * so, the legs reaching from it, but stepping as from where it would be without it — a moment's */
+  shifted?: Vector3;
   /** where the centre of mass is over the floor from the root, if the body keeps it there (m; a walker's: a little ahead of its feet's
    * middle, the root); by default over the root — the hips swaying about it, not the mass — the feet a crouch's `ahead` of the hips
    * as they sit back */
@@ -294,8 +294,8 @@ export class Steps {
   /** the leg whose foot the weight is going off (index): one waiting to lift till the weight is on the others, or one swinging from a body
    * slow enough to stand on the others meanwhile; none */
   unloading: number | null = null;
-  /** how far the pelvis is shifted off a foot to lift it, a moment (m, on the floor: `Steering.unloaded`) */
-  readonly unloaded = new Vector3();
+  /** how far the pelvis is shifted over the feet standing, a moment (m, on the floor: `Steering.shifted`) */
+  readonly shifted = new Vector3();
   /**
    * where the centre of mass at `com` goes as the weight goes off `unloading`: just inside the other planted feet's prints (`INSIDE` m), on
    * the floor — no further than it must to stand on them; none: not going

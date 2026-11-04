@@ -231,11 +231,11 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
         const at = forecast(t);
         return { position: at.position.clone().sub(behind), yaw: at.yaw };
       }),
-      // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass. The weight taken off a
-      // foot to lift it is a moment's: the feet step as from without it.
-      hips: offset.clone().sub(posture.unloaded.at).add(behind),
-      unloaded: posture.unloaded.at,
-      com: root.centre ? offset.clone().sub(upright.offset).sub(posture.unloaded.at).add(behind) : undefined,
+      // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass. The weight shifted onto a
+      // foot standing, or off one to lift it, is a moment's: the feet step as from without it.
+      hips: offset.clone().sub(posture.shifted).add(behind),
+      shifted: posture.shifted,
+      com: root.centre ? offset.clone().sub(upright.offset).sub(posture.shifted).add(behind) : undefined,
       crouch: Math.max(root.crouch ?? 0, Math.min(lowered, walkingMost)),
       tiptoe: Math.max(0, -requested.lower),
       still: !upright.moving && Math.abs(requested.lower) > LOWERED * s,

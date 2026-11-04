@@ -103,6 +103,8 @@ export class Posture {
   private readonly weight = new Vector3();
   /** the pelvis shifted off a foot to lift it, standing (m, on the floor) */
   readonly unloaded: Shift = { at: new Vector3(), speed: new Vector3() };
+  /** the pelvis shifted over its planted feet, standing (m, on the floor): onto a foot as the weight shifts, and off a foot to lift it */
+  readonly shifted = new Vector3();
   private offset: Vector3 | null = null;
   readonly quiet = new Vector3();
   /** how far (rad) the pelvis is rolled onto a foot as the weight shifts onto it, standing (its share of the pelvis's roll) */
@@ -158,8 +160,9 @@ export class Posture {
     else if (!unloading.lifted) goal.add(_s.subVectors(unloading.onto, f.prev.com(_s)).setY(0));
     followShift(this.unloaded, goal, UNLOAD, dt);
     pelvis.add(this.quiet.add(this.weight)).add(this.unloaded.at);
+    this.shifted.addVectors(this.weight, this.unloaded.at);
     // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
-    const shifted = _s.addVectors(this.weight, this.unloaded.at).dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
+    const shifted = this.shifted.dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
     this.shiftRoll = SHIFT.roll * shifted;
     roll += this.shiftRoll;
     const onward = smoothstep(0, 1, Math.max(0, upright.velocity.dot(fwd)));

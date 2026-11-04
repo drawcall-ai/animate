@@ -30,8 +30,10 @@ export function landing(steps: Steps, now: Now, leg: Leg, remaining: number): [V
   // stopping a step aside or back lands where the body stops, beside it. Arriving on a still mark, no further on than the extrapolated
   // centre of mass as it lands, braking where it brakes: carried on at the speed it went, a closing step landed 9–13 cm past the mark and
   // stepped back — Hof's foot placement at the XCoM, recalled: Hof, Gazendam & Sinke 2005, J Biomech 38:1. A goal followed, which may
-  // move off any moment, keeps the margin of a foot further on)
-  const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, along = chord?.length() ?? 0, on = v * (remaining + lead);
+  // move off any moment, keeps the margin of a foot further on. None on a way back against the root's going: a forecast turning back
+  // by a hair as the root overshoots its stop, carried on so, put a closing step 5 cm the other way)
+  const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, along = chord?.length() ?? 0;
+  const on = chord && chord.dot(r.velocity) < 0 ? 0 : v * (remaining + lead);
   const far = Math.max(along, r.arriving ? Math.min(on, along + speed * Math.sqrt(feet.length / GRAVITY)) : on);
   const past = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
   const forward = forwardOf(turned, _f);
