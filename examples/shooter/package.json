@@ -64,6 +64,57 @@
       "alias": {
         "public/sound-effects/loopable-forest-canopy-wind-with-leaves-brushing-and-distant-birds-no-melody.mp3": "assets/audio/canopy.mp3"
       }
+    },
+    "climb-ladder-step": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/ladder-climb.mp3": "public/audio/rung.mp3"
+      }
+    },
+    "heavy-plate-clank": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/armor-clank.mp3": "public/audio/clank.mp3"
+      }
+    },
+    "soft-metallic-landing-thud": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/soft-metallic-landing-thud-on-iron-deck-plating-muted-industrial-tap.mp3": "public/audio/thud.mp3"
+      }
+    },
+    "grounded-boot-metal-footfall-brass-clack": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/grounded-boot-and-metal-footfall-impact-with-a-small-brass-clack-short-and-dry.mp3": "public/audio/boot.mp3"
+      }
+    },
+    "gear-seat-clunk-resonance": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/short-checkpoint-activation-a-clear-gear-seat-clunk-followed-by-a-tiny-warm-mechanical-resonance-no-voice-or-music.mp3": "public/audio/clunk.mp3"
+      }
+    },
+    "mechanical-lever-pull": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/lever-pull.mp3": "public/audio/lever.mp3"
+      }
+    },
+    "rubber-surface-skid": {
+      "version": "1.0.0",
+      "alias": {
+        "public/sound-effects/tire-skid.mp3": "public/audio/skid.mp3"
+      }
+    },
+    "metal-01": {
+      "version": "1.0.0",
+      "alias": {
+        "public/metal-01_baseColor.png": "public/textures/metal-baseColor.png",
+        "public/metal-01_normal.png": "public/textures/metal-normal.png",
+        "public/metal-01_roughness.png": "public/textures/metal-roughness.png",
+        "public/metal-01_ambientOcclusion.png": "public/textures/metal-ambientOcclusion.png"
+      }
     }
   },
   "type": "module",

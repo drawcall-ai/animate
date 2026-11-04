@@ -20,10 +20,15 @@ Open http://localhost:5289 and click **Enter the course**. Requires a keyboard a
 | Right mouse (hold) | Aim |
 | Left mouse | Fire |
 | R | Reload |
+| E | Get into the Land Rover by its doorway, or out once stopped; get on the ladder at its foot or top |
+| W / S | Climb up or down (on the ladder), stepping off past either end |
+| W / S | Accelerate; brake, then reverse (seated) |
+| A / D | Steer (seated) |
+| Space | Handbrake (seated) |
 | Backspace | Reset the encounter and course |
 | Esc | Pause and release the mouse |
 
-The course has stairs, a ramp, raised walkways, step-height blocks, a crouch tunnel, cover, a moving lift, targets and physics crates.
+The course has stairs, a ramp, raised walkways, step-height blocks, a crouch tunnel, cover, a moving lift, targets, physics crates and an open-topped military Land Rover to drive.
 
 Serve it with COOP/COEP headers (configured for dev and preview).
 

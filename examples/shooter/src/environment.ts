@@ -4,6 +4,7 @@ import {
   Fog, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   SRGBColorSpace, Vector3, type Scene,
 } from 'three';
+import { createLadder } from './ladder/model';
 
 type Point = readonly [number, number, number];
 
@@ -140,6 +141,11 @@ export function createEnvironment(scene: Scene) {
   detail(lift, [2.8, 0.016, 0.09], [0, 0.134, -1.35], white);
   detail(lift, [2.8, 0.016, 0.09], [0, 0.134, 1.35], white);
   label('MOVING LIFT', 'Ride to the upper deck', [13.5, 3.3, 7.65], 4.2);
+  // A ladder up the landing's back, climbing toward −Z.
+  const ladder = createLadder(2.4);
+  ladder.body.position.set(13.5, 0, 11.08);
+  ladder.body.rotation.y = Math.PI;
+  yard.add(ladder.body);
 
   for (const [index, x] of [-7, -3.5, 0, 3.5, 7].entries()) {
     box('Target stand', [0.12, 1.2, 0.12], [x, 0.6, 20.5], charcoal);
@@ -178,7 +184,7 @@ export function createEnvironment(scene: Scene) {
   let stop: (() => void) | undefined;
   const pose = new Matrix4();
   return {
-    spawn: new Vector3(0, 0.04, -10), lift, moving: [lift, ...crates],
+    spawn: new Vector3(0, 0.04, -10), lift, ladder, moving: [lift, ...crates],
     bind(world: PhysicsWorld) {
       stop?.();
       stop = world.onBeforeStep((delta) => {

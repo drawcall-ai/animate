@@ -55,3 +55,4 @@ body.playing .menu { display: none; }
   .hint { display: none; }
   .combat { margin-left: auto; gap: 18px; }
 }
+.prompt:not(:empty) { margin-right: 12px; color: #f3d27a; font-weight: 700; }

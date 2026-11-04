@@ -24,7 +24,7 @@ try {
     const { game } = await import(entry.src);
     const app = await game;
     if (!app) throw new Error(document.querySelector('#notice').textContent);
-    const sight = app.avatar.group.getObjectByName('sight');
+    const sight = app.avatar.rifle.getObjectByName('sight');
     if (!sight) throw new Error('Missing rifle sight');
     const eye = app.avatar.look().eye;
     const at = sight.getWorldPosition(eye.clone()).sub(eye);
@@ -35,10 +35,12 @@ try {
       ammo: app.combat.ammo, reloads: app.avatar.reloads,
       reloading: app.avatar.reloading, fov: app.camera.camera.fov, alignment, time: app.world.time,
       health: app.player.health, opponentHealth: app.opponent.health, enemy: app.enemy.status,
+      driver: app.driver.state, climber: app.climber.state, roverSpeed: app.handling.speed, acquired: app.avatar.acquired,
     };
   });
-  const until = async (predicate, message) => {
-    const deadline = Date.now() + 20_000;
+  // (`ms` of wall time: software-rendered Chromium simulates several times slower than real time)
+  const until = async (predicate, message, ms = 20_000) => {
+    const deadline = Date.now() + ms;
     while (Date.now() < deadline) {
       const state = await read();
       if (predicate(state)) return state;
@@ -80,6 +82,40 @@ try {
   await until((state) => state.reloading, 'Reload did not start');
   await until((state) => state.ammo === 30 && state.reloads === 1 && !state.reloading, 'Magazine swap did not complete');
 
+  // Walk to the Land Rover's doorway from a step away, get in, drive off, stop and get out with the rifle back in the hands.
+  await page.evaluate(async () => {
+    const entry = document.querySelector('script[type="module"][src*="/src/main.ts"]');
+    const app = await (await import(entry.src)).game;
+    const door = app.rover.marks.door.getWorldPosition(app.player.position.clone());
+    app.player.place(door.setX(door.x + 1).setY(door.y + 0.05), app.handling.yaw);
+  });
+  await page.keyboard.press('e');
+  await until((state) => state.driver === 'on', 'Getting into the rover failed', 60_000);
+  await capture('driving.png');
+  await page.keyboard.down('w');
+  await until((state) => state.roverSpeed > 2, 'The rover did not drive off');
+  await page.keyboard.up('w');
+  await page.keyboard.down('s');
+  await until((state) => Math.abs(state.roverSpeed) < 0.3, 'The rover did not brake to a stop');
+  await page.keyboard.up('s');
+  await page.keyboard.press('e');
+  await until((state) => state.driver === 'off' && state.acquired, 'Getting out of the rover failed', 60_000);
+
+  // Walk to the ladder's foot, climb it and step off onto the landing with the rifle back in the hands.
+  await page.evaluate(async () => {
+    const entry = document.querySelector('script[type="module"][src*="/src/main.ts"]');
+    const app = await (await import(entry.src)).game;
+    const foot = app.ladder.marks.foot.getWorldPosition(app.player.position.clone());
+    app.player.place(foot.setX(foot.x + 1).setY(foot.y + 0.05), 0);
+  });
+  await page.keyboard.press('e');
+  await until((state) => state.climber === 'on', 'Getting on the ladder failed', 60_000);
+  await page.keyboard.down('w');
+  await until((state) => state.climber === 'off' && state.acquired, 'Climbing the ladder failed', 60_000);
+  await page.keyboard.up('w');
+  await capture('ladder.png');
+  assert.ok((await read()).position[1] > 2.2, 'The climber must step off onto the landing');
+
   await page.keyboard.press('Backspace');
   await until((state) => Math.abs(state.position[2] - initial.position[2]) < 0.1 && state.reloads === 0 && state.ammo === 30, 'Reset failed');
   await page.keyboard.press('Escape');
@@ -90,7 +126,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await capture('mobile.png');
   assert.deepEqual(errors, [], 'Browser errors');
-  console.log('Browser checks passed: first-person sprint, jump, crouch, aiming, firing, animated reload, reset, pause.');
+  console.log('Browser checks passed: first-person sprint, jump, crouch, aiming, firing, animated reload, driving, climbing, reset, pause.');
 } finally {
   await browser.close();
 }

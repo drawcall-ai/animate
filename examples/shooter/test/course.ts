@@ -1,11 +1,12 @@
 import { afterEach, expect } from 'vitest';
-import { BoxCollider, RigidBody } from '@drawcall/physics';
+import { BoxCollider, RigidBody, type PhysicsWorld } from '@drawcall/physics';
 import { buildWorld } from '@drawcall/physics-rapier';
 import type { Body } from '@drawcall/animate';
 import { Object3D, Scene, Vector3 } from 'three';
 import { Avatar, type AvatarState } from '../src/avatar';
+import type { Sound } from '../src/audio';
 import { GRAVITY, Movement } from '../src/movement';
-import { Soldier } from '../src/soldier';
+import { Soldier, type Mounts } from '../src/soldier';
 import { Terrain } from '../src/terrain';
 
 export const DT = 1 / 60;
@@ -131,4 +132,42 @@ export function soles(body: Body, side: 'left' | 'right') {
 export function palm(body: Body, side: 'left' | 'right') {
   const { offsets, height } = proportions(body);
   return body.bones[`${side}Hand`].localToWorld(offsets[`${side}Hand`].clone().setLength(0.043 * height));
+}
+
+/**
+ * Builds `scene`'s world with a soldier standing at `at` who can get on what `mounts` makes in it, once its hands have its rifle; `heard`,
+ * the sounds it has made since; and `until`, which steps the world until `done`, failing if that takes more than `seconds`, and returns
+ * the seconds it took.
+ */
+export async function mountable<T extends Mounts>(scene: Scene, at: Vector3, mounts: (world: PhysicsWorld) => T) {
+  const world = await buildWorld({ scene, fixedDelta: DT, gravity: [0, GRAVITY, 0] });
+  cleanup(() => world.dispose());
+  const made = mounts(world);
+  const heard: Sound[] = [];
+  const soldier = new Soldier('Soldier', world, scene, undefined, at, true, (sound) => heard.push(sound), made);
+  cleanup(() => soldier.dispose());
+  world.onAfterStep((dt) => soldier.update(dt));
+  const until = (done: () => boolean, seconds: number) => {
+    let frame = 0;
+    for (; frame < seconds / DT && !done(); frame++) world.update(DT);
+    expect(done()).toBe(true);
+    return frame * DT;
+  };
+  until(() => soldier.avatar.acquired, 10);
+  heard.length = 0;
+  return { world, soldier, until, heard, ...made };
+}
+
+/** Called once a frame, tracks the largest change in how far `thing` moves from one frame to the next (m): a jump shows as a spike. */
+export function jerkless(thing: Object3D) {
+  let at = thing.getWorldPosition(new Vector3()), moved = new Vector3();
+  const step = () => {
+    const now = thing.getWorldPosition(new Vector3()), by = now.clone().sub(at);
+    step.jerk = Math.max(step.jerk, by.distanceTo(moved));
+    at = now;
+    moved = by;
+    return true;
+  };
+  step.jerk = 0;
+  return step;
 }

@@ -1,5 +1,5 @@
 import { Matrix4, Vector3, type Object3D } from 'three';
-import { CapsuleMotor, type PhysicsWorld, type RigidBody } from '@drawcall/physics';
+import { CapsuleMotor, type CapsuleCastHit, type PhysicsWorld, type RigidBody } from '@drawcall/physics';
 
 interface Support {
   body: RigidBody;
@@ -12,6 +12,8 @@ export const HEIGHT = 1.8;
 export const CROUCH_HEIGHT = 1.45;
 export const RADIUS = 0.3;
 const BUFFER = 0.12;
+/** How near the ground (m) must come for a falling capsule to land on it, and how far below one just placed it may be to stand on. */
+const LANDING = 0.025, PLACING = 0.1;
 /** Seconds of knee bend before the jump launches the capsule. */
 export const PUSH_OFF = 0.05;
 export const JUMP_SPEED = 5;
@@ -65,10 +67,11 @@ export class Movement {
     this.active = true;
     this.motor.position.copy(position);
     this.motor.height = CROUCH_HEIGHT;
-    this.motor.resize(HEIGHT);
+    if (!this.motor.resize(HEIGHT)) throw new Error('No room to stand where the capsule was placed: place it a little above the ground, clear of walls');
     this.halt();
     this.input.yaw = 0;
-    this.ground = undefined;
+    // (placed just above the ground, it stands on it at once rather than landing on its first step)
+    this.ground = supportOf(this.motor.ground(PLACING));
     this.supportVelocity.set(0, 0, 0);
     this.jumped = false;
     this.jumpBuffer = this.coyoteTime = 0;
@@ -144,13 +147,10 @@ export class Movement {
       if (wasGrounded && normal.y > 0) this.velocity.y = Math.min(0, this.velocity.y);
     }
 
-    const ground = !jumping && !rising ? this.motor.ground(wasGrounded ? 0.3 : 0.025) : null;
-    this.ground = ground
-      ? { body: ground.body, pose: ground.body.matrixWorld.clone(), normal: ground.normal, point: ground.point }
-      : undefined;
-    if (ground) this.velocity.y = 0;
+    this.ground = !jumping && !rising ? supportOf(this.motor.ground(wasGrounded ? 0.3 : LANDING)) : undefined;
+    if (this.ground) this.velocity.y = 0;
     // The platform already carried us this step. Its velocity applies on subsequent airborne steps.
-    if (jumping || (wasGrounded && !ground)) this.velocity.add(this.supportVelocity);
+    if (jumping || (wasGrounded && !this.ground)) this.velocity.add(this.supportVelocity);
     this.actualVelocity.subVectors(this.position, previous).divideScalar(delta);
     this.motor.commit();
   }
@@ -165,4 +165,8 @@ export class Movement {
     this.supportVelocity.copy(displacement).divideScalar(delta);
     this.motor.carry(displacement, support.body);
   }
+}
+
+function supportOf(hit: CapsuleCastHit | null): Support | undefined {
+  return hit ? { body: hit.body, pose: hit.body.matrixWorld.clone(), normal: hit.normal, point: hit.point } : undefined;
 }

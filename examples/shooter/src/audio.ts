@@ -6,6 +6,7 @@ const FILES = {
   'step-a': 'step-a.ogg', 'step-b': 'step-b.ogg',
   jump: 'jump.mp3', land: 'land.mp3', shot: 'shot.mp3',
   reload: 'reload.mp3', cloth: 'cloth.mp3', lift: 'lift.mp3', ambient: 'ambient.ogg',
+  rung: 'rung.mp3', clank: 'clank.mp3', thud: 'thud.mp3', boot: 'boot.mp3', clunk: 'clunk.mp3', lever: 'lever.mp3', skid: 'skid.mp3',
 };
 
 export type Sound = keyof typeof FILES;
@@ -60,7 +61,8 @@ export class Contacts {
 }
 
 export class Audio {
-  private readonly master: GainNode;
+  /** where every sound goes, to the speakers */
+  readonly output: GainNode;
   private readonly ambient: AudioBufferSourceNode;
   private readonly motor: AudioBufferSourceNode;
   private readonly motorGain: GainNode;
@@ -69,17 +71,17 @@ export class Audio {
   private readonly forward = new Vector3();
   private readonly up = new Vector3();
 
-  private constructor(private readonly context: AudioContext, private readonly buffers: ReadonlyMap<string, AudioBuffer>) {
-    this.master = context.createGain();
-    this.master.gain.value = 0.63;
-    this.master.connect(context.destination);
+  private constructor(readonly context: AudioContext, private readonly buffers: ReadonlyMap<string, AudioBuffer>) {
+    this.output = context.createGain();
+    this.output.gain.value = 0.63;
+    this.output.connect(context.destination);
     this.ambient = this.source('ambient');
     this.ambient.loop = true;
     this.ambient.loopStart = 0.5;
     this.ambient.loopEnd = 20.5;
     const breeze = context.createGain();
     breeze.gain.value = 0.12;
-    this.ambient.connect(breeze).connect(this.master);
+    this.ambient.connect(breeze).connect(this.output);
     this.ambient.start(0, this.ambient.loopStart);
     this.motor = this.source('lift');
     this.motor.loop = true;
@@ -92,7 +94,7 @@ export class Audio {
     this.motorPosition.refDistance = 3;
     this.motorPosition.maxDistance = 35;
     this.motorPosition.rolloffFactor = 1.3;
-    this.motor.connect(this.motorGain).connect(this.motorPosition).connect(this.master);
+    this.motor.connect(this.motorGain).connect(this.motorPosition).connect(this.output);
     this.motor.start();
   }
 
@@ -117,8 +119,10 @@ export class Audio {
 
   play(sound: Sound, volume: number, offset = 0, duration?: number, position?: Readonly<Vector3>) {
     if (this.context.state !== 'running') return;
+    // (no two alike: each a little higher or lower and louder or softer)
     const source = this.source(sound), gain = this.context.createGain();
-    gain.gain.value = volume;
+    source.playbackRate.value = 1 + 0.08 * (Math.random() - 0.5);
+    gain.gain.value = volume * (0.9 + 0.2 * Math.random());
     const panner = position ? this.context.createPanner() : undefined;
     if (panner && position) {
       panner.panningModel = 'HRTF';
@@ -127,8 +131,8 @@ export class Audio {
       panner.positionX.value = position.x;
       panner.positionY.value = position.y;
       panner.positionZ.value = position.z;
-      source.connect(gain).connect(panner).connect(this.master);
-    } else source.connect(gain).connect(this.master);
+      source.connect(gain).connect(panner).connect(this.output);
+    } else source.connect(gain).connect(this.output);
     source.onended = () => { source.disconnect(); gain.disconnect(); panner?.disconnect(); };
     source.start(0, offset, duration);
   }
@@ -156,7 +160,7 @@ export class Audio {
     tone.frequency.value = 1400;
     gain.gain.setValueAtTime(0.18, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
-    tone.connect(gain).connect(this.master);
+    tone.connect(gain).connect(this.output);
     tone.onended = () => { tone.disconnect(); gain.disconnect(); };
     tone.start(now);
     tone.stop(now + 0.03);
@@ -171,11 +175,15 @@ export class Audio {
 
   dispose() { this.ambient.stop(); this.motor.stop(); return this.context.close(); }
 
-  private source(sound: Sound): AudioBufferSourceNode {
+  buffer(sound: Sound): AudioBuffer {
     const buffer = this.buffers.get(sound);
     if (!buffer) throw new Error(`Sound ${sound} was not loaded`);
+    return buffer;
+  }
+
+  private source(sound: Sound): AudioBufferSourceNode {
     const source = this.context.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = this.buffer(sound);
     return source;
   }
 }

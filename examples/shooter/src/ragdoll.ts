@@ -167,9 +167,12 @@ export class Ragdoll {
       if (!above) throw new Error(`The ragdoll part ${part.bone} comes before its parent ${part.joint.parent}`);
       this.root.add(joint(above, body, part.joint, at(part.bone), at(part.joint.parent), at(part.boxes[0].to), side));
     }
-    const rifle = dropped(avatar, trail);
-    this.root.add(rifle);
-    this.bodies.push(rifle);
+    // (a rifle the soldier has put down, in a rack, stays there)
+    if (onBody(avatar)) {
+      const rifle = dropped(avatar, trail);
+      this.root.add(rifle);
+      this.bodies.push(rifle);
+    }
     parent.add(this.root);
     this.root.updateMatrixWorld(true);
     struck?.body.applyImpulse(impulse, point);
@@ -236,6 +239,13 @@ function joint(above: RigidBody, body: RigidBody, shape: Ball | Hinge, pivot: Ve
 }
 
 const slack = () => new JointDrive({ damping: SLACK }).setTarget({ velocity: 0 });
+
+/** Whether the rifle is on the soldier: in its hands or on its shoulder. */
+function onBody(avatar: Avatar) {
+  let on = false;
+  avatar.rifle.traverseAncestors((node) => { on ||= node === avatar.group; });
+  return on;
+}
 
 /** The rifle, taken from the hands as a body of its own, moving as the hand on its grip did. */
 function dropped(avatar: Avatar, trail: Trail) {

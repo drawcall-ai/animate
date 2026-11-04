@@ -73,6 +73,7 @@ export class Input {
   }
 
   pressed(code: string) { return this.presses.delete(code); }
+  down(code: string) { return this.keys.has(code); }
   // The operating system's pointer speed stays: raw counts (unadjustedMovement) are far slower on macOS mice and trackpads.
   async lock() { await this.canvas.requestPointerLock(); }
 

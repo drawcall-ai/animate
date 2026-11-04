@@ -1,13 +1,5 @@
-import {
-  BufferGeometry, CylinderGeometry, DataTexture, ExtrudeGeometry, LatheGeometry,
-  Mesh, MeshStandardMaterial, Object3D, Path, RepeatWrapping, RGBAFormat,
-  Shape, UnsignedByteType, Vector2,
-} from 'three';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-
-type Point = readonly [x: number, y: number, z: number];
-type Profile = readonly (readonly [z: number, y: number])[];
+import { DataTexture, MeshStandardMaterial, Object3D, RepeatWrapping, RGBAFormat, UnsignedByteType } from 'three';
+import { Parts, type Profile } from '../parts';
 
 /** A compact carbine built in metres; geometry stays independent of its animation. */
 export class WeaponModel {
@@ -99,56 +91,6 @@ export class WeaponModel {
   dispose() {
     for (const material of [this.metal, this.steel, this.dark, this.polymer, this.rubber, this.inset]) material.dispose();
     this.grain.dispose();
-  }
-}
-
-/** Merge static detail by finish, keeping the rifle to six draw calls. */
-class Parts {
-  private readonly parts = new Map<MeshStandardMaterial, BufferGeometry[]>();
-
-  box(size: Point, at: Point, material: MeshStandardMaterial) {
-    const radius = Math.min(...size) * 0.18;
-    this.add(new RoundedBoxGeometry(...size, 1, radius), at, material);
-  }
-
-  profile(outline: Profile, width: number, at: Point, material: MeshStandardMaterial, holes: readonly Profile[] = []) {
-    const points = (profile: Profile) => profile.map(([z, y]) => new Vector2(-z, y));
-    const shape = new Shape(points(outline));
-    shape.holes = holes.map(hole => new Path(points(hole)));
-    const geometry = new ExtrudeGeometry(shape, { depth: width, bevelEnabled: true, bevelSegments: 1, steps: 1, bevelSize: 0.001, bevelThickness: 0.001 });
-    geometry.translate(0, 0, -width / 2).rotateY(Math.PI / 2);
-    this.add(geometry, at, material);
-  }
-
-  tube(radius: number, bore: number, length: number, at: Point, material: MeshStandardMaterial) {
-    const half = length / 2;
-    const section = [[bore, -half], [radius, -half], [radius, half], [bore, half], [bore, -half]].map(([x, y]) => new Vector2(x, y));
-    this.add(new LatheGeometry(section, 24).rotateX(Math.PI / 2), at, material);
-  }
-
-  pin(radius: number, length: number, at: Point, material: MeshStandardMaterial) {
-    this.add(new CylinderGeometry(radius, radius, length, 12).rotateZ(Math.PI / 2), at, material);
-  }
-
-  finish(parent: Object3D) {
-    for (const [material, geometries] of this.parts) {
-      const merged = mergeGeometries(geometries);
-      if (!merged) throw new Error(`Could not build ${material.name}`);
-      const mesh = new Mesh(merged, material);
-      mesh.name = material.name;
-      mesh.castShadow = mesh.receiveShadow = true;
-      parent.add(mesh);
-      for (const geometry of geometries) geometry.dispose();
-    }
-  }
-
-  private add(geometry: BufferGeometry, at: Point, material: MeshStandardMaterial) {
-    geometry.translate(...at);
-    const flat = geometry.index ? geometry.toNonIndexed() : geometry;
-    if (flat !== geometry) geometry.dispose();
-    const batch = this.parts.get(material) ?? [];
-    batch.push(flat);
-    this.parts.set(material, batch);
   }
 }
 

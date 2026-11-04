@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, CubeCamera, DirectionalLight, HalfFloatType, HemisphereLight, Mesh, PCFSoftShadowMap, PMREMGenerator, Scene, Vector3, WebGLCubeRenderTarget, WebGLRenderer } from 'three';
+import { ACESFilmicToneMapping, CubeCamera, DirectionalLight, HalfFloatType, HemisphereLight, MathUtils, Mesh, PCFSoftShadowMap, PMREMGenerator, Scene, Vector3, WebGLCubeRenderTarget, WebGLRenderer } from 'three';
 import { RigLoader } from '@drawcall/rig';
 import { buildWorld } from '@drawcall/physics-rapier';
 import { Audio } from './audio';
@@ -10,6 +10,12 @@ import { Input } from './input';
 import { GRAVITY } from './movement';
 import { Navigation } from './nav';
 import { Playback } from './playback';
+import type { Climber } from './ladder/climber';
+import type { Mount } from './mount';
+import type { Driver } from './rover/driver';
+import { Handling } from './rover/handling';
+import { createRover, loadPaintMaps } from './rover/model';
+import { RoverSound } from './rover/sound';
 import { SOLDIER } from './skeleton';
 import { Soldier } from './soldier';
 import './style.css';
@@ -18,6 +24,16 @@ import './style.css';
 const VIGNETTE = 0.3;
 /** Seconds the player watches through its falling body's eyes before the restart screen. */
 const DEATH_CAM = 2;
+
+/** How the HUD speaks of a mount, and where the view settles getting on it (rad). */
+interface Words { use: string; getting: string; leaving: string; on: string; keys: string; pitch: number }
+
+/** The player as the rover's driver and the ladder's climber. */
+function mountsOf(player: Soldier): { driver: Driver; climber: Climber } {
+  const { driver, climber } = player;
+  if (!driver || !climber) throw new Error('The player has no driver seat or no ladder');
+  return { driver, climber };
+}
 
 function element<T extends HTMLElement>(id: string, type: { new(): T }): T {
   const value = document.getElementById(id);
@@ -28,6 +44,7 @@ function element<T extends HTMLElement>(id: string, type: { new(): T }): T {
 const canvas = element('game', HTMLCanvasElement);
 const play = element('play', HTMLButtonElement);
 const notice = element('notice', HTMLElement);
+const prompt = element('prompt', HTMLElement);
 const labels = {
   motion: element('motion', HTMLElement), speed: element('speed', HTMLElement),
   ammo: element('ammo', HTMLElement), reload: element('reload', HTMLElement), feedback: element('feedback', HTMLElement), hit: element('hit', HTMLElement),
@@ -70,12 +87,33 @@ async function start() {
     node.frustumCulled = false;
     if (node instanceof Mesh) node.castShadow = node.receiveShadow = true;
   });
+  notice.textContent = 'Fuelling the Land Rover…';
+  const maps = await loadPaintMaps();
+  const rover = createRover(maps);
+  rover.body.position.set(-4.5, 0, -14.6);
+  rover.body.rotation.y = Math.PI / 2;
+  scene.add(rover.body);
   const world = await buildWorld({ scene, gravity: [0, GRAVITY, 0], fixedDelta: 1 / 60, maxSubsteps: 5 });
   environment.bind(world);
   const audio = await Audio.load();
-  const player = new Soldier('Player', world, scene, rig.scene, environment.spawn, true, (...args) => audio.play(...args));
+  const handling = new Handling(world, rover);
+  const roverSound = new RoverSound(audio, rover, handling);
+  const player = new Soldier('Player', world, scene, rig.scene, environment.spawn, true, (...args) => audio.play(...args),
+    { vehicle: { rover, handling }, ladder: environment.ladder });
   const opponent = new Soldier('Opponent', world, scene, rig.scene, new Vector3(0, 0.04, 13.5), false,
     (sound, gain, offset, duration) => audio.play(sound, gain, offset, duration, opponent.position));
+  // (a function's result, as the hoisted functions below see no narrowing of `player.driver` and `player.climber`)
+  const { driver, climber } = mountsOf(player);
+  // (the view settles onto the wheel and bonnet, and up the ladder)
+  const words = new Map<Mount, Words>([
+    [driver, { use: 'Drive', getting: 'Getting in', leaving: 'Getting out', on: 'Driving', keys: 'W S · Drive  A D · Steer  Space · Handbrake', pitch: -0.45 }],
+    [climber, { use: 'Climb', getting: 'Getting on', leaving: 'Getting off', on: 'Climbing', keys: 'W S · Climb up or down', pitch: 0.15 }],
+  ]);
+  const wordsOf = (mount: Mount) => {
+    const found = words.get(mount);
+    if (!found) throw new Error('A mount the HUD has no words for');
+    return found;
+  };
   player.combat.targets = [opponent];
   opponent.combat.targets = [player];
   const { movement, avatar, combat } = player;
@@ -83,7 +121,7 @@ async function start() {
   notice.textContent = 'Building navigation through the course…';
   const navigation = new Navigation(world);
   const enemy = new Enemy(opponent, player, navigation, world);
-  const playback = new Playback([avatar.group, opponent.avatar.group, player.remains, opponent.remains, ...environment.moving], () => player.look(), world.fixedDelta);
+  const playback = new Playback([avatar.group, opponent.avatar.group, player.remains, opponent.remains, rover.body, ...environment.moving], () => player.look(), world.fixedDelta);
   const input = new Input(canvas, (locked) => {
     if (!locked) void audio.pause().catch(showError);
     document.body.classList.toggle('playing', locked);
@@ -104,6 +142,7 @@ async function start() {
     resetting = true;
     dead = 0;
     world.reset();
+    handling.reset();
     player.reset();
     opponent.reset(undefined, Math.PI);
     enemy.reset();
@@ -130,33 +169,32 @@ async function start() {
   function draw(dt: number) {
     input.direction();
     if (input.locked) {
-      // Ask for the reload first, so this frame's aim already gives way to it.
-      if (input.pressed('KeyR') || combat.ammo === 0) player.reload();
-      movement.input.move.copy(input.move);
-      movement.input.yaw = input.yaw;
-      player.aim = input.aim;
-      // Firing (held or a quick click) ends a sprint, except during a reload; the shot goes as soon as the rifle is up.
-      movement.input.sprint = input.sprint && !(input.trigger && !avatar.reloading);
-      movement.input.crouch = input.crouch;
-      movement.input.jump = input.jump;
+      // E uses what the player is on or setting off for, else what it stands near.
+      if (input.pressed('KeyE')) (active() ?? player.mounts.find((mount) => mount.near))?.use();
+      const mount = active();
+      if (mount) ride(mount, dt);
+      else walk();
       player.view.pitch = input.pitch;
       if (input.pressed('Backspace')) reset();
       const before = world.time;
       world.update(dt);
       playback.advance(dt, world.time - before);
-      if (movement.position.y < -8) reset();
+      if (player.position.y < -8) reset();
       if (!player.alive && (dead += dt) > DEATH_CAM) document.exitPointerLock();
     }
     // The camera turns with the mouse every rendered frame; the blended body turns with it about the eye.
     // Dead, it sees through its ragdoll's head, the mouse no longer turning it.
-    const show = () => player.alive ? avatar.face(playback.blend(playback.alpha), input.yaw, input.pitch) : playback.blend(playback.alpha);
+    // Seated or on the ladder, it sees along its head as posed.
+    const free = player.alive && !player.mounted;
+    const show = () => free ? avatar.face(playback.blend(playback.alpha), input.yaw, input.pitch) : playback.blend(playback.alpha);
     const look = show();
     avatar.muzzle.getWorldPosition(muzzle);
     // Queries synchronize scene transforms into physics; keep display interpolation out of them.
     playback.restore();
-    camera.update(look, player.alive ? avatar.aimWeight : 0);
+    camera.update(look, free ? avatar.aimWeight : 0);
     audio.listen(camera.camera);
-    if (input.locked && input.trigger) {
+    roverSound.update();
+    if (input.locked && input.trigger && !active()) {
       // The shot leaves the muzzle for what the crosshair covers, recoil's kick included; along the view when that is nearer than
       // the muzzle (pressed against a wall) or nothing.
       const sighted = world.raycast(look.eye, camera.direction, 120);
@@ -174,8 +212,9 @@ async function start() {
     document.body.classList.toggle('aiming', movement.input.aim);
     const low = combat.ammo <= MAGAZINE / 3;
     labels.ammo.classList.toggle('low', low);
-    labels.motion.textContent = movement.crouched ? 'Crouched' : movement.grounded ? movement.sprinting ? 'Sprinting' : 'Grounded' : 'Airborne';
-    labels.speed.textContent = `${movement.speed.toFixed(1)} m/s`;
+    labels.motion.textContent = motionLabel();
+    labels.speed.textContent = driver.posed ? `${Math.abs(handling.speed * 3.6).toFixed(0)} km/h` : `${movement.speed.toFixed(1)} m/s`;
+    prompt.textContent = promptLabel();
     labels.ammo.textContent = String(combat.ammo);
     labels.reload.textContent = avatar.reloading ? 'Reloading…' : low ? 'R · Reload' : 'Practice rifle · unlimited magazines';
     labels.feedback.textContent = combat.feedback;
@@ -192,6 +231,55 @@ async function start() {
       avatar.afterRender();
       playback.restore();
     }
+  }
+
+  /** What the player is on or setting off for. */
+  function active() { return player.mounts.find((mount) => mount.state !== 'off'); }
+
+  function motionLabel() {
+    const mount = active();
+    if (mount) {
+      const said = wordsOf(mount);
+      return mount.state === 'on' ? said.on : mount.state === 'dismounting' ? said.leaving : said.getting;
+    }
+    if (movement.crouched) return 'Crouched';
+    if (!movement.grounded) return 'Airborne';
+    return movement.sprinting ? 'Sprinting' : 'Grounded';
+  }
+
+  function promptLabel() {
+    const near = player.mounts.find((mount) => mount.near), mount = active();
+    if (near) return `E · ${wordsOf(near).use}`;
+    if (driver.canExit) return 'E · Get out';
+    if (driver.blocked) return 'No room to get out';
+    return mount?.state === 'on' ? wordsOf(mount).keys : '';
+  }
+
+  /** On foot: the keys move the capsule and the mouse turns it. */
+  function walk() {
+    handling.park();
+    // Ask for the reload first, so this frame's aim already gives way to it.
+    if (input.pressed('KeyR') || combat.ammo === 0) player.reload();
+    movement.input.move.copy(input.move);
+    movement.input.yaw = input.yaw;
+    player.aim = input.aim;
+    // Firing (held or a quick click) ends a sprint, except during a reload; the shot goes as soon as the rifle is up.
+    movement.input.sprint = input.sprint && !(input.trigger && !avatar.reloading);
+    movement.input.crouch = input.crouch;
+    movement.input.jump = input.jump;
+  }
+
+  /**
+   * On a mount: walking to it, the view turns with the walk; on it, the view turns with it and no further than the head and shoulders
+   * can, seated the keys drive and on the ladder they climb.
+   */
+  function ride(mount: Mount, dt: number) {
+    if (mount.state === 'approaching' || mount.state === 'mounting') input.pitch = MathUtils.damp(input.pitch, wordsOf(mount).pitch, 3, dt);
+    input.yaw = mount.state === 'approaching' ? movement.input.yaw : mount.aim(input.yaw, input.pitch);
+    const ahead = mount.state === 'on' ? Number(input.down('KeyW')) - Number(input.down('KeyS')) : 0;
+    if (mount === driver && mount.state === 'on') handling.drive(ahead, Number(input.down('KeyA')) - Number(input.down('KeyD')), input.jump);
+    else handling.park();
+    if (mount === climber) climber.climb(ahead);
   }
 
   function frame(now: number) {
@@ -220,13 +308,14 @@ async function start() {
 
   const dispose = () => {
     stopped = true;
+    roverSound.dispose();
     void audio.dispose().catch(showError);
     reflections.dispose();
-    stopAnimation(); input.dispose(); player.dispose(); opponent.dispose(); environment.dispose(); world.dispose(); rig.dispose(); renderer.dispose();
+    stopAnimation(); handling.dispose(); rover.dispose(); maps.dispose(); input.dispose(); player.dispose(); opponent.dispose(); environment.dispose(); world.dispose(); rig.dispose(); renderer.dispose();
     window.removeEventListener('resize', resize);
   };
   window.addEventListener('pagehide', dispose, { once: true });
-  return { world, movement, camera, combat, input, avatar, player, opponent, enemy, navigation, reset, dispose };
+  return { world, audio, movement, camera, combat, input, avatar, player, opponent, enemy, navigation, rover, handling, driver, climber, ladder: environment.ladder, reset, dispose };
 }
 
 function showError(error: unknown) {
