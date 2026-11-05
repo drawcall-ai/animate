@@ -31,7 +31,9 @@ const CLOSE = 1.6;
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
 export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], step: boolean, motion?: Pace) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
-  const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);
+  // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so a
+  // support hand going back onto a rifle the other holds to the shoulder bowed the trunk as far as it bows before it got there)
+  const holding = takes.map((take) => heldThings(person).includes(take.thing));
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
     // (stood to as if the wrist went on the empty: the hand still hangs, so the palm's way back from it is not yet the reach's)
     grips: takes.map((take) => ({ side: take.side, at: emptyAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
@@ -78,7 +80,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
       yield* action<Frame>({ until: () => stood || preparing() });
       yield* during(request, 'trunk', 'borrowed', (f) => {
         takes.forEach((take, k) => {
-          if (!regripping[k]) bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass, onBody(person, take.thing));
+          if (!holding[k]) bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass, onBody(person, take.thing));
         });
       });
     });

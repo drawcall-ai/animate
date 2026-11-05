@@ -114,8 +114,8 @@ export class Avatar {
   }
 
   requestReload() { this.animation.requestReload(); }
-  /** Asks the left hand to press `button` (a thing whose grip `press` takes the index's pad) with its fingertip, calling `pressed` as the pad
-   * comes onto it, then to take the rifle again; ignored while it reloads or presses. */
+  /** Asks the left hand to press `button` (a thing whose grips `press`, on its face, and `clear`, out from it, take the index's pad) with its
+   * fingertip, calling `pressed` as the pad comes onto it, then to take the rifle again; ignored while it reloads or presses. */
   press(button: Object3D, pressed: () => void) { this.animation.press(button, pressed); }
   /** Whether a press is asked for or under way. */
   get pressing(): boolean { return this.animation.pressing(); }
@@ -210,7 +210,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   let time = 0, acquired = false, swapping = false, reloadWanted = false, reloads = 0;
   /** a button the left hand is asked to press, and what to tell as it does: until the hand is back on the rifle */
   let pressWanted: { button: Object3D; pressed: () => void } | null = null;
-  /** the left hand off the rifle for a press, the rifle lowered meanwhile (it comes up again as the hand comes back to it) */
+  /** the left hand off the rifle for a press, the rifle lowered meanwhile (it comes up again as the hand draws back off the button) */
   let lowering = false;
   let sprinted = 0, reloaded = 0, lowered = 0, lastShot = -Infinity, stillSince = 0;
   const sprinting = () => input.sprint && !input.aim;
@@ -349,15 +349,21 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     swapping = false;
   };
 
-  // The left hand lets go of the rifle's front, the right holding it on, and puts the index's pad on the button, the arm placed from that
-  // fingertip; holding it there a moment as the button goes in, it lets go and takes the rifle again.
+  // The left hand lets go of the rifle's front, the right holding it on, and points at the button from its `clear`, a finger's length out
+  // along its normal, then puts the index's pad on it, the arm placed from that fingertip (straight from the rifle, the hand came round
+  // onto it from wherever it set off); holding it there a moment as the button goes in, it draws straight back off it to its `clear` again
+  // and takes the rifle (straight from the press, it slid up the panel's face on its way over the rifle). In and out at a calm reach's
+  // pace: briskly, the hand overshot those few centimetres, the fingertip into the panel below the button.
   const press = function* (button: Object3D, pressed: () => void) {
     lowering = true;
-    if (!(yield* grab(person, button, { left: 'press' }, { ...QUICK, step: false }))) throw new Error(`The soldier could not reach "${button.name}"`);
+    for (const [grip, pace] of [['clear', QUICK], ['press', {}]] as const) {
+      if (!(yield* grab(person, button, { left: grip }, { ...pace, step: false }))) throw new Error(`The soldier could not reach "${button.name}"`);
+    }
     pressed();
     yield* wait(0.3);
-    release(person, { left: button });
     lowering = false;
+    if (!(yield* grab(person, button, { left: 'clear' }, { step: false }))) throw new Error(`The soldier could not draw back from "${button.name}"`);
+    release(person, { left: button });
     if (!(yield* grab(person, rifle, { left: 'foregrip' }))) throw new Error('The support hand could not return to the rifle after pressing');
   };
 
