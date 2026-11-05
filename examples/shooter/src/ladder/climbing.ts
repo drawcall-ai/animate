@@ -20,19 +20,25 @@ const LIMBS: readonly Limb[] = [
   { side: 'left', kind: 'hand', odd: 1 }, { side: 'right', kind: 'foot', odd: 0 },
   { side: 'right', kind: 'hand', odd: 0 }, { side: 'left', kind: 'foot', odd: 1 },
 ];
-const SWING = 0.4;
+const SWING = 0.36;
 const AWAY = 0.08;
-/** The share of a rung before its swing at which a hand lets go of its rung: it opens there, its fingers clear of the rung, then moves. */
-const LETTING = 0.04;
-/** Where all four limbs hold, as a share of a rung climbed past one: the pair that moved just there, the other not yet off. */
-const HELD = (1 - 2 * SWING) / 2;
+/**
+ * The share of its two rungs' climb before its swing at which a hand lets go of its rung: it opens there on the rung, its fingers off it
+ * before it moves (let go of only as it moved, it would travel with its fingers still closed).
+ */
+const LETTING = 0.08;
+/**
+ * Where all four limbs hold, as a share of a rung climbed past one: midway between the pair that moved just landing there and the other's
+ * hand letting go.
+ */
+const HELD = (1 - 2 * SWING - 2 * LETTING) / 2;
 /**
  * The body on the ladder (m): its hips `back` behind the rungs; a foot's rung `feet` below them as it lands on it (it then sinks
  * `SWING` of two rungs further below as the body climbs, its leg straightening, before it steps up); the hands `reach` rungs above the
  * feet (from the shoulder's height to above the head over a hand's two-rung climb); each hand and foot `apart` off the middle; an ankle
  * above its rung and behind it.
  */
-const BODY = { back: 0.37, feet: 0.55, reach: 5, apart: { hand: 0.155, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
+const BODY = { back: 0.37, feet: 0.6, reach: 5, apart: { hand: 0.155, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /**
  * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
  * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
@@ -47,6 +53,17 @@ export function heights(ladder: Ladder): Record<End, number> {
   // (the feet on rungs `rung` and the one below)
   const at = (rung: number) => (rung + HELD) * ladder.spacing + BODY.feet;
   return { foot: at(1), top: at(ladder.rungs) };
+}
+
+/**
+ * The next height (m) at or past the hips' `height` up `ladder`, climbing up (`going` > 0) or down, at which all four limbs hold, as
+ * `heights`' are: where a climb let go of on the way is carried on to, so that no hand or foot is left in the air between rungs.
+ */
+export function rest(ladder: Ladder, height: number, going: number) {
+  const rungs = (height - BODY.feet) / ladder.spacing - HELD, ends = heights(ladder);
+  // (a hair's tolerance, so that a height already there stays)
+  const rung = going > 0 ? Math.ceil(rungs - 1e-6) : Math.floor(rungs + 1e-6);
+  return MathUtils.clamp((rung + HELD) * ladder.spacing + BODY.feet, ends.foot, ends.top);
 }
 
 /**
