@@ -6,7 +6,7 @@ import type { DigitBones } from './bones';
 import { closedOn, padToward } from './closing';
 import type { Contact } from './contact';
 import { Joints } from './joints';
-import { blendShape, digitOf, easeShape, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
+import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
 
 /** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds (for a puppet's
  * grip, with how far its wrist stood off where `gripOn` puts it then), and where each digit a grip puts on one of its empties last reached
@@ -16,7 +16,7 @@ interface Hand {
   shape: Shape;
   asked: { shape: Shape; time: number } | null;
   closed: { on: Hold | Object3D; shape: Shape; off: Vector3 | null } | null;
-  reached: Map<Digit, { empty: string; target: Vector3; shape: Shape }>;
+  reached: Map<Digit, { empty: Object3D; target: Vector3; shape: Shape }>;
   /** the grip's empty a hand verb is bringing it to */
   coming: Object3D | null;
 }
@@ -110,7 +110,7 @@ export class FingerState {
     const point = grip.at.position.clone().applyMatrix4(owner.matrixWorld), now = hand.getWorldQuaternion(new Quaternion());
     const turn = owner.getWorldQuaternion(new Quaternion()), facing = grip.facing?.clone().applyQuaternion(turn);
     const axis = grip.handle?.axis.clone().applyQuaternion(turn);
-    const rotation = contact.axis && axis
+    const rotation = axis
       ? facing ? turnOnto(contact.axis, contact.facing, axis, facing) : new Quaternion().setFromUnitVectors(contact.axis.clone().applyQuaternion(now), axis).multiply(now)
       : facing ? new Quaternion().setFromUnitVectors(contact.facing.clone().applyQuaternion(now), facing).multiply(now) : now;
     const scale = new Vector3().setFromMatrixScale(hand.matrixWorld).x;
@@ -120,14 +120,14 @@ export class FingerState {
   /** where hand `side` holds `grip` (see `Contact`): on a handle, in its grasp; with a pad, that digit's as the grip shapes it; else the palm */
   contact(side: 'left' | 'right', grip: Grip): Contact {
     const joints = this.hands[side].joints;
-    if (!grip.handle) return joints.touch(grip.pad, shapeOf(values(grip.node), RELAXED));
+    if (!grip.handle) return joints.touch(grip.pad, shapeOf(values(grip.node), grip.pad ? POINT : RELAXED));
     joints.hand.updateWorldMatrix(true, false);
     return joints.handle(grip.handle.radius / new Vector3().setFromMatrixScale(joints.hand.matrixWorld).x);
   }
 
   /**
-   * the shape `side` takes for the grip `empty` as its wrist stands off where `gripOn` puts it: for a pad, the grip's own shape all the way
-   * (a fingertip comes pointing); else relaxed, opening as it nears (`APERTURE`), and within `ARRIVED` closed on its thing with the
+   * the shape `side` takes for the grip `empty` as its wrist stands off where `gripOn` puts it: for a pad, relaxed, pointing (or the
+   * grip's own shape) as it nears, and its pad on the empty once it is `NEAR`; else relaxed, opening as it nears (`APERTURE`), and within `ARRIVED` closed on its thing with the
    * empty's asks laid over that — afresh while the wrist still settles onto it (moving `MOVED` on it), so the fingers close as the palm
    * meets it, not once it has stopped there
    */
@@ -135,8 +135,9 @@ export class FingerState {
     const hand = this.hands[side], thing = empty.parent;
     if (!thing) throw new Error(`fingers: "${empty.name}" hangs from nothing`);
     const grip = Thing.of(thing).grip(empty.name);
-    if (grip.pad) return shapeOf(values(empty), RELAXED);
     const { wrist } = this.gripOn(side, empty), off = hand.joints.hand.getWorldPosition(new Vector3()).sub(wrist), distance = off.length();
+    // (a fingertip's hand comes relaxed, pointing as it nears, the pad met from where the hand is once it pushes in)
+    if (grip.pad) return distance > NEAR ? blendShape(RELAXED, shapeOf(values(empty), POINT), 1 - smoothstep(NEAR, NEARING, distance)) : this.asked(hand, shapeOf(values(empty), POINT), empty, thing);
     if (distance > ARRIVED) {
       hand.closed = null;
       return blendShape(RELAXED, APERTURE, 1 - smoothstep(NEAR, NEARING, distance));
@@ -163,27 +164,40 @@ export class FingerState {
 
   /** the shape `hand` takes `grip` of `thing` in, before its asks: closed on it (again, from `was`), or relaxed touching it with a pad */
   private taking(hand: Hand, grip: Grip, thing: Object3D, was: Shape | null = null): Shape {
-    return grip.pad ? structuredClone(RELAXED) : closedOn(hand.joints, thing, grip.handle !== null, was);
+    if (grip.pad) return shapeOf(values(grip.node), POINT);
+    if (!grip.handle) return closedOn(hand.joints, thing, null, was);
+    // (the handle's line in the hand's frame)
+    thing.updateWorldMatrix(true, false);
+    hand.joints.hand.updateWorldMatrix(true, false);
+    const back = new Matrix4().copy(hand.joints.hand.matrixWorld).invert(), turn = thing.getWorldQuaternion(new Quaternion());
+    const at = grip.at.position.clone().applyMatrix4(thing.matrixWorld).applyMatrix4(back);
+    const axis = grip.handle.axis.clone().applyQuaternion(turn).transformDirection(back);
+    return closedOn(hand.joints, thing, { at, axis }, was);
   }
 
   /**
-   * `closed` with what `grip` (an empty on `thing`) asks in `userData.fingers` laid over it: each digit given values takes them; each
-   * given an empty's name reaches its pad there, pressing on the part the empty hangs from (not on the thing itself), afresh once the empty
-   * moves in the hand (not the digit whose pad the grip is: the hand goes so that it is there)
+   * `closed` with what `grip` (an empty on `thing`) asks in `userData.fingers` laid over it — each digit given values takes them — and
+   * each of its contacts met from where the hand is now: the grip's own pad on it (the hand put so that it is there, as far as the arm
+   * brought it), and each digit given an empty's name with its pad there, pressing on the part the empty hangs from (not on the thing
+   * itself); each reached afresh once its empty moves in the hand
    */
   private asked(hand: Hand, closed: Shape, grip: Object3D, thing: Object3D): Shape {
-    const shape = shapeOf(values(grip), closed);
-    for (const [name, value] of Object.entries(asks(grip))) {
-      if (typeof value !== 'string') continue;
-      if (name === grip.userData.pad) throw new Error(`"${grip.name}" userData.fingers.${name}: its pad is the grip's, where the hand puts it`);
-      const digit = digitOf(name, `"${grip.name}" userData.fingers`), empty = thing.getObjectByName(value);
+    const shape = shapeOf(values(grip), closed), pad: unknown = grip.userData.pad;
+    const contacts = Object.entries(asks(grip)).flatMap(([name, value]) => {
+      if (typeof value !== 'string') return [];
+      if (name === pad) throw new Error(`"${grip.name}" userData.fingers.${name}: its pad is the grip's own, on it`);
+      const empty = thing.getObjectByName(value);
       if (!empty) throw new Error(`"${grip.name}" userData.fingers.${name}: "${thing.name}" has no empty named "${value}"`);
+      return [{ digit: digitOf(name, `"${grip.name}" userData.fingers`), empty, pressed: empty.parent === thing ? null : empty.parent }];
+    });
+    if (pad !== undefined) contacts.push({ digit: digitOf(pad, `"${grip.name}" userData.pad`), empty: grip, pressed: thing });
+    for (const { digit, empty, pressed } of contacts) {
       const target = handFrame(hand.joints.hand, empty), last = hand.reached.get(digit);
-      const afresh = last?.empty !== value;
+      const afresh = last?.empty !== empty;
       if (afresh || !last || last.target.distanceTo(target) > MOVED) {
         const reached = structuredClone(afresh || !last ? shape : last.shape);
-        padToward(hand.joints, thing, reached, digit, target, afresh, empty.parent === thing ? null : empty.parent);
-        hand.reached.set(digit, { empty: value, target, shape: reached });
+        padToward(hand.joints, thing, reached, digit, target, afresh, pressed);
+        hand.reached.set(digit, { empty, target, shape: reached });
       }
       const reached = hand.reached.get(digit)?.shape;
       if (!reached) continue;

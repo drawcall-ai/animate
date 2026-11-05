@@ -57,12 +57,12 @@ export const OPEN = {
   thumb: { curl: 0, oppose: 0, spread: 0 }, index: digit(0, 0, 0.3), middle: digit(0), ring: digit(0, 0, 0.3), little: digit(0, 0, 0.4),
 } as const satisfies Shape;
 /**
- * The index pointing, nearly straight, its tip given a little as a finger pressing a button is; the other fingers curled loosely into the
- * palm, each a little more than the one before; the thumb laid over the middle finger's middle segment (folded as a fist's, the fingers
- * hid the thumb, and the hand read as a fist).
+ * The index pointing, as a hand presses a button: nearly straight, each joint given a little as a relaxed finger's is (straight as a rod,
+ * it read as a stick); the other fingers curled loosely into the palm, each a little more than the one before (as a fist, the hand read
+ * as one, and the skin creased at the knuckles); the thumb resting along the middle finger's side.
  */
 export const POINT = {
-  thumb: { curl: 0.35, oppose: 0.6, spread: 0.35 }, index: digit(0.06, 0.15), middle: digit(0.62, 0.25), ring: digit(0.7, 0.25), little: digit(0.78, 0.25),
+  thumb: { curl: 0.3, oppose: 0.45, spread: 0.25 }, index: digit(0.05, 0.1), middle: digit(0.5, 0.22), ring: digit(0.56, 0.24), little: digit(0.62, 0.26),
 } as const satisfies Shape;
 /** The fingers folded, the thumb up. */
 export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0, spread: 0 } } as const satisfies Shape;

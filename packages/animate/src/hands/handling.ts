@@ -1,4 +1,4 @@
-import type { Object3D } from 'three';
+import type { Object3D, Vector3 } from 'three';
 import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Motion } from '../kernel/goal';
@@ -48,6 +48,6 @@ export interface Handling {
   bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, options: HandOptions): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */
   reach(request: Request, aims: readonly { hand: string; target: (f: Frame) => Goal }[], options: HandOptions): Handwork;
-  /** `hands`, having let go, back out of what they held: a request of the body's own */
-  backOut(hands: readonly string[]): void;
+  /** `hands`, having let go, back out of what they held, first along `away` (world) where given: a request of the body's own */
+  backOut(hands: readonly string[], away: Readonly<Record<string, Vector3>>): void;
 }

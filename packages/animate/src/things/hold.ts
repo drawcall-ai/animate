@@ -35,11 +35,12 @@ export function onBody(self: Holder, thing: Thing): boolean {
 
 /** A person's palm, as a grip takes it: the point of the hand that goes on the empty in the hand bone's frame — its centre; for a hand
  * with fingers, its `contact`'s — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers, where
- * it holds the grip (`Contact`, the bone's frame). */
+ * it holds the grip (`Contact`, the bone's frame) and the world's up in the thing's frame as it sets off. */
 export interface Palm {
   at: Readonly<Vector3>;
   turn: () => Quaternion;
   contact?: Contact;
+  up?: Vector3;
 }
 
 /**
@@ -73,15 +74,40 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goa
 /**
  * the hand's turn (the thing's frame) a grip's `facing` asks of `hand`: on a handle, the hand's grasp line along the handle's axis, its
  * thumb toward the axis's end, the palm facing so, as far as the wrist turns it so (`Goal.preferred`: a palm up under a rifle's receiver
- * as it points at the ground, asked strictly, failed the grab); elsewhere the palm or the pad facing so, free to roll about it, as far
- * as the wrist turns it so too (a fingertip on a low button, asked strictly, crept its last 2 cm onto it for a second). None
- * asked: none (a handle without one takes the hand turned as the arm brings it, its palm on the handle's line).
+ * as it points at the ground, asked strictly, failed the grab); a pad pushing so, the hand rolled about that as a pointing hand is
+ * (`pointing`), as far as the wrist turns it so too (a fingertip on a low button, asked strictly, crept its last 2 cm onto it for a
+ * second); the palm facing so, free to roll about it. None asked: none (a handle without one takes the hand turned as the arm brings
+ * it, its palm on the handle's line).
  */
-function palmTurn(grip: Grip, { contact }: Palm): { quaternion: Quaternion; axis?: Vector3; preferred?: true } | null {
+function palmTurn(grip: Grip, { contact, up }: Palm): { quaternion: Quaternion; axis?: Vector3; preferred?: true } | null {
   if (!grip.facing || !contact) return null;
-  if (grip.handle && contact.axis) return { quaternion: turnOnto(contact.axis, contact.facing, grip.handle.axis, grip.facing), preferred: true };
-  return { quaternion: new Quaternion().setFromUnitVectors(contact.facing, grip.facing), axis: grip.facing.clone(), preferred: true };
+  if (grip.handle) return { quaternion: turnOnto(contact.axis, contact.facing, grip.handle.axis, grip.facing), preferred: true };
+  const quaternion = new Quaternion().setFromUnitVectors(contact.facing, grip.facing);
+  if (grip.pad && up && pointing(quaternion, contact, grip.facing, up)) return { quaternion, preferred: true };
+  return { quaternion, axis: grip.facing.clone(), preferred: true };
 }
+
+/**
+ * `turn` (a hand's, its pad `contact` pushing along `push`) rolled about `push`, in place, as a hand points to press with a fingertip:
+ * its palm as far down as the roll turns it, then `POINTING` thumb up off that, as a forearm rests between its turns (a wall button's
+ * pressed palm down, a hand rolled as it came — straight off a palm-up hold under a rifle — pressed palm up). A push straight up or down
+ * leaves the roll as it is.
+ */
+function pointing(turn: Quaternion, contact: Contact, push: Vector3, up: Vector3): boolean {
+  const level = (v: Vector3) => v.addScaledVector(push, -v.dot(push));
+  const down = level(up.clone().negate());
+  if (down.lengthSq() < 1e-6) return false;
+  const palm = level(contact.palm.clone().applyQuaternion(turn));
+  const angle = Math.atan2(_cross.crossVectors(palm, down).dot(push), palm.dot(down));
+  turn.premultiply(_q.setFromAxisAngle(push, angle));
+  // (thumb up: the roll that lifts the line across the knuckles toward the thumb)
+  const thumb = _cross.copy(contact.axis).applyQuaternion(turn);
+  const roll = _q.setFromAxisAngle(push, POINTING), lifted = thumb.clone().applyQuaternion(roll).dot(up);
+  turn.premultiply(lifted >= thumb.clone().applyQuaternion(_q2.copy(roll).invert()).dot(up) ? roll : _q2);
+  return true;
+}
+/** how far a pointing hand is rolled thumb up off palm down (rad) */
+const POINTING = 0.5;
 
 /** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
 export function holdOn(thing: Thing, grip: string, goal: Goal, palm?: Palm): Hold {
@@ -333,7 +359,7 @@ export function wornOf(self: Holder): Thing[] {
 const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const _world = new Matrix4(), _parentInverse = new Matrix4();
 const ZERO = new Vector3(), _scale = new Vector3();
-const _back = new Quaternion(), _facing = new Vector3(), _turn = new Quaternion(), _q = new Quaternion();
+const _back = new Quaternion(), _facing = new Vector3(), _turn = new Quaternion(), _q = new Quaternion(), _q2 = new Quaternion(), _cross = new Vector3();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
 const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();
 

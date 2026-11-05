@@ -15,7 +15,7 @@ const MID_AIR = { height: 0.02, speed: 0.2 };
  * those hands let go of what each names and the body's others keep holding (one hand left on a thing carries it alone). A thing no hand
  * of the body holds any more is attached onto the empty `onto` (set there exactly if it is within 5 mm), else to another body still
  * holding it (that body carries it now), else to the parent it was lifted from, where it is now. The hands that let go back out of it,
- * carrying on the way they were going. Development says when a thing is let go in mid-air, put onto an empty more than 5 mm off or onto
+ * carrying on the way they were going (a fingertip off its button, back the way it pushed). Development says when a thing is let go in mid-air, put onto an empty more than 5 mm off or onto
  * one another thing already sits in.
  */
 export function release(body: Body, thing: Object3D, onto?: Object3D): void;
@@ -41,9 +41,14 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
   const f = self.frame, object = thing.object;
   const placed = self.track(object).at(f.time).current, moving = self.track(object).velocity(new Vector3()).length();
   const lowest = new Box3().copy(thing.bounds).applyMatrix4(new Matrix4().compose(placed.position, placed.quaternion, object.scale)).min.y;
+  // (a fingertip draws back off its button the way it pushed in)
+  const away = Object.fromEntries(hands.flatMap((hand) => {
+    const hold = self.holding[hand], grip = hold?.thing.grip(hold.grip);
+    return grip?.pad && grip.facing ? [[hand, grip.facing.clone().applyQuaternion(placed.quaternion).negate()]] : [];
+  }));
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
-  self.handling.backOut(hands);
+  self.handling.backOut(hands, away);
   // (a hand of its own still on it: that hand carries it alone)
   if (handsOn(self, thing).length) {
     take(self, thing);

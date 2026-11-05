@@ -1,4 +1,4 @@
-import { Quaternion } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { paceAt, type Handling } from '../handling';
 import { CALM } from './arms';
 import { bodyOf, goalOn, type Palm } from '../../things/hold';
@@ -38,9 +38,9 @@ export function personHands(person: Reacher): Handling {
     },
     bring: (request, thing, points, end, options) => carrying(person, request, thing, wayOf(person, thing, points, end), options),
     reach: (request, aims, options) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), options),
-    backOut(hands) {
+    backOut(hands, away) {
       const sides = hands.map(sideOf);
-      person.own('release', '', (request) => () => backingOut(person, request, sides));
+      person.own('release', '', (request) => () => backingOut(person, request, sides.map((side) => ({ side, away: away[side] ?? null }))));
     },
   };
 }
@@ -61,7 +61,9 @@ function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
     return { at: palmOf(person.proportions, side), turn: turned };
   }
   // (where the hand holds it, measured in its node's frame, in its bone's)
-  const scale = person.scaleOf(bone), { at, axis, facing } = fingers.contact(side, grip), rest = person.restOf(bone);
-  const contact = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis?.applyQuaternion(rest) ?? null };
-  return { at: contact.at, turn: turned, contact };
+  const scale = person.scaleOf(bone), { at, axis, facing, palm: palmFacing } = fingers.contact(side, grip), rest = person.restOf(bone);
+  const contact = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis.applyQuaternion(rest), palm: palmFacing.applyQuaternion(rest) };
+  // (the world's up in the thing's frame, as the hand sets off for it)
+  const up = new Vector3(0, 1, 0).applyQuaternion(person.track(thing.object).at(person.frame.time).prev.quaternion.clone().invert());
+  return { at: contact.at, turn: turned, contact, up };
 }

@@ -20,6 +20,8 @@ import { ARM } from './trunk';
 
 /** An outside guide beyond the arm's reach is followed this long after its planned arrival before closing on the exact grip. */
 const STAGING = 0.4;
+/** how far before its button a fingertip comes to first, and draws back to after (m, default body) */
+export const PRESSING = 0.07;
 
 /** A hand's hold to take: the hand, and the hold it takes. */
 export interface Taking {
@@ -81,8 +83,11 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const through = (corner: Vector3, next: Vector3) => world(corner).sub(hips).dot(toward) < 0 && pointSegmentDistance(hips, world(corner), world(next)) < trunk;
     const detour = onBody(person, take.thing) ? [] : aroundHeld(person, take.side, world(from), world(take.goal.position))
       .map((point) => point.sub(frame.position).applyQuaternion(frame.quaternion.clone().invert()));
+    // (a fingertip comes to its button from before it, pointing, and pushes straight in)
+    const grip = take.thing.grip(take.grip);
+    const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(grip.facing, -PRESSING * person.scale)] : [];
     const route = [...detour, ...(onBody(person, take.thing) ? []
-      : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`])))))]
+      : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`]))))), ...before]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
     const points = route.length ? route : [take.goal.position];
     let was = from;

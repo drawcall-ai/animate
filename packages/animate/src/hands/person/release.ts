@@ -8,16 +8,23 @@ import { clearArm, reaching } from './arms';
 import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
+import { PRESSING } from './reach';
 
-/** Release preserves follow-through within arm reach, without recruiting the trunk; idle arms resume on arrival or timeout. */
-export function* backingOut(person: Reacher, request: Request, sides: readonly Side[]) {
+/** Release preserves follow-through within arm reach, without recruiting the trunk; idle arms resume on arrival or timeout. A hand given
+ * a way `away` (world: a fingertip off its button) draws straight back along it `PRESSING` instead. */
+export function* backingOut(person: Reacher, request: Request, hands: readonly { side: Side; away: Vector3 | null }[]) {
+  const sides = hands.map(({ side }) => side);
   const proportions = person.proportions, began = person.frame.time;
   let targets: ((f: Frame) => Goal)[] | null = null, time = NaN, goals: Goal[] = [];
   // (where each hand goes, from how it moved as it let go)
   const off = (f: Frame): Goal[] => {
     if (time === f.time) return goals;
-    targets ??= sides.map((side) => {
+    targets ??= hands.map(({ side, away }) => {
       const hand = f.prev.position(person.hands[side]);
+      if (away) {
+        const back = hand.addScaledVector(away, PRESSING * person.scale);
+        return () => ({ position: back });
+      }
       const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
       const sign = side === 'left' ? 1 : -1;
       const rest = new Vector3(sign * REST.aside * proportions.scale, -REST.down * proportions.armLength, REST.ahead * proportions.scale);

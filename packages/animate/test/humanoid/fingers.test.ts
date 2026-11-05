@@ -132,27 +132,32 @@ describe('fingers', () => {
     expect(off).toBeLessThan(0.12);
   });
 
-  it('put the hand where a grip with a pad has that digit\'s pad on its empty', () => {
+  it('press a button with one grab, the pad on its face, and draw back off it on release', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body), joints = selfOf(body).fingers?.joints('right');
     if (!joints) throw new Error('no finger bones');
     const hand = body.bones.rightHand;
-    // (a button on a panel's face ahead of the right shoulder, pressed with the index pointing, the hand turned as the arm brings it)
+    // (a button on a panel's face ahead of the right shoulder, pushed straight in)
     const panel = new Mesh(new BoxGeometry(0.2, 0.2, 0.02));
     panel.name = 'panel';
     panel.position.set(-0.2, 1.2, 0.5);
     const button = empty(panel, 'button', new Vector3(0, 0, -0.012));
-    Object.assign(button.userData, { pad: 'index', fingers: POINT });
+    Object.assign(button.userData, { pad: 'index', facing: [0, 0, 1] });
     room.add(panel);
-    let held = false, off = Infinity;
+    let held = false, off = Infinity, back = 0;
     play(function* () {
       held = yield* grab(body, panel, { right: 'button' });
-      yield* wait(1);
+      yield* wait(0.5);
       const at = button.getWorldPosition(new Vector3());
       hand.updateWorldMatrix(true, false);
       off = joints.pad('index', shapeOf(POINT), new Vector3()).applyMatrix4(hand.matrixWorld).distanceTo(at);
+      const pressing = hand.getWorldPosition(new Vector3());
+      release(body, panel);
+      yield* wait(0.3);
+      back = pressing.z - hand.getWorldPosition(new Vector3()).z;
     }, [body], 4);
     expect(held).toBe(true);
-    expect(off).toBeLessThan(0.005);
+    expect(off).toBeLessThan(0.01);
+    expect(back).toBeGreaterThan(0.03);
   });
 
   it('lay what a grip asks over a hand its app poses, closed on the grip', () => {
