@@ -73,7 +73,7 @@ export function cues(end: End): Cue[] {
 /** How far the body steps in toward the ladder at each end (m), feet and all: standing clear of it, its rifle too, it then reaches it. */
 const INSET: Record<End, number> = { foot: 0.3, top: 0.3 };
 
-const UP = new Vector3(0, 1, 0), BACK = new Vector3(0, 0, -1), ACROSS = new Vector3(1, 0, 0);
+const UP = new Vector3(0, 1, 0), BACK = new Vector3(0, 0, -1);
 /**
  * The rifle slung against the right hip, muzzle down and a little back, its top to the rear, in the chest's frame (+X left, +Y up, +Z
  * forward).
@@ -128,11 +128,11 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
 
 /**
  * How a hand takes a rung over the top from behind: its palm facing the wall and a little down (the wrist below the rung, as a hand
- * reaching up to it has it), the rung `out` (m) further toward the fingertips than a handle's grasp line, at the fingers' roots, so they
- * hook over its top and down its far side and the thumb, its root clear of it, wraps under it; the thumb's pad `under` the rung (a unit
- * direction, `pad` (m) off its axis), `thumb` (m) toward the middle.
+ * reaching up to it has it), the rung on a handle's grasp line — further out, the index's knuckle, nearest it on the palm's slanted crease,
+ * sits in the rung and the finger folds round through it into the palm — so the fingers hook over its top and down its far side and the
+ * thumb wraps under it; the thumb's pad `under` the rung (a unit direction, `pad` (m) off its axis), `thumb` (m) toward the middle.
  */
-const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize(), out: 0.008, under: new Vector3(0, -0.84, -0.54).normalize(), pad: 0.018, thumb: 0.035 } as const;
+const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize(), under: new Vector3(0, -0.84, -0.54).normalize(), pad: 0.018, thumb: 0.035 } as const;
 /**
  * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
  * `turn` (the tangent) to face back toward the climber, its heel off the face — a thumb, standing in front of the palm, would otherwise
@@ -158,9 +158,8 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
     thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.up, -STILE_HOLD.back);
     Object.assign(empty.userData, { handle: [0, 1, 0], palm: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud });
   } else {
-    // (the empty set off the rung toward the wrist, square to the rung and the palm: the hand back by as much)
-    const fingers = new Vector3().crossVectors(RUNG.palm, ACROSS), x = sign * BODY.apart.hand;
-    empty.position.set(x, y, 0).addScaledVector(fingers, -RUNG.out);
+    const x = sign * BODY.apart.hand;
+    empty.position.set(x, y, 0);
     thumb.position.set(x - sign * RUNG.thumb, y, 0).addScaledVector(RUNG.under, RUNG.pad);
     Object.assign(empty.userData, { handle: [-sign, 0, 0], palm: RUNG.palm.toArray(), radius: RUNG_RADIUS });
   }
