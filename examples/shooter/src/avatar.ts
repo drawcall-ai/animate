@@ -155,7 +155,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   const arms = proportions.arms;
   const eye = onBone(person, person.bones.head, 'right eye', new Vector3(-proportions.head.eye.x, proportions.head.eye.y, proportions.head.eye.z));
   const chest = person.bones.chest;
-  const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.145, 0.19, 0.1).multiplyScalar(proportions.scale));
+  // (the butt in the pocket inside the shoulder joint, 9 cm right of the chest's middle: the receiver's front, where the left hand holds
+  // it palm up, 5.5 cm nearer it than with the butt out at the joint, where the short arm fell 2 cm short)
+  const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.09, 0.19, 0.1).multiplyScalar(proportions.scale));
   const mount = empty(pocket, 'aim', new Vector3());
   const { rifle, pistol, trigger, well, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
   rifle.position.copy(stock.position).negate();

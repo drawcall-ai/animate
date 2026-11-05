@@ -47,10 +47,9 @@ export class Thing {
    * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the
    * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers takes an empty with
    * `userData.handle` (an axis, the empty's frame, toward where the thumb goes) as a handle running through it: the palm goes against it
-   * and the fingers wrap it — with `userData.palm` (a direction, the empty's frame) the way the palm faces onto it, the handle lying across
-   * the palm on the hand's own grasp line; without, the hand turned as the arm brings it; its radius is measured off the thing's meshes
-   * about the empty, or given as `userData.radius` (m). Attached things'
-   * subtrees are not searched.
+   * and the fingers wrap it — with `userData.palm` (a direction, the empty's frame) the way the palm faces onto it, as far as the wrist turns
+   * it so, the handle lying across the palm on the hand's own grasp line; without, the hand turned as the arm brings it; its radius is
+   * measured off the thing's meshes about the empty, or given as `userData.radius` (m). Attached things' subtrees are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);

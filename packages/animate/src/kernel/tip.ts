@@ -108,7 +108,9 @@ export class ChainTip {
     // left it, between the fit asked and the one before, the solve could settle into another — a belt's tongue held at its end swung 4 cm
     // off it as the other hand's carry ended)
     if (own && options.keep && this.solved.length === bones.length) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));
-    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep });
+    // (a turn only preferred is the tip's own, as far as its last joint turns it: the bend is not swivelled off the pole's plane for it)
+    // (a turn only preferred is the tip's own, as far as its last joint turns it: the bend is not swivelled off the pole's plane for it)
+    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep, poleFirst: target.preferred });
     this.solved = bones.map((b, k) => (this.solved[k] ?? new Quaternion()).copy(f.current.local(b)));
     this.kept = options.keep === true && quaternion !== undefined;
     options.clear?.(f, { position, quaternion }, false);
@@ -155,7 +157,8 @@ export class ChainTip {
 
 type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
 
-/** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative speed. */
+/** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative speed;
+ * a turn only preferred, within REACHED angle or no longer turning toward it (`TURNING`). */
 export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);
@@ -173,7 +176,18 @@ export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: nu
   const at = prev.position(tip);
   const moving = _v.subVectors(at, prev2.position(tip)).divideScalar(dt).sub(velocity);
   if (at.distanceTo(then) > REACHED.distance || moving.length() > REACHED.speed) return false;
-  return angleOff(f, tip, target, on) <= REACHED.angle;
+  return angleOff(f, tip, target, on) <= REACHED.angle || (target.preferred === true && turning(f, tip, on) <= TURNING);
+}
+
+/** how fast (rad/s) a tip turns still toward a turn only preferred and is not yet as far as it goes: a grasp closed on a hand still turning
+ * was shaped for a turn the hand went on from */
+const TURNING = 0.2;
+
+/** how fast (rad/s) a tip turns, as the last two final poses have it, in the frame of the carrier its target is on */
+function turning(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, on?: Carrier): number {
+  const placed = on?.at(f.time);
+  const now = _spun.copy(near(f.prev.rotation(tip), placed && { current: placed.prev }));
+  return now.angleTo(near(f.prev2.rotation(tip), placed && { current: placed.prev2 })) / f.dt;
 }
 
 /** The unmet turn, in radians, allowing the target’s free roll and using the last final pose. */
@@ -185,10 +199,11 @@ function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip
   return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned);
 }
 
-/** how far a tip is from its target as the last final pose has it: its distance (m) and the turn left (rad), the target's world point */
+/** how far a tip is from its target as the last final pose has it: its distance (m) and the turn left (rad; none of a turn only
+ * preferred: it goes as far as it may), the target's world point */
 export function unmet(f: Frame, tip: number, target: Goal, on?: Carrier): { distance: number; angle: number; at: Vector3 } {
   const at = on ? on.toWorld(target, _goal, f.time).position : target.position;
-  return { distance: f.prev.position(tip).distanceTo(at), angle: angleOff(f, tip, target, on), at: _late.copy(at) };
+  return { distance: f.prev.position(tip).distanceTo(at), angle: target.preferred ? 0 : angleOff(f, tip, target, on), at: _late.copy(at) };
 }
 
 /**
@@ -262,5 +277,5 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
 const REACH = 0.98;
 const ZERO = new Vector3();
 const [_position, _braked, _v, _axis, _velocity, _then, _was, _was2, _late, _off] = Array.from({ length: 10 }, () => new Vector3());
-const [_turned, _before, _quaternion, _joint, _r, _d, _roll, _near] = Array.from({ length: 8 }, () => new Quaternion());
+const [_turned, _before, _quaternion, _joint, _r, _d, _roll, _near, _spun] = Array.from({ length: 9 }, () => new Quaternion());
 const _goal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

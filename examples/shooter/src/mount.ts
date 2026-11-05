@@ -20,7 +20,7 @@ const SQUARING = 8;
 const ALIGHT = 0.04;
 /** How many of its own steps the fresh body to get off onto is readied by each world step, off screen: a few steps' delay rather than one
  * long frame. */
-const READYING = 8;
+const READYING = 12;
 /** How far the mounted soldier may look off the way it faces (rad), turning its head and shoulders. */
 export const LOOK = 1.7;
 const UP = new Vector3(0, 1, 0), FORWARD = new Vector3(0, 0, 1);

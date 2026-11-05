@@ -63,6 +63,25 @@ describe('fingers', () => {
     expect(bent(body, 'rightMiddleIntermediate')).toBeLessThan(0.5);
   });
 
+  it('take a handle with its palm turned as far as the wrist turns it so, where it cannot be turned all the way', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+    // (the rod in front of the right hip, its palm asked out away from the body's middle, the thumb forward: past the forearm's turn)
+    const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
+    rod.name = 'rod';
+    rod.position.set(-0.25, 0.95, 0.35);
+    rod.rotation.x = Math.PI / 2;
+    Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], palm: [-1, 0, 0] });
+    room.add(rod);
+    let held = false, off = Infinity;
+    play(function* () {
+      held = yield* grab(body, rod, { right: 'grip' });
+      yield* wait(0.5);
+      off = rod.getWorldPosition(new Vector3()).distanceTo(body.bones.rightHand.getWorldPosition(new Vector3()));
+    }, [body], 4);
+    expect(held).toBe(true);
+    expect(off).toBeLessThan(0.12);
+  });
+
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {
     const body = new Body(humanoid(FINGERED));
     roomOf(body);
