@@ -62,13 +62,21 @@ describe('avatar', () => {
     advance(avatar, input, 180);
     expect(avatar.fire()).toBe(true);
     expect(avatar.fire()).toBe(false);
-    const magazine = node(avatar.group, 'magazine 1');
+    const magazine = node(avatar.group, 'magazine 1'), full = node(avatar.group, 'magazine 2'), hand = avatar.body.bones.leftHand;
     expect(magazine.parent?.name).toBe('well');
     // The soldier lowers the sights while it reloads.
     input.aim = false;
     avatar.requestReload();
     expect(avatar.reloading).toBe(true);
-    for (let i = 0; i < 600 && avatar.reloading; i++) avatar.update(1 / 60, input);
+    // (the full magazine held as taken from its pouch all the way into the well: regripped, it slid up through a still hand)
+    const held: number[] = [];
+    let frames = 0;
+    for (; frames < 600 && avatar.reloading; frames++) {
+      avatar.update(1 / 60, input);
+      if (full.parent === hand) held.push(full.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
+    }
+    expect(frames / 60).toBeLessThan(3.3);
+    expect(Math.max(...held) - Math.min(...held)).toBeLessThan(0.01);
     expect(avatar.reloads).toBe(1);
     expect(avatar.reloading).toBe(false);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
