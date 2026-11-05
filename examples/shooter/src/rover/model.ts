@@ -19,6 +19,8 @@ const RIM = 0.19, TEN_TO_TWO = 0.5;
 const DRIVER = -0.4;
 /** The cab floor's height (m). */
 const FLOOR = 0.62;
+/** How far the grab handle's upright stands back off the windscreen's pillar, centre to centre (m). */
+const GRAB = { standoff: 0.07 };
 
 export type Wheel = { mount: Vector3; pivot: Group; spin: Group; front: boolean };
 export type Rover = ReturnType<typeof createRover>;
@@ -130,10 +132,12 @@ export function createRover(maps?: PaintMaps) {
     pedals: { left: mark(body, 'clutch', [DRIVER + 0.14, 0.73, 0.47]), right: mark(body, 'accelerator', [DRIVER - 0.07, 0.75, 0.48]) },
     /** where the hands hold the rim, ten to two, each turned with it: +Y along the rim upward, +Z out of the wheel's face */
     grips: { left: grip(-1), right: grip(1) },
-    /** the grab handle on the windscreen's right pillar, its upright held from the doorway: thumb up, the palm facing in and forward */
-    handle: holdable('grab handle', [-0.82, 1.475, 0.62], [0, 1, 0], [0.7, 0, 0.7], 0.012),
-    /** the dash's top edge by the doorway, to lean on getting in: the palm on top of it, the fingers over its front, the thumb inboard */
-    dash: holdable('dash edge', [-0.68, 1.12, 0.46], [1, 0, 0], [0, -0.8, 0.6], 0.015),
+    /** the grab handle's upright behind the windscreen's right pillar, held from the doorway as the forearm reaches it, in and forward:
+     * thumb up along the pillar's lean, the palm on its outboard front facing in and back, the fingers round its inboard side */
+    handle: holdable('grab handle', [-0.86, 1.475, 0.622 - GRAB.standoff], [0, 1, -0.117], [0.6, 0, -0.8], 0.012),
+    /** the dash's top edge by the doorway (its back, toward the seats), to lean on getting in: a handle as thick as the edge is round,
+     * lying in its corner, so the palm rests on top and the fingers curl down over its back face, the thumb inboard */
+    dash: holdable('dash edge', [-0.68, 1.1, 0.465], [1, 0, 0], [0, -0.95, 0.3], 0.015),
     rack,
     /** the engine under the bonnet, where it is heard from */
     engine: mark(body, 'engine', [0, 0.85, 1.35]),
@@ -246,10 +250,9 @@ function hullParts(p: Parts, m: HullMaterials) {
     p.box([0.12, 0.15, 0.025], [side * 1.06, 1.72, 0.59], m.plastic, 0.012);
     p.box([0.105, 0.135, 0.004], [side * 1.06, 1.72, 0.576], m.mirror, 0.002);
   }
-  // The driver's grab handle on its pillar.
-  p.rod(0.012, [-0.86, 1.38, 0.63], [-0.82, 1.39, 0.63], m.black);
-  p.rod(0.012, [-0.82, 1.39, 0.63], [-0.82, 1.56, 0.61], m.black);
-  p.rod(0.012, [-0.82, 1.56, 0.61], [-0.86, 1.57, 0.61], m.black);
+  // The driver's grab handle on its pillar: an upright standing off the pillar's back on two brackets, a hand's fingers clear between them.
+  for (const [y, z] of [[1.38, 0.633], [1.57, 0.611]] as const) p.rod(0.012, [-0.86, y, z], [-0.86, y, z - GRAB.standoff], m.black);
+  p.rod(0.012, [-0.86, 1.38, 0.633 - GRAB.standoff], [-0.86, 1.57, 0.611 - GRAB.standoff], m.black);
   // The rifle rack: a bracket down the dash's side with a butt cup and a sprung clamp at the barrel.
   p.box([0.03, 0.66, 0.05], [-0.915, 0.95, 0.7], m.black, 0.008);
   p.box([0.08, 0.03, 0.14], [-0.96, 0.62, 0.66], m.black, 0.01);

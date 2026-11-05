@@ -12,7 +12,7 @@ export const BEATS = {
   /** the body steps up to the sill, near enough for its hands to reach the dash and the pillar's handle */
   inset: [0, 0.15],
   leftHand: { dash: [0.02, 0.22], wheel: [0.52, 0.78] },
-  rightHand: { rack: [0.06, 0.24], wheel: [0.4, 0.64] },
+  rightHand: { rack: [0.06, 0.24], wheel: [0.48, 0.7] },
   leftFoot: [0.22, 0.48],
   rightFoot: [0.56, 0.84],
   /** the hips over the sill and round onto the seat */
@@ -22,7 +22,7 @@ export const BEATS = {
   gaze: [0.15, 0.9],
   look: [0.55, 0.95],
   /** the right hand turns the key on its way to the wheel */
-  key: 0.5,
+  key: 0.58,
   /**
    * the right hand puts the rifle in its rack (or, getting out, takes it from there), letting go of it (or closing on it) at `take`, and
    * goes on to the pillar's handle over `rack`; the body bends toward the rack for `bend` either side of `take`
