@@ -68,11 +68,15 @@ export function nearHand(joints: Joints, object: Object3D): Triangles {
   return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld })), hand, REACH);
 }
 
-/** the segments of `digit` whose palm side (or another line along it, as `Joints.segments`' `side`) passes into `near` as `shape` has it, by index */
+/**
+ * the segments of `digit` whose palm side (or another line along it, as `Joints.segments`' `side`) passes into `near` as `shape` has it,
+ * by index: crossing its surface, or lying inside it (a thumb sunk whole in a stile's flat bar crosses none of its faces)
+ */
 function touches(joints: Joints, near: Triangles, digit: Digit, shape: Shape, side = 1): number[] {
   return joints.segments(digit, shape, side).flatMap(([start, end], k) => {
     const length = _to.subVectors(end, start).length();
-    return near.first(_ray.set(start, _to.normalize()), length) === null ? [] : [k];
+    _ray.set(start, _to.normalize());
+    return near.first(_ray, length) === null && !near.inside(_ray) ? [] : [k];
   });
 }
 
@@ -87,15 +91,18 @@ interface Value {
  * thumb's curl and opposition, searched over their range on a coarse grid (`afresh`), then on a fine one about the best so far. A thumb
  * passing into the thing (`near`, its triangles about the hand), its palm side, bones or back, is searched again kept out of it, as it
  * swings round a thing to oppose the fingers: reaching under a rung it goes round it, not through (with every shape passing into it, the
- * nearest). (A finger's pad on a trigger lies inside its guard: three values to search, kept to the nearest.)
+ * nearest of those passing into it least: against a stile's flat face, the thumb that comes round its edge). (A finger's pad on a trigger
+ * lies inside its guard: three values to search, kept to the nearest.)
  */
 export function reaching(joints: Joints, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean, near: Triangles): void {
   const values: Value[] = digit === 'thumb'
     ? [{ get: () => shape.thumb.curl, set: (v) => (shape.thumb.curl = v) }, { get: () => shape.thumb.oppose, set: (v) => (shape.thumb.oppose = v) }]
     : (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => shape[digit][key], set: (v: number) => (shape[digit][key] = v) }));
   const start = values.map((value) => value.get());
-  const into = () => [1, 0, -1].some((side) => touches(joints, near, digit, shape, side).length > 0);
-  /** the values nearest, set: kept `out` of the thing (each stage's shapes tried nearest first, the first out of it taken; none: the nearest) */
+  /** how many of the digit's segment lines (palm side, bone, back) pass into the thing as `shape` has it */
+  const into = () => [1, 0, -1].reduce((count, side) => count + touches(joints, near, digit, shape, side).length, 0);
+  /** the values nearest, set: kept `out` of the thing (each stage's shapes tried nearest first, the first out of it taken; none: the first
+   * of those passing into it least) */
   const nearest = (out: boolean) => {
     let best = [...start];
     for (const { step, span } of [...afresh ? [{ step: 0.1, span: 1 }] : [], { step: 0.02, span: 0.1 }]) {
@@ -115,13 +122,18 @@ export function reaching(joints: Joints, shape: Shape, digit: Digit, target: Rea
       };
       search(0, []);
       tried.sort((a, b) => a.miss - b.miss);
-      const kept = out ? tried.find(({ chosen }) => (chosen.forEach((v, j) => values[j].set(v)), !into())) : undefined;
-      best = (kept ?? tried[0]).chosen;
+      best = tried[0].chosen;
+      for (let k = 0, least = Infinity; out && least > 0 && k < tried.length; k++) {
+        const { chosen } = tried[k];
+        chosen.forEach((v, j) => values[j].set(v));
+        const count = into();
+        if (count < least) [least, best] = [count, chosen];
+      }
     }
     best.forEach((v, j) => values[j].set(v));
   };
   nearest(false);
-  if (digit === 'thumb' && into()) nearest(true);
+  if (digit === 'thumb' && into() > 0) nearest(true);
 }
 
 const _ray = new Ray(), _to = new Vector3(), _pad = new Vector3();

@@ -40,6 +40,24 @@ export class Triangles {
     }
     return met ? nearest : null;
   }
+
+  /**
+   * whether `ray` starts inside the meshes: the first triangle it meets is met from behind, its corners wound clockwise as seen from the
+   * ray (a closed mesh's faces wound outward, as three.js builds them); meeting none, outside
+   */
+  inside(ray: Readonly<Ray>): boolean {
+    let nearest = Infinity, behind = false;
+    const c = this.corners;
+    for (let k = 0; k < c.length; k += 9) {
+      _a.set(c[k], c[k + 1], c[k + 2]); _b.set(c[k + 3], c[k + 4], c[k + 5]); _c.set(c[k + 6], c[k + 7], c[k + 8]);
+      if (!ray.intersectTriangle(_a, _b, _c, false, _hit)) continue;
+      const distance = _hit.distanceTo(ray.origin);
+      if (distance >= nearest) continue;
+      nearest = distance;
+      behind = _normal.crossVectors(_b.sub(_a), _c.sub(_a)).dot(ray.direction) > 0;
+    }
+    return behind;
+  }
 }
 
-const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _hit = new Vector3();
+const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _hit = new Vector3(), _normal = new Vector3();

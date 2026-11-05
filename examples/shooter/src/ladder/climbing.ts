@@ -20,6 +20,8 @@ const LIMBS: readonly Limb[] = [
 ];
 const SWING = 0.4;
 const AWAY = 0.08;
+/** The share of a rung before its swing at which a hand lets go of its rung: it opens there, its fingers clear of the rung, then moves. */
+const LETTING = 0.04;
 /** Where all four limbs hold, as a share of a rung climbed: the lagging pair just moved, the leading pair about to. */
 const HELD = 0.55;
 /**
@@ -113,8 +115,8 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
     if (limb.kind === 'hand') {
       const s = phase(t, BEATS.hands[end][limb.side]);
       arm(puppet, frame, ladder, limb, height, t, s);
-      const { from, to, swing } = rungs(ladder, limb, height), standing = limb.side === 'left' ? 'foregrip' : t <= BEATS.take ? 'pistol' : null;
-      onto[limb.side] = s > 0 ? rungHold(ladder, limb.side, swing > 0 ? to : from) : standing && (rifle.getObjectByName(standing) ?? null);
+      const { from, to, leaving } = rungs(ladder, limb, height), standing = limb.side === 'left' ? 'foregrip' : t <= BEATS.take ? 'pistol' : null;
+      onto[limb.side] = s > 0 ? rungHold(ladder, limb.side, leaving ? to : from) : standing && (rifle.getObjectByName(standing) ?? null);
       continue;
     }
     const stood = planted(standing, limb.side, phase(t, BEATS.inset));
@@ -130,13 +132,17 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
  * hook over its top and down its far side and the thumb, its root clear of it, wraps under it; the thumb's pad `under` the rung (a unit
  * direction, `pad` (m) off its axis), `thumb` (m) toward the middle.
  */
-const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize(), out: 0.008, under: new Vector3(0, -0.84, -0.54).normalize(), pad: 0.024, thumb: 0.035 } as const;
-/** How a hand takes a stile: its thumb's pad on the bar's outer face, `up` (m) above the hand and `back` behind its middle. */
-const STILE_THUMB = { up: 0.03, back: 0.01 } as const;
+const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize(), out: 0.008, under: new Vector3(0, -0.84, -0.54).normalize(), pad: 0.018, thumb: 0.035 } as const;
+/**
+ * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
+ * `turn` (the tangent) to face back toward the climber, its heel off the face — a thumb, standing in front of the palm, would otherwise
+ * sink into a face the palm lies flat on — and its thumb's pad on that face, `up` (m) above the hand and `back` behind its middle.
+ */
+const STILE_HOLD = { proud: 0.003, turn: 0.6, up: 0.03, back: 0.01 } as const;
 /**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for), and the empty its thumb's pad
- * goes to: above the landing the stile, upright, its thumb up, taken from outside by its front edge (the palm on its outer face, facing in,
- * the fingers round the edge onto its inner face, the thumb along the outer one, as `STILE_THUMB`); below, the rung, as `RUNG`.
+ * goes to: above the landing the stile, upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing
+ * in, the fingers round the edge onto its inner face, the thumb on the outer one, as `STILE_HOLD`); below, the rung, as `RUNG`.
  */
 function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
@@ -149,8 +155,8 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
     // (a flat bar is as thick about its edge as half the bar)
     const radius = STILE_BAR.thick / 2;
     empty.position.set(sign * STILE, y, STILE_BAR.deep / 2 - radius);
-    thumb.position.set(sign * (STILE + radius), y + STILE_THUMB.up, -STILE_THUMB.back);
-    Object.assign(empty.userData, { handle: [0, 1, 0], palm: [-sign, 0, 0], radius });
+    thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.up, -STILE_HOLD.back);
+    Object.assign(empty.userData, { handle: [0, 1, 0], palm: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud });
   } else {
     // (the empty set off the rung toward the wrist, square to the rung and the palm: the hand back by as much)
     const fingers = new Vector3().crossVectors(RUNG.palm, ACROSS), x = sign * BODY.apart.hand;
@@ -203,9 +209,15 @@ function leg(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: n
   puppet.leg(side, frame.point(ankle), knee, foot);
 }
 
-/** The rungs a limb moves between with the hips `height` up the ladder, and how far it has moved (0 holding `from` … 1 at `to`). */
+/**
+ * The rungs a limb moves between with the hips `height` up the ladder, how far it has moved (0 holding `from` … 1 at `to`) and whether it
+ * has let go of `from` (`LETTING` before it moves).
+ */
 function rungs(ladder: Ladder, limb: Limb, height: number) {
   const lead = limb.kind === 'foot' ? -BODY.feet : BODY.reach * ladder.spacing - BODY.feet;
   const climbed = (height + lead) / ladder.spacing + limb.lag, from = Math.floor(climbed);
-  return { from, to: from + 1, swing: phase(climbed - from, [1 - SWING, 1]) };
+  // (a hand goes no higher than the stiles' highest hold: the rungs it would climb on to above that are all held there)
+  const last = limb.kind === 'hand' ? Math.ceil((ladder.height + RAIL - HEAD) / ladder.spacing) : Infinity;
+  if (from >= last) return { from: last, to: last, swing: 0, leaving: false };
+  return { from, to: from + 1, swing: phase(climbed - from, [1 - SWING, 1]), leaving: climbed - from > 1 - SWING - LETTING };
 }
