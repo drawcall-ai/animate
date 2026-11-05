@@ -3,7 +3,7 @@ import { WeaponModel } from './model';
 
 // Physical grip, sight, and magazine frames on the procedural carbine.
 export const RIFLE = {
-  mass: 3, foregrip: new Vector3(0, -0.01, 0.115), sight: new Vector3(0, 0.12, 0),
+  mass: 3, foregrip: new Vector3(0, -0.01, 0.13), sight: new Vector3(0, 0.12, 0),
   well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.2, 0.08), muzzle: new Vector3(0, 0.06, 0.68),
   magazine: { base: new Vector3(0, -0.045, -0.007), mass: 0.5 },
   /** where the trigger finger's pad rests: on the trigger's face, and off it along the receiver's side above the guard */
@@ -16,14 +16,15 @@ export function rifleOn(mount: Object3D, arms: number) {
   model.rifle(rifle, arms);
   rifle.userData.mass = RIFLE.mass;
   // (the grips as handles: the pistol grip slanting back down from the receiver, held in the right hand from its right, the thumb on top;
-  // the receiver's front in the left by its magazine well, as a short arm holds it: the palm on the well's left face turned a little up,
-  // the fingers round its front onto its right, the thumb up along the receiver — palm up under the receiver the hand could not go, the
-  // well filling it from below and the arm, already all but straight there, reaching no further forward)
+  // the receiver's front in the left by its magazine well, as a short arm holds it: the palm 4 mm off the well's left face, the knuckles
+  // by its front so the fingers fold round it onto its right, the thumb up along the receiver — palm up under the receiver, forward of
+  // the well, the hand could not go: its wrist there would be 0.53 m from the shoulder, the arm 0.46 m long, and 2 cm further on than this
+  // it already falls short)
   // (the empty at the hand's middle on the grip: the middle finger just under the trigger guard, the index level with the trigger)
   const pistol = empty(rifle, 'pistol', new Vector3(0, -0.08, -0.019));
   Object.assign(pistol.userData, { handle: [0, 0.985, 0.175], palm: [1, 0, 0.3] });
   const foregrip = empty(rifle, 'foregrip', RIFLE.foregrip);
-  Object.assign(foregrip.userData, { handle: [0, 1, 0.2], palm: [-1, 0.3, 0], radius: 0.026 });
+  Object.assign(foregrip.userData, { handle: [0, 1, 0.2], palm: [-1, 0.3, 0], radius: 0.03 });
   const trigger = empty(rifle, 'trigger', RIFLE.trigger);
   empty(rifle, 'frame', RIFLE.frame);
   empty(rifle, 'sight', RIFLE.sight);
@@ -43,7 +44,8 @@ export function rifleOn(mount: Object3D, arms: number) {
     model.magazine(magazine);
     magazine.userData.mass = RIFLE.magazine.mass;
     // (taken round its body below the well, the handle along its length and the thumb toward its lips, the hand turned about it as the
-    // arm brings it from a pouch or the well: across it, its depth, the lowest fingers wrapped under its base)
+    // arm brings it: in the well its palm on the left face, the fingers round the front; from a chest pouch holding it flat, its front
+    // toward the body's middle, the palm against it, the fingers round that front — a palm fixed so the carry could not seat it there)
     empty(magazine, 'base', RIFLE.magazine.base).userData.handle = [0, 1, 0.15];
     return magazine;
   };

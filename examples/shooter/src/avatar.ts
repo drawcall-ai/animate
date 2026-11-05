@@ -41,7 +41,9 @@ const SNATCH = { speed: 8 };
 const REST_AFTER = 1;
 /** How far a shot draws the trigger back (m). */
 const SQUEEZE = 0.004;
-const POUCHES = [new Vector3(0.06, -0.17, 0.2), new Vector3(0.13, -0.17, 0.2)];
+/** The chest pouches' magazines, side by side on the left of the chest with a hand's room between them, each turned flat against it, its
+ * front toward the body's middle: the left hand takes one palm against the chest, its fingers round the front, as it seats one in the well. */
+const POUCHES = [new Vector3(0.02, -0.17, 0.2), new Vector3(0.16, -0.17, 0.2)];
 const UP = new Vector3(0, 1, 0);
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
@@ -160,6 +162,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   const motion = new WeaponMotion();
   const pouches = POUCHES.map((at, i) => {
     const pouch = onBone(person, chest, `pouch ${i + 1}`, at.clone().multiply(new Vector3(arms, arms, proportions.scale)));
+    pouch.rotateY(-Math.PI / 2);
     empty(pouch, `over pouch ${i + 1}`, new Vector3(0, 0.1 * proportions.scale, 0));
     pouch.userData.approach = [`over pouch ${i + 1}`];
     return pouch;

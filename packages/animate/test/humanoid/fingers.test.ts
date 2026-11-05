@@ -1,7 +1,7 @@
 import { CylinderGeometry, Line3, Mesh, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
+import { Body, FIST, grab, humanoid, OPEN, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { Thing } from '../../src/things/thing';
 import { person, play } from '../bodies';
@@ -75,6 +75,25 @@ describe('fingers', () => {
     expect(fisted).toBeGreaterThan(1.4);
     expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.6);
     expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.6);
+  });
+
+  it('lie along the palm with no curl where the skin rests them curled in at the knuckles', () => {
+    // (the right middle finger rigged bent 30° down toward the palm at its knuckle, its outer joints straight on from there)
+    const knuckle = FINGERED.find((bone) => bone.name === 'rightMiddleProximal');
+    if (!knuckle) throw new Error('no knuckle');
+    const step = new Vector3(-0.03 * Math.cos(Math.PI / 6), -0.03 * Math.sin(Math.PI / 6), 0), from = new Vector3(...knuckle.position);
+    const body = new Body(humanoid(FINGERED.map((bone) => {
+      const k = ['rightMiddleIntermediate', 'rightMiddleDistal'].indexOf(bone.name);
+      return k < 0 ? bone : { ...bone, position: from.clone().addScaledVector(step, k + 1).toArray() };
+    })));
+    roomOf(body);
+    const at = (name: string) => body.bones[name].getWorldPosition(new Vector3());
+    let off = Infinity;
+    play(function* () {
+      yield* pose(body, { fingers: { right: OPEN } }, { until: 0.5 });
+      off = at('rightMiddleIntermediate').sub(at('rightMiddleProximal')).angleTo(at('rightMiddleProximal').sub(at('rightHand')));
+    }, [body], 1);
+    expect(off).toBeLessThan(0.1);
   });
 
   it('are refused where a skeleton has some finger bones but not all, or none to pose', () => {
