@@ -4,10 +4,14 @@ import { Triangles } from '../kernel/triangles';
 import type { Digit, Joints } from './joints';
 import { DIGITS, LIFTED, type Shape } from './shape';
 
-/** how a grasp closes on a thing, each digit folding until it touches: the thumb swung this far across (`Thumb.oppose`), the fingers straight */
+/**
+ * how a grasp closes on a thing, each digit folding until it touches: the thumb swung this far across (`Thumb.oppose`), the fingers
+ * straight out of the palm (`LIFTED`: a rig's rest fingers, a little curled, would start in a handle the palm lies on)
+ */
 const WRAP: Shape = {
   thumb: { curl: 0, oppose: 0.55 },
-  index: { curl: 0, hook: 0, spread: 0 }, middle: { curl: 0, hook: 0, spread: 0 }, ring: { curl: 0, hook: 0, spread: 0 }, little: { curl: 0, hook: 0, spread: 0 },
+  index: { curl: LIFTED, hook: 0, spread: 0 }, middle: { curl: LIFTED, hook: 0, spread: 0 }, ring: { curl: LIFTED, hook: 0, spread: 0 },
+  little: { curl: LIFTED, hook: 0, spread: 0 },
 };
 /** how far from the wrist a hand's fingers reach (m; a long hand's 0.21 m, and a handle's girth) */
 const REACH = 0.3;
@@ -15,10 +19,11 @@ const REACH = 0.3;
 const STEPS = 8, HALVINGS = 4;
 
 /**
- * The shape hand `joints` takes closed on `object` as the hand stands now: each finger curled until a segment's palm side touches the
- * object's meshes, then its two end joints hooked on until they touch too (a handle across the palm wraps, the fingertips round it); the
- * thumb, swung across the palm, curled until it touches. A segment touching as its fold starts lies in the object already and the others
- * fold on past it; a digit clear of the object folds all the way (fingers past the end of a grip close into the palm). Meshes of things
+ * The shape hand `joints` takes closed on `object` as the hand stands now: each finger curled from straight until a segment's palm side
+ * touches the object's meshes, then its two end joints hooked on until they touch too (a handle across the palm wraps, the fingertips
+ * round it); the thumb, swung across the palm, curled until it touches. A segment touching as its fold starts lies in the object
+ * already: the fold goes on past it until it comes clear, then stops as it touches again (a straight finger's tip in a magazine well
+ * hooks out of it and on under the guard); a digit clear of the object folds all the way (fingers past the end of a grip close into the palm). Meshes of things
  * attached to it (their own `userData.mass`) and hidden meshes are not touched; skinned meshes are touched as they stand at rest.
  */
 export function closedOn(joints: Joints, object: Object3D): Shape {
@@ -37,7 +42,11 @@ export function closedOn(joints: Joints, object: Object3D): Shape {
    * through a thin rung on its way, then halved within the step it first touches in */
   const fold = (digit: Digit, set: (value: number) => void, most: number) => {
     const embedded = new Set(touching(digit));
-    const touches = () => touching(digit).some((k) => !embedded.has(k));
+    const touches = () => {
+      const now = touching(digit);
+      for (const k of embedded) if (!now.includes(k)) embedded.delete(k);
+      return now.some((k) => !embedded.has(k));
+    };
     let clear = 0, met = most;
     for (let k = 1; k <= STEPS; k++) {
       set((k / STEPS) * most);
@@ -56,8 +65,8 @@ export function closedOn(joints: Joints, object: Object3D): Shape {
   };
   for (const digit of DIGITS) {
     const finger = shape[digit];
-    fold(digit, (value) => (finger.curl = value), 1);
-    fold(digit, (value) => (finger.hook = value), 1 - finger.curl);
+    fold(digit, (value) => (finger.curl = LIFTED + value), 1 - LIFTED);
+    fold(digit, (value) => (finger.hook = value), 1 - Math.max(0, finger.curl));
   }
   fold('thumb', (value) => (shape.thumb.curl = value), 1);
   return shape;

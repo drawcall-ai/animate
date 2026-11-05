@@ -42,11 +42,14 @@ export class WeaponModel {
     for (let i = 0; i < 31; i++) p.box([0.033, 0.007, 0.009], [0, 0.104, -0.05 + i * 0.0175], this.metal);
 
     // Grip and open trigger guard; the curved trigger is its own part, drawn back by a shot.
-    p.profile([[-0.028, 0.009], [0.023, 0.007], [0.018, -0.035], [-0.006, -0.137], [-0.048, -0.128], [-0.04, -0.051]], 0.039, [0, 0, 0], this.polymer);
+    // (the grip a hand's width deep and 3 cm across, the guard 4 cm deep under the receiver, as a carbine's: a hand wrapping the grip
+    // high in its web has its middle finger just under the guard and its trigger finger level with the receiver above it; the trigger
+    // well back from the magazine well, room for the finger's end in front of it)
+    p.profile([[-0.028, 0.009], [0.023, 0.007], [0.018, -0.035], [-0.006, -0.137], [-0.048, -0.128], [-0.04, -0.051]], 0.031, [0, 0, 0], this.polymer);
     for (const side of [-1, 1]) for (let i = 0; i < 6; i++)
-      p.box([0.002, 0.0025, 0.031], [side * 0.021, -0.037 - i * 0.014, -0.008 - i * 0.003], this.rubber);
-    p.profile([[0.018, -0.005], [0.08, -0.005], [0.083, -0.047], [0.067, -0.067], [0.025, -0.057]], 0.014, [0, 0, 0], this.dark,
-      [[[0.028, -0.015], [0.069, -0.015], [0.071, -0.043], [0.062, -0.055], [0.032, -0.048]]]);
+      p.box([0.002, 0.0025, 0.031], [side * 0.017, -0.037 - i * 0.014, -0.008 - i * 0.003], this.rubber);
+    p.profile([[0.018, -0.005], [0.08, -0.005], [0.082, -0.031], [0.066, -0.045], [0.025, -0.041]], 0.014, [0, 0, 0], this.dark,
+      [[[0.025, -0.013], [0.069, -0.013], [0.071, -0.029], [0.062, -0.036], [0.032, -0.033]]]);
 
     // Buffer tube and adjustable stock. Its length follows the soldier's reach.
     const back = -0.24 * arms;
@@ -79,7 +82,7 @@ export class WeaponModel {
   /** The curved trigger, in the rifle's frame. */
   trigger(parent: Object3D) {
     const p = new Parts();
-    p.profile([[0.037, -0.009], [0.044, -0.01], [0.044, -0.031], [0.052, -0.044], [0.045, -0.045], [0.036, -0.03]], 0.006, [0, 0, 0], this.steel);
+    p.profile([[0.032, -0.009], [0.039, -0.01], [0.039, -0.022], [0.046, -0.031], [0.039, -0.032], [0.031, -0.021]], 0.006, [0, 0, 0], this.steel);
     p.finish(parent);
   }
 
