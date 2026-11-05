@@ -159,13 +159,13 @@ export class Joints {
   }
 
   /**
-   * Each segment of `digit` as `shape` would have it, along its palm side, in the world as the hand stands now (its matrix up to date):
-   * from its joint to the next, the last out to its tip
+   * Each segment of `digit` as `shape` would have it, along its palm side (`side` 1; 0 its bone, −1 its back as far out), in the world as
+   * the hand stands now (its matrix up to date): from its joint to the next, the last out to its tip
    */
-  segments(digit: Digit, shape: Shape): [Vector3, Vector3][] {
+  segments(digit: Digit, shape: Shape, side = 1): [Vector3, Vector3][] {
     const frames = this.frames(digit, shape);
     return this.chain(digit).map((joint, k) => {
-      const start = joint.palmar.clone().multiplyScalar(joint.depth), end = start.clone().addScaledVector(joint.along, joint.length + (k === 2 ? joint.depth : 0));
+      const start = joint.palmar.clone().multiplyScalar(side * joint.depth), end = start.clone().addScaledVector(joint.along, joint.length + (k === 2 ? joint.depth : 0));
       return [start.applyMatrix4(frames[k]).applyMatrix4(this.hand.matrixWorld), end.applyMatrix4(frames[k]).applyMatrix4(this.hand.matrixWorld)];
     });
   }

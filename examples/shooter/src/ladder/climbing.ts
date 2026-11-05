@@ -125,17 +125,18 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
 }
 
 /**
- * How a hand takes a rung over the top from behind: its palm facing down and toward the wall, the rung `deep` (m) further into the palm
- * than a handle's grasp line puts it, toward the wrist, so the fingers come down round its far side rather than lying on top (a thin rod:
- * the grasp line runs under the fingers' roots); its thumb's pad `under` the rung (a unit direction), `thumb` (m) toward the middle.
+ * How a hand takes a rung over the top from behind: its palm facing the wall and a little down (the wrist below the rung, as a hand
+ * reaching up to it has it), the rung `out` (m) further toward the fingertips than a handle's grasp line, at the fingers' roots, so they
+ * hook over its top and down its far side and the thumb, its root clear of it, wraps under it; the thumb's pad `under` the rung (a unit
+ * direction, `pad` (m) off its axis), `thumb` (m) toward the middle.
  */
-const RUNG = { palm: new Vector3(0, -0.7, 0.7).normalize(), deep: 0.01, under: new Vector3(0, -0.8, -0.6), thumb: 0.035 } as const;
-/** How a hand takes a stile: its thumb's pad on the bar's inner face, `up` (m) above the hand and `in` from the back edge. */
-const STILE_THUMB = { up: 0.03, in: 0.015 } as const;
+const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize(), out: 0.008, under: new Vector3(0, -0.84, -0.54).normalize(), pad: 0.024, thumb: 0.035 } as const;
+/** How a hand takes a stile: its thumb's pad on the bar's outer face, `up` (m) above the hand and `back` behind its middle. */
+const STILE_THUMB = { up: 0.03, back: 0.01 } as const;
 /**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for), and the empty its thumb's pad
- * goes to: above the landing the stile, upright, its thumb up, taken by its back edge (the palm on it, facing the wall, the fingers round
- * its outer face, the thumb on its inner one, as `STILE_THUMB`); below, the rung, its thumb toward the middle, as `RUNG`.
+ * goes to: above the landing the stile, upright, its thumb up, taken from outside by its front edge (the palm on its outer face, facing in,
+ * the fingers round the edge onto its inner face, the thumb along the outer one, as `STILE_THUMB`); below, the rung, as `RUNG`.
  */
 function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
@@ -146,15 +147,15 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   thumb.name = `${side} thumb on rung ${rung}`;
   if (y > ladder.height) {
     // (a flat bar is as thick about its edge as half the bar)
-    const radius = STILE_BAR.thick / 2, back = -STILE_BAR.deep / 2;
-    empty.position.set(sign * STILE, y, back + radius);
-    thumb.position.set(sign * (STILE - radius), y + STILE_THUMB.up, back + STILE_THUMB.in);
-    Object.assign(empty.userData, { handle: [0, 1, 0], palm: [0, 0, 1], radius });
+    const radius = STILE_BAR.thick / 2;
+    empty.position.set(sign * STILE, y, STILE_BAR.deep / 2 - radius);
+    thumb.position.set(sign * (STILE + radius), y + STILE_THUMB.up, -STILE_THUMB.back);
+    Object.assign(empty.userData, { handle: [0, 1, 0], palm: [-sign, 0, 0], radius });
   } else {
-    // (the empty set off the rung toward the fingertips, square to the rung and the palm: the hand on by as much, the rung into the palm)
+    // (the empty set off the rung toward the wrist, square to the rung and the palm: the hand back by as much)
     const fingers = new Vector3().crossVectors(RUNG.palm, ACROSS), x = sign * BODY.apart.hand;
-    empty.position.set(x, y, 0).addScaledVector(fingers, RUNG.deep);
-    thumb.position.set(x - sign * RUNG.thumb, y, 0).addScaledVector(RUNG.under, RUNG_RADIUS);
+    empty.position.set(x, y, 0).addScaledVector(fingers, -RUNG.out);
+    thumb.position.set(x - sign * RUNG.thumb, y, 0).addScaledVector(RUNG.under, RUNG.pad);
     Object.assign(empty.userData, { handle: [-sign, 0, 0], palm: RUNG.palm.toArray(), radius: RUNG_RADIUS });
   }
   empty.userData.fingers = { thumb: thumb.name };

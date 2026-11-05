@@ -3,17 +3,18 @@ import { turnOnto } from '../kernel/math';
 import { Thing } from '../things/thing';
 import type { Hold } from '../things/resolve';
 import type { DigitBones } from './bones';
-import { closedOn, reaching } from './closing';
+import { closedOn, nearHand, reaching } from './closing';
 import { Joints, type Digit } from './joints';
 import { DIGITS, easeShape, RELAXED, shapeOf, type Fingers, type Shape } from './shape';
 
-/** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds, and where
- * each digit a grip puts on one of its empties last reached to (the hand's frame) and how. */
+/** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds (for a puppet's
+ * grip, with how far its wrist stood off where `gripOn` puts it then), and where each digit a grip puts on one of its empties last reached
+ * to (the hand's frame) and how. */
 interface Hand {
   joints: Joints;
   shape: Shape;
   asked: { shape: Shape; time: number } | null;
-  closed: { on: Hold | Object3D; shape: Shape } | null;
+  closed: { on: Hold | Object3D; shape: Shape; off: Vector3 | null } | null;
   reached: Map<Digit, { empty: string; target: Vector3; shape: Shape }>;
   /** a hand verb is bringing it to a grip */
   coming: boolean;
@@ -31,7 +32,8 @@ const APERTURE: Shape = {
   little: { curl: 0.16, hook: 0.05, spread: 0.15 },
 };
 const ARRIVED = 0.015;
-/** how far a digit's empty may move in the hand before the digit reaches for it afresh (m) */
+/** how far a digit's empty may move in the hand before the digit reaches for it afresh, and a puppet's wrist on its grip before the hand
+ * closes on it afresh (m) */
 const MOVED = 0.002;
 
 /**
@@ -82,7 +84,8 @@ export class FingerState {
 
   /**
    * `side`'s fingers eased `seconds` on toward `to`: on the way to an empty, open; once the wrist is there (`gripOn`), closed on its thing
-   * (once, while it is given it) with the empty's asks laid over that; a shape; or relaxed
+   * with the empty's asks laid over that — once while it is given it, and afresh while the wrist still settles onto it (moving `MOVED` on
+   * it), else the fingers stay as they closed short of the thing on arriving; a shape; or relaxed
    */
   set(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     const hand = this.hands[side];
@@ -90,15 +93,15 @@ export class FingerState {
       hand.closed = null;
       return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds);
     }
-    const { wrist } = this.gripOn(side, to), at = hand.joints.hand.getWorldPosition(new Vector3());
-    if (at.distanceTo(wrist) > ARRIVED) {
+    const { wrist } = this.gripOn(side, to), off = hand.joints.hand.getWorldPosition(new Vector3()).sub(wrist);
+    if (off.length() > ARRIVED) {
       hand.closed = null;
       return this.ease(hand, APERTURE, seconds);
     }
     const thing = to.parent;
     if (!thing) throw new Error(`fingers: "${to.name}" hangs from nothing`);
-    if (hand.closed?.on !== to) {
-      hand.closed = { on: to, shape: closedOn(hand.joints, thing) };
+    if (hand.closed?.on !== to || !hand.closed.off || hand.closed.off.distanceTo(off) > MOVED) {
+      hand.closed = { on: to, shape: closedOn(hand.joints, thing), off };
       hand.reached.clear();
     }
     this.ease(hand, this.asked(hand, hand.closed.shape, to, thing), seconds);
@@ -128,7 +131,7 @@ export class FingerState {
     this.since.set(hold, since);
     if (time - since < SETTLE) return null;
     if (hand.closed?.on !== hold) {
-      hand.closed = { on: hold, shape: closedOn(hand.joints, hold.thing.object) };
+      hand.closed = { on: hold, shape: closedOn(hand.joints, hold.thing.object), off: null };
       hand.reached.clear();
     }
     return this.asked(hand, hand.closed.shape, hold.thing.grip(hold.grip).node, hold.thing.object);
@@ -152,7 +155,7 @@ export class FingerState {
       const afresh = last?.empty !== value;
       if (afresh || !last || last.target.distanceTo(target) > MOVED) {
         const reached = structuredClone(afresh || !last ? shape : last.shape);
-        reaching(hand.joints, reached, digit, target, afresh);
+        reaching(hand.joints, reached, digit, target, afresh, nearHand(hand.joints, thing));
         hand.reached.set(digit, { empty: value, target, shape: reached });
       }
       const reached = hand.reached.get(digit)?.shape;
