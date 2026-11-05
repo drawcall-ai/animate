@@ -1,9 +1,9 @@
 /**
  * How one finger is bent, each 0 … 1: `curl` folds all three joints together as the tendons couple them (1: a fist's), and below 0, to
  * `LIFTED`, lifts it back at the knuckle alone past how its rig rests it — a rig's rest finger is often a little curled — to lie straight
- * out of the palm, as a trigger finger along a receiver; `hook` folds only the two end joints on top, the knuckle held (a curl of 0 with a
- * hook of 1 hooks the fingertips over a bag's handle); `spread` fans it away from the middle finger at the knuckle (1: as far as it goes;
- * the middle finger has none).
+ * out of the palm and a little past, as a trigger finger laid flat along a receiver; `hook` folds only the two end joints on top, the
+ * knuckle held (a curl of 0 with a hook of 1 hooks the fingertips over a bag's handle); `spread` fans it away from the middle finger at the
+ * knuckle (1: as far as it goes; the middle finger has none).
  */
 export interface Finger {
   curl?: number;
@@ -11,7 +11,11 @@ export interface Finger {
   spread?: number;
 }
 
-/** How the thumb is held, each 0 … 1: `curl` folds its two outer joints; `oppose` swings it from beside the index (0) across the palm (1). */
+/**
+ * How the thumb is held, each 0 … 1: `curl` folds its two outer joints; `oppose` swings it from beside the index (0) across the palm (1),
+ * and below 0, to `SPLAYED`, back out of the palm past how its rig rests it — a rig's rest thumb is often a little across the palm — to
+ * clear a handle the palm lies on, as a thumb along a receiver's side beside the hand.
+ */
 export interface Thumb {
   curl?: number;
   oppose?: number;
@@ -27,8 +31,10 @@ export interface Fingers {
 }
 
 export const DIGITS = ['index', 'middle', 'ring', 'little'] as const;
-/** the least a finger's `curl` goes: lifted back at the knuckle 0.35 of a fist's bend there */
-export const LIFTED = -0.35;
+/** the least a finger's `curl` goes: lifted back at the knuckle 0.45 of a fist's bend there */
+export const LIFTED = -0.45;
+/** the least a thumb's `oppose` goes: swung back out of the palm 0.8 of the way it swings across */
+export const SPLAYED = -0.8;
 export type DigitName = (typeof DIGITS)[number];
 
 /** `Fingers` with every digit and value given */
@@ -51,7 +57,8 @@ export const POINT = { ...FIST, index: digit(0) } as const satisfies Shape;
 /** The fingers folded, the thumb up. */
 export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0 } } as const satisfies Shape;
 
-/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1) is a misuse, said at once */
+/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1, a thumb's oppose `SPLAYED` … 1) is a
+ * misuse, said at once */
 export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
   for (const [name, values] of Object.entries(fingers)) {
     if (name !== 'thumb' && !DIGITS.some((digit) => digit === name)) throw new Error(`fingers: a hand has a thumb, ${DIGITS.join(', ')}; not "${name}"`);
@@ -59,7 +66,7 @@ export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
     const keys = name === 'thumb' ? ['curl', 'oppose'] : ['curl', 'hook', 'spread'];
     for (const [key, value] of Object.entries(values)) {
       if (!keys.includes(key)) throw new Error(`fingers: a ${name === 'thumb' ? 'thumb' : 'finger'} takes ${keys.join(', ')}; not "${key}"`);
-      const least = name !== 'thumb' && key === 'curl' ? LIFTED : 0;
+      const least = key === 'curl' ? (name === 'thumb' ? 0 : LIFTED) : key === 'oppose' ? SPLAYED : 0;
       if (!(typeof value === 'number' && value >= least && value <= 1)) throw new Error(`fingers: ${name} ${key} ${String(value)} is not ${least} … 1`);
     }
   }

@@ -6,11 +6,11 @@ export const RIFLE = {
   mass: 3, foregrip: new Vector3(0, 0.058, 0.16), sight: new Vector3(0, 0.12, 0),
   well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.2, 0.08), muzzle: new Vector3(0, 0.06, 0.68),
   magazine: { base: new Vector3(0, -0.05, -0.005), mass: 0.5 },
-  /** where the trigger finger's pad rests: on the trigger's face, and off it straight along the receiver's side above the guard */
-  trigger: new Vector3(0.003, -0.018, 0.043), frame: new Vector3(-0.03, -0.005, 0.068),
-  /** where the gripping hand's thumb pad goes: over the grip's top, under the receiver (a thumb swung across the palm would go in the
-   * grip; its base, at the grip's back, cannot reach round to its left side) */
-  thumb: new Vector3(0, -0.012, -0.02),
+  /** where the trigger finger's pad rests: on the trigger's face, and off it laid straight along the receiver's side above the guard */
+  trigger: new Vector3(0, -0.019, 0.043), frame: new Vector3(-0.028, 0.005, 0.058),
+  /** where the gripping hand's thumb pad goes: against the receiver's side above the grip, splayed out of the palm (the palm on the grip's
+   * side, its base cannot reach round the back strap to the grip's left, and across the palm it would go into the grip) */
+  thumb: new Vector3(-0.031, -0.002, -0.018),
 };
 
 export function rifleOn(mount: Object3D, arms: number) {

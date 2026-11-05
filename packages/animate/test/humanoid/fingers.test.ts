@@ -93,7 +93,7 @@ describe('fingers', () => {
   it('are refused where a skeleton has some finger bones but not all, or none to pose', () => {
     expect(() => humanoid([...PERSON, { name: 'leftIndexProximal', parent: 'leftHand', position: [0.85, 1.41, 0] }])).toThrow(/finger bones but not/);
     expect(() => pose(person(), { fingers: { right: FIST } })).toThrow(/no finger bones/);
-    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.35 … 1/);
+    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.45 … 1/);
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
     Object.assign(both.userData, { handle: [0, 1, 0], handTurn: true });
