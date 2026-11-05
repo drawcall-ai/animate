@@ -34,8 +34,12 @@ describe('Climber', () => {
     // the ladder's foot and the left up onto the first rung)
     expect(until(() => smooth() && climber.state === 'mounting', 3)).toBeLessThan(2);
     heard.length = 0;
-    expect(until(() => smooth() && climber.state === 'on', 2)).toBeLessThan(1.3);
+    // (its muzzle kept this side of the rungs as it steps in)
+    let muzzle = -Infinity;
+    const ahead = () => { muzzle = Math.max(muzzle, ladder.body.worldToLocal(soldier.avatar.muzzle.getWorldPosition(new Vector3())).z); };
+    expect(until(() => { ahead(); return smooth() && climber.state === 'on'; }, 2)).toBeLessThan(1.3);
     expect(heard).toEqual(['cloth', 'rung', 'step-b', 'rung', 'rung']);
+    expect(muzzle).toBeLessThan(0);
     expect(soldier.avatar.rifle.parent).toBe(bones.chest);
 
     // On, each hand holds a rung as its grasp has it, its wrist where that puts it, and each ankle is just above and behind one.
