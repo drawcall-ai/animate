@@ -34,11 +34,14 @@ export function roadWheel(radius: number, m: { rubber: Material; rim: Material; 
   return wheel;
 }
 
+/** How far the side spokes droop below level (rad), clear of the hands at ten to two. */
+const DROOP = 0.35;
+
 /** A three-spoke steering wheel in its XY plane, facing +Z: rim, spokes and boss. */
 export function steeringWheel(m: { plastic: Material; steel: Material }) {
   const p = new Parts();
   p.shape(new TorusGeometry(0.19, 0.015, 12, 48), [0, 0, 0], m.plastic);
-  for (const angle of [0, Math.PI, -Math.PI / 2]) p.rod(0.009, [0, 0, -0.03], [Math.cos(angle) * 0.18, Math.sin(angle) * 0.18, 0], m.steel);
+  for (const angle of [-DROOP, Math.PI + DROOP, -Math.PI / 2]) p.rod(0.009, [0, 0, -0.03], [Math.cos(angle) * 0.18, Math.sin(angle) * 0.18, 0], m.steel);
   p.shape(new CylinderGeometry(0.045, 0.05, 0.05, 20).rotateX(Math.PI / 2), [0, 0, -0.03], m.plastic);
   const wheel = new Group();
   wheel.name = 'Steering wheel';

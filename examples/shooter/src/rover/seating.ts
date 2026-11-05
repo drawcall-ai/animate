@@ -1,4 +1,4 @@
-import { Vector3, type Object3D } from 'three';
+import { MathUtils, Vector3, type Object3D } from 'three';
 import { heading } from '../angles';
 import { between, Frame, linear, phase, planted, shoulders, type Beat, type Cue, type Gaze, type Hold, type Standing } from '../choreography';
 import type { Puppet, Side } from '../puppet';
@@ -12,23 +12,26 @@ export const BEATS = {
   /** the body steps up to the sill, near enough for its hands to reach the dash and the pillar's handle */
   inset: [0, 0.15],
   leftHand: { dash: [0.02, 0.22], wheel: [0.52, 0.78] },
-  rightHand: { rack: [0.06, 0.24], wheel: [0.4, 0.64] },
-  leftFoot: [0.22, 0.48],
+  rightHand: { rack: [0.06, 0.24], wheel: [0.48, 0.7] },
+  leftFoot: [0.22, 0.76],
   rightFoot: [0.56, 0.84],
   /** the hips over the sill and round onto the seat */
   sit: [0.28, 0.76],
+  /** the right elbow from where it was to down and out for the wheel (the left's follows its hand) */
   elbows: [0, 0.3],
   /** the head from where it looked to along the road, then free to look round and into turns */
   gaze: [0.15, 0.9],
   look: [0.55, 0.95],
   /** the right hand turns the key on its way to the wheel */
-  key: 0.5,
+  key: 0.58,
   /**
-   * the right hand puts the rifle in its rack (or, getting out, takes it from there), letting go of it (or closing on it) at `take`, and
-   * goes on to the pillar's handle over `rack`; the body bends toward the rack for `bend` either side of `take`
+   * the right hand puts the rifle in its rack (or, getting out, takes it from there), letting go of it (or closing on it) at `take`, draws
+   * back out of the rack and up behind the windscreen's pillar over `rack`, and comes forward onto the pillar's handle over `handle`; the
+   * body bends toward the rack for `bend` either side of `take`
    */
   take: 0.24,
-  rack: [0.25, 0.37],
+  rack: [0.25, 0.33],
+  handle: [0.32, 0.38],
   bend: 0.13,
 } as const satisfies Record<string, Beat | number | Record<string, Beat>>;
 
@@ -49,7 +52,17 @@ const INSET = 0.18;
  * the hips dip (m). */
 const BEND = { spine: 0.35, chest: 0.6, lean: 0.6, dip: 0.06 };
 const UP = new Vector3(0, 1, 0), INBOARD = new Vector3(1, 0, 0);
+/** Which way the left elbow points as that hand leans on the dash's end: in and up, the forearm coming onto it from inboard. */
+const LEANING = new Vector3(1, 0.1, -0.3);
+/** How high a foot stepping in rises above its way from the ground to its pedal (m), and which way its knee points midway: up and a
+ * little out, clear of the dash above the footwell. */
+const STEP = { rise: 0.1, knee: new Vector3(-1, 0.5, -0.1) };
 const SIDES = ['left', 'right'] as const satisfies readonly Side[];
+/** Where the right hand comes up behind the pillar before it comes forward onto the handle, off where it holds it (m; the rover's frame):
+ * back and out, so the hand rising from the rack goes round the pillar rather than through it. */
+const ROUND = new Vector3(-0.04, -0.02, -0.07);
+/** How far a hand letting go of one hold goes toward the next with its fingers relaxed, before they open to take it. */
+const LET_GO = 0.5;
 
 /**
  * Poses `puppet`'s body `t` of the way from `standing` at the doorway, rifle in hand, to seated, each part on its beat: stepping up to the
@@ -88,9 +101,11 @@ function arms(puppet: Puppet, frame: Frame, rover: Rover, rifle: Object3D, t: nu
   const leaning = puppet.hold('left', dash), holding = puppet.hold('right', handle);
   const racked = frame.carrying(rack.matrixWorld);
   const { leftHand, rightHand } = BEATS;
+  const round = { wrist: holding.wrist.clone().add(ROUND.clone().applyQuaternion(rotation)), hand: holding.hand };
   const right = () => {
     if (t >= rightHand.wheel[0]) return between(holding, onWheel('right'), phase(t, rightHand.wheel));
-    if (t >= BEATS.rack[0]) return between(racked, holding, phase(t, BEATS.rack));
+    if (t >= BEATS.handle[0]) return between(round, holding, phase(t, BEATS.handle));
+    if (t >= BEATS.rack[0]) return between(racked, round, phase(t, BEATS.rack));
     return between(frame.hand('right'), racked, phase(t, rightHand.rack));
   };
   const hands: Record<Side, Hold> = {
@@ -98,14 +113,18 @@ function arms(puppet: Puppet, frame: Frame, rover: Rover, rifle: Object3D, t: nu
     right: right(),
   };
   for (const side of SIDES) {
-    const sign = side === 'left' ? 1 : -1;
-    const elbow = frame.direction(standing.elbows[side]).lerp(new Vector3(sign * 0.7, -1, -0.35).applyQuaternion(rotation), phase(t, BEATS.elbows));
+    const sign = side === 'left' ? 1 : -1, wheel = new Vector3(sign * 0.7, -1, -0.35), stood = frame.direction(standing.elbows[side]);
+    const elbow = side === 'left'
+      ? stood.lerp(LEANING.clone().applyQuaternion(rotation), phase(t, leftHand.dash)).lerp(wheel.applyQuaternion(rotation), phase(t, leftHand.wheel))
+      : stood.lerp(wheel.applyQuaternion(rotation), phase(t, BEATS.elbows));
     puppet.arm(side, hands[side].wrist, elbow, hands[side].hand);
   }
-  // (the right hand carries the rifle to its rack, letting go of it there, before it heads for the handle)
+  // (the right hand carries the rifle to its rack, letting go of it there, before it heads for the handle; a hand letting go hangs
+  // relaxed until it is LET_GO of the way to its next hold)
+  const onto = (beat: Beat, from: Object3D | null, to: Object3D) => t < beat[0] ? from : linear(t, beat) < LET_GO ? null : to;
   return {
-    left: t < leftHand.dash[0] ? rifle.getObjectByName('foregrip') ?? null : t < leftHand.wheel[0] ? dash : grips.left,
-    right: t < BEATS.rack[0] ? rifle.getObjectByName('pistol') ?? null : t < rightHand.wheel[0] ? handle : grips.right,
+    left: t < leftHand.dash[0] ? rifle.getObjectByName('foregrip') ?? null : onto(leftHand.wheel, dash, grips.left),
+    right: t < BEATS.rack[0] ? rifle.getObjectByName('pistol') ?? null : t < BEATS.handle[0] ? null : onto(rightHand.wheel, handle, grips.right),
   };
 }
 
@@ -117,11 +136,12 @@ function legs(puppet: Puppet, frame: Frame, rover: Rover, t: number) {
     const s = phase(t, beats[side]), stood = planted(standing, side, phase(t, BEATS.inset));
     const from = stood.ankle.addScaledVector(INBOARD, inset(t));
     const to = pedals[side].position;
-    // (lifted clear of the sill on the way)
-    const lift = Math.max(0.12, 0.9 - (from.y + to.y) / 2) * Math.sin(Math.PI * s);
-    const ankle = from.clone().lerp(to, s).addScaledVector(UP, lift);
+    // (up first, over the sill, in across the footwell and last forward under the dash, the knee out on the way rather than into the dash)
+    const ankle = from.clone().lerp(to, phase(s, [0.3, 1]))
+      .setY(MathUtils.lerp(from.y, to.y, phase(s, [0, 0.5])) + STEP.rise * Math.sin(Math.PI * s)).setZ(MathUtils.lerp(from.z, to.z, phase(s, [0.7, 1])));
     const sign = side === 'left' ? 1 : -1;
-    const knee = frame.direction(standing.knees[side]).lerp(new Vector3(sign * 0.2, 0.5, 1).applyQuaternion(rotation), s);
+    const knee = frame.direction(standing.knees[side]).lerp(new Vector3(sign * 0.2, 0.5, 1).applyQuaternion(rotation), s)
+      .lerp(STEP.knee.clone().applyQuaternion(rotation), Math.sin(Math.PI * s));
     const foot = frame.turn(stood.foot.slerp(heading(0, toes[side]), s));
     puppet.leg(side, frame.point(ankle), knee, foot);
   }

@@ -1,4 +1,4 @@
-import { Box3, BoxGeometry, CylinderGeometry, Line3, Mesh, Ray, Vector3 } from 'three';
+import { Box3, BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, Ray, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
@@ -105,6 +105,27 @@ describe('fingers', () => {
     }, [body], 4);
     expect(held).toBe(true);
     expect(off).toBeLessThan(0.12);
+  });
+
+  it('lay what a grip asks over a hand its app poses, closed on the grip', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+    const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
+    rod.position.set(-0.25, 0.95, 0.35);
+    rod.rotation.x = Math.PI / 2;
+    // (the index asked straight, off the rod the others close on)
+    const grip = empty(rod, 'grip', new Vector3());
+    Object.assign(grip.userData, { handle: [0, 1, 0], palm: [1, 0, 0], fingers: { index: { curl: 0, hook: 0 } } });
+    room.add(rod);
+    // (the hand bone put where it holds the rod, as a puppet would)
+    const hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = body.gripOn('right', grip);
+    if (!arm) throw new Error('no forearm');
+    arm.updateWorldMatrix(true, false);
+    hand.position.copy(arm.worldToLocal(wrist));
+    hand.quaternion.copy(arm.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
+    hand.updateMatrixWorld(true);
+    for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+    expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.05);
+    expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.8);
   });
 
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {
