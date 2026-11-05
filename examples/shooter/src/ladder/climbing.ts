@@ -33,12 +33,13 @@ const LETTING = 0.08;
  */
 const HELD = (1 - 2 * SWING - 2 * LETTING) / 2;
 /**
- * The body on the ladder (m): its hips `back` behind the rungs; a foot's rung `feet` below them as it lands on it (it then sinks
- * `SWING` of two rungs further below as the body climbs, its leg straightening, before it steps up); the hands `reach` rungs above the
- * feet (from the shoulder's height to above the head over a hand's two-rung climb); each hand and foot `apart` off the middle; an ankle
- * above its rung and behind it.
+ * The body on the ladder (m): its hips `back` behind the rungs, far enough that a hand held at the shoulder's height is reached by an arm
+ * not folded and the trunk leans in only a little; a foot's rung `feet` below them as it lands on it (it then sinks `SWING` of two rungs
+ * further below as the body climbs, its leg straightening just short of locked before it steps up); the hands `reach` rungs above the
+ * feet (from the shoulder's height to above the head, the arm nearly straight, over a hand's two-rung climb); each hand and foot `apart`
+ * off the middle; an ankle above its rung and behind it.
  */
-const BODY = { back: 0.37, feet: 0.6, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
+const BODY = { back: 0.38, feet: 0.52, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /**
  * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
  * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
@@ -134,8 +135,8 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
   puppet.place('hips', frame.point(hips.set(MathUtils.lerp(hips.x, 0, on), MathUtils.lerp(hips.y, height, phase(t, BEATS.hips[end].down)),
     MathUtils.lerp(hips.z, -BODY.back, on))));
   puppet.turn('hips', frame.turn(frame.was('hips').slerp(heading(0.06 * sway, 0.05), on)));
-  puppet.turn('spine', frame.turn(frame.was('spine').slerp(heading(0.1 * gaze.yaw, 0.2), on)));
-  puppet.turn('chest', frame.turn(frame.was('chest').slerp(heading(0.2 * gaze.yaw, 0.25), on)));
+  puppet.turn('spine', frame.turn(frame.was('spine').slerp(heading(0.1 * gaze.yaw, 0.1), on)));
+  puppet.turn('chest', frame.turn(frame.was('chest').slerp(heading(0.2 * gaze.yaw, 0.15), on)));
   shoulders(puppet, frame);
   // (squared on the chest as at rest once on the ladder, from however the rifle held them: else one arm reaches a hand further)
   for (const side of ['left', 'right'] as const) puppet.turn(`${side}Shoulder`, puppet.rotation(`${side}Shoulder`).slerp(puppet.rotation('chest'), on));
@@ -240,8 +241,8 @@ function leg(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: n
   const arc = Math.sin(Math.PI * s);
   const ankle = stood.ankle.clone().lerp(onLadder, s).addScaledVector(UP, 0.2 * arc).addScaledVector(BACK, 0.04 * arc);
   ankle.x -= sign * 0.1 * arc;
-  // (the knees splayed, to stay this side of the rungs)
-  const knee = frame.direction(frame.standing.knees[side]).lerp(frame.direction(new Vector3(sign * 0.6, 0.4, 0.6)), s);
+  // (the knees a little out and forward, between the stiles this side of the rungs)
+  const knee = frame.direction(frame.standing.knees[side]).lerp(frame.direction(new Vector3(sign * 0.45, 0.3, 0.7)), s);
   const foot = frame.turn(stood.foot.clone().slerp(new Quaternion(), s));
   puppet.leg(side, frame.point(ankle), knee, foot);
 }

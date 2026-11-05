@@ -98,6 +98,8 @@ describe('Climber', () => {
         const limb = `${side} ${kind}`, from = was.get(limb);
         if (rung > ladder.rungs) continue;
         if (from !== undefined && from !== rung) moves.push({ limb, by: rung - from });
+        // (a hand on past the other's, to the rung above it)
+        if (kind === 'hand' && from !== undefined && from !== rung) expect(rung).toBe((side === 'left' ? right : left).rung + 1);
         was.set(limb, rung);
       }
     }
