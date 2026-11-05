@@ -21,8 +21,8 @@ export function personHands(person: Reacher): Handling {
         const side = sideOf(hand), at = thing.grip(grip), hold = palm(person, side, thing, at);
         return { side, thing, grip, goal: goalOn(at, person.restOf(person.hands[hand]), hold), palm: hold };
       });
-      // (each hand opens as it comes, until it holds its grip)
-      for (const { side } of takes) person.fingers?.toward(side, true);
+      // (each hand opens as it comes, until it holds its grip, or points to press it)
+      for (const { side, grip } of takes) person.fingers?.toward(side, thing.grip(grip));
       try {
         if (options.speed === Infinity) {
           yield* takingAtOnce(person, request, takes);
@@ -33,7 +33,7 @@ export function personHands(person: Reacher): Handling {
         if (loose) yield* liftingClear(person, request, thing);
         request.met();
       } finally {
-        for (const { side } of takes) person.fingers?.toward(side, false);
+        for (const { side } of takes) person.fingers?.toward(side, null);
       }
     },
     bring: (request, thing, points, end, options) => carrying(person, request, thing, wayOf(person, thing, points, end), options),

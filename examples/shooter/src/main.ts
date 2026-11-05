@@ -170,12 +170,12 @@ async function start() {
   function draw(dt: number) {
     input.direction();
     if (input.locked) {
-      // E uses what the player is on or setting off for, else what it stands near: a mount, or the lift's panel, its button pressed with
-      // the left hand's fingertip.
+      // E uses what the player is on or setting off for, else what it stands near: a mount, or a lift panel it faces, its button pressed
+      // with the left hand's fingertip.
       if (input.pressed('KeyE')) {
         const mount = active() ?? player.mounts.find((each) => each.near), button = liftButton();
         if (mount) mount.use();
-        else if (button) avatar.press(button, () => { environment.lift.press(button); audio.tick(); });
+        else if (button) avatar.press(button.part, () => { environment.lift.press(button); audio.tick(); });
       }
       const mount = active();
       if (mount) ride(mount, dt);
@@ -253,15 +253,15 @@ async function start() {
     return movement.sprinting ? 'Sprinting' : 'Grounded';
   }
 
-  /** The lift's button the player stands by, on foot and its hands free to press it. */
+  /** The lift's button the player stands at and faces, on foot and its hands free to press it. */
   function liftButton() {
-    return active() || !player.alive || avatar.pressing ? null : environment.lift.within(movement.position);
+    return active() || !player.alive || avatar.pressing ? null : environment.lift.within(movement.position, input.yaw);
   }
 
   function promptLabel() {
     const near = player.mounts.find((mount) => mount.near), mount = active(), button = liftButton();
     if (near) return `E · ${wordsOf(near).use}`;
-    if (button) return `E · Send the lift ${button === environment.lift.buttons.up ? 'up' : 'down'}`;
+    if (button) return button.call ? 'E · Call the lift' : `E · Send the lift ${button.to}`;
     if (driver.canExit) return 'E · Get out';
     if (driver.blocked) return 'No room to get out';
     return mount?.state === 'on' ? wordsOf(mount).keys : '';

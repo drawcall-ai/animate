@@ -17,8 +17,8 @@ interface Hand {
   asked: { shape: Shape; time: number } | null;
   closed: { on: Hold | Object3D; shape: Shape; off: Vector3 | null } | null;
   reached: Map<Digit, { empty: string; target: Vector3; shape: Shape }>;
-  /** a hand verb is bringing it to a grip */
-  coming: boolean;
+  /** the grip a hand verb is bringing it to */
+  coming: Grip | null;
 }
 
 /** how long a hand that has taken hold of something waits before its fingers close on it (s): until its palm has settled there */
@@ -57,7 +57,7 @@ export class FingerState {
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       const joints = new Joints(node, bones[side], nodes, side, skinsOf(model, node)), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, reached: new Map(), coming: false };
+      return { joints, shape, asked: null, closed: null, reached: new Map(), coming: null };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -77,12 +77,13 @@ export class FingerState {
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands[side], hold = this.holding[side];
       const asked = hand.asked && time - hand.asked.time < 1.5 * dt ? hand.asked.shape : null;
-      this.ease(hand, hold ? this.held(hand, hold, time) ?? hand.shape : hand.coming ? APERTURE : asked ?? RELAXED, seconds);
+      this.ease(hand, hold ? this.held(hand, hold, time) ?? hand.shape : hand.coming ? coming(hand.coming) : asked ?? RELAXED, seconds);
     }
   }
 
-  /** a hand verb is bringing `side` to a grip (`true`) or no longer is: until it holds it, the hand opens as it comes */
-  toward(side: 'left' | 'right', coming: boolean): void {
+  /** a hand verb is bringing `side` to `grip`, or no longer is (`null`): until it holds it, the hand opens as it comes — or, to put a
+   * digit's pad on it, takes the shape it touches it in, as a finger points before it presses */
+  toward(side: 'left' | 'right', coming: Grip | null): void {
     this.hands[side].coming = coming;
   }
 
@@ -196,6 +197,11 @@ function asks(grip: Object3D): Record<string, unknown> {
   if (asked === undefined) return {};
   if (typeof asked !== 'object' || asked === null) throw new Error(`"${grip.name}" userData.fingers is neither digits' values nor empties' names`);
   return Object.fromEntries(Object.entries(asked));
+}
+
+/** the shape a hand coming to `grip` takes on its way (see `FingerState.toward`) */
+function coming(grip: Grip): Shape {
+  return grip.pad ? shapeOf(values(grip.node), RELAXED) : APERTURE;
 }
 
 /** the digits' values `grip` asks (`asks`), those it puts on an empty left out */
