@@ -26,7 +26,7 @@ function offRung(point: Vector3, spacing: number) {
 
 describe('Climber', () => {
   it('climbs up with its rifle slung, its hands and feet on the rungs, and steps off onto the landing taking its rifle back', async () => {
-    const { ladder, soldier, climber, until, heard } = await yard();
+    const { world, ladder, soldier, climber, until, heard } = await yard();
     expect(climber.near).toBe(true);
     const bones = soldier.avatar.body.bones, smooth = jerkless(soldier.avatar.rifle);
     climber.mount();
@@ -39,14 +39,27 @@ describe('Climber', () => {
     expect(soldier.avatar.rifle.parent).toBe(bones.chest);
 
     // On, each hand holds a rung as its grasp has it, its wrist where that puts it, and each ankle is just above and behind one.
-    for (const side of ['left', 'right'] as const) {
-      const at = (bone: 'Hand' | 'Foot') => ladder.body.worldToLocal(bones[`${side}${bone}`].getWorldPosition(new Vector3()));
+    const holding = () => (['left', 'right'] as const).every((side) => {
+      const foot = ladder.body.worldToLocal(bones[`${side}Foot`].getWorldPosition(new Vector3()));
       const wrist = bones[`${side}Hand`].getWorldPosition(new Vector3());
       const holds = ladder.body.children.filter((child) => child.name.startsWith(`${side} hand on rung`));
       const nearest = Math.min(...holds.map((hold) => soldier.avatar.body.gripOn(side, hold).wrist.distanceTo(wrist)));
-      expect(nearest).toBeLessThan(0.01);
-      expect(offRung(at('Foot'), ladder.spacing)).toBeLessThan(0.12);
-    }
+      return nearest < 0.01 && offRung(foot, ladder.spacing) < 0.12;
+    });
+    expect(holding()).toBe(true);
+    // (let go of mid-stride, it climbs on until all four hold, and stays there)
+    climber.climb(1);
+    until(() => !holding(), 1);
+    climber.climb(0);
+    expect(until(holding, 1)).toBeLessThan(0.7);
+    const still = () => {
+      const chest = bones.chest.getWorldPosition(new Vector3());
+      for (let frame = 0; frame < 20; frame++) world.update(DT);
+      return bones.chest.getWorldPosition(new Vector3()).distanceTo(chest);
+    };
+    still();
+    expect(holding()).toBe(true);
+    expect(still()).toBeLessThan(0.002);
 
     climber.climb(1);
     heard.length = 0;
