@@ -4,10 +4,10 @@ import { stockBack, WeaponModel } from './model';
 // Physical grip, sight, and magazine frames on the procedural carbine.
 export const RIFLE = {
   mass: 3, foregrip: new Vector3(-0.024, 0.06, 0.185), sight: new Vector3(0, 0.12, 0),
-  well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.145, 0.077), partWay: new Vector3(0, -0.082, 0.086), muzzle: new Vector3(0, 0.06, 0.68),
-  /** a magazine's grips: `base` round its body, `thumb` where its thumb's pad goes on the body's left face, `floor` the middle of its floor
-   * plate, the palm up under it */
-  magazine: { base: new Vector3(0, -0.045, -0.01), floor: new Vector3(0, -0.076, -0.015),
+  well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.145, 0.077), partWay: new Vector3(0, -0.092, 0.085), muzzle: new Vector3(0, 0.06, 0.68),
+  /** a magazine's grips: `base` round its body, `thumb` where its thumb's pad goes on the body's left face, `floor` a hand's half thickness
+   * under the middle of its floor plate */
+  magazine: { base: new Vector3(0, -0.045, -0.01), floor: new Vector3(0, -0.092, -0.015),
     thumb: new Vector3(0.016, -0.012, -0.014), mass: 0.5 },
   /** where the trigger finger's pad rests: on the trigger's face low in the guard, its skin on the face (5 mm in front of the blade's
    * middle; there, the blade went through the pad), and off it laid straight along the receiver's side above the guard */
@@ -67,20 +67,16 @@ export function rifleOn(mount: Object3D, arms: number) {
     const magazine = empty(place, name, new Vector3());
     model.magazine(magazine);
     magazine.userData.mass = RIFLE.magazine.mass;
-    // (taken round its body below the well, the handle along its length and the thumb toward its lips, the hand turned about it as the
-    // arm brings it: in the well its palm on the left face, the fingers round the front, as it took it from its chest pouch. The palm on
-    // a face, half the body's 2.8 cm off its middle: measured, 2.1 cm, the palm stood off the face and the fingers lay straight along it.
-    // The handle at the body's middle, the knuckles 2.5 cm behind its front edge, so the fingers fold round that edge rather than reaching
-    // past it. A palm asked on its face, even only preferred, stalled the reach into the pouch nearest the chest's middle, the wrist
-    // wavering at the end of its turn)
-    // (the thumb's pad on the left face toward the lips, so the thumb lies along that face as the fingers close round the front onto the
-    // right one: left to itself it stood out off the body along the handle)
-    const base = empty(magazine, 'base', RIFLE.magazine.base);
-    Object.assign(base.userData, { handle: [0, 1, 0.15], radius: 0.014, fingers: { thumb: 'thumb pad' } });
+    // (taken round its body, the handle along its length toward its lips, the palm on its left face and the thumb's pad along it, the
+    // fingers round its front onto the right face)
+    Object.assign(empty(magazine, 'base', RIFLE.magazine.base).userData, { handle: [0, 1, 0.15], radius: 0.014, fingers: { thumb: 'thumb pad' } });
     empty(magazine, 'thumb pad', RIFLE.magazine.thumb);
-    // (the palm up under the floor plate to push the magazine home, the plate as an edge along the palm's grasp line, the thumb toward
-    // its front and the fingers coming up round its right side)
-    Object.assign(empty(magazine, 'floor', RIFLE.magazine.floor).userData, { handle: [0, 0, 1], facing: [-0.5, 1, 0], radius: 0.0045 });
+    // (the palm under the floor plate, tilted in from its left as the hand comes from there, its fingers loose round the front to push
+    // it home: shaped, as there is nothing under the plate to close on)
+    Object.assign(empty(magazine, 'floor', RIFLE.magazine.floor).userData, { facing: [-1, 1, 0], fingers: {
+      thumb: { curl: 0.25, oppose: 0.15, spread: 0.3 },
+      index: { curl: 0.3, hook: 0.1 }, middle: { curl: 0.34, hook: 0.1 }, ring: { curl: 0.38, hook: 0.1 }, little: { curl: 0.42, hook: 0.12 },
+    } });
     return magazine;
   };
   return { rifle, pistol, blade, well, below, partWay, flash, muzzle, stock, magazineIn, dispose: () => { model.dispose(); flash.material.dispose(); } };
