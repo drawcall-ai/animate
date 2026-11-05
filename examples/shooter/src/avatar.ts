@@ -72,6 +72,9 @@ const UP = new Vector3(0, 1, 0);
 /** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly:
  * the release reads it a moment on, and one let go 4 mm short, still moving, was 5–11 mm off then, left askew in the well. */
 const ONTO = 0.002;
+/** How near its place under a magazine's floor plate the palm comes before it drives the magazine home (m), and in how long (s). */
+const ON_PLATE = 0.01, PUSH = 0.15;
+const ORIGIN = new Vector3();
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
 export class Avatar {
@@ -341,13 +344,31 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     litter.drop(spent, thrown.velocity, thrown.spin);
     thrown.object = null;
     if (!(yield* grab(person, full, { left: 'base' }, QUICK))) return false;
-    // (brought up under the well and in from there along its line; pushed home by the palm under the floor plate, a carry of its own, quick
-    // off the mark, rather than the last 0.1 s of the carry up, where it dipped under the mouth and shot up 14 cm)
+    // (brought up under the well and in from there along its line, let go part way in, where the well holds it)
     if (!(yield* carry(person, full, [below, partWay], { ...QUICK, until: near(full, partWay) }))) return false;
     release(person, full, partWay);
-    if (!(yield* grab(person, full, { left: 'floor' }, QUICK))) return false;
-    if (!(yield* carry(person, full, well, { ...QUICK, until: near(full, well) }))) return false;
-    release(person, full, well);
+    // (the palm coming under its floor plate drives it home as it meets the plate, and the hand goes on back to the rifle as it is home, not
+    // waiting for a grasp to settle on a magazine the well holds: pushed by a carry of its own once that grasp had closed, it stood part
+    // way in for 0.7 s, the hand settling and the carry setting off)
+    const floor = full.getObjectByName('floor');
+    if (!floor) throw new Error(`"${full.name}" has no grip "floor"`);
+    const home = partWay.worldToLocal(well.getWorldPosition(new Vector3()));
+    let pushed = 0;
+    const onPlate = () => person.gripOn('left', floor).wrist.distanceTo(person.bones.leftHand.getWorldPosition(new Vector3())) < ON_PLATE;
+    yield* parallel('race', grab(person, full, { left: 'floor' }, QUICK), function* () {
+      yield* wait(onPlate);
+      yield* action({
+        update: (_, clock) => { pushed = Math.min(1, pushed + clock.delta / PUSH); full.position.lerpVectors(ORIGIN, home, smooth(pushed)); },
+        until: () => pushed === 1,
+      });
+    });
+    if (pushed < 1) return false;
+    if (person.holds(full)) release(person, full, well);
+    else {
+      well.attach(full);
+      full.position.set(0, 0, 0);
+      full.quaternion.identity();
+    }
     onReload?.('in');
     return true;
   };
