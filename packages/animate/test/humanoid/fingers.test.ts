@@ -1,9 +1,11 @@
-import { CylinderGeometry, Line3, Mesh, Vector3 } from 'three';
+import { Box3, BoxGeometry, CylinderGeometry, Line3, Mesh, Ray, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { LIFTED } from '../../src/fingers/shape';
+import { reaching } from '../../src/fingers/closing';
+import { Joints } from '../../src/fingers/joints';
+import { LIFTED, shapeOf } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
 import { person, play } from '../bodies';
 import { empty, roomOf } from '../things';
@@ -62,6 +64,28 @@ describe('fingers', () => {
       expect(gap).toBeLessThan(0.035);
     }
     expect(bent(body, 'rightMiddleIntermediate')).toBeLessThan(0.5);
+  });
+
+  it('reach a pad toward an empty no nearer than keeps it out of the thing', () => {
+    const species = humanoid(FINGERED), body = new Body(species), fingers = species.fingers;
+    if (!fingers) throw new Error('no finger bones');
+    const hand = body.bones.rightHand, joints = new Joints(hand, fingers.right, body.bones, 'right', []);
+    hand.updateWorldMatrix(true, true);
+    // (a plate just under the straight index — the palm faces down — and an empty under the plate, below the finger's middle)
+    const knuckle = body.bones.rightIndexProximal.getWorldPosition(new Vector3()), tip = body.bones.rightIndexDistal.getWorldPosition(new Vector3());
+    const middle = knuckle.clone().lerp(tip, 0.5), plate = new Mesh(new BoxGeometry(0.2, 0.004, 0.06));
+    plate.position.copy(middle).add(new Vector3(0, -0.02, 0));
+    roomOf(body).add(plate);
+    plate.updateMatrixWorld(true);
+    const target = hand.worldToLocal(middle.clone().add(new Vector3(0, -0.05, 0)));
+    const shape = shapeOf({});
+    reaching(joints, plate, shape, 'index', target, true);
+    const box = new Box3().setFromObject(plate), through = joints.segments('index', shape).filter(([start, end]) => {
+      const hit = new Ray(start, end.clone().sub(start).normalize()).intersectBox(box, new Vector3());
+      return hit !== null && hit.distanceTo(start) <= end.distanceTo(start);
+    });
+    expect(through).toEqual([]);
+    expect(joints.pad('index', shape, new Vector3()).applyMatrix4(hand.matrixWorld).y).toBeGreaterThan(plate.position.y);
   });
 
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {

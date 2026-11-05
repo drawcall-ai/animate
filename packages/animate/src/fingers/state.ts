@@ -142,7 +142,7 @@ export class FingerState {
       const afresh = last?.empty !== value;
       if (afresh || !last || last.target.distanceTo(target) > MOVED) {
         const reached = structuredClone(afresh || !last ? shape : last.shape);
-        reaching(hand.joints, reached, digit, target, afresh);
+        reaching(hand.joints, hold.thing.object, reached, digit, target, afresh);
         hand.reached.set(digit, { empty: value, target, shape: reached });
       }
       const reached = hand.reached.get(digit)?.shape;

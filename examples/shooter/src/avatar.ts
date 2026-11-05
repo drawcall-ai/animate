@@ -258,8 +258,8 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     root.crouch = input.crouch && !sprinting() ? 1 : 0.6 * (input.takeoff ?? 0);
     flash.visible = time - lastShot < 0.06;
     // The trigger finger lies along the receiver above the guard until the rifle is asked up or fires, then rests on the trigger, squeezing
-    // it back for a shot; the thumb rests against the receiver's side above the grip.
-    pistol.userData.fingers = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame', thumb: 'thumb' };
+    // it back for a shot; the other fingers wrap the grip to its left side, the thumb curled over the receiver's side above it.
+    pistol.userData.fingers = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame', thumb: RIFLE.thumb, middle: 'middle', ring: 'ring', little: 'little' };
     blade.position.z = time - lastShot < SHOT_INTERVAL ? -SQUEEZE : 0;
     hold(seconds);
   };

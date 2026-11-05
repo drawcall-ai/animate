@@ -29,17 +29,8 @@ const STEPS = 8, HALVINGS = 4;
  * attached to it (their own `userData.mass`) and hidden meshes are not touched; skinned meshes are touched as they stand at rest.
  */
 export function closedOn(joints: Joints, object: Object3D): Shape {
-  const meshes = meshesOf(object);
-  joints.hand.updateWorldMatrix(true, false);
-  object.updateWorldMatrix(true, true);
-  // (the object's triangles about the hand, in the world)
-  const shape = structuredClone(WRAP), hand = joints.hand.getWorldPosition(new Vector3());
-  const near = new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld })), hand, REACH);
-  /** the segments of `digit` touching the object as `shape` has it now, by index */
-  const touching = (digit: Digit) => joints.segments(digit, shape).flatMap(([start, end], k) => {
-    const length = _to.subVectors(end, start).length();
-    return near.first(_ray.set(start, _to.normalize()), length) === null ? [] : [k];
-  });
+  const shape = structuredClone(WRAP), near = nearHand(joints, object);
+  const touching = (digit: Digit) => touchingIn(near, joints, digit, shape);
   /** the most of `set`'s range (0 … `most`) it folds to before a segment comes to touch: stepped out from 0, so a fold does not pass
    * through a thin rung on its way, then halved within the step it first touches in */
   const fold = (digit: Digit, set: (value: number) => void, most: number) => {
@@ -82,32 +73,61 @@ interface Value {
 }
 
 /**
- * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes, in place: a finger's curl (lifted too), hook
- * and spread, a thumb's curl and opposition (splayed too), searched over their range on a coarse grid (`afresh`), then on a fine one about the best so far
+ * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes, in place, its segments' palm sides kept out of
+ * `object` as `closedOn` touches it (a trigger finger goes into the guard, not through its frame; a bend that goes into it
+ * ranks behind every one that keeps clear): a finger's curl (lifted too), hook and spread, a thumb's curl and opposition (splayed too),
+ * searched over their range on a coarse grid (`afresh`), then on a fine one about the best so far
  */
-export function reaching(joints: Joints, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean): void {
+export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean): void {
+  const near = nearHand(joints, object);
   const values: Value[] = digit === 'thumb'
     ? [{ get: () => shape.thumb.curl, set: (v) => (shape.thumb.curl = v), least: 0 }, { get: () => shape.thumb.oppose, set: (v) => (shape.thumb.oppose = v), least: SPLAYED }]
     : (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => shape[digit][key], set: (v: number) => (shape[digit][key] = v), least: key === 'curl' ? LIFTED : 0 }));
-  let best = values.map((value) => value.get()), least = Infinity;
+  let best = values.map((value) => value.get()), least = Infinity, into = true;
   for (const { step, span } of [...afresh ? [{ step: 0.1, span: 2 }] : [], { step: 0.02, span: 0.1 }]) {
     const grids = best.map((centre, k) => {
       const out: number[] = [];
       for (let v = Math.max(values[k].least, centre - span); v <= Math.min(1, centre + span) + 1e-9; v += step) out.push(v);
       return out;
     });
+    const tried: { chosen: number[]; miss: number }[] = [];
     const search = (k: number, chosen: number[]) => {
       if (k === values.length) {
         chosen.forEach((v, j) => values[j].set(v));
-        const miss = joints.pad(digit, shape, _pad).distanceTo(target);
-        if (miss < least) [least, best] = [miss, [...chosen]];
+        tried.push({ chosen, miss: joints.pad(digit, shape, _pad).distanceTo(target) });
         return;
       }
       for (const v of grids[k]) search(k + 1, [...chosen, v]);
     };
     search(0, []);
+    // (the nearest first, each tried for going into the object until one keeps clear)
+    for (const { chosen, miss } of tried.sort((a, b) => a.miss - b.miss)) {
+      if (!into && miss >= least) break;
+      chosen.forEach((v, j) => values[j].set(v));
+      const goes = touchingIn(near, joints, digit, shape).length > 0;
+      if (goes && (!into || miss >= least)) continue;
+      [least, best, into] = [miss, chosen, goes];
+      if (!goes) break;
+    }
   }
   best.forEach((v, j) => values[j].set(v));
+}
+
+/** `object`'s triangles about `joints`' hand as they stand now, in the world: meshes of things attached to it (their own `userData.mass`)
+ * and hidden meshes left out, skinned meshes as they stand at rest */
+function nearHand(joints: Joints, object: Object3D): Triangles {
+  joints.hand.updateWorldMatrix(true, false);
+  object.updateWorldMatrix(true, true);
+  const meshes = meshesOf(object).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
+  return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), REACH);
+}
+
+/** the segments of `digit` whose palm sides touch `near` as `shape` has it, by index */
+function touchingIn(near: Triangles, joints: Joints, digit: Digit, shape: Shape): number[] {
+  return joints.segments(digit, shape).flatMap(([start, end], k) => {
+    const length = _to.subVectors(end, start).length();
+    return near.first(_ray.set(start, _to.normalize()), length) === null ? [] : [k];
+  });
 }
 
 const _ray = new Ray(), _to = new Vector3(), _pad = new Vector3();

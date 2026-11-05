@@ -93,7 +93,7 @@ foregrip.userData.handle = [0, 0, 1];                                           
 pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };          // the index's pad on an empty: read every update
 ```
 
-A grip's `userData.fingers` lays digits over the closed hand: values, or the name of an empty on the thing the digit's pad goes to. Move that empty to move the digit (a trigger drawn back 4 mm on a shot), and name a pad empty for the thumb and the index for a pinch.
+A grip's `userData.fingers` lays digits over the closed hand: values, or the name of an empty on the thing the digit's pad goes to, as near as it comes without going into the thing. Move that empty to move the digit (a trigger drawn back 4 mm on a shot), and name a pad empty for the thumb and the index for a pinch.
 
 A shape is per digit, each value 0 … 1: a finger's `curl` (all three joints, coupled), `hook` (the end two only) and `spread`, the thumb's `curl` and `oppose`; a finger's `curl` goes down to -0.45 (lifted straight, as along a receiver) and a thumb's `oppose` to -0.8 (swung out of the palm). Start from `RELAXED`, `FIST`, `OPEN`, `POINT` or `THUMBS_UP` and override digits: `pose(person, { fingers: { right: POINT } }, { until: 2 })`. A pose's fingers apply only to a free hand.
 
