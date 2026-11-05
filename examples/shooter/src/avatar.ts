@@ -88,7 +88,7 @@ export class Avatar {
     private readonly floor: Floor = () => 0,
     private readonly onReload?: (phase: 'out' | 'in') => void,
   ) {
-    this.litter = new Litter(scene, floor);
+    this.litter = new Litter(scene);
     this.animation = animate(model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload);
     this.group.add(this.animation.person.object);
     scene.add(this.group);
@@ -134,14 +134,14 @@ export class Avatar {
   get pressing(): boolean { return this.animation.pressing(); }
   fire(): boolean { return this.animation.fire(); }
 
-  /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take. */
+  /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take, the magazines it threw away cleared. */
   reset(position: Vector3, yaw = 0) {
+    this.litter.clear();
     this.show(animate(this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload));
   }
 
   update(dt: number, input: AvatarState) {
     this.animation.update(dt, input);
-    this.litter.update(dt);
     this.group.updateMatrixWorld(true);
   }
 
@@ -170,7 +170,7 @@ export class Avatar {
   dispose() {
     this.next?.dispose();
     this.animation.dispose();
-    this.litter.dispose();
+    this.litter.clear();
     this.group.removeFromParent();
   }
 
