@@ -178,6 +178,7 @@ async function start() {
         else if (button) avatar.press(button.part, () => { environment.lift.press(button); audio.tick(); });
       }
       const mount = active();
+      avatar.lower(!mount && environment.lift.at(movement.position, input.yaw));
       if (mount) ride(mount, dt);
       else walk();
       player.view.pitch = input.pitch;
