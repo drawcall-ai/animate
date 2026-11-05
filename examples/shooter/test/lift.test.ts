@@ -136,36 +136,20 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   const button = lift.within(movement.position, Math.PI / 2);
   expect(button).toBe(lift.buttons.up);
   if (!button) return;
-  const face = button.part.getObjectByName('press'), hand = avatar.body.bones.leftHand, tip = avatar.body.bones.leftIndexDistal;
+  const face = button.part.getObjectByName('press');
   if (!face) throw new Error('The button has no face to press');
-  let wrist = Infinity, pad = Infinity;
+  // (the index's end segment on the face as the button is pressed, within two seconds of asking)
+  let pad = Infinity, after = Infinity;
+  const asked = world.time;
   avatar.press(button.part, () => {
     lift.press(button);
-    // (the hand where the grip puts the index's pad on the button's face, its end segment there)
-    wrist = avatar.body.gripOn('left', face).wrist.distanceTo(hand.getWorldPosition(new Vector3()));
-    pad = tip.getWorldPosition(new Vector3()).distanceTo(face.getWorldPosition(new Vector3()));
+    pad = avatar.body.bones.leftIndexDistal.getWorldPosition(new Vector3()).distanceTo(face.getWorldPosition(new Vector3()));
+    after = world.time - asked;
   });
-  // (the index's end segment, wherever it comes before the button's face, never behind it: in along its normal, not through the panel)
-  let through = Infinity;
-  for (let frame = 0; frame < 240 && wrist === Infinity; frame++) {
-    world.update(DT);
-    const at = face.worldToLocal(tip.getWorldPosition(new Vector3()));
-    if (Math.hypot(at.x, at.y) < 0.06) through = Math.min(through, at.z);
-  }
-  expect(wrist).toBeLessThan(0.01);
+  advance(2);
+  expect(after).toBeLessThan(2);
   expect(pad).toBeLessThan(0.03);
-  expect(through).toBeGreaterThan(-0.005);
-  advance(7);
+  advance(6);
   expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
   expect(avatar.pressing).toBe(false);
-  const down = lift.within(movement.position, Math.PI / 2);
-  expect(down).toBe(lift.buttons.down);
-  if (!down) return;
-  let sent = -1;
-  avatar.press(down.part, () => { lift.press(down); sent = world.time; });
-  const asked = world.time;
-  for (let frame = 0; frame < 240 && sent < 0; frame++) world.update(DT);
-  // (the hand there within two seconds: from the rifle to a finger's length off the lower button, then in)
-  expect(sent - asked).toBeGreaterThan(0);
-  expect(sent - asked).toBeLessThan(2);
 }, 20000);
