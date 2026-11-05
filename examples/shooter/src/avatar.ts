@@ -45,8 +45,8 @@ const QUICK = { speed: 1.8 };
 /** How near its place on a button's face a pressing hand's wrist comes before the button is pressed (m), and how long the pad stays on it (s). */
 const ON_FACE = 0.006, HELD = 0.25;
 const _on = new Vector3();
-/** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, under its floor plate and back. Briskly, a
- * short move still took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. */
+/** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, and back. Briskly, a short move still
+ * took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. */
 const SHORT = { speed: 0.7 };
 /** How fast a fresh body's hands take the rifle it stands up with (m/s): at once, to take over from a pose held elsewhere. */
 const SNATCH = { speed: 8 };
@@ -64,12 +64,11 @@ const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
  * turned −1 rad, it still did. */
 const POUCHED = -Math.PI / 6;
 /** Where the left hand flings a spent magazine, out from the left hip and forward (the chest's frame as `POUCHES`), letting go of it on the
- * way once it is `TOSS` (m) clear of the well: it falls from there at the hand's speed. The fling turns it a right angle about the vertical
- * on the way (`FLUNG`, rad), the wrist rolling out as it throws, so the empty hand comes away turned nearly as it takes the full one from its
- * pouch: unturned, the wrist had 1.7 rad to roll back after letting go, and the hand stood turning at the pouch for 0.4 s before it closed. */
+ * way once it is `TOSS` (m) clear of the well: it falls from there at the hand's speed. The fling is a point, the magazine kept turned as
+ * it left the well, so the hand keeps its grasp on it: turned on the way, the hand turned it in its fingers onto its palm, held like a
+ * tray. */
 const FLING = new Vector3(0.36, -0.36, 0.3);
 const TOSS = 0.2;
-const FLUNG = -Math.PI / 2;
 const UP = new Vector3(0, 1, 0);
 /** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly. */
 const ONTO = 0.004;
@@ -210,7 +209,6 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     return pouch;
   });
   const fling = onBone(person, chest, 'fling', FLING.clone().multiply(new Vector3(arms, arms, proportions.scale)));
-  fling.rotateY(FLUNG);
   /** the magazines on it, each named by when it was issued: the one in the well and one in each pouch at first */
   const magazines: Object3D[] = [];
   let issued = 0;
@@ -326,14 +324,15 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
 
   // The left hand takes the spent magazine round its body in the well, pulls it down out of it and flings it away out by the hip, letting
   // go on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and drops it), then takes the
-  // full one from its pouch, brings it up under the well and pushes it part way in, shifts under its floor plate and pushes it home.
+  // full one from its pouch, brings it up under the well and pushes it part way in, shifts under its floor plate and pushes it home with
+  // the palm.
   const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, SHORT))) return false;
     onReload?.('out');
     const clear = () => spent.getWorldPosition(new Vector3()).distanceTo(well.getWorldPosition(new Vector3())) > TOSS;
     thrown.object = spent;
     spent.getWorldPosition(thrown.at);
-    yield* carry(person, spent, [below, fling], { ...QUICK, until: clear });
+    yield* carry(person, spent, [below, () => fling.getWorldPosition(new Vector3())], { ...QUICK, until: clear });
     if (!clear()) return false;
     release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
@@ -344,7 +343,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     // off the mark, rather than the last 0.1 s of the carry up, where it dipped under the mouth and shot up 14 cm)
     if (!(yield* carry(person, full, [below, partWay], { ...QUICK, until: near(full, partWay) }))) return false;
     release(person, full, partWay);
-    if (!(yield* grab(person, full, { left: 'floor' }, SHORT))) return false;
+    if (!(yield* grab(person, full, { left: 'floor' }, QUICK))) return false;
     if (!(yield* carry(person, full, well, { ...QUICK, until: near(full, well) }))) return false;
     release(person, full, well);
     onReload?.('in');

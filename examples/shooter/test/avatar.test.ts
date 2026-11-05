@@ -68,20 +68,20 @@ describe('avatar', () => {
     input.aim = false;
     avatar.requestReload();
     expect(avatar.reloading).toBe(true);
-    // (the full magazine held as taken from its pouch up part way into the well: regripped, it slid up through a still hand;
-    // then let go there and taken again under its floor plate to be pushed home)
-    const held: number[] = [], places: string[] = [];
+    // (each magazine held as taken, the spent one out of the well until it is thrown, the full one from its pouch up part way into the
+    // well: regripped, they slid through a still hand; then let go there and taken again under its floor plate to be pushed home)
+    const held: number[] = [], thrown: number[] = [], places: string[] = [];
     let frames = 0;
     for (; frames < 600 && avatar.reloading; frames++) {
       avatar.update(1 / 60, input);
       const place = full.parent?.name ?? '';
       if (places[places.length - 1] !== place) places.push(place);
       if (full.parent === hand && !places.includes('part way in')) held.push(full.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
+      if (magazine.parent === hand) thrown.push(magazine.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
     }
-    // (4.2 s: the support hand back on the front stands a half second on it before its grab returns — to be cut to ~4 s)
-    expect(frames / 60).toBeLessThan(4.3);
+    expect(frames / 60).toBeLessThan(4);
     expect(places).toEqual(['pouch 1', hand.name, 'part way in', hand.name, 'well']);
-    expect(Math.max(...held) - Math.min(...held)).toBeLessThan(0.01);
+    for (const distances of [held, thrown]) expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(0.01);
     expect(avatar.reloads).toBe(1);
     expect(avatar.reloading).toBe(false);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
