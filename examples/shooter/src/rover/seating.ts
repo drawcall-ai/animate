@@ -25,11 +25,13 @@ export const BEATS = {
   /** the right hand turns the key on its way to the wheel */
   key: 0.58,
   /**
-   * the right hand puts the rifle in its rack (or, getting out, takes it from there), letting go of it (or closing on it) at `take`, and
-   * goes on to the pillar's handle over `rack`; the body bends toward the rack for `bend` either side of `take`
+   * the right hand puts the rifle in its rack (or, getting out, takes it from there), letting go of it (or closing on it) at `take`, draws
+   * back out of the rack and up behind the windscreen's pillar over `rack`, and comes forward onto the pillar's handle over `handle`; the
+   * body bends toward the rack for `bend` either side of `take`
    */
   take: 0.24,
-  rack: [0.25, 0.37],
+  rack: [0.25, 0.33],
+  handle: [0.32, 0.38],
   bend: 0.13,
 } as const satisfies Record<string, Beat | number | Record<string, Beat>>;
 
@@ -56,6 +58,11 @@ const LEANING = new Vector3(1, 0.1, -0.3);
  * little out, clear of the dash above the footwell. */
 const STEP = { rise: 0.1, knee: new Vector3(-1, 0.5, -0.1) };
 const SIDES = ['left', 'right'] as const satisfies readonly Side[];
+/** Where the right hand comes up behind the pillar before it comes forward onto the handle, off where it holds it (m; the rover's frame):
+ * back and out, so the hand rising from the rack goes round the pillar rather than through it. */
+const ROUND = new Vector3(-0.04, -0.02, -0.07);
+/** How far a hand letting go of one hold goes toward the next with its fingers relaxed, before they open to take it. */
+const LET_GO = 0.5;
 
 /**
  * Poses `puppet`'s body `t` of the way from `standing` at the doorway, rifle in hand, to seated, each part on its beat: stepping up to the
@@ -94,9 +101,11 @@ function arms(puppet: Puppet, frame: Frame, rover: Rover, rifle: Object3D, t: nu
   const leaning = puppet.hold('left', dash), holding = puppet.hold('right', handle);
   const racked = frame.carrying(rack.matrixWorld);
   const { leftHand, rightHand } = BEATS;
+  const round = { wrist: holding.wrist.clone().add(ROUND.clone().applyQuaternion(rotation)), hand: holding.hand };
   const right = () => {
     if (t >= rightHand.wheel[0]) return between(holding, onWheel('right'), phase(t, rightHand.wheel));
-    if (t >= BEATS.rack[0]) return between(racked, holding, phase(t, BEATS.rack));
+    if (t >= BEATS.handle[0]) return between(round, holding, phase(t, BEATS.handle));
+    if (t >= BEATS.rack[0]) return between(racked, round, phase(t, BEATS.rack));
     return between(frame.hand('right'), racked, phase(t, rightHand.rack));
   };
   const hands: Record<Side, Hold> = {
@@ -110,10 +119,12 @@ function arms(puppet: Puppet, frame: Frame, rover: Rover, rifle: Object3D, t: nu
       : stood.lerp(wheel.applyQuaternion(rotation), phase(t, BEATS.elbows));
     puppet.arm(side, hands[side].wrist, elbow, hands[side].hand);
   }
-  // (the right hand carries the rifle to its rack, letting go of it there, before it heads for the handle)
+  // (the right hand carries the rifle to its rack, letting go of it there, before it heads for the handle; a hand letting go hangs
+  // relaxed until it is LET_GO of the way to its next hold)
+  const onto = (beat: Beat, from: Object3D | null, to: Object3D) => t < beat[0] ? from : linear(t, beat) < LET_GO ? null : to;
   return {
-    left: t < leftHand.dash[0] ? rifle.getObjectByName('foregrip') ?? null : t < leftHand.wheel[0] ? dash : grips.left,
-    right: t < BEATS.rack[0] ? rifle.getObjectByName('pistol') ?? null : t < rightHand.wheel[0] ? handle : grips.right,
+    left: t < leftHand.dash[0] ? rifle.getObjectByName('foregrip') ?? null : onto(leftHand.wheel, dash, grips.left),
+    right: t < BEATS.rack[0] ? rifle.getObjectByName('pistol') ?? null : t < BEATS.handle[0] ? null : onto(rightHand.wheel, handle, grips.right),
   };
 }
 

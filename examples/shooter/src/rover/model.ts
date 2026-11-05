@@ -142,8 +142,10 @@ export function createRover(maps?: PaintMaps) {
     /** where the hands hold the rim, ten to two, each turned with it: +Y along the rim upward, +Z out of the wheel's face */
     grips: { left: grip(-1), right: grip(1) },
     /** the grab handle's upright behind the windscreen's right pillar, held from the doorway as the forearm reaches it, in and forward:
-     * thumb up along the pillar's lean, the palm on its outboard front facing in and back, the fingers round its inboard side */
-    handle: holdable('grab handle', [-0.86, 1.475, 0.622 - GRAB.standoff], [0, 1, -0.117], [0.6, 0, -0.8], 0.012),
+     * thumb up along the pillar's lean, the palm on its outboard front facing in and back, the fingers round its inboard side, the
+     * thumb's pad on its outboard back above them */
+    handle: holdable('grab handle', [-0.86, 1.475, 0.622 - GRAB.standoff], [0, 1, -0.117], [0.6, 0, -0.8], 0.012,
+      { thumb: mark(body, 'handle thumb', [-0.876, 1.52, 0.622 - GRAB.standoff - 0.017]).name }),
     /** the dash's top at its outboard end, leant on getting in as the forearm comes onto it from inboard: the palm flat on it, facing
      * down, the fingers out over its end (the line across the palm 15° off square to them, as a grasp's is, so the knuckles lie along
      * the end) and closing down round it, the thumb's pad on it toward its back edge */
