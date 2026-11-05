@@ -1,6 +1,13 @@
 import { DataTexture, MeshStandardMaterial, Object3D, RepeatWrapping, RGBAFormat, UnsignedByteType } from 'three';
 import { Parts, type Profile } from '../parts';
 
+/**
+ * Where the stock's butt end sits behind the receiver (m) for a soldier whose arms are `arms` of the default's: collapsed for a short arm,
+ * so its support hand holds the receiver's front ahead of the magazine well with its elbow bent (at 0.24 m a unit of arm, the arms 0.77 of
+ * the default's reached that only straight, at the end of their reach)
+ */
+export const stockBack = (arms: number) => -0.16 * arms;
+
 /** A compact carbine built in metres; geometry stays independent of its animation. */
 export class WeaponModel {
   private readonly grain = grain();
@@ -49,11 +56,12 @@ export class WeaponModel {
       [[[0.028, -0.015], [0.069, -0.015], [0.071, -0.043], [0.062, -0.055], [0.032, -0.048]]]);
     p.profile([[0.037, -0.009], [0.044, -0.01], [0.044, -0.031], [0.052, -0.044], [0.045, -0.045], [0.036, -0.03]], 0.006, [0, 0, 0], this.steel);
 
-    // Buffer tube and adjustable stock. Its length follows the soldier's reach.
-    const back = -0.24 * arms;
+    // Buffer tube and adjustable stock. Its length follows the soldier's reach (`stockBack`), its cut-out left out once it is collapsed too
+    // short for it.
+    const back = stockBack(arms);
     p.tube(0.018, 0.012, Math.abs(back + 0.075), [0, 0.064, (back - 0.075) / 2], this.dark);
     p.profile([[back - 0.04, 0.087], [-0.12, 0.087], [-0.12, 0.047], [back + 0.015, -0.049], [back - 0.04, -0.061]], 0.05, [0, 0, 0], this.polymer,
-      [[[back + 0.003, 0.033], [-0.15, 0.033], [back + 0.003, -0.025]]]);
+      back + 0.003 < -0.165 ? [[[back + 0.003, 0.033], [-0.15, 0.033], [back + 0.003, -0.025]]] : []);
     p.box([0.056, 0.154, 0.017], [0, 0.013, back - 0.044], this.rubber);
     for (let i = 0; i < 9; i++) p.box([0.058, 0.003, 0.003], [0, -0.05 + i * 0.016, back - 0.054], this.polymer);
     p.box([0.055, 0.009, 0.045], [0, 0.005, back + 0.055], this.dark);

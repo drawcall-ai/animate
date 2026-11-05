@@ -42,8 +42,9 @@ const REST_AFTER = 1;
 /** How far a shot draws the trigger back (m). */
 const SQUEEZE = 0.004;
 /** The chest pouches' magazines, side by side on the left of the chest with a hand's room between them, each turned flat against it, its
- * front toward the body's middle: the left hand takes one palm against the chest, its fingers round the front, as it seats one in the well. */
-const POUCHES = [new Vector3(0.02, -0.17, 0.2), new Vector3(0.16, -0.17, 0.2)];
+ * front toward the body's middle: the left hand takes one palm against the chest, its fingers round the front, as it seats one in the well.
+ * The inner one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its fingers off the body. */
+const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
 const UP = new Vector3(0, 1, 0);
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */

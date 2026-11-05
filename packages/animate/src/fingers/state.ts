@@ -23,12 +23,13 @@ interface Hand {
 const SETTLE = 0.1;
 /**
  * a hand on its way to a grip opens to take it (Jeannerod 1984: the grip opens wider than the object during the reach, closing on it as
- * the hand arrives), and how near its wrist must come to where it holds the grip before it closes (m)
+ * the hand arrives), each finger a little more bent than the one before as a relaxed hand's are (all alike, the open hand read as a
+ * mannequin's claw), and how near its wrist must come to where it holds the grip before it closes (m)
  */
 const APERTURE: Shape = {
-  thumb: { curl: 0.05, oppose: 0.4 },
-  index: { curl: 0.1, hook: 0.05, spread: 0.15 }, middle: { curl: 0.12, hook: 0.05, spread: 0 }, ring: { curl: 0.14, hook: 0.05, spread: 0.1 },
-  little: { curl: 0.16, hook: 0.05, spread: 0.15 },
+  thumb: { curl: 0.1, oppose: 0.35 },
+  index: { curl: 0.05, hook: 0.03, spread: 0.2 }, middle: { curl: 0.1, hook: 0.05, spread: 0 }, ring: { curl: 0.16, hook: 0.08, spread: 0.15 },
+  little: { curl: 0.22, hook: 0.1, spread: 0.25 },
 };
 const ARRIVED = 0.015;
 /** how far a digit's empty may move in the hand before the digit reaches for it afresh (m) */
