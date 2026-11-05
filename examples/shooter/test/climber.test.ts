@@ -30,11 +30,12 @@ describe('Climber', () => {
     expect(climber.near).toBe(true);
     const bones = soldier.avatar.body.bones, smooth = jerkless(soldier.avatar.rifle);
     climber.mount();
-    // (straight on from the walk up, without waiting at the foot, and on at once: each move heard as it ends)
+    // (straight on from the walk up, without waiting at the foot, and on at once: each move heard as it ends, the right foot stepping in to
+    // the ladder's foot and the left up onto the first rung)
     expect(until(() => smooth() && climber.state === 'mounting', 3)).toBeLessThan(2);
     heard.length = 0;
     expect(until(() => smooth() && climber.state === 'on', 2)).toBeLessThan(1.3);
-    expect(heard).toEqual(['cloth', 'rung', 'rung', 'rung', 'rung']);
+    expect(heard).toEqual(['cloth', 'rung', 'step-b', 'rung', 'rung']);
     expect(soldier.avatar.rifle.parent).toBe(bones.chest);
 
     // On, each hand holds a rung as its grasp has it, its wrist where that puts it, and each ankle is just above and behind one.
@@ -68,18 +69,27 @@ describe('Climber', () => {
 
   it('climbs hand over hand, each hand two rungs on past the other\'s with the opposite foot', () => {
     const ladder = createLadder(2.4), { foot, top } = heights(ladder);
-    const held = { left: [] as number[], right: [] as number[] };
+    // (each move: the limb, and the rungs it went from and to, below the stiles' holds above the landing)
+    const moves: { limb: string; by: number }[] = [], was = new Map<string, number>();
     for (let height = foot; height <= top; height += 0.005) {
-      const [left, rightFoot, right, leftFoot] = gripping(ladder, height);
+      const limbs = gripping(ladder, height), [left, rightFoot, right, leftFoot] = limbs;
       expect(left.grips).toBe(rightFoot.grips);
       expect(right.grips).toBe(leftFoot.grips);
-      // (the rungs, below the stiles' holds above the landing)
       if (left.rung <= ladder.rungs && right.rung <= ladder.rungs) expect(left.rung).not.toBe(right.rung);
-      for (const hand of [left, right]) if (hand.rung <= ladder.rungs && held[hand.side].at(-1) !== hand.rung) held[hand.side].push(hand.rung);
+      expect(leftFoot.rung).not.toBe(rightFoot.rung);
+      for (const { side, kind, rung } of limbs) {
+        const limb = `${side} ${kind}`, from = was.get(limb);
+        if (rung > ladder.rungs) continue;
+        if (from !== undefined && from !== rung) moves.push({ limb, by: rung - from });
+        was.set(limb, rung);
+      }
     }
-    for (const rungs of Object.values(held)) {
-      expect(rungs.length).toBeGreaterThan(1);
-      expect(rungs.slice(1).map((rung, k) => rung - rungs[k])).toEqual(rungs.slice(1).map(() => 2));
+    for (const kind of ['hand', 'foot']) {
+      const own = moves.filter(({ limb }) => limb.endsWith(kind));
+      expect(own.length).toBeGreaterThan(2);
+      // (two rungs a move, the left and the right by turns)
+      expect(own.map(({ by }) => by)).toEqual(own.map(() => 2));
+      own.slice(1).forEach(({ limb }, k) => expect(limb).not.toBe(own[k].limb));
     }
   });
 
