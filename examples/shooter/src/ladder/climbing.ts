@@ -34,12 +34,12 @@ const LETTING = 0.08;
 const HELD = (1 - 2 * SWING - 2 * LETTING) / 2;
 /**
  * The body on the ladder (m): its hips `back` behind the rungs, far enough that a hand held at the shoulder's height is reached by an arm
- * not folded and the trunk leans in only a little; a foot's rung `feet` below them as it lands on it (it then sinks `SWING` of two rungs
+ * not folded, the trunk upright and clear of the rungs; a foot's rung `feet` below them as it lands on it (it then sinks `SWING` of two rungs
  * further below as the body climbs, its leg straightening just short of locked before it steps up); the hands `reach` rungs above the
  * feet (from the shoulder's height to above the head, the arm nearly straight, over a hand's two-rung climb); each hand and foot `apart`
  * off the middle; an ankle above its rung and behind it.
  */
-const BODY = { back: 0.38, feet: 0.52, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
+const BODY = { back: 0.36, feet: 0.6, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /**
  * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
  * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
@@ -129,14 +129,14 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
   // Standing where it got on, stepped in toward the ladder.
   const inset = new Vector3(0, 0, -Math.sign(standing.hips.z) * INSET[end] * phase(t, BEATS.inset));
   const frame = new Frame(ladder.body, standing), on = phase(t, BEATS.hips[end].over);
-  // Swaying a little toward the foot that pushes up each rung, the hips hang behind the ladder; the trunk leans in toward it.
+  // Swaying a little toward the foot that pushes up each rung, the hips hang behind the ladder, the trunk upright over them, clear of the rungs.
   const sway = Math.sin(Math.PI * ((height - BODY.feet) / ladder.spacing));
   const hips = standing.hips.clone().add(inset);
   puppet.place('hips', frame.point(hips.set(MathUtils.lerp(hips.x, 0, on), MathUtils.lerp(hips.y, height, phase(t, BEATS.hips[end].down)),
     MathUtils.lerp(hips.z, -BODY.back, on))));
-  puppet.turn('hips', frame.turn(frame.was('hips').slerp(heading(0.06 * sway, 0.05), on)));
-  puppet.turn('spine', frame.turn(frame.was('spine').slerp(heading(0.1 * gaze.yaw, 0.1), on)));
-  puppet.turn('chest', frame.turn(frame.was('chest').slerp(heading(0.2 * gaze.yaw, 0.15), on)));
+  puppet.turn('hips', frame.turn(frame.was('hips').slerp(heading(0.06 * sway, 0), on)));
+  puppet.turn('spine', frame.turn(frame.was('spine').slerp(heading(0.1 * gaze.yaw, 0.03), on)));
+  puppet.turn('chest', frame.turn(frame.was('chest').slerp(heading(0.2 * gaze.yaw, 0.03), on)));
   shoulders(puppet, frame);
   // (squared on the chest as at rest once on the ladder, from however the rifle held them: else one arm reaches a hand further)
   for (const side of ['left', 'right'] as const) puppet.turn(`${side}Shoulder`, puppet.rotation(`${side}Shoulder`).slerp(puppet.rotation('chest'), on));
