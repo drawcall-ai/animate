@@ -145,9 +145,16 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
     wrist = avatar.body.gripOn('left', face).wrist.distanceTo(hand.getWorldPosition(new Vector3()));
     pad = tip.getWorldPosition(new Vector3()).distanceTo(face.getWorldPosition(new Vector3()));
   });
-  for (let frame = 0; frame < 240 && wrist === Infinity; frame++) world.update(DT);
+  // (the index's end segment, wherever it comes before the button's face, never behind it: in along its normal, not through the panel)
+  let through = Infinity;
+  for (let frame = 0; frame < 240 && wrist === Infinity; frame++) {
+    world.update(DT);
+    const at = face.worldToLocal(tip.getWorldPosition(new Vector3()));
+    if (Math.hypot(at.x, at.y) < 0.06) through = Math.min(through, at.z);
+  }
   expect(wrist).toBeLessThan(0.01);
   expect(pad).toBeLessThan(0.03);
+  expect(through).toBeGreaterThan(-0.005);
   advance(7);
   expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
   expect(avatar.pressing).toBe(false);
@@ -158,7 +165,7 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   avatar.press(down.part, () => { lift.press(down); sent = world.time; });
   const asked = world.time;
   for (let frame = 0; frame < 240 && sent < 0; frame++) world.update(DT);
-  // (the hand there within a second, from the rifle down to the lower button)
+  // (the hand there within two seconds: from the rifle to a finger's length off the lower button, then in)
   expect(sent - asked).toBeGreaterThan(0);
-  expect(sent - asked).toBeLessThan(1.5);
+  expect(sent - asked).toBeLessThan(2);
 }, 20000);
