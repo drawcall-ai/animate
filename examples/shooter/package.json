@@ -131,6 +131,7 @@
     "typescript": "^5.9.0",
     "vite": "^7.1.0",
     "vitecache": "^0.1.1",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "vitexec": "^0.9.0"
   }
 }
