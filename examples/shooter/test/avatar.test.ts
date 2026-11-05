@@ -68,14 +68,18 @@ describe('avatar', () => {
     input.aim = false;
     avatar.requestReload();
     expect(avatar.reloading).toBe(true);
-    // (the full magazine held as taken from its pouch all the way into the well: regripped, it slid up through a still hand)
-    const held: number[] = [];
+    // (the full magazine held as taken from its pouch up part way into the well: regripped, it slid up through a still hand;
+    // then let go there and taken again under its floor plate to be pushed home)
+    const held: number[] = [], places: string[] = [];
     let frames = 0;
     for (; frames < 600 && avatar.reloading; frames++) {
       avatar.update(1 / 60, input);
-      if (full.parent === hand) held.push(full.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
+      const place = full.parent?.name ?? '';
+      if (places[places.length - 1] !== place) places.push(place);
+      if (full.parent === hand && !places.includes('part way in')) held.push(full.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
     }
-    expect(frames / 60).toBeLessThan(3.3);
+    expect(frames / 60).toBeLessThan(4);
+    expect(places).toEqual(['pouch 1', hand.name, 'part way in', hand.name, 'well']);
     expect(Math.max(...held) - Math.min(...held)).toBeLessThan(0.01);
     expect(avatar.reloads).toBe(1);
     expect(avatar.reloading).toBe(false);
@@ -102,7 +106,7 @@ describe('avatar', () => {
       advance(avatar, input, 60);
       input.aim = false;
       avatar.requestReload();
-      for (let frame = 0; frame < 240 && avatar.reloading; frame++) avatar.update(1 / 60, input);
+      for (let frame = 0; frame < 300 && avatar.reloading; frame++) avatar.update(1 / 60, input);
       expect(avatar.reloading).toBe(false);
       expect(avatar.reloads).toBe(1);
       expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
@@ -118,7 +122,7 @@ describe('avatar', () => {
     const avatar = avatarAt(input);
     advance(avatar, input, 180);
     avatar.requestReload();
-    for (let frame = 0; frame < 300 && avatar.reloading; frame++) {
+    for (let frame = 0; frame < 480 && avatar.reloading; frame++) {
       input.yaw += rate / 60;
       avatar.update(1 / 60, input);
     }
