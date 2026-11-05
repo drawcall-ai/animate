@@ -7,13 +7,14 @@ import { closedOn, reaching } from './closing';
 import { Joints, type Digit } from './joints';
 import { DIGITS, easeShape, RELAXED, shapeOf, type Fingers, type Shape } from './shape';
 
-/** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds, and where
- * each digit a grip puts on one of its empties last reached to (the hand's frame) and how. */
+/** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds (for a puppet's
+ * grip, with how far its wrist stood off where `gripOn` puts it then), and where each digit a grip puts on one of its empties last reached
+ * to (the hand's frame) and how. */
 interface Hand {
   joints: Joints;
   shape: Shape;
   asked: { shape: Shape; time: number } | null;
-  closed: { on: Hold | Object3D; shape: Shape } | null;
+  closed: { on: Hold | Object3D; shape: Shape; off: Vector3 | null } | null;
   reached: Map<Digit, { empty: string; target: Vector3; shape: Shape }>;
   /** a hand verb is bringing it to a grip */
   coming: boolean;
@@ -32,7 +33,8 @@ const APERTURE: Shape = {
   little: { curl: 0.22, hook: 0.1, spread: 0.25 },
 };
 const ARRIVED = 0.015;
-/** how far a digit's empty may move in the hand before the digit reaches for it afresh (m) */
+/** how far a digit's empty may move in the hand before the digit reaches for it afresh, and a puppet's wrist on its grip before the hand
+ * closes on it afresh (m) */
 const MOVED = 0.002;
 
 /**
@@ -83,7 +85,8 @@ export class FingerState {
 
   /**
    * `side`'s fingers eased `seconds` on toward `to`: on the way to an empty, open; once the wrist is there (`gripOn`), closed on its thing
-   * (once, while it is given it); a shape; or relaxed
+   * with the empty's asks laid over that — once while it is given it, and afresh while the wrist still settles onto it (moving `MOVED` on
+   * it), else the fingers stay as they closed short of the thing on arriving; a shape; or relaxed
    */
   set(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     const hand = this.hands[side];
@@ -91,18 +94,18 @@ export class FingerState {
       hand.closed = null;
       return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds);
     }
-    const { wrist } = this.gripOn(side, to), at = hand.joints.hand.getWorldPosition(new Vector3());
-    if (at.distanceTo(wrist) > ARRIVED) {
+    const { wrist } = this.gripOn(side, to), off = hand.joints.hand.getWorldPosition(new Vector3()).sub(wrist);
+    if (off.length() > ARRIVED) {
       hand.closed = null;
       return this.ease(hand, APERTURE, seconds);
     }
     const thing = to.parent;
     if (!thing) throw new Error(`fingers: "${to.name}" hangs from nothing`);
-    if (hand.closed?.on !== to) {
-      hand.closed = { on: to, shape: closedOn(hand.joints, thing) };
+    if (hand.closed?.on !== to || !hand.closed.off || hand.closed.off.distanceTo(off) > MOVED) {
+      hand.closed = { on: to, shape: closedOn(hand.joints, thing), off };
       hand.reached.clear();
     }
-    this.ease(hand, this.asked(hand, to, thing, hand.closed.shape), seconds);
+    this.ease(hand, this.asked(hand, hand.closed.shape, to, thing), seconds);
   }
 
   /** where hand `side`'s bone goes to hold `empty` (a grip of its parent): its wrist and its bone's rotation (world) — see `Body.gripOn` */
@@ -129,17 +132,17 @@ export class FingerState {
     this.since.set(hold, since);
     if (time - since < SETTLE) return null;
     if (hand.closed?.on !== hold) {
-      hand.closed = { on: hold, shape: closedOn(hand.joints, hold.thing.object) };
+      hand.closed = { on: hold, shape: closedOn(hand.joints, hold.thing.object), off: null };
       hand.reached.clear();
     }
-    return this.asked(hand, hold.thing.grip(hold.grip).node, hold.thing.object, hand.closed.shape);
+    return this.asked(hand, hand.closed.shape, hold.thing.grip(hold.grip).node, hold.thing.object);
   }
 
   /**
-   * `closed` with what `grip` (an empty on `thing`) asks in `userData.fingers` laid over it: each digit given values takes them; each given
-   * the name of an empty on `thing` reaches its pad there, afresh once the empty moves in the hand
+   * `closed` with what `grip` (an empty on `thing`) asks in `userData.fingers` laid over it: each digit given values takes them; each
+   * given an empty's name reaches its pad there, afresh once the empty moves in the hand
    */
-  private asked(hand: Hand, grip: Object3D, thing: Object3D, closed: Shape): Shape {
+  private asked(hand: Hand, closed: Shape, grip: Object3D, thing: Object3D): Shape {
     const asked: unknown = grip.userData.fingers;
     if (asked === undefined) return closed;
     if (typeof asked !== 'object' || asked === null) throw new Error(`"${grip.name}" userData.fingers is neither digits' values nor empties' names`);

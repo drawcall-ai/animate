@@ -128,6 +128,38 @@ describe('fingers', () => {
     expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.8);
   });
 
+  it('of a hand posed by its app close afresh as its wrist settles onto its grip', () => {
+    /** how far the right middle finger bends closed on a rod across its palm, the hand first `off` (m) back from its grip */
+    const closed = (off: number) => {
+      const body = new Body(humanoid(FINGERED)), room = roomOf(body), hand = body.bones.rightHand;
+      const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
+      rod.name = 'rod';
+      rod.rotation.x = Math.PI / 2;
+      Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0] });
+      rod.position.copy(hand.getWorldPosition(new Vector3())).add(new Vector3(-0.07, -0.04, 0));
+      room.add(rod);
+      room.updateMatrixWorld(true);
+      // (the hand turned and moved as its grip has it, first short of it by `off` along its fingers)
+      const grip = rod.getObjectByName('grip');
+      if (!grip) throw new Error('no grip');
+      const { wrist, rotation } = body.gripOn('right', grip), parent = hand.parent;
+      if (!parent) throw new Error('no arm');
+      const place = (along: number) => {
+        hand.quaternion.copy(parent.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
+        hand.position.copy(parent.worldToLocal(wrist.clone().add(new Vector3(along, 0, 0))));
+        hand.updateMatrixWorld(true);
+      };
+      place(off);
+      for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+      place(0);
+      for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+      return bent(body, 'rightMiddleIntermediate');
+    };
+    const settled = closed(0);
+    expect(settled).toBeGreaterThan(0.5);
+    expect(closed(0.01)).toBeCloseTo(settled, 2);
+  });
+
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {
     const body = new Body(humanoid(FINGERED));
     roomOf(body);
