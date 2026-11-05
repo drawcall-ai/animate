@@ -1,7 +1,7 @@
 /**
- * How one finger is bent, each 0 … 1: `curl` folds all three joints together as the tendons couple them (1: a fist's), and below 0, to
- * `LIFTED`, lifts it back at the knuckle alone past how its rig rests it — a rig's rest finger is often a little curled — to lie straight
- * out of the palm and a little past, as a trigger finger laid flat along a receiver; `hook` folds only the two end joints on top, the
+ * How one finger is bent, each 0 … 1: `curl` folds all three joints together as the tendons couple them from straight along the palm,
+ * however its rig rests it (0: straight; 1: a fist's), and below 0, to `LIFTED`, lifts it back at the knuckle alone a little past straight,
+ * as a trigger finger laid flat along a receiver; `hook` folds only the two end joints on top, the
  * knuckle held (a curl of 0 with a hook of 1 hooks the fingertips over a bag's handle); `spread` fans it away from the middle finger at the
  * knuckle (1: as far as it goes; the middle finger has none).
  */
@@ -31,8 +31,8 @@ export interface Fingers {
 }
 
 export const DIGITS = ['index', 'middle', 'ring', 'little'] as const;
-/** the least a finger's `curl` goes: lifted back at the knuckle 0.45 of a fist's bend there */
-export const LIFTED = -0.45;
+/** the least a finger's `curl` goes: lifted back at the knuckle past straight 0.15 of a fist's bend there */
+export const LIFTED = -0.15;
 /** the least a thumb's `oppose` goes: swung back out of the palm 0.8 of the way it swings across */
 export const SPLAYED = -0.8;
 export type DigitName = (typeof DIGITS)[number];

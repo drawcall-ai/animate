@@ -8,12 +8,16 @@ export type Digit = 'thumb' | DigitName;
 
 
 /** One finger joint: its node and rest rotation, where it stands at rest from the joint before it (the hand, for the first), the axis it
- * bends toward the palm about, and its segment out to the next joint, with how far its palm side lies from it (all its own frame). */
+ * bends toward the palm about, how far it is bent about it at rest, and its segment out to the next joint, with how far its palm side lies
+ * from it (all its own frame). */
 interface Joint {
   node: Object3D;
   rest: Quaternion;
   offset: Matrix4;
   flex: Vector3;
+  /** how far a finger's knuckle is bent toward the palm at rest, its first segment off the palm's plane (rad; 0 for its other joints and
+   * the thumb's): a skin modelled with its fingers relaxed has them some 30° in — undone, so a finger with no curl lies along the palm */
+  flexed: number;
   along: Vector3;
   palmar: Vector3;
   length: number;
@@ -102,7 +106,8 @@ export class Joints {
     const knuckles = DIGITS.reduce((sum, digit) => sum.add(point(bones[digit][0])), new Vector3()).divideScalar(DIGITS.length);
     const along = knuckles.clone().normalize();
     const measure = skins.length ? measuring(skins, hand) : undefined;
-    const chain = (names: readonly [string, string, string], thick: number, bending: (segment: Vector3) => Vector3): Three => {
+    // (`straight`: the way a digit's first segment points straight, from its rest one; none: straight as it rests, as a thumb)
+    const chain = (names: readonly [string, string, string], thick: number, bending: (segment: Vector3) => Vector3, straight?: (segment: Vector3) => Vector3): Three => {
       const segments = names.map((name, k) => {
         const next = names[k + 1];
         // (the last segment out to the bone's own child, if it has one, else as long as four fifths of the one before)
@@ -115,10 +120,11 @@ export class Joints {
         const back = turnOf(name).invert(), segment = segments[k], unit = segment.clone().normalize();
         const flex = bending(unit).normalize(), palmar = new Vector3().crossVectors(flex, unit).normalize();
         const middle = point(name).addScaledVector(segment, 0.5);
+        const before = straight && k === 0 ? straight(unit) : unit;
         return {
           node: node(name), rest: node(name).quaternion.clone(),
           offset: k === 0 ? at(name).clone() : at(names[k - 1]).clone().invert().multiply(at(name)),
-          flex: flex.applyQuaternion(back), along: unit.applyQuaternion(back), palmar: palmar.clone().applyQuaternion(back),
+          flexed: Math.atan2(_cross.crossVectors(before, unit).dot(flex), before.dot(unit)), flex: flex.applyQuaternion(back), along: unit.applyQuaternion(back), palmar: palmar.clone().applyQuaternion(back),
           length: segment.length(), depth: measure ? measure(middle, palmar) : thick * segments[0].length(),
         };
       });
@@ -126,7 +132,7 @@ export class Joints {
     };
     // (a finger fans away from the middle finger, square to itself)
     const finger = (digit: DigitName): FingerJoints => {
-      const joints = chain(bones[digit], THICK.finger, (unit) => new Vector3().crossVectors(unit, palm));
+      const joints = chain(bones[digit], THICK.finger, (unit) => new Vector3().crossVectors(unit, palm), (unit) => unit.clone().addScaledVector(palm, -unit.dot(palm)).normalize());
       if (digit === 'middle') return { joints, spread: null };
       const first = turnOf(bones[digit][0]), unit = joints[0].along.clone().applyQuaternion(first);
       const away = point(bones[digit][0]).sub(point(bones.middle[0]));
@@ -227,11 +233,11 @@ export class Joints {
   }
 }
 
-/** `joint` turned from its rest: fanned `fanned` rad about `fan`, then bent `bend` rad */
+/** `joint` turned from its rest: fanned `fanned` rad about `fan`, then bent `bend` rad from straight */
 function bent(joint: Joint, bend: number, fan: Vector3 | null, fanned: number): Quaternion {
   const turn = joint.rest.clone();
   if (fan && fanned) turn.multiply(_q.setFromAxisAngle(fan, fanned));
-  return turn.multiply(_q.setFromAxisAngle(joint.flex, bend));
+  return turn.multiply(_q.setFromAxisAngle(joint.flex, bend - joint.flexed));
 }
 
 /**
@@ -251,4 +257,4 @@ function measuring(skins: readonly SkinnedMesh[], hand: Object3D) {
   };
 }
 
-const _q = new Quaternion(), _back = new Quaternion(), _one = new Vector3(1, 1, 1);
+const _q = new Quaternion(), _back = new Quaternion(), _one = new Vector3(1, 1, 1), _cross = new Vector3();

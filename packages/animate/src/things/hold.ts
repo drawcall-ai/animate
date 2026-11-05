@@ -53,7 +53,7 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goa
   const onHandle = grip.handle && palm?.line && handleTurn(palm.line, grip.handle);
   const quaternion = onHandle ? onHandle.quaternion : grip.turn === null ? undefined : grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
   const axis = onHandle ? onHandle.axis : grip.turn instanceof Vector3 ? grip.turn.clone().applyQuaternion(grip.at.quaternion) : undefined;
-  const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }) };
+  const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }), ...(onHandle && { preferred: true }) };
   if (!palm) return { position: grip.at.position.clone(), ...turns };
   // (the wrist, the palm on the empty, the hand turned `turn` in the thing's frame)
   const empty = grip.at.position, wrist = new Vector3();
@@ -62,7 +62,8 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goa
 
 /**
  * the hand's turn (the thing's frame) with `hand`'s grasp line along `handle`'s axis, its thumb toward the axis's end and its palm facing
- * as the handle's `palm` asks; a handle without one takes the hand turned as the arm brings it, its palm on the handle's line
+ * as the handle's `palm` asks, as far as the wrist turns it so (`Goal.preferred`: a palm up under a rifle's receiver as it points at the
+ * ground, asked strictly, failed the grab); a handle without one takes the hand turned as the arm brings it, its palm on the handle's line
  */
 function handleTurn(hand: NonNullable<Palm['line']>, handle: NonNullable<Grip['handle']>): { quaternion: Quaternion; axis?: Vector3 } | null {
   return handle.palm ? { quaternion: turnOnto(hand.axis, hand.facing, handle.axis, handle.palm) } : null;

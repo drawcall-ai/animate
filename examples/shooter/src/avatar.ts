@@ -41,7 +41,10 @@ const SNATCH = { speed: 8 };
 const REST_AFTER = 1;
 /** How far a shot draws the trigger back (m), through the shot's interval: back all along while held fire keeps firing. */
 const SQUEEZE = 0.005;
-const POUCHES = [new Vector3(0.06, -0.17, 0.2), new Vector3(0.13, -0.17, 0.2)];
+/** The chest pouches' magazines, side by side on the left of the chest with a hand's room between them, each turned flat against it, its
+ * front toward the body's middle: the left hand takes one palm against the chest, its fingers round the front, as it seats one in the well.
+ * The inner one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its fingers off the body. */
+const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
 const UP = new Vector3(0, 1, 0);
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
@@ -153,13 +156,16 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   const arms = proportions.arms;
   const eye = onBone(person, person.bones.head, 'right eye', new Vector3(-proportions.head.eye.x, proportions.head.eye.y, proportions.head.eye.z));
   const chest = person.bones.chest;
-  const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.145, 0.19, 0.1).multiplyScalar(proportions.scale));
+  // (the butt in the pocket inside the shoulder joint, 9 cm right of the chest's middle: the receiver's front, where the left hand holds
+  // it palm up, 5.5 cm nearer it than with the butt out at the joint, where the short arm fell 2 cm short)
+  const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.09, 0.19, 0.1).multiplyScalar(proportions.scale));
   const mount = empty(pocket, 'aim', new Vector3());
   const { rifle, pistol, blade, well, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
   rifle.position.copy(stock.position).negate();
   const motion = new WeaponMotion();
   const pouches = POUCHES.map((at, i) => {
     const pouch = onBone(person, chest, `pouch ${i + 1}`, at.clone().multiply(new Vector3(arms, arms, proportions.scale)));
+    pouch.rotateY(-Math.PI / 2);
     empty(pouch, `over pouch ${i + 1}`, new Vector3(0, 0.1 * proportions.scale, 0));
     pouch.userData.approach = [`over pouch ${i + 1}`];
     return pouch;

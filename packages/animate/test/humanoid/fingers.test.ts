@@ -88,6 +88,25 @@ describe('fingers', () => {
     expect(joints.pad('index', shape, new Vector3()).applyMatrix4(hand.matrixWorld).y).toBeGreaterThan(plate.position.y);
   });
 
+  it('take a handle with its palm turned as far as the wrist turns it so, where it cannot be turned all the way', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+    // (the rod in front of the right hip, its palm asked out away from the body's middle, the thumb forward: past the forearm's turn)
+    const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
+    rod.name = 'rod';
+    rod.position.set(-0.25, 0.95, 0.35);
+    rod.rotation.x = Math.PI / 2;
+    Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], palm: [-1, 0, 0] });
+    room.add(rod);
+    let held = false, off = Infinity;
+    play(function* () {
+      held = yield* grab(body, rod, { right: 'grip' });
+      yield* wait(0.5);
+      off = rod.getWorldPosition(new Vector3()).distanceTo(body.bones.rightHand.getWorldPosition(new Vector3()));
+    }, [body], 4);
+    expect(held).toBe(true);
+    expect(off).toBeLessThan(0.12);
+  });
+
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {
     const body = new Body(humanoid(FINGERED));
     roomOf(body);
@@ -102,22 +121,40 @@ describe('fingers', () => {
     expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.6);
   });
 
-  it('lift a finger back at its knuckle alone for a curl below 0', () => {
-    const body = new Body(humanoid(FINGERED));
+  it('lie along the palm with no curl where the skin rests them curled in at the knuckles, and lift a little past it below 0', () => {
+    // (the right middle finger rigged bent 30° down toward the palm at its knuckle, its outer joints straight on from there)
+    const knuckle = FINGERED.find((bone) => bone.name === 'rightMiddleProximal');
+    if (!knuckle) throw new Error('no knuckle');
+    const step = new Vector3(-0.03 * Math.cos(Math.PI / 6), -0.03 * Math.sin(Math.PI / 6), 0), from = new Vector3(...knuckle.position);
+    const body = new Body(humanoid(FINGERED.map((bone) => {
+      const k = ['rightMiddleIntermediate', 'rightMiddleDistal'].indexOf(bone.name);
+      return k < 0 ? bone : { ...bone, position: from.clone().addScaledVector(step, k + 1).toArray() };
+    })));
     roomOf(body);
-    let knuckle = 0, middle = 0;
+    const at = (name: string) => body.bones[name].getWorldPosition(new Vector3());
+    // (the first segment's way, and its turn off the hand's line)
+    const segment = () => at('rightMiddleIntermediate').sub(at('rightMiddleProximal'));
+    const off = () => segment().angleTo(at('rightMiddleProximal').sub(at('rightHand')));
+    let straight = Infinity, lifted = 0, apart = 0;
     play(function* () {
-      yield* pose(body, { fingers: { right: { index: { curl: LIFTED, hook: 0 } } } }, { until: 0.5 });
-      [knuckle, middle] = [bent(body, 'rightIndexProximal'), bent(body, 'rightIndexIntermediate')];
-    }, [body], 1);
-    expect(knuckle).toBeCloseTo(-LIFTED * (Math.PI / 2), 1);
-    expect(middle).toBeLessThan(0.01);
+      yield* pose(body, { fingers: { right: { middle: { curl: 0, hook: 0 } } } }, { until: 0.5 });
+      straight = off();
+      // (lifted, then curled as far toward the palm: twice as far apart as either is off the line, not one on the other)
+      yield* pose(body, { fingers: { right: { middle: { curl: LIFTED, hook: 0 } } } }, { until: 0.5 });
+      const up = segment();
+      lifted = off();
+      yield* pose(body, { fingers: { right: { middle: { curl: -LIFTED, hook: 0 } } } }, { until: 0.5 });
+      apart = up.angleTo(segment());
+    }, [body], 2);
+    expect(straight).toBeLessThan(0.1);
+    expect(lifted).toBeCloseTo(-LIFTED * (Math.PI / 2), 1);
+    expect(apart).toBeCloseTo(-2 * LIFTED * (Math.PI / 2), 1);
   });
 
   it('are refused where a skeleton has some finger bones but not all, or none to pose', () => {
     expect(() => humanoid([...PERSON, { name: 'leftIndexProximal', parent: 'leftHand', position: [0.85, 1.41, 0] }])).toThrow(/finger bones but not/);
     expect(() => pose(person(), { fingers: { right: FIST } })).toThrow(/no finger bones/);
-    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.45 … 1/);
+    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.15 … 1/);
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
     Object.assign(both.userData, { handle: [0, 1, 0], handTurn: true });

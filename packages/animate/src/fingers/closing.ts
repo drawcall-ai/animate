@@ -6,17 +6,15 @@ import { DIGITS, LIFTED, SPLAYED, type Shape } from './shape';
 
 /**
  * how a grasp closes on a thing, each digit folding until it touches: the thumb swung this far across (`Thumb.oppose`), the fingers
- * straight out of the palm (`STRAIGHT`, lifted 0.35 of a fist's bend at the knuckle, short of `LIFTED`: a rig's rest fingers, a little
- * curled, would start in a handle the palm lies on)
+ * straight along the palm (a rig's rest fingers, a little curled, would start in a handle the palm lies on)
  */
-const STRAIGHT = -0.35;
 const WRAP: Shape = {
   thumb: { curl: 0, oppose: 0.55 },
-  index: { curl: STRAIGHT, hook: 0, spread: 0 }, middle: { curl: STRAIGHT, hook: 0, spread: 0 }, ring: { curl: STRAIGHT, hook: 0, spread: 0 },
-  little: { curl: STRAIGHT, hook: 0, spread: 0 },
+  index: { curl: 0, hook: 0, spread: 0 }, middle: { curl: 0, hook: 0, spread: 0 }, ring: { curl: 0, hook: 0, spread: 0 }, little: { curl: 0, hook: 0, spread: 0 },
 };
-/** how far from the wrist a hand's fingers reach (m; a long hand's 0.21 m, and a handle's girth) */
-const REACH = 0.3;
+/** how far from the wrist a hand's fingers reach (m; a long hand's 0.21 m, and a handle's girth), and how much further than its segments'
+ * lengths a digit's palm side reaches from its first joint's (m: the steps between one segment's palm side and the next's) */
+const REACH = 0.3, SLACK = 0.03;
 /** the steps each fold is tried at, and the halvings within the step it first touches in: 1/128 of its range */
 const STEPS = 8, HALVINGS = 4;
 
@@ -58,8 +56,8 @@ export function closedOn(joints: Joints, object: Object3D): Shape {
   };
   for (const digit of DIGITS) {
     const finger = shape[digit];
-    fold(digit, (value) => (finger.curl = STRAIGHT + value), 1 - STRAIGHT);
-    fold(digit, (value) => (finger.hook = value), 1 - Math.max(0, finger.curl));
+    fold(digit, (value) => (finger.curl = value), 1);
+    fold(digit, (value) => (finger.hook = value), 1 - finger.curl);
   }
   fold('thumb', (value) => (shape.thumb.curl = value), 1);
   return shape;
@@ -76,15 +74,16 @@ interface Value {
  * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes, in place, its segments' palm sides kept out of
  * `object` as `closedOn` touches it (a trigger finger goes into the guard, not through its frame; a bend that goes into it
  * ranks behind every one that keeps clear): a finger's curl (lifted too), hook and spread, a thumb's curl and opposition (splayed too),
- * searched over their range on a coarse grid (`afresh`), then on a fine one about the best so far
+ * searched over their range on a coarse grid, then on a fine one about the best so far (`afresh`), or only close about `shape` as it
+ * comes (an empty moved a little in the hand: a hand's drift on its grip re-reaches every few frames)
  */
 export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean): void {
-  const near = nearHand(joints, object);
+  const near = nearHand(joints, object, { digit, shape });
   const values: Value[] = digit === 'thumb'
     ? [{ get: () => shape.thumb.curl, set: (v) => (shape.thumb.curl = v), least: 0 }, { get: () => shape.thumb.oppose, set: (v) => (shape.thumb.oppose = v), least: SPLAYED }]
     : (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => shape[digit][key], set: (v: number) => (shape[digit][key] = v), least: key === 'curl' ? LIFTED : 0 }));
   let best = values.map((value) => value.get()), least = Infinity, into = true;
-  for (const { step, span } of [...afresh ? [{ step: 0.1, span: 2 }] : [], { step: 0.02, span: 0.1 }]) {
+  for (const { step, span } of afresh ? [{ step: 0.1, span: 2 }, { step: 0.02, span: 0.1 }] : [{ step: 0.02, span: 0.04 }]) {
     const grids = best.map((centre, k) => {
       const out: number[] = [];
       for (let v = Math.max(values[k].least, centre - span); v <= Math.min(1, centre + span) + 1e-9; v += step) out.push(v);
@@ -113,13 +112,16 @@ export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: 
   best.forEach((v, j) => values[j].set(v));
 }
 
-/** `object`'s triangles about `joints`' hand as they stand now, in the world: meshes of things attached to it (their own `userData.mass`)
- * and hidden meshes left out, skinned meshes as they stand at rest */
-function nearHand(joints: Joints, object: Object3D): Triangles {
+/** `object`'s triangles about `joints`' hand as they stand now, in the world — or only those `reach`'s digit reaches, about its first joint
+ * (every bend `reaching` tries is checked against them, and a grip's whole receiver is thousands) — meshes of things attached to it
+ * (their own `userData.mass`) and hidden meshes left out, skinned meshes as they stand at rest */
+function nearHand(joints: Joints, object: Object3D, reach?: { digit: Digit; shape: Shape }): Triangles {
   joints.hand.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, true);
   const meshes = meshesOf(object).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
-  return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), REACH);
+  if (!reach) return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), REACH);
+  const segments = joints.segments(reach.digit, reach.shape), length = segments.reduce((sum, [start, end]) => sum + start.distanceTo(end), 0);
+  return new Triangles(meshes, segments[0][0], length + SLACK);
 }
 
 /** the segments of `digit` whose palm sides touch `near` as `shape` has it, by index */
