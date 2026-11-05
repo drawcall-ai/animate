@@ -97,7 +97,7 @@ A grip's `userData.fingers` lays digits over the closed hand: values, or the nam
 
 A shape is per digit, each value 0 … 1: a finger's `curl` (all three joints, coupled), `hook` (the end two only) and `spread`, the thumb's `curl` and `oppose`. Start from `RELAXED`, `FIST`, `OPEN`, `POINT` or `THUMBS_UP` and override digits: `pose(person, { fingers: { right: POINT } }, { until: 2 })`. A pose's fingers apply only to a free hand.
 
-A body you pose yourself (seated at a wheel, on a ladder) has its update stopped, so place each hand with `body.gripOn(side, empty)`, which gives the wrist and hand turn for a handle empty as a grab would, and after posing call `body.fingers(side, empty, seconds)` each frame with the empty the hand is on or on its way to: the hand opens on its way and closes once its wrist is there. Make such empties where the hand holds (each rung of a ladder, a wheel's rim at ten to two), parented to what they belong to.
+A body you pose yourself (seated at a wheel, on a ladder) has its update stopped, so place each hand with `body.gripOn(side, empty)`, which gives the wrist and hand turn for a handle empty as a grab would, and after posing call `body.fingers(side, empty, seconds)` each frame with the empty the hand is on or on its way to: the hand opens on its way and closes once its wrist is there, the empty's `userData.fingers` laid over it as on a grabbed grip. Make such empties where the hand holds (each rung of a ladder, a wheel's rim at ten to two), parented to what they belong to.
 
 ## Stories that compose
 
