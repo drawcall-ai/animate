@@ -37,7 +37,7 @@ const limbs = (side: Side): Part[] => [
   },
   {
     bone: `${side}LowerArm`, mass: 2, joint: { parent: `${side}UpperArm`, bend: 2.6, knee: false },
-    boxes: [{ from: `${side}LowerArm`, to: `${side}Hand_end`, width: 0.08, depth: 0.08 }],
+    boxes: [{ from: `${side}LowerArm`, to: `${side}MiddleDistal_end`, width: 0.08, depth: 0.08 }],
   },
   {
     bone: `${side}UpperLeg`, mass: 9, joint: { parent: 'hips', flex: 1, twist: 0.5, side: 0.6 },

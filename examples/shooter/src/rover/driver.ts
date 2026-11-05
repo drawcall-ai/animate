@@ -62,9 +62,10 @@ export class Driver extends Mount {
   protected frame() { return this.rover.body; }
   protected facing() { return this.handling.yaw; }
 
-  protected pose(puppet: Puppet, standing: Standing) {
+  protected pose(puppet: Puppet, standing: Standing, dt: number) {
     const yaw = MathUtils.clamp(this.view.yaw + this.handling.lock * LEAD, -LOOK, LOOK);
-    seat(puppet, standing, this.rover, this.progress, { yaw, pitch: this.view.pitch });
+    const { body, rifle } = this.soldier.avatar, onto = seat(puppet, standing, this.rover, rifle, this.progress, { yaw, pitch: this.view.pitch });
+    for (const side of ['left', 'right'] as const) body.fingers(side, onto[side], dt);
   }
 
   protected cues() { return CUES; }

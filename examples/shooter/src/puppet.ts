@@ -1,5 +1,7 @@
 import { Quaternion, Vector3, type Object3D } from 'three';
+import type { Body } from '@drawcall/animate';
 import { frame } from './angles';
+import type { Hold } from './choreography';
 import { SOLDIER } from './skeleton';
 
 export type Bone = (typeof SOLDIER)[number]['name'];
@@ -34,7 +36,10 @@ export class Puppet {
   /** the length of each limb's upper and lower segment (m) */
   private readonly lengths = new Map<Bone, number>();
 
-  constructor(readonly bones: Readonly<Record<Bone, Object3D>>, model?: Object3D) {
+  readonly bones: Readonly<Record<Bone, Object3D>>;
+
+  constructor(private readonly body: Body, model?: Object3D) {
+    this.bones = body.bones;
     model?.updateMatrixWorld(true);
     const inverse = model ? model.getWorldQuaternion(new Quaternion()).invert() : new Quaternion();
     const measured = (bone: Bone) => {
@@ -66,6 +71,12 @@ export class Puppet {
     const world = rotation.clone().multiply(this.restOf(bone));
     node.quaternion.copy(parent.getWorldQuaternion(new Quaternion()).invert().multiply(world));
     node.updateMatrixWorld(true);
+  }
+
+  /** How hand `side` holds `empty` as a handle (`userData.handle`, `palm`): where its wrist goes and how it is turned, as the body's own grasp has it. */
+  hold(side: Side, empty: Object3D): Hold {
+    const { wrist, rotation } = this.body.gripOn(side, empty);
+    return { wrist, hand: rotation.multiply(this.restOf(`${side}Hand`).clone().invert()) };
   }
 
   /** Moves the root bone to a world position. */
@@ -118,11 +129,6 @@ export class Puppet {
     if (!rest) throw new Error(`${bone} is not posed by the puppet`);
     return rest;
   }
-}
-
-/** A hand's rotation with its fingers running along `fingers` and its thumb toward `thumb` (at rest the thumb is forward, +Z). */
-export function grip(side: Side, fingers: Readonly<Vector3>, thumb: Readonly<Vector3>): Quaternion {
-  return frame(restAxis(`${side}Hand`, `${side}Hand_end`), fingers, Z, thumb);
 }
 
 const LIMBS = [

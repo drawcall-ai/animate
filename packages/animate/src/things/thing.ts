@@ -1,4 +1,5 @@
-import { Box3, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from 'three';
+import { Box3, Matrix4, Mesh, Object3D, Quaternion, Ray, Vector3 } from 'three';
+import { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import type { Holder } from './resolve';
 
@@ -44,13 +45,32 @@ export class Thing {
 
   /**
    * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the
-   * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. Attached things' subtrees are not searched.
+   * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers takes an empty with
+   * `userData.handle` (an axis, the empty's frame, toward where the thumb goes) as a handle running through it: the palm goes against it
+   * and the fingers wrap it — with `userData.palm` (a direction, the empty's frame) the way the palm faces onto it, the handle lying across
+   * the palm on the hand's own grasp line; without, the hand turned as the arm brings it; its radius is measured off the thing's meshes
+   * about the empty, or given as `userData.radius` (m). Attached things'
+   * subtrees are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);
     if (!node) throw new Error(`"${this.object.name}" has no empty named "${name}"`);
-    const turn = node.userData.handTurn;
-    return { node, at: localOf(node, this.object), turn: turn === undefined ? null : turn === true ? true as const : vectorOf(turn, `"${name}" userData.handTurn`) };
+    const { handTurn: turn, handle, palm, radius } = node.userData, at = localOf(node, this.object), object = this.object;
+    const inThing = (value: unknown, what: string) => vectorOf(value, `"${name}" userData.${what}`).normalize().applyQuaternion(at.quaternion);
+    if (radius !== undefined && !(typeof radius === 'number' && radius > 0)) throw new Error(`"${name}" userData.radius ${String(radius)}: give it in m`);
+    if (handle !== undefined && turn !== undefined) throw new Error(`"${name}" has both userData.handle and userData.handTurn: a handle turns the hand itself`);
+    const axis = handle === undefined ? null : inThing(handle, 'handle');
+    return {
+      node, at, turn: turn === undefined ? null : turn === true ? true as const : vectorOf(turn, `"${name}" userData.handTurn`),
+      handle: axis === null ? null : {
+        axis, palm: palm === undefined ? null : inThing(palm, 'palm'),
+        /** its radius (m, the world's): as given, else measured, once, the first time it is asked for */
+        get radius(): number {
+          object.updateWorldMatrix(true, false);
+          return (typeof radius === 'number' ? radius : radiusAbout(object, node, at.position, axis)) * new Vector3().setFromMatrixScale(object.matrixWorld).x;
+        },
+      },
+    };
   }
 }
 
@@ -58,6 +78,48 @@ export class Thing {
 export type Grip = ReturnType<Thing['grip']>;
 
 const things = new WeakMap<Object3D, Thing>();
+
+/** `object`'s own meshes a hand can touch: the shown ones, not those of things attached to it (their own `userData.mass`) */
+export function meshesOf(object: Object3D): Mesh[] {
+  const meshes: Mesh[] = [];
+  const visit = (node: Object3D) => {
+    if (node !== object && node.userData.mass !== undefined) return;
+    if (!node.visible) return;
+    if (node instanceof Mesh) meshes.push(node);
+    for (const child of node.children) visit(child);
+  };
+  visit(object);
+  return meshes;
+}
+
+/** each handle's radius as measured, by its empty */
+const radii = new WeakMap<Object3D, number>();
+
+/**
+ * how far `object`'s meshes lie out from the line through `at` along `axis` (its frame), all round it: the middle of eight measures square
+ * to it, once per empty `node`; a handle with no mesh about it is a misuse, said at once
+ */
+function radiusAbout(object: Object3D, node: Object3D, at: Vector3, axis: Vector3): number {
+  const known = radii.get(node);
+  if (known !== undefined) return known;
+  const meshes = meshesOf(object);
+  object.updateWorldMatrix(true, true);
+  // (its triangles about the empty, in its frame)
+  const back = new Matrix4().copy(object.matrixWorld).invert();
+  const near = new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), at, 0.2);
+  const square = new Vector3(1, 0, 0).cross(axis);
+  if (square.lengthSq() < 1e-6) square.set(0, 1, 0).cross(axis);
+  square.normalize();
+  const hits: number[] = [];
+  for (let k = 0; k < 8; k++) {
+    const hit = near.first(new Ray(at.clone(), square.clone().applyAxisAngle(axis, (k * Math.PI) / 4)), 0.2);
+    if (hit !== null) hits.push(hit);
+  }
+  if (hits.length < 4) throw new Error(`"${node.name}" userData.handle: no handle about it on "${object.name}" (give userData.radius)`);
+  const radius = hits.sort((a, b) => a - b)[Math.floor(hits.length / 2)];
+  radii.set(node, radius);
+  return radius;
+}
 
 /** the descendant of `root` named `name` (or `root`), not looking into things attached to it */
 function find(root: Object3D, name: string): Object3D | undefined {

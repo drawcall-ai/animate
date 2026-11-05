@@ -128,10 +128,9 @@ export function soles(body: Body, side: 'left' | 'right') {
   return points.map(([bone, at]) => bone.localToWorld(new Vector3(side === 'left' ? at.x : -at.x, at.y, at.z)));
 }
 
-/** World centre of a palm: from the wrist toward the fingers by 4.3% of the body's height. */
-export function palm(body: Body, side: 'left' | 'right') {
-  const { offsets, height } = proportions(body);
-  return body.bones[`${side}Hand`].localToWorld(offsets[`${side}Hand`].clone().setLength(0.043 * height));
+/** How far hand `side`'s wrist is from where its grip `empty` puts it (m): off the rifle, by that much. */
+export function offGrip(body: Body, side: 'left' | 'right', empty: Object3D) {
+  return body.bones[`${side}Hand`].getWorldPosition(new Vector3()).distanceTo(body.gripOn(side, empty).wrist);
 }
 
 /**

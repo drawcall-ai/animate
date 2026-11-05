@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { box, DT, node, palm, soldierOn } from './course';
+import { box, DT, node, offGrip, soldierOn } from './course';
 
 it.each(['standing', 'walking', 'sprinting', 'aiming'] as const)('keeps the body and held rifle continuous when landing %s', async (mode) => {
   const { world, movement, avatar, advance } = await soldierOn((scene) => box(scene, [60, 1, 60], [0, -0.5, 0]));
   const aiming = mode === 'aiming';
   movement.input.aim = aiming;
   const gaps = () => (['left', 'right'] as const).map((side) => {
-    return palm(avatar.body, side).distanceTo(node(avatar.group, side === 'left' ? 'foregrip' : 'pistol').getWorldPosition(new Vector3()));
+    return offGrip(avatar.body, side, node(avatar.group, side === 'left' ? 'foregrip' : 'pistol'));
   });
   const eyeFrame = node(avatar.group, aiming ? 'sight' : 'right eye'), eyeOffset = new Vector3();
   const read = (frame: number) => ({

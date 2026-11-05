@@ -8,6 +8,7 @@ import { Binding } from './model';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Channel, Tier } from '../kernel/requests';
+import type { Fingers } from '../fingers/shape';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
  * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
@@ -90,6 +91,25 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * Set it before each `update`; the node's own rotation is written to match as the update ends. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
     selfOf(this).orient(node, rotation);
+  }
+
+  /**
+   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet, its bones turned by
+   * hand; a body its update poses does this itself, and the two would fight): the empty the hand is on or on its way to — a grip, as a
+   * thing's are named, its thing the empty's parent — opening the hand as it comes and closing it round the thing's meshes once the wrist
+   * is where `gripOn` puts it; a shape (`Fingers`; `FIST`, `POINT`, …); or relaxed for `null`. Call it each frame after posing the hand.
+   */
+  fingers(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
+    fingersOf(this).set(side, to, seconds);
+  }
+
+  /**
+   * Where hand `side`'s bone goes to hold `empty` — a grip, its thing the empty's parent — for a body its app poses itself: its wrist and
+   * its bone's rotation (world). A handle (`userData.handle`; `palm` and `radius` as a thing's grip takes them) lies across the palm as this
+   * hand's own grasp has it, turned to its `palm` or, without one, from the hand's turn now by the least turn that lays it so.
+   */
+  gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
+    return fingersOf(this).gripOn(side, empty);
   }
 
   /** A world-space impulse (N·s) at a world-space point: a humanoid's supported torso reacts and recovers before its hands are solved.
@@ -177,6 +197,13 @@ export class Body<S extends AnySpecies = AnySpecies> {
 }
 
 const selves = new WeakMap<Body, Self>();
+
+/** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */
+function fingersOf(body: Body): NonNullable<Self['fingers']> {
+  const fingers = selfOf(body).fingers;
+  if (!fingers) throw new Error(`fingers: a ${body.species.name ?? 'custom species'} skeleton has no finger bones`);
+  return fingers;
+}
 
 /** the runtime of `body` */
 export function selfOf(body: Body): Self {

@@ -1,6 +1,6 @@
-import { MathUtils, Matrix4, Quaternion, Vector3 } from 'three';
+import { MathUtils, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { heading } from '../angles';
-import { between, Frame, grasp, phase, planted, shoulders, type Beat, type Cue, type Effect, type Gaze, type Hold, type Standing } from '../choreography';
+import { between, Frame, phase, planted, shoulders, type Beat, type Cue, type Effect, type Gaze, type Hold, type Standing } from '../choreography';
 import type { Puppet, Side } from '../puppet';
 import { RAIL, STILE, type Ladder } from './model';
 
@@ -26,7 +26,7 @@ const HELD = 0.55;
  * The body on the ladder (m): its hips `back` behind the rungs; a foot's rung `feet` below them when it last moved; the hands `reach` rungs
  * above the feet; each hand and foot `apart` off the middle; an ankle above its rung and behind it.
  */
-const BODY = { back: 0.42, feet: 0.65, reach: 5, apart: { hand: 0.17, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
+const BODY = { back: 0.42, feet: 0.68, reach: 5, apart: { hand: 0.17, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /** How far below the stiles' heads the hands hold them at the most (m): about a standing body's hip height above the landing. */
 const HEAD = 0.2;
 /**
@@ -71,7 +71,7 @@ export function cues(end: End): Cue[] {
 /** How far the body steps in toward the ladder at each end (m), feet and all: standing clear of it, its rifle too, it then reaches it. */
 const INSET: Record<End, number> = { foot: 0.3, top: 0.3 };
 
-const UP = new Vector3(0, 1, 0), BACK = new Vector3(0, 0, -1), TOWARD = new Vector3(0, 0, 1);
+const UP = new Vector3(0, 1, 0), BACK = new Vector3(0, 0, -1);
 /**
  * The rifle slung against the right hip, muzzle down and a little back, its top to the rear, in the chest's frame (+X left, +Y up, +Z
  * forward).
@@ -86,9 +86,10 @@ export function slung(puppet: Puppet) {
 
 /**
  * Poses `puppet`'s body on `ladder`, its hips `height` (m) up it, `t` of the way from `standing` at `end` (0) to on it (1), its head turned
- * to `gaze`.
+ * to `gaze`. Returns the empty each hand is on or on its way to, for its fingers: the rifle's grip it held standing (the right hand's
+ * until it lets go of the rifle on its sling), then the rung or stile it holds or moves to.
  */
-export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, end: End, t: number, height: number, gaze: Gaze) {
+export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: Object3D, end: End, t: number, height: number, gaze: Gaze): Record<Side, Object3D | null> {
   // Standing where it got on, stepped in toward the ladder.
   const inset = new Vector3(0, 0, -Math.sign(standing.hips.z) * INSET[end] * phase(t, BEATS.inset));
   const frame = new Frame(ladder.body, standing), on = phase(t, BEATS.hips[end].over);
@@ -105,15 +106,41 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, end: En
   puppet.turn('neck', frame.turn(frame.was('neck').slerp(heading(0.5 * gaze.yaw, -0.4 * gaze.pitch), look)));
   puppet.turn('head', frame.turn(frame.was('head').slerp(heading(gaze.yaw, -gaze.pitch), look)));
 
+  const onto: Record<Side, Object3D | null> = { left: null, right: null };
   for (const limb of LIMBS) {
     if (limb.kind === 'hand') {
-      arm(puppet, frame, ladder, limb, height, t, phase(t, BEATS.hands[end][limb.side]));
+      const s = phase(t, BEATS.hands[end][limb.side]);
+      arm(puppet, frame, ladder, limb, height, t, s);
+      const { from, to, swing } = rungs(ladder, limb, height), standing = limb.side === 'left' ? 'foregrip' : t <= BEATS.take ? 'pistol' : null;
+      onto[limb.side] = s > 0 ? rungHold(ladder, limb.side, swing > 0 ? to : from) : standing && (rifle.getObjectByName(standing) ?? null);
       continue;
     }
     const stood = planted(standing, limb.side, phase(t, BEATS.inset));
     stood.ankle.add(inset);
     leg(puppet, frame, ladder, limb, height, stood, phase(t, BEATS.feet[end][limb.side]));
   }
+  return onto;
+}
+
+/**
+ * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
+ * upright, its thumb up and its palm facing the wall, no higher than the head; below, the rung, taken over the top from behind, its thumb
+ * toward the middle.
+ */
+function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
+  const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
+  if (found) return found;
+  const empty = new Object3D(), sign = side === 'left' ? 1 : -1, y = Math.min(rung * ladder.spacing, ladder.height + RAIL - HEAD);
+  empty.name = name;
+  if (y > ladder.height) {
+    empty.position.set(sign * STILE, y, 0);
+    Object.assign(empty.userData, { handle: [0, 1, 0], palm: [-sign * 0.3, 0, 1], radius: 0.02 });
+  } else {
+    empty.position.set(sign * BODY.apart.hand, y, 0);
+    Object.assign(empty.userData, { handle: [-sign, 0, 0], palm: [0, -0.7, 0.7], radius: 0.014 });
+  }
+  ladder.body.add(empty);
+  return empty;
 }
 
 /** Each limb with the hips `height` up `ladder`: which it is, and whether it grips its rung rather than moving to the next. */
@@ -123,14 +150,7 @@ export function gripping(ladder: Ladder, height: number) {
 
 function arm(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: number, t: number, s: number) {
   const { side } = limb, sign = side === 'left' ? 1 : -1;
-  const climbing = (rung: number): Hold => {
-    const y = Math.min(rung * ladder.spacing, ladder.height + RAIL - HEAD);
-    // Above the landing it holds the stile, fingers round it, no higher than its head; below, a rung, over the top of it, its thumb toward
-    // the middle.
-    if (y > ladder.height) return grasp(side, frame.point(new Vector3(sign * STILE, y, 0)), frame.direction(TOWARD), frame.direction(UP));
-    return grasp(side, frame.point(new Vector3(sign * BODY.apart.hand, y, 0)), frame.direction(new Vector3(0, -0.6, 1)),
-      frame.direction(new Vector3(-sign, 0, 0)));
-  };
+  const climbing = (rung: number): Hold => puppet.hold(side, rungHold(ladder, side, rung));
   const { from, to, swing } = rungs(ladder, limb, height);
   const held = between(climbing(from), climbing(to), swing);
   held.wrist.add(frame.direction(BACK).multiplyScalar(AWAY * Math.sin(Math.PI * swing)));

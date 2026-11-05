@@ -82,7 +82,8 @@ async function start() {
 
   notice.textContent = 'Loading the soldier and preparing its rig…';
   const url = 'models/soldier.glb';
-  const rig = await new RigLoader().loadAsync({ url, skeleton: SOLDIER, source: { url, dependencyUrls: [] } });
+  // (fine enough for the gloved fingers, some 5 voxels thick: solved once and cached)
+  const rig = await new RigLoader().loadAsync({ url, skeleton: SOLDIER, resolution: 640, source: { url, dependencyUrls: [] } });
   rig.scene.traverse((node) => {
     node.frustumCulled = false;
     if (node instanceof Mesh) node.castShadow = node.receiveShadow = true;

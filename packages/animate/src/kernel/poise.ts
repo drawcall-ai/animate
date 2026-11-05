@@ -1,3 +1,4 @@
+import type { Fingers } from '../fingers/shape';
 import type { Vector3 } from 'three';
 
 /**
@@ -20,6 +21,8 @@ export interface Posture {
   head?: { pitch?: number; yaw?: number; roll?: number };
   /** a person's arms posed over their hang and swing, each its own (`ArmPosture`) */
   arms?: { left?: ArmPosture; right?: ArmPosture };
+  /** a person's fingers, each hand's shape (`Fingers`): not added onto anything but taken as asked, by a hand holding nothing */
+  fingers?: { left?: Fingers; right?: Fingers };
 }
 
 /**
@@ -39,7 +42,7 @@ export interface ArmPosture {
 }
 
 /** A `Posture`'s trunk, each field given. */
-export type TrunkPosture = Required<Omit<Posture, 'head' | 'arms'>>;
+export type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
 
 /** What a body is asked to do with its stance this sub-step (see `Poise`), each field as it combines with the others asked. */
 export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'twist' | 'twistRate' | 'shift' | 'steady'>> & { posture?: TrunkPosture };

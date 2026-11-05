@@ -203,7 +203,7 @@ export abstract class Mount {
 
   /** Holds the library's body as it stands, to pose it from here, and takes that pose to get on from or off onto. */
   private hold() {
-    const puppet = new Puppet(this.soldier.avatar.body.bones, this.model), rifle = this.soldier.avatar.rifle;
+    const puppet = new Puppet(this.soldier.avatar.body, this.model), rifle = this.soldier.avatar.rifle;
     if (!rifle.parent) throw new Error('The rifle is not on the soldier');
     this.home = { parent: rifle.parent, matrix: rifle.matrix.clone() };
     this.standing = stand(puppet, this.frame(), rifle);

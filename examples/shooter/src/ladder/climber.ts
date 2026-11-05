@@ -48,8 +48,9 @@ export class Climber extends Mount {
   protected frame() { return this.ladder.body; }
   protected facing() { return yawOf(this.ladder.body); }
 
-  protected pose(puppet: Puppet, standing: Standing) {
-    hang(puppet, standing, this.ladder, this.end(), this.progress, this.height, this.view);
+  protected pose(puppet: Puppet, standing: Standing, dt: number) {
+    const { body, rifle } = this.soldier.avatar, onto = hang(puppet, standing, this.ladder, rifle, this.end(), this.progress, this.height, this.view);
+    for (const side of ['left', 'right'] as const) body.fingers(side, onto[side], dt);
   }
 
   protected cues() { return cues(this.end()); }
