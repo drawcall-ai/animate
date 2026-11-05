@@ -38,7 +38,7 @@ const HELD = (1 - 2 * SWING - 2 * LETTING) / 2;
  * feet (from the shoulder's height to above the head over a hand's two-rung climb); each hand and foot `apart` off the middle; an ankle
  * above its rung and behind it.
  */
-const BODY = { back: 0.37, feet: 0.6, reach: 5, apart: { hand: 0.155, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
+const BODY = { back: 0.37, feet: 0.6, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /**
  * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
  * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
@@ -74,7 +74,7 @@ export function rest(ladder: Ladder, height: number, going: number) {
  */
 export const BEATS = {
   /** the body steps in toward the ladder, near enough to take hold of it */
-  inset: [0, 0.2],
+  inset: [0, 0.3],
   take: 0.3,
   sling: [0.05, 0.3],
   hands: { foot: { left: [0, 0.35], right: [0.32, 0.55] }, top: { left: [0, 0.4], right: [0.3, 0.55] } },
@@ -104,7 +104,7 @@ export function cues(ladder: Ladder, end: End): Cue[] {
 }
 
 /** How far the body steps in toward the ladder at each end (m), feet and all: standing clear of it, its rifle too, it then reaches it. */
-const INSET: Record<End, number> = { foot: 0.5, top: 0.42 };
+const INSET: Record<End, number> = { foot: 0.75, top: 0.42 };
 
 const UP = new Vector3(0, 1, 0), BACK = new Vector3(0, 0, -1);
 /**
@@ -235,9 +235,10 @@ function leg(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: n
   const climbing = (rung: number) => new Vector3(sign * BODY.apart.foot, rung * ladder.spacing + up, -back);
   const { from, to, swing } = rungs(ladder, limb, height);
   const onLadder = climbing(from).lerp(climbing(to), swing).addScaledVector(BACK, AWAY * Math.sin(Math.PI * swing));
-  // (lifted clear of the rungs and the landing's edge on the way, out from the ladder and in toward its middle, the thigh clear of the stile)
+  // (lifted clear of the rungs and the landing's edge on the way, the knee raised rather than the foot kicked back, and in toward the ladder's
+  // middle, the thigh clear of the stile)
   const arc = Math.sin(Math.PI * s);
-  const ankle = stood.ankle.clone().lerp(onLadder, s).addScaledVector(UP, 0.2 * arc).addScaledVector(BACK, 0.2 * arc);
+  const ankle = stood.ankle.clone().lerp(onLadder, s).addScaledVector(UP, 0.2 * arc).addScaledVector(BACK, 0.04 * arc);
   ankle.x -= sign * 0.1 * arc;
   // (the knees splayed, to stay this side of the rungs)
   const knee = frame.direction(frame.standing.knees[side]).lerp(frame.direction(new Vector3(sign * 0.6, 0.4, 0.6)), s);

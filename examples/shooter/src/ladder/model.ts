@@ -67,6 +67,6 @@ export function createLadder(height: number): Ladder {
   };
   return {
     body, height, rungs, spacing,
-    marks: { foot: mark('ladder foot', [0, 0, -0.85]), top: mark('ladder top', [0, height, STANDOFF + 0.45]) },
+    marks: { foot: mark('ladder foot', [0, 0, -1.1]), top: mark('ladder top', [0, height, STANDOFF + 0.45]) },
   };
 }
