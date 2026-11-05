@@ -2,7 +2,7 @@ import { Ray, Vector3, type Object3D } from 'three';
 import { meshesOf } from '../things/thing';
 import { Triangles } from '../kernel/triangles';
 import type { Digit, Joints } from './joints';
-import { DIGITS, type Shape } from './shape';
+import { DIGITS, LIFTED, type Shape } from './shape';
 
 /** how a grasp closes on a thing, each digit folding until it touches: the thumb swung this far across (`Thumb.oppose`), the fingers straight */
 const WRAP: Shape = {
@@ -63,25 +63,26 @@ export function closedOn(joints: Joints, object: Object3D): Shape {
   return shape;
 }
 
-/** one of a digit's values as `reaching` searches it */
+/** one of a digit's values as `reaching` searches it, from `least` to 1 */
 interface Value {
   get(): number;
   set(value: number): void;
+  least: number;
 }
 
 /**
- * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes, in place: a finger's curl, hook and spread, a
- * thumb's curl and opposition, searched over their range on a coarse grid (`afresh`), then on a fine one about the best so far
+ * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes, in place: a finger's curl (lifted too), hook
+ * and spread, a thumb's curl and opposition, searched over their range on a coarse grid (`afresh`), then on a fine one about the best so far
  */
 export function reaching(joints: Joints, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean): void {
   const values: Value[] = digit === 'thumb'
-    ? [{ get: () => shape.thumb.curl, set: (v) => (shape.thumb.curl = v) }, { get: () => shape.thumb.oppose, set: (v) => (shape.thumb.oppose = v) }]
-    : (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => shape[digit][key], set: (v: number) => (shape[digit][key] = v) }));
+    ? [{ get: () => shape.thumb.curl, set: (v) => (shape.thumb.curl = v), least: 0 }, { get: () => shape.thumb.oppose, set: (v) => (shape.thumb.oppose = v), least: 0 }]
+    : (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => shape[digit][key], set: (v: number) => (shape[digit][key] = v), least: key === 'curl' ? LIFTED : 0 }));
   let best = values.map((value) => value.get()), least = Infinity;
-  for (const { step, span } of [...afresh ? [{ step: 0.1, span: 1 }] : [], { step: 0.02, span: 0.1 }]) {
-    const grids = best.map((centre) => {
+  for (const { step, span } of [...afresh ? [{ step: 0.1, span: 1.35 }] : [], { step: 0.02, span: 0.1 }]) {
+    const grids = best.map((centre, k) => {
       const out: number[] = [];
-      for (let v = Math.max(0, centre - span); v <= Math.min(1, centre + span) + 1e-9; v += step) out.push(v);
+      for (let v = Math.max(values[k].least, centre - span); v <= Math.min(1, centre + span) + 1e-9; v += step) out.push(v);
       return out;
     });
     const search = (k: number, chosen: number[]) => {

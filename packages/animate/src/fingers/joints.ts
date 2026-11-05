@@ -206,9 +206,10 @@ export class Joints {
         bent(joints[2], curl * BEND.thumb[1], null, 0),
       ];
     }
-    const { curl, hook, spread } = shape[digit], middle = Math.min(1, curl + hook) * BEND.middle;
+    // (a curl below 0 lifts the knuckle alone)
+    const { curl, hook, spread } = shape[digit], folded = Math.max(0, curl), middle = Math.min(1, folded + hook) * BEND.middle;
     return [
-      bent(joints[0], curl * BEND.knuckle, this.fingers[digit].spread, spread * SPREAD[digit] * (1 - curl)),
+      bent(joints[0], curl * BEND.knuckle, this.fingers[digit].spread, spread * SPREAD[digit] * (1 - folded)),
       bent(joints[1], middle, null, 0),
       bent(joints[2], DIP * middle, null, 0),
     ];

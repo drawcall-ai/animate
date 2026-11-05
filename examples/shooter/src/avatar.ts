@@ -39,7 +39,7 @@ const QUICK = { speed: 1.8 };
 /** How fast a fresh body's hands take the rifle it stands up with (m/s): at once, to take over from a pose held elsewhere. */
 const SNATCH = { speed: 8 };
 const REST_AFTER = 1;
-/** How far a shot draws the trigger back (m). */
+/** How far a shot draws the trigger back (m), through the shot's interval: back all along while held fire keeps firing. */
 const SQUEEZE = 0.004;
 const POUCHES = [new Vector3(0.06, -0.17, 0.2), new Vector3(0.13, -0.17, 0.2)];
 const UP = new Vector3(0, 1, 0);
@@ -155,7 +155,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   const chest = person.bones.chest;
   const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.145, 0.19, 0.1).multiplyScalar(proportions.scale));
   const mount = empty(pocket, 'aim', new Vector3());
-  const { rifle, pistol, trigger, well, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
+  const { rifle, pistol, blade, well, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
   rifle.position.copy(stock.position).negate();
   const motion = new WeaponMotion();
   const pouches = POUCHES.map((at, i) => {
@@ -257,9 +257,10 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     root.yaw += wrapAngle(input.yaw - root.yaw) * (1 - Math.exp(-seconds / 0.025));
     root.crouch = input.crouch && !sprinting() ? 1 : 0.6 * (input.takeoff ?? 0);
     flash.visible = time - lastShot < 0.06;
-    // The trigger finger lies along the receiver until the rifle comes up or fires, then rests on the trigger, squeezing it back for a shot.
-    pistol.userData.fingers = { index: aiming > 0.5 || time - lastShot < 0.5 ? 'trigger' : 'frame' };
-    trigger.position.z = RIFLE.trigger.z - (time - lastShot < 0.06 ? SQUEEZE : 0);
+    // The trigger finger lies straight outside the guard until the rifle is asked up or fires, then rests on the trigger, squeezing it back
+    // for a shot; the thumb folds down along the receiver's side above it.
+    pistol.userData.fingers = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame', thumb: { curl: 1, oppose: 0 } };
+    blade.position.z = time - lastShot < SHOT_INTERVAL ? -SQUEEZE : 0;
     hold(seconds);
   };
 

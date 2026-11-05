@@ -1,7 +1,9 @@
 /**
- * How one finger is bent, each 0 … 1: `curl` folds all three joints together as the tendons couple them (1: a fist's); `hook` folds only
- * the two end joints on top, the knuckle held (a curl of 0 with a hook of 1 hooks the fingertips over a bag's handle); `spread` fans it
- * away from the middle finger at the knuckle (1: as far as it goes; the middle finger has none).
+ * How one finger is bent, each 0 … 1: `curl` folds all three joints together as the tendons couple them (1: a fist's), and below 0, to
+ * `LIFTED`, lifts it back at the knuckle alone past how its rig rests it — a rig's rest finger is often a little curled — to lie straight
+ * out of the palm, as a trigger finger along a receiver; `hook` folds only the two end joints on top, the knuckle held (a curl of 0 with a
+ * hook of 1 hooks the fingertips over a bag's handle); `spread` fans it away from the middle finger at the knuckle (1: as far as it goes;
+ * the middle finger has none).
  */
 export interface Finger {
   curl?: number;
@@ -25,6 +27,8 @@ export interface Fingers {
 }
 
 export const DIGITS = ['index', 'middle', 'ring', 'little'] as const;
+/** the least a finger's `curl` goes: lifted back at the knuckle 0.35 of a fist's bend there */
+export const LIFTED = -0.35;
 export type DigitName = (typeof DIGITS)[number];
 
 /** `Fingers` with every digit and value given */
@@ -47,7 +51,7 @@ export const POINT = { ...FIST, index: digit(0) } as const satisfies Shape;
 /** The fingers folded, the thumb up. */
 export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0 } } as const satisfies Shape;
 
-/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 is a misuse, said at once */
+/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1) is a misuse, said at once */
 export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
   for (const [name, values] of Object.entries(fingers)) {
     if (name !== 'thumb' && !DIGITS.some((digit) => digit === name)) throw new Error(`fingers: a hand has a thumb, ${DIGITS.join(', ')}; not "${name}"`);
@@ -55,7 +59,8 @@ export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
     const keys = name === 'thumb' ? ['curl', 'oppose'] : ['curl', 'hook', 'spread'];
     for (const [key, value] of Object.entries(values)) {
       if (!keys.includes(key)) throw new Error(`fingers: a ${name === 'thumb' ? 'thumb' : 'finger'} takes ${keys.join(', ')}; not "${key}"`);
-      if (!(typeof value === 'number' && value >= 0 && value <= 1)) throw new Error(`fingers: ${name} ${key} ${String(value)} is not 0 … 1`);
+      const least = name !== 'thumb' && key === 'curl' ? LIFTED : 0;
+      if (!(typeof value === 'number' && value >= least && value <= 1)) throw new Error(`fingers: ${name} ${key} ${String(value)} is not ${least} … 1`);
     }
   }
   return {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
+import { LIFTED } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
 import { person, play } from '../bodies';
 import { empty, roomOf } from '../things';
@@ -77,10 +78,23 @@ describe('fingers', () => {
     expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.6);
   });
 
+  it('lift a finger back at its knuckle alone for a curl below 0', () => {
+    const body = new Body(humanoid(FINGERED));
+    roomOf(body);
+    let knuckle = 0, middle = 0;
+    play(function* () {
+      yield* pose(body, { fingers: { right: { index: { curl: LIFTED, hook: 0 } } } }, { until: 0.5 });
+      [knuckle, middle] = [bent(body, 'rightIndexProximal'), bent(body, 'rightIndexIntermediate')];
+    }, [body], 1);
+    expect(knuckle).toBeCloseTo(-LIFTED * (Math.PI / 2), 1);
+    expect(middle).toBeLessThan(0.01);
+  });
+
   it('are refused where a skeleton has some finger bones but not all, or none to pose', () => {
     expect(() => humanoid([...PERSON, { name: 'leftIndexProximal', parent: 'leftHand', position: [0.85, 1.41, 0] }])).toThrow(/finger bones but not/);
     expect(() => pose(person(), { fingers: { right: FIST } })).toThrow(/no finger bones/);
-    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/0 … 1/);
+    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.35 … 1/);
+    expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
     Object.assign(both.userData, { handle: [0, 1, 0], handTurn: true });
     expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.handle and userData.handTurn/);
