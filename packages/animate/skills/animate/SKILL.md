@@ -92,11 +92,13 @@ Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }
 Object.assign(rung.userData, { handle: [-1, 0, 0], facing: [0, -0.4, 0.9], radius: 0.016 });
 ```
 
-A fingertip touch (a button, a switch) names the digit in `userData.pad`: its pad goes on the empty, pushing along `facing`, the hand shaped as `userData.fingers` asks over a relaxed one. Make the button a massless thing of its own; move it in as it is pressed and the pad goes in with it; `release` it to draw the hand back. For a press straight in and back, give it a second pad grip a finger's length out along its normal and take that before and after.
+A fingertip touch (a button, a switch) names the digit in `userData.pad`: its pad goes on the empty, pushing along `facing`, the hand shaped as `userData.fingers` asks over a relaxed one. Make the button a massless thing of its own; move it in as it is pressed and the pad goes in with it; `release` it to draw the hand back.
+
+For a natural press, give the button a second grip a hand's length before it that turns the whole hand as it presses — a `handle` across the palm toward the thumb and the palm's `facing` (down, rolled a little thumb up, tipped toward the button) — and grab it before and after the press: a pad grip keeps the roll the hand comes with about `facing`, so a hand straight off a palm-up hold presses palm up. Lay the pad's `facing` some 30° off the button's normal toward the palm, as a fingertip meets a wall button a little off square. Keep the cap's mesh beside the button's thing, not in it: a hand goes round a thing's meshes to its grip.
 
 ```ts
-Object.assign(face.userData, { pad: 'index', facing: [0, 0, -1], fingers: POINT });
-yield* grab(person, button, { left: 'clear' }); yield* grab(person, button, { left: 'face' }); /* lit */ yield* grab(person, button, { left: 'clear' }); release(person, { left: button });
+Object.assign(face.userData, { pad: 'index', facing: [0, -0.5, -0.87], fingers: POINT });
+yield* grab(person, button, { left: 'near' }); yield* grab(person, button, { left: 'face' }); /* lit */ yield* grab(person, button, { left: 'near' }); release(person, { left: button });
 ```
 
 A grip's `userData.fingers` lays digits over the closed hand: a digit's values, or the name of an empty on the thing its pad goes to, pressing on the part the empty hangs from (hang a trigger's empty under the trigger's own part). Move that empty to move the digit. `handle`, `facing` and `pad` are the fingers' to hold by: a body without finger bones refuses them, and so do `reach` and `track` — take such a grip with `grab`.

@@ -16,36 +16,50 @@ const RISE = 2.2;
 const RIDE = 4.5;
 const DEPARTS = 0.8;
 /**
- * A button panel (m, its frame: its foot on the floor below its face's middle, +Z out of the face): a post up to a housing `height` up, at a
- * standing soldier's lower chest where its left hand rests on the rifle's front, so that the hand goes to a button level and in along its
- * face's normal (at elbow height, 1.12, it came down onto the plate from above, its finger steeply down); a face plate `z` thick on its
- * front; each button `radius` round in a dark bezel `bezel` round, `apart` from the next, its cap standing `out` off the plate and pushed
- * `travel` in by a press (still proud of its bezel), over `pushing` (s); a finger drawn back off it to `clear` out from its cap.
+ * A button panel (m, its frame: its foot on the floor below its face's middle, +Z out of the face): a post up to a housing `height` up,
+ * just above a standing soldier's elbow, so that the forearm comes level to a button and the wrist stays straight; a face plate `z` thick
+ * on its front; each button `radius` round in a dark bezel `bezel` round, `apart` from the next, its cap standing `out` off the plate and
+ * pushed `travel` in by a press (still proud of its bezel), over `pushing` (s).
  */
-const PANEL = { height: 1.28, post: 0.07, wide: 0.15, deep: 0.06, z: 0.004 };
-const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.008, apart: 0.09, travel: 0.004, pushing: 0.08, clear: 0.07 };
+const PANEL = { height: 1.2, post: 0.07, wide: 0.15, deep: 0.06, z: 0.004 };
+const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.008, apart: 0.09, travel: 0.004, pushing: 0.08 };
+/**
+ * How a hand comes to a button (the panel's frame): first a hand's length before it (`NEAR`, m: the palm's middle out from the cap and
+ * below it), palm down but rolled `ROLL` thumb up, as a forearm rests between its turns, and tipped `TIP` up toward the button — given as
+ * a handle across the palm toward the thumb (`THUMB`) and the way the palm faces (`PALM`), which turn the hand whole; then with the index's
+ * pad on the cap pushing in along `PAD`, `TILT` off the face's normal toward the palm, as a pad faces between the fingertip's palm side and
+ * its length, so the finger meets the cap some 25° off square, its tip first, the hand barely turning from `NEAR` (pushing square in, the
+ * hand tipped up 45° onto it, the wrist bent back). A pad's grip leaves the hand's roll about it as the hand comes: straight from the
+ * rifle's front, it pressed palm up.
+ */
+const NEAR = { out: 0.17, down: -0.03 };
+const ROLL = 0.5, TIP = 0.38, TILT = 0.52;
+const PALMWARD = new Vector3(Math.sin(ROLL), -Math.cos(ROLL), 0);
+const THUMB = new Vector3(Math.cos(ROLL), Math.sin(ROLL), 0);
+const PALM = PALMWARD.clone().multiplyScalar(Math.cos(TIP)).add(new Vector3(0, 0, -Math.sin(TIP)));
+const PAD = PALMWARD.clone().multiplyScalar(Math.sin(TILT)).add(new Vector3(0, 0, -Math.cos(TILT)));
 /** How near a panel a soldier's feet must stand to press it (m, out from its face), how far to its left and right of the panel's middle,
  * and how squarely it must face it (the cosine of the most it may look away): before it or beside it on its right, so that the left hand
- * presses and the rifle in the right, at the housing's height, passes it (further left, the barrel crosses the housing). */
+ * presses and the rifle in the right passes it. */
 const REACH = { near: 0.35, far: 0.85, left: 0.05, right: 0.45, facing: Math.cos(1.1) };
 /**
- * How a hand presses a button: the index's pad on the cap's face, the finger straight but for a little give at its tip, the others curled
- * loosely toward the palm each a little more than the one before (at 0.7 … 0.85 they closed into a fist), the thumb tucked along the middle
- * finger.
+ * A pointing hand: the index straight but for a little give at its tip, the others curled into a loose fist each a little more than the
+ * one before (closed further, the glove's skin tore at their knuckles), the thumb's pad on the middle finger's middle segment, beside it
+ * under the index.
  */
 const PRESSING: Fingers = {
-  index: { curl: 0, hook: 0.08, spread: 0 },
-  middle: { curl: 0.55, hook: 0.2 }, ring: { curl: 0.62, hook: 0.22 }, little: { curl: 0.7, hook: 0.25 },
-  thumb: { curl: 0.45, oppose: 0.7, spread: 0.2 },
+  index: { curl: 0, hook: 0.04, spread: 0 },
+  middle: { curl: 0.62, hook: 0.25, spread: 0 }, ring: { curl: 0.68, hook: 0.25, spread: 0 }, little: { curl: 0.74, hook: 0.25, spread: 0 },
+  thumb: { curl: 0.25, oppose: 0.65, spread: 0.15 },
 };
 const UP = new Vector3(0, 1, 0);
 
 /**
  * The course's lift: a kinematic platform that stays at the foot or at the upper deck until one of its buttons is pressed, then rides to
  * the other level. On it a panel sends it up or down; on each landing a post calls it there. Each button is a thing of its own (massless: a
- * fixture) with two grips: `press`, its cap's face — the index's pad goes on it (`userData.pad`, the other fingers `PRESSING`), the hand
- * and arm placed from that fingertip, so a press pushes the cap in and the pad on it with it — and `clear`, out from it along its normal,
- * where the pad comes to before it goes in and draws back to after; a pressed button lights until the lift arrives.
+ * fixture) with two grips, both shaped `PRESSING`: `near`, the hand before it, and `press`, its cap's face, where the index's pad goes
+ * (`userData.pad`), the hand and arm placed from that fingertip, so a press pushes the cap in and the pad on it with it. A pressed button
+ * lights until the lift arrives.
  */
 export class Lift {
   /** the buttons on its own panel, by the level each sends it to */
@@ -98,20 +112,16 @@ export class Lift {
 
   /**
    * The button a soldier standing with its feet at `feet` (world) facing `yaw` (rad, about +Y from +Z) would press: on the panel it stands
-   * before and faces, the one that sends the lift away or calls it; none while it rides or is about to, or the soldier is at no panel.
+   * at (`at`), the one that sends the lift away or calls it; none while it rides or is about to, or the soldier is at no panel.
    */
   within(feet: Readonly<Vector3>, yaw: number): Button | null {
     if (this.ride) return null;
-    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw)), local = new Vector3(), out = new Vector3();
-    for (const { frame, buttons } of this.panels) {
-      frame.updateWorldMatrix(true, false);
-      frame.worldToLocal(local.copy(feet));
-      if (local.z < REACH.near || local.z > REACH.far || local.x < -REACH.left || local.x > REACH.right || Math.abs(local.y) > 0.2) continue;
-      if (-forward.dot(out.set(0, 0, 1).transformDirection(frame.matrixWorld)) < REACH.facing) continue;
-      const button = buttons.find((each) => each.to !== this.level);
-      if (button) return button;
-    }
-    return null;
+    return this.panelAt(feet, yaw)?.buttons.find((each) => each.to !== this.level) ?? null;
+  }
+
+  /** Whether a soldier with its feet at `feet` facing `yaw` stands before one of its panels and faces it, the lift riding or not. */
+  at(feet: Readonly<Vector3>, yaw: number): boolean {
+    return this.panelAt(feet, yaw) !== null;
   }
 
   /** `button`, under a fingertip, pressed in: it lights and the lift sets off for its level shortly (`within` offers the one that does). */
@@ -144,8 +154,8 @@ export class Lift {
 
   /**
    * A panel in `frame` (see `PANEL`) with `asked`'s buttons top to bottom: a post up to a housing, its face plate, and each button in its
-   * bezel, an arrow on its cap the way it takes the soldier (a call post's, from its landing) — each a thing with its grips `press` and
-   * `clear`
+   * bezel, an arrow on its cap the way it takes the soldier (a call post's, from its landing) — each a thing with its grips `near` and
+   * `press`
    */
   private panel(frame: Object3D, asked: { to: Level; call: boolean }[]): Button[] {
     const { height, post, wide, deep, z } = PANEL, high = asked.length * BUTTON.apart + 0.05, below = height - high / 2;
@@ -164,8 +174,7 @@ export class Lift {
       part.position.set(0, height + ((asked.length - 1) / 2 - index) * BUTTON.apart, z);
       const bezel = new Mesh(new CylinderGeometry(BUTTON.bezel, BUTTON.bezel, 0.002, 24).rotateX(Math.PI / 2), this.bezel);
       bezel.position.copy(part.position).setZ(z + 0.001);
-      // (the cap beside the button's grips, pushed in with them, no part of its thing: a hand goes round a thing's meshes to its grip, and
-      // round the cap's few millimetres it went to the face nearest its wrist, the cap's top, coming down onto the button from above)
+      // (the cap beside the button's thing, pushed in with it: a hand goes round a thing's meshes to its grip, and round the cap's top)
       const cap = new Mesh(new CylinderGeometry(BUTTON.radius, BUTTON.radius, BUTTON.out, 24).rotateX(Math.PI / 2).translate(0, 0, BUTTON.out / 2), this.unlit);
       cap.position.copy(part.position);
       const rising = call ? to === 'down' : to === 'up';
@@ -175,13 +184,14 @@ export class Lift {
       cap.add(arrow);
       // (its face, where the index's pad goes, and a finger's length out from it, where the pad comes to before it presses and draws back
       // to after, pointing all along)
-      for (const name of ['press', 'clear']) {
-        const empty = new Object3D();
-        empty.name = name;
-        empty.position.z = BUTTON.out + (name === 'clear' ? BUTTON.clear : 0);
-        Object.assign(empty.userData, { pad: 'index', facing: [0, 0, -1], fingers: PRESSING });
-        part.add(empty);
-      }
+      const press = new Object3D(), near = new Object3D();
+      press.name = 'press';
+      press.position.z = BUTTON.out;
+      Object.assign(press.userData, { pad: 'index', facing: PAD, fingers: PRESSING });
+      near.name = 'near';
+      near.position.set(0, NEAR.down, BUTTON.out + NEAR.out);
+      Object.assign(near.userData, { handle: THUMB, radius: 0.012, facing: PALM, fingers: PRESSING });
+      part.add(press, near);
       frame.add(bezel, cap, part);
       const button = { part, to, call };
       this.caps.set(button, cap);
@@ -189,6 +199,17 @@ export class Lift {
     });
     this.panels.push({ frame, buttons });
     return buttons;
+  }
+
+  /** the panel a soldier with its feet at `feet` facing `yaw` stands before and faces (see `REACH`) */
+  private panelAt(feet: Readonly<Vector3>, yaw: number): { frame: Object3D; buttons: Button[] } | null {
+    const forward = new Vector3(Math.sin(yaw), 0, Math.cos(yaw)), local = new Vector3(), out = new Vector3();
+    return this.panels.find(({ frame }) => {
+      frame.updateWorldMatrix(true, false);
+      frame.worldToLocal(local.copy(feet));
+      if (local.z < REACH.near || local.z > REACH.far || local.x < -REACH.left || local.x > REACH.right || Math.abs(local.y) > 0.2) return false;
+      return -forward.dot(out.set(0, 0, 1).transformDirection(frame.matrixWorld)) >= REACH.facing;
+    }) ?? null;
   }
 
   /** the housing and post of the panel in `frame` as one box, for `frame`'s body: `frame` itself, else the lift's that it stands on */
