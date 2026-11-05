@@ -1,4 +1,3 @@
-import type { Fingers } from '@drawcall/animate';
 import { BoxCollider, RigidBody } from '@drawcall/physics';
 import {
   BufferGeometry, CylinderGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace,
@@ -17,19 +16,16 @@ const ARCH = 0.5, ARCH_CORNER = 0.18;
 /** The steering wheel's rim radius where the hands hold it (m), how far above level they hold it, ten to two (rad), and how much further
  * up the rim each thumb lies along it (rad). */
 const RIM = 0.19, TEN_TO_TWO = 0.5, THUMB = 0.4;
+/** How a hand holds the rim: as a handle this thick (m; the rim's 0.015 and a few millimetres of give in the glove, so the palm and the
+ * thumb's web lie on it rather than in it), its grasp line this far out from the rim's middle toward the fingers (m), so the rim lies
+ * across the palm rather than under the fingers' roots. */
+const HOLD = { radius: 0.019, out: 0.012 };
 /** The driver's seat's middle: right-hand drive sits on −X. */
 const DRIVER = -0.4;
 /** The cab floor's height (m). */
 const FLOOR = 0.62;
 /** How far the grab handle's upright stands back off the windscreen's pillar, centre to centre (m). */
 const GRAB = { standoff: 0.07 };
-/** A hand leant on the dash on its finger pads and thumb: each digit as straight as it goes (this rig's fingers droop some 25° below the
- * palm, so the palm stands a couple of centimetres off), the little finger's tip just hooked. */
-const LEANING = {
-  thumb: { curl: 0, oppose: 0 },
-  index: { curl: 0, hook: 0 }, middle: { curl: 0, hook: 0 }, ring: { curl: 0, hook: 0 }, little: { curl: 0, hook: 0.05 },
-} as const satisfies Fingers;
-
 export type Wheel = { mount: Vector3; pivot: Group; spin: Group; front: boolean };
 export type Rover = ReturnType<typeof createRover>;
 export type PaintMaps = Awaited<ReturnType<typeof loadPaintMaps>>;
@@ -123,17 +119,19 @@ export function createRover(maps?: PaintMaps) {
   // little in toward the hub; the thumb's pad on the rim's face toward the driver, THUMB further up it)
   const grip = (side: -1 | 1) => {
     const name = side < 0 ? 'left' : 'right', on = (angle: number, radius: number, z: number): Point => [side * radius * Math.cos(angle), radius * Math.sin(angle), z];
-    const thumb = mark(steering, `${name} thumb`, on(TEN_TO_TWO + THUMB, RIM - 0.006, 0.014));
-    const at = mark(steering, `${name} grip`, on(TEN_TO_TWO, RIM, 0));
+    const thumb = mark(steering, `${name} thumb`, on(TEN_TO_TWO + THUMB, RIM - 0.004, 0.017));
+    // (the fingers point out from the rim and a little away from the driver: square to the rim and to the palm)
+    const palm = new Vector3(-side * 0.4, 0, -0.9).normalize(), fingers = new Vector3(side * -palm.z, 0, side * palm.x);
+    const at = mark(steering, `${name} grip`, on(TEN_TO_TWO, RIM + HOLD.out * fingers.x * side, HOLD.out * fingers.z));
     at.rotation.z = side * TEN_TO_TWO;
-    Object.assign(at.userData, { handle: [0, 1, 0], palm: [-side * 0.4, 0, -0.9], fingers: { thumb: thumb.name } });
+    Object.assign(at.userData, { handle: [0, 1, 0], palm: palm.toArray(), radius: HOLD.radius, fingers: { thumb: thumb.name } });
     return at;
   };
   /** an empty a hand holds as a handle along `axis` (its thumb toward the axis's end), its palm facing onto it along `palm`, `radius` thick;
-   * its `fingers`, if given, laid over the hand as it closes there */
-  const holdable = (name: string, at: Point, axis: Point, palm: Point, radius: number, fingers?: Fingers) => {
+   * each digit in `pads`, if given, reaching its pad to the empty named */
+  const holdable = (name: string, at: Point, axis: Point, palm: Point, radius: number, pads?: Record<string, string>) => {
     const empty = mark(body, name, at);
-    Object.assign(empty.userData, { handle: axis, palm, radius }, fingers && { fingers });
+    Object.assign(empty.userData, { handle: axis, palm, radius }, pads && { fingers: pads });
     return empty;
   };
   const marks = {
@@ -146,11 +144,10 @@ export function createRover(maps?: PaintMaps) {
     /** the grab handle's upright behind the windscreen's right pillar, held from the doorway as the forearm reaches it, in and forward:
      * thumb up along the pillar's lean, the palm on its outboard front facing in and back, the fingers round its inboard side */
     handle: holdable('grab handle', [-0.86, 1.475, 0.622 - GRAB.standoff], [0, 1, -0.117], [0.6, 0, -0.8], 0.012),
-    /** the dash's top by the doorway, leant on getting in as the forearm comes onto it from behind, just in from its back edge: the hand
-     * tipped up onto its heel (the palm facing down, forward along the forearm and a little out), the fingers forward along the forearm
-     * and a little in, their pads and the thumb on it, the thumb outboard; a thin handle under the palm's knuckles (a power grasp's line
-     * slants 15° from them toward the fingers, so it lies 15° off square to the fingers) */
-    dash: holdable('dash top', [-0.74, 1.135, 0.53], [-0.67, 0, 0.745], [-0.3, -0.695, 0.711], 0.005, LEANING),
+    /** the dash's top at its outboard end, leant on getting in as the forearm comes onto it from inboard: the palm flat on it, facing
+     * down, the fingers out over its end (the line across the palm 15° off square to them, as a grasp's is, so the knuckles lie along
+     * the end) and closing down round it, the thumb's pad on it toward its back edge */
+    dash: holdable('dash top', [-0.848, 1.115, 0.5], [-0.09, 0, -1], [0, -1, 0], 0.003, { thumb: mark(body, 'dash thumb', [-0.81, 1.12, 0.46]).name }),
     rack,
     /** the engine under the bonnet, where it is heard from */
     engine: mark(body, 'engine', [0, 0.85, 1.35]),
