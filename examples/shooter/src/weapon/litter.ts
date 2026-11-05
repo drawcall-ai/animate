@@ -2,8 +2,9 @@ import type { Floor } from '@drawcall/animate';
 import { BufferGeometry, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 
 const GRAVITY = 9.81;
-/** How fast a magazine let go of tumbles (rad/s, its own frame): end over end, a little about its length. */
-const TUMBLE = new Vector3(9, 2, 0);
+/** How a magazine falling onto the floor bounces (a light steel box onto hard ground): how much of its fall it springs back up with, how
+ * much of its slide and turn it keeps, and how fast it must come down to bounce at all (m/s); slower, it lands. */
+const BOUNCE = { up: 0.25, kept: 0.5, least: 1 };
 /** How far a magazine lying on its side stands its middle off the floor (m): half its body's thickness. */
 const LYING = 0.014;
 /** How fast a landed magazine settles flat (s, about two thirds of the way), and how many lie about before the oldest is cleared. */
@@ -11,26 +12,26 @@ const SETTLE = 0.06;
 const KEPT = 6;
 
 /**
- * What a soldier lets go of to fall, its spent magazines: each, under the scene, falls from where it left the hand at the hand's velocity,
- * tumbling, until it lands on the floor below it (`floor`), then settles lying flat on a side where it landed; past `KEPT` the oldest is
- * cleared away.
+ * What a soldier lets go of to fall, its spent magazines: each, under the scene, flies on from where it left the hand as the hand moved
+ * and turned it, falling, bounces off the floor below it (`floor`) as long as it comes down hard enough, then settles lying flat on a
+ * side where it landed; past `KEPT` the oldest is cleared away.
  */
 export class Litter {
-  private readonly falling: { object: Object3D; velocity: Vector3; landed: boolean }[] = [];
+  private readonly falling: { object: Object3D; velocity: Vector3; spin: Vector3; landed: boolean }[] = [];
 
   constructor(private readonly scene: Object3D, private readonly floor: Floor) {}
 
-  /** `object` let go of, moving at `velocity` (m/s, world): it falls from where it is now */
-  drop(object: Object3D, velocity: Readonly<Vector3>) {
+  /** `object` let go of, moving at `velocity` (m/s) and turning at `spin` (rad/s about the world's axes): it flies on from where it is */
+  drop(object: Object3D, velocity: Readonly<Vector3>, spin: Readonly<Vector3>) {
     this.scene.attach(object);
-    this.falling.push({ object, velocity: velocity.clone(), landed: false });
+    this.falling.push({ object, velocity: velocity.clone(), spin: spin.clone(), landed: false });
     const cleared = this.falling.length > KEPT ? this.falling.shift() : undefined;
     if (cleared) dispose(cleared.object);
   }
 
   update(seconds: number) {
     for (const drop of this.falling) {
-      const { object, velocity } = drop;
+      const { object, velocity, spin } = drop;
       if (drop.landed) {
         // (its thin side, its own X, turned toward up, its length kept where it points)
         const up = new Vector3(1, 0, 0).applyQuaternion(object.quaternion), sign = up.y < 0 ? -1 : 1;
@@ -40,11 +41,17 @@ export class Litter {
       }
       velocity.y -= GRAVITY * seconds;
       object.position.addScaledVector(velocity, seconds);
-      object.quaternion.multiply(new Quaternion().setFromAxisAngle(TUMBLE.clone().normalize(), TUMBLE.length() * seconds));
+      const rate = spin.length();
+      if (rate > 0) object.quaternion.premultiply(new Quaternion().setFromAxisAngle(spin.clone().divideScalar(rate), rate * seconds));
       const ground = this.floor(object.position.x, object.position.z) + LYING;
       if (object.position.y > ground) continue;
       object.position.y = ground;
-      drop.landed = true;
+      if (-velocity.y < BOUNCE.least) {
+        drop.landed = true;
+        continue;
+      }
+      velocity.set(velocity.x * BOUNCE.kept, -velocity.y * BOUNCE.up, velocity.z * BOUNCE.kept);
+      spin.multiplyScalar(BOUNCE.kept);
     }
   }
 
