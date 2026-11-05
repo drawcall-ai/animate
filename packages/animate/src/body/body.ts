@@ -106,8 +106,9 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /**
    * Where hand `side`'s bone goes to hold `empty` — a grip, its thing the empty's parent — for a body its app poses itself: its wrist and
-   * its bone's rotation (world). A handle (`userData.handle`; `palm` and `radius` as a thing's grip takes them) lies across the palm as this
-   * hand's own grasp has it, turned to its `palm` or, without one, from the hand's turn now by the least turn that lays it so.
+   * its bone's rotation (world), the part of the hand the grip names on the empty as a grab would put it (`Thing.grip`: the palm, a
+   * handle across it, or a digit's pad). The hand is turned from its turn now by the least turn that lays a handle along its grasp and
+   * faces the palm (or the pad) as the grip's `facing` asks; with a handle and a `facing`, exactly so.
    */
   gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
     return fingersOf(this).gripOn(side, empty);

@@ -124,14 +124,14 @@ export function createRover(maps?: PaintMaps) {
     const palm = new Vector3(-side * 0.4, 0, -0.9).normalize(), fingers = new Vector3(side * -palm.z, 0, side * palm.x);
     const at = mark(steering, `${name} grip`, on(TEN_TO_TWO, RIM + HOLD.out * fingers.x * side, HOLD.out * fingers.z));
     at.rotation.z = side * TEN_TO_TWO;
-    Object.assign(at.userData, { handle: [0, 1, 0], palm: palm.toArray(), radius: HOLD.radius, fingers: { thumb: thumb.name } });
+    Object.assign(at.userData, { handle: [0, 1, 0], facing: palm.toArray(), radius: HOLD.radius, fingers: { thumb: thumb.name } });
     return at;
   };
   /** an empty a hand holds as a handle along `axis` (its thumb toward the axis's end), its palm facing onto it along `palm`, `radius` thick;
    * each digit in `pads`, if given, reaching its pad to the empty named */
   const holdable = (name: string, at: Point, axis: Point, palm: Point, radius: number, pads?: Record<string, string>) => {
     const empty = mark(body, name, at);
-    Object.assign(empty.userData, { handle: axis, palm, radius }, pads && { fingers: pads });
+    Object.assign(empty.userData, { handle: axis, facing: palm, radius }, pads && { fingers: pads });
     return empty;
   };
   const marks = {

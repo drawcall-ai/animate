@@ -7,28 +7,32 @@ import { RAIL, RUNG_RADIUS, STILE, STILE_BAR, type Ladder } from './model';
 /** Which end of the ladder the soldier gets on or off at. */
 export type End = 'foot' | 'top';
 
-/** A limb: which hand or foot, and the share of a rung by which it moves after its diagonal partner. */
-type Limb = { side: Side; kind: 'hand' | 'foot'; lag: number };
+/** A limb: which hand or foot, and whether it takes the odd rungs (1) or the even ones (0). */
+type Limb = { side: Side; kind: 'hand' | 'foot'; odd: 0 | 1 };
 
 /**
- * The limbs climb a rung at a time on the diagonal: the left hand with the right foot, then the right hand with the left foot half a rung
- * later. Each holds its rung until the last `SWING` of its turn, when it moves to the next, swung out by `AWAY` (m).
+ * The limbs climb two rungs at a time on the diagonal, as a person's do: the left hand with the right foot, then, a rung climbed later,
+ * the right hand with the left foot, each hand past the other's rung. Each takes every other rung — the hands, and the feet, never on one
+ * together (the hands `BODY.reach` rungs above the feet, an odd count, so the left hand takes the odd ones and the right foot the even) —
+ * holding it until the last `SWING` of its two rungs' climb, when it moves on to the next but one, swung out by `AWAY` (m).
  */
 const LIMBS: readonly Limb[] = [
-  { side: 'left', kind: 'hand', lag: 0 }, { side: 'right', kind: 'foot', lag: 0 },
-  { side: 'right', kind: 'hand', lag: 0.5 }, { side: 'left', kind: 'foot', lag: 0.5 },
+  { side: 'left', kind: 'hand', odd: 1 }, { side: 'right', kind: 'foot', odd: 0 },
+  { side: 'right', kind: 'hand', odd: 0 }, { side: 'left', kind: 'foot', odd: 1 },
 ];
 const SWING = 0.4;
 const AWAY = 0.08;
 /** The share of a rung before its swing at which a hand lets go of its rung: it opens there, its fingers clear of the rung, then moves. */
 const LETTING = 0.04;
-/** Where all four limbs hold, as a share of a rung climbed: the lagging pair just moved, the leading pair about to. */
-const HELD = 0.55;
+/** Where all four limbs hold, as a share of a rung climbed past one: the pair that moved just there, the other not yet off. */
+const HELD = (1 - 2 * SWING) / 2;
 /**
- * The body on the ladder (m): its hips `back` behind the rungs; a foot's rung `feet` below them when it last moved; the hands `reach` rungs
- * above the feet; each hand and foot `apart` off the middle; an ankle above its rung and behind it.
+ * The body on the ladder (m): its hips `back` behind the rungs; a foot's rung `feet` below them as it lands on it (it then sinks
+ * `SWING` of two rungs further below as the body climbs, its leg straightening, before it steps up); the hands `reach` rungs above the
+ * feet (from the shoulder's height to above the head over a hand's two-rung climb); each hand and foot `apart` off the middle; an ankle
+ * above its rung and behind it.
  */
-const BODY = { back: 0.37, feet: 0.68, reach: 5, apart: { hand: 0.155, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
+const BODY = { back: 0.37, feet: 0.55, reach: 5, apart: { hand: 0.155, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /** How far below the stiles' heads the hands hold them at the most (m): about a standing body's hip height above the landing. */
 const HEAD = 0.2;
 /**
@@ -36,8 +40,9 @@ const HEAD = 0.2;
  * on the top two, the top one level with the landing.
  */
 export function heights(ladder: Ladder): Record<End, number> {
+  // (the feet on rungs `rung` and the one below)
   const at = (rung: number) => (rung + HELD) * ladder.spacing + BODY.feet;
-  return { foot: at(1), top: at(ladder.rungs - 1) };
+  return { foot: at(2), top: at(ladder.rungs) };
 }
 
 /**
@@ -95,8 +100,8 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
   // Standing where it got on, stepped in toward the ladder.
   const inset = new Vector3(0, 0, -Math.sign(standing.hips.z) * INSET[end] * phase(t, BEATS.inset));
   const frame = new Frame(ladder.body, standing), on = phase(t, BEATS.hips[end].over);
-  // Swaying a little with each rung, the hips hang behind the ladder; the trunk leans in toward it.
-  const sway = Math.sin(2 * Math.PI * ((height - BODY.feet) / ladder.spacing));
+  // Swaying a little toward the foot that pushes up each rung, the hips hang behind the ladder; the trunk leans in toward it.
+  const sway = Math.sin(Math.PI * ((height - BODY.feet) / ladder.spacing));
   const hips = standing.hips.clone().add(inset);
   puppet.place('hips', frame.point(hips.set(MathUtils.lerp(hips.x, 0, on), MathUtils.lerp(hips.y, height, phase(t, BEATS.hips[end].down)),
     MathUtils.lerp(hips.z, -BODY.back, on))));
@@ -156,21 +161,27 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
     const radius = STILE_BAR.thick / 2;
     empty.position.set(sign * STILE, y, STILE_BAR.deep / 2 - radius);
     thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.up, -STILE_HOLD.back);
-    Object.assign(empty.userData, { handle: [0, 1, 0], palm: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud });
+    Object.assign(empty.userData, { handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud });
   } else {
     const x = sign * BODY.apart.hand;
     empty.position.set(x, y, 0);
     thumb.position.set(x - sign * RUNG.thumb, y, 0).addScaledVector(RUNG.under, RUNG.pad);
-    Object.assign(empty.userData, { handle: [-sign, 0, 0], palm: RUNG.palm.toArray(), radius: RUNG_RADIUS });
+    Object.assign(empty.userData, { handle: [-sign, 0, 0], facing: RUNG.palm.toArray(), radius: RUNG_RADIUS });
   }
   empty.userData.fingers = { thumb: thumb.name };
   ladder.body.add(empty, thumb);
   return empty;
 }
 
-/** Each limb with the hips `height` up `ladder`: which it is, and whether it grips its rung rather than moving to the next. */
+/**
+ * Each limb with the hips `height` up `ladder`: which it is, the rung it holds or last held (the one it moves to once it lets go) and
+ * whether it grips it rather than moving to the next.
+ */
 export function gripping(ladder: Ladder, height: number) {
-  return LIMBS.map((limb) => ({ kind: limb.kind, grips: rungs(ladder, limb, height).swing === 0 }));
+  return LIMBS.map((limb) => {
+    const { from, to, swing, leaving } = rungs(ladder, limb, height);
+    return { side: limb.side, kind: limb.kind, rung: leaving ? to : from, grips: swing === 0 };
+  });
 }
 
 function arm(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: number, t: number, s: number) {
@@ -209,14 +220,16 @@ function leg(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: n
 }
 
 /**
- * The rungs a limb moves between with the hips `height` up the ladder, how far it has moved (0 holding `from` … 1 at `to`) and whether it
- * has let go of `from` (`LETTING` before it moves).
+ * The rungs a limb moves between with the hips `height` up the ladder — two apart, of its own parity — how far it has moved (0 holding
+ * `from` … 1 at `to`) and whether it has let go of `from` (`LETTING` before it moves).
  */
 function rungs(ladder: Ladder, limb: Limb, height: number) {
   const lead = limb.kind === 'foot' ? -BODY.feet : BODY.reach * ladder.spacing - BODY.feet;
-  const climbed = (height + lead) / ladder.spacing + limb.lag, from = Math.floor(climbed);
+  // (its climb in pairs of rungs: the pair it is on, and how far through it)
+  const pairs = ((height + lead) / ladder.spacing + limb.odd) / 2, pair = Math.floor(pairs), through = pairs - pair;
+  const from = 2 * pair - limb.odd;
   // (a hand goes no higher than the stiles' highest hold: the rungs it would climb on to above that are all held there)
   const last = limb.kind === 'hand' ? Math.ceil((ladder.height + RAIL - HEAD) / ladder.spacing) : Infinity;
   if (from >= last) return { from: last, to: last, swing: 0, leaving: false };
-  return { from, to: from + 1, swing: phase(climbed - from, [1 - SWING, 1]), leaving: climbed - from > 1 - SWING - LETTING };
+  return { from, to: Math.min(from + 2, last), swing: phase(through, [1 - SWING, 1]), leaving: through > 1 - SWING - LETTING };
 }

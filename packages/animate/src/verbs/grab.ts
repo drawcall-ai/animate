@@ -22,7 +22,9 @@ import type { HandOptions } from '../hands/handling';
  * the hand comes turned as the arm brings it, and the grasp then fixes it on the thing — held in one hand, the thing turns with the hand,
  * and a carry turns it by turning the arm; one whose end the arm cannot hold it at as taken regrips it in the fingers on the way (see
  * `carry`). `userData.handTurn = true` turns the hand as the empty is turned, as an `Object3D` target does (`Target`), never regripped; an
- * axis [x, y, z] allows roll about that line in its frame.
+ * axis [x, y, z] allows roll about that line in its frame. A person with fingers takes more off the empty (`Thing.grip`): a handle the
+ * palm wraps, a digit's pad put on it in place of the palm (a fingertip on a button: the hand and arm placed from it), the way the palm or
+ * the pad faces.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);

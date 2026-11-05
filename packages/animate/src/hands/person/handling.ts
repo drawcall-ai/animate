@@ -46,17 +46,16 @@ export function personHands(person: Reacher): Handling {
 }
 
 /**
- * `side`'s palm on `grip` of `thing`: its centre beyond the wrist — on a handle, for a hand with fingers, where the handle lies in its
- * grasp — and the hand's turn in the thing's frame as the body was last posed (mid-update, the hand's turn may be the free arm's hang's,
- * written before the hand's own step: a reach read so never met its grip)
+ * `side`'s palm on `grip` of `thing`: the point of the hand that goes on the empty — for a hand with fingers, where it holds the grip
+ * (`Contact`), else the palm's centre beyond the wrist — and the hand's turn in the thing's frame as the body was last posed (mid-update,
+ * the hand's turn may be the free arm's hang's, written before the hand's own step: a reach read so never met its grip)
  */
 function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
   const bone = person.hands[side], turn = new Quaternion();
   const turned = () => turn.copy(person.track(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(bone));
   const fingers = person.fingers;
-  if (!grip.handle || !fingers) return { at: palmOf(person.proportions, side), turn: turned };
-  // (the hand's grasp, measured in its node's frame, in its bone's)
-  // (the handle's radius, the world's, in the hand's units)
-  const scale = person.scaleOf(bone), { at, axis, facing } = fingers.joints(side).handleLine(grip.handle.radius / scale), rest = person.restOf(bone);
-  return { at: at.applyQuaternion(rest).multiplyScalar(scale), turn: turned, line: { axis: axis.applyQuaternion(rest), facing: facing.applyQuaternion(rest) } };
+  if (!fingers) return { at: palmOf(person.proportions, side), turn: turned };
+  // (where the hand holds it, measured in its node's frame, in its bone's)
+  const scale = person.scaleOf(bone), { at, axis, facing } = fingers.contact(side, grip), rest = person.restOf(bone);
+  return { at: at.applyQuaternion(rest).multiplyScalar(scale), turn: turned, facing: facing.applyQuaternion(rest), axis: axis?.applyQuaternion(rest) ?? null };
 }

@@ -14,8 +14,8 @@ const CLIMBING = 0.65;
 
 /**
  * A soldier on a ladder. It walks to the ladder's foot, or to its top on the landing with its back to it; slinging its rifle it takes the
- * rungs (or the stiles above the landing) and steps on, one foot then the other, and climbs a rung at a time with its hands and feet on
- * the diagonal. Climbing past either end it steps off there, taking its rifle back.
+ * rungs (or the stiles above the landing) and steps on, one foot then the other, and climbs two rungs at a time with its hands and feet
+ * on the diagonal, the hands alternating. Climbing past either end it steps off there, taking its rifle back.
  */
 export class Climber extends Mount {
   /** How far up the ladder its hips are (m), and which way it is asked to climb (1 up … −1 down). */

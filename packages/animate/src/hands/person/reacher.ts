@@ -6,7 +6,8 @@ import type { Handed } from '../handed';
 import type { ArmPosture } from '../../kernel/poise';
 import type { Side } from '../../species/humanoid/bones';
 import type { Channel, Claim } from '../../kernel/requests';
-import type { HandleLine } from '../../fingers/line';
+import type { Contact } from '../../fingers/contact';
+import type { Grip } from '../../things/thing';
 
 /** A person as its hands see it: a body with hands, on legs of its proportions — and what its hands carry this sub-step, on which aim. */
 export type Reacher = Handed & PersonLegged & {
@@ -18,7 +19,7 @@ export type Reacher = Handed & PersonLegged & {
   /** the claim that has `channel` this sub-step, if a request claims it */
   owner(channel: Channel): Claim | undefined;
   /** its fingers' bones by hand, if its skeleton has finger bones */
-  readonly fingers: { joints(side: Side): { handleLine(radius: number): HandleLine }; toward(side: Side, coming: boolean): void } | null;
+  readonly fingers: { contact(side: Side, grip: Grip): Contact; toward(side: Side, coming: boolean): void } | null;
   /** how many updates it has finished (0: none of it has been shown yet) */
   readonly updates: number;
   /** `bones` as its pose being written has them, as if they had always stood so (only as it starts) */

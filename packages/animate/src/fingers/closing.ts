@@ -1,15 +1,15 @@
 import { Ray, Vector3, type Object3D } from 'three';
 import { meshesOf } from '../things/thing';
 import { Triangles } from '../kernel/triangles';
-import type { Digit, Joints } from './joints';
-import { DIGITS, LIFTED, SPLAYED, type Shape } from './shape';
+import type { Joints } from './joints';
+import { DIGITS, LIFTED, SPLAYED, type Digit, type Shape } from './shape';
 
 /**
- * how a grasp closes on a thing, each digit folding until it touches: the thumb swung this far across (`Thumb.oppose`), the fingers
- * straight along the palm (a rig's rest fingers, a little curled, would start in a handle the palm lies on)
+ * how a grasp closes on a thing, each digit folding until it touches: the thumb lifted this far out in front of the palm (`Thumb.spread`),
+ * beside the index, the fingers straight along the palm (a rig's rest fingers, a little curled, would start in a handle the palm lies on)
  */
 const WRAP: Shape = {
-  thumb: { curl: 0, oppose: 0.55 },
+  thumb: { curl: 0, oppose: 0, spread: 0.55 },
   index: { curl: 0, hook: 0, spread: 0 }, middle: { curl: 0, hook: 0, spread: 0 }, ring: { curl: 0, hook: 0, spread: 0 }, little: { curl: 0, hook: 0, spread: 0 },
 };
 /** how far from the wrist a hand's fingers reach (m; a long hand's 0.21 m, and a handle's girth), and how much further than its segments'
@@ -26,7 +26,7 @@ const STEPS = 8, HALVINGS = 4;
 /**
  * The shape hand `joints` takes closed on `object` as the hand stands now: each finger curled from straight until a segment's palm side
  * (`PRESSED`) touches the object's meshes, then its two end joints hooked on until they touch too (a handle across the palm wraps, the
- * fingertips round it); the thumb, swung across the palm, curled until it touches. A segment touching as its fold starts lies in the
+ * fingertips round it); the thumb, out in front of the palm, swung across it until it touches, then curled until it touches too. A segment touching as its fold starts lies in the
  * object already: the fold goes on past it until it comes clear, then stops as it touches again (a straight finger's tip in a magazine
  * well hooks out of it and on under the guard); a digit clear of the object folds all the way (fingers past the end of a grip close into
  * the palm). Meshes of things
@@ -66,11 +66,12 @@ export function closedOn(joints: Joints, object: Object3D): Shape {
     fold(digit, (value) => (finger.curl = value), 1);
     fold(digit, (value) => (finger.hook = value), 1 - finger.curl);
   }
+  fold('thumb', (value) => (shape.thumb.oppose = value), 1);
   fold('thumb', (value) => (shape.thumb.curl = value), 1);
   return shape;
 }
 
-/** one of a digit's values as `reaching` searches it, from `least` (a finger's curl `LIFTED`, a thumb's oppose `SPLAYED`) to 1 */
+/** one of a digit's values as `reaching` searches it, from `least` (a finger's curl `LIFTED`, a thumb's oppose and spread `SPLAYED`) to 1 */
 interface Value {
   get(): number;
   set(value: number): void;
@@ -79,7 +80,7 @@ interface Value {
 
 /**
  * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes without passing into `object`, in place: a
- * finger's curl (lifted too), hook and spread, a thumb's curl and opposition (splayed too), searched over their range on a coarse grid,
+ * finger's curl (lifted too), hook and spread, a thumb's curl, opposition and spread (splayed too), searched over their range on a coarse grid,
  * then on a fine one about the best so far (`afresh`), or only close about `shape` as it comes (an empty moved a little in the hand: a
  * hand's drift on its grip re-reaches every few frames). Each grid's shapes are tried nearest first, the first whose palm side, bones and
  * back all keep out of the object taken (a trigger finger goes into the guard, not through its frame; a thumb reaching under a rung goes
@@ -88,9 +89,10 @@ interface Value {
  */
 export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean): void {
   const near = nearHand(joints, object, { digit, shape });
-  const values: Value[] = digit === 'thumb'
-    ? [{ get: () => shape.thumb.curl, set: (v) => (shape.thumb.curl = v), least: 0 }, { get: () => shape.thumb.oppose, set: (v) => (shape.thumb.oppose = v), least: SPLAYED }]
-    : (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => shape[digit][key], set: (v: number) => (shape[digit][key] = v), least: key === 'curl' ? LIFTED : 0 }));
+  const thumb = shape.thumb, finger = digit === 'thumb' ? null : shape[digit];
+  const values: Value[] = finger
+    ? (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => finger[key], set: (v: number) => (finger[key] = v), least: key === 'curl' ? LIFTED : 0 }))
+    : (['curl', 'oppose', 'spread'] as const).map((key) => ({ get: () => thumb[key], set: (v: number) => (thumb[key] = v), least: key === 'curl' ? 0 : SPLAYED }));
   /** how many of the digit's segment lines (palm side, bone, back) pass into the object as `shape` has it, counted no further than `most` */
   const into = (most: number) => {
     let count = 0;

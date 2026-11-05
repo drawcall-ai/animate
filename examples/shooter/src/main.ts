@@ -160,7 +160,7 @@ async function start() {
     if (resetting) return;
     playback.step(() => { player.update(dt); opponent.update(dt); });
     enemy.update(dt);
-    audio.lift(environment.lift.position, environment.lift.getVelocity().linear.y);
+    audio.lift(environment.lift.body.position, environment.lift.body.getVelocity().linear.y);
   });
 
   function resize() { renderer.setSize(innerWidth, innerHeight); camera.resize(innerWidth, innerHeight); }
@@ -170,8 +170,13 @@ async function start() {
   function draw(dt: number) {
     input.direction();
     if (input.locked) {
-      // E uses what the player is on or setting off for, else what it stands near.
-      if (input.pressed('KeyE')) (active() ?? player.mounts.find((mount) => mount.near))?.use();
+      // E uses what the player is on or setting off for, else what it stands near: a mount, or the lift's panel, its button pressed with
+      // the left hand's fingertip.
+      if (input.pressed('KeyE')) {
+        const mount = active() ?? player.mounts.find((each) => each.near), button = liftButton();
+        if (mount) mount.use();
+        else if (button) avatar.press(button, () => { environment.lift.press(button); audio.tick(); });
+      }
       const mount = active();
       if (mount) ride(mount, dt);
       else walk();
@@ -248,9 +253,15 @@ async function start() {
     return movement.sprinting ? 'Sprinting' : 'Grounded';
   }
 
+  /** The lift's button the player stands by, on foot and its hands free to press it. */
+  function liftButton() {
+    return active() || !player.alive || avatar.pressing ? null : environment.lift.within(movement.position);
+  }
+
   function promptLabel() {
-    const near = player.mounts.find((mount) => mount.near), mount = active();
+    const near = player.mounts.find((mount) => mount.near), mount = active(), button = liftButton();
     if (near) return `E · ${wordsOf(near).use}`;
+    if (button) return `E · Send the lift ${button === environment.lift.buttons.up ? 'up' : 'down'}`;
     if (driver.canExit) return 'E · Get out';
     if (driver.blocked) return 'No room to get out';
     return mount?.state === 'on' ? wordsOf(mount).keys : '';
@@ -316,7 +327,7 @@ async function start() {
     window.removeEventListener('resize', resize);
   };
   window.addEventListener('pagehide', dispose, { once: true });
-  return { world, audio, movement, camera, combat, input, avatar, player, opponent, enemy, navigation, rover, handling, driver, climber, ladder: environment.ladder, reset, dispose };
+  return { world, audio, movement, camera, combat, input, avatar, player, opponent, enemy, navigation, rover, handling, driver, climber, ladder: environment.ladder, lift: environment.lift, reset, dispose };
 }
 
 function showError(error: unknown) {

@@ -57,7 +57,7 @@ describe('avatar', () => {
     }
   });
 
-  it('performs a real magazine swap before reporting a completed reload', () => {
+  it('throws the spent magazine away and seats the full one before reporting a completed reload, a fresh spare in the pouch', () => {
     const input = state(), avatar = avatarAt(input);
     advance(avatar, input, 180);
     expect(avatar.fire()).toBe(true);
@@ -71,8 +71,12 @@ describe('avatar', () => {
     for (let i = 0; i < 600 && avatar.reloading; i++) avatar.update(1 / 60, input);
     expect(avatar.reloads).toBe(1);
     expect(avatar.reloading).toBe(false);
-    expect(magazine.parent?.name).toMatch(/pouch/);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
+    expect(node(avatar.group, 'magazine 4').parent?.name).toBe('pouch 1');
+    // (off the body, fallen onto the floor and lying flat there)
+    expect(avatar.group.getObjectByName('magazine 1')).toBeUndefined();
+    expect(magazine.getWorldPosition(new Vector3()).y).toBeCloseTo(0.014, 3);
+    expect(Math.abs(new Vector3(1, 0, 0).applyQuaternion(magazine.getWorldQuaternion(new Quaternion())).y)).toBeGreaterThan(0.99);
   });
 
   it.each([true, false].flatMap((firstPerson) => [-1.2, -0.6, 0.6, 1.2].map((pitch) => ({ firstPerson, pitch }))))(

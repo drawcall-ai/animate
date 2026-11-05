@@ -12,13 +12,15 @@ export interface Finger {
 }
 
 /**
- * How the thumb is held, each 0 … 1: `curl` folds its two outer joints; `oppose` swings it from beside the index (0) across the palm (1),
- * and below 0, to `SPLAYED`, back out of the palm past how its rig rests it — a rig's rest thumb is often a little across the palm — to
- * clear a handle the palm lies on, as a thumb along a receiver's side beside the hand.
+ * How the thumb is held, each 0 … 1: `curl` folds its two outer joints; `oppose` swings it at its base across the palm toward the little
+ * finger, from beside the index (0); `spread` lifts it out in front of the palm, away from the palm's plane (0: in it). Wrapping a handle
+ * takes both, the thumb out round the handle and across onto its far side; laid along a face beside the hand, neither. Each goes below
+ * 0, to `SPLAYED`, back past how its rig rests it — a rig's rest thumb is often a little across and in front of the palm.
  */
 export interface Thumb {
   curl?: number;
   oppose?: number;
+  spread?: number;
 }
 
 /** A hand's fingers, each digit as `Finger` or `Thumb` has it, a digit left out as relaxed (`RELAXED`). */
@@ -31,11 +33,12 @@ export interface Fingers {
 }
 
 export const DIGITS = ['index', 'middle', 'ring', 'little'] as const;
+export type DigitName = (typeof DIGITS)[number];
+export type Digit = 'thumb' | DigitName;
 /** the least a finger's `curl` goes: lifted back at the knuckle past straight 0.15 of a fist's bend there */
 export const LIFTED = -0.15;
-/** the least a thumb's `oppose` goes: swung back out of the palm 0.8 of the way it swings across */
+/** the least a thumb's `oppose` and `spread` go: back 0.8 of the way they swing it across and out */
 export const SPLAYED = -0.8;
-export type DigitName = (typeof DIGITS)[number];
 
 /** `Fingers` with every digit and value given */
 export type Shape = { thumb: Required<Thumb> } & Record<DigitName, Required<Finger>>;
@@ -44,29 +47,29 @@ const digit = (curl: number, hook = 0, spread = 0): Required<Finger> => ({ curl,
 
 /** A hand at rest: each finger a little more curled than the one before it, the little finger most, the thumb beside the index. */
 export const RELAXED = {
-  thumb: { curl: 0.2, oppose: 0.25 }, index: digit(0.16, 0.05, 0.1), middle: digit(0.22, 0.06), ring: digit(0.28, 0.07, 0.1), little: digit(0.34, 0.08, 0.15),
+  thumb: { curl: 0.2, oppose: 0.12, spread: 0.25 }, index: digit(0.16, 0.05, 0.1), middle: digit(0.22, 0.06), ring: digit(0.28, 0.07, 0.1), little: digit(0.34, 0.08, 0.15),
 } as const satisfies Shape;
 /** Every finger folded into the palm, the thumb across them. */
-export const FIST = { thumb: { curl: 0.7, oppose: 0.75 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
+export const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
 /** Every finger straight, fanned a little. */
 export const OPEN = {
-  thumb: { curl: 0, oppose: 0 }, index: digit(0, 0, 0.3), middle: digit(0), ring: digit(0, 0, 0.3), little: digit(0, 0, 0.4),
+  thumb: { curl: 0, oppose: 0, spread: 0 }, index: digit(0, 0, 0.3), middle: digit(0), ring: digit(0, 0, 0.3), little: digit(0, 0, 0.4),
 } as const satisfies Shape;
 /** The index pointing, the other fingers folded under the thumb. */
 export const POINT = { ...FIST, index: digit(0) } as const satisfies Shape;
 /** The fingers folded, the thumb up. */
-export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0 } } as const satisfies Shape;
+export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0, spread: 0 } } as const satisfies Shape;
 
-/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1, a thumb's oppose `SPLAYED` … 1) is a
- * misuse, said at once */
+/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1, a thumb's oppose and spread
+ * `SPLAYED` … 1) is a misuse, said at once */
 export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
   for (const [name, values] of Object.entries(fingers)) {
-    if (name !== 'thumb' && !DIGITS.some((digit) => digit === name)) throw new Error(`fingers: a hand has a thumb, ${DIGITS.join(', ')}; not "${name}"`);
+    const digit = digitOf(name, 'fingers');
     if (typeof values !== 'object' || values === null) throw new Error(`fingers: ${name} ${String(values)} is no digit's values`);
-    const keys = name === 'thumb' ? ['curl', 'oppose'] : ['curl', 'hook', 'spread'];
+    const keys = digit === 'thumb' ? ['curl', 'oppose', 'spread'] : ['curl', 'hook', 'spread'];
     for (const [key, value] of Object.entries(values)) {
-      if (!keys.includes(key)) throw new Error(`fingers: a ${name === 'thumb' ? 'thumb' : 'finger'} takes ${keys.join(', ')}; not "${key}"`);
-      const least = key === 'curl' ? (name === 'thumb' ? 0 : LIFTED) : key === 'oppose' ? SPLAYED : 0;
+      if (!keys.includes(key)) throw new Error(`fingers: a ${digit === 'thumb' ? 'thumb' : 'finger'} takes ${keys.join(', ')}; not "${key}"`);
+      const least = digit === 'thumb' ? (key === 'curl' ? 0 : SPLAYED) : key === 'curl' ? LIFTED : 0;
       if (!(typeof value === 'number' && value >= least && value <= 1)) throw new Error(`fingers: ${name} ${key} ${String(value)} is not ${least} … 1`);
     }
   }
@@ -77,11 +80,19 @@ export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
   };
 }
 
+/** `name` as a digit; another is a misuse, said at once (`what`: what named it) */
+export function digitOf(name: unknown, what: string): Digit {
+  const digit = (['thumb', ...DIGITS] as const).find((d) => d === name);
+  if (digit === undefined) throw new Error(`${what}: a hand has a thumb, ${DIGITS.join(', ')}; not "${String(name)}"`);
+  return digit;
+}
+
 /** `shape` eased `seconds` on toward `goal` in place: about two thirds of the way in `EASE` (a fist closes from open in about a quarter second) */
 export function easeShape(shape: Shape, goal: Shape, seconds: number): void {
   const k = 1 - Math.exp(-seconds / EASE);
   shape.thumb.curl += (goal.thumb.curl - shape.thumb.curl) * k;
   shape.thumb.oppose += (goal.thumb.oppose - shape.thumb.oppose) * k;
+  shape.thumb.spread += (goal.thumb.spread - shape.thumb.spread) * k;
   for (const name of DIGITS) {
     const at = shape[name], to = goal[name];
     at.curl += (to.curl - at.curl) * k;

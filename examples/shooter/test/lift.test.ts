@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
-import { Matrix4, Vector3, type Scene } from 'three';
+import { Matrix4, MeshStandardMaterial, Vector3, type Scene } from 'three';
+import { Lift } from '../src/lift';
 import { SPEED } from '../src/movement';
-import { box, DT, soldierOn, soles } from './course';
+import { box, cleanup, DT, soldierOn, soles } from './course';
 import { expectSmooth, Motion } from './motion';
 
 const sides = ['left', 'right'] as const;
@@ -118,3 +119,44 @@ it.each([1, -1].flatMap((direction) => [false, true].map((stop) => ({ direction,
     expect(hipChange).toBeLessThan(0.06);
   }, 20000,
 );
+
+it('stays until its panel\'s button is pressed with the index fingertip, then rides up', async () => {
+  // (the soldier on the platform facing its panel, on the platform's +X edge)
+  const { world, avatar, movement, acquire, advance, built: lift } = await soldierOn((scene) => {
+    box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');
+    return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial());
+  }, { spawn: new Vector3(0.95, 0.27, 0.35), yaw: Math.PI / 2 });
+  cleanup(lift.bind(world));
+  acquire();
+  const foot = lift.body.position.y;
+  advance(2);
+  expect(lift.body.position.y).toBe(foot);
+  const button = lift.within(movement.position);
+  expect(button).toBe(lift.buttons.up);
+  if (!button) return;
+  const face = button.getObjectByName('press'), hand = avatar.body.bones.leftHand, tip = avatar.body.bones.leftIndexDistal;
+  if (!face) throw new Error('The button has no face to press');
+  let wrist = Infinity, pad = Infinity;
+  avatar.press(button, () => {
+    lift.press(button);
+    // (the hand where the grip puts the index's pad on the button's face, its end segment there)
+    wrist = avatar.body.gripOn('left', face).wrist.distanceTo(hand.getWorldPosition(new Vector3()));
+    pad = tip.getWorldPosition(new Vector3()).distanceTo(face.getWorldPosition(new Vector3()));
+  });
+  for (let frame = 0; frame < 240 && wrist === Infinity; frame++) world.update(DT);
+  expect(wrist).toBeLessThan(0.01);
+  expect(pad).toBeLessThan(0.03);
+  advance(7);
+  expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
+  expect(avatar.pressing).toBe(false);
+  const down = lift.within(movement.position);
+  expect(down).toBe(lift.buttons.down);
+  if (!down) return;
+  let sent = -1;
+  avatar.press(down, () => { lift.press(down); sent = world.time; });
+  const asked = world.time;
+  for (let frame = 0; frame < 240 && sent < 0; frame++) world.update(DT);
+  // (the hand there within a second, from the rifle down to the lower button)
+  expect(sent - asked).toBeGreaterThan(0);
+  expect(sent - asked).toBeLessThan(1.5);
+}, 20000);

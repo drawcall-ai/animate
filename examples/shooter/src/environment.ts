@@ -1,10 +1,11 @@
 import { BoxCollider, RigidBody, type PhysicsWorld } from '@drawcall/physics';
 import {
   BoxGeometry, CanvasTexture, CircleGeometry, Color, CylinderGeometry, DoubleSide,
-  Fog, Group, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
+  Fog, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry,
   SRGBColorSpace, Vector3, type Scene,
 } from 'three';
 import { createLadder } from './ladder/model';
+import { Lift } from './lift';
 
 type Point = readonly [number, number, number];
 
@@ -133,14 +134,14 @@ export function createEnvironment(scene: Scene) {
   label('ELEVATED COVER', 'Jump · take cover', [-8, 2.7, 11.8], 3.3);
   label('COVER LANE', 'Peek · reposition · reload', [0, 2.8, 17], 4.6);
 
-  const lift = box('Lift', [3.2, 0.25, 3.2], [13.5, 0.125, 6], orange, 'kinematic');
+  const lift = new Lift(box('Lift', [3.2, 0.25, 3.2], [13.5, 0.125, 6], orange, 'kinematic'), charcoal);
   for (const x of [11.7, 15.3]) box('Lift guide', [0.2, 4.4, 0.2], [x, 2.2, 7.8], charcoal);
   box('Lift gantry', [4, 0.2, 0.25], [13.5, 4.3, 7.8], charcoal);
   box('Lift landing', [5, 0.3, 3], [13.5, 2.25, 9.4], teal);
   for (const x of [11.5, 15.5]) box('Landing support', [0.35, 2.1, 2.7], [x, 1.05, 9.4], concrete);
-  detail(lift, [2.8, 0.016, 0.09], [0, 0.134, -1.35], white);
-  detail(lift, [2.8, 0.016, 0.09], [0, 0.134, 1.35], white);
-  label('MOVING LIFT', 'Ride to the upper deck', [13.5, 3.3, 7.65], 4.2);
+  detail(lift.body, [2.8, 0.016, 0.09], [0, 0.134, -1.35], white);
+  detail(lift.body, [2.8, 0.016, 0.09], [0, 0.134, 1.35], white);
+  label('LIFT', 'Press its button to ride up', [13.5, 3.3, 7.65], 4.2);
   // A ladder up the landing's back, climbing toward −Z.
   const ladder = createLadder(2.4);
   ladder.body.position.set(13.5, 0, 11.08);
@@ -182,18 +183,15 @@ export function createEnvironment(scene: Scene) {
   }
 
   let stop: (() => void) | undefined;
-  const pose = new Matrix4();
   return {
-    spawn: new Vector3(0, 0.04, -10), lift, ladder, moving: [lift, ...crates],
+    spawn: new Vector3(0, 0.04, -10), lift, ladder, moving: [lift.body, ...crates],
     bind(world: PhysicsWorld) {
       stop?.();
-      stop = world.onBeforeStep((delta) => {
-        const height = 0.125 + (1 - Math.cos((world.time + delta) * 0.7)) * 1.1;
-        lift.setKinematicTarget(pose.makeTranslation(13.5, height, 6));
-      });
+      stop = lift.bind(world);
     },
     dispose() {
       stop?.();
+      lift.dispose();
       yard.removeFromParent();
       yard.traverse((object) => {
         if (!(object instanceof Mesh)) return;

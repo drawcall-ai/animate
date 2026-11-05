@@ -2,6 +2,7 @@ import { Box3, Matrix4, Mesh, Object3D, Quaternion, Ray, Vector3 } from 'three';
 import { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import type { Holder } from './resolve';
+import { digitOf } from '../fingers/shape';
 
 /** Object mass (`userData.mass`, kg), centre (`userData.centre`, local; default origin), and bounds excluding attached things.
  * Without mass it cannot be lifted. Support persists until lifting and resumes on release into the room. */
@@ -45,24 +46,30 @@ export class Thing {
 
   /**
    * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the
-   * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers takes an empty with
-   * `userData.handle` (an axis, the empty's frame, toward where the thumb goes) as a handle running through it: the palm goes against it
-   * and the fingers wrap it — with `userData.palm` (a direction, the empty's frame) the way the palm faces onto it, as far as the wrist turns
-   * it so, the handle lying across the palm on the hand's own grasp line; without, the hand turned as the arm brings it; its radius is
-   * measured off the thing's meshes about the empty, or given as `userData.radius` (m). Attached things' subtrees are not searched.
+   * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers reads more off it, each
+   * in the empty's frame. `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip on a button): the hand is
+   * placed so, the digit shaped as `userData.fingers` asks over a relaxed hand. `userData.handle` (an axis toward where the thumb goes)
+   * makes it a handle running through it: the palm goes against it, the handle lying across the palm on the hand's own grasp line, and
+   * the fingers wrap it; its radius is measured off the thing's meshes about the empty, or given as `userData.radius` (m).
+   * `userData.facing` is the way the palm faces onto it — or the pad pushes into it, as a fingertip pushes, between its pad and its length:
+   * on a handle, as far as the wrist turns it so; elsewhere, the hand free to roll about it as the arm brings it. Attached things' subtrees are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);
     if (!node) throw new Error(`"${this.object.name}" has no empty named "${name}"`);
-    const { handTurn: turn, handle, palm, radius } = node.userData, at = localOf(node, this.object), object = this.object;
+    const { handTurn: turn, handle, facing, radius, pad } = node.userData, at = localOf(node, this.object), object = this.object;
     const inThing = (value: unknown, what: string) => vectorOf(value, `"${name}" userData.${what}`).normalize().applyQuaternion(at.quaternion);
     if (radius !== undefined && !(typeof radius === 'number' && radius > 0)) throw new Error(`"${name}" userData.radius ${String(radius)}: give it in m`);
-    if (handle !== undefined && turn !== undefined) throw new Error(`"${name}" has both userData.handle and userData.handTurn: a handle turns the hand itself`);
+    if (turn !== undefined && (handle ?? facing ?? pad) !== undefined) throw new Error(`"${name}" has userData.handTurn with a handle, facing or pad: they turn the hand themselves`);
+    if (pad !== undefined && handle !== undefined) throw new Error(`"${name}" has both userData.pad and userData.handle: a handle lies across the palm`);
+    const digit = pad === undefined ? null : digitOf(pad, `"${name}" userData.pad`);
     const axis = handle === undefined ? null : inThing(handle, 'handle');
     return {
       node, at, turn: turn === undefined ? null : turn === true ? true as const : vectorOf(turn, `"${name}" userData.handTurn`),
+      facing: facing === undefined ? null : inThing(facing, 'facing'),
+      pad: digit,
       handle: axis === null ? null : {
-        axis, palm: palm === undefined ? null : inThing(palm, 'palm'),
+        axis,
         /** its radius (m, the world's): as given, else measured, once, the first time it is asked for */
         get radius(): number {
           object.updateWorldMatrix(true, false);

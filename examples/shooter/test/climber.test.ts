@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Scene, Vector3 } from 'three';
+import { gripping, heights } from '../src/ladder/climbing';
 import { STILE, createLadder } from '../src/ladder/model';
 import { box, DT, jerkless, mountable } from './course';
 
@@ -50,9 +51,9 @@ describe('Climber', () => {
     heard.length = 0;
     const rifle = () => soldier.avatar.rifle;
     until(() => climber.state === 'dismounting', 10);
-    // (a hand or a foot onto each rung on the way up: each hears a rung a rung climbed)
+    // (a hand and a foot onto a rung each rung climbed, each limb every other rung)
     const climbed = Math.round((2.4 - 2 * ladder.spacing) / ladder.spacing);
-    expect(heard.filter((sound) => sound === 'rung').length).toBeGreaterThanOrEqual(4 * (climbed - 1));
+    expect(heard.filter((sound) => sound === 'rung').length).toBeGreaterThanOrEqual(2 * (climbed - 1));
     // (getting off readies a fresh body with its own rifle off screen, a few frames)
     const posed = rifle();
     expect(until(() => rifle() !== posed, 0.5)).toBeLessThan(0.15);
@@ -63,6 +64,23 @@ describe('Climber', () => {
     expect(soldier.avatar.acquired).toBe(true);
     expect(soldier.movement.grounded).toBe(true);
     expect(soldier.movement.position.y).toBeCloseTo(2.4, 1);
+  });
+
+  it('climbs hand over hand, each hand two rungs on past the other\'s with the opposite foot', () => {
+    const ladder = createLadder(2.4), { foot, top } = heights(ladder);
+    const held = { left: [] as number[], right: [] as number[] };
+    for (let height = foot; height <= top; height += 0.005) {
+      const [left, rightFoot, right, leftFoot] = gripping(ladder, height);
+      expect(left.grips).toBe(rightFoot.grips);
+      expect(right.grips).toBe(leftFoot.grips);
+      // (the rungs, below the stiles' holds above the landing)
+      if (left.rung <= ladder.rungs && right.rung <= ladder.rungs) expect(left.rung).not.toBe(right.rung);
+      for (const hand of [left, right]) if (hand.rung <= ladder.rungs && held[hand.side].at(-1) !== hand.rung) held[hand.side].push(hand.rung);
+    }
+    for (const rungs of Object.values(held)) {
+      expect(rungs.length).toBeGreaterThan(1);
+      expect(rungs.slice(1).map((rung, k) => rung - rungs[k])).toEqual(rungs.slice(1).map(() => 2));
+    }
   });
 
   it('gets on from the landing and climbs down to the foot', async () => {

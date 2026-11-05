@@ -1,12 +1,13 @@
 import { Box3, BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, Ray, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
+import { Body, FIST, grab, humanoid, POINT, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { reaching } from '../../src/fingers/closing';
 import { Joints } from '../../src/fingers/joints';
 import { LIFTED, shapeOf } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
+import { selfOf } from '../../src/body/body';
 import { person, play } from '../bodies';
 import { empty, roomOf } from '../things';
 
@@ -42,7 +43,7 @@ describe('fingers', () => {
     rod.position.set(-0.25, 0.95, 0.35);
     rod.rotation.x = Math.PI / 2;
     // (a handle along its length, its radius measured: the thumb forward, the palm facing in toward the body's middle)
-    Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], palm: [1, 0, 0] });
+    Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [1, 0, 0] });
     room.add(rod);
     let closed = 0, gaps: number[] = [];
     play(function* () {
@@ -95,7 +96,7 @@ describe('fingers', () => {
     rod.name = 'rod';
     rod.position.set(-0.25, 0.95, 0.35);
     rod.rotation.x = Math.PI / 2;
-    Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], palm: [-1, 0, 0] });
+    Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [-1, 0, 0] });
     room.add(rod);
     let held = false, off = Infinity;
     play(function* () {
@@ -107,6 +108,29 @@ describe('fingers', () => {
     expect(off).toBeLessThan(0.12);
   });
 
+  it('put the hand where a grip with a pad has that digit\'s pad on its empty', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body), joints = selfOf(body).fingers?.joints('right');
+    if (!joints) throw new Error('no finger bones');
+    const hand = body.bones.rightHand;
+    // (a button on a panel's face ahead of the right shoulder, pressed with the index pointing, the hand turned as the arm brings it)
+    const panel = new Mesh(new BoxGeometry(0.2, 0.2, 0.02));
+    panel.name = 'panel';
+    panel.position.set(-0.2, 1.2, 0.5);
+    const button = empty(panel, 'button', new Vector3(0, 0, -0.012));
+    Object.assign(button.userData, { pad: 'index', fingers: POINT });
+    room.add(panel);
+    let held = false, off = Infinity;
+    play(function* () {
+      held = yield* grab(body, panel, { right: 'button' });
+      yield* wait(1);
+      const at = button.getWorldPosition(new Vector3());
+      hand.updateWorldMatrix(true, false);
+      off = joints.pad('index', shapeOf(POINT), new Vector3()).applyMatrix4(hand.matrixWorld).distanceTo(at);
+    }, [body], 4);
+    expect(held).toBe(true);
+    expect(off).toBeLessThan(0.005);
+  });
+
   it('lay what a grip asks over a hand its app poses, closed on the grip', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
@@ -114,7 +138,7 @@ describe('fingers', () => {
     rod.rotation.x = Math.PI / 2;
     // (the index asked straight, off the rod the others close on)
     const grip = empty(rod, 'grip', new Vector3());
-    Object.assign(grip.userData, { handle: [0, 1, 0], palm: [1, 0, 0], fingers: { index: { curl: 0, hook: 0 } } });
+    Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], fingers: { index: { curl: 0, hook: 0 } } });
     room.add(rod);
     // (the hand bone put where it holds the rod, as a puppet would)
     const hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = body.gripOn('right', grip);
@@ -211,6 +235,10 @@ describe('fingers', () => {
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
     Object.assign(both.userData, { handle: [0, 1, 0], handTurn: true });
-    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.handle and userData.handTurn/);
+    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/handTurn with a handle, facing or pad/);
+    Object.assign(both.userData, { handTurn: undefined, pad: 'index' });
+    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.pad and userData.handle/);
+    Object.assign(both.userData, { handle: undefined, pad: 'pinky' });
+    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/a hand has a thumb/);
   });
 });

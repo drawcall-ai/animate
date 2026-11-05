@@ -14,7 +14,7 @@ export const RIFLE = {
   pads: { middle: new Vector3(0.0175, -0.053, 0.002), ring: new Vector3(0.0175, -0.073, -0.006), little: new Vector3(0.017, -0.092, -0.012) },
   /** the gripping hand's thumb, curled over against the receiver's right side above the grip, out of the palm (its base sits on the grip's
    * back-right corner: the thumb's swing across the palm takes it forward into the grip, not round the back strap to the grip's left) */
-  thumb: { curl: 0.8, oppose: -0.5 },
+  thumb: { curl: 0.8, oppose: -0.25, spread: -0.5 },
 };
 
 export function rifleOn(mount: Object3D, arms: number) {
@@ -32,9 +32,9 @@ export function rifleOn(mount: Object3D, arms: number) {
   // side back to the back strap, the knuckles at its front half and the trigger finger level with the trigger, the fingers wrapping its
   // front to its left side; the radius a millimetre over its half width, so the palm lies on its flat right side)
   const pistol = empty(rifle, 'pistol', new Vector3(0, -0.066, -0.018));
-  Object.assign(pistol.userData, { handle: [0, 0.9, 0.42], palm: [1, 0, 0], radius: 0.0165 });
+  Object.assign(pistol.userData, { handle: [0, 0.9, 0.42], facing: [1, 0, 0], radius: 0.0165 });
   const foregrip = empty(rifle, 'foregrip', RIFLE.foregrip);
-  Object.assign(foregrip.userData, { handle: [0.3, 0, 0.95], palm: [-0.5, 1, 0], radius: 0.035 });
+  Object.assign(foregrip.userData, { handle: [0.3, 0, 0.95], facing: [-0.5, 1, 0], radius: 0.035 });
   // (the trigger drawn back as a part, the trigger finger's pad on its face going with it)
   const blade = empty(rifle, 'blade', new Vector3());
   model.trigger(blade);

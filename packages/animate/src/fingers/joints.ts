@@ -1,11 +1,8 @@
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
 import { Triangles } from '../kernel/triangles';
-import { DIGITS, type DigitName, type Shape } from './shape';
-import type { HandleLine } from './line';
-
-export type Digit = 'thumb' | DigitName;
-
+import { DIGITS, type Digit, type DigitName, type Shape } from './shape';
+import type { Contact } from './contact';
 
 /** One finger joint: its node and rest rotation, where it stands at rest from the joint before it (the hand, for the first), the axis it
  * bends toward the palm about, how far it is bent about it at rest, and its segment out to the next joint, with how far its palm side lies
@@ -33,7 +30,7 @@ interface FingerJoints {
   spread: Vector3 | null;
 }
 
-/** The thumb's joints from the wrist out, and the axes its metacarpal swings about in front of the palm, then across it. */
+/** The thumb's joints from the wrist out, and the axes its metacarpal swings about out in front of the palm (`spread`), then across it (`oppose`). */
 interface Opposing {
   joints: Three;
   palmward: Vector3;
@@ -46,9 +43,10 @@ interface Opposing {
  */
 const BEND = { knuckle: Math.PI / 2, middle: (100 * Math.PI) / 180, thumb: [(55 * Math.PI) / 180, (75 * Math.PI) / 180] } as const;
 const DIP = 0.7;
-/** how far a full spread fans each finger (rad), and how far a thumb opposed all the way swings in front of the palm and across it */
-const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4 } as const;
-const OPPOSE = { palmward: 1.0, ulnar: 0.45 } as const;
+/** how far a full spread fans each finger (rad), and how far a thumb's swings out in front of the palm (its `spread`; palmar abduction
+ * ~60°) and across it (its `oppose`; ~50° flexion at its base: Cooney et al. 1981) */
+const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4, thumb: 1.0 } as const;
+const OPPOSE = 0.9;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
@@ -182,19 +180,22 @@ export class Joints {
     return out.copy(last.palmar).multiplyScalar(last.depth).addScaledVector(last.along, (2 / 3) * last.length).applyMatrix4(this.frames(digit, shape)[2]);
   }
 
-  /**
-   * Where a handle of `radius` lies in this hand's power grasp, in the hand's frame: a point on its axis, the axis (toward the thumb) and
-   * the way the palm faces onto it
-   */
-  handleLine(radius: number): HandleLine {
+  /** where this hand holds a handle of `radius` in its power grasp (see `Contact`) */
+  handle(radius: number): Contact {
     const proximal = this.fingers.middle.joints[0].length;
     const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * proximal).addScaledVector(this.palm, this.palmDepth + radius);
     return { at, axis: this.across.clone().addScaledVector(this.along, HANDLE.slant).normalize(), facing: this.palm.clone() };
   }
 
-  /** the palm's middle on its skin, in the hand's frame: where a grip without a handle goes */
-  centre(): Vector3 {
-    return this.handleLine(0).at;
+  /**
+   * where this hand holds a grip with its palm's middle, on its skin, or with `digit`'s pad as `shape` has it (see `Contact`): a pad faces
+   * the way a fingertip pushes, halfway between its last segment's palm side and its length (facing along the palm side alone, a finger
+   * laid flat on a panel, the hand beside the button or through the panel)
+   */
+  touch(digit: Digit | null, shape: Shape): Contact {
+    if (!digit) return { at: this.handle(0).at, axis: null, facing: this.palm.clone() };
+    const last = this.chain(digit)[2], facing = last.palmar.clone().add(last.along).normalize().transformDirection(this.frames(digit, shape)[2]);
+    return { at: this.pad(digit, shape, new Vector3()), axis: null, facing };
   }
 
   private chain(digit: Digit): Three {
@@ -205,9 +206,9 @@ export class Joints {
   private turns(digit: Digit, shape: Shape): Quaternion[] {
     const joints = this.chain(digit);
     if (digit === 'thumb') {
-      const { curl, oppose } = shape.thumb, { palmward, ulnar } = this.thumb;
+      const { curl, oppose, spread } = shape.thumb, { palmward, ulnar } = this.thumb;
       return [
-        joints[0].rest.clone().multiply(_q.setFromAxisAngle(palmward, oppose * OPPOSE.palmward)).multiply(_q.setFromAxisAngle(ulnar, oppose * OPPOSE.ulnar)),
+        joints[0].rest.clone().multiply(_q.setFromAxisAngle(palmward, spread * SPREAD.thumb)).multiply(_q.setFromAxisAngle(ulnar, oppose * OPPOSE)),
         bent(joints[1], curl * BEND.thumb[0], null, 0),
         bent(joints[2], curl * BEND.thumb[1], null, 0),
       ];

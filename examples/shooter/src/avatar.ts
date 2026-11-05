@@ -6,6 +6,7 @@ import { anglesOf, wrapAngle } from './angles';
 import type { Look } from './playback';
 import { SOLDIER } from './skeleton';
 import { empty, RIFLE, rifleOn } from './weapon';
+import { Litter } from './weapon/litter';
 import { WeaponMotion } from './weapon/motion';
 
 export interface AvatarState {
@@ -26,6 +27,8 @@ export interface AvatarState {
 
 const SPRINTING = new Vector3(0.22, 0.2, 0);
 const RELOADING = new Vector3(-0.05, 0, 0.4);
+/** The rifle held in the right hand alone while the left presses a button: its muzzle down and off to the right, clear of what is pressed. */
+const LOWERED = new Vector3(0.75, -0.35, 0);
 const EASE = 0.25;
 /** Seconds between shots. */
 const SHOT_INTERVAL = 0.1;
@@ -42,9 +45,14 @@ const REST_AFTER = 1;
 /** How far a shot draws the trigger back (m), through the shot's interval: back all along while held fire keeps firing. */
 const SQUEEZE = 0.005;
 /** The chest pouches' magazines, side by side on the left of the chest with a hand's room between them, each turned flat against it, its
- * front toward the body's middle: the left hand takes one palm against the chest, its fingers round the front, as it seats one in the well.
- * The inner one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its fingers off the body. */
+ * front toward the body's middle: the left hand takes the inner one's palm against the chest, its fingers round the front, as it seats it
+ * in the well, and a fresh one is in that pouch again once the hand is back on the rifle; the outer one is a spare's spare. The inner one
+ * 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its fingers off the body. */
 const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
+/** Where the left hand flings a spent magazine, out from the left hip and forward (the chest's frame as `POUCHES`), letting go of it on the
+ * way once it is `TOSS` (m) clear of the well: it falls from there at the hand's speed. */
+const FLING = new Vector3(0.34, -0.45, 0.3);
+const TOSS = 0.2;
 const UP = new Vector3(0, 1, 0);
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
@@ -53,13 +61,16 @@ export class Avatar {
   private animation;
   /** a fresh body being readied off screen, to show in place of this one */
   private next: ReturnType<typeof animate> | undefined;
+  /** the spent magazines its bodies have thrown away, lying where they fell */
+  private readonly litter: Litter;
 
   constructor(
     scene: Object3D, private readonly model?: Object3D,
     private readonly floor: Floor = () => 0,
     private readonly onReload?: (phase: 'out' | 'in') => void,
   ) {
-    this.animation = animate(model && clone(model), new Vector3(), 0, floor, false, onReload);
+    this.litter = new Litter(scene, floor);
+    this.animation = animate(model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload);
     this.group.add(this.animation.person.object);
     scene.add(this.group);
   }
@@ -95,22 +106,28 @@ export class Avatar {
   }
 
   requestReload() { this.animation.requestReload(); }
+  /** Asks the left hand to press `button` (a thing whose grip `press` takes the index's pad) with its fingertip, calling `pressed` as the pad
+   * comes onto it, then to take the rifle again; ignored while it reloads or presses. */
+  press(button: Object3D, pressed: () => void) { this.animation.press(button, pressed); }
+  /** Whether a press is asked for or under way. */
+  get pressing(): boolean { return this.animation.pressing(); }
   fire(): boolean { return this.animation.fire(); }
 
   /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take. */
   reset(position: Vector3, yaw = 0) {
-    this.show(animate(this.model && clone(this.model), position, yaw, this.floor, false, this.onReload));
+    this.show(animate(this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload));
   }
 
   update(dt: number, input: AvatarState) {
     this.animation.update(dt, input);
+    this.litter.update(dt);
     this.group.updateMatrixWorld(true);
   }
 
   /** Starts readying a fresh body off screen, standing at `position` and snatching up the rifle, while this one is still shown. */
   prepare(position: Vector3, yaw: number) {
     this.next?.dispose();
-    this.next = animate(this.model && clone(this.model), position, yaw, this.floor, true, this.onReload);
+    this.next = animate(this.model && clone(this.model), position, yaw, this.floor, true, this.litter, this.onReload);
   }
 
   /** Steps the fresh body; once its hands have the rifle it is shown in place of this one, and true is returned. */
@@ -132,6 +149,7 @@ export class Avatar {
   dispose() {
     this.next?.dispose();
     this.animation.dispose();
+    this.litter.dispose();
     this.group.removeFromParent();
   }
 
@@ -146,7 +164,7 @@ export class Avatar {
   }
 }
 
-function animate(model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, onReload?: (phase: 'out' | 'in') => void) {
+function animate(model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void) {
   const root: Root & { velocity: Vector3 } = { position: position.clone(), velocity: new Vector3(), yaw, support: position.clone() };
   let aiming = 0;
   const person = new Body(humanoid(SOLDIER), { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) } });
@@ -170,11 +188,22 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     pouch.userData.approach = [`over pouch ${i + 1}`];
     return pouch;
   });
-  const magazines = [magazineIn(well, 'magazine 1'), magazineIn(pouches[0], 'magazine 2')];
+  const fling = onBone(person, chest, 'fling', FLING.clone().multiply(new Vector3(arms, arms, proportions.scale)));
+  /** the magazines on it, each named by when it was issued: the one in the well and one in each pouch at first */
+  const magazines: Object3D[] = [];
+  let issued = 0;
+  const issue = (place: Object3D) => magazines.push(magazineIn(place, `magazine ${++issued}`));
+  for (const place of [well, ...pouches]) issue(place);
+  /** the magazine the hand is throwing away, where it was last update (world) and how fast it went (m/s) */
+  const thrown = { object: null as Object3D | null, at: new Vector3(), velocity: new Vector3() };
   let input: AvatarState = { position, velocity: new Vector3(), yaw, pitch: 0, aim: false, sprint: false, crouch: false, support: position.clone(), firstPerson: false };
   const look: Look = { eye: new Vector3(), yaw, pitch: 0, intent: { yaw, pitch: 0 } };
   let time = 0, acquired = false, swapping = false, reloadWanted = false, reloads = 0;
-  let sprinted = 0, reloaded = 0, lastShot = -Infinity, stillSince = 0;
+  /** a button the left hand is asked to press, and what to tell as it does: until the hand is back on the rifle */
+  let pressWanted: { button: Object3D; pressed: () => void } | null = null;
+  /** the left hand off the rifle for a press, the rifle lowered meanwhile (it comes up again as the hand comes back to it) */
+  let lowering = false;
+  let sprinted = 0, reloaded = 0, lowered = 0, lastShot = -Infinity, stillSince = 0;
   const sprinting = () => input.sprint && !input.aim;
   const atEase = () => time - stillSince > REST_AFTER;
   const reloading = () => swapping || reloadWanted;
@@ -223,7 +252,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     heading += MathUtils.clamp(wrapAngle(wanted - heading), -most, most);
     heading = chestYaw + MathUtils.clamp(wrapAngle(heading - chestYaw), -REACH, REACH);
     const aimed = new Quaternion().setFromEuler(new Euler(-pitch, heading + wrapAngle(pointed.yaw - heading) * smooth(aiming), 0, 'YXZ'));
-    const turn = SPRINTING.clone().multiplyScalar(smooth(sprinted)).addScaledVector(RELOADING, smooth(reloaded))
+    const turn = SPRINTING.clone().multiplyScalar(smooth(sprinted)).addScaledVector(RELOADING, smooth(reloaded)).addScaledVector(LOWERED, smooth(lowered))
       .add(new Vector3(motion.recoil.position.x - 2 * drift.y, 2 * drift.x, -3 * drift.x));
     aimed.slerp(facing, smooth(reloaded));
     const turned = aimed.multiply(new Quaternion().setFromEuler(new Euler(turn.x, turn.y, turn.z)));
@@ -255,6 +284,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     aiming = ease(aiming, Number(input.aim), seconds);
     sprinted = ease(sprinted, Number(sprinting()), seconds);
     reloaded = ease(reloaded, Number(swapping), seconds);
+    lowered = ease(lowered, Number(lowering), seconds);
     motion.update(seconds, chest.getWorldPosition(new Vector3()).sub(root.position));
     root.position.copy(input.position);
     root.velocity.copy(input.velocity);
@@ -270,11 +300,21 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     hold(seconds);
   };
 
-  const swap = function* (spent: Object3D, full: Object3D, free: Object3D) {
+  // The left hand takes the spent magazine round its body in the well, pulls it down out of it and flings it away out by the hip, letting
+  // go on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and drops it), then takes the
+  // full one from its pouch and seats it.
+  const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, QUICK))) return false;
     onReload?.('out');
-    if (!(yield* carry(person, spent, free, QUICK))) return false;
-    release(person, spent, free);
+    const clear = () => spent.getWorldPosition(new Vector3()).distanceTo(well.getWorldPosition(new Vector3())) > TOSS;
+    thrown.object = spent;
+    spent.getWorldPosition(thrown.at);
+    yield* carry(person, spent, fling, { ...QUICK, until: clear });
+    if (!clear()) return false;
+    release(person, spent);
+    magazines.splice(magazines.indexOf(spent), 1);
+    litter.drop(spent, thrown.velocity);
+    thrown.object = null;
     if (!(yield* grab(person, full, { left: 'base' }, QUICK))) return false;
     if (!(yield* carry(person, full, well, QUICK))) return false;
     release(person, full, well);
@@ -284,16 +324,28 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
 
   const reload = function* () {
     swapping = true;
-    const spent = magazines.find((magazine) => magazine.parent === well);
-    const full = magazines.find((magazine) => magazine !== spent);
-    if (!spent || !full || !full.parent) throw new Error('Reload requires an inserted magazine and a spare');
-    const free = pouches.find((pouch) => pouch !== full.parent);
-    if (!free) throw new Error('Reload requires a free magazine pouch');
-    if (!(yield* swap(spent, full, free))) throw new Error('The soldier could not swap magazines');
+    const [pouch] = pouches, spent = magazines.find((magazine) => magazine.parent === well);
+    const full = magazines.find((magazine) => magazine.parent === pouch);
+    if (!spent || !full) throw new Error('Reload requires an inserted magazine and a spare in the first pouch');
+    if (!(yield* swap(spent, full))) throw new Error('The soldier could not swap magazines');
     reloads++;
-    swapping = false;
+    // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it)
     if (!(yield* grab(person, rifle, { left: 'foregrip' })))
       throw new Error('The support hand could not return to the rifle after reloading');
+    issue(pouch);
+    swapping = false;
+  };
+
+  // The left hand lets go of the rifle's front, the right holding it on, and puts the index's pad on the button, the arm placed from that
+  // fingertip; holding it there a moment as the button goes in, it lets go and takes the rifle again.
+  const press = function* (button: Object3D, pressed: () => void) {
+    lowering = true;
+    if (!(yield* grab(person, button, { left: 'press' }, { ...QUICK, step: false }))) throw new Error(`The soldier could not reach "${button.name}"`);
+    pressed();
+    yield* wait(0.3);
+    release(person, { left: button });
+    lowering = false;
+    if (!(yield* grab(person, rifle, { left: 'foregrip' }))) throw new Error('The support hand could not return to the rifle after pressing');
   };
 
   eye.getWorldPosition(look.eye);
@@ -303,7 +355,12 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
       acquired = yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, snatch ? SNATCH : {});
       if (!acquired) throw new Error('The soldier could not acquire both rifle grips');
       for (;;) {
-        yield* wait(() => reloadWanted);
+        yield* wait(() => reloadWanted || pressWanted !== null);
+        if (pressWanted) {
+          yield* press(pressWanted.button, pressWanted.pressed);
+          pressWanted = null;
+          continue;
+        }
         reloadWanted = false;
         yield* reload();
       }
@@ -323,12 +380,14 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     reloading,
     aimWeight: () => smooth(aiming),
     reloads: () => reloads,
-    requestReload: () => { if (acquired && !swapping) reloadWanted = true; },
+    requestReload: () => { if (acquired && !swapping && !pressWanted) reloadWanted = true; },
+    press: (button: Object3D, pressed: () => void) => { if (acquired && !reloading() && !pressWanted) pressWanted = { button, pressed }; },
+    pressing: () => pressWanted !== null,
     fire: () => {
       // The rifle fires once it has come halfway up from the sprint carry, about 0.13 s after the sprint ends.
       // Held fire keeps its cadence on the shot clock, not the simulation steps the shots land on (1e-9: float steps).
       const next = lastShot + SHOT_INTERVAL;
-      if (!acquired || reloading() || sprinted > 0.5 || time < next - 1e-9) return false;
+      if (!acquired || reloading() || pressWanted || sprinted > 0.5 || time < next - 1e-9) return false;
       lastShot = time - next < SHOT_INTERVAL ? next : time;
       motion.fire();
       // 12 N·s keeps sustained 600 rpm fire to a torso sway of about 0.08 rad.
@@ -339,6 +398,11 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
       input = state;
       step(undefined, seconds);
       person.update(seconds);
+      if (thrown.object) {
+        const at = thrown.object.getWorldPosition(new Vector3());
+        thrown.velocity.subVectors(at, thrown.at).divideScalar(seconds);
+        thrown.at.copy(at);
+      }
       see();
     },
     dispose: () => {
