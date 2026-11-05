@@ -69,8 +69,9 @@ const POUCHED = -Math.PI / 6;
 const FLING = new Vector3(0.36, -0.36, 0.3);
 const TOSS = 0.2;
 const UP = new Vector3(0, 1, 0);
-/** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly. */
-const ONTO = 0.004;
+/** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly:
+ * the release reads it a moment on, and one let go 4 mm short, still moving, was 5–11 mm off then, left askew in the well. */
+const ONTO = 0.002;
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
 export class Avatar {
@@ -86,7 +87,7 @@ export class Avatar {
     private readonly floor: Floor = () => 0,
     private readonly onReload?: (phase: 'out' | 'in') => void,
   ) {
-    this.litter = new Litter(scene, floor);
+    this.litter = new Litter(scene);
     this.animation = animate(model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload);
     this.group.add(this.animation.person.object);
     scene.add(this.group);
@@ -131,14 +132,14 @@ export class Avatar {
   get pressing(): boolean { return this.animation.pressing(); }
   fire(): boolean { return this.animation.fire(); }
 
-  /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take. */
+  /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take, the magazines it threw away cleared. */
   reset(position: Vector3, yaw = 0) {
+    this.litter.clear();
     this.show(animate(this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload));
   }
 
   update(dt: number, input: AvatarState) {
     this.animation.update(dt, input);
-    this.litter.update(dt);
     this.group.updateMatrixWorld(true);
   }
 
@@ -167,7 +168,7 @@ export class Avatar {
   dispose() {
     this.next?.dispose();
     this.animation.dispose();
-    this.litter.dispose();
+    this.litter.clear();
     this.group.removeFromParent();
   }
 
@@ -212,8 +213,10 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   let issued = 0;
   const issue = (place: Object3D) => magazines.push(magazineIn(place, `magazine ${++issued}`));
   for (const place of [well, ...pouches]) issue(place);
-  /** the magazine the hand is throwing away, where it was last update (world) and how fast it went (m/s) */
-  const thrown: { object: Object3D | null; at: Vector3; velocity: Vector3 } = { object: null, at: new Vector3(), velocity: new Vector3() };
+  /** the magazine the hand is throwing away, where and how it was turned last update (world), and how fast it went (m/s) and turned (rad/s
+   * about the world's axes) */
+  const thrown: { object: Object3D | null; at: Vector3; turn: Quaternion; velocity: Vector3; spin: Vector3 } =
+    { object: null, at: new Vector3(), turn: new Quaternion(), velocity: new Vector3(), spin: new Vector3() };
   let input: AvatarState = { position, velocity: new Vector3(), yaw, pitch: 0, aim: false, sprint: false, crouch: false, support: position.clone(), firstPerson: false };
   const look: Look = { eye: new Vector3(), yaw, pitch: 0, intent: { yaw, pitch: 0 } };
   let time = 0, acquired = false, swapping = false, reloadWanted = false, reloads = 0;
@@ -321,20 +324,21 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   };
 
   // The left hand takes the spent magazine round its body in the well, pulls it down out of it and flings it away out by the hip, letting
-  // go on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and drops it), then takes the
-  // full one from its pouch, brings it up under the well and pushes it part way in, shifts under its floor plate and pushes it home with
-  // the palm.
+  // go on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and lets it fly on as the hand
+  // last moved and turned it), then takes the full one from its pouch, brings it up under the well and pushes it part way in, shifts under
+  // its floor plate and pushes it home with the palm.
   const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, SHORT))) return false;
     onReload?.('out');
     const clear = () => spent.getWorldPosition(new Vector3()).distanceTo(well.getWorldPosition(new Vector3())) > TOSS;
     thrown.object = spent;
     spent.getWorldPosition(thrown.at);
+    spent.getWorldQuaternion(thrown.turn);
     yield* carry(person, spent, [below, () => fling.getWorldPosition(new Vector3())], { ...QUICK, until: clear });
     if (!clear()) return false;
     release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
-    litter.drop(spent, thrown.velocity);
+    litter.drop(spent, thrown.velocity, thrown.spin);
     thrown.object = null;
     if (!(yield* grab(person, full, { left: 'base' }, QUICK))) return false;
     // (brought up under the well and in from there along its line; pushed home by the palm under the floor plate, a carry of its own, quick
@@ -428,9 +432,11 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
       step(undefined, seconds);
       person.update(seconds);
       if (thrown.object) {
-        const at = thrown.object.getWorldPosition(new Vector3());
+        const at = thrown.object.getWorldPosition(new Vector3()), turn = thrown.object.getWorldQuaternion(new Quaternion());
         thrown.velocity.subVectors(at, thrown.at).divideScalar(seconds);
+        spinOf(thrown.turn, turn, seconds, thrown.spin);
         thrown.at.copy(at);
+        thrown.turn.copy(turn);
       }
       see();
     },
@@ -452,6 +458,14 @@ function onBone(person: Body, bone: Object3D, name: string, offset: Vector3): Ob
   placed.position.copy(offset).applyQuaternion(placed.quaternion).add(bone.getWorldPosition(new Vector3()));
   bone.attach(placed);
   return placed;
+}
+
+/** how fast (rad/s, about the world's axes) a thing turned `from` → `to` in `seconds` (into `out`): its axis scaled by its rate */
+function spinOf(from: Quaternion, to: Quaternion, seconds: number, out: Vector3): Vector3 {
+  const step = to.clone().multiply(from.clone().invert());
+  if (step.w < 0) step.set(-step.x, -step.y, -step.z, -step.w);
+  const angle = 2 * Math.acos(Math.min(1, step.w)), sine = Math.sqrt(1 - step.w * step.w);
+  return sine < 1e-9 ? out.set(0, 0, 0) : out.set(step.x, step.y, step.z).multiplyScalar(angle / sine / seconds);
 }
 
 /** Whether `thing` has come within `ONTO` of `place`: near enough to be let go onto it there, the rest of a carry's slow end left out. */

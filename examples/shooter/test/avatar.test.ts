@@ -3,7 +3,8 @@ import { Quaternion, Vector3 } from 'three';
 import { lookDirection } from '../src/angles';
 import { Avatar, type AvatarState } from '../src/avatar';
 import { TUNNEL_CLEARANCE } from '../src/environment';
-import { avatarAt, node } from './course';
+import { RigidBody } from '@drawcall/physics';
+import { avatarAt, box, DT, node, soldierOn } from './course';
 
 const state = (): AvatarState => ({
   position: new Vector3(3, 0, -4), velocity: new Vector3(), yaw: 0, pitch: 0,
@@ -57,15 +58,12 @@ describe('avatar', () => {
     }
   });
 
-  it('throws the spent magazine away and seats the full one before reporting a completed reload, a fresh spare in the pouch', () => {
-    const input = state(), avatar = avatarAt(input);
-    advance(avatar, input, 180);
-    expect(avatar.fire()).toBe(true);
-    expect(avatar.fire()).toBe(false);
+  it('throws the spent magazine away and seats the full one before reporting a completed reload, a fresh spare in the pouch', async () => {
+    const { world, movement, avatar, acquire, advance: run } = await soldierOn((scene) => box(scene, [60, 1, 60], [0, -0.5, 0]));
+    acquire();
     const magazine = node(avatar.group, 'magazine 1'), full = node(avatar.group, 'magazine 2'), hand = avatar.body.bones.leftHand;
     expect(magazine.parent?.name).toBe('well');
-    // The soldier lowers the sights while it reloads.
-    input.aim = false;
+    movement.input.aim = false;
     avatar.requestReload();
     expect(avatar.reloading).toBe(true);
     // (each magazine held as taken, the spent one out of the well until it is thrown, the full one from its pouch up part way into the
@@ -73,7 +71,7 @@ describe('avatar', () => {
     const held: number[] = [], thrown: number[] = [], places: string[] = [];
     let frames = 0;
     for (; frames < 600 && avatar.reloading; frames++) {
-      avatar.update(1 / 60, input);
+      world.update(DT);
       const place = full.parent?.name ?? '';
       if (places[places.length - 1] !== place) places.push(place);
       if (full.parent === hand && !places.includes('part way in')) held.push(full.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
@@ -83,13 +81,17 @@ describe('avatar', () => {
     expect(places).toEqual(['pouch 1', hand.name, 'part way in', hand.name, 'well']);
     for (const distances of [held, thrown]) expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(0.01);
     expect(avatar.reloads).toBe(1);
-    expect(avatar.reloading).toBe(false);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
     expect(node(avatar.group, 'magazine 4').parent?.name).toBe('pouch 1');
-    // (off the body, fallen onto the floor and lying flat there)
+    // (off the body, a body of its own come to rest on the floor, lying on a side)
+    run(2);
     expect(avatar.group.getObjectByName('magazine 1')).toBeUndefined();
-    expect(magazine.getWorldPosition(new Vector3()).y).toBeCloseTo(0.014, 3);
+    const body = magazine.parent;
+    if (!(body instanceof RigidBody)) throw new Error('The thrown magazine is no rigid body');
+    expect(body.getVelocity().linear.length()).toBeLessThan(0.01);
+    expect(magazine.getWorldPosition(new Vector3()).y).toBeLessThan(0.05);
     expect(Math.abs(new Vector3(1, 0, 0).applyQuaternion(magazine.getWorldQuaternion(new Quaternion())).y)).toBeGreaterThan(0.99);
+    expect(magazine.getWorldPosition(new Vector3()).distanceTo(movement.position)).toBeGreaterThan(0.3);
   });
 
   it.each([true, false].flatMap((firstPerson) => [-1.2, -0.6, 0.6, 1.2].map((pitch) => ({ firstPerson, pitch }))))(
