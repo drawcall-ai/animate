@@ -464,7 +464,7 @@ function onBone(person: Body, bone: Object3D, name: string, offset: Vector3): Ob
 function spinOf(from: Quaternion, to: Quaternion, seconds: number, out: Vector3): Vector3 {
   const step = to.clone().multiply(from.clone().invert());
   if (step.w < 0) step.set(-step.x, -step.y, -step.z, -step.w);
-  const angle = 2 * Math.acos(Math.min(1, step.w)), sine = Math.sqrt(1 - step.w * step.w);
+  const angle = 2 * Math.acos(Math.min(1, step.w)), sine = Math.sqrt(Math.max(0, 1 - step.w * step.w));
   return sine < 1e-9 ? out.set(0, 0, 0) : out.set(step.x, step.y, step.z).multiplyScalar(angle / sine / seconds);
 }
 

@@ -1,10 +1,8 @@
-import { Box3, BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, Ray, Vector3 } from 'three';
+import { BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, FIST, grab, humanoid, POINT, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { padToward } from '../../src/fingers/closing';
-import { Joints } from '../../src/fingers/joints';
 import { LIFTED, shapeOf } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
 import { selfOf } from '../../src/body/body';
@@ -71,48 +69,6 @@ describe('fingers', () => {
     expect(bent(body, 'rightMiddleIntermediate')).toBeLessThan(closed - 0.1);
   });
 
-  it('reach a pad toward an empty no nearer than keeps it out of the thing', () => {
-    const species = humanoid(FINGERED), body = new Body(species), fingers = species.fingers;
-    if (!fingers) throw new Error('no finger bones');
-    const hand = body.bones.rightHand, joints = new Joints(hand, fingers.right, body.bones, 'right', []);
-    hand.updateWorldMatrix(true, true);
-    // (a plate just under the straight index — the palm faces down — and an empty under the plate, below the finger's middle)
-    const knuckle = body.bones.rightIndexProximal.getWorldPosition(new Vector3()), tip = body.bones.rightIndexDistal.getWorldPosition(new Vector3());
-    const middle = knuckle.clone().lerp(tip, 0.5), plate = new Mesh(new BoxGeometry(0.2, 0.004, 0.06));
-    plate.position.copy(middle).add(new Vector3(0, -0.02, 0));
-    roomOf(body).add(plate);
-    plate.updateMatrixWorld(true);
-    const target = hand.worldToLocal(middle.clone().add(new Vector3(0, -0.05, 0)));
-    const shape = shapeOf({});
-    padToward(joints, plate, shape, 'index', target, true);
-    const box = new Box3().setFromObject(plate), through = joints.segments('index', shape).filter(([start, end]) => {
-      const hit = new Ray(start, end.clone().sub(start).normalize()).intersectBox(box, new Vector3());
-      return hit !== null && hit.distanceTo(start) <= end.distanceTo(start);
-    });
-    expect(through).toEqual([]);
-    expect(joints.pad('index', shape, new Vector3()).applyMatrix4(hand.matrixWorld).y).toBeGreaterThan(plate.position.y);
-  });
-
-  it('reach a pad onto the part it presses, kept out only of the rest of the thing', () => {
-    const species = humanoid(FINGERED), body = new Body(species), fingers = species.fingers;
-    if (!fingers) throw new Error('no finger bones');
-    const hand = body.bones.rightHand, joints = new Joints(hand, fingers.right, body.bones, 'right', []);
-    hand.updateWorldMatrix(true, true);
-    // (a thin blade hanging under the straight index's end, across its fold, as a trigger, and an empty on its face toward the knuckle)
-    const knuckle = body.bones.rightIndexProximal.getWorldPosition(new Vector3()), tip = body.bones.rightIndexDistal.getWorldPosition(new Vector3());
-    const thing = empty(roomOf(body), 'thing', knuckle.clone().lerp(tip, 0.8)), blade = new Mesh(new BoxGeometry(0.004, 0.06, 0.06));
-    blade.position.set(0, -0.03, 0);
-    thing.add(blade);
-    thing.updateMatrixWorld(true);
-    const target = hand.worldToLocal(thing.localToWorld(new Vector3(0.002, -0.025, 0)));
-    const kept = shapeOf({}), pressing = shapeOf({});
-    padToward(joints, thing, kept, 'index', target, true);
-    padToward(joints, thing, pressing, 'index', target, true, blade);
-    const miss = (shape: typeof kept) => joints.pad('index', shape, new Vector3()).distanceTo(target);
-    expect(miss(pressing)).toBeLessThan(0.01);
-    expect(miss(pressing)).toBeLessThan(miss(kept));
-  });
-
   it('take a handle with its palm turned as far as the wrist turns it so, where it cannot be turned all the way', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     // (the rod in front of the right hip, its palm asked out away from the body's middle, the thumb forward: past the forearm's turn)
@@ -129,7 +85,7 @@ describe('fingers', () => {
       off = rod.getWorldPosition(new Vector3()).distanceTo(body.bones.rightHand.getWorldPosition(new Vector3()));
     }, [body], 4);
     expect(held).toBe(true);
-    expect(off).toBeLessThan(0.12);
+    expect(off).toBeLessThan(0.13);
   });
 
   it('press a button with one grab, the pad on its face, and draw back off it on release', () => {

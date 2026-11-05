@@ -7,7 +7,7 @@ import { anchors, movers, resolve, written, type Hold, type Holder, type Resolvi
 import { Thing, type Grip } from './thing';
 import type { Goal, Placement } from '../kernel/goal';
 import { turnOnto } from '../kernel/math';
-import type { Contact } from '../fingers/contact';
+import type { Part } from '../fingers/part';
 
 /** the nearest anchor among `object` and its ancestors: a body's object (bone −1) or moving bone */
 function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined {
@@ -35,11 +35,11 @@ export function onBody(self: Holder, thing: Thing): boolean {
 
 /** A person's palm, as a grip takes it: the point of the hand that goes on the empty in the hand bone's frame — its centre; for a hand
  * with fingers, its `contact`'s — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers, where
- * it holds the grip (`Contact`, the bone's frame) and the world's up in the thing's frame as it sets off. */
+ * it holds the grip (`Part`, the bone's frame) and the world's up in the thing's frame as it sets off. */
 export interface Palm {
   at: Readonly<Vector3>;
   turn: () => Quaternion;
-  contact?: Contact;
+  contact?: Part;
   up?: Vector3;
 }
 
@@ -61,14 +61,17 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goa
   const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }), ...(asked?.preferred && { preferred: true }) };
   if (!palm) return { position: grip.at.position.clone(), ...turns };
   // (the wrist, the palm on the empty, the hand turned as asked, or as it is — facing as asked — in the thing's frame)
-  const empty = grip.at.position, wrist = new Vector3(), faced = new Quaternion();
-  const turned = () => {
-    if (quaternion && !axis) return quaternion;
-    const now = palm.turn();
-    if (!grip.facing || !palm.contact) return now;
-    return faced.setFromUnitVectors(_facing.copy(palm.contact.facing).applyQuaternion(now), grip.facing).multiply(now);
-  };
-  return { get position() { return wrist.copy(palm.at).applyQuaternion(turned()).negate().add(empty); }, ...turns };
+  const empty = grip.at.position, wrist = new Vector3();
+  return { get position() { return wrist.copy(palm.at).applyQuaternion(heldTurn(grip, palm, asked)).negate().add(empty); }, ...turns };
+}
+
+/** the hand bone's turn on `grip` (the thing's frame) as `palm` takes it: as the grip asks (`palmTurn`, given as `asked`), or as it is —
+ * facing as asked, by the least turn that faces it so */
+export function heldTurn(grip: Grip, palm: Palm, asked = palmTurn(grip, palm)): Quaternion {
+  if (asked && !asked.axis) return asked.quaternion;
+  const now = palm.turn();
+  if (!grip.facing || !palm.contact) return now;
+  return new Quaternion().setFromUnitVectors(_facing.copy(palm.contact.facing).applyQuaternion(now), grip.facing).multiply(now);
 }
 
 /**
@@ -93,7 +96,7 @@ function palmTurn(grip: Grip, { contact, up }: Palm): { quaternion: Quaternion; 
  * pressed palm down, a hand rolled as it came — straight off a palm-up hold under a rifle — pressed palm up). A push straight up or down
  * leaves the roll as it is.
  */
-function pointing(turn: Quaternion, contact: Contact, push: Vector3, up: Vector3): boolean {
+function pointing(turn: Quaternion, contact: Part, push: Vector3, up: Vector3): boolean {
   const level = (v: Vector3) => v.addScaledVector(push, -v.dot(push));
   const down = level(up.clone().negate());
   if (down.lengthSq() < 1e-6) return false;

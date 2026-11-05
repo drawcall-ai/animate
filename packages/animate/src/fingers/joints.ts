@@ -1,4 +1,4 @@
-import type { Contact } from './contact';
+import type { Part } from './part';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
 import { Triangles } from '../kernel/triangles';
@@ -57,8 +57,8 @@ const OPPOSE = 0.9;
  * back instead of round a handle.
  */
 const PRONATE = { lifted: 0.4, most: (70 * Math.PI) / 180 } as const;
-/** how far off its length toward its palm side a fingertip presses (rad) */
-const PRESS = (25 * Math.PI) / 180;
+/** how far off its length toward its palm side a fingertip presses a button, and a pad presses on what the hand holds (rad) */
+export const PRESS = (25 * Math.PI) / 180, PINCH = (70 * Math.PI) / 180;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
@@ -195,29 +195,31 @@ export class Joints {
 
   /**
    * where `digit`'s pad is as `shape` would have it, in the hand's frame, and the way it faces (into `out`, `facing`): the point of its
-   * rounded end that faces `PRESS` off its length toward its palm side — a fingertip presses nearly end on (faced halfway to the palm
-   * side, a pointing finger, its joints a little bent, came onto a button with the hand flat along the panel)
+   * rounded end that faces `round` off its length toward its palm side — `PRESS`, nearly end on, as a fingertip presses a button (faced
+   * halfway to the palm side, a pointing finger, its joints a little bent, came onto a button with the hand flat along the panel), or
+   * `PINCH`, the flat of the pad, as it presses on what a hand holds
    */
-  pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3()): Vector3 {
+  pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3(), round = PRESS): Vector3 {
     const last = this.chain(digit)[2], frame = this.frames(digit, shape)[2];
-    facing.copy(last.along).multiplyScalar(Math.cos(PRESS)).addScaledVector(last.palmar, Math.sin(PRESS));
+    facing.copy(last.along).multiplyScalar(Math.cos(round)).addScaledVector(last.palmar, Math.sin(round));
     out.copy(last.along).multiplyScalar(last.length).addScaledVector(facing, last.depth).applyMatrix4(frame);
     facing.transformDirection(frame);
     return out;
   }
 
-  /** where this hand holds a handle of `radius` in its power grasp (see `Contact`) */
-  handle(radius: number): Contact {
+  /** where this hand holds a handle of `radius` in its power grasp (see `Part`) */
+  handle(radius: number): Part {
     const proximal = this.fingers.middle.joints[0].length;
     const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * proximal).addScaledVector(this.palm, this.palmDepth + radius);
     return { at, axis: this.across.clone().addScaledVector(this.along, HANDLE.slant).normalize(), facing: this.palm.clone(), palm: this.palm.clone() };
   }
 
-  /** where this hand holds a grip with its palm's middle, on its skin, or presses with `digit`'s pad as `shape` has it (see `Contact`) */
-  touch(digit: Digit | null, shape: Shape): Contact {
+  /** where this hand holds a grip with its palm's middle, on its skin, or presses with `digit`'s pad as `shape` has it, `round` off its
+   * length (see `pad`, `Part`) */
+  touch(digit: Digit | null, shape: Shape, round = PRESS): Part {
     if (!digit) return { at: this.handle(0).at, axis: this.across.clone(), facing: this.palm.clone(), palm: this.palm.clone() };
     const facing = new Vector3();
-    return { at: this.pad(digit, shape, new Vector3(), facing), axis: this.across.clone(), facing, palm: this.palm.clone() };
+    return { at: this.pad(digit, shape, new Vector3(), facing, round), axis: this.across.clone(), facing, palm: this.palm.clone() };
   }
 
   private chain(digit: Digit): Three {
