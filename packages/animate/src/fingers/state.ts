@@ -1,12 +1,12 @@
 import { Matrix4, Quaternion, SkinnedMesh, Vector3, type Object3D } from 'three';
-import { turnOnto } from '../kernel/math';
+import { smoothstep, turnOnto } from '../kernel/math';
 import { Thing, type Grip } from '../things/thing';
 import type { Hold } from '../things/resolve';
 import type { DigitBones } from './bones';
 import { closedOn, reaching } from './closing';
 import type { Contact } from './contact';
 import { Joints } from './joints';
-import { digitOf, easeShape, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
+import { blendShape, digitOf, easeShape, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
 
 /** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds (for a puppet's
  * grip, with how far its wrist stood off where `gripOn` puts it then), and where each digit a grip puts on one of its empties last reached
@@ -17,24 +17,25 @@ interface Hand {
   asked: { shape: Shape; time: number } | null;
   closed: { on: Hold | Object3D; shape: Shape; off: Vector3 | null } | null;
   reached: Map<Digit, { empty: string; target: Vector3; shape: Shape }>;
-  /** a hand verb is bringing it to a grip */
-  coming: boolean;
+  /** the grip's empty a hand verb is bringing it to */
+  coming: Object3D | null;
 }
 
 /** how long a hand that has taken hold of something waits before its fingers close on it (s): until its palm has settled there */
 const SETTLE = 0.1;
 /**
- * a hand on its way to a grip opens to take it (Jeannerod 1984: the grip opens wider than the object during the reach, closing on it as
+ * a hand on its way to a grip opens to take it (Jeannerod 1984: the grip opens wider than the object late in the reach, closing on it as
  * the hand arrives): the thumb out in front of the palm, the fingers side by side and a little bent, each a little more than the one before
- * as a relaxed hand's are (all alike, the open hand read as a mannequin's claw; fanned, as a stiff splayed hand) — and how near its wrist
- * must come to where it holds the grip before it closes (m)
+ * as a relaxed hand's are (all alike, the open hand read as a mannequin's claw; fanned, as a stiff splayed hand) — relaxed until its wrist
+ * is `OPENING` from where it holds the grip, open from `OPEN` (m: opened all the way, it travelled 0.6 s as a palm-up claw), and closing
+ * on it within `ARRIVED` (m)
  */
 const APERTURE: Shape = {
   thumb: { curl: 0.12, oppose: 0.12, spread: 0.4 },
   index: { curl: 0.1, hook: 0.08, spread: 0.05 }, middle: { curl: 0.14, hook: 0.1, spread: 0 }, ring: { curl: 0.19, hook: 0.12, spread: 0.04 },
   little: { curl: 0.25, hook: 0.14, spread: 0.08 },
 };
-const ARRIVED = 0.015;
+const OPENING = 0.22, OPEN = 0.08, ARRIVED = 0.015;
 /** how far a digit's empty may move in the hand before the digit reaches for it afresh, and a puppet's wrist on its grip before the hand
  * closes on it afresh (m) */
 const MOVED = 0.002;
@@ -57,7 +58,7 @@ export class FingerState {
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       const joints = new Joints(node, bones[side], nodes, side, skinsOf(model, node)), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, reached: new Map(), coming: false };
+      return { joints, shape, asked: null, closed: null, reached: new Map(), coming: null };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -77,38 +78,23 @@ export class FingerState {
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands[side], hold = this.holding[side];
       const asked = hand.asked && time - hand.asked.time < 1.5 * dt ? hand.asked.shape : null;
-      this.ease(hand, hold ? this.held(hand, hold, time) ?? hand.shape : hand.coming ? APERTURE : asked ?? RELAXED, seconds);
+      this.ease(hand, hold ? this.held(hand, hold, time) ?? hand.shape : hand.coming ? this.onto(side, hand.coming) : asked ?? RELAXED, seconds);
     }
   }
 
-  /** a hand verb is bringing `side` to a grip (`true`) or no longer is: until it holds it, the hand opens as it comes */
-  toward(side: 'left' | 'right', coming: boolean): void {
-    this.hands[side].coming = coming;
+  /** a hand verb is bringing `side` to the grip `empty`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`) */
+  toward(side: 'left' | 'right', empty: Object3D | null): void {
+    this.hands[side].coming = empty;
   }
 
-  /**
-   * `side`'s fingers eased `seconds` on toward `to`: on the way to an empty, open; once the wrist is there (`gripOn`), closed on its thing
-   * with the empty's asks laid over that — once while it is given it, and afresh while the wrist still settles onto it (moving `MOVED` on
-   * it), else the fingers stay as they closed short of the thing on arriving; a shape; or relaxed
-   */
+  /** `side`'s fingers eased `seconds` on toward `to`: an empty's grip as they come to it and take it (`onto`), a shape, or relaxed */
   set(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     const hand = this.hands[side];
     if (to === null || !('isObject3D' in to)) {
       hand.closed = null;
       return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds);
     }
-    const { wrist } = this.gripOn(side, to), off = hand.joints.hand.getWorldPosition(new Vector3()).sub(wrist);
-    if (off.length() > ARRIVED) {
-      hand.closed = null;
-      return this.ease(hand, APERTURE, seconds);
-    }
-    const thing = to.parent;
-    if (!thing) throw new Error(`fingers: "${to.name}" hangs from nothing`);
-    if (hand.closed?.on !== to || !hand.closed.off || hand.closed.off.distanceTo(off) > MOVED) {
-      hand.closed = { on: to, shape: this.taking(hand, Thing.of(thing).grip(to.name), thing), off };
-      hand.reached.clear();
-    }
-    this.ease(hand, this.asked(hand, hand.closed.shape, to, thing), seconds);
+    this.ease(hand, this.onto(side, to), seconds);
   }
 
   /**
@@ -139,6 +125,29 @@ export class FingerState {
     return joints.handle(grip.handle.radius / new Vector3().setFromMatrixScale(joints.hand.matrixWorld).x);
   }
 
+  /**
+   * the shape `side` takes for the grip `empty` as its wrist stands off where `gripOn` puts it: for a pad, the grip's own shape all the way
+   * (a fingertip comes pointing); else relaxed, opening as it nears (`APERTURE`), and within `ARRIVED` closed on its thing with the
+   * empty's asks laid over that — afresh while the wrist still settles onto it (moving `MOVED` on it), so the fingers close as the palm
+   * meets it, not once it has stopped there
+   */
+  private onto(side: 'left' | 'right', empty: Object3D): Shape {
+    const hand = this.hands[side], thing = empty.parent;
+    if (!thing) throw new Error(`fingers: "${empty.name}" hangs from nothing`);
+    const grip = Thing.of(thing).grip(empty.name);
+    if (grip.pad) return shapeOf(values(empty), RELAXED);
+    const { wrist } = this.gripOn(side, empty), off = hand.joints.hand.getWorldPosition(new Vector3()).sub(wrist), distance = off.length();
+    if (distance > ARRIVED) {
+      hand.closed = null;
+      return blendShape(RELAXED, APERTURE, 1 - smoothstep(OPEN, OPENING, distance));
+    }
+    if (hand.closed?.on !== empty || !hand.closed.off || hand.closed.off.distanceTo(off) > MOVED) {
+      hand.closed = { on: empty, shape: this.taking(hand, grip, thing), off };
+      hand.reached.clear();
+    }
+    return this.asked(hand, hand.closed.shape, empty, thing);
+  }
+
   /** the shape `hand` takes on `hold` (none yet: its palm still settling): its grip's asks laid over the shape it closed to */
   private held(hand: Hand, hold: Hold, time: number): Shape | null {
     const since = this.since.get(hold) ?? time;
@@ -159,8 +168,8 @@ export class FingerState {
 
   /**
    * `closed` with what `grip` (an empty on `thing`) asks in `userData.fingers` laid over it: each digit given values takes them; each
-   * given an empty's name reaches its pad there, afresh once the empty moves in the hand (not the digit whose pad the grip is: the hand
-   * goes so that it is there)
+   * given an empty's name reaches its pad there, pressing on the part the empty hangs from (not on the thing itself), afresh once the empty
+   * moves in the hand (not the digit whose pad the grip is: the hand goes so that it is there)
    */
   private asked(hand: Hand, closed: Shape, grip: Object3D, thing: Object3D): Shape {
     const shape = shapeOf(values(grip), closed);
@@ -173,7 +182,7 @@ export class FingerState {
       const afresh = last?.empty !== value;
       if (afresh || !last || last.target.distanceTo(target) > MOVED) {
         const reached = structuredClone(afresh || !last ? shape : last.shape);
-        reaching(hand.joints, thing, reached, digit, target, afresh);
+        reaching(hand.joints, thing, reached, digit, target, afresh, empty.parent === thing ? null : empty.parent);
         hand.reached.set(digit, { empty: value, target, shape: reached });
       }
       const reached = hand.reached.get(digit)?.shape;

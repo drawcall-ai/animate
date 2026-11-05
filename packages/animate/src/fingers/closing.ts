@@ -82,13 +82,14 @@ interface Value {
  * `shape` with `digit` bent so its pad is as near `target` (the hand's frame) as it comes without passing into `object`, in place: a
  * finger's curl (lifted too), hook and spread, a thumb's curl, opposition and spread (splayed too), searched over their range on a coarse grid,
  * then on a fine one about the best so far (`afresh`), or only close about `shape` as it comes (an empty moved a little in the hand: a
- * hand's drift on its grip re-reaches every few frames). Each grid's shapes are tried nearest first, the first whose palm side, bones and
- * back all keep out of the object taken (a trigger finger goes into the guard, not through its frame; a thumb reaching under a rung goes
- * round it, not through); with none, the nearest of those passing into it least (against a stile's flat face, the thumb that comes round
- * its edge).
+ * hand's drift on its grip re-reaches every few frames). Each grid's shapes are tried nearest first, the first whose palm side (`PRESSED`,
+ * as a closing fold's), bones and back all keep out of the object taken (a trigger finger goes into the guard, not through its frame; a
+ * thumb reaching under a rung goes round it, not through); with none, the nearest of those passing into it least (against a stile's flat
+ * face, the thumb that comes round its edge). The part `pressed` (the target's own: a trigger blade) is what the pad presses on, not kept
+ * out of (counted, a pad on a 6 mm blade always touched it, and the finger stayed laid straight 3 cm off it).
  */
-export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean): void {
-  const near = nearHand(joints, object, { digit, shape });
+export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean, pressed: Object3D | null = null): void {
+  const near = nearHand(joints, object, { digit, shape, pressed });
   const thumb = shape.thumb, finger = digit === 'thumb' ? null : shape[digit];
   const values: Value[] = finger
     ? (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => finger[key], set: (v: number) => (finger[key] = v), least: key === 'curl' ? LIFTED : 0 }))
@@ -96,7 +97,7 @@ export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: 
   /** how many of the digit's segment lines (palm side, bone, back) pass into the object as `shape` has it, counted no further than `most` */
   const into = (most: number) => {
     let count = 0;
-    for (const side of [1, 0, -1]) if ((count += touches(joints, near, digit, shape, side).length) >= most) break;
+    for (const side of [PRESSED, 0, -PRESSED]) if ((count += touches(joints, near, digit, shape, side).length) >= most) break;
     return count;
   };
   let best = values.map((value) => value.get());
@@ -128,12 +129,14 @@ export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: 
 }
 
 /** `object`'s triangles about `joints`' hand as they stand now, in the world — or only those `reach`'s digit reaches, about its first joint
- * (every bend `reaching` tries is checked against them, and a grip's whole receiver is thousands) — meshes of things attached to it
- * (their own `userData.mass`) and hidden meshes left out, skinned meshes as they stand at rest */
-function nearHand(joints: Joints, object: Object3D, reach?: { digit: Digit; shape: Shape }): Triangles {
+ * (every bend `reaching` tries is checked against them, and a grip's whole receiver is thousands), its part `pressed` left out — meshes of
+ * things attached to it (their own `userData.mass`) and hidden meshes left out, skinned meshes as they stand at rest */
+function nearHand(joints: Joints, object: Object3D, reach?: { digit: Digit; shape: Shape; pressed: Object3D | null }): Triangles {
   joints.hand.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, true);
-  const meshes = meshesOf(object).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
+  const pressed = new Set<Object3D>();
+  reach?.pressed?.traverse((node) => pressed.add(node));
+  const meshes = meshesOf(object).filter((mesh) => !pressed.has(mesh)).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
   if (!reach) return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), REACH);
   const segments = joints.segments(reach.digit, reach.shape), length = segments.reduce((sum, [start, end]) => sum + start.distanceTo(end), 0);
   return new Triangles(meshes, segments[0][0], length + SLACK);

@@ -97,7 +97,7 @@ Object.assign(face.userData, { pad: 'index', facing: [1, 0, 0], fingers: { ...PO
 yield* grab(person, button, { left: 'face' }); /* press it in */ release(person, { left: button });
 ```
 
-A grip's `userData.fingers` lays digits over the closed hand: values, or the name of an empty on the thing the digit's pad goes to, as near as it comes without going into the thing. Move that empty to move the digit (a trigger drawn back 4 mm on a shot), and name a pad empty for the thumb and the index for a pinch.
+A grip's `userData.fingers` lays digits over the closed hand: values, or the name of an empty on the thing the digit's pad goes to, as near as it comes without going into the thing — except the part the empty hangs from, which the pad presses on (hang a trigger's empty under the trigger's own part, not straight off the rifle). Move that empty to move the digit (a trigger drawn back 4 mm on a shot), and name a pad empty for the thumb and the index for a pinch.
 
 A shape is per digit, each value 0 … 1: a finger's `curl` (all three joints, coupled, 0 straight along the palm however the rig rests it), `hook` (the end two only) and `spread`, the thumb's `curl`, `oppose` (swung across the palm toward the little finger) and `spread` (lifted out in front of the palm; a thumb wrapping a handle takes both, one laid along a face neither); a finger's `curl` goes down to -0.15 (lifted a little past straight, as along a receiver) and a thumb's `oppose` and `spread` to -0.8 (back out of the palm past how the rig rests it). Start from `RELAXED`, `FIST`, `OPEN`, `POINT` or `THUMBS_UP` and override digits: `pose(person, { fingers: { right: POINT } }, { until: 2 })`. A pose's fingers apply only to a free hand.
 

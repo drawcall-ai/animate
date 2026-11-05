@@ -101,5 +101,15 @@ export function easeShape(shape: Shape, goal: Shape, seconds: number): void {
   }
 }
 
+/** `from` the share `t` (0 … 1) of the way to `to`, every value */
+export function blendShape(from: Shape, to: Shape, t: number): Shape {
+  const mix = (a: number, b: number) => a + (b - a) * t;
+  const finger = (a: Required<Finger>, b: Required<Finger>) => ({ curl: mix(a.curl, b.curl), hook: mix(a.hook, b.hook), spread: mix(a.spread, b.spread) });
+  return {
+    thumb: { curl: mix(from.thumb.curl, to.thumb.curl), oppose: mix(from.thumb.oppose, to.thumb.oppose), spread: mix(from.thumb.spread, to.thumb.spread) },
+    index: finger(from.index, to.index), middle: finger(from.middle, to.middle), ring: finger(from.ring, to.ring), little: finger(from.little, to.little),
+  };
+}
+
 /** how quickly fingers take up a new shape (s): their time constant */
 const EASE = 0.07;

@@ -19,7 +19,7 @@ export type Reacher = Handed & PersonLegged & {
   /** the claim that has `channel` this sub-step, if a request claims it */
   owner(channel: Channel): Claim | undefined;
   /** its fingers' bones by hand, if its skeleton has finger bones */
-  readonly fingers: { contact(side: Side, grip: Grip): Contact; toward(side: Side, coming: boolean): void } | null;
+  readonly fingers: { contact(side: Side, grip: Grip): Contact; toward(side: Side, empty: Object3D | null): void } | null;
   /** how many updates it has finished (0: none of it has been shown yet) */
   readonly updates: number;
   /** `bones` as its pose being written has them, as if they had always stood so (only as it starts) */

@@ -89,6 +89,26 @@ describe('fingers', () => {
     expect(joints.pad('index', shape, new Vector3()).applyMatrix4(hand.matrixWorld).y).toBeGreaterThan(plate.position.y);
   });
 
+  it('reach a pad onto the part it presses, kept out only of the rest of the thing', () => {
+    const species = humanoid(FINGERED), body = new Body(species), fingers = species.fingers;
+    if (!fingers) throw new Error('no finger bones');
+    const hand = body.bones.rightHand, joints = new Joints(hand, fingers.right, body.bones, 'right', []);
+    hand.updateWorldMatrix(true, true);
+    // (a thin blade hanging under the straight index's end, across its fold, as a trigger, and an empty on its face toward the knuckle)
+    const knuckle = body.bones.rightIndexProximal.getWorldPosition(new Vector3()), tip = body.bones.rightIndexDistal.getWorldPosition(new Vector3());
+    const thing = empty(roomOf(body), 'thing', knuckle.clone().lerp(tip, 0.8)), blade = new Mesh(new BoxGeometry(0.004, 0.06, 0.06));
+    blade.position.set(0, -0.03, 0);
+    thing.add(blade);
+    thing.updateMatrixWorld(true);
+    const target = hand.worldToLocal(thing.localToWorld(new Vector3(0.002, -0.025, 0)));
+    const kept = shapeOf({}), pressing = shapeOf({});
+    reaching(joints, thing, kept, 'index', target, true);
+    reaching(joints, thing, pressing, 'index', target, true, blade);
+    const miss = (shape: typeof kept) => joints.pad('index', shape, new Vector3()).distanceTo(target);
+    expect(miss(pressing)).toBeLessThan(0.01);
+    expect(miss(pressing)).toBeLessThan(miss(kept));
+  });
+
   it('take a handle with its palm turned as far as the wrist turns it so, where it cannot be turned all the way', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     // (the rod in front of the right hip, its palm asked out away from the body's middle, the thumb forward: past the forearm's turn)
