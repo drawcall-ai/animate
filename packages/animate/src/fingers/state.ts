@@ -82,7 +82,7 @@ export class FingerState {
 
   /**
    * `side`'s fingers eased `seconds` on toward `to`: on the way to an empty, open; once the wrist is there (`gripOn`), closed on its thing
-   * (once, while it is given it); a shape; or relaxed
+   * (once, while it is given it) with the empty's asks laid over that; a shape; or relaxed
    */
   set(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     const hand = this.hands[side];
@@ -97,8 +97,11 @@ export class FingerState {
     }
     const thing = to.parent;
     if (!thing) throw new Error(`fingers: "${to.name}" hangs from nothing`);
-    if (hand.closed?.on !== to) hand.closed = { on: to, shape: closedOn(hand.joints, thing) };
-    this.ease(hand, hand.closed.shape, seconds);
+    if (hand.closed?.on !== to) {
+      hand.closed = { on: to, shape: closedOn(hand.joints, thing) };
+      hand.reached.clear();
+    }
+    this.ease(hand, this.asked(hand, hand.closed.shape, to, thing), seconds);
   }
 
   /** where hand `side`'s bone goes to hold `empty` (a grip of its parent): its wrist and its bone's rotation (world) — see `Body.gripOn` */
@@ -128,16 +131,23 @@ export class FingerState {
       hand.closed = { on: hold, shape: closedOn(hand.joints, hold.thing.object) };
       hand.reached.clear();
     }
-    const grip = hold.thing.grip(hold.grip).node, asked: unknown = grip.userData.fingers;
-    if (asked === undefined) return hand.closed.shape;
-    if (typeof asked !== 'object' || asked === null) throw new Error(`"${hold.grip}" userData.fingers is neither digits' values nor empties' names`);
-    // (each digit given values takes them; each given an empty's name reaches its pad there, afresh once the empty moves in the hand)
+    return this.asked(hand, hand.closed.shape, hold.thing.grip(hold.grip).node, hold.thing.object);
+  }
+
+  /**
+   * `closed` with what `grip` (an empty on `thing`) asks in `userData.fingers` laid over it: each digit given values takes them; each
+   * given an empty's name reaches its pad there, afresh once the empty moves in the hand
+   */
+  private asked(hand: Hand, closed: Shape, grip: Object3D, thing: Object3D): Shape {
+    const asked: unknown = grip.userData.fingers;
+    if (asked === undefined) return closed;
+    if (typeof asked !== 'object' || asked === null) throw new Error(`"${grip.name}" userData.fingers is neither digits' values nor empties' names`);
     const values = Object.fromEntries(Object.entries(asked).filter(([, value]) => typeof value !== 'string'));
-    const shape = shapeOf(values, hand.closed.shape);
+    const shape = shapeOf(values, closed);
     for (const [name, value] of Object.entries(asked)) {
       if (typeof value !== 'string') continue;
-      const digit = digitOf(name), empty = hold.thing.object.getObjectByName(value);
-      if (!empty) throw new Error(`"${hold.grip}" userData.fingers.${name}: "${hold.thing.object.name}" has no empty named "${value}"`);
+      const digit = digitOf(name), empty = thing.getObjectByName(value);
+      if (!empty) throw new Error(`"${grip.name}" userData.fingers.${name}: "${thing.name}" has no empty named "${value}"`);
       const target = handFrame(hand.joints.hand, empty), last = hand.reached.get(digit);
       const afresh = last?.empty !== value;
       if (afresh || !last || last.target.distanceTo(target) > MOVED) {

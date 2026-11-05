@@ -6,6 +6,9 @@ import { Parts, type Point } from '../parts';
 const SPACING = 0.27;
 /** How far each stile stands off the middle, how far the ladder stands off the wall and how far its stiles run on above the landing (m). */
 export const STILE = 0.22;
+/** A stile's flat bar: how thick it is across the ladder and how deep toward the wall; and a rung's radius (m). */
+export const STILE_BAR = { thick: 0.012, deep: 0.065 } as const;
+export const RUNG_RADIUS = 0.014;
 const STANDOFF = 0.18;
 export const RAIL = 1.15;
 
@@ -33,12 +36,12 @@ export function createLadder(height: number): Ladder {
   const p = new Parts();
   for (const side of [-1, 1]) {
     const x = side * STILE;
-    p.box([0.012, top, 0.065], [x, top / 2, 0], steel, 0.004);
+    p.box([STILE_BAR.thick, top, STILE_BAR.deep], [x, top / 2, 0], steel, 0.004);
     // Brackets to the wall below the landing and to its edge, and the stile's head bent over toward the landing.
     for (const y of [0.4, height / 2, height - 0.08]) p.box([0.012, 0.05, STANDOFF], [x, y, STANDOFF / 2], steel, 0.004);
     p.rod(0.016, [x, top, 0], [x, top - 0.12, STANDOFF], steel);
   }
-  for (let rung = 1; rung <= rungs; rung++) p.rod(0.014, [-STILE, rung * spacing, 0], [STILE, rung * spacing, 0], steel);
+  for (let rung = 1; rung <= rungs; rung++) p.rod(RUNG_RADIUS, [-STILE, rung * spacing, 0], [STILE, rung * spacing, 0], steel);
   const model = new Group();
   model.name = 'Ladder';
   p.finish(model);

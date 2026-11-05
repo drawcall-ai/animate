@@ -63,6 +63,22 @@ describe('fingers', () => {
     expect(bent(body, 'rightMiddleIntermediate')).toBeLessThan(0.5);
   });
 
+  it('of a hand posed by its app take what its grip asks over the shape they close to', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+    // (a rod under the right hand as it stands, its grip asking the index to stay straight)
+    const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
+    rod.name = 'rod';
+    const grip = empty(rod, 'grip', new Vector3());
+    Object.assign(grip.userData, { handle: [0, 1, 0], fingers: { index: { curl: 0, hook: 0 } } });
+    room.add(rod);
+    room.updateMatrixWorld(true);
+    rod.position.add(body.bones.rightHand.getWorldPosition(new Vector3()).sub(body.gripOn('right', grip).wrist));
+    room.updateMatrixWorld(true);
+    for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+    expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.05);
+    expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.3);
+  });
+
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {
     const body = new Body(humanoid(FINGERED));
     roomOf(body);

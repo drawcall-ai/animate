@@ -97,7 +97,8 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet, its bones turned by
    * hand; a body its update poses does this itself, and the two would fight): the empty the hand is on or on its way to — a grip, as a
    * thing's are named, its thing the empty's parent — opening the hand as it comes and closing it round the thing's meshes once the wrist
-   * is where `gripOn` puts it; a shape (`Fingers`; `FIST`, `POINT`, …); or relaxed for `null`. Call it each frame after posing the hand.
+   * is where `gripOn` puts it, with what the empty asks in `userData.fingers` laid over that as for a hold; a shape (`Fingers`; `FIST`,
+   * `POINT`, …); or relaxed for `null`. Call it each frame after posing the hand.
    */
   fingers(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     fingersOf(this).set(side, to, seconds);
