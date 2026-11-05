@@ -34,7 +34,7 @@ const FINGERED: SkeletonBone[] = [...PERSON, ...(['left', 'right'] as const).fla
 const bent = (body: Body, name: string) => 2 * Math.acos(Math.min(1, Math.abs(body.bones[name].quaternion.w)));
 
 describe('fingers', () => {
-  it('close round a handle a hand grabs, none through it, and open as the hand lets go', () => {
+  it('close round a handle a hand grabs, none through it, the thumb round its far side, and open as the hand lets go', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     // (a 3 cm rod held across the palm, in front of the right hip)
     const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
@@ -45,7 +45,7 @@ describe('fingers', () => {
     // (a handle along its length, its radius measured: the thumb forward, the palm facing in toward the body's middle)
     Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [1, 0, 0] });
     room.add(rod);
-    let closed = 0, gaps: number[] = [];
+    let closed = 0, gaps: number[] = [], round = 0;
     play(function* () {
       if (!(yield* grab(body, rod, { right: 'grip' }))) throw new Error('the hand did not take the rod');
       yield* wait(1);
@@ -56,6 +56,9 @@ describe('fingers', () => {
         return axis.closestPointToPoint(joint, true, new Vector3()).distanceTo(joint);
       });
       closed = bent(body, 'rightMiddleIntermediate');
+      // (the thumb round onto the rod's far side from the palm: the way out to it from the axis against the way out to the knuckles)
+      const at = (bone: string) => { const point = body.bones[bone].getWorldPosition(new Vector3()); return point.sub(axis.closestPointToPoint(point, false, new Vector3())).normalize(); };
+      round = at('rightThumbDistal').dot(at('rightMiddleProximal'));
       release(body, rod);
       yield* wait(1);
     }, [body], 6);
@@ -64,7 +67,8 @@ describe('fingers', () => {
       expect(gap).toBeGreaterThan(0.015);
       expect(gap).toBeLessThan(0.035);
     }
-    expect(bent(body, 'rightMiddleIntermediate')).toBeLessThan(0.5);
+    expect(round).toBeLessThan(0);
+    expect(bent(body, 'rightMiddleIntermediate')).toBeLessThan(closed - 0.1);
   });
 
   it('reach a pad toward an empty no nearer than keeps it out of the thing', () => {
@@ -214,8 +218,8 @@ describe('fingers', () => {
       yield* wait(1);
     }, [body], 2);
     expect(fisted).toBeGreaterThan(1.4);
-    expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.6);
-    expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.6);
+    expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.8);
+    expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.8);
   });
 
   it('lie along the palm with no curl where the skin rests them curled in at the knuckles, and lift a little past it below 0', () => {

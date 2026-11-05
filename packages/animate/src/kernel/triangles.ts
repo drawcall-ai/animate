@@ -47,12 +47,12 @@ export class Triangles {
 
   /**
    * whether `ray` starts inside the meshes: the first triangle it meets is met from behind, its corners wound clockwise as seen from the
-   * ray (a closed mesh's faces wound outward, as three.js builds them); meeting none, outside
+   * ray (a closed mesh's faces wound outward, as three.js builds them); meeting none, outside — looked for as far as the triangles'
+   * furthest bounds from where it starts, or `within` (m) if that is nearer (a part no thicker than that)
    */
-  inside(ray: Readonly<Ray>): boolean {
-    // (as far as the triangles' furthest bounds from where it starts)
+  inside(ray: Readonly<Ray>, within = Infinity): boolean {
     const e = this.extent, o = ray.origin;
-    const far = Math.hypot(Math.max(Math.abs(o.x - e[0]), Math.abs(o.x - e[3])), Math.max(Math.abs(o.y - e[1]), Math.abs(o.y - e[4])), Math.max(Math.abs(o.z - e[2]), Math.abs(o.z - e[5])));
+    const far = Math.min(within, Math.hypot(Math.max(Math.abs(o.x - e[0]), Math.abs(o.x - e[3])), Math.max(Math.abs(o.y - e[1]), Math.abs(o.y - e[4])), Math.max(Math.abs(o.z - e[2]), Math.abs(o.z - e[5]))));
     const [k] = this.met(ray, far), c = this.corners;
     if (k < 0) return false;
     _a.set(c[k], c[k + 1], c[k + 2]); _b.set(c[k + 3], c[k + 4], c[k + 5]); _c.set(c[k + 6], c[k + 7], c[k + 8]);

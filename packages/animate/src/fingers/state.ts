@@ -1,4 +1,4 @@
-import { Matrix4, Quaternion, SkinnedMesh, Vector3, type Object3D } from 'three';
+import { Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
 import { smoothstep, turnOnto } from '../kernel/math';
 import { Thing, type Grip } from '../things/thing';
 import type { Hold } from '../things/resolve';
@@ -31,9 +31,9 @@ const SETTLE = 0.1;
  * all the way, it travelled 0.6 s as a palm-up claw), and closing on it within `ARRIVED` (m)
  */
 const APERTURE: Shape = {
-  thumb: { curl: 0.12, oppose: 0.12, spread: 0.4 },
-  index: { curl: 0.1, hook: 0.03, spread: 0.05 }, middle: { curl: 0.14, hook: 0.04, spread: 0 }, ring: { curl: 0.19, hook: 0.05, spread: 0.04 },
-  little: { curl: 0.25, hook: 0.06, spread: 0.08 },
+  thumb: { curl: 0.12, oppose: 0.1, spread: 0.55 },
+  index: { curl: 0.16, hook: 0.05, spread: 0.06 }, middle: { curl: 0.2, hook: 0.06, spread: 0 }, ring: { curl: 0.25, hook: 0.07, spread: 0.05 },
+  little: { curl: 0.3, hook: 0.08, spread: 0.1 },
 };
 const NEARING = 0.22, NEAR = 0.08, ARRIVED = 0.015;
 /** how far a digit's empty may move in the hand before the digit reaches for it afresh, and a puppet's wrist on its grip before the hand
@@ -90,7 +90,7 @@ export class FingerState {
   /** `side`'s fingers eased `seconds` on toward `to`: an empty's grip as they come to it and take it (`onto`), a shape, or relaxed */
   set(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     const hand = this.hands[side];
-    if (to === null || !('isObject3D' in to)) {
+    if (!(to instanceof Object3D)) {
       hand.closed = null;
       return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds);
     }
@@ -142,7 +142,7 @@ export class FingerState {
       return blendShape(RELAXED, APERTURE, 1 - smoothstep(NEAR, NEARING, distance));
     }
     if (hand.closed?.on !== empty || !hand.closed.off || hand.closed.off.distanceTo(off) > MOVED) {
-      hand.closed = { on: empty, shape: this.taking(hand, grip, thing), off };
+      hand.closed = { on: empty, shape: this.taking(hand, grip, thing, hand.closed?.on === empty ? hand.closed.shape : null), off };
       hand.reached.clear();
     }
     return this.asked(hand, hand.closed.shape, empty, thing);
@@ -155,15 +155,15 @@ export class FingerState {
     if (time - since < SETTLE) return null;
     const grip = hold.thing.grip(hold.grip);
     if (hand.closed?.on !== hold) {
-      hand.closed = { on: hold, shape: this.taking(hand, grip, hold.thing.object), off: null };
+      hand.closed = { on: hold, shape: this.taking(hand, grip, hold.thing.object, hand.closed?.on === grip.node ? hand.closed.shape : null), off: null };
       hand.reached.clear();
     }
     return this.asked(hand, hand.closed.shape, grip.node, hold.thing.object);
   }
 
-  /** the shape `hand` takes `grip` of `thing` in, before its asks: closed on it, or relaxed touching it with a pad */
-  private taking(hand: Hand, grip: Grip, thing: Object3D): Shape {
-    return grip.pad ? structuredClone(RELAXED) : closedOn(hand.joints, thing);
+  /** the shape `hand` takes `grip` of `thing` in, before its asks: closed on it (again, from `was`), or relaxed touching it with a pad */
+  private taking(hand: Hand, grip: Grip, thing: Object3D, was: Shape | null = null): Shape {
+    return grip.pad ? structuredClone(RELAXED) : closedOn(hand.joints, thing, grip.handle !== null, was);
   }
 
   /**

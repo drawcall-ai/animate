@@ -1,73 +1,74 @@
-import { Ray, Vector3, type Object3D } from 'three';
+import { Matrix4, Ray, Vector3, type Object3D } from 'three';
 import { meshesOf } from '../things/thing';
 import { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
 import { DIGITS, LIFTED, SPLAYED, type Digit, type Shape } from './shape';
 
 /**
- * how a grasp closes on a thing, each digit folding until it touches: the thumb lifted this far out in front of the palm (`Thumb.spread`),
- * beside the index, the fingers straight along the palm (a rig's rest fingers, a little curled, would start in a handle the palm lies on)
+ * how a grasp starts to close on a thing: the fingers straight along the palm (a rig's rest fingers, a little curled, would start in a
+ * handle the palm lies on), the thumb beside the index (it reaches round afresh, `padToward`)
  */
 const WRAP: Shape = {
-  thumb: { curl: 0, oppose: 0, spread: 0.55 },
+  thumb: { curl: 0, oppose: 0, spread: 0 },
   index: { curl: 0, hook: 0, spread: 0 }, middle: { curl: 0, hook: 0, spread: 0 }, ring: { curl: 0, hook: 0, spread: 0 }, little: { curl: 0, hook: 0, spread: 0 },
 };
-/** how far from the wrist a hand's fingers reach (m; a long hand's 0.21 m, and a handle's girth), and how much further than its segments'
- * lengths a digit's palm side reaches from its first joint's (m: the steps between one segment's palm side and the next's) */
-const REACH = 0.3, SLACK = 0.03;
+/** how much further than its segments' lengths a digit's palm side reaches from its first joint's, and a hand from its wrist (m: the
+ * steps between one segment's palm side and the next's) */
+const SLACK = 0.03;
+/** how far out from the palm the far side of what it holds is looked for (m): a thick handle's girth */
+const GIRTH = 0.08;
 /**
  * how far a digit's palm side is taken to touch, as a share of its depth from the bone: a fifth pressed in, as the pad's flesh gives (a
  * segment lying along a thing's surface, grazing it, does not stop the fold)
  */
 const PRESSED = 0.8;
-/** the steps each fold is tried at, and the halvings within the step it first touches in: 1/128 of its range */
-const STEPS = 8, HALVINGS = 4;
+/** the steps each fold is tried at, and the halvings within the step it first comes clear in: 1/128 of its range (in eighths, a
+ * finger stepped past the narrow clear between a pistol grip's front and the guard its tip passes on the way) */
+const STEPS = 16, HALVINGS = 3;
 
 /**
- * The shape hand `joints` takes closed on `object` as the hand stands now: each finger curled from straight until a segment's palm side
- * (`PRESSED`) touches the object's meshes, then its two end joints hooked on until they touch too (a handle across the palm wraps, the
- * fingertips round it); the thumb, out in front of the palm, swung across it until it touches, then curled until it touches too. A segment
- * touching as its fold starts lies in the object already: the fold goes on past it until it comes clear, then stops as it touches again (a
- * straight finger's tip in a magazine well hooks out of it and on under the guard); a digit clear of the object folds all the way (fingers
- * past the end of a grip close into the palm). Meshes of things attached to it (their own `userData.mass`) and hidden meshes are not
- * touched; skinned meshes are touched as they stand at rest.
+ * The shape hand `joints` takes closed on `object` as the hand stands now: each finger curled as far as it goes with no segment's palm
+ * side (`PRESSED`) in the object's meshes, then its two end joints hooked on as far as they go so too (a handle across the palm wraps, the
+ * fingertips round it; a box's flat underside, the fingers lie along it and fold up its side); then the thumb reaching its pad round to
+ * the far side of what the palm holds (`farSide`, `padToward`), as a thumb opposes the palm — on a `handle`, anywhere along that side:
+ * round a pistol grip's back strap onto its far side, under a rung the fingers come over. Each fold is opened from its end, not closed
+ * from its start, so what a finger passes on its way in (a trigger guard before the grip's front) does not stop it; a digit clear of the
+ * object at its end folds all the way (fingers past the end of a grip close into the palm). Meshes of things attached to it (their own
+ * `userData.mass`) and hidden meshes are not touched; skinned meshes are touched as they stand at rest. Closed again on it a little
+ * further on (`was`, the shape it closed to before), the thumb looks only close about where it was.
  */
-export function closedOn(joints: Joints, object: Object3D): Shape {
+export function closedOn(joints: Joints, object: Object3D, handle: boolean, was: Shape | null = null): Shape {
   const shape = structuredClone(WRAP), near = nearHand(joints, object);
-  /** the segments of `digit` touching the object as `shape` has it now, by index */
-  const touching = (digit: Digit) => touches(joints, near, digit, shape, PRESSED);
-  /** the most of `set`'s range (0 … `most`) it folds to before a segment comes to touch: stepped out from 0, so a fold does not pass
-   * through a thin rung on its way, then halved within the step it first touches in */
-  const fold = (digit: Digit, set: (value: number) => void, most: number) => {
-    const embedded = new Set(touching(digit));
-    const meets = () => {
-      const now = touching(digit);
-      for (const k of embedded) if (!now.includes(k)) embedded.delete(k);
-      return now.some((k) => !embedded.has(k));
-    };
-    let clear = 0, met = most;
-    for (let k = 1; k <= STEPS; k++) {
-      set((k / STEPS) * most);
-      if (meets()) break;
-      clear = (k / STEPS) * most;
+  /** the most of `set`'s range (`least` … `most`) at which `digit`'s segments it folds, `from` its `from`th out, keep out of the object —
+   * one lying on it as the fold starts (a finger along a receiver's flat underside) kept from sinking past half its flesh: stepped down
+   * from `most`, then halved within the step they first come clear in; none clear: `least` */
+  const fold = (digit: Digit, from: number, set: (value: number) => void, least: number, most: number) => {
+    set(least);
+    const lying = touches(joints, near, digit, shape, PRESSED), deep = touches(joints, near, digit, shape, PRESSED / 2);
+    const clear = () => touches(joints, near, digit, shape, PRESSED).every((k) => k < from || lying.includes(k))
+      && touches(joints, near, digit, shape, PRESSED / 2).every((k) => k < from || deep.includes(k));
+    const step = (most - least) / STEPS;
+    for (let k = STEPS; k >= 0; k--) {
+      set(least + k * step);
+      if (!clear()) continue;
+      let free = least + k * step, met = Math.min(most, free + step);
+      for (let h = 0; h < HALVINGS && met > free; h++) {
+        const mid = (free + met) / 2;
+        set(mid);
+        if (clear()) free = mid;
+        else met = mid;
+      }
+      return set(free);
     }
-    if (clear === most) return set(most);
-    met = Math.min(most, clear + most / STEPS);
-    for (let k = 0; k < HALVINGS; k++) {
-      const mid = (clear + met) / 2;
-      set(mid);
-      if (meets()) met = mid;
-      else clear = mid;
-    }
-    set(clear);
+    set(least);
   };
   for (const digit of DIGITS) {
     const finger = shape[digit];
-    fold(digit, (value) => (finger.curl = value), 1);
-    fold(digit, (value) => (finger.hook = value), 1 - finger.curl);
+    fold(digit, 0, (value) => (finger.curl = value), 0, 1);
+    fold(digit, 1, (value) => (finger.hook = value), 0, 1 - finger.curl);
   }
-  fold('thumb', (value) => (shape.thumb.oppose = value), 1);
-  fold('thumb', (value) => (shape.thumb.curl = value), 1);
+  if (was) shape.thumb = { ...was.thumb };
+  padToward(joints, object, shape, 'thumb', farSide(joints, near, shape), !was, null, handle ? joints.handle(0).axis : null);
   return shape;
 }
 
@@ -86,22 +87,25 @@ interface Value {
  * as a closing fold's), bones and back all keep out of the object taken (a trigger finger goes into the guard, not through its frame; a
  * thumb reaching under a rung goes round it, not through); with none, the nearest of those passing into it least (against a stile's flat
  * face, the thumb that comes round its edge). The part `pressed` (the target's own: a trigger blade) is what the pad presses on, not kept
- * out of (counted, a pad on a 6 mm blade always touched it, and the finger stayed laid straight 3 cm off it).
+ * out of (counted, a pad on a 6 mm blade always touched it, and the finger stayed laid straight 3 cm off it). Given a line `along` (the
+ * hand's frame) through `target`, anywhere on that line is as near.
  */
-export function padToward(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean, pressed: Object3D | null = null): void {
+export function padToward(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean, pressed: Object3D | null = null, along: Readonly<Vector3> | null = null): void {
   const near = nearHand(joints, object, { digit, shape, pressed });
   const thumb = shape.thumb, finger = digit === 'thumb' ? null : shape[digit];
+  /** a segment touching that counts: not the thumb's metacarpal, the ball of the thumb, which lies in the palm against what it holds */
+  const palmless = (k: number) => finger !== null || k > 0;
   const values: Value[] = finger
     ? (['curl', 'hook', 'spread'] as const).map((key) => ({ get: () => finger[key], set: (v: number) => (finger[key] = v), least: key === 'curl' ? LIFTED : 0 }))
     : (['curl', 'oppose', 'spread'] as const).map((key) => ({ get: () => thumb[key], set: (v: number) => (thumb[key] = v), least: key === 'curl' ? 0 : SPLAYED }));
   /** how many of the digit's segment lines (palm side, bone, back) pass into the object as `shape` has it, counted no further than `most` */
   const into = (most: number) => {
     let count = 0;
-    for (const side of [PRESSED, 0, -PRESSED]) if ((count += touches(joints, near, digit, shape, side).length) >= most) break;
+    for (const side of [PRESSED, 0, -PRESSED]) if ((count += touches(joints, near, digit, shape, side).filter(palmless).length) >= most) break;
     return count;
   };
   let best = values.map((value) => value.get());
-  for (const { step, span } of afresh ? [{ step: 0.1, span: 2 }, { step: 0.02, span: 0.1 }] : [{ step: 0.02, span: 0.04 }]) {
+  for (const { step, span } of afresh ? [{ step: 0.2, span: 2 }, { step: 0.05, span: 0.2 }, { step: 0.02, span: 0.05 }] : [{ step: 0.02, span: 0.04 }]) {
     const grids = best.map((centre, k) => {
       const out: number[] = [];
       for (let v = Math.max(values[k].least, centre - span); v <= Math.min(1, centre + span) + 1e-9; v += step) out.push(v);
@@ -111,7 +115,8 @@ export function padToward(joints: Joints, object: Object3D, shape: Shape, digit:
     const search = (k: number, chosen: number[]) => {
       if (k === values.length) {
         chosen.forEach((v, j) => values[j].set(v));
-        tried.push({ chosen, miss: joints.pad(digit, shape, _pad).distanceTo(target) });
+        const miss = joints.pad(digit, shape, _pad).sub(target);
+        tried.push({ chosen, miss: (along ? miss.addScaledVector(along, -miss.dot(along)) : miss).length() });
         return;
       }
       for (const v of grids[k]) search(k + 1, [...chosen, v]);
@@ -128,7 +133,24 @@ export function padToward(joints: Joints, object: Object3D, shape: Shape, digit:
   best.forEach((v, j) => values[j].set(v));
 }
 
-/** `object`'s triangles about `joints`' hand as they stand now, in the world — or only those `reach`'s digit reaches, about its first joint
+/**
+ * the far side of what the palm holds, `near`, as `shape` has the hand (its frame): where a line on from the palm's middle the way it faces
+ * comes out of it, within `GIRTH` — none there, the palm's middle as far out as a handle's girth
+ */
+function farSide(joints: Joints, near: Triangles, shape: Shape): Vector3 {
+  const palm = joints.touch(null, shape), world = joints.hand.matrixWorld;
+  const from = palm.at.clone().applyMatrix4(world), way = palm.facing.clone().transformDirection(world);
+  _ray.set(from.clone().addScaledVector(way, GIRTH), way.clone().negate());
+  const met = near.first(_ray, GIRTH);
+  return from.addScaledVector(way, met === null ? GIRTH : GIRTH - met).applyMatrix4(_back.copy(world).invert());
+}
+
+/** the world's scale of `node` */
+function scaleOf(node: Object3D): number {
+  return _scale.setFromMatrixScale(node.matrixWorld).x;
+}
+
+/** `object`'s triangles about `joints`' hand as they stand now, in the world, as far as it reaches (`Joints.span`) — or only those `reach`'s digit reaches, about its first joint
  * (every bend `padToward` tries is checked against them, and a grip's whole receiver is thousands), its part `pressed` left out — meshes of
  * things attached to it (their own `userData.mass`) and hidden meshes left out, skinned meshes as they stand at rest */
 function nearHand(joints: Joints, object: Object3D, reach?: { digit: Digit; shape: Shape; pressed: Object3D | null }): Triangles {
@@ -137,21 +159,22 @@ function nearHand(joints: Joints, object: Object3D, reach?: { digit: Digit; shap
   const pressed = new Set<Object3D>();
   reach?.pressed?.traverse((node) => pressed.add(node));
   const meshes = meshesOf(object).filter((mesh) => !pressed.has(mesh)).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
-  if (!reach) return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), REACH);
+  if (!reach) return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), joints.span * scaleOf(joints.hand) + SLACK);
   const segments = joints.segments(reach.digit, reach.shape), length = segments.reduce((sum, [start, end]) => sum + start.distanceTo(end), 0);
   return new Triangles(meshes, segments[0][0], length + SLACK);
 }
 
 /**
  * the segments of `digit` whose palm side (or another line along it, as `Joints.segments`' `side`) passes into `near` as `shape` has it,
- * by index: crossing its surface, or lying inside it (a thumb sunk whole in a stile's flat bar crosses none of its faces)
+ * by index: crossing its surface, or lying inside it (a thumb sunk whole in a stile's flat bar crosses none of its faces), a part a
+ * handle's girth thick at most
  */
 function touches(joints: Joints, near: Triangles, digit: Digit, shape: Shape, side = 1): number[] {
   return joints.segments(digit, shape, side).flatMap(([start, end], k) => {
     const length = _to.subVectors(end, start).length();
     _ray.set(start, _to.normalize());
-    return near.first(_ray, length) === null && !near.inside(_ray) ? [] : [k];
+    return near.first(_ray, length) === null && !near.inside(_ray, GIRTH) ? [] : [k];
   });
 }
 
-const _ray = new Ray(), _to = new Vector3(), _pad = new Vector3();
+const _ray = new Ray(), _to = new Vector3(), _pad = new Vector3(), _back = new Matrix4(), _scale = new Vector3();

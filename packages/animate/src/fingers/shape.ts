@@ -45,9 +45,10 @@ export type Shape = { thumb: Required<Thumb> } & Record<DigitName, Required<Fing
 
 const digit = (curl: number, hook = 0, spread = 0): Required<Finger> => ({ curl, hook, spread });
 
-/** A hand at rest: each finger a little more curled than the one before it, the little finger most, the thumb beside the index. */
+/** A hand at rest: each finger bent some 30° at each joint, a little more than the one before it, the little finger most, the thumb
+ * beside the index a little out in front of the palm (straighter, a hand hanging or travelling read as a stiff flat paddle). */
 export const RELAXED = {
-  thumb: { curl: 0.2, oppose: 0.12, spread: 0.25 }, index: digit(0.16, 0.05, 0.1), middle: digit(0.22, 0.06), ring: digit(0.28, 0.07, 0.1), little: digit(0.34, 0.08, 0.15),
+  thumb: { curl: 0.25, oppose: 0.15, spread: 0.3 }, index: digit(0.3, 0.08, 0.08), middle: digit(0.36, 0.1), ring: digit(0.42, 0.11, 0.08), little: digit(0.48, 0.12, 0.12),
 } as const satisfies Shape;
 /** Every finger folded into the palm, the thumb across them. */
 export const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
@@ -55,8 +56,14 @@ export const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: dig
 export const OPEN = {
   thumb: { curl: 0, oppose: 0, spread: 0 }, index: digit(0, 0, 0.3), middle: digit(0), ring: digit(0, 0, 0.3), little: digit(0, 0, 0.4),
 } as const satisfies Shape;
-/** The index pointing, the other fingers folded under the thumb. */
-export const POINT = { ...FIST, index: digit(0) } as const satisfies Shape;
+/**
+ * The index pointing, nearly straight, its tip given a little as a finger pressing a button is; the other fingers curled loosely into the
+ * palm, each a little more than the one before; the thumb laid over the middle finger's middle segment (folded as a fist's, the fingers
+ * hid the thumb, and the hand read as a fist).
+ */
+export const POINT = {
+  thumb: { curl: 0.35, oppose: 0.6, spread: 0.35 }, index: digit(0.06, 0.15), middle: digit(0.62, 0.25), ring: digit(0.7, 0.25), little: digit(0.78, 0.25),
+} as const satisfies Shape;
 /** The fingers folded, the thumb up. */
 export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0, spread: 0 } } as const satisfies Shape;
 

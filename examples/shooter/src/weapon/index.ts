@@ -9,17 +9,9 @@ export const RIFLE = {
    * plate, the palm up under it */
   magazine: { base: new Vector3(0, -0.045, -0.01), floor: new Vector3(0, -0.076, -0.015),
     thumb: new Vector3(0.016, -0.012, -0.014), mass: 0.5 },
-  /** where the trigger finger's pad rests: on the trigger's face low in the guard, its skin on the face (5 mm in front of the blade's
-   * middle; there, the blade went through the pad), and off it laid straight along the receiver's side above the guard */
-  trigger: new Vector3(0, -0.024, 0.047), frame: new Vector3(-0.028, 0.008, 0.058),
-  /** where the gripping hand's pads go, empties of their digits' names: the middle, ring and little fingers' round the grip's front onto
-   * its left side, the middle finger just under the guard; the thumb's round the back strap high under the receiver onto the left side */
-  pads: {
-    middle: new Vector3(0.018, -0.051, -0.008), ring: new Vector3(0.018, -0.071, -0.015), little: new Vector3(0.018, -0.09, -0.02),
-    thumb: new Vector3(0.018, -0.022, -0.03),
-  },
-  /** the empty the gripping hand's thumb puts its pad on */
-  thumb: 'thumb',
+  /** where the trigger finger's pad rests: on the blade's face, a little right of its middle (the finger coming in from the right), and
+   * off it laid straight along the receiver's side above the guard */
+  trigger: new Vector3(-0.004, -0.018, 0.043), frame: new Vector3(-0.028, 0.008, 0.058),
 };
 
 export function rifleOn(mount: Object3D, arms: number) {
@@ -32,13 +24,10 @@ export function rifleOn(mount: Object3D, arms: number) {
   // in the well), round the receiver's 6 × 7 cm body: palm up and turned in under it, as far as the wrist turns so, the fingers round its
   // right side, the thumb up its left, the grasp slanting forward-right across it as the forearm comes from the left shoulder; the empty
   // 2.4 cm right of the middle and below it, so the fingertips come up the right side rather than stopping on its lower edge)
-  // (the pistol grip's axis leant 10° further forward than its own 11°, so the fingers wrap it a little downward as a hand's do — further,
-  // the arm cannot keep the turn on a reload looking far down; the empty a little behind and below its middle, so the palm covers its right
-  // side back to the back strap, the knuckles at its front half and the trigger finger level with the trigger, the fingers wrapping its
-  // front to its left side; the palm turned a little toward the front, its heel round the back strap so the thumb's base sits behind it
-  // in the web of the hand and the thumb swings round it; the radius a millimetre over its half width, so the palm lies on its flat right
-  // side)
-  const pistol = empty(rifle, 'pistol', new Vector3(0, -0.066, -0.018));
+  // (the pistol grip held high and forward on it, the knuckles at its front edge so the fingers wrap its front to the left side and the
+  // index reaches the trigger, the web round the back strap so the thumb closes round it onto the left; its axis leant 10° past the
+  // grip's own, so the fingers wrap a little downward; the radius a millimetre over its half width, the palm on its flat right side)
+  const pistol = empty(rifle, 'pistol', new Vector3(0, -0.068, -0.008));
   Object.assign(pistol.userData, { handle: [0, 0.9, 0.42], facing: [1, 0, 0.3], radius: 0.0165 });
   const foregrip = empty(rifle, 'foregrip', RIFLE.foregrip);
   Object.assign(foregrip.userData, { handle: [0.3, 0, 0.95], facing: [-0.5, 1, 0], radius: 0.035 });
@@ -47,7 +36,6 @@ export function rifleOn(mount: Object3D, arms: number) {
   model.trigger(blade);
   empty(blade, 'trigger', RIFLE.trigger);
   empty(rifle, 'frame', RIFLE.frame);
-  for (const [digit, at] of Object.entries(RIFLE.pads)) empty(rifle, digit, at);
   empty(rifle, 'sight', RIFLE.sight);
   const stock = empty(rifle, 'stock', new Vector3(0, 0.013, stockBack(arms) - 0.0555));
   const flash = new Mesh(new SphereGeometry(0.045, 16, 12), new MeshBasicMaterial({ color: 0xffe6a3, transparent: true, opacity: 0.9, depthWrite: false }));

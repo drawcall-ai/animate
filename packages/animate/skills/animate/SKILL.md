@@ -83,27 +83,34 @@ For a nod, a bow, an arched back, a head tilt or a gesture of the arms (raised, 
 
 ## Fingers
 
-A person has fingers when its skeleton has VRM's finger bones, all fifteen a hand (`leftThumbMetacarpal` … `leftLittleDistal`), each chain hanging from the one before it from the hand out and ending in a tip bone, with every joint on its finger's centre line at the crease, inside the mesh, rigged with the mesh like any other bone (fingers a few voxels thick need a high rig resolution). The body measures each finger's and the palm's thickness off that skin, so they close onto things with their skin. They need nothing from the story: a free hand hangs relaxed, a hand a verb is bringing to a grip opens as it comes, a holding hand closes each finger until it touches the thing's meshes, and it opens again as it lets go.
+A person has fingers when its skeleton has VRM's finger bones, all fifteen a hand (`leftThumbMetacarpal` … `leftLittleDistal`), each chain hanging from the one before it and ending in a tip bone, every joint on its finger's centre line at the crease, inside the mesh and rigged with it (fingers a few voxels thick need a high rig resolution). They need nothing from the story: a free hand hangs relaxed, a hand a verb brings to a grip opens as it comes and closes round the thing's meshes there, the thumb round onto the far side, and it opens again as it lets go.
 
-How well a hand closes depends on where the hand is placed, so describe what the hand touches rather than where the wrist goes: the hand and the arm are solved from that. Give a grip that is a handle, a bar, a rung or an edge `userData.handle`, the axis along it (the empty's frame) pointing where the thumb goes, and put the empty on that axis; give it `userData.facing`, the way the palm faces onto it, when the hand should sit one way round. The palm then goes against the handle, which lies across it on the hand's own grasp line, and the fingers wrap round it; its radius is measured off the thing's meshes, or set with `userData.radius` for an edge or a thin bar. The hand turns toward `facing` as far as the wrist turns it so and takes hold there, so a palm up under a rifle the arm brings round at the end of its reach is met as nearly as the arm can; without `facing` the hand comes turned however the arm brings it.
-
-To touch with a fingertip (a button, a switch), name the digit in `userData.pad`: its pad goes on the empty instead of the palm, pushing along `facing` (into the button), the hand shaped as `userData.fingers` asks over a relaxed one (already on its way, as a finger points before it presses, where a palm's grip opens) and free to roll as the arm brings it. `grab` a button that is a thing of its own, massless, so it holds still for the press; move it in as it is pressed and the pad goes in with it; `release` it to draw the hand back.
+Describe what the hand touches, not where the wrist goes: the hand and arm are solved from it. A handle, bar, rung or edge gets `userData.handle`, its axis (the empty's frame) pointing where the thumb goes, the empty on that axis, and `userData.facing`, the way the palm faces onto it, when the hand should sit one way round; `userData.radius` sets a thin bar's or an edge's thickness instead of measuring it.
 
 ```ts
-Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }); // thumb on top, palm on the grip's right
-foregrip.userData.handle = [0, 0, 1];                                              // thumb toward the muzzle, rolled as the arm holds it
-pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };            // the index's pad on an empty: read every update
-Object.assign(face.userData, { pad: 'index', facing: [1, 0, 0], fingers: { ...POINT, index: { curl: 0, hook: 0.1 } } });
-yield* grab(person, button, { left: 'face' }); /* press it in */ release(person, { left: button });
+Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }); // palm on the grip's right, thumb up and round its back
+Object.assign(rung.userData, { handle: [-1, 0, 0], facing: [0, -0.4, 0.9], radius: 0.016 });
 ```
 
-For a press straight in and back, give the button a second pad grip a finger's length out along its normal and grab it before and after the press, at a calm pace (briskly, the hand overshoots those few centimetres into the panel). Keep the cap's mesh beside the button's thing, not in it: a hand goes round a thing's meshes to its grip, and round a cap a few millimetres deep it comes down over its top.
+A fingertip touch (a button, a switch) names the digit in `userData.pad`: its pad goes on the empty, pushing along `facing`, the hand shaped as `userData.fingers` asks over a relaxed one. Make the button a massless thing of its own; move it in as it is pressed and the pad goes in with it; `release` it to draw the hand back. For a press straight in and back, give it a second pad grip a finger's length out along its normal and take that before and after.
 
-A grip's `userData.fingers` lays digits over the closed hand: values, or the name of an empty on the thing the digit's pad goes to, as near as it comes without going into the thing — except the part the empty hangs from, which the pad presses on (hang a trigger's empty under the trigger's own part, not straight off the rifle). Move that empty to move the digit (a trigger drawn back 4 mm on a shot); name a pad empty for the thumb to wrap it round a pistol grip's back onto its far side, or for the thumb and the index for a pinch. `handle`, `facing` and `pad` are the fingers' to hold by: a body without finger bones refuses them, and so do `reach` and `track`, which put the wrist itself on their target — take a grip with `grab`.
+```ts
+Object.assign(face.userData, { pad: 'index', facing: [0, 0, -1], fingers: POINT });
+yield* grab(person, button, { left: 'clear' }); yield* grab(person, button, { left: 'face' }); /* lit */ yield* grab(person, button, { left: 'clear' }); release(person, { left: button });
+```
 
-A shape is per digit, each value 0 … 1: a finger's `curl` (all three joints, coupled, 0 straight along the palm however the rig rests it), `hook` (the end two only) and `spread`, the thumb's `curl`, `oppose` (swung across the palm toward the little finger) and `spread` (lifted out in front of the palm; a thumb wrapping a handle takes both, one laid along a face neither); a finger's `curl` goes down to -0.15 (lifted a little past straight, as along a receiver) and a thumb's `oppose` and `spread` to -0.8 (back out of the palm past how the rig rests it). Start from `RELAXED`, `FIST`, `OPEN`, `POINT` or `THUMBS_UP` and override digits: `pose(person, { fingers: { right: POINT } }, { until: 2 })`. A pose's fingers apply only to a free hand.
+A grip's `userData.fingers` lays digits over the closed hand: a digit's values, or the name of an empty on the thing its pad goes to, pressing on the part the empty hangs from (hang a trigger's empty under the trigger's own part). Move that empty to move the digit. `handle`, `facing` and `pad` are the fingers' to hold by: a body without finger bones refuses them, and so do `reach` and `track` — take such a grip with `grab`.
 
-A body you pose yourself (seated at a wheel, on a ladder) has its update stopped: place each hand with `gripOn` as a grab would, and after posing hand `fingers` the empty each hand is on or on its way to, every frame (see their docs) — it opens on its way and closes once its wrist is there. Make such empties where the hand holds (each rung of a ladder, a wheel's rim at ten to two), parented to what they belong to.
+```ts
+pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' }; // read every update
+pose(person, { fingers: { right: { ...POINT, thumb: { curl: 0 } } } }, { until: 2 }); // a free hand only
+```
+
+A body you pose yourself (seated at a wheel, on a ladder) has its update stopped: place each hand with `gripOn` as a grab would, and after posing give `fingers` the empty each hand is on or on its way to, every frame; it opens on its way and closes once its wrist is there. Make such empties where the hand holds (each rung, the rim at ten to two), parented to what they belong to.
+
+```ts
+const { wrist, rotation } = puppet.gripOn('left', rungEmpty); /* pose the arm to them */ puppet.fingers('left', rungEmpty, dt);
+```
 
 ## Stories that compose
 

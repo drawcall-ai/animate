@@ -30,11 +30,14 @@ interface FingerJoints {
   spread: Vector3 | null;
 }
 
-/** The thumb's joints from the wrist out, and the axes its metacarpal swings about out in front of the palm (`spread`), then across it (`oppose`). */
+/** The thumb's joints from the wrist out, the axes its metacarpal swings about out in front of the palm (`spread`), then across it
+ * (`oppose`), and the way from its base to the palm's middle, where a lifted thumb turns its pad (`PRONATE`), all its metacarpal's frame
+ * at rest. */
 interface Opposing {
   joints: Three;
   palmward: Vector3;
   ulnar: Vector3;
+  inward: Vector3;
 }
 
 /**
@@ -47,6 +50,13 @@ const DIP = 0.7;
  * ~60°) and across it (its `oppose`; ~50° flexion at its base: Cooney et al. 1981) */
 const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4, thumb: 1.0 } as const;
 const OPPOSE = 0.9;
+/**
+ * A thumb lifted out in front of the palm turns about its own length to face its pad onto the palm's middle, as the saddle joint at its
+ * base couples the two (Cooney et al. 1981; Kapandji's conjunct rotation): fully once it is lifted this far (`Thumb.spread`), by at most
+ * `most` (rad). Swung out alone, its pad kept facing the way it did along the palm, and its outer joints folded it back toward the hand's
+ * back instead of round a handle.
+ */
+const PRONATE = { lifted: 0.4, most: (70 * Math.PI) / 180 } as const;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
@@ -73,6 +83,8 @@ export class Joints {
   private readonly across: Vector3;
   /** how far the palm's skin lies out from the knuckles' bones toward the palm */
   private readonly palmDepth: number;
+  /** how far from the wrist the hand reaches at most, every digit straight out (m, the hand's frame) */
+  readonly span: number;
 
   constructor(readonly hand: Object3D, bones: DigitBones, nodes: Readonly<Record<string, Object3D>>, side: 'left' | 'right', skins: readonly SkinnedMesh[]) {
     const node = (name: string) => {
@@ -144,17 +156,22 @@ export class Joints {
     const ulnar = across.clone().negate(), toward = ulnar.clone().addScaledVector(palm, 0.4).normalize();
     const joints = chain(bones.thumb, THICK.thumb, (unit) => new Vector3().crossVectors(unit, toward));
     const metacarpal = turnOf(bones.thumb[0]), back = metacarpal.clone().invert(), unit = joints[0].along.clone().applyQuaternion(metacarpal);
-    this.thumb = {
-      joints,
-      palmward: new Vector3().crossVectors(unit, palm).normalize().applyQuaternion(back),
-      ulnar: new Vector3().crossVectors(unit, ulnar).normalize().applyQuaternion(back),
-    };
     this.palm = palm;
     this.knuckles = knuckles;
     this.along = along;
     this.across = across;
     // (the palm's skin, measured a third of the way back from the knuckles to the wrist)
     this.palmDepth = measure ? measure(knuckles.clone().multiplyScalar(2 / 3), palm) : THICK.palm * knuckles.length();
+    this.thumb = {
+      joints,
+      palmward: new Vector3().crossVectors(unit, palm).normalize().applyQuaternion(back),
+      ulnar: new Vector3().crossVectors(unit, ulnar).normalize().applyQuaternion(back),
+      inward: this.handle(0).at.sub(point(bones.thumb[0])).normalize().applyQuaternion(back),
+    };
+    this.span = Math.max(...(['thumb', ...DIGITS] as const).map((digit) => {
+      const chain = this.chain(digit);
+      return point(bones[digit][0]).length() + chain.reduce((sum, joint) => sum + joint.length, chain[2].depth);
+    }));
   }
 
   /** the bones turned as `shape` has them */
@@ -207,8 +224,9 @@ export class Joints {
     const joints = this.chain(digit);
     if (digit === 'thumb') {
       const { curl, oppose, spread } = shape.thumb, { palmward, ulnar } = this.thumb;
+      const swing = new Quaternion().setFromAxisAngle(palmward, spread * SPREAD.thumb).multiply(_q.setFromAxisAngle(ulnar, oppose * OPPOSE));
       return [
-        joints[0].rest.clone().multiply(_q.setFromAxisAngle(palmward, spread * SPREAD.thumb)).multiply(_q.setFromAxisAngle(ulnar, oppose * OPPOSE)),
+        joints[0].rest.clone().multiply(swing).multiply(_q.setFromAxisAngle(joints[0].along, this.pronation(swing, spread))),
         bent(joints[1], curl * BEND.thumb[0], null, 0),
         bent(joints[2], curl * BEND.thumb[1], null, 0),
       ];
@@ -220,6 +238,16 @@ export class Joints {
       bent(joints[1], middle, null, 0),
       bent(joints[2], DIP * middle, null, 0),
     ];
+  }
+
+  /** how far the thumb's metacarpal, swung `swing` off its rest and lifted `spread`, turns about its length (`PRONATE`): the turn that
+   * brings its palm side, the way its outer joints fold it, square to it toward the palm's middle */
+  private pronation(swing: Quaternion, spread: number): number {
+    const { joints: [metacarpal], inward } = this.thumb;
+    const length = _u.copy(metacarpal.along).applyQuaternion(swing), folds = _c.copy(metacarpal.palmar).applyQuaternion(swing);
+    const toward = _d.copy(inward).addScaledVector(length, -inward.dot(length));
+    const angle = Math.atan2(_cross.crossVectors(folds, toward).dot(length), folds.dot(toward));
+    return Math.min(1, Math.max(0, spread) / PRONATE.lifted) * Math.max(-PRONATE.most, Math.min(PRONATE.most, angle));
   }
 
   /** each joint's frame in the hand's, as `shape` turns them: its offset at rest, its rest turn swapped for the shape's */
@@ -258,4 +286,4 @@ function measuring(skins: readonly SkinnedMesh[], hand: Object3D) {
   };
 }
 
-const _q = new Quaternion(), _back = new Quaternion(), _one = new Vector3(1, 1, 1), _cross = new Vector3();
+const _q = new Quaternion(), _back = new Quaternion(), _one = new Vector3(1, 1, 1), _cross = new Vector3(), _u = new Vector3(), _c = new Vector3(), _d = new Vector3();
