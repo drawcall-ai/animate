@@ -42,8 +42,8 @@ const REACH = 0.35;
 /** Radians a second the arms turn the rifle at most, closing on where it should point without passing it. */
 const SWING = 12;
 const QUICK = { speed: 1.8 };
-/** How long a pressing pad stays on its button (s). */
-const HELD = 0.5;
+/** How long a pressing pad stays on its button before it draws back (s): a brisk poke, the press over in half a second. */
+const HELD = 0.15;
 /** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, and back. Briskly, a short move still
  * took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. */
 const SHORT = { speed: 0.7 };
