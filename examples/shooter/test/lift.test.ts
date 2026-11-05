@@ -124,20 +124,22 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   // (the soldier on the platform facing its panel, on the platform's +X edge)
   const { world, avatar, movement, acquire, advance, built: lift } = await soldierOn((scene) => {
     box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');
-    return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial());
+    const landing = { at: new Vector3(3, 0, 3), yaw: 0 };
+    return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial(), { down: landing, up: landing });
   }, { spawn: new Vector3(0.95, 0.27, 0.35), yaw: Math.PI / 2 });
   cleanup(lift.bind(world));
   acquire();
   const foot = lift.body.position.y;
   advance(2);
   expect(lift.body.position.y).toBe(foot);
-  const button = lift.within(movement.position);
+  expect(lift.within(movement.position, -Math.PI / 2), 'Its back to the panel, it presses nothing').toBeNull();
+  const button = lift.within(movement.position, Math.PI / 2);
   expect(button).toBe(lift.buttons.up);
   if (!button) return;
-  const face = button.getObjectByName('press'), hand = avatar.body.bones.leftHand, tip = avatar.body.bones.leftIndexDistal;
+  const face = button.part.getObjectByName('press'), hand = avatar.body.bones.leftHand, tip = avatar.body.bones.leftIndexDistal;
   if (!face) throw new Error('The button has no face to press');
   let wrist = Infinity, pad = Infinity;
-  avatar.press(button, () => {
+  avatar.press(button.part, () => {
     lift.press(button);
     // (the hand where the grip puts the index's pad on the button's face, its end segment there)
     wrist = avatar.body.gripOn('left', face).wrist.distanceTo(hand.getWorldPosition(new Vector3()));
@@ -149,11 +151,11 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   advance(7);
   expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
   expect(avatar.pressing).toBe(false);
-  const down = lift.within(movement.position);
+  const down = lift.within(movement.position, Math.PI / 2);
   expect(down).toBe(lift.buttons.down);
   if (!down) return;
   let sent = -1;
-  avatar.press(down, () => { lift.press(down); sent = world.time; });
+  avatar.press(down.part, () => { lift.press(down); sent = world.time; });
   const asked = world.time;
   for (let frame = 0; frame < 240 && sent < 0; frame++) world.update(DT);
   // (the hand there within a second, from the rifle down to the lower button)
