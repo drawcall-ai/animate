@@ -18,6 +18,18 @@ import { Carrier } from '../kernel/carrier';
  */
 export type Target = Vector3 | Object3D | ((time: number) => Vector3 | Object3D);
 
+/**
+ * `target` as a hand's (`verb` going there): an empty a hand holds by — a handle (`userData.handle`) or a digit's pad (`userData.pad`) —
+ * is a grip, the hand placed from where it holds it, which only `grab` does; a hand reaching or tracked there would put its wrist on it, a
+ * misuse said at once
+ */
+export function handTarget(target: Target, verb: string): Target {
+  if (!(target instanceof Object3D)) return target;
+  const { handle, pad } = target.userData, key = handle !== undefined ? 'handle' : pad !== undefined ? 'pad' : null;
+  if (key) throw new Error(`${verb}: "${target.name}" has userData.${key}, a grip: a hand goes onto it with grab, placed from where it holds it`);
+  return target;
+}
+
 /** A target as a body finds it in a sub-step: where, turned how (an `Object3D`'s; none for a point), moving how fast (if known), and the
  * object it is, if it is one. */
 interface Found extends Goal {

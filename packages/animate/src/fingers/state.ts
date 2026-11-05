@@ -3,7 +3,7 @@ import { smoothstep, turnOnto } from '../kernel/math';
 import { Thing, type Grip } from '../things/thing';
 import type { Hold } from '../things/resolve';
 import type { DigitBones } from './bones';
-import { closedOn, reaching } from './closing';
+import { closedOn, padToward } from './closing';
 import type { Contact } from './contact';
 import { Joints } from './joints';
 import { blendShape, digitOf, easeShape, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
@@ -26,16 +26,16 @@ const SETTLE = 0.1;
 /**
  * a hand on its way to a grip opens to take it (Jeannerod 1984: the grip opens wider than the object late in the reach, closing on it as
  * the hand arrives): the thumb out in front of the palm, the fingers side by side and a little bent, each a little more than the one before
- * as a relaxed hand's are (all alike, the open hand read as a mannequin's claw; fanned, as a stiff splayed hand) — relaxed until its wrist
- * is `OPENING` from where it holds the grip, open from `OPEN` (m: opened all the way, it travelled 0.6 s as a palm-up claw), and closing
- * on it within `ARRIVED` (m)
+ * as a relaxed hand's are, their tips barely hooked (all alike, the open hand read as a mannequin's claw; fanned, as a stiff splayed hand;
+ * hooked more, a claw closing on nothing) — relaxed until its wrist is `NEARING` from where it holds the grip, open from `NEAR` (m: opened
+ * all the way, it travelled 0.6 s as a palm-up claw), and closing on it within `ARRIVED` (m)
  */
 const APERTURE: Shape = {
   thumb: { curl: 0.12, oppose: 0.12, spread: 0.4 },
-  index: { curl: 0.1, hook: 0.08, spread: 0.05 }, middle: { curl: 0.14, hook: 0.1, spread: 0 }, ring: { curl: 0.19, hook: 0.12, spread: 0.04 },
-  little: { curl: 0.25, hook: 0.14, spread: 0.08 },
+  index: { curl: 0.1, hook: 0.03, spread: 0.05 }, middle: { curl: 0.14, hook: 0.04, spread: 0 }, ring: { curl: 0.19, hook: 0.05, spread: 0.04 },
+  little: { curl: 0.25, hook: 0.06, spread: 0.08 },
 };
-const OPENING = 0.22, OPEN = 0.08, ARRIVED = 0.015;
+const NEARING = 0.22, NEAR = 0.08, ARRIVED = 0.015;
 /** how far a digit's empty may move in the hand before the digit reaches for it afresh, and a puppet's wrist on its grip before the hand
  * closes on it afresh (m) */
 const MOVED = 0.002;
@@ -139,7 +139,7 @@ export class FingerState {
     const { wrist } = this.gripOn(side, empty), off = hand.joints.hand.getWorldPosition(new Vector3()).sub(wrist), distance = off.length();
     if (distance > ARRIVED) {
       hand.closed = null;
-      return blendShape(RELAXED, APERTURE, 1 - smoothstep(OPEN, OPENING, distance));
+      return blendShape(RELAXED, APERTURE, 1 - smoothstep(NEAR, NEARING, distance));
     }
     if (hand.closed?.on !== empty || !hand.closed.off || hand.closed.off.distanceTo(off) > MOVED) {
       hand.closed = { on: empty, shape: this.taking(hand, grip, thing), off };
@@ -182,7 +182,7 @@ export class FingerState {
       const afresh = last?.empty !== value;
       if (afresh || !last || last.target.distanceTo(target) > MOVED) {
         const reached = structuredClone(afresh || !last ? shape : last.shape);
-        reaching(hand.joints, thing, reached, digit, target, afresh, empty.parent === thing ? null : empty.parent);
+        padToward(hand.joints, thing, reached, digit, target, afresh, empty.parent === thing ? null : empty.parent);
         hand.reached.set(digit, { empty: value, target, shape: reached });
       }
       const reached = hand.reached.get(digit)?.shape;

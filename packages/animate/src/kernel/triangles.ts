@@ -1,7 +1,7 @@
 import { Matrix4, Ray, Triangle, Vector3, type BufferGeometry } from 'three';
 
 /** A geometry and the matrix that takes its positions into the frame its triangles are gathered in. */
-export interface Placed {
+export interface PlacedGeometry {
   geometry: BufferGeometry;
   matrix: Matrix4;
 }
@@ -17,7 +17,7 @@ export class Triangles {
   /** all of theirs, as far as a ray from inside them goes to leave them */
   private readonly extent = new Float32Array([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
 
-  constructor(meshes: readonly Placed[], centre: Readonly<Vector3>, radius: number) {
+  constructor(meshes: readonly PlacedGeometry[], centre: Readonly<Vector3>, radius: number) {
     const kept: number[] = [], a = new Vector3(), b = new Vector3(), c = new Vector3(), triangle = new Triangle(), nearest = new Vector3();
     for (const { geometry, matrix } of meshes) {
       const position = geometry.getAttribute('position'), index = geometry.index, count = index ? index.count : position.count;

@@ -101,7 +101,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * …); or relaxed for `null`. Call it each frame after posing the hand.
    */
   fingers(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
-    fingersOf(this).set(side, to, seconds);
+    fingerStateOf(this).set(side, to, seconds);
   }
 
   /**
@@ -111,7 +111,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * faces the palm (or the pad) as the grip's `facing` asks; with a handle and a `facing`, exactly so.
    */
   gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
-    return fingersOf(this).gripOn(side, empty);
+    return fingerStateOf(this).gripOn(side, empty);
   }
 
   /** A world-space impulse (N·s) at a world-space point: a humanoid's supported torso reacts and recovers before its hands are solved.
@@ -201,7 +201,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
 const selves = new WeakMap<Body, Self>();
 
 /** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */
-function fingersOf(body: Body): NonNullable<Self['fingers']> {
+function fingerStateOf(body: Body): NonNullable<Self['fingers']> {
   const fingers = selfOf(body).fingers;
   if (!fingers) throw new Error(`fingers: a ${body.species.name ?? 'custom species'} skeleton has no finger bones`);
   return fingers;

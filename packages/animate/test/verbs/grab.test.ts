@@ -281,3 +281,12 @@ describe('grab at once (speed: Infinity)', () => {
     expect(() => grab(pup, near, { jaw: 'left' }, { speed: Infinity })).toThrow('a person’s');
   });
 });
+
+it('refuses a grip only a hand with fingers holds by, on a body without finger bones, and a reach onto a grip', () => {
+  const body = person(), room = roomOf(body);
+  const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
+  const grip = named(handle, 'right');
+  grip.userData.handle = [0, 1, 0];
+  expect(() => play(function* () { yield* grab(body, handle, { right: 'right' }); }, [body], 1)).toThrow(/userData.handle.*finger bones/);
+  expect(() => reach(body, { right: grip })).toThrow(/reach: "right" has userData.handle, a grip/);
+});

@@ -146,41 +146,39 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
  * How a hand takes a rung over the top from behind: its palm facing the wall and a little down (the wrist below the rung, as a hand
  * reaching up to it has it), the rung on a handle's grasp line — further out, the index's knuckle, nearest it on the palm's slanted crease,
  * sits in the rung and the finger folds round through it into the palm — so the fingers hook over its top and down its far side and the
- * thumb wraps under it; the thumb's pad `under` the rung (a unit direction, `pad` (m) off its axis), `thumb` (m) toward the middle.
+ * thumb, out in front of the palm, swings round under it (its pad put on an empty under the rung, it was pulled across the palm into the
+ * skin's crease at its base).
  */
-const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize(), under: new Vector3(0, -0.84, -0.54).normalize(), pad: 0.018, thumb: 0.035 } as const;
+const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
 /**
  * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
- * `turn` (the tangent) to face back toward the climber, its heel off the face — a thumb, standing in front of the palm, would otherwise
- * sink into a face the palm lies flat on — and its thumb's pad on that face, `up` (m) above the hand and `back` behind its middle.
+ * `turn` (the tangent) to face back toward the climber, its heel off the face, and its thumb laid along that face up beside the index, in
+ * the palm's plane (its pad put on the face, the thumb stood out off it turned onto its pad)
  */
-const STILE_HOLD = { proud: 0.003, turn: 0.6, up: 0.03, back: 0.01 } as const;
+const STILE_HOLD = { proud: 0.003, turn: 0.6, thumb: { curl: 0.1, oppose: 0.1, spread: 0 } } as const;
 /**
- * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for), and the empty its thumb's pad
- * goes to: above the landing the stile, upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing
- * in, the fingers round the edge onto its inner face, the thumb on the outer one, as `STILE_HOLD`); below, the rung, as `RUNG`.
+ * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
+ * upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing in, the fingers round the edge onto
+ * its inner face, the thumb along the outer one, as `STILE_HOLD`); below, the rung, as `RUNG`.
  */
 function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
   if (found) return found;
-  const empty = new Object3D(), thumb = new Object3D(), sign = side === 'left' ? 1 : -1;
+  const empty = new Object3D(), sign = side === 'left' ? 1 : -1;
   const y = Math.min(rung * ladder.spacing, ladder.height + RAIL - HEAD);
   empty.name = name;
-  thumb.name = `${side} thumb on rung ${rung}`;
   if (y > ladder.height) {
     // (a flat bar is as thick about its edge as half the bar)
     const radius = STILE_BAR.thick / 2;
     empty.position.set(sign * STILE, y, STILE_BAR.deep / 2 - radius);
-    thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.up, -STILE_HOLD.back);
-    Object.assign(empty.userData, { handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud });
+    Object.assign(empty.userData, {
+      handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud, fingers: { thumb: STILE_HOLD.thumb },
+    });
   } else {
-    const x = sign * BODY.apart.hand;
-    empty.position.set(x, y, 0);
-    thumb.position.set(x - sign * RUNG.thumb, y, 0).addScaledVector(RUNG.under, RUNG.pad);
+    empty.position.set(sign * BODY.apart.hand, y, 0);
     Object.assign(empty.userData, { handle: [-sign, 0, 0], facing: RUNG.palm.toArray(), radius: RUNG_RADIUS });
   }
-  empty.userData.fingers = { thumb: thumb.name };
-  ladder.body.add(empty, thumb);
+  ladder.body.add(empty);
   return empty;
 }
 

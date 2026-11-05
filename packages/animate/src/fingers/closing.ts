@@ -26,11 +26,11 @@ const STEPS = 8, HALVINGS = 4;
 /**
  * The shape hand `joints` takes closed on `object` as the hand stands now: each finger curled from straight until a segment's palm side
  * (`PRESSED`) touches the object's meshes, then its two end joints hooked on until they touch too (a handle across the palm wraps, the
- * fingertips round it); the thumb, out in front of the palm, swung across it until it touches, then curled until it touches too. A segment touching as its fold starts lies in the
- * object already: the fold goes on past it until it comes clear, then stops as it touches again (a straight finger's tip in a magazine
- * well hooks out of it and on under the guard); a digit clear of the object folds all the way (fingers past the end of a grip close into
- * the palm). Meshes of things
- * attached to it (their own `userData.mass`) and hidden meshes are not touched; skinned meshes are touched as they stand at rest.
+ * fingertips round it); the thumb, out in front of the palm, swung across it until it touches, then curled until it touches too. A segment
+ * touching as its fold starts lies in the object already: the fold goes on past it until it comes clear, then stops as it touches again (a
+ * straight finger's tip in a magazine well hooks out of it and on under the guard); a digit clear of the object folds all the way (fingers
+ * past the end of a grip close into the palm). Meshes of things attached to it (their own `userData.mass`) and hidden meshes are not
+ * touched; skinned meshes are touched as they stand at rest.
  */
 export function closedOn(joints: Joints, object: Object3D): Shape {
   const shape = structuredClone(WRAP), near = nearHand(joints, object);
@@ -71,7 +71,7 @@ export function closedOn(joints: Joints, object: Object3D): Shape {
   return shape;
 }
 
-/** one of a digit's values as `reaching` searches it, from `least` (a finger's curl `LIFTED`, a thumb's oppose and spread `SPLAYED`) to 1 */
+/** one of a digit's values as `padToward` searches it, from `least` (a finger's curl `LIFTED`, a thumb's oppose and spread `SPLAYED`) to 1 */
 interface Value {
   get(): number;
   set(value: number): void;
@@ -88,7 +88,7 @@ interface Value {
  * face, the thumb that comes round its edge). The part `pressed` (the target's own: a trigger blade) is what the pad presses on, not kept
  * out of (counted, a pad on a 6 mm blade always touched it, and the finger stayed laid straight 3 cm off it).
  */
-export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean, pressed: Object3D | null = null): void {
+export function padToward(joints: Joints, object: Object3D, shape: Shape, digit: Digit, target: Readonly<Vector3>, afresh: boolean, pressed: Object3D | null = null): void {
   const near = nearHand(joints, object, { digit, shape, pressed });
   const thumb = shape.thumb, finger = digit === 'thumb' ? null : shape[digit];
   const values: Value[] = finger
@@ -129,7 +129,7 @@ export function reaching(joints: Joints, object: Object3D, shape: Shape, digit: 
 }
 
 /** `object`'s triangles about `joints`' hand as they stand now, in the world — or only those `reach`'s digit reaches, about its first joint
- * (every bend `reaching` tries is checked against them, and a grip's whole receiver is thousands), its part `pressed` left out — meshes of
+ * (every bend `padToward` tries is checked against them, and a grip's whole receiver is thousands), its part `pressed` left out — meshes of
  * things attached to it (their own `userData.mass`) and hidden meshes left out, skinned meshes as they stand at rest */
 function nearHand(joints: Joints, object: Object3D, reach?: { digit: Digit; shape: Shape; pressed: Object3D | null }): Triangles {
   joints.hand.updateWorldMatrix(true, false);

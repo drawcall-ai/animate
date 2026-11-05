@@ -6,7 +6,7 @@ import type { DigitName } from './shape';
 export type DigitBones = Record<'thumb' | DigitName, readonly [string, string, string]>;
 
 /** the VRM 1.0 finger bones of hand `side` (`leftThumbMetacarpal`, `leftIndexProximal`, …) */
-export function fingerBones(side: 'left' | 'right'): DigitBones {
+function fingerBones(side: 'left' | 'right'): DigitBones {
   const finger = (digit: string) => [`${side}${digit}Proximal`, `${side}${digit}Intermediate`, `${side}${digit}Distal`] as const;
   return {
     thumb: [`${side}ThumbMetacarpal`, `${side}ThumbProximal`, `${side}ThumbDistal`],

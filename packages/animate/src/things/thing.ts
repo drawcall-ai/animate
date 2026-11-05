@@ -45,14 +45,15 @@ export class Thing {
   }
 
   /**
-   * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the
-   * hand bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers reads more off it, each
-   * in the empty's frame. `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip on a button): the hand is
-   * placed so, the digit shaped as `userData.fingers` asks over a relaxed hand. `userData.handle` (an axis toward where the thumb goes)
-   * makes it a handle running through it: the palm goes against it, the handle lying across the palm on the hand's own grasp line, and
-   * the fingers wrap it; its radius is measured off the thing's meshes about the empty, or given as `userData.radius` (m).
-   * `userData.facing` is the way the palm faces onto it — or the pad pushes into it, as a fingertip pushes, between its pad and its length:
-   * on a handle, as far as the wrist turns it so; elsewhere, the hand free to roll about it as the arm brings it. Attached things' subtrees are not searched.
+   * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the hand
+   * bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers reads more off it, each in the
+   * empty's frame. `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip on a button): the hand is placed so,
+   * the digit shaped as `userData.fingers` asks over a relaxed hand — ask it nearly straight, as a pressing finger is: bent, the hand comes
+   * round over a panel to push with it. `userData.handle` (an axis toward where the thumb goes) makes it a handle running through it: the
+   * palm goes against it, the handle lying across the palm on the hand's own grasp line, and the fingers wrap it; its radius is measured
+   * off the thing's meshes about the empty, or given as `userData.radius` (m). `userData.facing` is the way the palm faces onto it — or the
+   * pad pushes into it, as a fingertip pushes, between its pad and its length: on a handle, as far as the wrist turns it so; elsewhere, the
+   * hand free to roll about it as the arm brings it. Attached things' subtrees are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);

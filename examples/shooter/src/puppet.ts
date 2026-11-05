@@ -73,7 +73,7 @@ export class Puppet {
     node.updateMatrixWorld(true);
   }
 
-  /** How hand `side` holds `empty` as a handle (`userData.handle`, `palm`): where its wrist goes and how it is turned, as the body's own grasp has it. */
+  /** How hand `side` holds the grip `empty` (a handle, a pad or a palm), as `Body.gripOn` places it: where its wrist goes and how it is turned. */
   hold(side: Side, empty: Object3D): Hold {
     const { wrist, rotation } = this.body.gripOn(side, empty);
     return { wrist, hand: rotation.multiply(this.restOf(`${side}Hand`).clone().invert()) };

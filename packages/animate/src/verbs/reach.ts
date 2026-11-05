@@ -1,6 +1,6 @@
 import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
-import { finder, type Target } from './targets';
+import { finder, handTarget, type Target } from './targets';
 import { verb, type Verb } from './story';
 import type { HandOptions } from '../hands/handling';
 
@@ -14,7 +14,7 @@ import type { HandOptions } from '../hands/handling';
  * unmet after the planned reach plus four seconds, excluding balance-support steps.
  */
 export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Target>, options: HandOptions = {}): Verb {
-  const named = Object.entries<Target | undefined>(targets).flatMap(([hand, target]) => target === undefined ? [] : [{ hand, target }]);
+  const named = Object.entries<Target | undefined>(targets).flatMap(([hand, target]) => target === undefined ? [] : [{ hand, target: handTarget(target, 'reach') }]);
   if (!named.length) throw new Error('reach: name a target for a hand');
   if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`reach: a speed of ${options.speed}`);
   return verb(body, 'reach', (request) => function* () {

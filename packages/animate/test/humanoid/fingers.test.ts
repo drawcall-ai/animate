@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, FIST, grab, humanoid, POINT, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { reaching } from '../../src/fingers/closing';
+import { padToward } from '../../src/fingers/closing';
 import { Joints } from '../../src/fingers/joints';
 import { LIFTED, shapeOf } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
@@ -80,7 +80,7 @@ describe('fingers', () => {
     plate.updateMatrixWorld(true);
     const target = hand.worldToLocal(middle.clone().add(new Vector3(0, -0.05, 0)));
     const shape = shapeOf({});
-    reaching(joints, plate, shape, 'index', target, true);
+    padToward(joints, plate, shape, 'index', target, true);
     const box = new Box3().setFromObject(plate), through = joints.segments('index', shape).filter(([start, end]) => {
       const hit = new Ray(start, end.clone().sub(start).normalize()).intersectBox(box, new Vector3());
       return hit !== null && hit.distanceTo(start) <= end.distanceTo(start);
@@ -102,8 +102,8 @@ describe('fingers', () => {
     thing.updateMatrixWorld(true);
     const target = hand.worldToLocal(thing.localToWorld(new Vector3(0.002, -0.025, 0)));
     const kept = shapeOf({}), pressing = shapeOf({});
-    reaching(joints, thing, kept, 'index', target, true);
-    reaching(joints, thing, pressing, 'index', target, true, blade);
+    padToward(joints, thing, kept, 'index', target, true);
+    padToward(joints, thing, pressing, 'index', target, true, blade);
     const miss = (shape: typeof kept) => joints.pad('index', shape, new Vector3()).distanceTo(target);
     expect(miss(pressing)).toBeLessThan(0.01);
     expect(miss(pressing)).toBeLessThan(miss(kept));

@@ -6,7 +6,7 @@ import { personOf } from '../body/person';
 import { heading } from '../look/head';
 import { HOLD, reaching } from '../hands/person/arms';
 import { INDEX, type Side } from '../species/humanoid/bones';
-import { finder, type Target } from './targets';
+import { finder, handTarget, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
 /** how far a tracked hand may be off a target past `reach` × its arm's length (m, default body) — as far as a reach is let end — and for
@@ -29,6 +29,7 @@ export type Tracked = Partial<Record<'head' | Side, Target>>;
  * It asks for the eyes, the legs and the trunk with a head, and for each hand it is given.
  */
 export function track(body: Body, tracked: Tracked, options: { until?: Until } = {}): Verb {
+  for (const target of [tracked.left, tracked.right]) if (target) handTarget(target, 'track');
   return verb(body, 'track', (request) => function* () {
     const person = personOf(selfOf(body)), branches = [];
     if (tracked.head) {

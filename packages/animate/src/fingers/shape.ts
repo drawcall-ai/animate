@@ -1,9 +1,9 @@
 /**
  * How one finger is bent, each 0 … 1: `curl` folds all three joints together as the tendons couple them from straight along the palm,
  * however its rig rests it (0: straight; 1: a fist's), and below 0, to `LIFTED`, lifts it back at the knuckle alone a little past straight,
- * as a trigger finger laid flat along a receiver; `hook` folds only the two end joints on top, the
- * knuckle held (a curl of 0 with a hook of 1 hooks the fingertips over a bag's handle); `spread` fans it away from the middle finger at the
- * knuckle (1: as far as it goes; the middle finger has none).
+ * as a trigger finger laid flat along a receiver; `hook` folds only the two end joints on top, the knuckle held (a curl of 0 with a hook of
+ * 1 hooks the fingertips over a bag's handle); `spread` fans it away from the middle finger at the knuckle (1: as far as it goes; the
+ * middle finger has none).
  */
 export interface Finger {
   curl?: number;

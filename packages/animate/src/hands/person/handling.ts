@@ -54,7 +54,12 @@ function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
   const bone = person.hands[side], turn = new Quaternion();
   const turned = () => turn.copy(person.track(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(bone));
   const fingers = person.fingers;
-  if (!fingers) return { at: palmOf(person.proportions, side), turn: turned };
+  if (!fingers) {
+    // (where a hand holds a handle or a pad, and which way that faces, is its fingers': without them, its grip's own would be dropped)
+    const key = grip.handle ? 'handle' : grip.pad ? 'pad' : grip.facing ? 'facing' : null;
+    if (key) throw new Error(`"${grip.node.name}" has userData.${key}, which only a hand with finger bones holds by: this skeleton has none`);
+    return { at: palmOf(person.proportions, side), turn: turned };
+  }
   // (where the hand holds it, measured in its node's frame, in its bone's)
   const scale = person.scaleOf(bone), { at, axis, facing } = fingers.contact(side, grip), rest = person.restOf(bone);
   const contact = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis?.applyQuaternion(rest) ?? null };

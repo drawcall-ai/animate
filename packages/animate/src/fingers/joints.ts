@@ -1,8 +1,8 @@
+import type { Contact } from './contact';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
 import { Triangles } from '../kernel/triangles';
 import { DIGITS, type Digit, type DigitName, type Shape } from './shape';
-import type { Contact } from './contact';
 
 /** One finger joint: its node and rest rotation, where it stands at rest from the joint before it (the hand, for the first), the axis it
  * bends toward the palm about, how far it is bent about it at rest, and its segment out to the next joint, with how far its palm side lies
@@ -139,14 +139,14 @@ export class Joints {
     };
     this.fingers = { index: finger('index'), middle: finger('middle'), ring: finger('ring'), little: finger('little') };
     // (a thumb bends toward the palm's far side, the little finger's, and a little into the palm; it swings out in front of the palm
-    // square to the hand's length, then across toward the little finger)
+    // square to itself, then across toward the little finger — swung about the hand's length instead, a metacarpal lying along the hand,
+    // as a rig's often does, only twisted about itself, and the thumb never came off the palm's side)
     const ulnar = across.clone().negate(), toward = ulnar.clone().addScaledVector(palm, 0.4).normalize();
     const joints = chain(bones.thumb, THICK.thumb, (unit) => new Vector3().crossVectors(unit, toward));
     const metacarpal = turnOf(bones.thumb[0]), back = metacarpal.clone().invert(), unit = joints[0].along.clone().applyQuaternion(metacarpal);
-    const square = unit.clone().addScaledVector(along, -unit.dot(along));
     this.thumb = {
       joints,
-      palmward: new Vector3().crossVectors(square, palm).normalize().applyQuaternion(back),
+      palmward: new Vector3().crossVectors(unit, palm).normalize().applyQuaternion(back),
       ulnar: new Vector3().crossVectors(unit, ulnar).normalize().applyQuaternion(back),
     };
     this.palm = palm;
