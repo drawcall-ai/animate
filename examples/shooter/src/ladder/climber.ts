@@ -5,7 +5,7 @@ import type { Standing } from '../choreography';
 import { Mount } from '../mount';
 import type { Puppet } from '../puppet';
 import type { Soldier } from '../soldier';
-import { BEATS, cues, gripping, hang, heights, ONTO, slung, type End } from './climbing';
+import { BEATS, cues, gripping, hang, heights, onto, slung, type End } from './climbing';
 import type { Ladder } from './model';
 
 /** Seconds to get on the ladder (and off it), and how fast it is climbed (m/s). */
@@ -53,7 +53,7 @@ export class Climber extends Mount {
     for (const side of ['left', 'right'] as const) body.fingers(side, onto[side], dt);
   }
 
-  protected cues() { return cues(this.end()); }
+  protected cues() { return cues(this.ladder, this.end()); }
 
   protected stowage(puppet: Puppet) {
     const chest = this.soldier.avatar.body.bones.chest;
@@ -66,7 +66,7 @@ export class Climber extends Mount {
     this.height = Math.min(ends.top, Math.max(ends.foot, this.height + this.ahead * CLIMBING * dt));
     // (each hand and foot heard as it comes onto its next rung)
     const limbs = gripping(this.ladder, this.height);
-    limbs.forEach(({ kind, grips }, i) => { if (grips && this.gripped[i] === false) this.soldier.sound(...ONTO[kind]); });
+    limbs.forEach(({ kind, rung, grips }, i) => { if (grips && this.gripped[i] === false) this.soldier.sound(...onto(kind, rung)); });
     this.gripped = limbs.map(({ grips }) => grips);
     const off = this.ahead < 0 && this.height === ends.foot ? foot : this.ahead > 0 && this.height === ends.top ? top : undefined;
     if (off && this.fits(off)) this.dismount(off);

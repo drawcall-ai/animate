@@ -33,50 +33,61 @@ const HELD = (1 - 2 * SWING) / 2;
  * above its rung and behind it.
  */
 const BODY = { back: 0.37, feet: 0.55, reach: 5, apart: { hand: 0.155, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
-/** How far below the stiles' heads the hands hold them at the most (m): about a standing body's hip height above the landing. */
-const HEAD = 0.2;
 /**
- * How high the hips are on the ladder at each end (m), all four limbs holding: at the foot, the feet on the first two rungs; at the top,
- * on the top two, the top one level with the landing.
+ * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
+ * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
+ */
+const HEAD = 0.1;
+/**
+ * How high the hips are on the ladder at each end (m), all four limbs holding: at the foot, one foot on the first rung and the other on the
+ * ground at the ladder's foot (rung 0), the hands on rungs a standing body reaches; at the top, the feet on the top two rungs, the top one
+ * level with the landing.
  */
 export function heights(ladder: Ladder): Record<End, number> {
   // (the feet on rungs `rung` and the one below)
   const at = (rung: number) => (rung + HELD) * ladder.spacing + BODY.feet;
-  return { foot: at(2), top: at(ladder.rungs) };
+  return { foot: at(1), top: at(ladder.rungs) };
 }
 
 /**
  * When each part moves getting on at each end, as progress from standing there (0) to on the ladder (1); getting off plays them backward.
- * The left hand lets go of the rifle as the right slings it, letting go of it (or, getting off, taking it back) at `take`. At the foot the lower foot steps up
- * first; at the top the higher one steps back down onto the top rung first, before the weight goes back over the ladder.
+ * The left hand lets go of the rifle as the right slings it, letting go of it (or, getting off, taking it back) at `take`. At the foot the right
+ * foot steps in to the ladder's foot, then the left up onto the first rung; at the top the left steps back down onto the top rung first, the
+ * weight already going back over the ladder, the left hand on its stile before either foot moves.
  */
 export const BEATS = {
   /** the body steps in toward the ladder, near enough to take hold of it */
   inset: [0, 0.2],
   take: 0.3,
   sling: [0.05, 0.3],
-  hands: { foot: { left: [0, 0.35], right: [0.32, 0.55] }, top: { left: [0, 0.4], right: [0.35, 0.6] } },
+  hands: { foot: { left: [0, 0.35], right: [0.32, 0.55] }, top: { left: [0, 0.4], right: [0.3, 0.55] } },
   /** the hips over toward the ladder and down (or up) onto it: at the top over the edge first, then down */
-  hips: { foot: { over: [0.32, 0.95], down: [0.32, 0.95] }, top: { over: [0.38, 0.8], down: [0.62, 0.95] } },
-  feet: { foot: { right: [0.36, 0.66], left: [0.63, 0.95] }, top: { left: [0.35, 0.6], right: [0.6, 0.92] } },
+  hips: { foot: { over: [0.32, 0.95], down: [0.32, 0.95] }, top: { over: [0.25, 0.8], down: [0.62, 0.95] } },
+  feet: { foot: { right: [0.3, 0.55], left: [0.55, 0.92] }, top: { left: [0.4, 0.62], right: [0.6, 0.92] } },
   gaze: [0.2, 1],
 } as const satisfies Record<string, number | Beat | Record<string, Beat | Record<string, Beat>>>;
-/** A hand or foot coming onto a rung (or a stile), heard. */
-export const ONTO: Record<Limb['kind'], Effect> = { hand: ['rung', 0.05, 0, 0.15], foot: ['rung', 0.1, 0, 0.5] };
+/** A hand or foot coming onto `rung` (or a stile), heard: a foot onto the ground at the ladder's foot (rung 0) as a step. */
+export function onto(kind: Limb['kind'], rung: number): Effect {
+  if (kind === 'hand') return ['rung', 0.05, 0, 0.15];
+  return rung === 0 ? ['step-b', 0.2] : ['rung', 0.1, 0, 0.5];
+}
 
-/** What is heard getting on and off at `end`: the rifle slung (and taken back), each hand and foot onto the ladder, the feet back down. */
-export function cues(end: End): Cue[] {
+/**
+ * What is heard getting on and off `ladder` at `end`: the rifle slung (and taken back), each hand and foot onto the ladder, the feet back
+ * down.
+ */
+export function cues(ladder: Ladder, end: End): Cue[] {
+  const on = gripping(ladder, heights(ladder)[end]);
   return [
     { beat: [BEATS.take, BEATS.take], on: ['cloth', 0.12], off: ['cloth', 0.12] },
-    ...(['left', 'right'] as const).flatMap((side): Cue[] => [
-      { beat: BEATS.hands[end][side], on: ONTO.hand },
-      { beat: BEATS.feet[end][side], on: ONTO.foot, off: [side === 'left' ? 'step-a' : 'step-b', 0.2] },
-    ]),
+    ...on.map(({ side, kind, rung }): Cue => kind === 'hand'
+      ? { beat: BEATS.hands[end][side], on: onto(kind, rung) }
+      : { beat: BEATS.feet[end][side], on: onto(kind, rung), off: [side === 'left' ? 'step-a' : 'step-b', 0.2] }),
   ];
 }
 
 /** How far the body steps in toward the ladder at each end (m), feet and all: standing clear of it, its rifle too, it then reaches it. */
-const INSET: Record<End, number> = { foot: 0.3, top: 0.3 };
+const INSET: Record<End, number> = { foot: 0.5, top: 0.42 };
 
 const UP = new Vector3(0, 1, 0), BACK = new Vector3(0, 0, -1);
 /**
