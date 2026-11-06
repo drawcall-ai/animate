@@ -14,7 +14,7 @@ import type { Root } from '../legs/legged';
 import type { Stepper } from '../legs/step/stepper';
 import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
-import { yawOf } from '../kernel/math';
+import { smoothstep, yawOf } from '../kernel/math';
 import { Binding } from './model';
 import { PlatformFrame } from './platform';
 import { anchors, movers, oriented, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
@@ -460,26 +460,29 @@ export class Self implements Holder {
       const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
       const far = out.length(), near = toward.length();
       if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
-      // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder)
+      // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder; for a hand still on
+      // its way, only as it nears — turned at once as it set off back from a lift's button, its hand still turned as it pressed and so
+      // its grip seemingly farther, the rifle swung 10° toward it in a sub-step)
       const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
       const axis = _axis.crossVectors(out, toward);
       if (axis.lengthSq() < 1e-12) continue;
-      turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), out.angleTo(toward) - wanted));
+      const off = hold ? 0 : _off.addVectors(out, pivot).distanceTo(f.current.position(bones[bones.length - 1])) / this.scale;
+      turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), (out.angleTo(toward) - wanted) * (1 - smoothstep(COMING.near, COMING.far, off))));
       this.turned.get(node)?.copy(turned);
     }
     this.turned.get(node)?.copy(was);
     return turned;
   }
 
-  /** how far the hands holding what hangs from `node`, or taking hold of it, are from holding it there, `node` turned as it is now
+  /** how far the hands holding what hangs from `node` are from holding it there, `node` turned as it is now
    * (m, summed: 0, they hold it): each grip within what its arm holds — `HOLDABLE` of its length off its shoulder, and no further behind
    * it (an arm folded back past the trunk's side holds nothing) — where the fingers seat the hand, once they have */
   private off(f: Frame, node: Object3D): number {
     let off = 0;
     for (const [hand, chain] of this.species.hands ?? []) {
-      const hold = this.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : this.fingers?.coming(side);
-      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? this.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
-      if (!thing || !goal || !under(thing, node)) continue;
+      const hold = this.holding[hand], thing = hold?.thing.object;
+      if (!hold || !thing || !under(thing, node)) continue;
+      const goal = this.fingers?.seat(hand as 'left' | 'right')?.position ?? hold.goal.position;
       const bones = this.skeleton.chain(chain), length = bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
       const placed = resolve(this, thing, _placed), out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(f.current.position(bones[0]));
       const ahead = out.dot(_toward.set(0, 0, 1).applyQuaternion(f.current.rotation(this.skeleton.bones[bones[0]].parent)));
@@ -642,6 +645,9 @@ const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3(), _was
 const _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 /** how many times the turn a node's hands hold it to is halved down to (1/64 of the turn its app asks on from where it was) */
 const HALVINGS = 6;
+/** from how far off its grip a hand on its way to it turns what it takes toward itself (`reached`), fully by how near (m, default body) */
+const COMING = { far: 0.15, near: 0.03 };
+const _off = new Vector3();
 
 /** whether `object` hangs from `node` (is it, or under it) */
 function under(object: Object3D, node: Object3D): boolean {

@@ -121,12 +121,12 @@ it.each([1, -1].flatMap((direction) => [false, true].map((stop) => ({ direction,
 );
 
 it('stays until its panel\'s button is pressed with the index fingertip, then rides up', async () => {
-  // (the soldier on the platform facing its panel, on the platform's +X edge)
+  // (the soldier on the platform facing its panel, on the platform's +X edge, a little to its right)
   const { world, avatar, movement, acquire, advance, built: lift } = await soldierOn((scene) => {
     box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');
     const landing = { at: new Vector3(3, 0, 3), yaw: 0 };
     return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial(), { down: landing, up: landing });
-  }, { spawn: new Vector3(1, 0.27, 0.35), yaw: Math.PI / 2 });
+  }, { spawn: new Vector3(1, 0.27, 0.45), yaw: Math.PI / 2 });
   cleanup(lift.bind(world));
   acquire();
   const foot = lift.body.position.y;

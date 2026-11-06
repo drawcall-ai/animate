@@ -1,3 +1,4 @@
+import { RELAXED, type Fingers } from '@drawcall/animate';
 import { MathUtils, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { heading } from '../angles';
 import { between, Frame, phase, planted, shoulders, type Beat, type Cue, type Effect, type Gaze, type Hold, type Standing } from '../choreography';
@@ -22,6 +23,11 @@ const LIMBS: readonly Limb[] = [
 ];
 const SWING = 0.36;
 const AWAY = 0.08;
+/**
+ * How far back (m) a hand swings going from a rung, between the stiles, out round a stile onto its outer face: back past the bar's depth
+ * and its own fingers' length (swung out `AWAY`, the fingers went through the stile)
+ */
+const ROUND = 0.16;
 /**
  * The share of its two rungs' climb before its swing at which a hand lets go of its rung: it opens there on the rung, its fingers off it
  * before it moves (let go of only as it moved, it would travel with its fingers still closed).
@@ -122,10 +128,10 @@ export function slung(puppet: Puppet) {
 
 /**
  * Poses `puppet`'s body on `ladder`, its hips `height` (m) up it, `t` of the way from `standing` at `end` (0) to on it (1), its head turned
- * to `gaze`. Returns the empty each hand is on or on its way to, for its fingers: the rifle's grip it held standing (the right hand's
- * until it lets go of the rifle on its sling), then the rung or stile it holds or moves to.
+ * to `gaze`. Returns what each hand's fingers take: the rifle's grip it held standing (the right hand's until it lets go of the rifle on
+ * its sling), then the rung or stile it holds or moves to — `LEAVING` while it moves off or onto a stile.
  */
-export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: Object3D, end: End, t: number, height: number, gaze: Gaze): Record<Side, Object3D | null> {
+export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: Object3D, end: End, t: number, height: number, gaze: Gaze): Record<Side, Object3D | Fingers | null> {
   // Standing where it got on, stepped in toward the ladder.
   const inset = new Vector3(0, 0, -Math.sign(standing.hips.z) * INSET[end] * phase(t, BEATS.inset));
   const frame = new Frame(ladder.body, standing), on = phase(t, BEATS.hips[end].over);
@@ -144,13 +150,14 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
   puppet.turn('neck', frame.turn(frame.was('neck').slerp(heading(0.5 * gaze.yaw, -0.4 * gaze.pitch), look)));
   puppet.turn('head', frame.turn(frame.was('head').slerp(heading(gaze.yaw, -gaze.pitch), look)));
 
-  const onto: Record<Side, Object3D | null> = { left: null, right: null };
+  const onto: Record<Side, Object3D | Fingers | null> = { left: null, right: null };
   for (const limb of LIMBS) {
     if (limb.kind === 'hand') {
       const s = phase(t, BEATS.hands[end][limb.side]);
       arm(puppet, frame, ladder, limb, height, t, s);
       const { from, to, leaving } = rungs(ladder, limb, height), standing = limb.side === 'left' ? 'foregrip' : t <= BEATS.take ? 'pistol' : null;
-      onto[limb.side] = s > 0 ? rungHold(ladder, limb.side, leaving ? to : from) : standing && (rifle.getObjectByName(standing) ?? null);
+      const off = leaving && [from, to].some((rung) => stile(ladder, rung));
+      onto[limb.side] = s <= 0 ? standing && (rifle.getObjectByName(standing) ?? null) : off ? LEAVING : rungHold(ladder, limb.side, leaving ? to : from);
       continue;
     }
     const stood = planted(standing, limb.side, phase(t, BEATS.inset));
@@ -169,12 +176,21 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
  */
 const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
 /**
- * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
- * `turn` (the tangent) a little back toward the climber, nearly flat on the face; its thumb's pad on the outer face `thumb.up` (m) above
- * the grasp and `thumb.back` behind the edge, where the thumb reaches lying straight along the face (turned 0.6 back, the palm's heel
- * stood 4 cm off the face with the thumb's base, and the pad 4 cm up, the thumb stood up at the edge, its tip bone 50° into the face)
+ * A hand's fingers from letting go of a stile, or of the rung below it, until it holds the next: relaxed, the thumb kept straight along
+ * the stile's outer face as it lay holding it — opening toward the next hold as a hand does, its thumb swung out in front of the palm,
+ * went 2.5 cm into the bar, as the hand's digits are kept out of what they touch only once it holds it (laid flat as an open hand's,
+ * 0.5 cm)
  */
-const STILE_HOLD = { proud: 0.003, turn: 0.1, thumb: { up: 0.075, back: 0.015 } } as const;
+const LEAVING: Fingers = { ...RELAXED, thumb: { curl: 0, oppose: 0.25, spread: -0.05 } };
+/**
+ * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
+ * `turn` (the tangent) a little back toward the climber, nearly parallel to the face; its thumb's pad `thumb.off` (m) off the outer face,
+ * `thumb.up` above the grasp and `thumb.back` behind the edge, where the thumb reaches lying straight along the face and its skin clear
+ * of it — the palm held off the face as far as the thumb lying beside it is thick (turned 0.6 back, the palm's heel stood 4 cm off the
+ * face with the thumb's base, and the pad 4 cm up, the thumb stood up at the edge, its tip bone 50° into the face; the palm and the pad
+ * on the face, the thumb lay half through the bar)
+ */
+const STILE_HOLD = { proud: 0.016, turn: 0.1, thumb: { up: 0.075, back: 0.015, off: 0.009 } } as const;
 /**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
  * upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing in, the fingers round the edge onto
@@ -184,14 +200,14 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
   if (found) return found;
   const empty = new Object3D(), sign = side === 'left' ? 1 : -1;
-  const y = Math.min(rung * ladder.spacing, ladder.height + RAIL - HEAD);
+  const y = holdHeight(ladder, rung);
   empty.name = name;
-  if (y > ladder.height) {
+  if (stile(ladder, rung)) {
     // (a flat bar is as thick about its edge as half the bar)
     const radius = STILE_BAR.thick / 2, edge = STILE_BAR.deep / 2 - radius, thumb = new Object3D();
     empty.position.set(sign * STILE, y, edge);
     thumb.name = `${name}: thumb`;
-    thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.thumb.up, edge - STILE_HOLD.thumb.back);
+    thumb.position.set(sign * (STILE + radius + STILE_HOLD.thumb.off), y + STILE_HOLD.thumb.up, edge - STILE_HOLD.thumb.back);
     ladder.body.add(thumb);
     Object.assign(empty.userData, {
       handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud, fingers: { thumb: thumb.name },
@@ -203,6 +219,12 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   ladder.body.add(empty);
   return empty;
 }
+
+/** How high a hand holds rung `rung` of `ladder` (m): at it, or the stiles no higher than their highest hold. */
+function holdHeight(ladder: Ladder, rung: number) { return Math.min(rung * ladder.spacing, ladder.height + RAIL - HEAD); }
+
+/** Whether a hand holds rung `rung` of `ladder` by a stile, above the landing, rather than by the rung. */
+function stile(ladder: Ladder, rung: number) { return holdHeight(ladder, rung) > ladder.height; }
 
 /**
  * Each limb with the hips `height` up `ladder`: which it is, the rung it holds or last held (the one it moves to once it lets go) and
@@ -220,7 +242,8 @@ function arm(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: n
   const climbing = (rung: number): Hold => puppet.hold(side, rungHold(ladder, side, rung));
   const { from, to, swing } = rungs(ladder, limb, height);
   const held = between(climbing(from), climbing(to), swing);
-  held.wrist.add(frame.direction(BACK).multiplyScalar(AWAY * Math.sin(Math.PI * swing)));
+  const away = stile(ladder, to) && !stile(ladder, from) ? ROUND : AWAY;
+  held.wrist.add(frame.direction(BACK).multiplyScalar(away * Math.sin(Math.PI * swing)));
   // The right hand slings the rifle on its way to the ladder.
   const start = side === 'right' ? slinging(puppet, frame, t) : frame.hand(side);
   const hand = between(start, held, s);

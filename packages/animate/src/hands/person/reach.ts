@@ -6,7 +6,7 @@ import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
-import { grasp, held, holdOn, onBody, pressingWay, worn, type Palm } from '../../things/hold';
+import { grasp, held, holdOn, onBody, worn, type Palm } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
@@ -20,8 +20,12 @@ import { ARM } from './trunk';
 
 /** An outside guide beyond the arm's reach is followed this long after its planned arrival before closing on the exact grip. */
 const STAGING = 0.4;
-/** how far before its button a fingertip comes to first, and draws back to after (m, default body) */
+/** how far a fingertip draws back off its button as it lets go (m, default body) */
 export const PRESSING = 0.07;
+/** how far straight out before its button a fingertip's wrist comes first, level with where it presses, to push in from along the face's
+ * normal, its index pointing by then (m, default body): from 7 cm before it along the line from the eyes, 40° off the normal, the hand
+ * came down onto the button and its finger, still curling out, up from below it across the button below */
+const SQUARE = 0.12;
 /** how near a hand comes to the point before its button before it goes on in (m, default body) */
 const THROUGH = 0.02;
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
@@ -92,8 +96,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     // (a fingertip comes to its button straight from before it, pointing, and pushes straight in — not round the thing's bounds first: its
     // face is the side it comes from, and round a panel's post the hand came over its top and down past the other button)
     const grip = take.thing.grip(take.grip);
-    const eyes = local(person.pose.position(INDEX.head)).sub(grip.at.position);
-    const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(pressingWay(grip.facing.clone().negate(), eyes), PRESSING * person.scale)] : [];
+    const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(grip.facing, -SQUARE * person.scale)] : [];
     const route = [...detour, ...(onBody(person, take.thing) || before.length ? []
       : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`]))))), ...before]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));

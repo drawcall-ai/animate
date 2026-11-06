@@ -4,11 +4,14 @@ import { stockBack, WeaponModel } from './model';
 // Physical grip, sight, and magazine frames on the procedural carbine.
 export const RIFLE = {
   mass: 3, foregrip: new Vector3(-0.02, 0.06, 0.185), sight: new Vector3(0, 0.12, 0),
-  well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.145, 0.077), muzzle: new Vector3(0, 0.06, 0.68),
-  /** a magazine's grip, `base`: on the line through its front edge's rounding, half its thickness in from the edge, 7 cm under its
-   * well's mouth (of the 8 cm it shows below it), so the thumb and index pinch its body below the well; 4.5 cm under, the thumb's tip was
-   * at the well's edge and the index's on the receiver's face over it */
-  magazine: { base: new Vector3(0, -0.07, 0.009), mass: 0.5 },
+  well: new Vector3(0, -0.055, 0.09), muzzle: new Vector3(0, 0.06, 0.68),
+  /** how far below its seat a magazine comes in to the well along the well's line (m): its lips 2 cm under the receiver */
+  wellLine: 0.095,
+  /** a magazine's grip, `base`: on the line through its front edge's rounding, half its thickness in from the edge, 8.6 cm under its
+   * well's mouth (the hand's lower edge under its floor plate), so the thumb and index pinch its body below the well, the index's tip
+   * 1 cm under the well's flared mouth; 4.5 cm under, the thumb's tip was at the well's edge and the index's on the receiver's face over
+   * it, and 7 cm under, the index's tip touched the flare */
+  magazine: { base: new Vector3(0, -0.086, 0.005), mass: 0.5 },
   /** where the trigger finger's pad rests: on the blade's face, a little right of its middle (the finger coming in from the right), and
    * off it laid straight along the receiver's side above the guard */
   trigger: new Vector3(-0.004, -0.018, 0.043), frame: new Vector3(-0.028, 0.008, 0.058),
@@ -48,9 +51,12 @@ export function rifleOn(mount: Object3D, arms: number) {
   const muzzle = empty(rifle, 'muzzle', RIFLE.muzzle);
   const well = empty(rifle, 'well', RIFLE.well);
   well.rotation.x = -0.15;
-  // (a magazine comes in to the well from below it, its lips just under the well's mouth and turned as the well is, then up the well's line)
-  const below = empty(rifle, 'below the well', RIFLE.belowWell);
-  below.rotation.x = well.rotation.x;
+  // (a magazine comes in to the well along its line, from below it turned as the well is, its lips just under the receiver, and a carry
+  // out of the well leaves from there: off the line, 3 cm behind it, a magazine came in slanting against the well and its top corner
+  // stood out through the well's wall)
+  const below = empty(rifle, 'below the well', RIFLE.well.clone().add(new Vector3(0, -RIFLE.wellLine, 0).applyEuler(well.rotation)));
+  below.rotation.copy(well.rotation);
+  well.userData.approach = [below.name];
   const magazineIn = (place: Object3D, name: string) => {
     const magazine = empty(place, name, new Vector3());
     model.magazine(magazine);
