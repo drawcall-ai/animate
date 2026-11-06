@@ -291,17 +291,19 @@ describe('release', () => {
     const ball = box(room, new Vector3(-0.2, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
     Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const target = new Vector3(0, 0, 15);
-    let highest = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), done = false;
+    let behind = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), done = false;
     play(function* () {
       yield* grab(body, ball, { right: 'body' });
       yield* throwAt(body, ball, target, { released: ({ velocity }) => { thrown = velocity; thrownFrom = worldOf(ball); } });
       after = body.object.worldToLocal(body.bones.rightHand.getWorldPosition(new Vector3()));
       done = true;
     }, [body], 6, () => {
-      if (body.holds(ball)) highest = Math.max(highest, worldOf(ball).y);
+      // (how far behind the head, at its height, the hand cocks the ball)
+      const head = body.bones.head.getWorldPosition(new Vector3()), hand = body.bones.rightHand.getWorldPosition(new Vector3());
+      if (body.holds(ball) && Math.abs(hand.y - head.y) < 0.15) behind = Math.max(behind, head.z - hand.z);
       return done;
     });
-    expect(highest).toBeGreaterThan(1.75);
+    expect(behind).toBeGreaterThan(0.05);
     expect(ball.parent).toBe(room);
     // (aimed: on its arc from where it left the hand, it comes down at the target)
     const v = thrown ?? new Vector3(), flight = (2 * v.y) / 9.81 + 0.3;

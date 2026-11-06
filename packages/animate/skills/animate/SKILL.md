@@ -107,7 +107,7 @@ Hand targets for what a person does about itself (holding something up to look a
 
 A part of a held thing (a magazine in its rifle, a grenade's pin) is a thing of its own: give it its own mass and grips under its parent. The other hand grabs it where it sits, leaving it in place and following it; `carry` lifts it off into that hand, and a release onto an empty puts it back. To move a part along its parent (a magazine up its well), hold it with `grab` and move its local position yourself: the hand follows it.
 
-To throw what one hand holds, `throwAt` it: the throw is the body's whole motion, cocked, whipped and followed through, aimed at the target. Turn the body toward the target first. Its `released` callback gives the velocity aimed at the target and the hand's spin as the thing leaves the hand, left in the world where it was let go; give them to your physics. `release` also returns how a thing was moving, for one simply let go of on the way of a carry.
+To throw what one hand holds, `throwAt` it: the throw is the body's whole motion, cocked, whipped and followed through, aimed at the target. Turn the body toward the target first, and sling what the other hand holds: the trunk's coil swings whatever is mounted on the chest. A body whose root you drive steps into the throw only as you move its root, about half a stride forward over the whip. Its `released` callback gives the velocity aimed at the target and the hand's spin as the thing leaves the hand, left in the world where it was let go; give them to your physics. `release` also returns how a thing was moving, for one simply let go of on the way of a carry.
 
 ```ts
 yield* grab(soldier, grenade, { right: 'body' });
