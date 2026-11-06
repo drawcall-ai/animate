@@ -4,7 +4,7 @@ import { stockBack, WeaponModel } from './model';
 
 // Physical grip, sight, and magazine frames on the procedural carbine.
 export const RIFLE = {
-  mass: 3, foregrip: new Vector3(-0.012, 0.06, 0.185), sight: new Vector3(0, 0.12, 0),
+  mass: 3, foregrip: new Vector3(-0.02, 0.06, 0.185), sight: new Vector3(0, 0.12, 0),
   well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.145, 0.077), partWay: new Vector3(0, -0.092, 0.085), muzzle: new Vector3(0, 0.06, 0.68),
   /** a magazine's grips: `base` on the line through its front edge's rounding, half its thickness in from the edge; `floor` a hand's half
    * thickness under the middle of its floor plate */
@@ -21,17 +21,18 @@ export function rifleOn(mount: Object3D, arms: number) {
   rifle.userData.mass = RIFLE.mass;
   // (the grips as handles: the pistol grip slanting back down from the receiver, held in the right hand from its right, the thumb on top;
   // the receiver's front in the left, ahead of the magazine well with room for four fingers before it (2 cm nearer, the little finger lay
-  // in the well), round the receiver's 6 × 7 cm body: palm up under it, turned in a little, as far as the wrist turns so, the fingers round
-  // its right side, the thumb opposing them up its left, the grasp slanting forward-right across it as the forearm comes from the left
-  // shoulder; the empty 1.2 cm right of the middle and below it, so the fingertips come up the right side rather than stopping on its lower
-  // edge (squarely under it, the palm drew the hand off it aiming))
+  // in the well), round the receiver's 6 × 7 cm body: palm up and turned in under it, as far as the wrist turns so, the fingers round its
+  // right side, the thumb opposing them up its left, the grasp slanting forward-right across it as the forearm comes from the left
+  // shoulder; the empty 2 cm right of the middle and below it, so the fingertips come up the right side rather than stopping on its lower
+  // edge — tuned between two failures: turned in less (its palm half as far off up), a fresh body stepping off the course's ladder turned
+  // its hand onto it for over 3 s and never took its rifle; further, the hand back from a lift's button turned onto it for over 6 s)
   // (the pistol grip held high and forward on it, the knuckles at its front edge so the fingers wrap its front to the left side and the
   // index reaches the trigger, the web round the back strap so the thumb closes round it onto the left; its axis leant 10° past the
   // grip's own, so the fingers wrap a little downward; the radius a millimetre over its half width, the palm on its flat right side)
   const pistol = empty(rifle, 'pistol', new Vector3(0, -0.068, -0.008));
   Object.assign(pistol.userData, { handle: [0, 0.9, 0.42], facing: [1, 0, 0.3], radius: 0.0165 });
   const foregrip = empty(rifle, 'foregrip', RIFLE.foregrip);
-  Object.assign(foregrip.userData, { handle: [0.3, 0, 0.95], facing: [-0.25, 1, 0], radius: 0.035 });
+  Object.assign(foregrip.userData, { handle: [0.3, 0, 0.95], facing: [-0.4, 1, 0], radius: 0.035 });
   // (the trigger drawn back as a part, the trigger finger's pad on its face going with it)
   const blade = empty(rifle, 'blade', new Vector3());
   model.trigger(blade);
