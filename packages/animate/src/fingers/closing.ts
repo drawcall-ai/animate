@@ -24,10 +24,14 @@ const GIRTH = 0.09;
  * segment lying along a thing's surface, grazing it, does not stop the fold)
  */
 const PRESSED = 0.8;
-/** the ways across a grip its chords are tried in (over half a turn); how much nearer the way the palm faces counts for against a chord's
- * width (m per unit of the cosine between them: a round rung's chords alike, the one along it); and how much nearer one end of the chord
- * than the other the palm must lie, as a share of its width, for the thumb to go to the other */
-const CHORDS = 12, EVEN = 0.004, TIE = 0.3;
+/**
+ * the ways across a grip its chords are tried in (over half a turn); how much nearer the way the palm faces counts for against a chord's
+ * width (m per unit of the cosine between them: a round rung's chords alike, the one along it); and how squarely the palm must face along
+ * the chord to lie on its end (the cosine), the thumb going to the other (a pistol grip's palm on its side, a rung's) — facing across it
+ * (on a magazine's edge, under a receiver's corner), the thumb goes away from the fingers' pads instead: judged by where the palm lies, a
+ * support hand's palm at the receiver's lower corner sent the thumb through it to the right face, with the fingers
+ */
+const CHORDS = 12, EVEN = 0.004, TIE = Math.SQRT1_2;
 /** the steps each fold is tried at, and the halvings within the step it first meets the thing in: 1/128 of its range */
 const STEPS = 16, HALVINGS = 3;
 
@@ -120,44 +124,53 @@ function halved(met: () => boolean, set: (value: number) => void, free: number, 
  * where the thumb opposes the handle `handle` (its middle and line, the world's), `near`, as `shape` closed the fingers on it (the world):
  * at an end of the handle's narrowest chord square to its line, level along it with the thumb's pad as `WRAP` has it (it reaches across
  * beside the index, not the palm's middle) — a magazine's thickness, a receiver's width, a pistol grip's from side to side; of chords as
- * narrow as each other (`EVEN`, a round rung's), the one nearest the way the palm faces — the end away from the palm, or where the palm
- * lies about as near both (`TIE`: on a magazine's edge, under a receiver), away from the fingers' pads. Its pad goes there, facing back
+ * narrow as each other (`EVEN`, a round rung's), the one nearest the way the palm faces — the end away from the palm where it faces
+ * along the chord (`TIE`), else away from the fingers' pads. Its pad goes on that face where
+ * the line along the chord through its pad as `WRAP` has it meets it (within the chord's width of its end; else at the end), facing back
  * along the chord; no chord (nothing about the line within `GIRTH`), none.
  */
 function opposite(joints: Joints, near: Triangles, shape: Shape, handle: Line): Opposed | null {
   const world = joints.hand.matrixWorld, palm = joints.touch(null, shape);
   const at = palm.at.applyMatrix4(world), faces = palm.facing.transformDirection(world), axis = handle.axis;
   const thumb = joints.pad('thumb', shape, new Vector3(), _facing, PINCH).applyMatrix4(world);
-  const middle = handle.at.clone().addScaledVector(axis, thumb.sub(handle.at).dot(axis));
-  // (how far the surface is from the middle along `way`: where a line in from `GIRTH` out first meets it)
-  const out = (way: Vector3) => {
-    const hit = near.first(_ray.set(middle.clone().addScaledVector(way, GIRTH), way.clone().negate()), GIRTH);
+  // (how far the surface is from `from` along `way`: where a line in from `GIRTH` out first meets it)
+  const out = (from: Vector3, way: Vector3) => {
+    const hit = near.first(_ray.set(from.clone().addScaledVector(way, GIRTH), way.clone().negate()), GIRTH);
     return hit === null ? null : GIRTH - hit;
   };
   const square = new Vector3().crossVectors(axis, faces);
   if (square.lengthSq() < 1e-8) square.crossVectors(axis, _pad.set(1, 0, 0));
   square.cross(axis).normalize();
-  let best: { way: Vector3; ahead: number; behind: number; score: number } | null = null;
-  for (let k = 0; k < CHORDS; k++) {
-    const way = square.clone().applyAxisAngle(axis, (k * Math.PI) / CHORDS), ahead = out(way), behind = out(way.clone().negate());
-    if (ahead === null || behind === null) continue;
-    const score = ahead + behind - EVEN * Math.abs(way.dot(faces));
-    if (!best || score < best.score) best = { way, ahead, behind, score };
-  }
+  // (the chords through `from`, each way across, with its score)
+  const chords = (from: Vector3) => Array.from({ length: CHORDS }, (_, k) => {
+    const way = square.clone().applyAxisAngle(axis, (k * Math.PI) / CHORDS), ahead = out(from, way), behind = out(from, way.clone().negate());
+    return ahead === null || behind === null ? null : { way, ahead, behind, score: ahead + behind - EVEN * Math.abs(way.dot(faces)) };
+  }).filter((chord) => chord !== null);
+  // (through the middle of its cross-section, the midpoints of the chords through the handle's line averaged: through a line off to its
+  // side, as a receiver's is, the chord across its corner was the narrowest, and the thumb went for the corner)
+  const level = handle.at.clone().addScaledVector(axis, thumb.clone().sub(handle.at).dot(axis)), first = chords(level);
+  if (!first.length) return null;
+  const middle = first.reduce((sum, c) => sum.add(level.clone().addScaledVector(c.way, (c.ahead - c.behind) / 2)), new Vector3()).divideScalar(first.length);
+  const best = chords(middle).reduce<ReturnType<typeof chords>[number] | null>((was, c) => !was || c.score < was.score ? c : was, null);
   if (!best) return null;
-  const ends = [middle.clone().addScaledVector(best.way, best.ahead), middle.clone().addScaledVector(best.way, -best.behind)];
-  const width = best.ahead + best.behind, pads = padsOn(joints, near, shape);
-  const away = Math.abs(ends[0].distanceTo(at) - ends[1].distanceTo(at)) > TIE * width || !pads ? at : pads;
-  const end = ends[0].distanceTo(away) > ends[1].distanceTo(away) ? ends[0] : ends[1];
-  return { at: end, facing: middle.sub(end).normalize() };
+  // (along the chord, from its middle: the palm, and the fingers' pads)
+  const width = best.ahead + best.behind, centre = middle.clone().addScaledVector(best.way, (best.ahead - best.behind) / 2);
+  const along = (point: Vector3) => point.clone().sub(centre).dot(best.way) / (width / 2), pads = padsOn(joints, near, shape);
+  const side = -Math.sign(along(Math.abs(faces.dot(best.way)) > TIE ? at : pads));
+  const end = middle.clone().addScaledVector(best.way, side >= 0 ? best.ahead : -best.behind), way = end.clone().sub(middle).normalize();
+  // (on that face where the thumb already is, in along the chord through its pad as `WRAP` has it: at the chord's own end, a support
+  // thumb under a receiver reached 2 cm short for the middle of its side and lay through the face on the way)
+  const hit = near.first(_ray.set(thumb.clone().addScaledVector(way, GIRTH), way.clone().negate()), 2 * GIRTH);
+  const on = hit === null ? end : thumb.clone().addScaledVector(way, GIRTH - hit);
+  return { at: on.distanceTo(end) < width ? on : end, facing: way.negate() };
 }
 
-/** the middle of the pads of the fingers whose last segment meets `near` as `shape` has them, else of any that meets it (the world); none
- * meeting it, none */
-function padsOn(joints: Joints, near: Triangles, shape: Shape): Vector3 | null {
+/** the middle of the pads of the fingers whose last segment meets `near` as `shape` has them, else of any that meets it, else of all
+ * (the world) */
+function padsOn(joints: Joints, near: Triangles, shape: Shape): Vector3 {
   const met = DIGITS.filter((digit) => touches(joints, near, digit, shape, PRESSED).length);
-  const tips = met.filter((digit) => touches(joints, near, digit, shape, PRESSED).includes(2)), pressing = tips.length ? tips : met;
-  if (!pressing.length) return null;
+  const tips = met.filter((digit) => touches(joints, near, digit, shape, PRESSED).includes(2));
+  const pressing = tips.length ? tips : met.length ? met : DIGITS;
   const sum = new Vector3();
   for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, PINCH).applyMatrix4(joints.hand.matrixWorld));
   return sum.divideScalar(pressing.length);

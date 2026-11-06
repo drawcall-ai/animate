@@ -7,7 +7,8 @@ import { DIGITS, LIFTED, SPLAYED, type Digit, type Shape } from './shape';
 /**
  * A part of a hand on a thing (world): the palm's middle, the handle's line (where a handle of `radius` lies across the palm in its grasp), or a
  * digit's pad — the point of its fingertip `round` off its length (`Joints.pad`) — at `at`, facing `facing` and its grasp line along `axis`
- * (toward the thumb), where given.
+ * (toward the thumb), where given; its miss counting `weight` against the others' (default 1: a digit's own pad on what the hand holds
+ * counts `DIGIT`, so the digit bends to meet it and the arm barely gives).
  */
 export interface Contact {
   part: Digit | 'palm' | 'handle';
@@ -16,6 +17,7 @@ export interface Contact {
   axis?: Vector3;
   radius?: number;
   round?: number;
+  weight?: number;
 }
 
 /** The arm a contact solve moves with the fingers: its bones in `pose` from the upper arm to the hand, and the hand node's rest turn and
@@ -28,7 +30,7 @@ export interface Arm {
   rest: Readonly<Quaternion>;
   scale: number;
   /** how much of the solved turns its joints take (0 … 1: the pose's as it stands … met), eased in as a hold begins (default 1) */
-  weight?: number;
+  share?: number;
 }
 
 /**
@@ -48,6 +50,8 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
   const x = new Float64Array(n);
   values.forEach((v, j) => (x[turns + j] = read(shape, v.digit, v.key)));
   const pulled = values.map((v) => read(preferred, v.digit, v.key));
+  // (a digit's pull toward its preferred value weighed as its contact is: a weighted contact moves the arm less, not the digit)
+  const held = values.map((v) => Math.min(...contacts.filter((c) => c.part === v.digit).map((c) => c.weight ?? 1)));
   // (the hand node in the world as `x` has the arm: from the pose, or where its node stands)
   const hand = { position: new Vector3(), rotation: new Quaternion(), scale: 1 };
   const node = new Matrix4();
@@ -80,10 +84,10 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
     place(x);
     for (const c of contacts) {
       const part = partOf(joints, c, shape, hand.scale);
-      const at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at);
+      const weight = c.weight ?? 1, at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at).multiplyScalar(weight);
       out.push(at.x, at.y, at.z);
       if (c.facing) {
-        const off = part.facing.applyQuaternion(hand.rotation).sub(c.facing).multiplyScalar(c.part === 'palm' || c.part === 'handle' ? TURN.hand : TURN.pad);
+        const off = part.facing.applyQuaternion(hand.rotation).sub(c.facing).multiplyScalar(weight * (c.part === 'palm' || c.part === 'handle' ? TURN.hand : TURN.pad));
         out.push(off.x, off.y, off.z);
       }
       if (c.axis) {
@@ -92,7 +96,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
       }
     }
     for (let j = 0; j < turns; j++) out.push(x[j] * (j >= turns - 3 ? PULL.wrist : PULL.arm));
-    values.forEach((_, j) => out.push((x[turns + j] - pulled[j]) * PULL.finger));
+    values.forEach((_, j) => out.push((x[turns + j] - pulled[j]) * PULL.finger * held[j]));
   };
   const r: number[] = [], moved: number[] = [];
   for (let iteration = 0; iteration < ITERATIONS; iteration++) {
@@ -126,7 +130,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
     values.forEach((v, j) => (x[turns + j] = Math.min(1, Math.max(v.least, x[turns + j]))));
   }
   residual(x, r);
-  if (arm) arm.bones.forEach((bone, k) => arm.pose.setLocal(bone, locals[k], arm.weight ?? 1));
+  if (arm) arm.bones.forEach((bone, k) => arm.pose.setLocal(bone, locals[k], arm.share ?? 1));
   // (the miss: the contacts' positions alone)
   place(x);
   return Math.max(...contacts.map((c) => {
@@ -143,6 +147,9 @@ function partOf(joints: Joints, contact: Contact, shape: Shape, scale: number) {
   return joints.touch(contact.part === 'palm' ? null : contact.part, shape, contact.round);
 }
 
+/** how much a digit's own pad on what the hand holds counts against the hand's grip (`Contact.weight`): moved as much as its grip, the
+ * trigger finger drew the hand 4 cm and 58° off the pistol grip, and a thumb's pad the support hand off the receiver */
+export const DIGIT = 0.1;
 /** how much a unit of a part's facing or grasp line off its contact's weighs against a metre off it: the hand's as 2 mm, so it turns only
  * as far as the arm lets it; a pad's as 1 cm, so it presses with its flat */
 const TURN = { hand: 0.002, pad: 0.01 } as const;

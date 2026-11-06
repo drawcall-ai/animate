@@ -6,7 +6,7 @@ import type { Hold } from '../things/resolve';
 import { heldTurn } from '../things/hold';
 import type { DigitBones } from './bones';
 import { closedOn, type Opposed } from './closing';
-import { meet, type Arm, type Contact } from './contact';
+import { DIGIT, meet, type Arm, type Contact } from './contact';
 import type { HandPoint } from './point';
 import { Joints, PINCH } from './joints';
 import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
@@ -101,16 +101,15 @@ export class FingerState {
     if (hold) {
       const began = this.began.get(hold) ?? time;
       this.began.set(hold, began);
-      arm = { ...arm, weight: smoothstep(0, TAKING, time - began) };
+      arm = { ...arm, share: smoothstep(0, TAKING, time - began) };
     }
     const contacts = this.contacts(grip, thing, placed), thumb = opposing(closed?.thumb ?? null, contacts, thing, placed);
     hand.met = { shape: this.solved(hand, arm, contacts, thumb, preferred), digits: touching(thumb ? [...contacts, thumb] : contacts) };
   }
 
   /**
-   * `preferred` with the digits `contacts` touch met together with `arm` (`meet`), from where they were last met; then the thumb onto
-   * `thumb`, where it opposes the handle, the hand as the arm brought it: the thumb bends to the grip, the arm does not give for it (moved
-   * with it, a support hand drew off the receiver and a magazine slid in the hand pulling it from the well)
+   * `preferred` with the digits `contacts` and `thumb` (where it opposes the handle) touch met together with `arm` (`meet`), as one chain,
+   * from where they were last met: the digits bend to their pads' contacts, the arm barely giving for them (`DIGIT`)
    */
   private solved(hand: Hand, arm: Arm | null, contacts: readonly Contact[], thumb: Contact | null, preferred: Shape): Shape {
     const shape = structuredClone(preferred), was = hand.met?.shape ?? hand.shape;
@@ -118,8 +117,7 @@ export class FingerState {
       if (digit === 'thumb') shape.thumb = { ...was.thumb };
       else shape[digit] = { ...was[digit] };
     }
-    meet(hand.joints, arm, contacts, shape, preferred);
-    if (thumb) meet(hand.joints, arm && { ...arm, bones: [] }, [thumb], shape, preferred);
+    meet(hand.joints, arm, thumb ? [...contacts, thumb] : contacts, shape, preferred);
     return shape;
   }
 
@@ -197,7 +195,7 @@ export class FingerState {
     const pinching = (part: Digit, at: Vector3): Contact => {
       const toward = centre.clone().sub(at);
       if (line) toward.addScaledVector(line, -toward.dot(line));
-      return { part, at, round: PINCH, ...(toward.lengthSq() > 1e-8 && { facing: toward.normalize() }) };
+      return { part, at, round: PINCH, weight: DIGIT, ...(toward.lengthSq() > 1e-8 && { facing: toward.normalize() }) };
     };
     const contacts: Contact[] = [grip.pad ? { part: grip.pad, at: centre, facing }
       : grip.handle ? { part: 'handle', at: centre, axis: line ?? undefined, facing, radius: grip.handle.radius }
@@ -275,7 +273,7 @@ export class FingerState {
 function opposing(opposed: Opposed | null, contacts: readonly Contact[], thing: Object3D, placed: (object: Object3D) => Placement): Contact | null {
   if (!opposed || contacts.some((c) => c.part === 'thumb')) return null;
   const at = placed(thing);
-  return { part: 'thumb', at: opposed.at.clone().applyQuaternion(at.quaternion).add(at.position), facing: opposed.facing.clone().applyQuaternion(at.quaternion), round: PINCH };
+  return { part: 'thumb', at: opposed.at.clone().applyQuaternion(at.quaternion).add(at.position), facing: opposed.facing.clone().applyQuaternion(at.quaternion), round: PINCH, weight: DIGIT };
 }
 
 /** the digits `contacts` put a pad of on the thing */
