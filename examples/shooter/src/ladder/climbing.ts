@@ -170,8 +170,9 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
 const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
 /**
  * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
- * `turn` (the tangent) to face back toward the climber, its heel off the face; its thumb's pad flat on the outer face `thumb` (m) above
- * the grasp, abeam the edge, so it presses square into the face (a flat bar taken as a round one, the thumb hooked onto its edge)
+ * `turn` (the tangent) a little back toward the climber, nearly flat on the face; its thumb's pad on the outer face `thumb.up` (m) above
+ * the grasp and `thumb.back` behind the edge, where the thumb reaches lying straight along the face (turned 0.6 back, the palm's heel
+ * stood 4 cm off the face with the thumb's base, and the pad 4 cm up, the thumb stood up at the edge, its tip bone 50° into the face)
  */
 const STILE_HOLD = { proud: 0.003, turn: 0.1, thumb: { up: 0.075, back: 0.015 } } as const;
 /**
