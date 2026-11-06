@@ -446,7 +446,6 @@ export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
 /** where the feet's middle stands from the centre of mass (`OVER` behind it, facing as the stepper does; × `scale`) */
 export const feetBehind = (stepper: Pick<Stepper, 'yaw'>, scale: number) => forwardOf(stepper.yaw).multiplyScalar(OVER * scale);
 
-/** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
 /**
  * `history`'s older value, moved so it says no faster a motion than `motion`'s top speed: what a part taken at an asked rate (a throw's
  * bow) hands on to its own pace once the rate is no longer asked — the trunk checked by the hips, not carried on by a throw's 3 rad/s into
@@ -456,6 +455,7 @@ function paced(history: readonly number[], motion: { speed: number }, dt: number
   return history[1] - clamp(history[1] - history[0], -motion.speed * dt, motion.speed * dt);
 }
 
+/** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
 function followed(history: number[], goal: number, motion: { accel: number; speed: number }, dt: number): number {
   const next = follow(history[0], history[1], goal, motion, dt);
   [history[0], history[1]] = [history[1], next];

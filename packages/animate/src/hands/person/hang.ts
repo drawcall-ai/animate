@@ -53,10 +53,14 @@ const CLEAR = 0.055;
 /** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it
  * kinks; let go of, it comes down calmly — and posed, it goes there so */
 export const SWING = { accel: 25, speed: 2.5 };
+/** how many times a free arm's swing a joint taken back from a verb may be turning before it counts as flung (a throw's whip) */
+const FLUNG = 4;
 
 /** Free arms follow their own histories back into stride swing, posed over it as asked (`armPose`, cleared); holding hands keep their grips. */
 export function hanging(person: Reacher): Step {
   const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
+  /** whether each arm was another's (a hand verb's, or holding) the sub-step before: taken back, it is carried on no faster than it swings */
+  const taken = { left: true, right: true };
   let phase = person.locomotion.phase;
   // (each arm's turn back with the bow (rad) and its rate, swaying after `drawnBack` as `SWAY` has it)
   const start = drawnBack(person.proportions, person.locomotion.bow, 0);
@@ -76,6 +80,8 @@ export function hanging(person: Reacher): Step {
     SIDES.forEach((side, s) => {
       const posed = person.armPose[side], { shrug, forward, out: spread, twist, elbow } = posed;
       [posed.shrug, posed.forward, posed.out, posed.twist, posed.elbow] = [0, 0, 0, 0, 0];
+      const busy = person.holding[side] !== null || person.owner(`hand.${side}`) !== undefined, handed = taken[side] && !busy;
+      taken[side] = busy;
       if (person.holding[side]) return;
       const sign = s === 0 ? 1 : -1;
       // (the left arm in front as the left foot lifts, the right behind; growing in as the walk does)
@@ -86,7 +92,7 @@ export function hanging(person: Reacher): Step {
       // the arm hanging from the shoulder — plumb, but as far back as the bow carries it (held in as the other hand works) — out as far
       // as keeps the hand clear of the thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or
       // twists, swung forward about that frame's left; the forearm forward
-      followJoint(f, goals, INDEX[`${side}Shoulder`], shrug === 0 ? IDENTITY : _s2.setFromAxisAngle(Z, sign * shrug));
+      followJoint(f, goals, INDEX[`${side}Shoulder`], shrug === 0 ? IDENTITY : _s2.setFromAxisAngle(Z, sign * shrug), handed);
       const outward = (at: Readonly<Vector3>) => _d.subVectors(at, hips).dot(left) * sign;
       const thigh = Math.max(outward(f.current.position(INDEX[`${side}UpperLeg`])), outward(f.current.position(INDEX[`${side}LowerLeg`])));
       const handY = f.current.position(INDEX[`${side}UpperArm`]).y - proportions.armLength;
@@ -108,7 +114,7 @@ export function hanging(person: Reacher): Step {
       f.current.setLocal(limb[1], _q.setFromAxisAngle(Y, -sign * flex));
       f.current.setLocal(limb[2], IDENTITY);
       keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, HUNG, seen[side]);
-      for (const bone of limb) followJoint(f, goals, bone, f.current.local(bone).clone());
+      for (const bone of limb) followJoint(f, goals, bone, f.current.local(bone).clone(), handed);
       // A hand returning from a task stays clear as its braked joints descend with the turning trunk, below the hips too (its clearance
       // is judged again only as the arm or the trunk moves: a hanging arm at rest is not)
       keepArmOut(f, proportions, side, { position: _hung.copy(f.current.position(limb[2])) }, NUDGED, seen[side]);
@@ -136,10 +142,14 @@ export function clearArm(person: Reacher, f: Frame, side: Side, at: Vector3, yaw
 }
 
 /** joint `bone` turned on from its history toward `goal` (its own motion followed), as briskly as a free arm swings (`SWING`) */
-export function followJoint(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion) {
+export function followJoint(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion, handed = false) {
   let joint = joints.get(bone);
   if (!joint) joints.set(bone, (joint = new TrackedRotation()));
-  const q = joint.follow(f.prev2.local(bone), f.prev.local(bone), goal, SWING, f.dt, _r);
+  // (`handed`: just taken back from what had the arm, flung — turning faster than `FLUNG` swings — it is carried on no faster than a free
+  // arm swings: let go of at a throw's whip speed, it flew on up past the shoulder before its brakes caught it)
+  const prev = f.prev.local(bone), prev2 = _p2.copy(f.prev2.local(bone)), turned = prev2.angleTo(prev), most = SWING.speed * f.dt;
+  if (handed && turned > FLUNG * most) prev2.copy(prev).slerp(f.prev2.local(bone), most / turned);
+  const q = joint.follow(prev2, prev, goal, SWING, f.dt, _r);
   f.current.setLocal(bone, limited(f.current.skeleton, bone, q));
 }
 
@@ -147,6 +157,6 @@ export function followJoint(f: Frame, joints: Map<number, TrackedRotation>, bone
 const HUNG = { ...NUDGED, swivel: 0 };
 
 const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 1), ONE = new Vector3(1, 1, 1);
-const _q = new Quaternion(), _p = new Quaternion(), _r = new Quaternion(), _h = new Quaternion(), IDENTITY = new Quaternion(), _s2 = new Quaternion(), _t = new Quaternion();
+const _q = new Quaternion(), _p = new Quaternion(), _p2 = new Quaternion(), _r = new Quaternion(), _h = new Quaternion(), IDENTITY = new Quaternion(), _s2 = new Quaternion(), _t = new Quaternion();
 const _left = new Vector3(), _d = new Vector3(), _w = new Vector3(), _rest = new Vector3(), _hung = new Vector3();
 const _box = new Box3(), _matrix = new Matrix4();

@@ -29,7 +29,8 @@ export interface ThrowOptions {
 }
 
 /**
- * Throws `thing`, held in one of a person's hands, overhand at `target` (a point, or an object; none: straight ahead), along the way the
+ * Throws `thing`, held in one of a person's hands, overhand at `target` (a point, or an object read where it is as the thing is let go;
+ * none: straight ahead), along the way the
  * body faces — turn it toward the target first. The hand swings out to the side and cocks the thing behind the ear at head height as the
  * trunk coils away, the hips with it, and the body sinks onto its back foot, the free arm pointing at the target; the hips and then the
  * trunk uncoil ahead of the arm and

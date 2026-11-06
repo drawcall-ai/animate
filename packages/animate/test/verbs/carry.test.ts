@@ -286,23 +286,34 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  for (const [driven, height] of [[false, 1.75], [true, 1.75], [true, 1.6], [false, 1.9]] as const) it(`throws overhand at a target (${height} m${driven ? ', its root driven' : ''}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through`, () => {
+  for (const [driven, height, low] of [[false, 1.75, true], [true, 1.75, true], [true, 1.6, true], [false, 1.9, true], [false, 1.75, false]] as const) it(`throws overhand at a target (${height} m${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
     const body = person({ dev: true, ...(driven && { drive: () => root }) }, height), room = roomOf(body);
-    // (taken up from low, before the belly)
-    const ball = box(room, new Vector3(-0.12, 0.55 * height, 0.28), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
+    // (taken up from low, before the belly, or from before the chest)
+    const ball = box(room, low ? new Vector3(-0.12, 0.55 * height, 0.28) : new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
     Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const target = new Vector3(0, 0, 15);
-    let behind = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), done = false;
+    let behind = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), ended = false, done = false;
+    let ahead = 0, upright = Infinity, raised = -Infinity, hand = new Vector3();
     play(function* () {
       yield* grab(body, ball, { right: 'body' });
       yield* throwAt(body, ball, target, { released: ({ velocity }) => { thrown = velocity; thrownFrom = worldOf(ball); } });
       after = body.object.worldToLocal(body.bones.rightHand.getWorldPosition(new Vector3()));
+      ended = true;
+      yield* wait(1.5);
       done = true;
-    }, [body], 6, () => {
+    }, [body], 8, () => {
       // (how far behind the head, at its height, the hand cocks the ball)
-      const head = body.bones.head.getWorldPosition(new Vector3()), hand = body.bones.rightHand.getWorldPosition(new Vector3());
-      if (body.holds(ball) && Math.abs(hand.y - head.y) < 0.15) behind = Math.max(behind, head.z - hand.z);
+      const head = body.bones.head.getWorldPosition(new Vector3()), at = body.bones.rightHand.getWorldPosition(new Vector3());
+      if (body.holds(ball) && Math.abs(at.y - head.y) < 0.15) behind = Math.max(behind, head.z - at.z);
+      if (ended) {
+        // (once the throw has ended: how far ahead of the feet the head runs on, and how high the free hand swings above its shoulder)
+        const local = body.object.worldToLocal(head.clone());
+        ahead = Math.max(ahead, local.z);
+        upright = local.z;
+        raised = Math.max(raised, at.y - body.bones.rightUpperArm.getWorldPosition(new Vector3()).y);
+        hand = body.object.worldToLocal(at.clone());
+      }
       return done;
     });
     expect(behind).toBeGreaterThan(0.05);
@@ -311,31 +322,13 @@ describe('release', () => {
     const v = thrown ?? new Vector3(), flight = (2 * v.y) / 9.81 + 0.3;
     expect(Math.abs(thrownFrom.z + v.z * flight - target.z)).toBeLessThan(3);
     expect(after.y).toBeLessThan(1.1);
-    expect(body.log).toEqual([]);
-  });
-
-  it('comes back up from a throw\'s follow-through, the trunk checked rather than bowing on past it', () => {
-    const body = person({ dev: true }), room = roomOf(body);
-    const ball = box(room, new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4, solid: false });
-    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
-    let thrown = false, ahead = 0, upright = Infinity;
-    play(function* () {
-      yield* grab(body, ball, { right: 'body' });
-      yield* throwAt(body, ball, new Vector3(0, 0, 15));
-      thrown = true;
-      yield* wait(1.5);
-    }, [body], 8, () => {
-      if (!thrown) return;
-      // (how far ahead of the feet the head runs on once the throw has ended, and how far it is still ahead as the story ends)
-      const head = body.object.worldToLocal(body.bones.head.getWorldPosition(new Vector3()));
-      ahead = Math.max(ahead, head.z);
-      upright = head.z;
-    });
-    // (bowing on, it ran 0.5 m ahead, its centre of mass out past its feet)
+    // (the trunk checked rather than bowing on past the follow-through — bowing on, the head ran 0.5 m ahead of the feet — and upright again)
     expect(ahead).toBeLessThan(0.36);
     expect(upright).toBeLessThan(0.05);
-    // (the stride's foot stepping back in slides the planted one some 4 mm, with or without the bow: not what this checks)
-    expect(body.log.filter(({ check }) => check !== 'planted slide (m)')).toEqual([]);
+    // (the arm, free, let hang by the side: taken over at its whip's speed, it flew up past the shoulder)
+    expect(raised).toBeLessThan(-0.2);
+    expect(Math.abs(hand.x)).toBeLessThan(0.35 * height / 1.75);
+    expect(body.log).toEqual([]);
   });
 
   // (a target on the body given as an object or by a function: either way the carry ends with the thing there and turned, and keeps it so)
