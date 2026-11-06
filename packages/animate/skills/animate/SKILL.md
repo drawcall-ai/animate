@@ -100,7 +100,7 @@ pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };
 
 A part of a held thing (a magazine in its rifle, a grenade's pin) is a thing of its own: give it its own mass and grips under its parent. The other hand grabs it where it sits, leaving it in place and following it; `carry` lifts it off into that hand, and a release onto an empty puts it back. To move a part along its parent (a magazine up its well), hold it with `grab` and move its local position yourself: the hand follows it.
 
-To throw a held thing, `carry` it back to wind up, then toward where it is flung with an `until` that ends on the way, while it still moves fast, and `release` it there. `release` returns the thing's `velocity` and `spin` as it left the hand; take the thing into your physics with them. A hand moves at a few m/s at most, so a long throw takes its speed from you and its direction and spin from the swing. Keep the swing's points within the arm's reach and pass `step: false`, or the carry walks the body to them.
+To throw a held thing, `carry` it back to wind up, then toward where it is flung with an `until` that ends on the way, while it still moves fast, and `release` it there. `release` returns the thing's `velocity` and `spin` as it left the hand; take the thing into your physics with them. Let go with nowhere given, a thing goes back under the parent it was lifted from, where it is now — a pouch on the body, the grenade a pin came off — so attach it to your scene or physics body right after. A hand moves at a few m/s at most, so a long throw takes its speed from you and its direction and spin from the swing. Keep the swing's points within the arm's reach and pass `step: false`, or the carry walks the body to them.
 
 ```ts
 const at = (x: number, y: number, z: number) => soldier.object.localToWorld(new Vector3(x, y, z)); // the body's frame, +X its left
@@ -108,6 +108,7 @@ yield* grab(soldier, grenade, { right: 'body' });
 yield* grab(soldier, pin, { left: 'ring' });               // the pin: a thing of its own (its own mass) under the grenade
 yield* carry(soldier, pin, at(0.35, 1.1, 0.3), { step: false });
 release(soldier, pin);
+scene.attach(pin);                                         // dropped: back under the grenade otherwise
 yield* carry(soldier, grenade, at(-0.28, 1.5, 0.1), { step: false });                     // wound up beside the shoulder
 const from = grenade.getWorldPosition(new Vector3());
 yield* carry(soldier, grenade, at(-0.2, 1.45, 0.65), { speed: 3, step: false, until: () => grenade.getWorldPosition(new Vector3()).distanceTo(from) > 0.35 });
