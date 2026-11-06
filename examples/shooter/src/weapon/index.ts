@@ -1,4 +1,5 @@
 import { Mesh, MeshBasicMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
+import { RELAXED } from '@drawcall/animate';
 import { stockBack, WeaponModel } from './model';
 
 // Physical grip, sight, and magazine frames on the procedural carbine.
@@ -58,12 +59,9 @@ export function rifleOn(mount: Object3D, arms: number) {
     // (taken by its front edge, thumb up toward its lips, the palm on the edge facing back: the fingers round onto its right face, the
     // thumb opposing them on its left)
     Object.assign(empty(magazine, 'base', RIFLE.magazine.base).userData, { handle: [0, 1, 0.18], facing: [0, 0, -1], radius: 0.014 });
-    // (the palm under the floor plate, tilted in from its left as the hand comes from there, its fingers loose round the front to push
-    // it home: shaped, as there is nothing under the plate to close on)
-    Object.assign(empty(magazine, 'floor', RIFLE.magazine.floor).userData, { facing: [-1, 1, 0], fingers: {
-      thumb: { curl: 0.25, oppose: 0.15, spread: 0.3 },
-      index: { curl: 0.3, hook: 0.1 }, middle: { curl: 0.34, hook: 0.1 }, ring: { curl: 0.38, hook: 0.1 }, little: { curl: 0.42, hook: 0.12 },
-    } });
+    // (the palm under the floor plate, tilted in from its left as the hand comes from there, its fingers relaxed round the front to push
+    // it home, not closed into a fist on its side)
+    Object.assign(empty(magazine, 'floor', RIFLE.magazine.floor).userData, { facing: [-1, 1, 0], fingers: RELAXED });
     return magazine;
   };
   return { rifle, pistol, blade, well, below, partWay, flash, muzzle, stock, magazineIn, dispose: () => { model.dispose(); flash.material.dispose(); } };

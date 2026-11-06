@@ -17,10 +17,10 @@ import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, ty
 interface Hand {
   joints: Joints;
   shape: Shape;
-  asked: { shape: Shape; time: number } | null;
+  asked: Shape | null;
   closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; off: Vector3; since: number } | null;
   coming: Object3D | null;
-  met: { shape: Shape; time: number; digits: readonly Digit[] } | null;
+  met: { shape: Shape; digits: readonly Digit[] } | null;
 }
 
 /**
@@ -74,9 +74,9 @@ export class FingerState {
     return this.hands[side].joints;
   }
 
-  /** a pose asks `side`'s fingers to take `shape` this sub-step (at `time`, s) */
-  ask(side: 'left' | 'right', shape: Shape, time: number): void {
-    this.hands[side].asked = { shape, time };
+  /** a pose asks `side`'s fingers to take `shape` this update */
+  ask(side: 'left' | 'right', shape: Shape): void {
+    this.hands[side].asked = shape;
   }
 
   /**
@@ -104,7 +104,7 @@ export class FingerState {
       arm = { ...arm, weight: smoothstep(0, TAKING, time - began) };
     }
     const contacts = this.contacts(grip, thing, placed), thumb = opposing(closed?.thumb ?? null, contacts, thing, placed);
-    hand.met = { shape: this.solved(hand, arm, contacts, thumb, preferred), time, digits: touching(thumb ? [...contacts, thumb] : contacts) };
+    hand.met = { shape: this.solved(hand, arm, contacts, thumb, preferred), digits: touching(thumb ? [...contacts, thumb] : contacts) };
   }
 
   /**
@@ -123,22 +123,18 @@ export class FingerState {
     return shape;
   }
 
-  /** each hand eased `seconds` on toward what it holds, what a pose asks of it this sub-step (`time`, s; `dt` a sub-step), or relaxed —
-   * one whose contacts were met this sub-step put as they were met */
-  update(seconds: number, time: number, dt: number): void {
+  /** each hand eased `seconds` on toward what it holds, what a pose asked of it this update, or relaxed — one whose contacts were met
+   * this update put as they were last met — at `time` (s); what was met and asked then let go, each asked afresh the next */
+  update(seconds: number, time: number): void {
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands[side], hold = this.holding[side];
       if (hold && (hand.closed?.on !== hold || (time - hand.closed.since < SETTLING && hand.closed.off.distanceTo(offOn(hand, hold.thing.object)) > MOVED))) {
         this.close(hand, hold.thing.grip(hold.grip), hold.thing.object, hold, time);
       }
-      const met = hand.met && time - hand.met.time < 1.5 * dt ? hand.met : null;
-      if (met) {
-        this.ease(hand, met.shape, seconds, met.digits);
-        continue;
-      }
-      hand.met = null;
-      const asked = hand.asked && time - hand.asked.time < 1.5 * dt ? hand.asked.shape : null;
-      this.ease(hand, hold ? shapeOf(values(hold.thing.grip(hold.grip).node), hand.closed?.shape ?? hand.shape) : hand.coming ? this.onto(side, hand.coming, time) : asked ?? RELAXED, seconds);
+      const { met, asked } = hand;
+      [hand.met, hand.asked] = [null, null];
+      if (met) this.ease(hand, met.shape, seconds, met.digits);
+      else this.ease(hand, hold ? shapeOf(values(hold.thing.grip(hold.grip).node), hand.closed?.shape ?? hand.shape) : hand.coming ? this.onto(side, hand.coming, time) : asked ?? RELAXED, seconds);
     }
   }
 
@@ -160,7 +156,6 @@ export class FingerState {
     if (!grip || !thing || hand.closed?.on !== to) return this.ease(hand, goal, seconds);
     const contacts = this.contacts(grip, thing, worldOf), thumb = opposing(hand.closed.thumb, contacts, thing, worldOf);
     const shape = this.solved(hand, null, contacts, thumb, goal), digits = touching(thumb ? [...contacts, thumb] : contacts);
-    hand.met = { shape, time: 0, digits };
     this.ease(hand, shape, seconds, digits);
   }
 

@@ -385,7 +385,7 @@ export class Self implements Holder {
       node.parent?.updateWorldMatrix(true, false);
       node.quaternion.copy(node.parent ? node.parent.getWorldQuaternion(_turn).invert().multiply(rotation) : rotation);
     }
-    this.fingers?.update(seconds, this.time, this.frame.dt);
+    this.fingers?.update(seconds, this.time);
   }
 
   /** each hand's contacts met with its arm this sub-step (`FingerState.meet`): the arm moved with the fingers where it holds what does not

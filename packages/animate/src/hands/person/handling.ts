@@ -60,6 +60,9 @@ function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
     if (key) throw new Error(`"${grip.node.name}" has userData.${key}, which only a hand with finger bones holds by: this skeleton has none`);
     return { at: palmOf(person.proportions, side), turn: turned };
   }
+  // (a hand with fingers is turned by what it touches, a handle's line, a palm's or pad's facing, not by the empty's axes: two ways to turn
+  // one hand, one of them blind to where the fingers go)
+  if (grip.turn !== null) throw new Error(`"${grip.node.name}" has userData.handTurn, which a hand with finger bones does not take: describe the grip as a handle, a pad or a palm's facing`);
   // (where the hand holds it, measured in its node's frame, in its bone's)
   const scale = person.scaleOf(bone), { at, axis, facing, palm: palmFacing } = fingers.part(side, grip), rest = person.restOf(bone);
   const contact = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis.applyQuaternion(rest), palm: palmFacing.applyQuaternion(rest) };

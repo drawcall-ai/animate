@@ -58,7 +58,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
       posed && during(request, 'trunk', 'asked', () => self.poise.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
       ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))),
-      ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape, self.time))));
+      ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));
   }, options.until, true);
 }
 

@@ -46,8 +46,8 @@ export class Thing {
 
   /**
    * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the hand
-   * bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll. A person with fingers reads more off it, each in the
-   * empty's frame. `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip on a button): the hand points
+   * bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll — not for a person with fingers, whose grab refuses
+   * it. A person with fingers reads more off it, each in the empty's frame. `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip on a button): the hand points
    * (`POINT`, or as `userData.fingers` asks), comes to it from a little before it along `facing`, pushes in until the pad meets it — the
    * grab then holds there — rolled palm down a little thumb up, and draws back the way it came as it is released; the digit meets the
    * empty from wherever the arm brought the hand. `userData.handle` (an axis toward where the thumb goes) makes it a handle running through it: the
