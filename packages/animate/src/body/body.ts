@@ -91,7 +91,8 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * following its parent, as far as the hands holding what hangs from it hold it there (turned faster than the body follows, it waits for
    * the trunk rather than leaving the hands): read so as its hands take hold of what hangs from it, each sub-step, after the trunk is
    * posed; `null` lets it go.
-   * Set it before each `update`; the node's own rotation is written to match as the update ends. */
+   * Set it before each `update`; the node's own rotation is written to match as the update ends. With no hand on what hangs from it, it
+   * simply turns as asked. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
     selfOf(this).oriented.set(node, rotation);
   }
@@ -117,8 +118,9 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /**
    * A point for a person's hand `side`, scaled to its body: out from its shoulder (the upper arm's joint) along `direction` (the body's
-   * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`). Up to about 0.95 the arm
-   * reaches it, joint ranges allowing (behind the shoulder, only with the trunk turned: `pose`'s `twist`). Read where the body stands now:
+   * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`): 0.5 a bent arm near the
+   * body, 0.75 a comfortable reach, 0.9 all but straight. Past about 0.8, and behind the shoulder, the joints' ranges may hold the hand a
+   * little short (a carry there ends once it has stopped closing, within 1.5 cm of it). Read where the body stands now:
    * as a hand verb's target, give it as a function so it moves with the body, `() => body.armPoint('right', ahead, 0.8)`.
    */
   armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {

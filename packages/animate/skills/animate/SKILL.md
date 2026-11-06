@@ -97,11 +97,11 @@ pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };
 ```
 
 ```ts
-Object.assign(grenadeBody.userData, { handle: [0, 1, 0], radius: 0.032 });                  // a 6.4 cm ball in the fist, fuze up
-Object.assign(ringEdge.userData, { handle: [0, 1, 0], facing: [-1, 0, 0], radius: 0.0015 });  // a ring's wire on its +X edge, hooked from outside
+Object.assign(grenadeBody.userData, { handle: [0, 1, 0], facing: [0, 0, -1], radius: 0.032 }); // fuze up, the palm over a spoon on its +Z side
+Object.assign(ringEdge.userData, { handle: [0, 1, 0], facing: [-1, 0, 0], radius: 0.0015 });  // a ring standing upright (its hole along Z), held by its wire on its +X edge from outside
 ```
 
-`grab` ends once the fingers have closed, so what follows it may pull at once. A hand that holds something else lets go of it as `grab` sets off: a two-handed weapon left by both hands stays wherever its mount holds it, in mid-air if that is where the mount is, so when both hands are needed elsewhere sling it first — `release` it onto an empty on the body (a sling point on the back or hip) — or keep one hand on it. Take it back the way a soldier does: the support hand first (on a rifle, the front grip), bring it up toward the aim, then the firing hand; a firing hand going first reaches for a grip against the trunk and is held off it. Make a button a massless thing of its own, its cap's mesh beside it rather than under it (a hand goes round a thing's meshes to its grip), and move the thing in as it is pressed. `reach` and `track` refuse a handle or pad, whose empty is not where the wrist goes; take it with `grab`.
+`grab` ends once the fingers have closed, so what follows it may pull at once. A hand that holds something else lets go of it as `grab` sets off: a two-handed weapon left by both hands stays wherever its mount holds it, in mid-air if that is where the mount is, so when both hands are needed elsewhere sling it first — `release` it onto an empty under `bones.hips` or the upper back, and stop orienting its mount, so the chest's turns do not swing it — or keep one hand on it. Take it back the way a soldier does: the support hand first (on a rifle, the front grip), bring it up toward the aim, then the firing hand; a firing hand going first reaches for a grip against the trunk and is held off it. Make a button a massless thing of its own, its cap's mesh beside it rather than under it (a hand goes round a thing's meshes to its grip), and move the thing in as it is pressed. `reach` and `track` refuse a handle or pad, whose empty is not where the wrist goes; take it with `grab`.
 
 Hand targets for what a person does about itself (holding something up to look at it, drawing a pin out) come out of `body.armPoint(side, direction, share)`, which scales with the body; give it as a function target, `() => body.armPoint(…)`, so it moves with the body. Any verb's target may be such a function of the body's time returning a point or an object. A carry whose thing stops short of its target (the arm's joints holding it off) ends `false` a moment later, saying so in development.
 
@@ -112,7 +112,7 @@ To throw what one hand holds, `throwAt` it: the throw is the body's whole motion
 ```ts
 yield* grab(soldier, grenade, { right: 'body' });
 yield* grab(soldier, pin, { left: 'ring' });               // the pin: a thing of its own (its own mass) under the grenade
-yield* carry(soldier, pin, () => soldier.armPoint('left', new Vector3(1, -0.5, 0.7), 0.85), { step: false });
+yield* carry(soldier, pin, () => soldier.armPoint('left', new Vector3(1, -0.5, 0.7), 0.75), { step: false });
 release(soldier, pin);                                     // left in the world where it is: it falls in your physics
 yield* throwAt(soldier, grenade, target, { released: ({ velocity, spin }) => throwInto(physics, grenade, velocity, spin) });
 ```

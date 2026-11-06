@@ -286,8 +286,9 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  it('throws overhand at a target: cocked behind the head, whipped through, let go ahead of it aimed at the target, following through', () => {
-    const body = person({ dev: true }), room = roomOf(body);
+  for (const driven of [false, true]) it(`throws overhand at a target${driven ? ', its root driven' : ''}: cocked behind the head, whipped through, let go ahead of it aimed at the target, following through`, () => {
+    const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
+    const body = person({ dev: true, ...(driven && { drive: () => root }) }), room = roomOf(body);
     const ball = box(room, new Vector3(-0.2, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
     Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const target = new Vector3(0, 0, 15);
@@ -311,7 +312,5 @@ describe('release', () => {
     expect(after.y).toBeLessThan(1.1);
     expect(body.log).toEqual([]);
   });
-
-
 
 });
