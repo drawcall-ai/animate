@@ -27,10 +27,11 @@ export interface AvatarState {
 
 const SPRINTING = new Vector3(0.22, 0.2, 0);
 const RELOADING = new Vector3(-0.05, 0, 0.4);
-/** The rifle held low, its muzzle down and off to the right, clear of a lift's panel: in the right hand alone while the left presses its
- * button; standing at one, both hands on it, `LOW` of the way. It comes up as the left hand draws back from a button to take it again
- * (taken held low, it took seconds to settle on its front). */
-const LOWERED = new Vector3(0.75, -0.35, 0);
+/** The rifle held low, its muzzle down and well off to the right, clear of a lift's panel: in the right hand alone while the left presses
+ * its button; standing at one, both hands on it, `LOW` of the way (turned 0.35 rad right, a soldier close before the panel held its front
+ * into the panel's edge). It comes up as the left hand draws back from a button to take it again (taken held low, it took seconds to
+ * settle on its front). */
+const LOWERED = new Vector3(0.75, -0.6, 0);
 const LOW = 0.5;
 const EASE = 0.25;
 /** Seconds between shots. */
@@ -46,7 +47,7 @@ const QUICK = { speed: 1.8 };
  * goes back to the rifle (s): as long as the release takes to draw it back; taken up at once, the hand snapped off the button toward the rifle. */
 const HELD = 0.15, DRAWN = 0.25;
 /** How a hand goes to a button from where the soldier stands (m/s): briskly, pressed some 0.7 s after it leaves the rifle. */
-const POKE = { step: false, speed: 0.8 };
+const POKE = { step: false };
 /** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, and back. Briskly, a short move still
  * took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. */
 const SHORT = { speed: 0.7 };
@@ -419,7 +420,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     lowering = false;
     release(person, { left: button });
     yield* wait(DRAWN);
-    if (!(yield* grab(person, rifle, { left: 'foregrip' }, QUICK))) throw new Error('The support hand could not return to the rifle after pressing');
+    if (!(yield* grab(person, rifle, { left: 'foregrip' }))) throw new Error('The support hand could not return to the rifle after pressing');
   };
 
   eye.getWorldPosition(look.eye);

@@ -6,7 +6,7 @@ import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
-import { grasp, held, holdOn, onBody, worn, type Palm } from '../../things/hold';
+import { grasp, held, holdOn, onBody, pressingWay, worn, type Palm } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
@@ -25,7 +25,7 @@ export const PRESSING = 0.07;
 /** how near a hand comes to the point before its button before it goes on in (m, default body) */
 const THROUGH = 0.02;
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
-const TOUCHING = 0.004;
+const TOUCHING = 0.012;
 
 /** A hand's hold to take: the hand, and the hold it takes. */
 export interface Taking {
@@ -92,7 +92,8 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     // (a fingertip comes to its button straight from before it, pointing, and pushes straight in — not round the thing's bounds first: its
     // face is the side it comes from, and round a panel's post the hand came over its top and down past the other button)
     const grip = take.thing.grip(take.grip);
-    const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(grip.facing, -PRESSING * person.scale)] : [];
+    const eyes = local(person.pose.position(INDEX.head)).sub(grip.at.position);
+    const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(pressingWay(grip.facing.clone().negate(), eyes), PRESSING * person.scale)] : [];
     const route = [...detour, ...(onBody(person, take.thing) || before.length ? []
       : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`]))))), ...before]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));

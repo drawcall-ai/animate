@@ -25,7 +25,7 @@ const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.012, apart: 0.09, travel: 0.
 /** How near a panel a soldier's feet must stand to press it (m, out from its face), how far to its left and right of the panel's middle,
  * and how squarely it must face it (the cosine of the most it may look away): before it or a little to its right, so that the left hand
  * presses and the rifle in the right passes it (farther, or further right, the arm reached out straight and hunted round the button). */
-const REACH = { near: 0.35, far: 0.55, left: 0.05, right: 0.2, facing: Math.cos(1.1) };
+const REACH = { near: 0.38, far: 0.55, left: 0.05, right: 0.2, facing: Math.cos(1.1) };
 const UP = new Vector3(0, 1, 0);
 
 /**

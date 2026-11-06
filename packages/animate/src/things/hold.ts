@@ -126,6 +126,22 @@ function pressingLine(push: Vector3, up: Vector3): Vector3 {
   return level.normalize().multiplyScalar(Math.cos(LEAN)).addScaledVector(up, Math.sin(LEAN));
 }
 
+/** how far off the face's normal a fingertip comes in and draws back along the line from its eyes at most (rad) */
+const SIGHTED = 0.9;
+
+/**
+ * the way a fingertip comes in to its button and draws back off it (unit, out from the face): along the line from the button to the eyes
+ * that watch it, as a hand brings a fingertip onto what the eyes fix, as far as `SIGHTED` off `out`, the face's normal. Straight out along
+ * the normal, seen from above it came over the button below, slid up onto its own and drew back down over the one below again.
+ */
+export function pressingWay(out: Readonly<Vector3>, toEyes: Readonly<Vector3>): Vector3 {
+  const way = toEyes.clone().normalize(), along = way.dot(out);
+  if (along >= Math.cos(SIGHTED)) return way;
+  const aside = way.addScaledVector(out, -along);
+  if (aside.lengthSq() < 1e-8) return out.clone();
+  return aside.normalize().multiplyScalar(Math.sin(SIGHTED)).addScaledVector(out, Math.cos(SIGHTED));
+}
+
 /** a hand's own line from its wrist out along its fingers (its frame), square to its grasp line and palm */
 function handLine(hand: HandPoint): Vector3 {
   const line = new Vector3().crossVectors(hand.axis, hand.palmFacing).normalize();

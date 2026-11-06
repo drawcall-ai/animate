@@ -28,17 +28,18 @@ interface Hand {
  * the hand arrives): the thumb out in front of the palm, the fingers side by side and a little bent, each a little more than the one before
  * as a relaxed hand's are, their tips barely hooked (all alike, the open hand read as a mannequin's claw; fanned, as a stiff splayed hand;
  * hooked more, a claw closing on nothing) — relaxed until its wrist is `NEARING` from where it holds the grip, open from `NEAR` (m: opened
- * all the way, it travelled 0.6 s as a palm-up claw), and closing on it within `ARRIVED` (m); a fingertip's hand points as it nears instead
+ * all the way, it travelled 0.6 s as a palm-up claw; opening from 22 cm off, a hand going back to a rifle from a button came at it as an
+ * open claw for 0.4 s), and closing on it within `ARRIVED` (m); a fingertip's hand points as it nears instead
  */
 const APERTURE: Shape = {
   thumb: { curl: 0.12, oppose: 0.1, spread: 0.55 },
   index: { curl: 0.16, hook: 0.05, spread: 0.06 }, middle: { curl: 0.2, hook: 0.06, spread: 0 }, ring: { curl: 0.25, hook: 0.07, spread: 0.05 },
   little: { curl: 0.3, hook: 0.08, spread: 0.1 },
 };
-const NEARING = 0.22, NEAR = 0.08, ARRIVED = 0.015;
-/** a fingertip's hand points only late, from this far off where it presses until this near (m): from `NEARING`, the index was out half
- * a second before it met its button */
-const POINTING = { nearing: 0.12, near: 0.05 } as const;
+const NEARING = 0.14, NEAR = 0.05, ARRIVED = 0.015;
+/** a fingertip's hand points only as it pushes in, from this far off where it presses until this near (m): from 12 cm off, the index was
+ * out a quarter second before it met its button */
+const POINTING = { nearing: 0.09, near: 0.04 } as const;
 /** how far a hand's wrist may move on what it holds before it closes on it afresh (m), for how long after it first closed on it (s): it
  * closes as it settles there, not once it has, and then keeps its grasp */
 const MOVED = 0.002, SETTLING = 0.3;
