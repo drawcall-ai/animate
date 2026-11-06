@@ -70,6 +70,9 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
 export const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 }, TURN = { accel: 60 };
+/** Tuned (rad/s²): the trunk's joints turning after a look taken up at once (`Poise.twistRate`), an aim tracking a turning view: at
+ * `TURN`'s pace, a chest still swinging on as a player's 8 rad/s turn reversed carried the rifle 23° off the sights */
+const AIMING = { accel: 300 };
 
 /**
  * Legs under a root the app drives (`drive`, read every sub-step; see `Stepper`) — its hips over the floor, as a game's character
@@ -269,7 +272,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
         prev2.multiply(impact.prev2.clone().invert());
         prev.multiply(impact.prev.clone().invert());
       }
-      const turned = back[k].follow(prev2, prev, local, TURN, dt, new Quaternion());
+      const turned = back[k].follow(prev2, prev, local, poise.twistRate > 0 ? AIMING : TURN, dt, new Quaternion());
       if (impact.active) {
         turned.multiply(impact.rotation);
         if (limit) clampRotation(turned, limit);
