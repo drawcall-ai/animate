@@ -64,9 +64,9 @@ function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
   // one hand, one of them blind to where the fingers go)
   if (grip.turn !== null) throw new Error(`"${grip.node.name}" has userData.handTurn, which a hand with finger bones does not take: describe the grip as a handle, a pad or a palm's facing`);
   // (where the hand holds it, measured in its node's frame, in its bone's)
-  const scale = person.scaleOf(bone), { at, axis, facing, palmFacing } = fingers.part(side, grip), rest = person.restOf(bone);
-  const hand = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis.applyQuaternion(rest), palmFacing: palmFacing.applyQuaternion(rest) };
+  const scale = person.scaleOf(bone), { at, axis, facing, palmFacing } = fingers.pointOn(side, grip), rest = person.restOf(bone);
+  const point = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis.applyQuaternion(rest), palmFacing: palmFacing.applyQuaternion(rest) };
   // (the world's up in the thing's frame, as the hand sets off for it)
   const up = new Vector3(0, 1, 0).applyQuaternion(person.track(thing.object).at(person.frame.time).prev.quaternion.clone().invert());
-  return { at: hand.at, turn: turned, hand, up };
+  return { at: point.at, turn: turned, point, up };
 }

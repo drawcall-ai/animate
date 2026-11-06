@@ -83,7 +83,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
     values.forEach((v, j) => write(shape, v.digit, v.key, x[turns + j]));
     place(x);
     for (const c of contacts) {
-      const part = partOf(joints, c, shape, hand.scale);
+      const part = pointOf(joints, c, shape, hand.scale);
       const weight = c.weight ?? 1, at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at).multiplyScalar(weight);
       out.push(at.x, at.y, at.z);
       if (c.facing) {
@@ -134,7 +134,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
   // (the miss: the contacts' positions alone)
   place(x);
   return Math.max(...contacts.map((c) => {
-    const part = partOf(joints, c, shape, hand.scale);
+    const part = pointOf(joints, c, shape, hand.scale);
     const at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at);
     return at.length();
   }));
@@ -142,7 +142,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
 
 /** where `contact`'s part of the hand is as `shape` has it, the way it faces and its grasp line, in the hand's frame (`scale`: the hand's
  * world scale, a handle's radius given in the world's metres) */
-function partOf(joints: Joints, contact: Contact, shape: Shape, scale: number) {
+function pointOf(joints: Joints, contact: Contact, shape: Shape, scale: number) {
   if (contact.part === 'handle') return joints.handle((contact.radius ?? 0) / scale);
   return joints.touch(contact.part === 'palm' ? null : contact.part, shape, contact.round);
 }

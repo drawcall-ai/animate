@@ -96,7 +96,7 @@ export class FingerState {
       arm = { ...arm, bones: [] };
     }
     const closed = hand.closed && (hand.closed.on === hold || hand.closed.on === empty) ? hand.closed : null;
-    const preferred = shapeOf(values(grip.node), closed && closed.on === (hold ?? empty) ? closed.shape : this.shaped(hand, grip));
+    const preferred = shapeOf(values(grip.node), closed ? closed.shape : this.shaped(hand, grip));
     // (the arm eased onto the contacts as the hold begins: taken all at once, a rifle taken back jerked in the hands)
     if (hold) {
       const began = this.began.get(hold) ?? time;
@@ -164,16 +164,16 @@ export class FingerState {
   gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
     const owner = empty.parent;
     if (!owner) throw new Error(`gripOn: "${empty.name}" hangs from nothing`);
-    const grip = Thing.of(owner).grip(empty.name), hand = this.hands[side].joints.hand, part = this.part(side, grip);
+    const grip = Thing.of(owner).grip(empty.name), hand = this.hands[side].joints.hand, point = this.pointOn(side, grip);
     const placed = worldOf(owner), back = placed.quaternion.clone().invert(), scale = new Vector3().setFromMatrixScale(hand.matrixWorld).x;
     const now = back.clone().multiply(hand.getWorldQuaternion(new Quaternion()));
-    const turn = heldTurn(grip, { at: part.at, turn: () => now, hand: part, up: new Vector3(0, 1, 0).applyQuaternion(back) });
-    const wrist = part.at.clone().multiplyScalar(scale).applyQuaternion(turn).negate().add(grip.at.position).applyQuaternion(placed.quaternion).add(placed.position);
+    const turn = heldTurn(grip, { at: point.at, turn: () => now, point, up: new Vector3(0, 1, 0).applyQuaternion(back) });
+    const wrist = point.at.clone().multiplyScalar(scale).applyQuaternion(turn).negate().add(grip.at.position).applyQuaternion(placed.quaternion).add(placed.position);
     return { wrist, rotation: placed.quaternion.clone().multiply(turn) };
   }
 
   /** where hand `side` holds `grip` (see `HandPoint`): on a handle, in its grasp; with a pad, that digit's as the grip shapes it; else the palm */
-  part(side: 'left' | 'right', grip: Grip): HandPoint {
+  pointOn(side: 'left' | 'right', grip: Grip): HandPoint {
     const joints = this.hands[side].joints;
     if (!grip.handle) return joints.touch(grip.pad, shapeOf(values(grip.node), grip.pad ? POINT : RELAXED));
     joints.hand.updateWorldMatrix(true, false);
@@ -216,8 +216,8 @@ export class FingerState {
   /** how far the hand bone `arm` has is off where it holds `grip` of `thing` as `placed` has it, turned as it is (m) */
   private wristOff(side: 'left' | 'right', arm: Arm, grip: Grip, thing: Object3D, placed: (object: Object3D) => Placement): number {
     const at = placed(thing), turn = arm.pose.rotation(arm.hand).clone().multiply(arm.rest);
-    const part = this.part(side, grip);
-    const wrist = part.at.clone().multiplyScalar(arm.scale).applyQuaternion(turn).negate().add(grip.at.position.clone().applyQuaternion(at.quaternion).add(at.position));
+    const point = this.pointOn(side, grip);
+    const wrist = point.at.clone().multiplyScalar(arm.scale).applyQuaternion(turn).negate().add(grip.at.position.clone().applyQuaternion(at.quaternion).add(at.position));
     return wrist.distanceTo(arm.pose.position(arm.hand));
   }
 

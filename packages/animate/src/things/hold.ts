@@ -34,12 +34,12 @@ export function onBody(self: Holder, thing: Thing): boolean {
 }
 
 /** A person's palm, as a grip takes it: the point of the hand that goes on the empty in the hand bone's frame — its centre; for a hand
- * with fingers, its `hand`'s — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers, where
+ * with fingers, its `point`'s — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers, where
  * it holds the grip (`HandPoint`, the bone's frame) and the world's up in the thing's frame as it sets off. */
 export interface Palm {
   at: Readonly<Vector3>;
   turn: () => Quaternion;
-  hand?: HandPoint;
+  point?: HandPoint;
   up?: Vector3;
 }
 
@@ -70,8 +70,8 @@ export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goa
 export function heldTurn(grip: Grip, palm: Palm, asked = palmTurn(grip, palm)): Quaternion {
   if (asked && !asked.axis) return asked.quaternion;
   const now = palm.turn();
-  if (!grip.facing || !palm.hand) return now;
-  return new Quaternion().setFromUnitVectors(_facing.copy(palm.hand.facing).applyQuaternion(now), grip.facing).multiply(now);
+  if (!grip.facing || !palm.point) return now;
+  return new Quaternion().setFromUnitVectors(_facing.copy(palm.point.facing).applyQuaternion(now), grip.facing).multiply(now);
 }
 
 /**
@@ -82,29 +82,29 @@ export function heldTurn(grip: Grip, palm: Palm, asked = palmTurn(grip, palm)): 
  * second); the palm facing so, free to roll about it. None asked: none (a handle without one takes the hand turned as the arm brings
  * it, its palm on the handle's line).
  */
-function palmTurn(grip: Grip, { hand, up }: Palm): { quaternion: Quaternion; axis?: Vector3; preferred?: true } | null {
-  if (!grip.facing || !hand) return null;
-  if (grip.handle) return { quaternion: turnOnto(hand.axis, hand.facing, grip.handle.axis, grip.facing), preferred: true };
-  const quaternion = new Quaternion().setFromUnitVectors(hand.facing, grip.facing);
-  if (grip.pad && up && pointing(quaternion, hand, grip.facing, up)) return { quaternion, preferred: true };
+function palmTurn(grip: Grip, { point, up }: Palm): { quaternion: Quaternion; axis?: Vector3; preferred?: true } | null {
+  if (!grip.facing || !point) return null;
+  if (grip.handle) return { quaternion: turnOnto(point.axis, point.facing, grip.handle.axis, grip.facing), preferred: true };
+  const quaternion = new Quaternion().setFromUnitVectors(point.facing, grip.facing);
+  if (grip.pad && up && pointing(quaternion, point, grip.facing, up)) return { quaternion, preferred: true };
   return { quaternion, axis: grip.facing.clone(), preferred: true };
 }
 
 /**
- * `turn` (a hand's, its pad `hand` pushing along `push`) rolled about `push`, in place, as a hand points to press with a fingertip:
+ * `turn` (a hand's, its pad `point` pushing along `push`) rolled about `push`, in place, as a hand points to press with a fingertip:
  * its palm as far down as the roll turns it, then `POINTING` thumb up off that, as a forearm rests between its turns (a wall button's
  * pressed palm down, a hand rolled as it came — straight off a palm-up hold under a rifle — pressed palm up). A push straight up or down
  * leaves the roll as it is.
  */
-function pointing(turn: Quaternion, hand: HandPoint, push: Vector3, up: Vector3): boolean {
+function pointing(turn: Quaternion, point: HandPoint, push: Vector3, up: Vector3): boolean {
   const level = (v: Vector3) => v.addScaledVector(push, -v.dot(push));
   const down = level(up.clone().negate());
   if (down.lengthSq() < 1e-6) return false;
-  const palm = level(hand.palmFacing.clone().applyQuaternion(turn));
+  const palm = level(point.palmFacing.clone().applyQuaternion(turn));
   const angle = Math.atan2(_cross.crossVectors(palm, down).dot(push), palm.dot(down));
   turn.premultiply(_q.setFromAxisAngle(push, angle));
   // (thumb up: the roll that lifts the line across the knuckles toward the thumb)
-  const thumb = _cross.copy(hand.axis).applyQuaternion(turn);
+  const thumb = _cross.copy(point.axis).applyQuaternion(turn);
   const roll = _q.setFromAxisAngle(push, POINTING), lifted = thumb.clone().applyQuaternion(roll).dot(up);
   turn.premultiply(lifted >= thumb.clone().applyQuaternion(_q2.copy(roll).invert()).dot(up) ? roll : _q2);
   return true;
