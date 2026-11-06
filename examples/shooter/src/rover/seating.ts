@@ -11,8 +11,11 @@ import type { Rover } from './model';
 export const BEATS = {
   /** the body steps up to the sill, near enough for its hands to reach the dash and the pillar's handle */
   inset: [0, 0.15],
-  leftHand: { dash: [0.02, 0.22], wheel: [0.52, 0.78] },
-  rightHand: { rack: [0.06, 0.24], wheel: [0.48, 0.7] },
+  leftHand: { dash: [0.12, 0.22], wheel: [0.52, 0.78] },
+  rightHand: { wheel: [0.48, 0.7] },
+  /** the rifle down from the aim turned halfway, held there as the left hand leaves it for the dash (or, getting out, comes onto it from
+   * there, both feet on the ground), and on into the rack */
+  rifle: { down: [0, 0.12], away: [0.14, 0.24] },
   leftFoot: [0.22, 0.76],
   rightFoot: [0.56, 0.84],
   /** the hips over the sill and round onto the seat */
@@ -107,17 +110,17 @@ function arms(puppet: Puppet, frame: Frame, rover: Rover, rifle: Object3D, t: nu
   const onWheel = (side: Side): Hold => puppet.hold(side, grips[side]);
   // The left hand leans on the dash's edge, fingers over it; the right takes the pillar's upright handle.
   const leaning = puppet.hold('left', dash), holding = puppet.hold('right', handle);
-  const racked = frame.carrying(rack.matrixWorld);
+  const racked = frame.carrying(rack.matrixWorld), rifled = (at: number, side: Side) => frame.carrying(frame.rifle(rack.matrixWorld, at, BEATS.rifle), side);
   const { leftHand, rightHand } = BEATS;
   const round = { wrist: holding.wrist.clone().add(ROUND.clone().applyQuaternion(rotation)), hand: holding.hand };
   const right = () => {
     if (t >= rightHand.wheel[0]) return between(holding, onWheel('right'), phase(t, rightHand.wheel));
     if (t >= BEATS.handle[0]) return between(round, holding, phase(t, BEATS.handle));
     if (t >= BEATS.rack[0]) return between(racked, round, phase(t, BEATS.rack));
-    return between(frame.hand('right'), racked, phase(t, rightHand.rack));
+    return rifled(t, 'right');
   };
   const hands: Record<Side, Hold> = {
-    left: t < leftHand.wheel[0] ? between(frame.hand('left'), leaning, phase(t, leftHand.dash)) : between(leaning, onWheel('left'), phase(t, leftHand.wheel)),
+    left: t < leftHand.wheel[0] ? between(rifled(Math.min(t, BEATS.rifle.away[0]), 'left'), leaning, phase(t, leftHand.dash)) : between(leaning, onWheel('left'), phase(t, leftHand.wheel)),
     right: right(),
   };
   for (const side of SIDES) {

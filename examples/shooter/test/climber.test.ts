@@ -30,15 +30,15 @@ describe('Climber', () => {
     expect(climber.near).toBe(true);
     const bones = soldier.avatar.body.bones, smooth = jerkless(soldier.avatar.rifle);
     climber.mount();
-    // (straight on from the walk up, without waiting at the foot, and on at once: each move heard as it ends, the right foot stepping in to
-    // the ladder's foot and the left up onto the first rung)
+    // (straight on from the walk up, without waiting at the foot, and on at once: each move heard as it ends, the left hand onto its rung
+    // before the right slings the rifle, the right foot stepping in to the ladder's foot and the left up onto the first rung)
     expect(until(() => smooth() && climber.state === 'mounting', 3)).toBeLessThan(2);
     heard.length = 0;
     // (its muzzle kept this side of the rungs as it steps in)
     let muzzle = -Infinity;
     const ahead = () => { muzzle = Math.max(muzzle, ladder.body.worldToLocal(soldier.avatar.muzzle.getWorldPosition(new Vector3())).z); };
-    expect(until(() => { ahead(); return smooth() && climber.state === 'on'; }, 2)).toBeLessThan(1.3);
-    expect(heard).toEqual(['cloth', 'rung', 'step-b', 'rung', 'rung']);
+    expect(until(() => { ahead(); return smooth() && climber.state === 'on'; }, 3)).toBeLessThan(1.9);
+    expect(heard).toEqual(['rung', 'cloth', 'step-b', 'rung', 'rung']);
     expect(muzzle).toBeLessThan(0);
     expect(soldier.avatar.rifle.parent).toBe(bones.chest);
 

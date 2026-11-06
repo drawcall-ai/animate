@@ -35,7 +35,7 @@ describe('Driver', () => {
     // (straight on from the walk up, without waiting at the doorway, and in at once: each move heard as it ends)
     expect(until(() => smooth() && driver.state === 'mounting', 2)).toBeLessThan(1.4);
     heard.length = 0;
-    expect(until(() => smooth() && driver.state === 'on', 2)).toBeLessThan(1.7);
+    expect(until(() => smooth() && driver.state === 'on', 3)).toBeLessThan(2.1);
     expect(heard).toEqual(['clank', 'cloth', 'boot', 'thud', 'boot']);
     expect(smooth.jerk).toBeLessThan(0.02);
     expect(soldier.avatar.rifle.parent).toBe(rover.marks.rack);
@@ -68,7 +68,7 @@ describe('Driver', () => {
     expect(until(() => {
       taken ||= rifle.parent === hand;
       return out() && driver.state === 'off';
-    }, 2)).toBeLessThan(1.7);
+    }, 3)).toBeLessThan(2.1);
     expect(heard).toEqual(['cloth', 'step-b', 'clank', 'step-a']);
     expect(taken).toBe(true);
     expect(out.jerk).toBeLessThan(0.02);

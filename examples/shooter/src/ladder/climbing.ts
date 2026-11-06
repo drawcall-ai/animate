@@ -75,19 +75,21 @@ export function rest(ladder: Ladder, height: number, going: number) {
 
 /**
  * When each part moves getting on at each end, as progress from standing there (0) to on the ladder (1); getting off plays them backward.
- * The left hand lets go of the rifle as the right slings it, letting go of it (or, getting off, taking it back) at `take`. At the foot the right
- * foot steps in to the ladder's foot, then the left up onto the first rung; at the top the left steps back down onto the top rung first, the
- * weight already going back over the ladder, the left hand on its stile before either foot moves.
+ * The rifle comes down turned halfway in both hands, the left hand leaves it for the ladder, and the right slings it, letting go of it (or,
+ * getting off, taking it back: up turned halfway, the left hand onto it, then up to the aim) at `take`. At the foot the right foot steps in
+ * to the ladder's foot, then the left up onto the first rung; at the top the left steps back down onto the top rung first, the weight
+ * already going back over the ladder, the left hand on its stile before either foot moves. A hand lets go of the ladder only with both
+ * feet on it, or on the ground.
  */
 export const BEATS = {
   /** the body steps in toward the ladder, near enough to take hold of it */
   inset: [0, 0.3],
-  take: 0.3,
-  sling: [0.05, 0.3],
-  hands: { foot: { left: [0, 0.35], right: [0.32, 0.55] }, top: { left: [0, 0.4], right: [0.3, 0.55] } },
+  take: 0.5,
+  rifle: { down: [0, 0.18], away: [0.24, 0.5] },
+  hands: { foot: { left: [0.18, 0.42], right: [0.5, 0.65] }, top: { left: [0.18, 0.42], right: [0.5, 0.65] } },
   /** the hips over toward the ladder and down (or up) onto it: at the top over the edge first, then down */
-  hips: { foot: { over: [0.32, 0.95], down: [0.32, 0.95] }, top: { over: [0.25, 0.8], down: [0.62, 0.95] } },
-  feet: { foot: { right: [0.3, 0.55], left: [0.55, 0.92] }, top: { left: [0.4, 0.62], right: [0.6, 0.92] } },
+  hips: { foot: { over: [0.42, 0.95], down: [0.42, 0.95] }, top: { over: [0.42, 0.85], down: [0.65, 0.95] } },
+  feet: { foot: { right: [0.42, 0.6], left: [0.6, 0.92] }, top: { left: [0.42, 0.65], right: [0.65, 0.92] } },
   gaze: [0.2, 1],
 } as const satisfies Record<string, number | Beat | Record<string, Beat | Record<string, Beat>>>;
 /** A hand or foot coming onto `rung` (or a stile), heard: a foot onto the ground at the ladder's foot (rung 0) as a step. */
@@ -244,17 +246,11 @@ function arm(puppet: Puppet, frame: Frame, ladder: Ladder, limb: Limb, height: n
   const held = between(climbing(from), climbing(to), swing);
   const away = stile(ladder, to) && !stile(ladder, from) ? ROUND : AWAY;
   held.wrist.add(frame.direction(BACK).multiplyScalar(away * Math.sin(Math.PI * swing)));
-  // The right hand slings the rifle on its way to the ladder.
-  const start = side === 'right' ? slinging(puppet, frame, t) : frame.hand(side);
+  // The right hand slings the rifle on its way to the ladder, the left leaving it turned halfway.
+  const start = frame.carrying(frame.rifle(slung(puppet), side === 'right' ? t : Math.min(t, BEATS.rifle.away[0]), BEATS.rifle), side);
   const hand = between(start, held, s);
   const elbow = frame.direction(frame.standing.elbows[side]).lerp(frame.direction(new Vector3(sign * 0.35, -1, -0.5)), s);
   puppet.arm(side, hand.wrist, elbow, hand.hand);
-}
-
-/** The right hand taking the rifle from where it held it standing to its sling (or, getting off, back), until it lets go at `take`. */
-function slinging(puppet: Puppet, frame: Frame, t: number) {
-  const s = phase(t, BEATS.sling);
-  return between(frame.hand('right'), frame.carrying(slung(puppet)), s);
 }
 
 /** `limb`'s leg from as it stood (`stood`: its ankle stepped in, and its foot's turn, in the ladder's frame) onto the ladder, `s` of the way. */

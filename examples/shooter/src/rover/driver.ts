@@ -9,7 +9,7 @@ import type { Rover } from './model';
 import { BEATS, CUES, seat } from './seating';
 
 /** Seconds to get from standing at the doorway to seated with both hands on the wheel, and back out. */
-const SEATING = 1.6;
+const SEATING = 2;
 /** The fastest the rover may still be rolling (m/s) for the driver to get out. */
 const STOPPED = 0.6;
 /** How far the driver's head leads into a turn per radian of lock. */

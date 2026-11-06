@@ -9,7 +9,7 @@ import { BEATS, cues, gripping, hang, heights, onto, rest, slung, type End } fro
 import type { Ladder } from './model';
 
 /** Seconds to get on the ladder (and off it), and how fast it is climbed (m/s). */
-const MOUNTING = 1.2;
+const MOUNTING = 1.8;
 const CLIMBING = 0.58;
 
 /**
