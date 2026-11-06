@@ -182,9 +182,9 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     ...options,
     pole,
     contact,
-    // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better: two fits about as good
-    // would otherwise take turns as the goal moves on, swinging the elbow and what is in the hand; a hand on a thing something else moves
-    // is put back on it after its brakes, `contact`)
+    // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better, and swivels on from it
+    // continuously: two fits about as good would otherwise take turns as the goal moves on, swinging the elbow and what is in the hand; a
+    // hand on a thing something else moves is put back on it after its brakes, `contact`)
     keep: Boolean(person.holding[side]) && !contact,
     letOut: toward !== undefined || contact,
     clear: (frame, tip, braked) => {
