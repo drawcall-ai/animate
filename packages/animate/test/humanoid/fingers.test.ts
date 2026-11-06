@@ -125,49 +125,44 @@ describe('fingers', () => {
     const grip = empty(rod, 'grip', new Vector3());
     Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], fingers: { index: { curl: 0, hook: 0 } } });
     room.add(rod);
-    // (the hand bone put where it holds the rod, as a puppet would)
-    const hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = body.gripOn('right', grip);
+    // (the hand bone put where its placement holds the rod, as a puppet would)
+    const placement = body.placement('right', grip), hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = body.gripOn('right', placement);
     if (!arm) throw new Error('no forearm');
     arm.updateWorldMatrix(true, false);
     hand.position.copy(arm.worldToLocal(wrist));
     hand.quaternion.copy(arm.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
     hand.updateMatrixWorld(true);
-    for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
+    for (let k = 0; k < 20; k++) body.shapeHand('right', placement, 0.05);
     expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.05);
     expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.8);
   });
 
-  it('of a hand posed by its app close afresh as its wrist settles onto its grip', () => {
-    /** how far the right middle finger bends closed on a rod across its palm, the hand first `off` (m) back from its grip */
-    const closed = (off: number) => {
-      const body = new Body(humanoid(FINGERED)), room = roomOf(body), hand = body.bones.rightHand;
+  it('take a grip the same however the hand comes to it, the fingers never moving the hand', () => {
+    /** where the right hand ends on a rod that leaves its roll free, and how far its middle finger closes, the arm first raised `raised` */
+    const taken = (raised: number) => {
+      const body = new Body(humanoid(FINGERED), { dev: true }), room = roomOf(body);
       const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
       rod.name = 'rod';
+      rod.userData.mass = 0.5;
+      rod.position.set(-0.25, 0.95, 0.35);
       rod.rotation.x = Math.PI / 2;
       Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0] });
-      rod.position.copy(hand.getWorldPosition(new Vector3())).add(new Vector3(-0.07, -0.04, 0));
       room.add(rod);
-      room.updateMatrixWorld(true);
-      // (the hand turned and moved as its grip has it, first short of it by `off` along its fingers)
-      const grip = rod.getObjectByName('grip');
-      if (!grip) throw new Error('no grip');
-      const { wrist, rotation } = body.gripOn('right', grip), parent = hand.parent;
-      if (!parent) throw new Error('no arm');
-      const place = (along: number) => {
-        hand.quaternion.copy(parent.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
-        hand.position.copy(parent.worldToLocal(wrist.clone().add(new Vector3(along, 0, 0))));
-        hand.updateMatrixWorld(true);
-      };
-      // (settling: on it within a fifth of a second)
-      place(off);
-      for (let k = 0; k < 4; k++) body.shapeHand('right', grip, 0.05);
-      place(0);
-      for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
-      return bent(body, 'rightMiddleIntermediate');
+      let held = false;
+      play(function* () {
+        yield* pose(body, { arms: { right: { forward: raised, out: raised / 2 } } }, { until: 0.6 });
+        held = yield* grab(body, rod, { right: 'grip' });
+        yield* wait(0.5);
+      }, [body], 4, () => false);
+      expect(held, JSON.stringify(body.log)).toBe(true);
+      rod.updateWorldMatrix(true, false);
+      const back = rod.matrixWorld.clone().invert(), hand = body.bones.rightHand;
+      return { at: hand.getWorldPosition(new Vector3()).applyMatrix4(back), turn: rod.getWorldQuaternion(new Quaternion()).invert().multiply(hand.getWorldQuaternion(new Quaternion())), closed: bent(body, 'rightMiddleIntermediate') };
     };
-    const settled = closed(0);
-    expect(settled).toBeGreaterThan(0.5);
-    expect(closed(0.01)).toBeCloseTo(settled, 2);
+    const low = taken(0), high = taken(1);
+    expect(low.at.distanceTo(high.at)).toBeLessThan(0.002);
+    expect(low.turn.angleTo(high.turn)).toBeLessThan(0.02);
+    expect(Math.abs(low.closed - high.closed)).toBeLessThan(0.02);
   });
 
   it('take the shape a pose asks of a free hand, then ease back to relaxed', () => {

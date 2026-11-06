@@ -20,8 +20,8 @@ import { PlatformFrame } from './platform';
 import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
-import type { Goal, Placement } from '../kernel/goal';
-import { bear, checkParents, heldMass, steadied, wornOf, type Bearing } from '../things/hold';
+import type { Placement } from '../kernel/goal';
+import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
 import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
@@ -173,16 +173,6 @@ export class Self implements Holder {
 
   /** what it bears of the things it holds and wears */
   readonly borne = new Map<Thing, Bearing>();
-
-  /** where hand `side` goes on what `hold` has it hold (the thing's frame): where its fingers seat it, so their contacts are met from the
-   * shoulder out, once they have closed on it — turned so, not only toward it: the seat is where the grip puts the hand, however it came,
-   * and an arm leaving it short by the wrist's range would leave the digits on contacts met for a hand turned otherwise — else where its
-   * hold puts it */
-  seated(side: 'left' | 'right', hold: Hold): Goal {
-    const seat = this.fingers?.seat(side);
-    if (!seat) return steadied(hold);
-    return { ...hold.goal, position: seat.position, quaternion: seat.quaternion.clone().multiply(_rest.copy(this.restOf(this.hands[side])).invert()), axis: undefined, preferred: undefined };
-  }
 
   /** what its hands do for the verbs (made when first asked, once all it is has been made) */
   get handling(): Handling {
@@ -504,6 +494,5 @@ const IDENTITY = new Matrix4();
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
-const _rest = new Quaternion();
 const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const EMPTY: readonly LogEntry[] = Object.freeze([]);

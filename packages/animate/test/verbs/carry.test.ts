@@ -185,7 +185,8 @@ describe('carry', () => {
     expect(inside.carried).toBe(false);
     expect(inside.off).toBeGreaterThan(0.1);
     expect(inside.held).toBe(true);
-    expect(inside.log).toEqual([{ check: 'carry: held clear of its own body, off its end (m)', detail: expect.stringContaining('stands too near it') }]);
+    // (its own body in the way, said once: at rest held clear of it, or late there, still settling against it)
+    expect(inside.log).toEqual([{ check: expect.stringMatching(/^carry: held clear of its own body|^late carry/), detail: expect.stringContaining('stands too near it') }]);
     // (out ahead at the chin, past where the planted feet let the arms come: within the planning's reach, not quite the arms'. Held in
     // the palms, the box's middle goes a palm further than the wrists: at the chest's height the arms now place it wherever the
     // planning lets them try)

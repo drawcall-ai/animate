@@ -10,7 +10,7 @@ import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
-import { goalOn, palmOn } from './palm';
+import { takingOf } from './palm';
 
 /** the longest a grab waits, its hands on their grips, for their fingers to close (s) */
 const CLOSING = 0.2;
@@ -20,12 +20,10 @@ export function personHands(person: Reacher): Handling {
   return {
     take: function* (request, thing, grips, options) {
       const loose = thing.massive && !bodyOf(thing.object);
-      const takes = grips.map(({ hand, grip }) => {
-        const side = sideOf(hand), palm = palmOn(person, side, thing, thing.grip(grip));
-        return { side, thing, grip, goal: goalOn(thing.grip(grip), palm), palm };
-      });
-      // (each hand shapes for its grip as it comes, until it holds it)
-      for (const { side, grip } of takes) person.fingers?.toward(side, thing.grip(grip).node);
+      // (each hand's placement picked as the grab starts, from where the body stands, and kept on the thing while it holds it)
+      const takes = grips.map(({ hand, grip }) => takingOf(person, sideOf(hand), thing, grip));
+      // (each hand shapes for its placement as it comes, until it holds it)
+      for (const { side, placement } of takes) person.fingers?.toward(side, placement);
       try {
         if (options.speed === Infinity) {
           yield* takingAtOnce(person, request, takes);

@@ -1,4 +1,4 @@
-import { Matrix4, Quaternion, Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import type { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
 import { PAD_DEPTH } from './closing';
@@ -16,34 +16,28 @@ export interface Contact {
 }
 
 /**
- * `shape` (in place) solved so that each contact's digit meets it and the hand stays out of `near` (the thing's triangles, in the frame
- * the contacts are given in, where `hand` places the hand): damped least squares over the touching digits' values, each pulled toward
- * `preferred` (relaxed, pointing, the shape a grip closed to) and kept in range every iteration, every ball of their flesh
- * (`Joints.flesh`) pushed out of `near` as its skin gives (`PAD_DEPTH`). `seat`: the hand itself is solved too (moved, in place), pulled
- * back toward where it was, its palm and each knuckle kept out of `near` with the touching digits — where the hand sits on what it holds,
- * the arm bringing it there, so a fingertip's contact moves the wrist, the elbow and the shoulder. `swept`: digits whose contacts have
- * moved, started afresh. Returns the contacts' miss (m) as it is left.
+ * `shape` (in place) solved so that each contact's digit meets it, the hand where `hand` places it (in the frame the contacts are given
+ * in), staying out of `near` (the thing's triangles there): damped least squares over the touching digits' values, each pulled toward
+ * `preferred` (the shape the hand closed to) and kept in range every iteration, every ball of their flesh (`Joints.flesh`) pushed out of
+ * `near` as its skin gives (`PAD_DEPTH`). The hand is not moved: a digit reaches what it can from where the hand is. `swept`: digits
+ * whose contacts have moved, started afresh. Returns the contacts' miss (m) as it is left.
  */
-export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, { preferred, near, seat = false, swept = [] }: Meeting): number {
+export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, { preferred, near, swept = [] }: Meeting): number {
   const digits = (['thumb', ...DIGITS] as const).filter((digit) => contacts.some((c) => c.part === digit));
-  if (!digits.length && !seat) return 0;
+  if (!digits.length) return 0;
   const values = digits.flatMap((digit) => keysOf(digit).map((key) => ({ digit, key, least: leastOf(digit, key) })));
-  const free = seat ? 6 : 0, n = free + values.length, x = new Float64Array(n);
+  const n = values.length, x = new Float64Array(n);
   const pulled = values.map((v) => read(preferred, v.digit, v.key));
-  const base = { position: hand.position.clone(), quaternion: hand.quaternion.clone() }, matrix = new Matrix4(), scale = new Vector3().setScalar(hand.scale);
+  const matrix = new Matrix4().compose(hand.position, hand.quaternion, new Vector3().setScalar(hand.scale));
   // (how far each contact's pad is off it)
   const off = (c: Contact, facing: Vector3) => joints.pad(c.part, shape, _at, facing, c.round).multiplyScalar(hand.scale).applyQuaternion(hand.quaternion).add(hand.position).sub(c.at);
-  // (how far `digit`'s flesh sinks into `near` where `matrix` places the hand, each ball's depth)
-  const sunk = (digit: Digit | null, all = true) => {
-    const balls = joints.flesh(digit, shape);
-    return (all ? balls : balls.slice(0, 1)).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PAD_DEPTH, WITHIN)) : 0);
-  };
-  // (seating, or for `swept`, each touching digit started from the best of where it is and a sweep of its two main values — a finger's curl
-  // and hook, a thumb's oppose and spread — by its own contacts' miss and its flesh sunk in: from where it last lay, along a receiver, a
-  // trigger finger could not come round the guard onto the trigger without passing through it)
-  matrix.compose(hand.position, hand.quaternion, scale);
+  // (how far `digit`'s flesh sinks into `near`, each ball's depth)
+  const sunk = (digit: Digit) => joints.flesh(digit, shape).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PAD_DEPTH, WITHIN)) : 0);
+  // (for `swept`, each touching digit started from the best of where it is and a sweep of its two main values — a finger's curl and hook,
+  // a thumb's oppose and spread — by its own contacts' miss and its flesh sunk in: from where it last lay, along a receiver, a trigger
+  // finger could not come round the guard onto the trigger without passing through it)
   for (const digit of digits) {
-    if (!seat && !swept.includes(digit)) continue;
+    if (!swept.includes(digit)) continue;
     const cost = () => contacts.reduce((sum, c) => c.part === digit ? sum + off(c, _facing).lengthSq() + (c.facing ? _facing.applyQuaternion(hand.quaternion).distanceToSquared(c.facing) * TURN * TURN : 0) : sum, 0)
       + sunk(digit).reduce((sum, d) => sum + d * d * KEEP * KEEP, 0);
     const [a, b] = digit === 'thumb' ? (['oppose', 'spread'] as const) : (['curl', 'hook'] as const);
@@ -58,26 +52,17 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
     write(shape, digit, a, best.a);
     write(shape, digit, b, best.b);
   }
-  values.forEach((v, j) => (x[free + j] = read(shape, v.digit, v.key)));
+  values.forEach((v, j) => (x[j] = read(shape, v.digit, v.key)));
   // (a finger already on its contact, followed on: fanned as it was, its joints taking up how the contact moves, so a small move of the
   // contact does not swing the tip sideways)
   const weights = values.map((v, j) => {
-    const held = !seat && v.key === 'spread' && v.digit !== 'thumb' && !swept.includes(v.digit);
-    if (held) pulled[j] = x[free + j];
+    const held = v.key === 'spread' && v.digit !== 'thumb' && !swept.includes(v.digit);
+    if (held) pulled[j] = x[j];
     return held ? PULL * FAN : PULL;
   });
-  // (the hand as `x` places it: moved and turned off where it started)
-  const place = (x: Float64Array) => {
-    if (!seat) return;
-    hand.position.copy(base.position).add(_move.set(x[0], x[1], x[2]));
-    const angle = Math.hypot(x[3], x[4], x[5]);
-    hand.quaternion.copy(base.quaternion);
-    if (angle > 1e-12) hand.quaternion.premultiply(_turn.setFromAxisAngle(_axis.set(x[3] / angle, x[4] / angle, x[5] / angle), angle));
-  };
   const residual = (x: Float64Array, out: number[]) => {
     out.length = 0;
-    values.forEach((v, j) => write(shape, v.digit, v.key, x[free + j]));
-    place(x);
+    values.forEach((v, j) => write(shape, v.digit, v.key, x[j]));
     for (const c of contacts) {
       const at = off(c, _facing);
       out.push(at.x, at.y, at.z);
@@ -85,21 +70,19 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
       const turned = _facing.applyQuaternion(hand.quaternion).sub(c.facing).multiplyScalar(TURN);
       out.push(turned.x, turned.y, turned.z);
     }
-    values.forEach((_, j) => out.push((x[free + j] - pulled[j]) * weights[j]));
-    if (seat) for (let j = 0; j < 6; j++) out.push(x[j] * (j < 3 ? ANCHORED.move : ANCHORED.turn));
-    matrix.compose(hand.position, hand.quaternion, scale);
-    for (const part of seat ? [null, 'thumb', ...DIGITS] as const : digits) for (const depth of sunk(part, part === null || digits.includes(part))) out.push(depth * KEEP);
+    values.forEach((_, j) => out.push((x[j] - pulled[j]) * weights[j]));
+    for (const digit of digits) for (const depth of sunk(digit)) out.push(depth * KEEP);
   };
   const r: number[] = [], moved: number[] = [];
-  for (let iteration = 0; iteration < (seat ? SEATING : ITERATIONS); iteration++) {
+  for (let iteration = 0; iteration < ITERATIONS; iteration++) {
     residual(x, r);
     const m = r.length, jacobian = new Float64Array(m * n);
     for (let j = 0; j < n; j++) {
-      const was = x[j], h = j >= free ? STEP.digit : j < 3 ? STEP.move : STEP.turn;
-      x[j] = was + h;
+      const was = x[j];
+      x[j] = was + STEP;
       residual(x, moved);
       x[j] = was;
-      for (let i = 0; i < m; i++) jacobian[i * n + j] = (moved[i] - r[i]) / h;
+      for (let i = 0; i < m; i++) jacobian[i * n + j] = (moved[i] - r[i]) / STEP;
     }
     // (JᵀJ + λ) Δ = −Jᵀ r
     const a = new Float64Array(n * n), b = new Float64Array(n);
@@ -112,19 +95,16 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
     for (let j = 0; j < n; j++) a[j * n + j] += DAMPING;
     const step = solved(a, b, n);
     if (!step.every(Number.isFinite)) break;
-    for (let j = 0; j < free; j++) x[j] += step[j];
-    values.forEach((v, j) => (x[free + j] = Math.min(1, Math.max(v.least, x[free + j] + step[free + j]))));
+    values.forEach((v, j) => (x[j] = Math.min(1, Math.max(v.least, x[j] + step[j]))));
   }
   residual(x, r);
-  return contacts.length ? Math.max(...contacts.map((c) => off(c, _facing).length())) : 0;
+  return Math.max(...contacts.map((c) => off(c, _facing).length()));
 }
 
-/** How `meet` solves: the shape the touching digits are pulled toward, what the hand stays out of, whether it seats the hand, and the
- * digits started afresh. */
+/** How `meet` solves: the shape the touching digits are pulled toward, what the hand stays out of, and the digits started afresh. */
 interface Meeting {
   preferred: Shape;
   near: Triangles | null;
-  seat?: boolean;
   swept?: readonly Digit[];
 }
 
@@ -134,16 +114,13 @@ const TURN = 0.01;
 const PULL = 0.008;
 /** how much more a finger's fan off where it was weighs, followed on along its contact (see `meet`) */
 const FAN = 8;
-/** how much a metre and a radian of a seated hand off where its grip put it weigh against a metre off a contact: it moves for what its
- * digits cannot reach and what it would sink into, not on its own */
-const ANCHORED = { move: 3, turn: 0.6 } as const;
 /** how much a metre of flesh sunk into what the hand touches weighs against a metre off a contact (a contact the digits cannot meet
  * clear of it pulls them in a hundredth of its miss), and how far in from a surface a ball is still found inside it (m) */
 const KEEP = 10, WITHIN = 0.03;
 /** how many steps across its range each of a digit's two main values is swept in, to start it from */
 const SWEEP = 5;
-/** the solve's iterations each sub-step, and seating a hand; its finite steps (m, rad, a digit's value) and its damping */
-const ITERATIONS = 4, SEATING = 12, STEP = { move: 1e-4, turn: 1e-3, digit: 1e-3 } as const, DAMPING = 1e-7;
+/** the solve's iterations each sub-step; its finite step (a digit's value) and its damping */
+const ITERATIONS = 4, STEP = 1e-3, DAMPING = 1e-7;
 
 /** the least `key` of `digit` goes (see `Finger`, `Thumb`) */
 function leastOf(digit: Digit, key: 'curl' | 'hook' | 'spread' | 'oppose'): number {
@@ -193,4 +170,4 @@ function solved(a: Float64Array, b: Float64Array, n: number): Float64Array {
   return x;
 }
 
-const _at = new Vector3(), _facing = new Vector3(), _move = new Vector3(), _axis = new Vector3(), _turn = new Quaternion();
+const _at = new Vector3(), _facing = new Vector3();

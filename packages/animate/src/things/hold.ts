@@ -5,7 +5,7 @@ import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
 import { anchors, movers, resolve, written, type Hold, type Holder, type Resolving } from './resolve';
 import { Thing } from './thing';
-import type { Goal, Placement } from '../kernel/goal';
+import type { Placement } from '../kernel/goal';
 
 /** the nearest anchor among `object` and its ancestors: a body's object (bone −1) or moving bone */
 function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined {
@@ -29,11 +29,6 @@ export function bodyOf(object: Object3D): Holder | null {
 /** whether `thing` is on `self`: attached under it, or in its hands */
 export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
-}
-
-/** where a hand holding `hold` goes on its thing: its goal, turned as the hand holds it (`Hold.turn`) when the grip sets no turn */
-export function steadied(hold: Hold): Goal {
-  return hold.turn && !hold.goal.quaternion ? { position: hold.goal.position, quaternion: hold.turn().clone() } : hold.goal;
 }
 
 /** hand `hand` of `self` holding `hold` (null: letting go), the thing's holders kept */

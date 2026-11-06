@@ -61,24 +61,40 @@ export const POINT = {
   thumb: { curl: 0.3, oppose: 0.45, spread: 0.25 }, index: digit(0.05, 0.1), middle: digit(0.8, 0.3), ring: digit(0.85, 0.3), little: digit(0.9, 0.3),
 } as const satisfies Shape;
 
-/** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1, a thumb's oppose and spread
- * `SPLAYED` … 1) is a misuse, said at once */
+/** The thumb's and the index's pads brought together in front of the palm, as a hand pinches a small thing; the other fingers curled
+ * out of their way. */
+export const PINCH = {
+  thumb: { curl: 0.35, oppose: 0.6, spread: 0.5 }, index: digit(0.45, 0.25), middle: digit(0.6, 0.2), ring: digit(0.7, 0.2), little: digit(0.8, 0.2),
+} as const satisfies Shape;
+
+/** `fingers` over `base`: each value given replaces `base`'s (see `valuesOf`) */
 export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
-  for (const [name, values] of Object.entries(fingers)) {
-    const digit = digitOf(name, 'fingers');
-    if (typeof values !== 'object' || values === null) throw new Error(`fingers: ${name} ${String(values)} is no digit's values`);
-    const keys = digit === 'thumb' ? ['curl', 'oppose', 'spread'] : ['curl', 'hook', 'spread'];
-    for (const [key, value] of Object.entries(values)) {
-      if (!keys.includes(key)) throw new Error(`fingers: a ${digit === 'thumb' ? 'thumb' : 'finger'} takes ${keys.join(', ')}; not "${key}"`);
-      const least = digit === 'thumb' ? (key === 'curl' ? 0 : SPLAYED) : key === 'curl' ? LIFTED : 0;
-      if (!(typeof value === 'number' && value >= least && value <= 1)) throw new Error(`fingers: ${name} ${key} ${String(value)} is not ${least} … 1`);
-    }
-  }
+  for (const [name, values] of Object.entries(fingers)) valuesOf(digitOf(name, 'fingers'), values);
   return {
     thumb: { ...base.thumb, ...fingers.thumb },
     index: { ...base.index, ...fingers.index }, middle: { ...base.middle, ...fingers.middle },
     ring: { ...base.ring, ...fingers.ring }, little: { ...base.little, ...fingers.little },
   };
+}
+
+/** `values` as `digit`'s (`Finger`, `Thumb`): out of 0 … 1 (a finger's curl `LIFTED` … 1, a thumb's oppose and spread `SPLAYED` … 1), or
+ * another key, is a misuse, said at once */
+export function valuesOf(digit: Digit, values: unknown): Finger & Thumb {
+  if (typeof values !== 'object' || values === null) throw new Error(`fingers: ${digit} ${String(values)} is no digit's values`);
+  const keys = digit === 'thumb' ? ['curl', 'oppose', 'spread'] : ['curl', 'hook', 'spread'], out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (!keys.includes(key)) throw new Error(`fingers: a ${digit === 'thumb' ? 'thumb' : 'finger'} takes ${keys.join(', ')}; not "${key}"`);
+    const least = digit === 'thumb' ? (key === 'curl' ? 0 : SPLAYED) : key === 'curl' ? LIFTED : 0;
+    if (!(typeof value === 'number' && value >= least && value <= 1)) throw new Error(`fingers: ${digit} ${key} ${String(value)} is not ${least} … 1`);
+    out[key] = value;
+  }
+  return out;
+}
+
+/** `shape` with `digit` given `values` (in place) */
+export function withValues(shape: Shape, digit: Digit, values: Finger | Thumb): void {
+  if (digit === 'thumb') shape.thumb = { ...shape.thumb, ...values };
+  else shape[digit] = { ...shape[digit], ...values };
 }
 
 /** `name` as a digit; another is a misuse, said at once (`what`: what named it) */

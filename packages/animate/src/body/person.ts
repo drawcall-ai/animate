@@ -86,7 +86,7 @@ export class Person extends Self {
         // (what both hands hold before the body goes with the chest they hang from, not the hips: the arms hang from the chest, so it stays
         // in the hands as the trunk bows or straightens)
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);
-        handStep(this, f, side, this.seated(side, hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
+        handStep(this, f, side, hold.goal, { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
         checkParents(this, f);
@@ -132,10 +132,9 @@ const GRIP_TAKEN = REACHED.distance + 0.02;
 const HELD = 0.05;
 
 /** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
- * it after the hands): where its fingers seated it, once they have; else its goal on the grip (a palm short of a turn its grip asks is
- * put where the turn would have it on the empty, not on the empty itself) */
+ * it after the hands): its goal on the grip (a palm short of the turn its placement asks is put where the turn would have it) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = resolve(person, hold.thing.object, _placed), goal = person.seated(side, hold).position;
+  const at = resolve(person, hold.thing.object, _placed), goal = hold.goal.position;
   return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
 }
 

@@ -11,7 +11,7 @@ import { DIGITS, easeShape, type Digit, type Shape } from './shape';
  * moves before the triangles about it are gathered afresh (m); how deep a digit may sink into what it is kept out of (m: its skin's give
  * is in its balls' size already); and how many times a digit's ease is halved down to where it is kept out */
 const GUARD = { within: 0.04, leaving: 0.01, regather: 0.03, sunk: 0.001, halvings: 5 } as const;
-/** how much further than the hand reaches the triangles about it are gathered (m): as far as its seat may move it */
+/** how much further than the hand reaches the triangles about it are gathered (m): as far as it moves before they are gathered afresh */
 const REACH = 0.05;
 
 /**
@@ -47,7 +47,7 @@ export class Guard {
       for (const digit of ['thumb', ...DIGITS] as const) if (!at.includes(digit)) keptOut(this.joints, kept.near, place, shape, was, digit);
     }
     // (as fast as its joints turn, however it is put: a digit on its contact or opened out of a thing at once swung there in a step — a
-    // thumb's base 100–130 rad/s as its hand seated or let go)
+    // thumb's base had swung 100–130 rad/s as its hand took hold or let go)
     this.joints.braked(shape, was, seconds);
   }
 
@@ -99,8 +99,8 @@ function keptOut(joints: Joints, near: Triangles, place: Placed, shape: Shape, w
 }
 
 /** the triangles of `thing`'s meshes about the hand `joints` move, in the thing's frame (`frame`, the world's): every mesh shown under it,
- * what hangs from it too (a magazine in a rifle's well) — the body's own `skins` left out — as far as the hand reaches and a seat may move
- * it, from its wrist at `about` (the thing's frame; default: where it is) */
+ * what hangs from it too (a magazine in a rifle's well) — the body's own `skins` left out — as far as the hand reaches, from its wrist at
+ * `about` (the thing's frame; default: where it is) */
 export function trianglesAbout(joints: Joints, skins: readonly SkinnedMesh[], thing: Object3D, frame: Placement, about?: Vector3): Triangles {
   const back = new Matrix4().compose(frame.position, frame.quaternion, new Vector3(1, 1, 1)).invert(), meshes: Mesh[] = [];
   thing.traverseVisible((node) => { if (node instanceof Mesh && !skins.some((skin) => skin === node)) meshes.push(node); });

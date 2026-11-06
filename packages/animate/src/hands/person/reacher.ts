@@ -6,8 +6,7 @@ import type { Handed } from '../handed';
 import type { ArmPosture } from '../../kernel/poise';
 import type { Side } from '../../species/humanoid/bones';
 import type { Channel, Claim } from '../../kernel/requests';
-import type { HandPoint } from '../../fingers/point';
-import type { Grip } from '../../things/thing';
+import type { FingerState } from '../../fingers/state';
 
 /** A person as its hands see it: a body with hands, on legs of its proportions — and what its hands carry this sub-step, on which aim. */
 export type Reacher = Handed & PersonLegged & {
@@ -18,8 +17,8 @@ export type Reacher = Handed & PersonLegged & {
   readonly armPose: Record<Side, Required<ArmPosture>>;
   /** the claim that has `channel` this sub-step, if a request claims it */
   owner(channel: Channel): Claim | undefined;
-  /** its fingers' bones by hand, if its skeleton has finger bones */
-  readonly fingers: { pointOn(side: Side, grip: Grip): HandPoint; toward(side: Side, empty: Object3D | null): void; point(side: Side, share: number): void; keep(side: Side): void; closed(side: Side): boolean } | null;
+  /** its fingers, if its skeleton has finger bones */
+  readonly fingers: Pick<FingerState, 'point' | 'sunk' | 'toward' | 'pointAt' | 'keep' | 'closed'> | null;
   /** how many updates it has finished (0: none of it has been shown yet) */
   readonly updates: number;
   /** `bones` as its pose being written has them, as if they had always stood so (only as it starts) */

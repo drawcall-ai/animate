@@ -13,15 +13,16 @@ import { HOLD, reaching } from './arms';
 import { emptyAt, type Taking } from './palm';
 
 /*
- * A fingertip's press (a grip with `userData.pad`): the hand turned to point into the face, its way in ending in a short run along the
- * face's normal over which the digit points, the touch that ends the reach, and the way back off it as it lets go.
+ * A fingertip's press (a grip with `userData.pad`): the hand turned to point into the face, pointed before its way's last run in along
+ * the face's normal and frozen so — the arm brings the pad, its finger still — the touch that ends the reach, and the way back off it as
+ * it lets go.
  */
 
-/** how a fingertip's way to its button runs in at its end (m, default body): `out` along the face's normal and `down` onto it from
- * above, its index pointing over that run alone */
-const RUN = { out: 0.045, down: 0.01 };
-/** how much of the way is left as its index sets off pointing, and as it points (m, default body, along the way) */
-const POINTS = { from: 0.08, to: 0.035 };
+/** how far out along the face's normal a fingertip's way to its button runs straight in at its end (m, default body) */
+const RUN = 0.045;
+/** how much of the way is left as its index sets off pointing, and as it points (m, default body, along the way): pointed before its run
+ * in, its pad goes along the run as its wrist does (pointing over the run, the straightening index swung the pad up as it went in) */
+const POINTS = { from: 0.22, to: 0.12 };
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
 const TOUCH = 0.012;
 /** how far a pointing hand is rolled thumb up off palm down (rad), as a forearm rests between its turns */
@@ -47,28 +48,28 @@ export function drawnBack(person: Reacher, side: Side, time: number): boolean {
   return time >= (drawing.get(person)?.[side] ?? -Infinity);
 }
 
-/** where a fingertip's way to `grip` turns in for its run (`RUN`, the thing's frame), its goal `goal`, `up` the world's up there; none:
- * no fingertip's grip */
-export function runOf(person: Reacher, grip: Grip, goal: Goal, up: Vector3): Vector3 | null {
-  if (!grip.pad || !grip.facing) return null;
-  return goal.position.clone().addScaledVector(grip.facing, -RUN.out * person.scale).addScaledVector(up.clone().projectOnPlane(grip.facing).normalize(), RUN.down * person.scale);
+/** where a fingertip's way to its button turns in for its run (`RUN`, the thing's frame): out from its goal along the face's normal;
+ * none: no fingertip's grip */
+export function runOf(person: Reacher, take: Taking): Vector3 | null {
+  const grip = take.thing.grip(take.grip);
+  if (!grip.pad || grip.pad === 'pinch' || !grip.facing) return null;
+  return take.goal.position.clone().addScaledVector(grip.facing, -RUN * person.scale);
 }
 
 /**
- * a fingertip's way to its button (the thing's frame), as one motion: a smooth curve from where its hand sets off through `run` and on
- * in to its grip, timed by one minimum-jerk profile over its length (it passes `run` without stopping and comes to rest only on the
- * button), set off `after` s on; its index points as the way nears its end (`FingerState.point`, `POINTS`)
+ * a fingertip's way to its button (the thing's frame), as one motion: a smooth curve from where its hand sets off through its run and on
+ * in to its grip (`points`), timed by one minimum-jerk profile over its length (it passes the run without stopping and comes to rest
+ * only on the button), set off `after` s on; its index points before the way's run in (`FingerState.pointAt`, `POINTS`), frozen so
  */
-export function pressingIn(person: Reacher, hand: Taking & { from: Vector3; seconds: number; lengths: number[] }, run: Vector3, after: number) {
-  const [sweep, push] = hand.lengths, total = sweep + push;
-  const path = course({ current: { position: hand.from, quaternion: IDENTITY } }, [[hand.seconds * sweep / total, { position: run }], [hand.seconds * push / total, { position: hand.goal.position }]], { delay: after });
+export function pressingIn(person: Reacher, hand: Taking & { from: Vector3; points: Vector3[]; lengths: number[]; seconds: number }, after: number) {
+  const total = hand.lengths.reduce((sum, length) => sum + length, 0) || 1, seconds = hand.seconds;
+  const path = course({ current: { position: hand.from, quaternion: IDENTITY } }, hand.points.map((position, k) => [seconds * hand.lengths[k] / total, { position }] as const), { delay: after });
   let began = NaN;
   const goal = (f: Frame): Goal => {
     if (Number.isNaN(began)) began = f.time;
     // (its pointing asked as far ahead as the fingers take to ease into a shape)
-    const gone = minimumJerk(Math.min(1, Math.max(0, (f.time + SHAPING - began - after) / hand.seconds)));
-    const left = (1 - gone) * total / person.scale;
-    person.fingers?.point(hand.side, Math.min(1, Math.max(0, (POINTS.from - left) / (POINTS.from - POINTS.to))));
+    const left = (1 - minimumJerk(Math.min(1, Math.max(0, (f.time + SHAPING - began - after) / seconds)))) * total / person.scale;
+    person.fingers?.pointAt(hand.side, Math.min(1, Math.max(0, (POINTS.from - left) / (POINTS.from - POINTS.to))));
     return { ...hand.goal, position: path.to(f).position };
   };
   return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
@@ -77,7 +78,7 @@ export function pressingIn(person: Reacher, hand: Taking & { from: Vector3; seco
 /** whether `take`'s grip is a fingertip's, and its pad, where the hand last stood, is on its empty (`TOUCH`): a press ends there */
 export function touching(person: Reacher, take: Taking, f: Frame): boolean {
   if (!take.thing.grip(take.grip).pad) return false;
-  const bone = person.hands[take.side], pad = _pad.copy(take.palm.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
+  const bone = person.hands[take.side], pad = _pad.copy(take.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
   return pad.distanceTo(emptyAt(person, take, f, _empty)) < TOUCH * person.scale;
 }
 
@@ -86,7 +87,7 @@ export function touching(person: Reacher, take: Taking, f: Frame): boolean {
  * the button to the eyes that watch it, as far as `SIGHTED` off the face's normal; none: no fingertip's grip
  */
 export function backOff(person: Reacher, grip: Grip, placed: { position: Vector3; quaternion: Quaternion }): Vector3 | null {
-  if (!grip.pad || !grip.facing) return null;
+  if (!grip.pad || grip.pad === 'pinch' || !grip.facing) return null;
   const empty = grip.at.position.clone().applyQuaternion(placed.quaternion).add(placed.position);
   const out = grip.facing.clone().applyQuaternion(placed.quaternion).negate(), way = person.pose.position(INDEX.head).clone().sub(empty).normalize();
   const along = way.dot(out);

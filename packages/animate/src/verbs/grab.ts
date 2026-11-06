@@ -20,8 +20,8 @@ import type { HandOptions } from '../hands/handling';
  * of what the other hand holds, a pouch's magazine — stays where it is, and the hands follow it. It returns `false` if no stand reaches
  * the grips (with `step: false`: if they are out of reach from where it stands) or a hand stops getting nearer its unmet position or turn
  * once the planned reach is over (or is still off it four seconds on). What each empty asks of the hand (a palm, a handle, a fingertip's
- * pad, a facing) is `Thing.grip`'s; a grip that asks no facing takes the hand turned as the arm brings it, and the grasp then fixes it on
- * the thing.
+ * pad, a facing, what it leaves free) is `Thing.grip`'s: as it starts, the grab fixes each hand's placement within what its grip leaves free
+ * from where the body stands (`Body.placement`), and the hand keeps it on the thing while it holds it.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);

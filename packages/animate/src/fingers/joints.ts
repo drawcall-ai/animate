@@ -1,9 +1,9 @@
-import type { HandPoint } from './point';
+import type { HandPart, HandPoint } from './point';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
 import { bisect } from '../kernel/math';
 import { Triangles } from '../kernel/triangles';
-import { DIGITS, type Digit, type DigitName, type Shape } from './shape';
+import { DIGITS, RELAXED, type Digit, type DigitName, type Shape } from './shape';
 
 /** One finger joint: its node and rest rotation, where it stands at rest from the joint before it (the hand, for the first), the axis it
  * bends toward the palm about, how far it is bent about it at rest, and its segment out to the next joint, with how far its palm side lies
@@ -71,15 +71,14 @@ const FLEXING = 15;
 /** the halvings a digit braked to `FLEXING` is held back in (to 1/64 of its way on) */
 const BRAKING = 6;
 /** how far off its length toward its palm side the point of a fingertip that touches is: pressing a button nearly end on (`TIP`), and
- * pressing with the flat of the pad on what the hand holds (`PINCH`) (rad) */
-export const TIP = (25 * Math.PI) / 180, PINCH = (70 * Math.PI) / 180;
+ * pressing with the flat of the pad on what the hand holds (`FLAT`) (rad) */
+export const TIP = (25 * Math.PI) / 180, FLAT = (70 * Math.PI) / 180;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
 /**
  * Where a handle lies in a power grasp: across the palm just short of the knuckles (this share of a proximal phalanx back from them), its
- * index end a little further out than its little-finger end — the palm's distal crease runs ~15° off square to the hand (Napier 1956) —
- * and as far out from the palm's skin as its radius
+ * index end a little further out than its little-finger end — the palm's distal crease runs ~15° off square to the hand (Napier 1956)
  */
 const HANDLE = { back: 0.25, slant: Math.tan((15 * Math.PI) / 180) } as const;
 
@@ -183,7 +182,7 @@ export class Joints {
       joints,
       palmward: new Vector3().crossVectors(unit, palm).normalize().applyQuaternion(back),
       ulnar: new Vector3().crossVectors(unit, ulnar).normalize().applyQuaternion(back),
-      inward: this.handle(0).at.sub(point(bones.thumb[0])).normalize().applyQuaternion(back),
+      inward: this.point('palm', RELAXED).at.sub(point(bones.thumb[0])).normalize().applyQuaternion(back),
     };
     this.span = Math.max(...(['thumb', ...DIGITS] as const).map((digit) => {
       const chain = this.chain(digit);
@@ -223,7 +222,7 @@ export class Joints {
 
   /**
    * where `digit`'s pad is as `shape` would have it, in the hand's frame, and the way it faces (into `out`, `facing`): the point of its
-   * rounded end that faces `round` off its length toward its palm side (`TIP`, `PINCH`)
+   * rounded end that faces `round` off its length toward its palm side (`TIP`, `FLAT`)
    */
   pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3(), round = TIP): Vector3 {
     const last = this.chain(digit)[2], frame = this.frames(digit, shape)[2];
@@ -246,19 +245,23 @@ export class Joints {
       .map((t) => ({ at: joint.along.clone().multiplyScalar(t * joint.length).applyMatrix4(frames[k]), radius: joint.depth })));
   }
 
-  /** where this hand holds a handle of `radius` in its power grasp (see `HandPoint`) */
-  handle(radius: number): HandPoint {
-    const proximal = this.fingers.middle.joints[0].length;
-    const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * proximal).addScaledVector(this.palm, this.palmDepth + radius);
-    return { at, axis: this.across.clone().addScaledVector(this.along, HANDLE.slant).normalize(), facing: this.palm.clone(), palmFacing: this.palm.clone() };
-  }
-
-  /** where this hand holds a grip with its palm's middle, on its skin, or presses with `digit`'s pad as `shape` has it, `round` off its
-   * length (see `pad`, `HandPoint`) */
-  touch(digit: Digit | null, shape: Shape, round = TIP): HandPoint {
-    if (!digit) return { at: this.handle(0).at, axis: this.across.clone(), facing: this.palm.clone(), palmFacing: this.palm.clone() };
+  /**
+   * The point `part` of this hand as `shape` has it (see `HandPoint`): the palm's middle on its skin, where a handle lies in a power
+   * grasp — across the palm just short of the knuckles, along its slanted crease; the pinch, midway between the thumb's and the index's
+   * pads, facing as the palm does; or a digit's pad, `TIP` off its length
+   */
+  point(part: HandPart, shape: Shape): HandPoint {
+    const palm = this.palm.clone(), axis = this.across.clone();
+    if (part === 'palm') {
+      const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * this.fingers.middle.joints[0].length).addScaledVector(this.palm, this.palmDepth);
+      return { at, axis: axis.addScaledVector(this.along, HANDLE.slant).normalize(), facing: palm.clone(), palmFacing: palm };
+    }
+    if (part === 'pinch') {
+      const at = this.pad('thumb', shape, new Vector3(), new Vector3(), FLAT).add(this.pad('index', shape, new Vector3(), new Vector3(), FLAT)).multiplyScalar(0.5);
+      return { at, axis, facing: palm.clone(), palmFacing: palm };
+    }
     const facing = new Vector3();
-    return { at: this.pad(digit, shape, new Vector3(), facing, round), axis: this.across.clone(), facing, palmFacing: this.palm.clone() };
+    return { at: this.pad(part, shape, new Vector3(), facing), axis, facing, palmFacing: palm };
   }
 
   private chain(digit: Digit): Three {

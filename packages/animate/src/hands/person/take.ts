@@ -30,7 +30,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   const began = person.frame.time;
   // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
   const there = (f: Frame) => takes.every((take) => touching(person, take, f) || reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
-  const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm)));
+  const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(person, take)));
   if (there(person.frame)) return close();
   let ends = Infinity;
   const late = lateWatch(person, request, takes.map((take) => ({
@@ -56,7 +56,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
       .map((point) => point.sub(frame.position).applyQuaternion(frame.quaternion.clone().invert()));
     // (a fingertip comes to its button in one sweep ending in a run in along the face's normal (`pressingIn`), not round the thing's
     // bounds: its face is the side it comes from)
-    const run = runOf(person, take.thing.grip(take.grip), take.goal, _up.set(0, 1, 0).applyQuaternion(frame.quaternion.clone().invert()));
+    const run = runOf(person, take);
     const route = run ? [] : [...detour, ...(onBody(person, take.thing) ? []
       : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`])))))]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
@@ -79,7 +79,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     if (hand.run) {
       const after = Math.max(hand.delay, finish - hand.seconds);
       ends = Math.max(ends, person.frame.time + after + hand.seconds);
-      yield* during(request, `hand.${hand.side}`, 'asked', pressingIn(person, hand, hand.run, after), until(there));
+      yield* during(request, `hand.${hand.side}`, 'asked', pressingIn(person, hand, after), until(there));
       return;
     }
     for (const [i, position] of hand.points.entries()) {
@@ -173,4 +173,4 @@ function outside(bounds: Box3, grip: Goal, from: Vector3, hand: Hand): Vector3[]
   return from.distanceTo(corner) <= REACHED.distance ? [outer] : [corner, outer];
 }
 
-const _toward = new Vector3(), _fingers = new Vector3(), _up = new Vector3();
+const _toward = new Vector3(), _fingers = new Vector3();

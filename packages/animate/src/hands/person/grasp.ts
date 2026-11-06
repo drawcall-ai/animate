@@ -14,6 +14,7 @@ import { solveChain } from '../../kernel/chain';
 import { coordinates, coordinatesOf } from '../../kernel/limits';
 import type { ReadonlyPose } from '../../kernel/pose';
 import type { Reacher } from './reacher';
+import { fixes } from './palm';
 
 /**
  * A thing in one hand hangs from the hand as the hand took it: the grasp fixes the hand on the thing, and the thing goes and turns with
@@ -21,8 +22,8 @@ import type { Reacher } from './reacher';
  * is to be turned, and the arm — shoulder, elbow, forearm and wrist — finds how to put it there. Nothing reads the hand's own turn back
  * into where it goes: the thing's turn is the carry's, the hand's follows from the grasp.
  *
- * A grip that sets no hand turn says only where the palm closes, so the grasp may change. From half a second before a carry's course
- * ends (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
+ * A grip that leaves the hand's turn free has its placement picked as the grab starts, for that moment, so the grasp may change. From
+ * half a second before a carry's course ends (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
  * keeps it: solved there, how far its joints are out of the middle of their ranges (`strainAt`). Comfortable enough (`STRAINED`), it is
  * kept, the arm working for it (a lance borne upright beside the hip); else the hand regrips onto the least turned of the grasps tried
  * there that the arm holds clearly more comfortably (strained by half `STRAINED` at most, and by `STRAINED` less) — the hand as the arm
@@ -97,14 +98,14 @@ function regripped(person: Reacher, side: Side, thing: Thing, regrip: Regrip, ti
 }
 
 /**
- * For a carry of `thing` in hand `side` alone by a grip that sets no hand turn, to `end` (world, turned): the grasp it has if the arm
- * holds it there comfortably enough (`strainAt`, `STRAINED`); else a regrip onto the least turned of the grasps tried that it holds
+ * For a carry of `thing` in hand `side` alone by a grip that leaves its turn free (`fixes`), to `end` (world, turned): the grasp it has if
+ * the arm holds it there comfortably enough (`strainAt`, `STRAINED`); else a regrip onto the least turned of the grasps tried that it holds
  * clearly more comfortably there — or, if none is and the arm cannot hold the one it has there at all (in the trunk, or far short of its
  * turn), onto the least strained of them; else still the one it has, the arm working for it (a lance borne upright beside the hip).
  * Whether it kept the grasp as comfortable enough there: weighed again as the end or the body moves on, it may yet be regripped.
  */
 export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>, settling = false): boolean {
-  if (hold.goal.quaternion || !inHand(person, thing)) return false;
+  if (fixes(hold.thing.grip(hold.grip)) || !inHand(person, thing)) return false;
   const f = person.frame, bone = person.hands[side], restOf = person.restOf(bone);
   const prior = regrips.get(hold);
   const from: InHand = { position: new Vector3(), quaternion: new Quaternion() };
@@ -147,7 +148,7 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
  * How the arm brings hand `side` to have its palm at `at` (world): the hand bone's turn (world, into `out`) with the arm posed onto it
  * from `pose` on `scratch` — its elbow bent the way a reach there bends it, the forearm and the wrist unturned, as a hanging arm's are
  */
-function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
+export function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
   scratch.copy(pose);
   const proportions = person.proportions, hand = INDEX[`${side}Hand`], palm = palmOf(proportions, side), wrist = _wrist;
   // (the wrist a palm back from `at` along the hand as the last pass turned it: two more passes bring it within a millimetre)
@@ -195,7 +196,7 @@ const UNHELD = 10;
 
 /** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
 const scratches = new WeakMap<Reacher, { brought: Pose; trial: Pose }>();
-function scratch(person: Reacher): { brought: Pose; trial: Pose } {
+export function scratch(person: Reacher): { brought: Pose; trial: Pose } {
   let poses = scratches.get(person);
   const skeleton = person.frame.prev.skeleton;
   if (!poses) scratches.set(person, (poses = { brought: new Pose(skeleton), trial: new Pose(skeleton) }));

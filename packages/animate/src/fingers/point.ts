@@ -1,9 +1,13 @@
 import type { Vector3 } from 'three';
+import type { Digit } from './shape';
+
+/** A point of a hand that goes on what it holds: the palm's middle, the pinch between the thumb's and the index's pads, or a digit's pad. */
+export type HandPart = 'palm' | 'pinch' | Digit;
 
 /**
- * Where a hand holds a grip, in its frame: the point of it that goes on the grip's empty — the palm's middle, a digit's pad, or a point
- * on a handle's axis where the handle lies in its power grasp — the way that part faces (a pad's, the palm's), the hand's grasp line
- * toward the thumb (where a handle lies, its axis; else across the knuckles toward the index), and the way the palm faces.
+ * Where a hand's point is, in its frame: where it goes on a thing (`at`), the way it faces into it (the palm's, a pad's), its grasp line
+ * toward the thumb (across the palm, along its slanted crease where a handle lies) and the way the palm faces. A placement's turn is that
+ * of the point's frame: +X its grasp line, +Y its facing.
  */
 export interface HandPoint {
   at: Vector3;

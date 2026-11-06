@@ -57,7 +57,7 @@ export class Orient {
     const pivot = resolve(self, node, _pivot).position;
     for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of self.species.hands ?? []) {
       const hold = self.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : self.fingers?.coming(side);
-      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? self.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
+      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? hold.goal.position : coming?.wrist;
       if (!thing || !goal || !within(thing, node)) continue;
       const bones = self.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
       const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + self.skeleton.bones[bone].offset.length(), 0);

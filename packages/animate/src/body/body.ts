@@ -3,13 +3,15 @@ import { INDEX } from '../species/humanoid/bones';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
-import { Person } from './person';
+import { Person, personOf } from './person';
 import { Self, type SelfOptions } from './runtime';
 import { Binding } from './model';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Channel, Tier } from '../kernel/requests';
 import type { Fingers } from '../fingers/shape';
+import { takingOf } from '../hands/person/palm';
+import type { HandPlacement } from '../hands/person/place';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
  * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
@@ -99,22 +101,32 @@ export class Body<S extends AnySpecies = AnySpecies> {
   }
 
   /**
-   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet: its update stopped,
-   * the two would fight): the grip empty the hand is on or on its way to — its thing the empty's parent — opening as it comes and closing
-   * round the thing's meshes once the wrist is where `gripOn` puts it, the empty's `userData.fingers` laid over that; a shape (`Fingers`;
-   * `FIST`, `POINT`, …); or relaxed for `null`. Call it every frame after posing the hand. A skeleton without finger bones is a misuse.
+   * The placement hand `side` takes the grip `empty` by (its thing the empty's parent): what the grip leaves free fixed as a grab fixes it,
+   * from where the body stands now (`Thing.grip`). For a body its app poses itself, to hand to `gripOn` and `shapeHand`: pick it once as
+   * the hand sets off for the grip and keep it while it holds it — picked afresh as the body moves, a grip with freedoms may be taken
+   * otherwise.
    */
-  shapeHand(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
-    fingerStateOf(this).set(side, to, seconds);
+  placement(side: 'left' | 'right', empty: Object3D): HandPlacement {
+    const thing = empty.parent;
+    if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
+    return takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement;
   }
 
   /**
-   * Where hand `side` goes to hold the grip `empty` (its thing the empty's parent), for a body its app poses itself: the wrist, and the
-   * world rotation to give the hand bone (`bones.leftHand`), the hand holding the grip as a grab would (`Thing.grip`) — turned from its
-   * turn now by the least turn that does what the grip asks; once its fingers have closed on it (`shapeHand`), where they seated it.
+   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet: its update stopped,
+   * the two would fight): the placement the hand is on or on its way to, opening as it comes and, once the wrist is where `gripOn` puts
+   * it, taking the shape the placement asks (closed round its thing's meshes as the placement has the hand there, or held); a shape
+   * (`Fingers`; `FIST`, `POINT`, …); or relaxed for `null`. Call it every frame after posing the hand. A skeleton without finger bones is
+   * a misuse.
    */
-  gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
-    return fingerStateOf(this).gripOn(side, empty);
+  shapeHand(side: 'left' | 'right', to: HandPlacement | Fingers | null, seconds: number): void {
+    fingerStateOf(this).set(side, to, seconds);
+  }
+
+  /** Where hand `side` goes for `placement`, for a body its app poses itself: the wrist, and the world rotation to give the hand bone
+   * (`bones.leftHand`) — the placement's point of the hand on its target, turned as it asks. */
+  gripOn(side: 'left' | 'right', placement: HandPlacement): { wrist: Vector3; rotation: Quaternion } {
+    return fingerStateOf(this).gripOn(side, placement);
   }
 
   /**
