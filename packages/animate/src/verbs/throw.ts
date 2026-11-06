@@ -13,7 +13,7 @@ import { INDEX, sideOf, type Side } from '../species/humanoid/bones';
 import type { Asked } from '../kernel/poise';
 import { letGo, type Released } from './release';
 import { verb, type Verb } from './story';
-import { smoothstep } from '../kernel/math';
+import { lerp, smoothstep } from '../kernel/math';
 
 /** How a throw goes. */
 export interface ThrowOptions {
@@ -51,20 +51,24 @@ export function throwAt(body: Body, thing: Object3D, target?: Vector3 | Object3D
 }
 
 /** where the throwing hand's wrist goes, from the head standing upright (the body's frame for a right hand, +X its left, × its scale;
- * a left hand mirrors it): out beside the shoulder, cocked behind the ear, past the side of the head, let go ahead of it, and on down
- * past the other hip */
+ * a left hand mirrors it): out beside the shoulder, cocked behind the ear, past the side of the head, and let go ahead of it */
 const PATH = {
   aside: new Vector3(-0.42, -0.12, 0), cocked: new Vector3(-0.36, 0, -0.22), passing: new Vector3(-0.33, 0.07, 0.12),
-  out: new Vector3(-0.25, 0.08, 0.42), through: new Vector3(0.25, -0.85, 0.5),
+  out: new Vector3(-0.25, 0.08, 0.42),
 };
+/** where the follow-through ends, from the shoulder as the body stands, bowed into the throw (the body's frame for a right hand): down
+ * and across toward the other thigh, `share` of the arm's length — nearly all of it, where the arm reaches — as `Body.armPoint` has it */
+const THROUGH = { direction: new Vector3(0.6, -0.7, 0.45).normalize(), share: 0.95 };
 /** how long each part takes (s): the windup to the cock, held there, the whip and follow-through, the hand held at its end; how far
  * ahead of the arm's whip the trunk's uncoil, and the free arm's pull, set off (s) */
-const TIMES = { windup: 0.32, cocked: 0.15, whip: 0.4, held: 0.05, lead: 0.05, pull: 0.25 };
+const TIMES = { windup: 0.32, cocked: 0.15, whip: 0.4, held: 0.15, lead: 0.05, pull: 0.25 };
 /** the trunk (a right-handed throw's; `lower` and `shift`, m ahead, × scale): coiled, the chest 50° right and the hips 30°, sunk onto the
  * back foot; uncoiled, the chest 23° left and the hips 20°, bowed into the throw, the weight forward */
 const COILED = { twist: -0.8, hips: -0.5, bow: -0.1, lower: 0.07, shift: -0.06 }, UNCOILED = { twist: 0.4, hips: 0.3, bow: 0.6, lower: 0.1, shift: 0.08 };
 /** how fast the trunk turns and bows (rad/s), and how far ahead of the chest the hips uncoil (s) */
 const TWISTING = 10, BOWING = 3, HIPS_LEAD = 0.03;
+/** how long the trunk's uncoil takes (s): 1.2 rad of twist on a smooth ramp, peaking under `TWISTING` */
+const UNCOILING = 0.2;
 /** how far ahead the foot on the free side strides (× the leg's length: about half a stride, as far as the front leg reaches with the hips
  * let down and turned through the whip), from when in the windup (s) */
 const STRIDE = { ahead: 0.33, from: 0.16 };
@@ -98,6 +102,8 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   // turn the whip takes it in, not snapped there in a sub-step)
   const forearm = INDEX[`${side}LowerArm`], held = facing().invert().multiply(person.pose.rotation(bone));
   const wrist = (f: Frame) => _held.copy(held).premultiply(facing()).slerp(f.prev.rotation(forearm), smoothstep(0, TIMES.windup + TIMES.cocked, since(f))).clone();
+  const through = () => ({ position: new Vector3(x * THROUGH.direction.x, THROUGH.direction.y, THROUGH.direction.z).multiplyScalar(THROUGH.share * person.proportions.armLength)
+    .applyQuaternion(facing()).add(person.pose.position(INDEX[`${side}UpperArm`])) });
   const elbow = () => person.pose.position(INDEX[`${side}UpperArm`]).clone().add(new Vector3(x * ELBOW.x, ELBOW.y, ELBOW.z).applyQuaternion(facing()));
   let whip: ReturnType<typeof course> | null = null, let_go = false, began = NaN;
   const since = (f: Frame) => f.time - (Number.isNaN(began) ? (began = f.time) : began);
@@ -106,10 +112,14 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   // own gait, whose steps, pelvis and knees a staggered stance, a coiled hip or a sink would fight)
   const ahead = STRIDE.ahead * person.proportions.legLength, stride = side === 'right' ? [ahead, 0] : [0, ahead], strides = !person.locomotion.moving;
   const trunk = (f: Frame): Asked => {
-    const ask = uncoiled(f) ? UNCOILED : COILED, hips = since(f) >= TIMES.windup + TIMES.cocked - TIMES.lead - HIPS_LEAD ? UNCOILED.hips : COILED.hips;
+    // (uncoiled along a smooth ramp, the hips a moment ahead of the chest, not asked all at once: at the trunk's top rate all the way, it
+    // stopped dead at the end of its turn, a jolt the hand carried into the whip)
+    const ask = uncoiled(f) ? UNCOILED : COILED, from = TIMES.windup + TIMES.cocked - TIMES.lead;
+    const turn = (lead: number) => smoothstep(from - lead - UNCOILING / 5, from - lead + UNCOILING * 4 / 5, since(f));
+    const twist = lerp(COILED.twist, UNCOILED.twist, turn(0)), hips = lerp(COILED.hips, UNCOILED.hips, turn(HIPS_LEAD));
     // (bowed into the throw as the hand lets go, not before, so the head does not run on past the hand)
     return {
-      twist: x * ask.twist, hips: strides ? x * hips : 0, twistRate: TWISTING, bow: let_go ? UNCOILED.bow : COILED.bow, bowRate: BOWING,
+      twist: x * twist, hips: strides ? x * hips : 0, twistRate: TWISTING, bow: let_go ? UNCOILED.bow : COILED.bow, bowRate: BOWING,
       ...(strides && { lower: ask.lower * scale, shift: new Vector3(0, 0, ask.shift * scale).applyQuaternion(facing()) }), ...(strides && since(f) >= STRIDE.from && { stagger: stride }),
     };
   };
@@ -123,7 +133,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
     during(request, `hand.${side}`, 'asked', (f) => {
       if (since(f) < TIMES.windup + TIMES.cocked) return void handStep(person, f, side, { position: windup.to(f).position, quaternion: wrist(f) }, { ...QUICK, lead: false, pole: elbow() }, arm);
       whip ??= course({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
-        [[TIMES.whip * 0.25, at(PATH.passing)], [TIMES.whip * 0.25, at(PATH.out)], [TIMES.whip * 0.5, at(PATH.through)]]);
+        [[TIMES.whip * 0.3, at(PATH.passing)], [TIMES.whip * 0.2, at(PATH.out)], [TIMES.whip * 0.5, through]]);
       // (the hand turned with the forearm through the whip, its turn's rate rising and falling within `WHIPPED` rather than braked at the
       // joints' cap where the swing over the shoulder turns the forearm fastest)
       handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, ...WHIPPED, lead: false, ...(!let_go && { pole: elbow() }) }, arm);
@@ -136,7 +146,6 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
     }, (f) => whip !== null && whip.over(f)));
   // (the hand held at the end of its follow-through a moment, the trunk held there with it; then the arm is free, and the trunk and the
   // stride come back on their own as the next verb begins)
-  const through = at(PATH.through);
   yield* parallel<Frame>('race',
     during(request, 'trunk', 'asked', (f) => person.poise.add(trunk(f))),
     during(request, `hand.${side}`, 'asked', (f) => handStep(person, f, side, { ...through(), quaternion: f.prev.rotation(forearm) }, { ...QUICK, ...WHIPPED, lead: false }, arm), (f) => since(f) >= TIMES.windup + TIMES.cocked + TIMES.whip + TIMES.held));
