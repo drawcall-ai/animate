@@ -24,12 +24,15 @@ import { ARM } from './trunk';
 const STAGING = 0.4;
 /** how far a fingertip draws back off its button as it lets go (m, default body) */
 export const PRESSING = 0.07;
-/** how far a fingertip's way to its button runs in along the face's normal at its end (m, default body): its index points over that run
- * alone. Through a point 12 cm before it where the way turned in, the hand stood there 0.3 s, its finger raised; from 7 cm before it
- * along the line from the eyes, 40° off the normal, it came down onto the button and its finger, still curling out, up from below it */
-const RUN = 0.1;
-/** how much of that run its index takes to point (share): pointing on to its end, it was still curling out as the pad met the button */
-const POINTED = 0.35;
+/** how far a fingertip's way to its button runs in at its end (m, default body): `out` along the face's normal and `down` (m) onto it
+ * from above, its index pointing over that run alone. From 10 cm out, the hand came from the rifle near the face, backed out 8 cm and
+ * went in again; from level, the finger seemed from the eyes aimed at the button below until the last moment; through a point 12 cm
+ * before it where the way turned in, the hand stood there 0.3 s, its finger raised; from 7 cm before it along the line from the eyes,
+ * 40° off the normal, it came down onto the button and its finger, still curling out, up from below it */
+const RUN = { out: 0.045, down: 0.01 };
+/** how much of the way is left as its index sets off pointing, and as it points (m, default body, along the way): pointing over the run's
+ * first third, its index was out only 2 cm before the button; on to its end, still curling out as the pad met it */
+const POINTING = { from: 0.08, to: 0.035 };
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
 const TOUCHING = 0.012;
 
@@ -99,7 +102,9 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     // thing's bounds first: its face is the side it comes from, and round a panel's post the hand came over its top and down past the other
     // button)
     const grip = take.thing.grip(take.grip);
-    const run = grip.pad && grip.facing ? take.goal.position.clone().addScaledVector(grip.facing, -RUN * person.scale) : null;
+    const up = _up.set(0, 1, 0).applyQuaternion(frame.quaternion.clone().invert());
+    const run = grip.pad && grip.facing ? take.goal.position.clone().addScaledVector(grip.facing, -RUN.out * person.scale)
+      .addScaledVector(up.projectOnPlane(grip.facing).normalize(), RUN.down * person.scale) : null;
     const route = run ? [] : [...detour, ...(onBody(person, take.thing) ? []
       : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`])))))]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
@@ -154,10 +159,10 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
 }
 
 /**
- * a fingertip's way to its button (the thing's frame), as one motion: a smooth curve from where its hand sets off through `run`, straight
- * before the button, and on in along the face's normal to its grip, timed by one minimum-jerk profile over its length (`course`: it
+ * a fingertip's way to its button (the thing's frame), as one motion: a smooth curve from where its hand sets off through `run`, just
+ * before the button and a little above it, and on in to its grip, timed by one minimum-jerk profile over its length (`course`: it
  * passes `run` without stopping and comes to rest only on the button), set off `after` s on, the hand following it as a held hand
- * follows; its index points over the run alone (`FingerState.pointing`), as the share of the run the way has gone
+ * follows; its index points as the way nears its end (`FingerState.pointing`, `POINTING`)
  */
 function pressing(person: Reacher, hand: Taking & { from: Vector3; seconds: number; lengths: number[] }, run: Vector3, after: number) {
   const [sweep, push] = hand.lengths, total = sweep + push;
@@ -167,7 +172,8 @@ function pressing(person: Reacher, hand: Taking & { from: Vector3; seconds: numb
     if (Number.isNaN(began)) began = f.time;
     // (its pointing asked as far ahead as the fingers take to ease into a shape: asked as the way went, it pointed the last centimetre late)
     const gone = minimumJerk(Math.min(1, Math.max(0, (f.time + SHAPING - began - after) / hand.seconds)));
-    person.fingers?.pointing(hand.side, Math.min(1, Math.max(0, (gone * total - sweep) / (POINTED * push))));
+    const left = (1 - gone) * total / person.scale;
+    person.fingers?.pointing(hand.side, Math.min(1, Math.max(0, (POINTING.from - left) / (POINTING.from - POINTING.to))));
     return { ...hand.goal, position: path.to(f).position };
   };
   return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
@@ -369,7 +375,7 @@ const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
 const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3(), _fingers = new Vector3();
-const _pad = new Vector3(), _empty = new Vector3(), IDENTITY = new Quaternion();
+const _pad = new Vector3(), _empty = new Vector3(), _up = new Vector3(), IDENTITY = new Quaternion();
 
 /** whether a foot is in the air under `person`: a support step under way */
 const stepping = (person: Reacher) => person.stepper?.legs.some((leg) => leg.swing) ?? false;
