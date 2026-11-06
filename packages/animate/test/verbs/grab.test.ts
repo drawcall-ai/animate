@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Body, dog, grab, humanoid, reach, release, wait } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
@@ -164,21 +164,21 @@ describe('grab, from where it stands', () => {
     expect(lag).toBeLessThanOrEqual(0.15);
   });
 
-  it("turns the hand as its grip is turned, the hand bone's axes on the empty's", () => {
+  it('faces the palm as its grip asks, on a body without finger bones too', () => {
     const body = person(), room = roomOf(body);
     const handle = box(room, new Vector3(-0.2, 1.0, 0.35), { mass: null, solid: false, name: 'handle' });
     const grip = named(handle, 'right');
-    // (turned as the hand hangs, then a quarter turn more about its forearm: a hand that must turn to take it)
-    grip.userData.handTurn = true;
-    grip.quaternion.copy(body.bones.rightHand.getWorldQuaternion(new Quaternion())).multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 0.8));
+    // (the palm facing in toward the body's middle, +X)
+    grip.userData.facing = [1, 0, 0];
     room.updateMatrixWorld(true);
     let held = false;
     play(function* () {
       held = yield* grab(body, handle, { right: 'right' });
     }, [body], 3, () => held);
     expect(held).toBe(true);
-    room.updateMatrixWorld(true);
-    expect(body.bones.rightHand.getWorldQuaternion(new Quaternion()).angleTo(grip.getWorldQuaternion(new Quaternion()))).toBeLessThan(0.05);
+    // (the T-pose's palm faces down, −Y, in the hand bone's turn from rest)
+    const h = insides(body), turn = h.pose.rotation(h.hands.right);
+    expect(new Vector3(0, -1, 0).applyQuaternion(turn).dot(new Vector3(1, 0, 0))).toBeGreaterThan(0.8);
   });
 
   it('takes a grip on a turned thing, the palm on it', () => {
@@ -219,16 +219,15 @@ describe('grab, from where it stands', () => {
   });
 });
 
-for (const verb of ['grab', 'reach'] as const) it(`${verb} fails an unreachable hand turn and reports its angular error`, () => {
+it('reach fails an unreachable hand turn and reports its angular error', () => {
   for (const dev of [false, true]) {
     const body = person({ dev }), room = roomOf(body);
     const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
     const grip = named(handle, 'right');
-    grip.userData.handTurn = true;
     grip.rotation.z = Math.PI;
     let result: boolean | undefined;
     play(function* () {
-      result = yield* (verb === 'grab' ? grab(body, handle, { right: 'right' }) : reach(body, { right: grip }));
+      result = yield* reach(body, { right: grip });
     }, [body], 12, () => result !== undefined);
     expect(result).toBe(false);
     expect(body.holds(handle)).toBe(false);
@@ -282,11 +281,9 @@ describe('grab at once (speed: Infinity)', () => {
   });
 });
 
-it('refuses a grip only a hand with fingers holds by, on a body without finger bones, and a reach onto a grip', () => {
+it('refuses a reach onto a grip', () => {
   const body = person(), room = roomOf(body);
-  const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
-  const grip = named(handle, 'right');
+  const grip = named(box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false }), 'right');
   grip.userData.handle = [0, 1, 0];
-  expect(() => play(function* () { yield* grab(body, handle, { right: 'right' }); }, [body], 1)).toThrow(/userData.handle.*finger bones/);
   expect(() => reach(body, { right: grip })).toThrow(/reach: "right" has userData.handle, a grip/);
 });

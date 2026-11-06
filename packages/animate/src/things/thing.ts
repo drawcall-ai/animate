@@ -45,30 +45,28 @@ export class Thing {
   }
 
   /**
-   * The named empty, where a person's palm (a creature's tip) goes: position-only unless `userData.handTurn` is true (its axes are the hand
-   * bone's), or an axis ([x, y, z], the empty's frame) about which that turn may roll — not for a person with fingers, whose grab refuses
-   * it. A person with fingers reads more off it, each in the empty's frame. `userData.pad` names a digit whose pad goes on it instead of
-   * the palm (a fingertip on a button): the hand comes as a loose fist, points (`POINT`, or as `userData.fingers` asks) late, comes to a
-   * little before it along `facing` (the way into the face) and pushes in until the pad meets it — the grab ends there and holds it —
-   * the hand pointing level into an upright face, a little up, rolled palm down a little thumb up, the finger curving down onto it; it
-   * draws straight back the way it came as it is released. `userData.handle` (an axis toward where the thumb goes) makes it a handle running through it: the
-   * palm goes against it, the handle lying across the palm on the hand's own grasp line, and the fingers wrap it; its radius is measured
-   * off the thing's meshes about the empty, or given as `userData.radius` (m). `userData.facing` is the way the palm faces onto it — or the
-   * way into the face a pad presses: on a handle, as far as the wrist turns it so; a palm elsewhere, free to roll about it as
-   * the arm brings it. Attached things' subtrees are not searched.
+   * The named empty, a grip: where a person's hand (a creature's tip) goes, each key below in the empty's frame. Alone it is where the
+   * palm's middle goes, the hand turned as the arm brings it. `userData.handle` (an axis, pointing out of the fist at the thumb's end)
+   * makes it a handle running through it, the palm against it and the fingers round it; its radius is measured off the thing's meshes
+   * about the empty, or given as `userData.radius` (m). `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip
+   * on a button: the hand comes as a loose fist, points late, comes in along `facing` and holds where the pad meets the face; it draws back
+   * the way it came as it is released). `userData.facing` is the way the touching part — the palm, or the pad — faces into the surface,
+   * the hand turned so as far as the wrist allows (a palm without a handle free to roll about it). `userData.fingers` lays digits over the
+   * closed hand: a digit's values (`Finger`, `Thumb`), or the name of an empty on the thing its pad presses on (read every update; that
+   * empty's own `facing` lays the pad flat on its face). A creature's tip takes the empty's position alone. Attached things' subtrees (their
+   * own `userData.mass`) are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);
     if (!node) throw new Error(`"${this.object.name}" has no empty named "${name}"`);
-    const { handTurn: turn, handle, facing, radius, pad } = node.userData, at = localOf(node, this.object), object = this.object;
+    const { handle, facing, radius, pad } = node.userData, at = localOf(node, this.object), object = this.object;
     const inThing = (value: unknown, what: string) => vectorOf(value, `"${name}" userData.${what}`).normalize().applyQuaternion(at.quaternion);
     if (radius !== undefined && !(typeof radius === 'number' && radius > 0)) throw new Error(`"${name}" userData.radius ${String(radius)}: give it in m`);
-    if (turn !== undefined && (handle ?? facing ?? pad) !== undefined) throw new Error(`"${name}" has userData.handTurn with a handle, facing or pad: they turn the hand themselves`);
     if (pad !== undefined && handle !== undefined) throw new Error(`"${name}" has both userData.pad and userData.handle: a handle lies across the palm`);
     const digit = pad === undefined ? null : digitOf(pad, `"${name}" userData.pad`);
     const axis = handle === undefined ? null : inThing(handle, 'handle');
     return {
-      node, at, turn: turn === undefined ? null : turn === true ? true as const : vectorOf(turn, `"${name}" userData.handTurn`),
+      node, at,
       facing: facing === undefined ? null : inThing(facing, 'facing'),
       pad: digit,
       handle: axis === null ? null : {
@@ -83,7 +81,7 @@ export class Thing {
   }
 }
 
-/** A grip on a thing: its empty, where it is in the thing's frame, and its hand turn (null: unconstrained; true: the empty’s; a vector: free to roll about that axis). */
+/** A grip on a thing, as `Thing.grip` reads it: its empty, where it is in the thing's frame, and what its keys ask (in the thing's frame). */
 export type Grip = ReturnType<Thing['grip']>;
 
 const things = new WeakMap<Object3D, Thing>();

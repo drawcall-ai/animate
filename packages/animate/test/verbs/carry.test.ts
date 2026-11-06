@@ -259,8 +259,8 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('says in development when a thing is let go in mid-air, put onto an empty far off it, or onto one already taken', () => {
-    const body = person({ dev: true }), room = roomOf(body);
+  it('says in development when a thing is put onto an empty far off it, or onto one already taken, and notes one let go in mid-air', () => {
+    const body = person({ dev: { notes: true } }), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 1, solid: false });
     const other = box(room, new Vector3(1, 0.9, 1), { name: 'other', mass: 1, solid: false });
     const far = empty(room, 'far', new Vector3(1, 0.9, 1));
@@ -282,6 +282,27 @@ describe('release', () => {
       release(body, loose);
       done = true;
     }, [body], 8, () => done);
-    expect(body.log.map(({ check }) => check).slice(2)).toEqual(['let go in mid-air: its lowest point above the ground (m)']);
+    expect(body.log.map(({ check }) => check).slice(2)).toEqual([]);
+    expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
+
+  it('lets go of a thing it carries on the way, telling how it was moving: a throw', () => {
+    const body = person(), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.2, 0.9, 0.4), { mass: 0.4, solid: false });
+    let thrown = new Vector3(), seen = new Vector3();
+    play(function* () {
+      yield* grab(body, ball, { right: 'right' });
+      // (swung out to the right and up, let go on the way: moving as it was over the frame before)
+      const from = worldOf(ball), last = from.clone();
+      yield* carry(body, ball, from.clone().add(new Vector3(-0.4, 0.2, 0)), { speed: 2, until: () => {
+        seen = worldOf(ball).sub(last).multiplyScalar(60);
+        last.copy(worldOf(ball));
+        return last.distanceTo(from) > 0.15;
+      } });
+      thrown = release(body, ball).velocity;
+    }, [body], 6, () => !body.holds(ball) && thrown.lengthSq() > 0);
+    expect(thrown.x).toBeLessThan(-0.2);
+    expect(thrown.distanceTo(seen)).toBeLessThan(0.5 * seen.length());
+  });
+
 });

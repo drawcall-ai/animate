@@ -21,8 +21,7 @@ interface Joint {
   /** how far the segment's palm side is from its bone: the skin's, measured at rest; else a share of the digit's length */
   depth: number;
   /** a fingertip's: how far along it from its joint its rounded end (`depth` round) is centred, so that it ends where the skin does
-   * (measured at rest; else at the bone's end): on the bone's end, a pad pressed onto a button stood off it by the skin 8 mm, its contact
-   * 1.4 cm off the button's middle */
+   * (measured at rest; else at the bone's end) */
   end: number;
 }
 
@@ -53,20 +52,19 @@ const DIP = 0.7;
 /**
  * how far a full spread fans each finger (rad); and the thumb's base, its saddle joint's two ways: how far it swings out in front of the
  * palm (its `spread`: palmar abduction 0–70°, Greene & Heckman 1994) and across it toward the little finger (its `oppose`: ~50°, the
- * flexion–extension arc of 53°, Cooney et al. 1981) — at 60°, the thumb's pad came short of a magazine's far face by 2–3 cm
+ * flexion–extension arc of 53°, Cooney et al. 1981)
  */
 const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4, thumb: (70 * Math.PI) / 180 } as const;
 const OPPOSE = 0.9;
 /**
  * A thumb lifted out in front of the palm or swung across it turns about its own length to face its pad onto the palm's middle, as the
  * saddle joint at its base couples the two (Cooney et al. 1981; Kapandji's conjunct rotation): fully once it is lifted or swung this far
- * (`Thumb.spread`, `oppose`, whichever further), by at most `most` (rad). Swung out alone, its pad kept facing the way it did along the
- * palm, and its outer joints folded it back toward the hand's back instead of round a handle; swung across alone, its pad lay flat on
- * the palm's side instead of facing the fingers.
+ * (`Thumb.spread`, `oppose`, whichever further), by at most `most` (rad).
  */
 const PRONATE = { lifted: 0.4, most: (70 * Math.PI) / 180 } as const;
-/** how far off its length toward its palm side a fingertip presses a button, and a pad presses on what the hand holds (rad) */
-export const PRESS = (25 * Math.PI) / 180, PINCH = (70 * Math.PI) / 180;
+/** how far off its length toward its palm side the point of a fingertip that touches is: pressing a button nearly end on (`TIP`), and
+ * pressing with the flat of the pad on what the hand holds (`PINCH`) (rad) */
+export const TIP = (25 * Math.PI) / 180, PINCH = (70 * Math.PI) / 180;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
@@ -163,8 +161,7 @@ export class Joints {
     };
     this.fingers = { index: finger('index'), middle: finger('middle'), ring: finger('ring'), little: finger('little') };
     // (a thumb bends toward the palm's far side, the little finger's, and a little into the palm; it swings out in front of the palm
-    // square to itself, then across toward the little finger — swung about the hand's length instead, a metacarpal lying along the hand,
-    // as a rig's often does, only twisted about itself, and the thumb never came off the palm's side)
+    // square to itself, then across toward the little finger — not about the hand's length, along which a rig's metacarpal often lies)
     const ulnar = across.clone().negate(), toward = ulnar.clone().addScaledVector(palm, 0.4).normalize();
     const joints = chain(bones.thumb, THICK.thumb, (unit) => new Vector3().crossVectors(unit, toward));
     const metacarpal = turnOf(bones.thumb[0]), back = metacarpal.clone().invert(), unit = joints[0].along.clone().applyQuaternion(metacarpal);
@@ -193,23 +190,21 @@ export class Joints {
 
   /**
    * Each segment of `digit` as `shape` would have it, along its palm side (`side` 1; 0 its bone, −1 its back as far out), in the world as
-   * the hand stands now (its matrix up to date): from its joint to the next, the last out to its tip
+   * the hand stands at `world` (default: as it stands now, its matrix up to date): from its joint to the next, the last out to its tip
    */
-  segments(digit: Digit, shape: Shape, side = 1): [Vector3, Vector3][] {
+  segments(digit: Digit, shape: Shape, side = 1, world: Matrix4 = this.hand.matrixWorld): [Vector3, Vector3][] {
     const frames = this.frames(digit, shape);
     return this.chain(digit).map((joint, k) => {
       const start = joint.palmar.clone().multiplyScalar(side * joint.depth), end = start.clone().addScaledVector(joint.along, joint.length + (k === 2 ? joint.depth : 0));
-      return [start.applyMatrix4(frames[k]).applyMatrix4(this.hand.matrixWorld), end.applyMatrix4(frames[k]).applyMatrix4(this.hand.matrixWorld)];
+      return [start.applyMatrix4(frames[k]).applyMatrix4(world), end.applyMatrix4(frames[k]).applyMatrix4(world)];
     });
   }
 
   /**
    * where `digit`'s pad is as `shape` would have it, in the hand's frame, and the way it faces (into `out`, `facing`): the point of its
-   * rounded end that faces `round` off its length toward its palm side — `PRESS`, nearly end on, as a fingertip presses a button (faced
-   * halfway to the palm side, a pointing finger, its joints a little bent, came onto a button with the hand flat along the panel), or
-   * `PINCH`, the flat of the pad, as it presses on what a hand holds
+   * rounded end that faces `round` off its length toward its palm side (`TIP`, `PINCH`)
    */
-  pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3(), round = PRESS): Vector3 {
+  pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3(), round = TIP): Vector3 {
     const last = this.chain(digit)[2], frame = this.frames(digit, shape)[2];
     facing.copy(last.along).multiplyScalar(Math.cos(round)).addScaledVector(last.palmar, Math.sin(round));
     out.copy(last.along).multiplyScalar(last.end).addScaledVector(facing, last.depth).applyMatrix4(frame);
@@ -239,7 +234,7 @@ export class Joints {
 
   /** where this hand holds a grip with its palm's middle, on its skin, or presses with `digit`'s pad as `shape` has it, `round` off its
    * length (see `pad`, `HandPoint`) */
-  touch(digit: Digit | null, shape: Shape, round = PRESS): HandPoint {
+  touch(digit: Digit | null, shape: Shape, round = TIP): HandPoint {
     if (!digit) return { at: this.handle(0).at, axis: this.across.clone(), facing: this.palm.clone(), palmFacing: this.palm.clone() };
     const facing = new Vector3();
     return { at: this.pad(digit, shape, new Vector3(), facing, round), axis: this.across.clone(), facing, palmFacing: this.palm.clone() };

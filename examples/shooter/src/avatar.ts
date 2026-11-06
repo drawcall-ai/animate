@@ -1,4 +1,4 @@
-import { Body, carry, FIST, grab, humanoid, lookAt, pose, reach, release, wait, type Floor, type Root } from '@drawcall/animate';
+import { Body, carry, grab, humanoid, lookAt, release, wait, type Floor, type Root } from '@drawcall/animate';
 import { action, parallel, runTimeline } from '@pmndrs/timeline';
 import { BufferGeometry, Euler, Group, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -43,19 +43,9 @@ const ZERO = 25;
 const QUICK = { speed: 1.8 };
 /** How fast the left hand goes to the pouch and brings the magazine from it to the well (m/s). */
 const BRISK = { speed: 2.6 };
-/** How long a pressing pad stays on its button before it lifts off (s): as long as the cap takes to go in under it (0.15 s read as a
- * dwell). */
+/** How long a pressing pad stays on its button before it lets go (s): as long as the cap takes to go in under it. */
 const HELD = 0.08;
-/** How a fingertip lifts off its button before the hand goes back to the rifle (m, at `LIFTING`): `out` off the face, `aside` across it
- * level toward the rifle's front, out past the panel's edge, and `up`, so that it comes down onto the rifle in a high, flat arc in view
- * (toward the rifle's front, lower, it went out of the eyes' view for 0.3 s), at once, curling into a fist as it goes and coming back so (drawn back by the
- * release's eased 0.25 s, the index curled while the hand still stood, dragging its tip down the face; its index held out off the button,
- * then relaxed, it read as a second press as it passed back over the panel; lifted straight out, it came back across the panel's corner
- * within 3 cm of it); it goes on to the rifle `through` (m) short of there, not stopping. */
-const LIFT = { out: 0.12, aside: 0.14, up: 0.03, through: 0.03 };
-/** How fast a fingertip lifts off its button (m/s): quickly, off it 0.05 s after it lets go. */
-const LIFTING = { speed: 2 };
-/** How a hand goes to a button from where the soldier stands (m/s): briskly, pressed some 0.7 s after it leaves the rifle. */
+/** A hand goes to a button from where the soldier stands. */
 const POKE = { step: false };
 /** How fast a fresh body's hands take the rifle it stands up with (m/s): at once, to take over from a pose held elsewhere. */
 const SNATCH = { speed: 8 };
@@ -71,25 +61,18 @@ const SQUEEZE = 0.005;
  * a reload, it sat diagonally across the pouch; turned out 30°, the arm took 0.27 s under the well turning it the 42° on (it turns a
  * carried magazine only once it is there). */
 const POUCHES = [new Vector3(0.07, -0.129, 0.2), new Vector3(0.21, -0.25, 0.15)];
-/** What the wrist's flick adds to a spent magazine as the hand lets go of it at the bottom of its pull (the body's frame, +X its left):
- * out to the left and down (m/s),
- * and end over end, its top tipping outward (rad/s about the body's forward): it falls clear of the leg, as at the hand's speed alone it
- * dropped onto the thigh and landed by the boots. It passes 46 cm out from the left hip 0.2 s on (30 cm, at 2.2 m/s out, it read as
- * brushing the thigh), lands 0.9 m out to the left 0.37 s on and slides to rest 1.2 m out; spun at −4 and −9 rad/s it tumbled on
- * landing and came to rest anywhere 0.7–1.1 m out. */
-const FLICK = { velocity: new Vector3(3, -0.3, -0.3), spin: -2 };
-/** How long a hand that has quickly taken a magazine waits for its pinch to close before it takes it away (s). */
-const PINCHING = 0.06;
+/** Where a spent magazine is flung toward from the bottom of its pull (m, the body's frame: +X its left), how fast (m/s), and how far on
+ * its way it is let go (m): out to the left and down, clear of the leg. */
+const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 5, after: 0.2 };
 const UP = new Vector3(0, 1, 0);
 /** How near its place under the well, on the well's line, and how near turned as the well (rad), the arm brings a magazine before the
  * fingers square it onto it (`square`), in how long (s): held to 3° by the arm, it wobbled 2 cm off and 23° round for 0.3 s. */
-const LINED = 0.01, ALIGNED = 0.1, SQUARING = 0.08;
+const LINED = 0.015, ALIGNED = 0.1, SQUARING = 0.08;
 /** How long a magazine takes to be pushed up the well's line to its seat (s), slowing as it seats: its last 4 cm over 0.16 s, not
  * snapped in (pushed evenly over 0.18 s, they took 0.10 s). */
 const PUSH = 0.25;
-/** How far a spent magazine is pulled down the well's line before it is let go (m), and in how long (s): out of the well and a hand's
- * breadth on, gathering speed. */
-const PULL = { length: 0.2, seconds: 0.22 };
+/** How long a spent magazine takes to be pulled down the well's line until it is out of it (s), gathering speed into its fling. */
+const PULL = 0.12;
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
 export class Avatar {
@@ -229,10 +212,6 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   let issued = 0;
   const issue = (place: Object3D) => magazines.push(magazineIn(place, `magazine ${++issued}`));
   for (const place of [well, ...pouches]) issue(place);
-  /** the magazine the hand is throwing away, where and how it was turned last update (world), and how fast it went (m/s) and turned (rad/s
-   * about the world's axes) */
-  const thrown: { object: Object3D | null; at: Vector3; turn: Quaternion; velocity: Vector3; spin: Vector3 } =
-    { object: null, at: new Vector3(), turn: new Quaternion(), velocity: new Vector3(), spin: new Vector3() };
   let input: AvatarState = { position, velocity: new Vector3(), yaw, pitch: 0, aim: false, sprint: false, crouch: false, support: position.clone(), firstPerson: false };
   const look: Look = { eye: new Vector3(), yaw, pitch: 0, intent: { yaw, pitch: 0 } };
   let time = 0, acquired = false, swapping = false, reloadWanted = false, reloads = 0;
@@ -327,9 +306,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     hold(seconds);
   };
 
-  // The left hand pinches the spent magazine's body under the well, pulls it down out of it and flicks it away down and out, letting go
-  // on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and lets it fly on as the hand
-  // last moved and turned it), then pinches the full one in its pouch, brings it up under the well and pushes it home.
+  // The left hand pinches the spent magazine's body under the well, pulls it down out of it and flings it away down and out, letting go
+  // on the way (the litter takes it and lets it fly on as the hand moved it), then pinches the full one in its pouch, brings it up under
+  // the well and pushes it home.
   /** `magazine`, held, slid `by` (m) along the well's line (its parent turned as the well) in `seconds`, along `way` (the share of the
    * way gone at each share of the time), the hand going with it */
   const slide = (magazine: Object3D, by: number, seconds: number, way: (share: number) => number) => {
@@ -366,27 +345,16 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
 
   const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, QUICK))) return false;
-    // (still, pinched, before it pulls: pulled as the hand arrived, still rising onto it, it drove the magazine 1.2 cm up into the well first)
-    yield* wait(PINCHING);
     onReload?.('out');
-    thrown.object = spent;
-    spent.getWorldPosition(thrown.at);
-    spent.getWorldQuaternion(thrown.turn);
-    // (pulled straight down out of the well along its line, gathering speed, and let go of at the bottom of the pull with a flick: carried
-    // out, it went 1.7 cm off the line still in the well; slid out and then carried off to be flung, it was thrown from chest height 0.15 s
-    // after it left the well, the pull hardly seen)
-    yield* slide(spent, -PULL.length, PULL.seconds, (share) => share);
-    release(person, spent);
+    // (pulled straight down out of the well along its line, gathering speed — carried out, it would leave the line still in the well —
+    // then flung on out and down, let go of on the way)
+    yield* slide(spent, -RIFLE.wellLine, PULL, (share) => share * share);
+    const from = spent.getWorldPosition(new Vector3()), to = person.object.localToWorld(FLING.to.clone());
+    yield* carry(person, spent, to, { speed: FLING.speed, until: () => spent.getWorldPosition(new Vector3()).distanceTo(from) > FLING.after });
+    const { velocity, spin } = release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
-    const facing = new Quaternion().setFromAxisAngle(UP, person.facing);
-    const flung = thrown.velocity.clone().add(FLICK.velocity.clone().applyQuaternion(facing));
-    const spun = thrown.spin.clone().add(new Vector3(0, 0, FLICK.spin).applyQuaternion(facing));
-    litter.drop(spent, flung, spun);
-    thrown.object = null;
+    litter.drop(spent, velocity, spin);
     if (!(yield* grab(person, full, { left: 'base' }, BRISK))) return false;
-    // (the fingers closing round its far face before it comes out: taken quickly, the hand is on it with its thumb on the near face and
-    // the fingers still 2–4 cm open, closing over the next tenth)
-    yield* wait(PINCHING);
     // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in, and let go
     // there: shifted under its floor plate to drive it home with the palm, the fingers came off its faces and opened; carried in, it
     // came in turned as the hand turned it, slanting against the well, its top corner out through the well's wall, and snapped home in
@@ -423,7 +391,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   };
 
   // The left hand lets go of the rifle's front, the right holding it on, and presses the button's face with its index's pad, `pressed` as
-  // it meets it; it holds a moment, lifts straight off it, curling (see `LIFT`), and goes straight back to the rifle's front.
+  // it meets it; it holds a moment, draws back off it and goes back to the rifle's front.
   const press = function* (button: Object3D, pressed: () => void) {
     lowering = true;
     if (!(yield* grab(person, button, { left: 'press' }, POKE))) throw new Error(`The soldier could not press "${button.name}"`);
@@ -431,22 +399,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     yield* wait(HELD);
     lowering = false;
     release(person, { left: button });
-    // (the wrist's way off, in the frame of the face it pressed — out of it, against its grip's `facing` — moving with what it is on)
-    const face = button.getObjectByName('press');
-    if (!face) throw new Error(`"${button.name}" has no face to press`);
-    const wrist = face.worldToLocal(person.bones.leftHand.getWorldPosition(new Vector3())), out = new Vector3(...face.userData.facing).negate();
-    const foregrip = rifle.getObjectByName('foregrip');
-    if (!foregrip) throw new Error('The rifle has no foregrip to go back to');
-    const up = new Vector3(0, 1, 0).applyQuaternion(face.getWorldQuaternion(new Quaternion()).invert());
-    const aside = face.worldToLocal(foregrip.getWorldPosition(new Vector3())).projectOnPlane(out).projectOnPlane(up).normalize();
-    const off = () => face.localToWorld(wrist.clone().addScaledVector(out, LIFT.out).addScaledVector(aside, LIFT.aside).addScaledVector(up, LIFT.up));
-    let lifted = false;
-    yield* parallel('all', pose(person, { fingers: { left: FIST } }, { until: () => lifted }), function* () {
-      const there = () => person.bones.leftHand.getWorldPosition(new Vector3()).distanceTo(off()) < LIFT.through;
-      if (!(yield* reach(person, { left: off }, { ...LIFTING, until: there }))) throw new Error(`The soldier could not lift its fingertip off "${button.name}"`);
-      lifted = true;
-    });
-    if (!(yield* grab(person, rifle, { left: 'foregrip' }))) throw new Error('The support hand could not return to the rifle after pressing');
+    if (!(yield* grab(person, rifle, { left: 'foregrip' }, QUICK))) throw new Error('The support hand could not return to the rifle after pressing');
   };
 
   eye.getWorldPosition(look.eye);
@@ -500,13 +453,6 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
       input = state;
       step(undefined, seconds);
       person.update(seconds);
-      if (thrown.object) {
-        const at = thrown.object.getWorldPosition(new Vector3()), turn = thrown.object.getWorldQuaternion(new Quaternion());
-        thrown.velocity.subVectors(at, thrown.at).divideScalar(seconds);
-        spinOf(thrown.turn, turn, seconds, thrown.spin);
-        thrown.at.copy(at);
-        thrown.turn.copy(turn);
-      }
       see();
     },
     dispose: () => {
@@ -527,14 +473,6 @@ function onBone(person: Body, bone: Object3D, name: string, offset: Vector3): Ob
   placed.position.copy(offset).applyQuaternion(placed.quaternion).add(bone.getWorldPosition(new Vector3()));
   bone.attach(placed);
   return placed;
-}
-
-/** how fast (rad/s, about the world's axes) a thing turned `from` → `to` in `seconds` (into `out`): its axis scaled by its rate */
-function spinOf(from: Quaternion, to: Quaternion, seconds: number, out: Vector3): Vector3 {
-  const step = to.clone().multiply(from.clone().invert());
-  if (step.w < 0) step.set(-step.x, -step.y, -step.z, -step.w);
-  const angle = 2 * Math.acos(Math.min(1, step.w)), sine = Math.sqrt(Math.max(0, 1 - step.w * step.w));
-  return sine < 1e-9 ? out.set(0, 0, 0) : out.set(step.x, step.y, step.z).multiplyScalar(angle / sine / seconds);
 }
 
 /** whether `thing` has come within `within` (m) of `place` */

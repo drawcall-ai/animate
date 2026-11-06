@@ -4,10 +4,8 @@ import type { Pose } from '../kernel/pose';
 import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
 import { anchors, movers, resolve, written, type Hold, type Holder, type Resolving } from './resolve';
-import { Thing, type Grip } from './thing';
+import { Thing } from './thing';
 import type { Goal, Placement } from '../kernel/goal';
-import { turnOnto } from '../kernel/math';
-import type { HandPoint } from '../fingers/point';
 
 /** the nearest anchor among `object` and its ancestors: a body's object (bone −1) or moving bone */
 function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined {
@@ -18,7 +16,7 @@ function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined 
 }
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
-export function hangsFrom(self: Holder, object: Object3D): number {
+export function boneOf(self: Holder, object: Object3D): number {
   const anchor = anchorOf(object);
   return anchor?.body === self ? anchor.bone : NaN;
 }
@@ -31,128 +29,6 @@ export function bodyOf(object: Object3D): Holder | null {
 /** whether `thing` is on `self`: attached under it, or in its hands */
 export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
-}
-
-/** A person's palm, as a grip takes it: the point of the hand that goes on the empty in the hand bone's frame — its centre; for a hand
- * with fingers, its `point`'s — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers, where
- * it holds the grip (`HandPoint`, the bone's frame) and the world's up in the thing's frame as it sets off. */
-export interface Palm {
-  at: Readonly<Vector3>;
-  turn: () => Quaternion;
-  point?: HandPoint;
-  up?: Vector3;
-}
-
-/**
- * Where a hand bone goes on `grip` (the thing's frame): turned as the empty is, its `rest` undone; or rolling about its free line; or turned
- * as the hand comes. A person's hand holds a grip in its `palm`: the bone, at the wrist, goes as far back from the empty as the point of
- * the hand that goes on it is from the wrist, along the hand as the grip turns it — or, where the grip leaves the hand some turn of its
- * own, as it was last turned, read afresh, so the goal moves on the thing as the hand turns or rolls: turned, where the grip asks a
- * facing, by the least turn that faces it so (a fingertip 18 cm out from the wrist, put on its button as the hand stood while it still
- * turned to face it, chased a goal swinging with each turn and never came to it). A hand short of a turn it is asked only as far as it
- * goes (`palmTurn`) is still put where the turn asked would have it: a support hand rolled off its palm up under a receiver, put on it as
- * it stood, came to rest palm down on its top.
- * A creature's tip, with no palm, goes on the empty.
- */
-export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goal {
-  const asked = palm && palmTurn(grip, palm);
-  const quaternion = asked ? asked.quaternion : grip.turn === null ? undefined : grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
-  const axis = asked ? asked.axis : grip.turn instanceof Vector3 ? grip.turn.clone().applyQuaternion(grip.at.quaternion) : undefined;
-  const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }), ...(asked?.preferred && { preferred: true }) };
-  if (!palm) return { position: grip.at.position.clone(), ...turns };
-  // (the wrist, the palm on the empty, the hand turned as asked, or as it is — facing as asked — in the thing's frame)
-  const empty = grip.at.position, wrist = new Vector3();
-  return { get position() { return wrist.copy(palm.at).applyQuaternion(heldTurn(grip, palm, asked)).negate().add(empty); }, ...turns };
-}
-
-/** the hand bone's turn on `grip` (the thing's frame) as `palm` takes it: as the grip asks (`palmTurn`, given as `asked`), or as it is —
- * facing as asked, by the least turn that faces it so */
-export function heldTurn(grip: Grip, palm: Palm, asked = palmTurn(grip, palm)): Quaternion {
-  if (asked && !asked.axis) return asked.quaternion;
-  const now = palm.turn();
-  if (!grip.facing || !palm.point) return now;
-  return new Quaternion().setFromUnitVectors(_facing.copy(palm.point.facing).applyQuaternion(now), grip.facing).multiply(now);
-}
-
-/**
- * the hand's turn (the thing's frame) a grip's `facing` asks of `hand`: on a handle, the hand's grasp line along the handle's axis, its
- * thumb toward the axis's end, the palm facing so, as far as the wrist turns it so (`Goal.preferred`: a palm up under a rifle's receiver
- * as it points at the ground, asked strictly, failed the grab); a pad pressed in so, the hand pointing along its pressing line
- * (`pressingLine`) rolled as a pointing hand is (`pointing`), as far as the wrist turns it so too (a fingertip on a low button, asked
- * strictly, crept its last 2 cm onto it for a second); the palm facing so, free to roll about it. None asked: none (a handle without
- * one takes the hand turned as the arm brings it, its palm on the handle's line).
- */
-function palmTurn(grip: Grip, { point, up }: Palm): { quaternion: Quaternion; axis?: Vector3; preferred?: true } | null {
-  if (!grip.facing || !point) return null;
-  if (grip.handle) return { quaternion: turnOnto(point.axis, point.facing, grip.handle.axis, grip.facing), preferred: true };
-  if (grip.pad && up) {
-    const line = pressingLine(grip.facing, up), quaternion = new Quaternion().setFromUnitVectors(handLine(point), line);
-    if (pointing(quaternion, point, line, up)) return { quaternion, preferred: true };
-  }
-  const quaternion = new Quaternion().setFromUnitVectors(point.facing, grip.facing);
-  return { quaternion, axis: grip.facing.clone(), preferred: true };
-}
-
-/**
- * `turn` (a hand's, its pad `point` pushing along `push`) rolled about `push`, in place, as a hand points to press with a fingertip:
- * its palm as far down as the roll turns it, then `POINTING` thumb up off that, as a forearm rests between its turns (a wall button's
- * pressed palm down, a hand rolled as it came — straight off a palm-up hold under a rifle — pressed palm up). A push straight up or down
- * leaves the roll as it is.
- */
-function pointing(turn: Quaternion, point: HandPoint, push: Vector3, up: Vector3): boolean {
-  const level = (v: Vector3) => v.addScaledVector(push, -v.dot(push));
-  const down = level(up.clone().negate());
-  if (down.lengthSq() < 1e-6) return false;
-  const palm = level(point.palmFacing.clone().applyQuaternion(turn));
-  const angle = Math.atan2(_cross.crossVectors(palm, down).dot(push), palm.dot(down));
-  turn.premultiply(_q.setFromAxisAngle(push, angle));
-  // (thumb up: the roll that lifts the line across the knuckles toward the thumb)
-  const thumb = _cross.copy(point.axis).applyQuaternion(turn);
-  const roll = _q.setFromAxisAngle(push, POINTING), lifted = thumb.clone().applyQuaternion(roll).dot(up);
-  turn.premultiply(lifted >= thumb.clone().applyQuaternion(_q2.copy(roll).invert()).dot(up) ? roll : _q2);
-  return true;
-}
-/** how far a pointing hand is rolled thumb up off palm down (rad) */
-const POINTING = 0.5;
-/** how far below level a hand pressing a fingertip into an upright face points (rad), its wrist a little above the button: the fingers
- * curled under it kept off the face (pointing 0.15 rad above level, the knuckles came within 2.8 cm of the face, the fist against it),
- * the finger coming onto the button a little from above. Its pad pushed straight in along the face's normal, the hand pointed 50° up off
- * a level forearm, the wrist bent back, the finger up along the face. */
-const LEAN = 0.2;
-
-/** the line a hand pressing a fingertip in along `push` points along: level into the face, `LEAN` down; into a level face, along `push` */
-function pressingLine(push: Vector3, up: Vector3): Vector3 {
-  const level = push.clone().addScaledVector(up, -push.dot(up));
-  if (level.lengthSq() < 0.25) return push.clone();
-  return level.normalize().multiplyScalar(Math.cos(LEAN)).addScaledVector(up, -Math.sin(LEAN));
-}
-
-/** how far off the face's normal a fingertip comes in and draws back along the line from its eyes at most (rad) */
-const SIGHTED = 0.9;
-
-/**
- * the way a fingertip comes in to its button and draws back off it (unit, out from the face): along the line from the button to the eyes
- * that watch it, as a hand brings a fingertip onto what the eyes fix, as far as `SIGHTED` off `out`, the face's normal. Straight out along
- * the normal, seen from above it came over the button below, slid up onto its own and drew back down over the one below again.
- */
-export function pressingWay(out: Readonly<Vector3>, toEyes: Readonly<Vector3>): Vector3 {
-  const way = toEyes.clone().normalize(), along = way.dot(out);
-  if (along >= Math.cos(SIGHTED)) return way;
-  const aside = way.addScaledVector(out, -along);
-  if (aside.lengthSq() < 1e-8) return out.clone();
-  return aside.normalize().multiplyScalar(Math.sin(SIGHTED)).addScaledVector(out, Math.cos(SIGHTED));
-}
-
-/** a hand's own line from its wrist out along its fingers (its frame), square to its grasp line and palm */
-function handLine(hand: HandPoint): Vector3 {
-  const line = new Vector3().crossVectors(hand.axis, hand.palmFacing).normalize();
-  return line.dot(hand.at) < 0 ? line.negate() : line;
-}
-
-/** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
-export function holdOn(thing: Thing, grip: string, goal: Goal, palm?: Palm): Hold {
-  if (!palm) return { thing, grip, goal };
-  return { thing, grip, goal, palm: palm.at, ...(!goal.quaternion && { turn: palm.turn }) };
 }
 
 /** where a hand holding `hold` goes on its thing: its goal, turned as the hand holds it (`Hold.turn`) when the grip sets no turn */
@@ -198,7 +74,7 @@ export function carriedBy(self: Holder, thing: Thing): boolean {
 
 /** whether `thing` hangs from a hand of `self` that holds it (a thing held in one hand is attached under that hand's bone) */
 export function inHand(self: Holder, thing: Thing): boolean {
-  const bone = hangsFrom(self, thing.object);
+  const bone = boneOf(self, thing.object);
   return handsOn(self, thing).some((hand) => self.hands[hand] === bone);
 }
 
@@ -399,7 +275,7 @@ export function wornOf(self: Holder): Thing[] {
 const _frame: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const _world = new Matrix4(), _parentInverse = new Matrix4();
 const ZERO = new Vector3(), _scale = new Vector3();
-const _back = new Quaternion(), _facing = new Vector3(), _turn = new Quaternion(), _q = new Quaternion(), _q2 = new Quaternion(), _cross = new Vector3();
+const _back = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion();
 const _at = new Vector3(), _c = new Vector3(), _a = new Vector3(), _b = new Vector3(), _m = new Vector3(), _h = new Vector3();
 const _g1 = new Vector3(), _g2 = new Vector3(), _w1 = new Vector3(), _w2 = new Vector3();
 

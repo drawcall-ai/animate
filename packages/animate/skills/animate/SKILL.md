@@ -79,38 +79,46 @@ Each body part does one thing at a time. An asked part beats a borrowed one, and
 
 `reach` takes the hands to a target with a human reach's timing and is judged on getting there: it fails, saying why, when it cannot. `track` keeps each hand on a moving target at once, without arriving, and never ends on its own; it serves a clap or a fist pump as well as XR controllers, within `armLength` of the shoulder (`body.species.person` has it and the other measures: build hand targets from them, not in metres).
 
-For a nod, a bow, an arched back, a head tilt or a gesture of the arms (raised, spread, a wave), use `pose`; `lookAt` says only where the eyes go, and how much of the turn the head and trunk take (`head`, `trunk`: 0…1 shares; `head: 0.3` follows someone mostly with the eyes). A pose's head sits on top of the gaze: race a `lookAt` with a head `pose` to tilt a look. A trunk pose competes with a `lookAt` given `trunk`, and a pose's arms give way to a hand verb or a held thing. Each part eases in at its own pace, so a short pose comes out smaller (dev notes say so). A look's target may be a function returning a point, object or body, for a changing focus. No body kneels, sits or lies down, and a stopped dog stands; a pose's `lower` is the nearest to a kneel. To seat a body (a driver) or put it on a ladder, stop updating it and write its `bones` yourself, starting from its last pose. A body you stop updating keeps its internal state where it stopped, so to hand it back create a fresh body where it now stands, step it until it has settled and blend from your pose onto the fresh body's.
+For a nod, a bow, an arched back, a head tilt or a gesture of the arms (raised, spread, a wave), use `pose`; `lookAt` says only where the eyes go, and how much of the turn the head and trunk take (`head`, `trunk`: 0…1 shares; `head: 0.3` follows someone mostly with the eyes). A pose's head sits on top of the gaze: race a `lookAt` with a head `pose` to tilt a look. A trunk pose competes with a `lookAt` given `trunk`, and a pose's arms give way to a hand verb or a held thing. Each part eases in at its own pace, so a short pose comes out smaller (dev notes say so). A look's target may be a function returning a point, object or body, for a changing focus. No body kneels, sits or lies down, and a stopped dog stands; a pose's `lower` is the nearest to a kneel, and anything further is a puppet (below).
 
-## Fingers
+## Hands on props
 
-A person has fingers when its skeleton has VRM's finger bones, all fifteen a hand (`leftThumbMetacarpal` … `leftLittleDistal`), each chain hanging from the one before it and ending in a tip bone, every joint on its finger's centre line at the crease, inside the mesh and rigged with it (fingers a few voxels thick need a high rig resolution). They need nothing from the story: a free hand hangs relaxed, a hand a verb brings to a grip opens as it comes and closes round the thing's meshes there, and it opens again as it lets go. A handle is clamped across its narrowest width: the thumb's pad on one face, the fingers or the palm on the other.
+Give a movable prop its `userData.mass` and named grip empties, and describe on each empty what the hand touches, not where the wrist goes: the hand and arm are solved from it, and a person whose skeleton has finger bones (see `humanoid`) also closes its fingers round the prop's meshes there. The same prop works for a person with or without finger bones. `userData.facing` always means the way the touching part — the palm, or a fingertip's pad — faces into the prop; leave it out where any way round will do. Choose the grip by what the hand does:
 
-Describe what the hand touches, not where the wrist goes: the hand and arm are solved from it. A handle, bar, rung or edge gets `userData.handle`: the line it runs along (the empty's frame), pointing out of the fist at the thumb's end (a mug's handle held upright: up; a lever pulled toward you, its top end held thumb up: up along it), the empty on that line, and `userData.facing`, the way the palm faces onto it, when the hand should sit one way round; `userData.radius` sets a thin bar's or an edge's thickness instead of measuring it. To pinch something flat across its thickness (a magazine, a book), put the handle along an edge with the palm facing onto that edge: the fingers go round onto one face and the thumb onto the other.
+- Laid on a surface (a box's side, a tabletop): a plain empty where the palm's middle goes, a hand's half-thickness out from the surface — never where the wrist would be. Without a facing the hand comes as the arm brings it and the grasp keeps it so.
+- Round something (a handle, a bar, a rung, a grenade's body): `userData.handle`, the line it runs along pointing out of the fist at the thumb's end, with the empty on that line. Round all over, any facing is right: give the one the arm reaches most easily, the palm toward the body's middle for something held before it. To pinch something flat across its thickness (a magazine, a book), put the handle along an edge, facing onto that edge.
+- A fingertip (a button, a switch): `userData.pad` names the digit, with a facing. One `grab` presses; `release` draws it back off the face, and a hand verb that follows waits until it has.
+- A digit apart from the rest (a trigger finger, a thumb on a spoon): `userData.fingers` on the grip, naming for that digit an empty its pad goes to, read every update. Hang that empty under the part it presses and move the part to move the digit.
 
 ```ts
 Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }); // palm on the grip's right, thumb up and round its back
-Object.assign(rung.userData, { handle: [-1, 0, 0], facing: [0, -0.4, 0.9], radius: 0.016 });
+Object.assign(button.userData, { pad: 'index', facing: [0, 0, -1] });
+pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };
 ```
 
-A fingertip touch (a button, a switch) names the digit in `userData.pad` and gives `facing`, the way into the face. One `grab` presses it: the hand comes as a loose fist, points late, comes in along `facing` and ends as the pad meets the face, the hand level into an upright face with the wrist straight, rolled palm down a little thumb up, the finger curving down onto it; it holds there until `release`, which draws it straight back over a quarter second and keeps it there until the hand is asked elsewhere. Make the button a massless thing of its own, with the cap's mesh beside it rather than in it (a hand goes round a thing's meshes to its grip); move the button in as it is pressed — or along, for a switch that slides — and the pad goes with it.
+`grab` ends once the fingers have closed, so what follows it may pull at once. Make a button a massless thing of its own, its cap's mesh beside it rather than under it (a hand goes round a thing's meshes to its grip), and move the thing in as it is pressed. `reach` and `track` refuse a handle or pad, whose empty is not where the wrist goes; take it with `grab`.
+
+A part of a held thing (a magazine in its rifle, a grenade's pin) is a thing of its own: give it its own mass and grips under its parent. The other hand grabs it where it sits, leaving it in place and following it; `carry` lifts it off into that hand, and a release onto an empty puts it back. To move a part along its parent (a magazine up its well), hold it with `grab` and move its local position yourself: the hand follows it.
+
+To throw a held thing, `carry` it back to wind up, then toward where it is flung with an `until` that ends on the way, while it still moves fast, and `release` it there. `release` returns the thing's `velocity` and `spin` as it left the hand; take the thing into your physics with them. Let go with nowhere given, a thing goes back under the parent it was lifted from, where it is now — a pouch on the body, the grenade a pin came off — so attach it to your scene or physics body right after. A hand moves at a few m/s at most, so a long throw takes its speed from you and its direction and spin from the swing. Keep the swing's points within the arm's reach and pass `step: false`, or the carry walks the body to them.
 
 ```ts
-Object.assign(face.userData, { pad: 'index', facing: [0, 0, -1] });
-if (yield* grab(person, button, { left: 'face' })) lit(); yield* wait(0.5); release(person, { left: button });
+const at = (x: number, y: number, z: number) => soldier.object.localToWorld(new Vector3(x, y, z)); // the body's frame, +X its left
+yield* grab(soldier, grenade, { right: 'body' });
+yield* grab(soldier, pin, { left: 'ring' });               // the pin: a thing of its own (its own mass) under the grenade
+yield* carry(soldier, pin, at(0.35, 1.1, 0.3), { step: false });
+release(soldier, pin);
+scene.attach(pin);                                         // dropped: back under the grenade otherwise
+yield* carry(soldier, grenade, at(-0.28, 1.5, 0.1), { step: false });                     // wound up beside the shoulder
+const from = grenade.getWorldPosition(new Vector3());
+yield* carry(soldier, grenade, at(-0.2, 1.45, 0.65), { speed: 3, step: false, until: () => grenade.getWorldPosition(new Vector3()).distanceTo(from) > 0.35 });
+const { velocity, spin } = release(soldier, grenade);
+throwInto(physics, grenade, velocity.normalize().multiplyScalar(12), spin);  // your physics' own call
 ```
 
-A grip's `userData.fingers` lays digits over the closed hand: a digit's values, or the name of an empty on the thing its pad goes to, pressing on the part the empty hangs from (hang a trigger's empty under the trigger's own part). Move that empty to move the digit; give it `userData.facing`, the way the pad presses into the face it lies on, where the pad should lie flat on that face rather than press toward the grip's middle. `handle`, `facing` and `pad` are the fingers' to hold by: a body without finger bones refuses them, and so do `reach` and `track` — take such a grip with `grab`.
+## Puppets
 
-```ts
-pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' }; // read every update
-pose(person, { fingers: { right: { ...POINT, thumb: { curl: 0 } } } }, { until: 2 }); // a free hand only
-```
-
-A body you pose yourself (seated at a wheel, on a ladder) has its update stopped: place each hand with `gripOn` as a grab would, and after posing give `shapeHand` the empty each hand is on or on its way to, every frame; it opens on its way and closes once its wrist is there. Make such empties where the hand holds (each rung, the rim at ten to two), parented to what they belong to.
-
-```ts
-const { wrist, rotation } = body.gripOn('left', rungEmpty); /* pose the arm to them */ body.shapeHand('left', rungEmpty, dt);
-```
+For what no verb does (sitting at a wheel, climbing a ladder), stop updating the body and write its `bones` yourself, starting from its last pose. Put each hand where `body.gripOn(side, empty)` says: the wrist, and the world rotation to give the hand bone, as a grab would hold that grip. After posing, call `body.shapeHand(side, to, seconds)` every frame with the grip the hand is on or on its way to (it opens on the way and closes once the wrist is there), a `Fingers` shape, or `null` for relaxed. Make grip empties wherever a hand holds (each rung, the rim at ten to two), parented to what they belong to. A body you stop updating keeps its internal state where it stopped, so to hand it back create a fresh body where it now stands, step it until it has settled and blend from your pose onto the fresh body's.
 
 ## Stories that compose
 
@@ -134,7 +142,7 @@ A thing held before the body is comfortable where a walking carry holds it, for 
 
 To move bodies together (a line abreast, an escort, a horse led), give each the same explicit `speed`: left to their defaults, bodies of different sizes walk and climb at different paces and string out, and people of different heights fall out of sync on their own, as they should. A shared speed keeps every difference in start time or place as a gap, so start bodies level and stagger only look-alikes. To keep a formation on a leader, walk each follower to a target in its own lane (an empty parented to the leader's `object`, or a function of time moving at the shared pace), ending when the leader arrives. A walk to a moving target catches up at its `speed` and then matches the target's velocity, so give that speed a little headroom over the shared pace and start each body near its lane; a lane target behind where its follower starts turns the follower round. To lead a horse, take the rope first; a tether limits its head's reach but does not make it follow, and the scene draws the visible rope.
 
-Give movable props their mass and named grips. A person holds a grip in its palm: put the empty where the hand closes on the prop (on a handle's line, a hand's half-thickness out from a box's side), never where the wrist would be: the hand is placed from it. A hand can take hold of a worn prop (a sword in its scabbard) before carrying draws it. A position-only grip takes the hand as the arm brings it, and the grasp then holds the prop as taken: in one hand it turns with the hand, and a carry whose end the arm cannot hold it at so regrips it in the fingers on the way; set `userData.handTurn` where the hand must sit one way on it — a person with fingers refuses it: describe the grip as a handle, a pad or a facing instead (Fingers, above). To throw a held thing away, carry it toward where it is flung with an `until` that ends on the way, while the hand still moves, and `release` it there: with nowhere given it goes back under the parent it was lifted from, where it is (development notes the let-go in mid-air), so take it from there into your own scene and let it fall from the hand's speed.
+A hand can take hold of a worn prop (a sword in its scabbard) before carrying draws it. A prop held in one hand turns with the hand, and a carry whose end the arm cannot hold it at as taken regrips it in the fingers on the way.
 
 ## Many bodies
 

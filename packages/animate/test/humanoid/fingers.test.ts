@@ -1,11 +1,10 @@
 import { BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, FIST, grab, humanoid, POINT, pose, release, wait } from '../../src/index';
+import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { LIFTED, shapeOf } from '../../src/fingers/shape';
+import { LIFTED } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
-import { selfOf } from '../../src/body/body';
 import { person, play } from '../bodies';
 import { empty, roomOf } from '../things';
 
@@ -89,8 +88,7 @@ describe('fingers', () => {
   });
 
   it('press a button with one grab, the pad on its face, and draw back off it on release', () => {
-    const body = new Body(humanoid(FINGERED)), room = roomOf(body), joints = selfOf(body).fingers?.joints('right');
-    if (!joints) throw new Error('no finger bones');
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     const hand = body.bones.rightHand;
     // (a button on a panel's face ahead of the right shoulder, pushed straight in)
     const panel = new Mesh(new BoxGeometry(0.2, 0.2, 0.02));
@@ -104,8 +102,9 @@ describe('fingers', () => {
       held = yield* grab(body, panel, { right: 'button' });
       yield* wait(0.5);
       const at = button.getWorldPosition(new Vector3());
-      hand.updateWorldMatrix(true, false);
-      off = joints.pad('index', shapeOf(POINT), new Vector3()).applyMatrix4(hand.matrixWorld).distanceTo(at);
+      // (the index's tip: its last segment carried on as long again as four fifths of it)
+      const distal = body.bones.rightIndexDistal.getWorldPosition(new Vector3()), middle = body.bones.rightIndexIntermediate.getWorldPosition(new Vector3());
+      off = distal.clone().lerp(middle, -0.8).distanceTo(at);
       const pressing = hand.getWorldPosition(new Vector3());
       release(body, panel);
       yield* wait(0.3);
@@ -220,9 +219,7 @@ describe('fingers', () => {
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.15 … 1/);
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
-    Object.assign(both.userData, { handle: [0, 1, 0], handTurn: true });
-    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/handTurn with a handle, facing or pad/);
-    Object.assign(both.userData, { handTurn: undefined, pad: 'index' });
+    Object.assign(both.userData, { handle: [0, 1, 0], pad: 'index' });
     expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.pad and userData.handle/);
     Object.assign(both.userData, { handle: undefined, pad: 'pinky' });
     expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/a hand has a thumb/);

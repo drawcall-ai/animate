@@ -13,18 +13,12 @@ import type { HandOptions } from '../hands/handling';
  * origin): it walks up to stand in reach (borrowed legs; with `step: false` it stays where it stands), its eyes find the grips first
  * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. It
  * picks where to stand once, as it starts, from where its feet and the grips are then: a thing still moving, or feet still walking,
- * gives a stand for where they were; with no particular place to stand, leave the walking to it. A mover,
- * it ends holding. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else stays where it is, and the
- * hands follow it. It returns `false` if no stand reaches the grips (with `step: false`: if they are out of reach from where it stands) or
- * the hand position or turn remains unmet after the planned reach plus four seconds. A person holds a grip in its palm: the empty is
- * where the palm's centre goes (0.043 of the body's height past the wrist, along the hand), so put it where the hand closes on the prop
- * (on a handle's axis, half the hand's thickness out from a box's side), not where the wrist would be. Grips set position only by default:
- * the hand comes turned as the arm brings it, and the grasp then fixes it on the thing — held in one hand, the thing turns with the hand,
- * and a carry turns it by turning the arm; one whose end the arm cannot hold it at as taken regrips it in the fingers on the way (see
- * `carry`). `userData.handTurn = true` turns the hand as the empty is turned, as an `Object3D` target does (`Target`), never regripped; an
- * axis [x, y, z] allows roll about that line in its frame. A person with fingers takes more off the empty (`Thing.grip`): a handle the
- * palm wraps, a digit's pad put on it in place of the palm (a fingertip on a button: the hand and arm placed from it), the way the palm or
- * the pad faces.
+ * gives a stand for where they were; with no particular place to stand, leave the walking to it. A mover, it ends holding, its fingers
+ * closed. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else — a part of what the other hand holds,
+ * a pouch's magazine — stays where it is, and the hands follow it. It returns `false` if no stand reaches the grips (with `step: false`:
+ * if they are out of reach from where it stands) or the hand position or turn remains unmet after the planned reach plus four seconds.
+ * What each empty asks of the hand (a palm, a handle, a fingertip's pad, a facing) is `Thing.grip`'s; a grip that asks no facing takes the
+ * hand turned as the arm brings it, and the grasp then fixes it on the thing.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);

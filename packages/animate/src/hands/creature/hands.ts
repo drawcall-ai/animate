@@ -7,7 +7,7 @@ import { ChainTip, lateReach, Progress, reached, unmet } from '../../kernel/tip'
 import { noticing } from '../../look/gaze';
 import { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
-import { bodyOf, goalOn, grasp, handsOn, lift } from '../../things/hold';
+import { bodyOf, grasp, handsOn, lift } from '../../things/hold';
 import { Pose, type ReadonlyPose } from '../../kernel/pose';
 import { STOOPING } from '../../legs/creature';
 import { forwardOf, minimumJerk } from '../../kernel/math';
@@ -184,7 +184,7 @@ export function creatureHands(self: Handed): Handling {
     take: function* (request, thing, grips, options) {
       const motion = paceAt(options.speed, DIP);
       const { hand, grip } = only('grab', grips);
-      const goal = goalOn(thing.grip(grip), self.restOf(self.hands[hand])), frame = self.track(thing.object);
+      const goal = { position: thing.grip(grip).at.position.clone() }, frame = self.track(thing.object);
       const point = (f: Frame) => frame.toWorld({ position: goal.position }, _world, f.time).position.clone();
       if (!(yield* walkingUp(self, request, hand, point, thing.object.name, motion, options.step ?? true))) return;
       yield* tipping(self, request, hand, () => goal, motion, frame);

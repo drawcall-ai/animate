@@ -1,7 +1,8 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import type { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
-import { PRESSED } from './closing';
+import { PAD_DEPTH } from './closing';
+import type { Placed } from '../kernel/scene';
 import { DIGITS, LIFTED, SPLAYED, type Digit, type Shape } from './shape';
 
 /**
@@ -14,23 +15,16 @@ export interface Contact {
   round?: number;
 }
 
-/** Where a hand is as its contacts are met (the frame they are given in): its node's position, turn and scale. */
-export interface Placed {
-  position: Vector3;
-  quaternion: Quaternion;
-  scale: number;
-}
-
 /**
  * `shape` (in place) solved so that each contact's digit meets it and the hand stays out of `near` (the thing's triangles, in the frame
- * the contacts are given in): damped least squares over the touching digits' values, each pulled toward `preferred` (relaxed, pointing,
- * the shape a grip closed to) and kept in range every iteration, every ball of their flesh (`Joints.flesh`) pushed out of `near` as its
- * skin gives (`PRESSED`). `seat`: the hand itself is solved too, from where `hand` places it (moved there, in place), pulled back toward
- * it, its palm and each knuckle kept out of `near` with the touching digits — where the hand sits on what it holds, the arm bringing it
- * there, so a fingertip's contact moves the wrist, the elbow and the shoulder. `swept`: digits whose contacts have moved, started afresh.
- * Returns the contacts' miss (m) as it is left.
+ * the contacts are given in, where `hand` places the hand): damped least squares over the touching digits' values, each pulled toward
+ * `preferred` (relaxed, pointing, the shape a grip closed to) and kept in range every iteration, every ball of their flesh
+ * (`Joints.flesh`) pushed out of `near` as its skin gives (`PAD_DEPTH`). `seat`: the hand itself is solved too (moved, in place), pulled
+ * back toward where it was, its palm and each knuckle kept out of `near` with the touching digits — where the hand sits on what it holds,
+ * the arm bringing it there, so a fingertip's contact moves the wrist, the elbow and the shoulder. `swept`: digits whose contacts have
+ * moved, started afresh. Returns the contacts' miss (m) as it is left.
  */
-export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, preferred: Shape, near: Triangles | null, seat = false, swept: readonly Digit[] = []): number {
+export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, { preferred, near, seat = false, swept = [] }: Meeting): number {
   const digits = (['thumb', ...DIGITS] as const).filter((digit) => contacts.some((c) => c.part === digit));
   if (!digits.length && !seat) return 0;
   const values = digits.flatMap((digit) => keysOf(digit).map((key) => ({ digit, key, least: leastOf(digit, key) })));
@@ -42,7 +36,7 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
   // (how far `digit`'s flesh sinks into `near` where `matrix` places the hand, each ball's depth)
   const sunk = (digit: Digit | null, all = true) => {
     const balls = joints.flesh(digit, shape);
-    return (all ? balls : balls.slice(0, 1)).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PRESSED, WITHIN)) : 0);
+    return (all ? balls : balls.slice(0, 1)).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PAD_DEPTH, WITHIN)) : 0);
   };
   // (seating, or for `swept`, each touching digit started from the best of where it is and a sweep of its two main values — a finger's curl
   // and hook, a thumb's oppose and spread — by its own contacts' miss and its flesh sunk in: from where it last lay, along a receiver, a
@@ -92,7 +86,7 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
       out.push(turned.x, turned.y, turned.z);
     }
     values.forEach((_, j) => out.push((x[free + j] - pulled[j]) * weights[j]));
-    if (seat) for (let j = 0; j < 6; j++) out.push(x[j] * (j < 3 ? HELD.move : HELD.turn));
+    if (seat) for (let j = 0; j < 6; j++) out.push(x[j] * (j < 3 ? ANCHORED.move : ANCHORED.turn));
     matrix.compose(hand.position, hand.quaternion, scale);
     for (const part of seat ? [null, 'thumb', ...DIGITS] as const : digits) for (const depth of sunk(part, part === null || digits.includes(part))) out.push(depth * KEEP);
   };
@@ -125,6 +119,15 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
   return contacts.length ? Math.max(...contacts.map((c) => off(c, _facing).length())) : 0;
 }
 
+/** How `meet` solves: the shape the touching digits are pulled toward, what the hand stays out of, whether it seats the hand, and the
+ * digits started afresh. */
+interface Meeting {
+  preferred: Shape;
+  near: Triangles | null;
+  seat?: boolean;
+  swept?: readonly Digit[];
+}
+
 /** how much a unit of a pad's facing off its contact's weighs against a metre off it: as 1 cm, so it presses with its flat */
 const TURN = 0.01;
 /** how much a unit of a digit's value off its preferred weighs against a metre off a contact (pulled toward it, not held to it) */
@@ -133,7 +136,7 @@ const PULL = 0.008;
 const FAN = 8;
 /** how much a metre and a radian of a seated hand off where its grip put it weigh against a metre off a contact: it moves for what its
  * digits cannot reach and what it would sink into, not on its own */
-const HELD = { move: 3, turn: 0.6 } as const;
+const ANCHORED = { move: 3, turn: 0.6 } as const;
 /** how much a metre of flesh sunk into what the hand touches weighs against a metre off a contact (a contact the digits cannot meet
  * clear of it pulls them in a hundredth of its miss), and how far in from a surface a ball is still found inside it (m) */
 const KEEP = 10, WITHIN = 0.03;

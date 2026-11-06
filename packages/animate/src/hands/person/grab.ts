@@ -1,5 +1,5 @@
 import { Box3, Quaternion, Ray, Vector3 } from 'three';
-import { grasp, held as heldThings, holdOn, lift, onBody } from '../../things/hold';
+import { grasp, held as heldThings, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
@@ -14,7 +14,8 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { emptyAt, gripAt, reachFor, type Taking } from './reach';
+import { reachFor } from './reach';
+import { emptyAt, gripAt, holdOn, type Taking } from './palm';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 

@@ -8,14 +8,15 @@ import { clearArm, reaching } from './arms';
 import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { PRESSING } from './reach';
+import { BACK, drawBack } from './press';
 
 /** Release preserves follow-through within arm reach, without recruiting the trunk; idle arms resume on arrival or timeout. A hand given
- * a way `away` (world: a fingertip off its button) draws straight back along it `PRESSING` instead, eased over `DRAWING`, and stays there
- * until it is asked elsewhere. */
+ * a way `away` (world: a fingertip off its button, `backOff`) draws straight back along it instead (`BACK`), its fingers kept as they
+ * pressed until it is off (curling as it left, a fingertip dragged down the face), and stays there until it is asked elsewhere. */
 export function* backingOut(person: Reacher, request: Request, hands: readonly { side: Side; away: Vector3 | null }[]) {
   const sides = hands.map(({ side }) => side);
-  const proportions = person.proportions, began = person.frame.time;
+  const proportions = person.proportions, began = person.frame.time, drawn = began + BACK.seconds / person.tempo;
+  for (const { side, away } of hands) if (away) drawBack(person, side, drawn);
   let targets: ((f: Frame) => Goal)[] | null = null, time = NaN, goals: Goal[] = [];
   // (where each hand goes, from how it moved as it let go)
   const off = (f: Frame): Goal[] => {
@@ -23,7 +24,7 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
     targets ??= hands.map(({ side, away }) => {
       const hand = f.prev.position(person.hands[side]).clone();
       if (away) {
-        const back = hand.addScaledVector(away, PRESSING * person.scale);
+        const back = hand.addScaledVector(away, BACK.distance * person.scale);
         return () => ({ position: back });
       }
       const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
@@ -49,15 +50,17 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
   // (a fingertip drawn back is held there, off its button, until the hand is asked elsewhere; let go at once, it fell to its hang)
   const done = (f: Frame) => f.time - began > LETTING_GO || hands.every(({ away }, k) => !away && reached(f, person.hands[sides[k]], off(f)[k]));
   // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over)
-  yield* parallel<Frame>('all', ...hands.map(({ side, away }, k) => during(request, `hand.${side}`, 'borrowed',
-    reaching(person, side, (f) => off(f)[k], { lead: false, ...(away && { seconds: DRAWING / person.tempo, straight: true }) }),
-    (f) => done(f) || person.holding[side] !== null)));
+  yield* parallel<Frame>('all', ...hands.map(({ side, away }, k) => {
+    const step = reaching(person, side, (f) => off(f)[k], { lead: false, ...(away && { seconds: BACK.seconds / person.tempo, straight: true }) });
+    return during(request, `hand.${side}`, 'borrowed', (f: Frame) => {
+      if (away && f.time < drawn) person.fingers?.keep(side);
+      return step(f);
+    }, (f) => done(f) || person.holding[side] !== null);
+  }));
 }
 
 /** How long a hand’s own motion carries it on (s) and how far at most (m), and how long before the free arms take it (s) */
 const FOLLOW_THROUGH = 0.15, FOLLOWING_ON = 0.08, LETTING_GO = 1;
-/** how long a fingertip takes to draw back off its button (s) */
-export const DRAWING = 0.25;
 /** how near its shoulder a hand going off is put at least (× the arm's length) */
 const FOLDED = 0.45;
 /** Tuned release staging: a relaxed wrist beside the thigh, elbow slightly bent (m, the drop × the arm's length) */

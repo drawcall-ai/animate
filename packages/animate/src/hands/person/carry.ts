@@ -9,7 +9,7 @@ import { course, type Waypoint } from '../../kernel/course';
 import { follow } from '../../kernel/follow';
 import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
-import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
+import { carriedBy, handsOn, heldMass, lift, supported, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import type { Reacher } from './reacher';
 import { paceAt, type HandOptions } from '../handling';
@@ -233,7 +233,10 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
   { near = END.distance, on, end = false, walks = false, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; eta?: (left: number) => number; grasp?: Grasping } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
-  const lag = grips[LEADING] === undefined && person.holding[LEADING] ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
+  // (a hand carrying alone while the leading hand carries something of its own goes a moment after it; one beside a leading hand that
+  // holds what the body wears — a rifle on its sling — goes at once)
+  const leading = person.holding[LEADING]?.thing;
+  const lag = grips[LEADING] === undefined && leading && !worn(leading) ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
   const factor = loadFactor(thing.mass);
   const aim = makeAim(factor);
   const from = carrier.current.position.y;

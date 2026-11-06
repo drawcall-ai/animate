@@ -29,8 +29,6 @@ const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.012, apart: 0.09, travel: 0.
  * looked to touch its edge, 6 cm off). */
 const REACH = { near: 0.38, far: 0.55, aside: { least: 0.085, most: 0.2 }, facing: Math.cos(1.1) };
 const UP = new Vector3(0, 1, 0);
-/** the fingers but the index as a hand pressing a button holds them, curled into its palm */
-const TUCKED = { middle: { curl: 0.8, hook: 0.3 }, ring: { curl: 0.85, hook: 0.3 }, little: { curl: 0.9, hook: 0.3 } };
 
 /**
  * The course's lift: a kinematic platform that stays at the foot or at the upper deck until one of its buttons is pressed, then rides to
@@ -159,12 +157,11 @@ export class Lift {
       arrow.position.z = BUTTON.out + 0.0005;
       arrow.scale.z = 0.05;
       cap.add(arrow);
-      // (its face, where the index's pad goes, pressed straight in, the other fingers tucked into the palm: loosely curled, the hand came
-      // half open)
+      // (its face, where the index's pad goes, pressed straight in)
       const press = new Object3D();
       press.name = 'press';
       press.position.z = BUTTON.out;
-      Object.assign(press.userData, { pad: 'index', facing: [0, 0, -1], fingers: TUCKED });
+      Object.assign(press.userData, { pad: 'index', facing: [0, 0, -1] });
       part.add(press);
       frame.add(bezel, cap, part);
       const button = { part, to, call };
