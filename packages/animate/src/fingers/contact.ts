@@ -124,7 +124,7 @@ const TURN = 0.01;
 const PULL = 0.008;
 /** how much a metre and a radian of a seated hand off where its grip put it weigh against a metre off a contact: it moves for what its
  * digits cannot reach and what it would sink into, not on its own */
-const HELD = { move: 0.5, turn: 0.1 } as const;
+const HELD = { move: 3, turn: 0.6 } as const;
 /** how much a metre of flesh sunk into what the hand touches weighs against a metre off a contact (a contact the digits cannot meet
  * clear of it pulls them in a hundredth of its miss), and how far in from a surface a ball is still found inside it (m) */
 const KEEP = 10, WITHIN = 0.03;

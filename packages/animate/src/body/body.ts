@@ -87,7 +87,9 @@ export class Body<S extends AnySpecies = AnySpecies> {
   }
 
   /** Keeps `node` — something on the body, such as the mount of a rifle on its chest — turned to `rotation` in the world, its position
-   * following its parent: read so as its hands take hold of what hangs from it, each sub-step, after the trunk is posed; `null` lets it go.
+   * following its parent, as far as the hands holding what hangs from it hold it there (turned faster than the body follows, it waits for
+   * the trunk rather than leaving the hands): read so as its hands take hold of what hangs from it, each sub-step, after the trunk is
+   * posed; `null` lets it go.
    * Set it before each `update`; the node's own rotation is written to match as the update ends. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
     selfOf(this).orient(node, rotation);

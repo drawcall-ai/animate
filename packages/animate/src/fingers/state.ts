@@ -52,8 +52,9 @@ const POINTING = { nearing: 0.09, near: 0.04 } as const;
 const MOVED = 0.002, SETTLING = 0.3;
 /** how little a hand and its contacts move on what it holds for its last solve to stand (m, rad) */
 const STILL = 1e-4;
-/** how far a contact moves on what the hand holds before its digit is started afresh (m) */
-const SWEPT = 0.005;
+/** how far a contact moves on what the hand holds before its digit is started afresh (m): a trigger drawn back 5 mm is followed on, not
+ * started afresh (its pad jumped 1.7 cm) */
+const SWEPT = 0.02;
 /** how much further than the hand reaches its seat may move it, and the triangles about it are kept for (m) */
 const REACH = 0.05;
 
@@ -270,19 +271,29 @@ export class FingerState {
     if (on instanceof Object3D) now.quaternion.copy(this.placedOn(side, grip.node).rotation);
     const point = this.pointOn(side, grip).at.multiplyScalar(now.scale).applyQuaternion(now.quaternion);
     const base = hangsFrom(hand.joints.hand, thing) ? null : inFrame({ ...now, position: grip.at.position.clone().applyMatrix4(thing.matrixWorld).sub(point) }, frame);
+    const handle = grip.handle && { at: grip.at.position.clone().applyMatrix4(thing.matrixWorld), axis: grip.handle.axis.clone().applyQuaternion(frame.quaternion) };
+    // (closed round from where it is placed: its shape and where its thumb opposes the handle, in the thing's frame)
+    const closing = (at: Placement | null) => {
+      const closed = at ? placedAt(hand.joints.hand, toWorld(at, frame), () => closedOn(hand.joints, thing, handle, hand.skins)) : closedOn(hand.joints, thing, handle, hand.skins);
+      const thumb = closed.thumb && { at: closed.thumb.at.sub(frame.position).applyQuaternion(back), facing: closed.thumb.facing.applyQuaternion(back) };
+      return { shape: shapeOf(values(grip.node), closed.shape), thumb };
+    };
     let shape = shapeOf(values(grip.node), grip.pad ? POINT : hand.shape), seat: Placement | null = null, thumb: Opposed | null = null;
-    const contacts = this.contacts(grip, thing, null), met = structuredClone(shape);
+    // (closed round from where a grab puts it, then seated with its thumb on where it opposes the handle — so the hand makes room for the
+    // thumb round the back strap — then closed round again from the seat; the digits on contacts kept as the seat put them)
+    if (!grip.pad) ({ shape, thumb } = closing(base));
+    const contacts = this.contacts(grip, thing, thumb), met = structuredClone(shape);
     if (base) {
+      for (const { part } of contacts) {
+        if (part === 'thumb') continue;
+        met[part] = { ...hand.shape[part] };
+      }
       meet(hand.joints, base, contacts, met, structuredClone(met), near, true);
       seat = { position: base.position, quaternion: base.quaternion };
     }
     shape = met;
-    if (!grip.pad) {
-      const handle = grip.handle && { at: grip.at.position.clone().applyMatrix4(thing.matrixWorld), axis: grip.handle.axis.clone().applyQuaternion(frame.quaternion) };
-      const closing = () => closedOn(hand.joints, thing, handle, hand.skins), closed = seat ? placedAt(hand.joints.hand, toWorld(seat, frame), closing) : closing();
-      shape = shapeOf(values(grip.node), closed.shape);
-      thumb = closed.thumb && { at: closed.thumb.at.sub(frame.position).applyQuaternion(back), facing: closed.thumb.facing.applyQuaternion(back) };
-      // (what the seat put on its contacts stays so)
+    if (!grip.pad && seat) {
+      ({ shape } = closing(seat));
       for (const { part } of contacts) {
         if (part === 'thumb') shape.thumb = met.thumb;
         else shape[part] = met[part];

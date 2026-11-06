@@ -409,41 +409,83 @@ export class Self implements Holder {
       return;
     }
     this.asked.set(node, (this.asked.get(node) ?? new Quaternion()).copy(rotation));
-    const turned = (this.turned.get(node) ?? new Quaternion()).copy(rotation);
+    // (turned on from where its hands last held it, `holdable`)
+    const turned = this.turned.get(node) ?? rotation.clone();
     oriented.set(node, turned);
     this.turned.set(node, turned);
   }
 
   /**
-   * each node its app keeps turned (`orient`) turned as it asks, then back about itself toward the shoulder of each hand holding what hangs
-   * from it, or taking hold of it, as far as keeps the hand's grip within its arm's reach (`HOLDABLE` of its length; where the fingers seat
-   * the hand, once they have): what the hands hold goes only where they hold it — a rifle swung faster than the body turns came round
-   * 4.5 cm past the support arm's reach, and the hand slid off it and through it; held low at a lift's panel, the support hand came back
-   * from the button 1.6 cm short of its front and never took it
+   * each node its app keeps turned (`orient`) turned on toward how it asks — brought within reach of the hands on it (`reached`) — as far
+   * as each hand holding what hangs from it keeps its grip within what its arm holds (`off`), once the trunk has turned with it as far as it
+   * does: what the hands hold goes only where they hold it — a rifle swung faster than the body turns came round 4.5 cm past the support
+   * arm's reach, the hand sliding off and through it, and on a sustained turn its front came round into the support shoulder and both
+   * hands came off
    */
   private holdable(f: Frame): void {
     for (const [node, asked] of this.asked) {
       const turned = this.turned.get(node);
       if (!turned) continue;
-      turned.copy(asked);
-      const pivot = resolve(this, node, _pivot).position;
-      for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of this.species.hands ?? []) {
-        const hold = this.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : this.fingers?.coming(side);
-        const thing = hold?.thing.object ?? coming?.thing, goal = hold ? this.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
-        if (!thing || !goal || !under(thing, node)) continue;
-        const bones = this.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
-        const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
-        const placed = resolve(this, thing, _placed);
-        const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
-        const far = out.length(), near = toward.length();
-        if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
-        // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder)
-        const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
-        const axis = _axis.crossVectors(out, toward);
-        if (axis.lengthSq() < 1e-12) continue;
-        turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), out.angleTo(toward) - wanted));
+      const was = _was.copy(turned), goal = this.reached(f, node, _goal.copy(asked));
+      // (as far from where it was toward that as its hands hold it there, halved down to it; held nowhere on the way, where they are least
+      // off holding it — held where it was, it stood still as the body turned away under it, and let go to where its app asks, both hands
+      // came off)
+      const off = (t: number) => (turned.copy(was).slerp(goal, t), this.off(f, node));
+      let from = 0, to = 1;
+      if (off(1) === 0) from = 1;
+      else if (off(0) > 0) from = [0.25, 0.5, 0.75, 1].reduce((best, t) => off(t) <= off(best) ? t : best, 0);
+      else for (let k = 0; k < HALVINGS; k++) {
+        const t = (from + to) / 2;
+        if (off(t) === 0) from = t;
+        else to = t;
       }
+      turned.copy(was).slerp(goal, from);
     }
+  }
+
+  /** `turned` (`node`'s, in place) turned back about the node toward the shoulder of each hand holding what hangs from it, or taking hold
+   * of it, as far as brings its grip within its arm's reach (`HOLDABLE.far` of its length): held low at a lift's panel, the support hand
+   * came back from the button 1.6 cm short of the rifle's front and never took it */
+  private reached(f: Frame, node: Object3D, turned: Quaternion): Quaternion {
+    const was = _kept.copy(this.turned.get(node) ?? turned);
+    this.turned.get(node)?.copy(turned);
+    const pivot = resolve(this, node, _pivot).position;
+    for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of this.species.hands ?? []) {
+      const hold = this.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : this.fingers?.coming(side);
+      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? this.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
+      if (!thing || !goal || !under(thing, node)) continue;
+      const bones = this.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
+      const reach = HOLDABLE.far * bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
+      const placed = resolve(this, thing, _placed);
+      const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
+      const far = out.length(), near = toward.length();
+      if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
+      // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder)
+      const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
+      const axis = _axis.crossVectors(out, toward);
+      if (axis.lengthSq() < 1e-12) continue;
+      turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), out.angleTo(toward) - wanted));
+      this.turned.get(node)?.copy(turned);
+    }
+    this.turned.get(node)?.copy(was);
+    return turned;
+  }
+
+  /** how far the hands holding what hangs from `node`, or taking hold of it, are from holding it there, `node` turned as it is now
+   * (m, summed: 0, they hold it): each grip within what its arm holds — `HOLDABLE` of its length off its shoulder, and no further behind
+   * it (an arm folded back past the trunk's side holds nothing) — where the fingers seat the hand, once they have */
+  private off(f: Frame, node: Object3D): number {
+    let off = 0;
+    for (const [hand, chain] of this.species.hands ?? []) {
+      const hold = this.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : this.fingers?.coming(side);
+      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? this.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
+      if (!thing || !goal || !under(thing, node)) continue;
+      const bones = this.skeleton.chain(chain), length = bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
+      const placed = resolve(this, thing, _placed), out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(f.current.position(bones[0]));
+      const ahead = out.dot(_toward.set(0, 0, 1).applyQuaternion(f.current.rotation(this.skeleton.bones[bones[0]].parent)));
+      off += Math.max(0, out.length() - HOLDABLE.far * length, HOLDABLE.near * length - out.length(), -ahead - HOLDABLE.behind * length);
+    }
+    return off;
   }
 
   /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
@@ -590,11 +632,16 @@ const IDENTITY = new Matrix4();
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
-/** how far out of a chain's full length a hand's grip on what its body turns is kept (a chain's tip goes 0.98 of it at most) */
-const HOLDABLE = 0.975;
+/** how far out of a chain's full length a hand's grip on what its body turns is kept: within its reach (a chain's tip goes 0.98 of it at
+ * most), not so near the shoulder, nor so far behind it, that the arm, folded, cannot turn the hand onto it (on a sustained turn, the
+ * support hand rolled 40° off its grip there and slid off it) */
+const HOLDABLE = { near: 0.25, far: 0.975, behind: 0.05 } as const;
 const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _turn = new Quaternion();
-const _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3();
+const _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3(), _was = new Quaternion(), _kept = new Quaternion(), _goal = new Quaternion();
+const _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+/** how many times the turn a node's hands hold it to is halved down to (1/64 of the turn its app asks on from where it was) */
+const HALVINGS = 6;
 
 /** whether `object` hangs from `node` (is it, or under it) */
 function under(object: Object3D, node: Object3D): boolean {
