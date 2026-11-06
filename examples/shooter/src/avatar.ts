@@ -38,10 +38,6 @@ const EASE = 0.25;
 const SHOT_INTERVAL = 0.1;
 /** Metres ahead of the eye at which a player's barrel line crosses the view. */
 const ZERO = 25;
-/** Radians the rifle points at most to either side of the chest, as far as both arms hold it; past that it waits for the body to turn. */
-const REACH = 0.35;
-/** Radians a second the arms turn the rifle at most, closing on where it should point without passing it. */
-const SWING = 12;
 const QUICK = { speed: 1.8 };
 /** How fast the left hand goes to the pouch and brings the magazine from it to the well (m/s). */
 const BRISK = { speed: 2.6 };
@@ -265,10 +261,6 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
 
   /** How the rifle rode the chest through a reload (its turn on the shoulder pocket), to ease back to the aim from. */
   let rode: Quaternion | undefined;
-  /** How far the rifle's aim leads the chest (rad), kept on the side the view went round when it passes behind the body. */
-  let lead = 0;
-  /** The rifle's world yaw from the hip (rad), as the arms have turned it. */
-  let heading = yaw;
   const hold = (seconds: number) => {
     // Through the swap the rifle rides the chest as it sways and twists under a running body, its well where the hand last found it.
     if (swapping && reloaded === 1) {
@@ -285,17 +277,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     const pointed = anglesOf(target.clone().sub(position));
     // Aim the barrel line above the shoulder contact, not the grip-to-target line.
     const pitch = pointed.pitch - Math.asin(Math.min(1, (RIFLE.muzzle.y - stock.position.y) / target.distanceTo(position)));
-    // From the hip the rifle points as far as both arms hold it from the chest; past that, on a flick the body cannot keep up with,
-    // it waits for the body to turn rather than being torn from the hands. It turns no faster than the arms swing it, closing on that
-    // aim without passing it.
-    // Down the sights the camera looks along it, so it follows the view.
-    const chestYaw = anglesOf(pocket.getWorldDirection(new Vector3())).yaw;
-    const toward = wrapAngle(pointed.yaw - chestYaw);
-    lead = Math.abs(toward) <= REACH ? toward : lead + wrapAngle(toward - lead);
-    const wanted = chestYaw + MathUtils.clamp(lead, -REACH, REACH), most = SWING * seconds;
-    heading += MathUtils.clamp(wrapAngle(wanted - heading), -most, most);
-    heading = chestYaw + MathUtils.clamp(wrapAngle(heading - chestYaw), -REACH, REACH);
-    const aimed = new Quaternion().setFromEuler(new Euler(-pitch, heading + wrapAngle(pointed.yaw - heading) * smooth(aiming), 0, 'YXZ'));
+    // The rifle points where the view does, from the hip and down the sights: the trunk turns after it, and the body only brings it back
+    // within the arms' reach where the trunk has not yet come round (`Body.orient`).
+    const aimed = new Quaternion().setFromEuler(new Euler(-pitch, pointed.yaw, 0, 'YXZ'));
     const turn = SPRINTING.clone().multiplyScalar(smooth(sprinted)).addScaledVector(RELOADING, smooth(reloaded)).addScaledVector(LOWERED, smooth(lowered))
       .add(new Vector3(motion.recoil.position.x - 2 * drift.y, 2 * drift.x, -3 * drift.x));
     aimed.slerp(facing, smooth(reloaded));
