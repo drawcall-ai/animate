@@ -96,21 +96,19 @@ export class Body<S extends AnySpecies = AnySpecies> {
   }
 
   /**
-   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet, its bones turned by
-   * hand; a body its update poses does this itself, and the two would fight): the empty the hand is on or on its way to — a grip, as a
-   * thing's are named, its thing the empty's parent — opening the hand as it comes and closing it round the thing's meshes once the wrist
-   * is where `gripOn` puts it, the empty's `userData.fingers` laid over that as over a grabbed grip; a shape (`Fingers`; `FIST`, `POINT`,
-   * …); or relaxed for `null`. Call it each frame after posing the hand.
+   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet: its update stopped,
+   * the two would fight): the grip empty the hand is on or on its way to — its thing the empty's parent — opening as it comes and closing
+   * round the thing's meshes once the wrist is where `gripOn` puts it, the empty's `userData.fingers` laid over that; a shape (`Fingers`;
+   * `FIST`, `POINT`, …); or relaxed for `null`. Call it every frame after posing the hand. A skeleton without finger bones is a misuse.
    */
   shapeHand(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     fingerStateOf(this).set(side, to, seconds);
   }
 
   /**
-   * Where hand `side`'s bone goes to hold `empty` — a grip, its thing the empty's parent — for a body its app poses itself: its wrist and
-   * its bone's rotation (world), the part of the hand the grip names on the empty as a grab would put it (`Thing.grip`: the palm, a
-   * handle across it, or a digit's pad). The hand is turned from its turn now by the least turn that lays a handle along its grasp and
-   * faces the palm (or the pad) as the grip's `facing` asks; with a handle and a `facing`, exactly so.
+   * Where hand `side` goes to hold the grip `empty` (its thing the empty's parent), for a body its app poses itself: the wrist, and the
+   * world rotation to give the hand bone (`bones.leftHand`), the hand holding the grip as a grab would (`Thing.grip`) — turned from its
+   * turn now by the least turn that does what the grip asks; once its fingers have closed on it (`shapeHand`), where they seated it.
    */
   gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
     return fingerStateOf(this).gripOn(side, empty);
