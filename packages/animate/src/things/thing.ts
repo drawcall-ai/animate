@@ -52,8 +52,7 @@ export class Thing {
    * the way it came as it is released). `userData.facing` is the way the touching part — the palm, or the pad — faces into the surface,
    * the hand turned so as far as the wrist allows (a palm without a handle free to roll about it). `userData.fingers` lays digits over the
    * closed hand: a digit's values (`Finger`, `Thumb`), or the name of an empty on the thing its pad presses on (read every update; that
-   * empty's own `facing` lays the pad flat on its face). `userData.approach` (names of empties beside it, outermost first) is the way a
-   * carry takes a thing out of it or in to it (a pouch's mouth, a scabbard's), as `carry` says. A creature's tip takes the empty's position alone. Attached things' subtrees (their
+   * empty's own `facing` lays the pad flat on its face). A creature's tip takes the empty's position alone. Attached things' subtrees (their
    * own `userData.mass`) are not searched.
    */
   grip(name: string) {

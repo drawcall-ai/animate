@@ -95,7 +95,10 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0, turns = false;
+  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0;
+  // (whether its end sets a turn — an object, not a point: its course turns the thing on either way, from how it set out)
+  const ending = waypoints[waypoints.length - 1][1];
+  const turns = (f: Frame) => (typeof ending === 'function' ? ending(f, carrier.current, carrier.current) : ending).quaternion !== undefined;
   const was = new Vector3(), wasTurned = new Quaternion();
   const left = (f: Frame) => Math.max(0, (Number.isNaN(began) ? f.time : began) + lag.delay + total - f.time);
   const rested = restingAt(near);
@@ -104,7 +107,6 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     if (Number.isNaN(began)) began = f.time;
     if (grasp && left(f) <= PLANNED) grasp.nearing(f, left(f) === 0);
     const goal = path.to(f);
-    turns = goal.quaternion !== undefined;
     const u = Number.isNaN(since) || seconds === 0 ? 0 : Math.min(1, (f.time - since) / seconds);
     if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
     return goal;
@@ -121,7 +123,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
     dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
     // (an end that sets a turn is arrived at turned too, not on its place alone — or, once late, on its place however it is turned)
-    const turnedOff = turns ? carrier.current.quaternion.angleTo(aim.goal.quaternion) : 0;
+    const turnedOff = turns(f) ? carrier.current.quaternion.angleTo(aim.goal.quaternion) : 0;
     if (rested(f, carrier, goal) && (turnedOff <= TURNED || late) && (dip === 0 || f.time - since >= seconds)) {
       if (!end || aim.off <= near) return true;
       // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
@@ -134,9 +136,11 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     }
     // (standing still short of its end: as near as the arms take it — there, within `STALL.close`, a hand's joints holding it a few
     // millimetres off; else late, no waiting brings it nearer)
-    if (Number.isNaN(still) || carrier.current.position.distanceTo(was) > STALL.moved || carrier.current.quaternion.angleTo(wasTurned) > STALL.turned) {
+    // (still on its end, however the end and the body under it sway: a thing held short of a point the body carries moves with it)
+    const offset = _off.subVectors(carrier.current.position, goal);
+    if (Number.isNaN(still) || offset.distanceTo(was) > STALL.moved || (turns(f) && carrier.current.quaternion.angleTo(wasTurned) > STALL.turned)) {
       still = f.time;
-      was.copy(carrier.current.position);
+      was.copy(offset);
       wasTurned.copy(carrier.current.quaternion);
     }
     const short = carrier.current.position.distanceTo(goal), stalled = f.time - still > STALL.seconds;
@@ -223,4 +227,4 @@ function restingAt(near: number): (f: Frame, carrier: Carrier, at: Readonly<Vect
     return thing.position.distanceTo(end.prev.position) < near && off.length() < END.speed;
   };
 }
-const _placed = { position: new Vector3(), quaternion: new Quaternion() }, _v = new Vector3(), _g = new Vector3();
+const _placed = { position: new Vector3(), quaternion: new Quaternion() }, _v = new Vector3(), _g = new Vector3(), _off = new Vector3();
