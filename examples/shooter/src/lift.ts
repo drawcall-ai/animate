@@ -21,18 +21,18 @@ const DEPARTS = 0.8;
  * in by a press (still proud of its bezel, and seen to go in), over `pushing` (s).
  */
 const PANEL = { height: 1.2, post: 0.07, wide: 0.15, deep: 0.06, z: 0.004 };
-const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.01, apart: 0.09, travel: 0.006, pushing: 0.08 };
+const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.012, apart: 0.09, travel: 0.008, pushing: 0.08 };
 /** How near a panel a soldier's feet must stand to press it (m, out from its face), how far to its left and right of the panel's middle,
  * and how squarely it must face it (the cosine of the most it may look away): before it or a little to its right, so that the left hand
  * presses and the rifle in the right passes it (farther, or further right, the arm reached out straight and hunted round the button). */
-const REACH = { near: 0.35, far: 0.6, left: 0.05, right: 0.3, facing: Math.cos(1.1) };
+const REACH = { near: 0.35, far: 0.55, left: 0.05, right: 0.2, facing: Math.cos(1.1) };
 const UP = new Vector3(0, 1, 0);
 
 /**
  * The course's lift: a kinematic platform that stays at the foot or at the upper deck until one of its buttons is pressed, then rides to
  * the other level. On it a panel sends it up or down; on each landing a post calls it there. Each button is a thing of its own (massless: a
- * fixture) with one grip, `press`: its cap's face, where the left index's pad goes (`userData.pad`), pushing straight in (`facing`), so
- * the hand comes pointing along the face's normal and the pad meets the cap nearly end on; the cap and the pad on it go in with the press.
+ * fixture) with one grip, `press`: its cap's face, where the left index's pad goes (`userData.pad`), pressed straight in (`facing`): the
+ * hand comes as a loose fist to before it, points and pushes in; the cap and the pad on it go in with the press.
  * A pressed button lights until the lift arrives.
  */
 export class Lift {
@@ -155,7 +155,7 @@ export class Lift {
       arrow.position.z = BUTTON.out + 0.0005;
       arrow.scale.z = 0.05;
       cap.add(arrow);
-      // (its face, where the index's pad goes, pushing straight in)
+      // (its face, where the index's pad goes, pressed straight in)
       const press = new Object3D();
       press.name = 'press';
       press.position.z = BUTTON.out;

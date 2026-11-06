@@ -183,7 +183,7 @@ export class FingerState {
   }
 
   /**
-   * the contacts a hand makes on `grip` of `thing` (`placed` where it is): its pad — pushing along the grip's `facing` — its grasp on a
+   * the contacts a hand makes on `grip` of `thing` (`placed` where it is): its pad on the empty, its grasp on a
    * handle there, its grasp line along the handle's axis, or its palm on the empty, facing as the grip asks; each digit `userData.fingers`
    * names to an empty with its pad there
    */
@@ -199,7 +199,9 @@ export class FingerState {
       if (line) toward.addScaledVector(line, -toward.dot(line));
       return { part, at, round: PINCH, ...(toward.lengthSq() > 1e-8 && { facing: toward.normalize() }) };
     };
-    const contacts: Contact[] = [grip.pad ? { part: grip.pad, at: centre, facing }
+    // (a fingertip's pad only on its empty, the hand turned as it pointed to press: pulled to face the way into the face, it turned the
+    // hand off the line it pointed along and slid off the button)
+    const contacts: Contact[] = [grip.pad ? { part: grip.pad, at: centre }
       : grip.handle ? { part: 'handle', at: centre, axis: line ?? undefined, facing, radius: grip.handle.radius }
         : { part: 'palm', at: centre, facing }];
     for (const [name, value] of Object.entries(asks(grip.node))) {
@@ -254,7 +256,10 @@ export class FingerState {
     const grip = Thing.of(thing).grip(empty.name);
     const { wrist } = this.gripOn(side, empty), distance = hand.joints.hand.getWorldPosition(new Vector3()).distanceTo(wrist);
     const open = grip.pad ? shapeOf(values(empty), POINT) : APERTURE;
-    if (distance > ARRIVED) return blendShape(RELAXED, open, 1 - (grip.pad ? smoothstep(POINTING.near, POINTING.nearing, distance) : smoothstep(NEAR, NEARING, distance)));
+    // (a fingertip's hand comes as a loose fist, its digit curled with the others until it points late: from the relaxed hand's open
+    // fingers it travelled as a flat claw)
+    const from = !grip.pad ? RELAXED : grip.pad === 'thumb' ? open : { ...open, [grip.pad]: open.middle };
+    if (distance > ARRIVED) return blendShape(from, open, 1 - (grip.pad ? smoothstep(POINTING.near, POINTING.nearing, distance) : smoothstep(NEAR, NEARING, distance)));
     if (hand.closed?.on !== empty || hand.closed.off.distanceTo(offOn(hand, thing)) > MOVED) this.close(hand, grip, thing, empty, time);
     return shapeOf(values(empty), hand.closed?.shape ?? open);
   }

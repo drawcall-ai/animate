@@ -24,6 +24,8 @@ const STAGING = 0.4;
 export const PRESSING = 0.07;
 /** how near a hand comes to the point before its button before it goes on in (m, default body) */
 const THROUGH = 0.02;
+/** how near its button a fingertip's pad comes to touch it (m, default body) */
+const TOUCHING = 0.004;
 
 /** A hand's hold to take: the hand, and the hold it takes. */
 export interface Taking {
@@ -50,7 +52,9 @@ export function emptyAt(person: Reacher, take: Pick<Taking, 'thing' | 'grip'>, f
 /** Hands close together after reaching every grip; route staging is separate from final closure. */
 export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: Pace) {
   const began = person.frame.time;
-  const there = (f: Frame) => takes.every((take) => reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
+  // (a fingertip is there as its pad meets its button, the hand's turn still settling: held to the turn, it stood on the cap's rim 0.4 s
+  // with the arm out at full reach)
+  const there = (f: Frame) => takes.every((take) => touching(person, take, f) || reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
   const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm)));
   if (there(person.frame)) return close();
   let late = false, ends = Infinity;
@@ -138,6 +142,13 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
       reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), until(there))));
   }
   close();
+}
+
+/** whether `take`'s grip is a digit's pad, and that pad, where the hand last stood, is within `TOUCHING` of its empty */
+function touching(person: Reacher, take: Taking, f: Frame): boolean {
+  if (!take.thing.grip(take.grip).pad) return false;
+  const bone = person.hands[take.side], pad = _pad.copy(take.palm.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
+  return pad.distanceTo(emptyAt(person, take, f, _empty)) < TOUCHING * person.scale;
 }
 
 /** Put a reaching hand on its own side of a held obstacle before it closes on an external grip. */
@@ -329,6 +340,7 @@ const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
 const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3(), _fingers = new Vector3();
+const _pad = new Vector3(), _empty = new Vector3();
 
 /** whether a foot is in the air under `person`: a support step under way */
 const stepping = (person: Reacher) => person.stepper?.legs.some((leg) => leg.swing) ?? false;

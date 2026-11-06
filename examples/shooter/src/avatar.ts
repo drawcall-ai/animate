@@ -42,8 +42,11 @@ const REACH = 0.35;
 /** Radians a second the arms turn the rifle at most, closing on where it should point without passing it. */
 const SWING = 12;
 const QUICK = { speed: 1.8 };
-/** How long a pressing pad stays on its button before it draws back (s): a brisk poke, the press over in half a second. */
-const HELD = 0.15;
+/** How long a pressing pad stays on its button before it draws back (s), and how long it draws straight back off it before the hand
+ * goes back to the rifle (s): as long as the release takes to draw it back; taken up at once, the hand snapped off the button toward the rifle. */
+const HELD = 0.15, DRAWN = 0.25;
+/** How a hand goes to a button from where the soldier stands (m/s): briskly, pressed some 0.7 s after it leaves the rifle. */
+const POKE = { step: false, speed: 0.8 };
 /** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, and back. Briskly, a short move still
  * took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. */
 const SHORT = { speed: 0.7 };
@@ -400,15 +403,16 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   };
 
   // The left hand lets go of the rifle's front, the right holding it on, and presses the button's face with its index's pad, `pressed` as
-  // it meets it; it holds a moment, draws back off it and takes the rifle again.
+  // it meets it; it holds a moment, draws straight back off it and goes straight back to the rifle's front.
   const press = function* (button: Object3D, pressed: () => void) {
     lowering = true;
-    if (!(yield* grab(person, button, { left: 'press' }, { step: false }))) throw new Error(`The soldier could not press "${button.name}"`);
+    if (!(yield* grab(person, button, { left: 'press' }, POKE))) throw new Error(`The soldier could not press "${button.name}"`);
     pressed();
     yield* wait(HELD);
     lowering = false;
     release(person, { left: button });
-    if (!(yield* grab(person, rifle, { left: 'foregrip' }))) throw new Error('The support hand could not return to the rifle after pressing');
+    yield* wait(DRAWN);
+    if (!(yield* grab(person, rifle, { left: 'foregrip' }, QUICK))) throw new Error('The support hand could not return to the rifle after pressing');
   };
 
   eye.getWorldPosition(look.eye);

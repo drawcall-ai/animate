@@ -92,7 +92,7 @@ Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }
 Object.assign(rung.userData, { handle: [-1, 0, 0], facing: [0, -0.4, 0.9], radius: 0.016 });
 ```
 
-A fingertip touch (a button, a switch) names the digit in `userData.pad` and gives `facing`, the way the pad pushes in (straight into the face). One `grab` presses it: the hand comes relaxed, points as it nears, comes in along `facing` and ends as the pad meets the face, rolled palm down a little thumb up; it holds there until `release`, which draws it straight back. Make the button a massless thing of its own, with the cap's mesh beside it rather than in it (a hand goes round a thing's meshes to its grip); move the button in as it is pressed — or along, for a switch that slides — and the pad goes with it.
+A fingertip touch (a button, a switch) names the digit in `userData.pad` and gives `facing`, the way into the face. One `grab` presses it: the hand comes as a loose fist, points late, comes in along `facing` and ends as the pad meets the face, the hand level into an upright face with the wrist straight, rolled palm down a little thumb up, the finger curving down onto it; it holds there until `release`, which draws it straight back over a quarter second and keeps it there until the hand is asked elsewhere. Make the button a massless thing of its own, with the cap's mesh beside it rather than in it (a hand goes round a thing's meshes to its grip); move the button in as it is pressed — or along, for a switch that slides — and the pad goes with it.
 
 ```ts
 Object.assign(face.userData, { pad: 'index', facing: [0, 0, -1] });
