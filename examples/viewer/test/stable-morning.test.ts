@@ -246,22 +246,26 @@ test(`gaze shifts between story tasks${on}`, () => {
     'leading out': () => handler.holds(slack),
   };
   const started = new Map<string, number>(), shifts = new Map<string, Quaternion[]>(Object.keys(begins).map((task) => [task, []]));
-  const all: Quaternion[] = [];
+  const onChest = new Map<string, Quaternion[]>(Object.keys(begins).map((task) => [task, []]));
+  const all: Quaternion[] = [], index = (name: string) => handler.pose.skeleton.index(name);
   while (sim.t < 20) {
     sim.step();
-    const head = handler.pose.rotation(handler.pose.skeleton.index('head')).clone();
+    const head = handler.pose.rotation(index('head')).clone();
     all.push(head);
     for (const [task, begun] of Object.entries(begins)) {
       if (!started.has(task) && begun()) started.set(task, sim.t);
       const from = started.get(task);
-      if (from !== undefined && sim.t - from <= 1.5) shifts.get(task)?.push(head);
+      if (from === undefined || sim.t - from > 1.5) continue;
+      shifts.get(task)?.push(head);
+      onChest.get(task)?.push(handler.pose.rotation(index('chest')).clone().invert().multiply(head));
     }
   }
   for (const [task, heads] of shifts) {
     expect(started.has(task), `${task} begins within 20 s`).toBe(true);
-    const shift = headShift(heads, 1 / 60);
+    const shift = headShift(heads, 1 / 60), neck = headShift(onChest.get(task) ?? [], 1 / 60);
     expect(shift.amplitude, task).toBeGreaterThan(45);
-    expect(shift.peak, task).toBeLessThan(SHIFT_BOUNDS.peak(shift.amplitude));
+    // (the main sequence bounds the head turning on the neck: in the world it also turns with a trunk stepping round beneath it)
+    expect(neck.peak, task).toBeLessThan(SHIFT_BOUNDS.peak(neck.amplitude));
     expect(shift.swing, task).toBeLessThan(SHIFT_BOUNDS.swing);
   }
   expect(headShift(all, 1 / 60).roll).toBeLessThan(SHIFT_BOUNDS.roll);
