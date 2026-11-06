@@ -27,7 +27,8 @@ import { relaxedPose } from '../species/humanoid/relaxed';
 import { standingFeet } from '../species/humanoid/stance';
 import { driven } from '../legs/person/balance';
 import { stride } from '../legs/person/stride';
-import { handStep, HOLD } from '../hands/person/arms';
+import { handStep, HOLD, placeArm } from '../hands/person/arms';
+import { armClear } from '../hands/person/trunk';
 import { hanging } from '../hands/person/hang';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
@@ -47,6 +48,8 @@ export class Person extends Self {
   readonly stride: Stride;
   /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
   readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
+  /** a pose to try an arm on (`holds`) */
+  private readonly scratch = new Pose(this.skeleton);
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;
@@ -54,6 +57,13 @@ export class Person extends Self {
     super(species, options, binding, (skeleton, floor) => relaxed(proportions, new Pose(skeleton), floor, options.at ?? new Vector3(), options.face ?? 0));
     this.proportions = proportions;
     this.stride = species.stride ?? {};
+  }
+
+  /** a person's: if its arm, posed onto it afresh, keeps clear of its trunk */
+  holds(f: Frame, hand: string, wrist: Goal): boolean {
+    const side = sideOf(hand), frame = { current: this.scratch.copy(f.current) };
+    placeArm(this, frame, side, wrist);
+    return armClear(frame.current, this.proportions, side);
   }
 
   /** a person's hands: both at once, the right leading */

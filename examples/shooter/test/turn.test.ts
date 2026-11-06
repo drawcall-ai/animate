@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { Line3, Vector3 } from 'three';
 import { wrapAngle } from '../src/angles';
 import { Playback } from '../src/playback';
 import { box, DT, node, offGrip, soldierOn, soldiers } from './course';
@@ -116,4 +116,18 @@ it('brings the rifle back to the crosshair without passing it after a flick, at 
   }
   // (the barrel's zero puts it a few milliradians across the view at rest)
   expect(past).toBeLessThan(0.01);
+});
+
+it('takes and holds the rifle with the support forearm clear of the trunk while looking straight down', async () => {
+  const { avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]), { pitch: -1.35 });
+  acquire();
+  // (the forearm's nearest to the line from the hips to the chest, against the trunk's and the forearm's radii there, 0.06 and 0.022 of the
+  // height, as the arms keep them apart)
+  const at = (bone: 'hips' | 'chest' | 'leftLowerArm' | 'leftHand') => avatar.body.bones[bone].getWorldPosition(new Vector3());
+  const trunk = new Line3(at('hips'), at('chest')), elbow = at('leftLowerArm'), wrist = at('leftHand'), near = new Vector3();
+  const gap = Math.min(...Array.from({ length: 21 }, (_, k) => {
+    const point = elbow.clone().lerp(wrist, k / 20);
+    return point.distanceTo(trunk.closestPointToPoint(point, true, near));
+  }));
+  expect(gap).toBeGreaterThan((0.06 + 0.022) * 1.8);
 });

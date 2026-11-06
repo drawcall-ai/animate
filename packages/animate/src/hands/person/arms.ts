@@ -204,7 +204,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
 }
 
 /** arm `side` posed onto `goal` (world) at once, its elbow bent the way a reach there bends it */
-export function placeArm(person: Reacher, f: Frame, side: Side, goal: Goal): void {
+export function placeArm(person: Reacher, f: Pick<Frame, 'current'>, side: Side, goal: Goal): void {
   solveChain(f, `${side}Arm`, { tip: { position: goal.position, quaternion: goal.quaternion }, pole: elbowPole(f.current, person.proportions, side, goal.position, _pole) });
 }
 

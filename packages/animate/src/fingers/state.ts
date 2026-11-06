@@ -148,9 +148,9 @@ export class FingerState {
   }
 
   /** where a hand verb is bringing `side`'s wrist to, before it holds it: the thing and the hand's node in its frame (none: nowhere) */
-  coming(side: 'left' | 'right'): { thing: Object3D; wrist: Vector3 } | null {
+  coming(side: 'left' | 'right'): { thing: Object3D; wrist: Placement } | null {
     const coming = this.hands[side].coming;
-    return coming ? { thing: coming.on, wrist: this.nodeOf(this.hands[side], coming).position } : null;
+    return coming ? { thing: coming.on, wrist: this.nodeOf(this.hands[side], coming) } : null;
   }
 
   /** a hand verb is bringing `side` to `placement`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`),

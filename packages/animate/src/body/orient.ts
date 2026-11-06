@@ -1,6 +1,6 @@
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
-import type { Placement } from '../kernel/goal';
+import type { Goal, Placement } from '../kernel/goal';
 import { smoothstep } from '../kernel/math';
 import { within } from '../kernel/scene';
 import { oriented, resolve } from '../things/resolve';
@@ -57,13 +57,12 @@ export class Orient {
     this.turned.get(node)?.copy(turned);
     const pivot = resolve(self, node, _pivot).position;
     for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of self.species.hands ?? []) {
-      const hold = self.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : self.fingers?.coming(side);
-      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? hold.goal.position : coming?.wrist;
-      if (!thing || !goal || !within(thing, node)) continue;
+      const grip = this.gripOf(hand);
+      if (!grip || !within(grip.thing, node)) continue;
       const bones = self.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
       const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + self.skeleton.bones[bone].offset.length(), 0);
-      const placed = resolve(self, thing, _placed);
-      const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
+      const placed = resolve(self, grip.thing, _placed);
+      const out = _out.copy(grip.goal.position).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
       const far = out.length(), near = toward.length();
       if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
       // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder; for a hand still on
@@ -71,15 +70,52 @@ export class Orient {
       const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
       const axis = _axis.crossVectors(out, toward);
       if (axis.lengthSq() < 1e-12) continue;
-      const off = hold ? 0 : _off.addVectors(out, pivot).distanceTo(f.current.position(bones[bones.length - 1])) / self.scale;
+      const off = grip.held ? 0 : _off.addVectors(out, pivot).distanceTo(f.current.position(bones[bones.length - 1])) / self.scale;
       turned.premultiply(_q.setFromAxisAngle(axis.normalize(), (out.angleTo(toward) - wanted) * (1 - smoothstep(COMING.near, COMING.far, off))));
       this.turned.get(node)?.copy(turned);
     }
+    this.held(f, node, turned);
     this.turned.get(node)?.copy(was);
     return turned;
+  }
+
+  /** `turned` (`node`'s, in place) turned back toward its parent's frame as far as the hands holding what hangs from it, or taking hold of
+   * it, hold their grips with their arms clear of the body (`Self.holds`), if they hold them so there: else, held off its grip, a hand
+   * passed through what it held — a rifle's support hand, the rifle pointed at the feet */
+  private held(f: Frame, node: Object3D, turned: Quaternion): void {
+    const self = this.self, rest = node.parent && resolve(self, node.parent, _rest).quaternion;
+    const holds = (rotation: Quaternion) => {
+      this.turned.get(node)?.copy(rotation);
+      return Object.keys(self.holding).every((hand) => {
+        const grip = this.gripOf(hand);
+        if (!grip || !within(grip.thing, node)) return true;
+        const { thing, goal } = grip, placed = resolve(self, thing, _placed);
+        const position = _wrist.copy(goal.position).applyQuaternion(placed.quaternion).add(placed.position);
+        return self.holds(f, hand, { position, quaternion: goal.quaternion && _grip.copy(placed.quaternion).multiply(goal.quaternion) });
+      });
+    };
+    if (!rest || holds(turned) || !holds(rest)) return;
+    // (the furthest toward `turned` from its parent's frame that they hold, halved in on)
+    const asked = _asked.copy(turned);
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 8; k++) {
+      const mid = (lo + hi) / 2;
+      if (holds(_try.slerpQuaternions(rest, asked, mid))) lo = mid;
+      else hi = mid;
+    }
+    turned.slerpQuaternions(rest, asked, lo);
+  }
+
+  /** what hand `hand` holds or is taking hold of, and its wrist's goal on it (the thing's frame), if anything */
+  private gripOf(hand: string): { thing: Object3D; goal: Goal; held: boolean } | null {
+    const hold = this.self.holding[hand];
+    if (hold) return { thing: hold.thing.object, goal: hold.goal, held: true };
+    const coming = this.self.fingers?.coming(hand as 'left' | 'right');
+    return coming ? { thing: coming.thing, goal: coming.wrist, held: false } : null;
   }
 }
 
 const _turn = new Quaternion(), _q = new Quaternion(), _kept = new Quaternion(), _goal = new Quaternion();
 const _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3(), _off = new Vector3();
+const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3(), _off = new Vector3(), _wrist = new Vector3();
+const _rest: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _grip = new Quaternion(), _asked = new Quaternion(), _try = new Quaternion();

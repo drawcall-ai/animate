@@ -169,6 +169,12 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
   return pushed;
 }
 
+/** whether arm `side`, as `pose` has it, keeps clear of the trunk as a solve keeps it */
+export function armClear(pose: ReadonlyPose, proportions: Proportions, side: Side): boolean {
+  const clear = -AIR * proportions.height, shoulder = pose.position(INDEX[`${side}UpperArm`]);
+  return armDepth(pose, proportions, side, Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth), clear) <= clear;
+}
+
 /** the least push from `least` that `fits` (left fitted): stepped out from `step`, doubling, then halved in on (`halvings`, to `within`); none past `most` */
 function leastPush(fits: (push: number) => boolean, least: number, step: number, most: number, halvings: number, within: number): number | null {
   let lo = least, hi = least;

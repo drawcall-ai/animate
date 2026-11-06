@@ -20,7 +20,7 @@ import { PlatformFrame } from './platform';
 import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
-import type { Placement } from '../kernel/goal';
+import type { Goal, Placement } from '../kernel/goal';
 import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
 import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
@@ -180,6 +180,11 @@ export class Self implements Holder {
   }
 
   private handled: Handling | null = null;
+
+  /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now: a creature's, wherever it reaches */
+  holds(_f: Frame, _hand: string, _wrist: Goal): boolean {
+    return true;
+  }
 
   /** a creature's hands: one at a time, each the tip of its chain */
   protected handle(): Handling {
