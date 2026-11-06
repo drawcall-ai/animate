@@ -20,6 +20,10 @@ interface Joint {
   length: number;
   /** how far the segment's palm side is from its bone: the skin's, measured at rest; else a share of the digit's length */
   depth: number;
+  /** a fingertip's: how far along it from its joint its rounded end (`depth` round) is centred, so that it ends where the skin does
+   * (measured at rest; else at the bone's end): on the bone's end, a pad pressed onto a button stood off it by the skin 8 mm, its contact
+   * 1.4 cm off the button's middle */
+  end: number;
 }
 
 type Three = readonly [Joint, Joint, Joint];
@@ -141,9 +145,11 @@ export class Joints {
           node: node(name), rest: node(name).quaternion.clone(),
           offset: k === 0 ? at(name).clone() : at(names[k - 1]).clone().invert().multiply(at(name)),
           flexed: Math.atan2(_cross.crossVectors(before, unit).dot(flex), before.dot(unit)), flex: flex.applyQuaternion(back), along: unit.applyQuaternion(back), palmar: palmar.clone().applyQuaternion(back),
-          length: segment.length(), depth: measure ? measure(middle, palmar) : thick * segments[0].length(),
+          length: segment.length(), depth: measure ? measure(middle, palmar) : thick * segments[0].length(), end: segment.length(),
         };
       });
+      // (the tip's rounded end where the skin ends, from the middle of its segment out along it)
+      if (measure) c.end = c.length / 2 + measure(point(names[2]).addScaledVector(segments[2], 0.5), segments[2]) - c.depth;
       return [a, b, c];
     };
     // (a finger fans away from the middle finger, square to itself)
@@ -206,7 +212,7 @@ export class Joints {
   pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3(), round = PRESS): Vector3 {
     const last = this.chain(digit)[2], frame = this.frames(digit, shape)[2];
     facing.copy(last.along).multiplyScalar(Math.cos(round)).addScaledVector(last.palmar, Math.sin(round));
-    out.copy(last.along).multiplyScalar(last.length).addScaledVector(facing, last.depth).applyMatrix4(frame);
+    out.copy(last.along).multiplyScalar(last.end).addScaledVector(facing, last.depth).applyMatrix4(frame);
     facing.transformDirection(frame);
     return out;
   }
