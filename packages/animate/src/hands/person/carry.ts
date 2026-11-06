@@ -19,8 +19,6 @@ import { footing, walking, type WalkUp } from './stand';
 import { aimsFor, CARRYING, type Aim } from './aim';
 import { grasping, holding, travel, type Grasping } from './travel';
 
-/** how much faster than its mean a carry's course goes at its quickest (a minimum-jerk profile's peak, 1.875, and some room) */
-const PEAK = 2;
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
 const PREPARED = 2;
 /** Artistic calibration (s): a brief preparatory lift, a slower precise raise, begun early enough to overlap arrival. */
@@ -29,7 +27,7 @@ const LIFT = 0.5, RAISE = 1.3, RAISE_LEAD = 0.9;
 const RAISE_TURN = 0.5;
 /** Tuned (a box shelved overhead, gear put on a horse): a transfer's walk sets off once the load has risen this share of its way to the body */
 const APPROACH_RISE = 2 / 3;
-/** a carry's pace along a way it goes straight to (m/s, its mean) and how long it takes at least (s), unless told */
+/** a carry's pace along a way it goes straight to (m/s, its mean; unless told) and how long it takes at least (s), however quick */
 const ALONG = { speed: 0.5, least: 0.4 };
 /** how far a grab lifts a loose thing clear of what it rests on (m, default body), in how long (s), how far from the hips it draws it in to
  * at most (× the arm's length; tuned: in reach with the back bowed no more than holding asks), and how near it comes to rest (m: clear) */
@@ -58,10 +56,8 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   const end = way.points[way.points.length - 1];
   // (in one hand, its grasp planned for its end as it comes there)
   const grasp = grasping(person, thing, end);
-  // (the hands as brisk as the way is quick: `CARRYING` is a calm carry's, along its way at `ALONG.speed`; a quicker one peaks at
-  // about twice its mean speed — a throw's swing — and its aim keeps up)
-  const pace = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel });
-  const aim = aimsFor(person, thing, { ...CARRYING, accel: pace.accel, speed: Math.max(CARRYING.speed, PEAK * pace.speed) }, way.clear);
+  // (the hands as brisk as the way is quick: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
+  const aim = aimsFor(person, thing, { ...CARRYING, accel: paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel }, way.clear);
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, aim, resting, grasp, options.speed));
   else yield* transferring(person, request, thing, way, plan, aim, resting, grasp);
   request.met();
@@ -110,9 +106,8 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(person: Reacher, request: Request, thing: Thing, way: Way, aim: Aim, resting: boolean, grasp: Grasping, asked?: number) {
-  // (a calm carry takes `ALONG.least` at least; one told its speed, as quick as it is told: a throw's swing)
-  const speed = asked ?? ALONG.speed * person.tempo, least = asked === undefined ? ALONG.least : 0;
+function* along(person: Reacher, request: Request, thing: Thing, way: Way, aim: Aim, resting: boolean, grasp: Grasping, speed = ALONG.speed * person.tempo) {
+  const least = ALONG.least;
   let points = way.points;
   if (way.outside > 0) {
     yield* travel(person, request, thing, timed(person, thing, points.slice(0, way.outside), speed, least),

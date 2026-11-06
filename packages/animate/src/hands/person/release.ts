@@ -29,9 +29,7 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
         return () => ({ position: back });
       }
       const shoulder = f.prev.position(INDEX[`${side}UpperArm`]);
-      // (a hand let go of fast — a throw's — follows through across the body to the other thigh)
-      const thrown = _v.subVectors(hand, f.prev2.position(person.hands[side])).divideScalar(f.dt).length() > THROWN.speed;
-      const sign = (side === 'left' ? 1 : -1) * (thrown ? -1 : 1);
+      const sign = side === 'left' ? 1 : -1;
       const rest = new Vector3(sign * REST.aside * proportions.scale, -REST.down * proportions.armLength, REST.ahead * proportions.scale);
       const at = shoulder.clone().add(rest.applyQuaternion(_turned.setFromAxisAngle(UP, person.locomotion.facing)));
       _v.subVectors(hand, f.prev2.position(person.hands[side])).divideScalar(f.dt).clampLength(0, FOLLOWING_ON / FOLLOW_THROUGH);
@@ -55,10 +53,7 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
   // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over; nor is
   // one whose arm a pose asks for)
   yield* parallel<Frame>('all', ...hands.map(({ side, away }, k) => {
-    // (a fast hand brought to rest within `THROWN.over` of its way on, not braked as a calm one)
-    const speed = person.frame.prev.position(person.hands[side]).distanceTo(person.frame.prev2.position(person.hands[side])) / person.frame.dt;
-    const brisk = speed > THROWN.speed && { accel: speed * speed / (2 * THROWN.over), speed };
-    const step = reaching(person, side, (f) => off(f)[k], { lead: false, ...brisk, ...(away && { seconds: BACK.seconds / person.tempo, straight: true }) });
+    const step = reaching(person, side, (f) => off(f)[k], { lead: false, ...(away && { seconds: BACK.seconds / person.tempo, straight: true }) });
     return during(request, `hand.${side}`, 'borrowed', (f: Frame) => {
       if (away && f.time < drawn) person.fingers?.keep(side);
       return step(f);
@@ -68,8 +63,6 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
 
 /** How long a hand’s own motion carries it on (s) and how far at most (m), and how long before the free arms take it (s) */
 const FOLLOW_THROUGH = 0.15, FOLLOWING_ON = 0.08, LETTING_GO = 1;
-/** how fast a hand let go of is moving to follow through as a throw's does (m/s), and how far on it comes to rest (m) */
-const THROWN = { speed: 2, over: 0.4 };
 /** how near its shoulder a hand going off is put at least (× the arm's length) */
 const FOLDED = 0.45;
 /** Tuned release staging: a relaxed wrist beside the thigh, elbow slightly bent (m, the drop × the arm's length) */

@@ -63,7 +63,7 @@ const SQUEEZE = 0.005;
 const POUCHES = [new Vector3(0.07, -0.129, 0.2), new Vector3(0.21, -0.25, 0.15)];
 /** Where a spent magazine is flung toward from the bottom of its pull (m, the body's frame: +X its left), how fast (m/s), and how far on
  * its way it is let go (m): out to the left and down, clear of the leg. */
-const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 2.8, after: 0.2 };
+const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 5, after: 0.2 };
 const UP = new Vector3(0, 1, 0);
 /** Whether the bodies check their motion and say what went wrong (`Body.log`): in the dev server, not in tests or a build. */
 const DEV = import.meta.env.MODE === 'development';

@@ -9,7 +9,7 @@ import { during, type Request } from '../../kernel/requests';
 import { handsOn, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import type { Reacher } from './reacher';
-import { handStep } from './arms';
+import { handStep, HOLD } from './arms';
 import { sideOf } from '../../species/humanoid/bones';
 import { bringShoulder } from './bend';
 import { ChainTip } from '../../kernel/tip';
@@ -197,12 +197,12 @@ export function holding(person: Reacher, request: Request, thing: Thing, aim: Ca
     if (single) {
       const goal = single(f);
       bringShoulder(person, f, side, _g.copy(goal.position).applyQuaternion(carrier.current.quaternion).add(carrier.current.position), 1, 0, carried);
-      handStep(person, f, side, goal, { on: carrier, ...aim.hold, lead: true }, tip);
+      handStep(person, f, side, goal, { on: carrier, ...HOLD, lead: true }, tip);
       return;
     }
     bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carried);
     person.carrying.set(thing.object, carrier);
-    handStep(person, f, side, hold.goal, { on: carrier, thing, ...aim.hold, lead: true }, tip);
+    handStep(person, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
   };
   return parallel<Frame>('race', ...hands.map((hand) => {
     const move = step(hand);

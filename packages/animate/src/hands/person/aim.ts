@@ -7,7 +7,6 @@ import { follow } from '../../kernel/follow';
 import type { Thing } from '../../things/thing';
 import type { Reacher } from './reacher';
 import type { Clearance } from '../route';
-import { HOLD } from './arms';
 import { clearBody } from './clearance';
 
 // A carried thing's aim: where it is to go each sub-step, followed at a carry's pace about its grips and kept clear of the body.
@@ -44,12 +43,8 @@ export class CarryAim {
   /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
   private readonly pivot = new Vector3();
 
-  /** how briskly the hands keep to it: a held hand's pace (`HOLD`), quickened as much as its aim is past a calm carry's (a throw's swing) */
-  readonly hold: Motion;
 
   constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: Clearance) {
-    const k = Math.max(1, (motion.speed ?? CARRYING.speed) / CARRYING.speed);
-    this.hold = { accel: HOLD.accel * k * k, speed: HOLD.speed * k, turnAccel: HOLD.turnAccel * k * k, turnSpeed: HOLD.turnSpeed * k };
     const own = person.track(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its course has it, the hand with it)
