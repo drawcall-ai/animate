@@ -95,9 +95,11 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   };
   const head = new Vector3(0, person.proportions.eyeHeight - person.proportions.eyes.y, 0);
   const local = (point: Vector3) => point.clone().sub(ground()).applyQuaternion(facing().invert()).sub(head);
-  const at = (offset: Vector3) => () => ({ position: new Vector3(x * offset.x, offset.y, offset.z).multiplyScalar(scale).add(head).applyQuaternion(facing()).add(ground()) });
+  // (`coil`: the offset turned with the trunk's coil, as far as that is in, so `behind` is behind the turned shoulders, as it looks)
+  const at = (offset: Vector3, coil = 0) => () => ({ position: new Vector3(x * offset.x, offset.y, offset.z).applyAxisAngle(UP, coil * x * COILED.twist)
+    .multiplyScalar(scale).add(head).applyQuaternion(facing()).add(ground()) });
   const windup = course({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
-    [[TIMES.windup / 2, at(PATH.aside)], [TIMES.windup / 2, at(PATH.cocked)], [TIMES.cocked, still]]);
+    [[TIMES.windup / 2, at(PATH.aside, 0.25)], [TIMES.windup / 2, at(PATH.cocked, 0.5)], [TIMES.cocked, still]]);
   const arm = new ChainTip(`${side}Arm`), free = !person.holding[off];
   // (the hand eased through the windup and the cock from how it held the thing, turned with the body, to straight on the forearm, the
   // turn the whip takes it in, not snapped there in a sub-step)
