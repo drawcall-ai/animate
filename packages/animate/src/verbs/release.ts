@@ -1,7 +1,8 @@
 import { Box3, Matrix4, Object3D, Vector3 } from 'three';
 import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
-import { attach, bodyOf, grasp, handsOn, take } from '../things/hold';
+import { attach, bodyOf, grasp, handsOn, pressingWay, take } from '../things/hold';
+import { INDEX } from '../species/humanoid/bones';
 import type { Self } from '../body/runtime';
 import { Thing } from '../things/thing';
 
@@ -41,10 +42,12 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
   const f = self.frame, object = thing.object;
   const placed = self.track(object).at(f.time).current, moving = self.track(object).velocity(new Vector3()).length();
   const lowest = new Box3().copy(thing.bounds).applyMatrix4(new Matrix4().compose(placed.position, placed.quaternion, object.scale)).min.y;
-  // (a fingertip draws back off its button the way it pushed in)
+  // (a fingertip draws back off its button the way it came in)
   const away = Object.fromEntries(hands.flatMap((hand) => {
     const hold = self.holding[hand], grip = hold?.thing.grip(hold.grip);
-    return grip?.pad && grip.facing ? [[hand, grip.facing.clone().applyQuaternion(placed.quaternion).negate()]] : [];
+    if (!grip?.pad || !grip.facing) return [];
+    const empty = grip.at.position.clone().applyQuaternion(placed.quaternion).add(placed.position);
+    return [[hand, pressingWay(grip.facing.clone().applyQuaternion(placed.quaternion).negate(), self.pose.position(INDEX.head).clone().sub(empty))]];
   }));
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
