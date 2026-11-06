@@ -3,7 +3,7 @@ import { meshesOf } from '../things/thing';
 import { bisect } from '../kernel/math';
 import { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
-import { DIGITS, type DigitName, type Shape } from './shape';
+import { DIGITS, SPLAYED, type DigitName, type Shape } from './shape';
 import { PINCH } from './joints';
 
 /**
@@ -34,6 +34,13 @@ export const PAD_DEPTH = 0.8;
 const CHORDS = 12, EVEN = 0.004, TIE = Math.SQRT1_2;
 /** the steps each fold is tried at, and the halvings within the step it first meets the thing in: 1/128 of its range */
 const FOLD = { steps: 16, halvings: 3 } as const;
+/** the steps each of the thumb's values is tried at across its range, finding where it meets the face it opposes on */
+const REACHING = 8;
+/** how deep a ball of the thumb's flesh may sink into the face it reaches (m: its skin's give is in its size already) */
+const SUNK = 0.001;
+/** how far off the face (m, with a unit of its flat's turn off pressing square as a centimetre) a thumb's pad may lie and still be
+ * taken to reach it, its contact met the rest of the way */
+const REACH = 0.01;
 
 /** A handle's middle and its line, toward the thumb (the world). */
 export interface Line {
@@ -62,9 +69,9 @@ export interface Opposed {
  * instead (a finger under a box folded into the palm below it) — a finger meeting nothing folding into the palm (past the end of a grip).
  * On a handle (`handle`, its middle and line, the world's) the thumb then opposes them (`opposite`): a grasp clamps what it holds between
  * the thumb's pad on one face and the fingers' pads, or the palm, on the other — its pad there is a contact of its own, met once the arm
- * has brought the hand, from the thumb `WRAP` has; a palm elsewhere presses on what it is on, the thumb as `WRAP` has it. Meshes of
- * things attached to it (their own `userData.mass`), hidden meshes and the body's own skin (`skins`: an empty in a scene held every mesh
- * under it, the body's too) are not touched; other skinned meshes are touched as they stand at rest.
+ * has brought the hand, from the thumb as it reached there; a palm elsewhere presses on what it is on, the thumb as `WRAP` has it.
+ * Meshes of things attached to it (their own `userData.mass`), hidden meshes and the body's own skin (`skins`: an empty in a scene held
+ * every mesh under it, the body's too) are not touched; other skinned meshes are touched as they stand at rest.
  */
 export function closedOn(joints: Joints, object: Object3D, handle: Line | null, skins: readonly SkinnedMesh[], world: Matrix4 = joints.hand.matrixWorld): { shape: Shape; thumb: Opposed | null } {
   joints.hand.updateWorldMatrix(true, false);
@@ -123,9 +130,9 @@ function opening(at: Closing, digit: DigitName, shape: Shape, set: (value: numbe
  * at an end of the handle's narrowest chord square to its line, level along it with the thumb's pad as `WRAP` has it (it reaches across
  * beside the index, not the palm's middle) — a magazine's thickness, a receiver's width, a pistol grip's from side to side; of chords as
  * narrow as each other (`EVEN`, a round rung's), the one nearest the way the palm faces — the end away from the palm where it faces
- * along the chord (`TIE`), else away from the fingers' pads. Its pad goes on that face where
- * the line along the chord through its pad as `WRAP` has it meets it (within the chord's width of its end; else at the end), facing back
- * along the chord; no chord (nothing about the line within `GIRTH`), none.
+ * along the chord (`TIE`), else away from the fingers' pads. Its pad goes on that face where the thumb reaches it clear of the thing
+ * (`reached`, the thumb shaped so), else where the line along the chord through its pad as `WRAP` has it meets it (within the chord's
+ * width of its end; else at the end), facing back along the chord; no chord (nothing about the line within `GIRTH`), none.
  */
 function opposite(hand: Closing, shape: Shape, handle: Line): Opposed | null {
   const { joints, near, world } = hand;
@@ -157,11 +164,50 @@ function opposite(hand: Closing, shape: Shape, handle: Line): Opposed | null {
   const along = (point: Vector3) => point.clone().sub(centre).dot(best.way) / (width / 2), pads = padsOn(hand, shape);
   const side = -Math.sign(along(Math.abs(faces.dot(best.way)) > TIE ? at : pads));
   const end = middle.clone().addScaledVector(best.way, side >= 0 ? best.ahead : -best.behind), way = end.clone().sub(middle).normalize();
-  // (on that face where the thumb already is, in along the chord through its pad as `WRAP` has it, rather than at the chord's own end,
-  // which can lie short of the side's middle with the thumb through the face on the way)
+  // (on that face where the thumb, closing onto it, meets it — a point it reaches with its skin clear of the thing, not one along a line
+  // through where it starts, which it reaches, if at all, only by pressing through the face)
+  const meets = reached(hand, shape, way, end, width);
+  if (meets) {
+    shape.thumb = meets.shape;
+    return { at: meets.at, facing: way.negate() };
+  }
+  // (reaching it nowhere clear of the thing, where the line along the chord through its pad as `WRAP` has it meets that face, within the
+  // chord's width of its end, else at the end)
   const hit = near.first(_ray.set(thumb.clone().addScaledVector(way, GIRTH), way.clone().negate()), 2 * GIRTH);
   const on = hit === null ? end : thumb.clone().addScaledVector(way, GIRTH - hit);
   return { at: on.distanceTo(end) < width ? on : end, facing: way.negate() };
+}
+
+/**
+ * where the thumb's pad meets the face of `near` that `way` points out of (its chord's end `end`, the chord `width` wide), the fingers as
+ * `shape` has them: of the thumb's shapes over its range (`REACHING` steps each way), those whose flesh stays out of the thing and whose
+ * pad is on that face within the chord's width of its end and `REACH` of it, the one whose pad lies nearest on it, pressing most squarely
+ * in; none: none
+ */
+function reached(hand: Closing, shape: Shape, way: Vector3, end: Vector3, width: number): { at: Vector3; shape: Shape['thumb'] } | null {
+  const { joints, near, world } = hand, tried = structuredClone(shape), into = way.clone().negate();
+  const steps = (least: number) => Array.from({ length: REACHING + 1 }, (_, k) => least + ((1 - least) * k) / REACHING);
+  let best: { at: Vector3; shape: Shape['thumb']; score: number } | null = null;
+  for (const oppose of steps(SPLAYED)) for (const spread of steps(SPLAYED)) for (const curl of steps(0)) {
+    tried.thumb = { curl, oppose, spread };
+    const pad = joints.pad('thumb', tried, new Vector3(), _facing, PINCH).applyMatrix4(world);
+    const hit = near.first(_ray.set(pad.clone().addScaledVector(way, GIRTH), into), 2 * GIRTH);
+    if (hit === null) continue;
+    const on = pad.clone().addScaledVector(way, GIRTH - hit);
+    if (on.distanceTo(end) > width) continue;
+    // (how far the pad is off the face, and how far its flat is turned off pressing square into it, as a centimetre a unit)
+    const score = Math.abs(hit - GIRTH) + 0.01 * _facing.transformDirection(world).distanceTo(into);
+    if (score > REACH || (best && score >= best.score)) continue;
+    if (sinks(hand, tried)) continue;
+    best = { at: on, shape: { ...tried.thumb }, score };
+  }
+  return best;
+}
+
+/** whether any ball of the thumb's flesh (`Joints.flesh`) as `shape` has it sinks into `near`, as its skin gives (`PAD_DEPTH`) */
+function sinks(at: Closing, shape: Shape): boolean {
+  const { joints, near, world } = at, scale = _scale.setFromMatrixScale(world).x;
+  return joints.flesh('thumb', shape).some((ball) => near.depth(ball.at.applyMatrix4(world), ball.radius * scale * PAD_DEPTH, GIRTH) > SUNK);
 }
 
 /** the middle of the pads of the fingers whose last segment meets `near` as `shape` has them, else of any that meets it, else of all
