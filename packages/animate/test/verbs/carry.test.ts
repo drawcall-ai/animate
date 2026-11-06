@@ -1,6 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { arriving, carry, grab, release, throwAt, wait, type Body } from '../../src/index';
+import { arriving, Body, carry, grab, humanoid, release, throwAt, wait } from '../../src/index';
+import { SOLDIER } from '../soldier';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -286,15 +287,16 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  for (const [driven, height, low] of [[false, 1.75, true], [true, 1.75, true], [true, 1.6, true], [false, 1.9, true], [false, 1.75, false]] as const) it(`throws overhand at a target (${height} m${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
+  for (const [driven, height, low, soldier] of [[false, 1.75, true, false], [true, 1.75, true, false], [true, 1.6, true, false], [false, 1.9, true, false], [false, 1.75, false, false], [true, 1.8, false, true]] as const) it(`throws overhand at a target (${soldier ? 'the short-armed soldier' : `${height} m`}${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
-    const body = person({ dev: true, ...(driven && { drive: () => root }) }, height), room = roomOf(body);
+    const options = { dev: true, ...(driven && { drive: () => root }) };
+    const body: Body = soldier ? new Body(humanoid(SOLDIER), options) : person(options, height), room = roomOf(body);
     // (taken up from low, before the belly, or from before the chest)
     const ball = box(room, low ? new Vector3(-0.12, 0.55 * height, 0.28) : new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
     Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const target = new Vector3(0, 0, 15);
     let behind = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), ended = false, done = false;
-    let ahead = 0, upright = Infinity, raised = -Infinity, hand = new Vector3();
+    let ahead = 0, upright = Infinity, raised = -Infinity, hand = new Vector3(), flip = 0, last: Quaternion | null = null;
     play(function* () {
       yield* grab(body, ball, { right: 'body' });
       yield* throwAt(body, ball, target, { released: ({ velocity }) => { thrown = velocity; thrownFrom = worldOf(ball); } });
@@ -306,6 +308,10 @@ describe('release', () => {
       // (how far behind the head, at its height, the hand cocks the ball)
       const head = body.bones.head.getWorldPosition(new Vector3()), at = body.bones.rightHand.getWorldPosition(new Vector3());
       if (body.holds(ball) && Math.abs(at.y - head.y) < 0.15) behind = Math.max(behind, head.z - at.z);
+      // (the upper arm's largest turn in a sub-step, in the chest's frame)
+      const arm = body.bones.chest.getWorldQuaternion(new Quaternion()).invert().multiply(body.bones.rightUpperArm.getWorldQuaternion(new Quaternion()));
+      if (last) flip = Math.max(flip, arm.angleTo(last));
+      last = arm;
       if (ended) {
         // (once the throw has ended: how far ahead of the feet the head runs on, and how high the free hand swings above its shoulder)
         const local = body.object.worldToLocal(head.clone());
@@ -327,6 +333,9 @@ describe('release', () => {
     expect(upright).toBeLessThan(0.05);
     // (the arm, free, let hang by the side: taken over at its whip's speed, it flew up past the shoulder)
     expect(raised).toBeLessThan(-0.2);
+    // (no flip of the elbow over the shoulder: a short-armed body's upper arm, its elbow let loose after the release, turned 130–180° in a
+    // sub-step; a whip's own swing is under 60°)
+    expect(flip).toBeLessThan(Math.PI / 3);
     expect(Math.abs(hand.x)).toBeLessThan(0.35 * height / 1.75);
     expect(body.log).toEqual([]);
   });

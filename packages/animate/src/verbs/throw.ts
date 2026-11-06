@@ -13,6 +13,7 @@ import { INDEX, sideOf, type Side } from '../species/humanoid/bones';
 import type { Asked } from '../kernel/poise';
 import { letGo, type Released } from './release';
 import { verb, type Verb } from './story';
+import type { Target } from './targets';
 import { lerp, smoothstep } from '../kernel/math';
 
 /** How a throw goes. */
@@ -29,8 +30,8 @@ export interface ThrowOptions {
 }
 
 /**
- * Throws `thing`, held in one of a person's hands, overhand at `target` (a point, or an object read where it is as the thing is let go;
- * none: straight ahead), along the way the
+ * Throws `thing`, held in one of a person's hands, overhand at `target` (a point, an object or a function of the body's time giving either, read as the thing is
+ * let go; none: straight ahead), along the way the
  * body faces — turn it toward the target first. The hand swings out to the side and cocks the thing behind the ear at head height as the
  * trunk coils away, the hips with it, and the body sinks onto its back foot, the free arm pointing at the target; the hips and then the
  * trunk uncoil ahead of the arm and
@@ -43,7 +44,7 @@ export interface ThrowOptions {
  * beside it). A mover, it ends `true` once the follow-through is done (about 1 s after it starts): the throwing arm is free for the next
  * hand verb (taking a weapon back), and the trunk and the stride come back on their own meanwhile.
  */
-export function throwAt(body: Body, thing: Object3D, target?: Vector3 | Object3D, options: ThrowOptions = {}): Verb {
+export function throwAt(body: Body, thing: Object3D, target?: Target, options: ThrowOptions = {}): Verb {
   const self = selfOf(body), held = Thing.of(thing), hands = handsOn(self, held);
   if (!body.species.person) throw new Error(`throwAt: a ${body.species.name ?? 'custom species'} has no arms to throw with`);
   if (hands.length !== 1) throw new Error(`throwAt: "${thing.name}" is held in ${hands.length} hands; throw what one hand holds`);
@@ -84,7 +85,7 @@ const WHIPPED = { turnAccel: 400, turnSpeed: 35 };
 /** the fastest a default throw sets out (m/s) and the arc it sets out on (rad) */
 const MOST = 25, ARC = (40 * Math.PI) / 180;
 
-function* throwing(person: Person, request: Request, thing: Thing, side: Side, target: Vector3 | Object3D | undefined, options: ThrowOptions) {
+function* throwing(person: Person, request: Request, thing: Thing, side: Side, target: Target | undefined, options: ThrowOptions) {
   const off: Side = side === 'right' ? 'left' : 'right', x = side === 'right' ? 1 : -1, scale = person.proportions.scale, bone = person.hands[side];
   const facing = () => _turn.setFromAxisAngle(UP, person.locomotion.facing).clone();
   // (the body's frame as it stands — its root's ground point, turned as it faces — and where its head is standing upright: not where it
@@ -139,12 +140,17 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
         [[TIMES.whip * 0.3, at(PATH.passing)], [TIMES.whip * 0.2, at(PATH.out)], [TIMES.whip * 0.5, through]]);
       // (the hand turned with the forearm through the whip, its turn's rate rising and falling within `WHIPPED` rather than braked at the
       // joints' cap where the swing over the shoulder turns the forearm fastest)
-      handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, ...WHIPPED, lead: false, ...(!let_go && { pole: elbow() }) }, arm);
+      // (the elbow kept out and level through the follow-through as well: let loose after the release, a short arm's solve could pick the
+      // elbow over the shoulder from one sub-step to the next)
+      handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, ...WHIPPED, lead: false, pole: elbow() }, arm);
       // (let go as it passes ahead of the head, or as the whip reaches where that is, whichever is first)
       if (let_go || (local(f.current.position(bone)).z < PATH.out.z * scale && since(f) < TIMES.windup + TIMES.cocked + TIMES.whip / 2)) return;
       let_go = true;
       const motion = letGo(person, thing, [side], undefined, false);
-      if (target) motion.velocity.copy(aimed(thing.object.getWorldPosition(new Vector3()), target instanceof Object3D ? target.getWorldPosition(new Vector3()) : target, options.speed, options.gravity ?? G));
+      if (target) {
+        const at = typeof target === 'function' ? target(f.time) : target;
+        motion.velocity.copy(aimed(thing.object.getWorldPosition(new Vector3()), at instanceof Object3D ? at.getWorldPosition(new Vector3()) : at, options.speed, options.gravity ?? G));
+      }
       options.released?.(motion);
     }, (f) => whip !== null && whip.over(f)));
   // (the hand held at the end of its follow-through a moment, the trunk held there with it; then the arm is free, and the trunk and the
