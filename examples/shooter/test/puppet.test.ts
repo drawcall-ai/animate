@@ -29,4 +29,16 @@ describe('Puppet', () => {
     expect(body.position('rightFoot').distanceTo(ankle)).toBeLessThan(1e-3);
     expect(body.position('rightLowerLeg').sub(hip.clone().add(ankle).multiplyScalar(0.5)).z).toBeGreaterThan(0);
   });
+
+  it('rolls the forearm with the hand about its length, half the way', () => {
+    const body = puppet();
+    const wrist = body.position('leftUpperArm').add(new Vector3(0.15, -0.3, 0.3)), elbow = new Vector3(0, -1, -1);
+    const base = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2);
+    const forearm = (roll: number) => {
+      // (the left arm's forearm runs along +X at rest)
+      body.arm('left', wrist, elbow, base.clone().multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), roll)));
+      return body.rotation('leftLowerArm');
+    };
+    expect(forearm(0.6).angleTo(forearm(-0.6))).toBeCloseTo(0.6, 1);
+  });
 });
