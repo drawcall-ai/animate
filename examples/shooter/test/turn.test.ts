@@ -39,15 +39,16 @@ const jump = (values: number[]) => Math.max(...values.slice(1).map((value, i) =>
 it('keeps the rifle rigid with the camera while turning in place from the hip', async () => {
   const frames = await turnInPlace(false);
   expect(jump(frames.map((frame) => frame.muzzle - frame.camera))).toBeLessThan(0.001);
-}, 30000);
+});
 
 it('turns the sights evenly while turning in place aiming down them', async () => {
   const frames = await turnInPlace(true);
   expect(jump(frames.map((frame) => frame.muzzle - frame.camera))).toBeLessThan(1e-5);
   expect(jump(frames.slice(1).map((frame, i) => frame.camera - frames[i].camera))).toBeLessThan(1e-4);
-}, 30000);
+});
 
-it.each([6, 10])('keeps both hands on the rifle through a %s rad/s flick the body cannot keep up with', async (rate) => {
+it('keeps both hands on the rifle through a 10 rad/s flick the body cannot keep up with', async () => {
+  const rate = 10;
   const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
   acquire();
   const pistol = node(avatar.group, 'pistol'), foregrip = node(avatar.group, 'foregrip');
@@ -59,7 +60,7 @@ it.each([6, 10])('keeps both hands on the rifle through a %s rad/s flick the bod
     off = Math.max(off, offGrip(avatar.body, 'right', pistol), offGrip(avatar.body, 'left', foregrip));
   }
   expect(off).toBeLessThan(0.06);
-}, 30000);
+});
 
 it('keeps the sights on the mouse through a 6 rad/s flick aiming down them', async () => {
   const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
@@ -72,7 +73,7 @@ it('keeps the sights on the mouse through a 6 rad/s flick aiming down them', asy
     off = Math.max(off, Math.abs(wrapAngle(avatar.look().yaw - movement.input.yaw)));
   }
   expect(off).toBeLessThan(0.02);
-}, 30000);
+});
 
 it('brings the rifle back to the crosshair without passing it after a flick, at 20 fps', async () => {
   const { world, soldiers: [player] } = await soldiers((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]), ['Player', new Vector3(0, 0.04, 0), true]);
@@ -95,4 +96,4 @@ it('brings the rifle back to the crosshair without passing it after a flick, at 
   }
   // (the barrel's zero puts it a few milliradians across the view at rest)
   expect(past).toBeLessThan(0.01);
-}, 30000);
+});

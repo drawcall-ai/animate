@@ -81,7 +81,7 @@ it.each(['walk', 'sprint', 'jump'] as const)('keeps %s animation attached to the
   expect(hovering, 'Planted soles must follow the completed platform pose').toBeLessThan(0.025);
   expect(penetration).toBeLessThan(0.01);
   expectSmooth(motion);
-}, 20000);
+});
 
 it.each([1, -1].flatMap((direction) => [false, true].map((stop) => ({ direction, stop }))))(
   'keeps each foot on its surface through lift/deck transfer direction=$direction stop=$stop', async ({ direction, stop }) => {
@@ -117,7 +117,7 @@ it.each([1, -1].flatMap((direction) => [false, true].map((stop) => ({ direction,
     expect(hover, 'Planted contacts must follow their own surface').toBeLessThan(0.025);
     expect(penetration).toBeLessThan(0.01);
     expect(hipChange).toBeLessThan(0.06);
-  }, 20000,
+  },
 );
 
 it('stays until its panel\'s button is pressed with the index fingertip, then rides up', async () => {
@@ -149,4 +149,4 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   advance(6);
   expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
   expect(avatar.pressing).toBe(false);
-}, 20000);
+});

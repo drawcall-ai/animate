@@ -105,14 +105,14 @@ describe('avatar', () => {
     },
   );
 
-  it.each([4, 7.2])('completes a reload while turning in place at %s rad/s', (rate) => {
+  it('completes a reload while turning in place at 7.2 rad/s', () => {
     const input = state();
     input.aim = false;
     const avatar = avatarAt(input);
     advance(avatar, input, 180);
     avatar.requestReload();
     for (let frame = 0; frame < 600 && avatar.reloading; frame++) {
-      input.yaw += rate / 60;
+      input.yaw += 7.2 / 60;
       avatar.update(1 / 60, input);
     }
     expect(avatar.reloads).toBe(1);

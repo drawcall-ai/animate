@@ -121,7 +121,7 @@ describe('requests', () => {
     expect(walked).toBe(false);
     expect(ended).toBeLessThan(15);
     expect(body.log.filter((entry) => entry.check.startsWith('stalled walk'))).toHaveLength(1);
-  }, 20000);
+  });
 });
 
 describe('targets', () => {

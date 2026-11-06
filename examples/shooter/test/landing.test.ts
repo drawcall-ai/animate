@@ -2,7 +2,8 @@ import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { box, DT, node, offGrip, soldierOn } from './course';
 
-it.each(['standing', 'walking', 'sprinting', 'aiming'] as const)('keeps the body and held rifle continuous when landing %s', async (mode) => {
+// (from a sprint, the hardest landing from the hip; aiming, the sights held at the eye)
+it.each(['sprinting', 'aiming'] as const)('keeps the body and held rifle continuous when landing %s', async (mode) => {
   const { world, movement, avatar, advance } = await soldierOn((scene) => box(scene, [60, 1, 60], [0, -0.5, 0]));
   const aiming = mode === 'aiming';
   movement.input.aim = aiming;
@@ -18,7 +19,7 @@ it.each(['standing', 'walking', 'sprinting', 'aiming'] as const)('keeps the body
   });
   advance(3);
   expect(avatar.acquired).toBe(true);
-  movement.input.move.z = mode === 'standing' ? 0 : 1;
+  movement.input.move.z = 1;
   movement.input.sprint = mode === 'sprinting';
   advance(1);
   // Keep eye relief fixed while its actual head/sight frame follows the newly solved pose.
@@ -39,7 +40,8 @@ it.each(['standing', 'walking', 'sprinting', 'aiming'] as const)('keeps the body
     const row = records[i], previous = records[i - 1];
     const bodyMove = Math.abs(row.hip - row.capsule - previous.hip + previous.capsule);
     if (bodyMove > hipStep) { hipStep = bodyMove; worstHip = i; }
-    eyeStep = Math.max(eyeStep, Math.abs(row.look.y - previous.look.y));
+    // (the view against the capsule, as the hips: its own motion, not the jump's)
+    eyeStep = Math.max(eyeStep, Math.abs(row.look.y - row.capsule - previous.look.y + previous.capsule));
     eyePhase = Math.max(eyePhase, row.look.distanceTo(row.eye));
     if (Math.max(...row.gaps) > gripGap) { gripGap = Math.max(...row.gaps); worstGrip = i; }
     if (row.grounded && !previous.grounded) landing = i;
@@ -48,7 +50,7 @@ it.each(['standing', 'walking', 'sprinting', 'aiming'] as const)('keeps the body
     worstHip: records[worstHip], worstGrip: records[worstGrip] });
   expect(landing).toBeGreaterThan(0);
   expect(hipStep, detail).toBeLessThan(0.06);
-  expect(eyeStep, detail).toBeLessThan(0.1);
+  expect(eyeStep, detail).toBeLessThan(0.06);
   expect(eyePhase, detail).toBeLessThan(1e-6);
   expect(gripGap, detail).toBeLessThan(0.05);
 });

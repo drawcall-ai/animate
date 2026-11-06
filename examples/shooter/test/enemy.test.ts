@@ -16,6 +16,8 @@ it('uses cover, a physical sprint, peeking bursts, retreat and a completed magaz
   soldier.reset(undefined, Math.PI);
   for (let frame = 0; frame < 4; frame++) world.update(DT);
   for (let frame = 0; frame < 180; frame++) { player.update(DT); soldier.update(DT); }
+  // (its magazine all but spent, so the first burst it fires has it reload once back in cover)
+  soldier.combat.ammo = 9;
   const states = new Set<string>();
   let speed = 0, crouchedInCover = false, hidden = false, fired = false;
   world.onAfterStep(dt => {
@@ -35,14 +37,16 @@ it('uses cover, a physical sprint, peeking bursts, retreat and a completed magaz
       hidden ||= !visible(world, soldier.avatar.look().eye, player.avatar.look().eye);
     }
   });
-  for (let frame = 0; frame < 2400; frame++) world.update(DT);
-  expect([...states]).toEqual(expect.arrayContaining(['move', 'hide', 'reload', 'peek', 'burst', 'retreat']));
+  const expected = ['move', 'hide', 'reload', 'peek', 'burst', 'retreat'];
+  const done = () => expected.every((state) => states.has(state)) && soldier.avatar.reloads > 0;
+  for (let frame = 0; frame < 40 * 60 && !done(); frame++) world.update(DT);
+  expect([...states]).toEqual(expect.arrayContaining(expected));
   expect(speed).toBeGreaterThan(3);
   expect(crouchedInCover).toBe(true);
   expect(hidden).toBe(true);
   expect(soldier.avatar.reloads).toBeGreaterThan(0);
   expect(fired).toBe(true);
-}, 30_000);
+});
 
 it('tracks a player it sees every step, not only when it senses', async () => {
   const { world, soldiers: [player, soldier] } = await soldiers((scene) => {
@@ -75,4 +79,4 @@ it('tracks a player it sees every step, not only when it senses', async () => {
   kinks.sort((a, b) => a - b);
   expect(kinks.length).toBeGreaterThan(200);
   expect(kinks[Math.floor(kinks.length * 0.95)]).toBeLessThan(0.005);
-}, 30_000);
+});

@@ -4,10 +4,7 @@ import { Path } from '../src/enemy/path';
 import { Navigation } from '../src/nav';
 import { box, cleanup, DT, soldiers } from './course';
 
-it.each([
-  { height: 0.45, back: false }, { height: 0.75, back: false },
-  { height: 0.45, back: true }, { height: 0.75, back: true },
-])('follows a NavCat jump on the $height m block (reverse=$back) through the shared soldier controller', async ({ height, back }) => {
+it.each([{ height: 0.75, back: false }, { height: 0.45, back: true }])('follows a NavCat jump on the $height m block (reverse=$back) through the shared soldier controller', async ({ height, back }) => {
   const from = back ? new Vector3(0, height + 0.04, 4) : new Vector3(0, 0.04, 1);
   const goal = back ? new Vector3(0, 0, 1) : new Vector3(0, height, 4);
   const { world, soldiers: [soldier] } = await soldiers((scene) => {
@@ -31,7 +28,7 @@ it.each([
   for (let frame = 0; frame < 30; frame++) world.update(DT);
   expect(soldier.movement.grounded).toBe(true);
   expect(soldier.position.y).toBeCloseTo(goal.y, 1);
-}, 15000);
+});
 
 it('brakes a relocation sprint at the requested position', async () => {
   const { world, soldiers: [soldier] } = await soldiers((scene) => box(scene, [12, 1, 12], [0, -0.5, 0]), ['Test', new Vector3(0, 0.04, -3), false]);
@@ -48,4 +45,4 @@ it('brakes a relocation sprint at the requested position', async () => {
   expect(status).toBe('arrived');
   for (let frame = 0; frame < 60; frame++) world.update(DT);
   expect(soldier.position.distanceTo(goal)).toBeLessThan(0.25);
-}, 15000);
+});

@@ -2,6 +2,9 @@ import { vi } from 'vitest';
 import { seedOf } from '../src/kernel/random';
 import { standingFeet } from '../src/species/humanoid/stance';
 
+// (a test steps whole stories headless, up to a few seconds each alone: it is given the time it takes on a loaded machine, not vitest's 5 s)
+vi.setConfig({ testTimeout: 30_000 });
+
 // Vary geometry-derived idle motion; an explicit seed remains reproducible. (The stride is imported here once mocked: had its
 // module moved, the mock would hold for nothing and every run would quietly be seed 0's.)
 vi.mock('../src/legs/person/stride', async (original) => {

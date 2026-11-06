@@ -223,7 +223,7 @@ it.each([['the default person', 1.75], ['a 2.3 m skeleton', 0]])('holds still as
   expect(ease.sway).toBeGreaterThan(0.03);
   expect(attention.sway).toBeLessThan(0.01);
   expect([...ease.log, ...attention.log, ...half.log]).toEqual([]);
-}, 20000);
+});
 
 it('takes its steadiness as a function of its time, and says what it cannot take', () => {
   let asked = 0;

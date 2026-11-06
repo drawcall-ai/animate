@@ -62,7 +62,7 @@ describe('carry', () => {
     expect(lastRise).toBeGreaterThan(0.01);
     expect(held.most).toBeLessThan(0.03);
     expect(body.log).toEqual([]);
-  }, 20000);
+  });
 
   it('lifts a heavy load slower than a light one, and dips with it as it takes its weight', () => {
     const lift = (mass: number) => {
@@ -139,7 +139,7 @@ describe('carry', () => {
     expect(worldOf(load).distanceTo(worldOf(table))).toBeLessThan(0.01);
     expect(held.most).toBeLessThan(0.03);
     expect(body.log).toEqual([]);
-  }, 20000);
+  });
 
   // (the trial that found it: a bearer who walks a medal to the princess; `arriving` said he was all but there while he lifted it, 1.9 m
   // off, and her grab went for a medal still on its way)
@@ -164,7 +164,7 @@ describe('carry', () => {
       // (arriving within 0.6 s, as the walk ends and the raise begins: the thing within about a stride of its place, not across the room)
       expect(far).toBeLessThan(0.8 * scale);
       expect(body.log).toEqual([]);
-    }, 20000);
+    });
 
   // (the trial that found it: a princess standing on a kneeling hero hung a medal at his neck, inside her own trunk; the carry said true
   // with the medal 36 cm off his neck)
@@ -192,7 +192,7 @@ describe('carry', () => {
     expect(far.carried).toBe(false);
     expect(far.off).toBeGreaterThan(0.01);
     expect(far.log).toEqual([{ check: 'late carry: course end distance after 2 s (m)', detail: expect.stringContaining('beyond the arm’s reach') }]);
-  }, 20000);
+  });
 
   it('throws when no hand holds what it is asked to carry', () => {
     const body = person(), room = roomOf(body);

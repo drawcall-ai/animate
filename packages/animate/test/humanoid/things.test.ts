@@ -192,7 +192,7 @@ describe('a sword in a scabbard on the hips', () => {
     expect(sword.position.length()).toBe(0);
     expect(sword.quaternion.angleTo(new Quaternion())).toBe(0);
     expect(body.log).toEqual([]);
-  }, 20000);
+  });
 });
 
 describe('hands that cannot get there', () => {
@@ -261,5 +261,5 @@ describe('a thing in one hand by a grip that sets no turn', () => {
       // (turning with the hand kept on the bowing body: 0.7 rad/s at most for the default body, 3–5.7 for the 2.3 m one as the hand settles
       // from the take into its keep; not spun on a free wrist, 12 rad/s for the 2.3 m body when the medal kept its own turn)
       expect(fastest).toBeLessThan(8);
-    }, 20000);
+    });
 });

@@ -109,4 +109,4 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without defe
   // Open: the 120° arrival exceeds the 10 cm XCoM bound by up to 1 cm.
   const open = face === 2 * Math.PI / 3 ? body.log.filter((entry) => entry.check === 'XCoM outside support (m)' && entry.value < 0.11) : [];
   expect(body.log.filter((entry) => !open.includes(entry))).toEqual([]);
-}, 20000);
+});
