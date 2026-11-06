@@ -26,7 +26,9 @@ export interface AvatarState {
 }
 
 const SPRINTING = new Vector3(0.22, 0.2, 0);
-const RELOADING = new Vector3(-0.05, 0, 0.4);
+/** How the rifle turns through a reload (rad, as `SPRINTING`): up before the chest, canted 9° toward the support hand — canted 23°, an
+ * upright magazine from the pouch had 24° to turn under the well, which the arm took 0.15 s over; at 9°, 13°. */
+const RELOADING = new Vector3(-0.05, 0, 0.15);
 /** The rifle held low at a lift's panel, its muzzle down and a little to the right, clear of the panel (which stands to its left), both
  * hands on it and through a press in the right hand alone: the same turn, so it stays still as the left hand leaves it and takes it again.
  * Turned 0.6 rad right, the support hand's grip was past its arm's reach and the rifle swung toward it as it let go and came back; held
@@ -65,23 +67,20 @@ const REST_AFTER = 1;
 const SQUEEZE = 0.005;
 /** The pouches' magazines on the left of the body: the left hand takes the chest one round its body as it will seat it in the well, and
  * a fresh one is in that pouch again once the hand is back on the rifle; the one on the belt, out, down and back from it, is a spare's
- * spare — beside it on the chest, it hid the thumb on the taken one's outer face from the left (5 cm lower, it hung at mid-thigh). The chest one 5 cm off the middle: nearer, the
- * left hand reached it with its wrist bent back across the sternum, its fingers off the body. As high as puts the grip low on the
- * magazine where the hand took it before (2.5 cm lower, the hand turned 0.3 s longer onto it). */
+ * spare — beside it on the chest, it hid the thumb on the taken one's outer face from the left (5 cm lower, it hung at mid-thigh). The
+ * chest one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its fingers off the body;
+ * as high as puts the grip low on the magazine where the hand took it before (2.5 cm lower, the hand turned 0.3 s longer onto it). Each
+ * stands upright in the vest's upright pouch, its faces to the sides, the hand taking its front edge: canted as the well stands through
+ * a reload, it sat diagonally across the pouch; turned out 30°, the arm took 0.27 s under the well turning it the 42° on (it turns a
+ * carried magazine only once it is there). */
 const POUCHES = [new Vector3(0.07, -0.129, 0.2), new Vector3(0.21, -0.25, 0.15)];
-/** How each pouch holds its magazine on the chest (rad): standing out from it, its faces to the sides, canted as the well stands before
- * the chest through a reload (its foot 9° forward, 23° out to the left), so the magazine comes out of it already all but turned as it
- * goes into the well — upright and turned out 30°, the arm took 0.25 s under the well turning it the 40° on. Turned flat against the
- * chest (−π/2 about the vertical, its front toward the middle), the arm held the grasp it took there strained in the well, and the hand
- * regripped it in its fingers on the way up, the magazine sliding up through a still hand. */
-const POUCHED = new Euler(-0.15, 0, 0.4, 'YXZ');
 /** What the wrist's flick adds to a spent magazine as the hand lets go of it at the bottom of its pull (the body's frame, +X its left):
  * out to the left and down (m/s),
  * and end over end, its top tipping outward (rad/s about the body's forward): it falls clear of the leg, as at the hand's speed alone it
- * dropped onto the thigh and landed by the boots. It lands 0.7 m out to the left and 0.4 m ahead of the left foot 0.38 s on and slides
- * to rest a metre out, within 5 cm of that whenever in the body's sway it is thrown; spun at −4 and −9 rad/s it tumbled on landing and
- * came to rest anywhere 0.7–1.1 m out. */
-const FLICK = { velocity: new Vector3(2.2, -0.3, 0), spin: -2 };
+ * dropped onto the thigh and landed by the boots. It passes 46 cm out from the left hip 0.2 s on (30 cm, at 2.2 m/s out, it read as
+ * brushing the thigh), lands 0.9 m out to the left 0.37 s on and slides to rest 1.2 m out; spun at −4 and −9 rad/s it tumbled on
+ * landing and came to rest anywhere 0.7–1.1 m out. */
+const FLICK = { velocity: new Vector3(3, -0.3, -0.3), spin: -2 };
 /** How long a hand that has quickly taken a magazine waits for its pinch to close before it takes it away (s). */
 const PINCHING = 0.06;
 const UP = new Vector3(0, 1, 0);
@@ -224,7 +223,6 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   const motion = new WeaponMotion();
   const pouches = POUCHES.map((at, i) => {
     const pouch = onBone(person, chest, `pouch ${i + 1}`, at.clone().multiply(new Vector3(arms, arms, proportions.scale)));
-    pouch.quaternion.setFromEuler(POUCHED);
     empty(pouch, `over pouch ${i + 1}`, new Vector3(0, 0.1 * proportions.scale, 0));
     pouch.userData.approach = [`over pouch ${i + 1}`];
     return pouch;
