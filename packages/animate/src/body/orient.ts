@@ -5,6 +5,7 @@ import { smoothstep } from '../kernel/math';
 import { within } from '../kernel/scene';
 import { oriented, resolve } from '../things/resolve';
 import type { Self } from './runtime';
+import { PROTRACTION } from '../hands/person/bend';
 
 /** how far out of a chain's full length a hand's grip on what its body turns is kept: just within its reach (`REACH`) */
 const HOLDABLE = 0.975;
@@ -60,7 +61,8 @@ export class Orient {
       const thing = hold?.thing.object ?? coming?.thing, goal = hold ? hold.goal.position : coming?.wrist;
       if (!thing || !goal || !within(thing, node)) continue;
       const bones = self.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
-      const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + self.skeleton.bones[bone].offset.length(), 0);
+      // (as far as the arm reaches with the shoulder girdle drawn out toward the grip, as a reach draws it: `PROTRACTION`)
+      const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + self.skeleton.bones[bone].offset.length(), 0) + (self.species.person ? PROTRACTION * self.species.person.height : 0);
       const placed = resolve(self, thing, _placed);
       const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
       const far = out.length(), near = toward.length();
