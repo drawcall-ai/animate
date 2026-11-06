@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Body, carry, grab, humanoid, release, wait, type Root } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
@@ -110,6 +110,32 @@ describe('what a body wears', () => {
     play(function* () { held = yield* grab(body, magazine, { left: 'base' }, { speed: 1.8 }); }, [body], 4, () => (orient(), held !== undefined));
     expect(held).toBe(true);
     expect([h.holding.left?.thing.object, h.holding.right?.thing.object, rifle.parent]).toEqual([magazine, rifle, mount]);
+    expect(body.log).toEqual([]);
+  });
+
+  it('lets the rifle hang on its mount for both hands to work, and takes it back support hand first', () => {
+    const { body, h, rifle, aim } = armed((body) => body.facing);
+    const mount = rifle.parent;
+    if (!mount) throw new Error('no mount');
+    // (hanging: the muzzle down and across the body; the mount turned back halfway as the support hand comes to it)
+    const hang = (share: number) => aim().multiply(new Quaternion().setFromEuler(new Euler(1.1 * share, 0.5 * share, 0)));
+    let turned = 0;
+    const steps: unknown[] = [];
+    play(function* () {
+      release(body, rifle);
+      turned = 1;
+      yield* wait(0.5);
+      steps.push(h.holding.left === null && h.holding.right === null);
+      turned = 0.5;
+      steps.push(yield* grab(body, rifle, { left: 'foregrip' }));
+      turned = 0;
+      steps.push(yield* grab(body, rifle, { right: 'pistol' }));
+    }, [body], 8, () => {
+      body.orient(mount, hang(turned));
+      return steps.length === 3;
+    });
+    expect(steps).toEqual([true, true, true]);
+    expect(rifle.parent).toBe(mount);
     expect(body.log).toEqual([]);
   });
 

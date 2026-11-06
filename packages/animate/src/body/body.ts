@@ -121,7 +121,8 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`): 0.5 a bent arm near the
    * body, 0.75 a comfortable reach, 0.9 all but straight. Past about 0.8, and behind the shoulder, the joints' ranges may hold the hand a
    * little short (a carry there ends once it has stopped closing, within 1.5 cm of it). Read where the body stands now:
-   * as a hand verb's target, give it as a function so it moves with the body, `() => body.armPoint('right', ahead, 0.8)`.
+   * as a hand verb's target, give it as a function so it moves with the body, `() => body.armPoint('right', ahead, 0.8)`. A point keeps a
+   * carried thing turned as the hand holds it; to turn it too, carry it to an empty turned so (parented to `object`, it moves with the body).
    */
   armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {
     const person = this.species.person;

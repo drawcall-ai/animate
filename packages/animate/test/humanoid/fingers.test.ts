@@ -1,7 +1,8 @@
-import { BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, Vector3 } from 'three';
+import { BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
+import { Body, carry, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
+import { selfOf } from '../../src/body/body';
 import { PERSON } from '../../skills/animate/references/person';
 import { LIFTED } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
@@ -211,6 +212,33 @@ describe('fingers', () => {
     expect(straight).toBeLessThan(0.1);
     expect(lifted).toBeCloseTo(-LIFTED * (Math.PI / 2), 1);
     expect(apart).toBeCloseTo(-2 * LIFTED * (Math.PI / 2), 1);
+  });
+
+  it('end a grab that stops short of its grip false, soon after its plan, saying so: a ring held on the grenade\'s far side', () => {
+    const body = new Body(humanoid(FINGERED), { dev: true }), room = roomOf(body);
+    const grenade = new Mesh(new SphereGeometry(0.032, 16, 12));
+    grenade.name = 'grenade';
+    grenade.userData.mass = 0.4;
+    grenade.position.set(-0.2, 1.0, 0.35);
+    Object.assign(empty(grenade, 'body', new Vector3()).userData, { handle: [0, 1, 0], facing: [0, 0, -1], radius: 0.032 });
+    const pin = empty(grenade, 'pin', new Vector3());
+    pin.userData.mass = 0.01;
+    const ring = new Mesh(new TorusGeometry(0.011, 0.0016, 6, 20).rotateY(Math.PI / 2));
+    ring.position.set(0, 0.045, -0.027);
+    pin.add(ring);
+    Object.assign(empty(pin, 'ring', new Vector3(0, 0.045, -0.038)).userData, { handle: [0, 1, 0], facing: [0, 0, 1], radius: 0.0016 });
+    room.add(grenade);
+    let hooked: boolean | undefined, began = 0, ended = 0;
+    play(function* () {
+      yield* grab(body, grenade, { right: 'body' });
+      yield* carry(body, grenade, new Vector3(-0.08, 1.12, 0.32), { step: false });
+      began = selfOf(body).time;
+      hooked = yield* grab(body, pin, { left: 'ring' });
+      ended = selfOf(body).time;
+    }, [body], 10, () => hooked !== undefined);
+    expect(hooked).toBe(false);
+    expect(ended - began).toBeLessThan(3);
+    expect(body.log.map(({ check }) => check)).toContain('late reach: distance (m)');
   });
 
   it('are refused where a skeleton has some finger bones but not all, or none to pose', () => {

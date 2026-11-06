@@ -39,7 +39,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   const stopped = (f: Frame) => takes.some((take, k) => {
     if (stepping(person)) progress[k].reset();
     const off = unmet(f, person.hands[take.side], take.goal, person.track(take.thing.object));
-    return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, person.hands[take.side], off.at);
+    return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, off);
   });
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
     request.eta = Math.max(0, ends - f.time);
@@ -240,7 +240,7 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   const progress = aims.map(() => new Progress());
   const stopped = (f: Frame) => aims.some(({ side, target }, k) => {
     const off = unmet(f, person.hands[side], target(f));
-    return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, person.hands[side], off.at);
+    return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, off);
   });
   const eta = (f: Frame) => {
     // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the

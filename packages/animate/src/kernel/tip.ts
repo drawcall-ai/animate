@@ -201,25 +201,17 @@ export function unmet(f: Frame, tip: number, target: Goal, on?: Carrier): { dist
 }
 
 /**
- * Whether a tip has stopped: it has kept within `STOPPED.moved` (m) of where it was and turned no more than `STOPPED.turned`, and its
- * target kept its place, for `STOPPED.seconds`, as the last final poses have it — a hand held off its target, not one still on its way
- * or knocked about by the body under it. Read once a sub-step.
+ * Whether a tip has stopped getting nearer its goal: its miss (`unmet`) no smaller by `STOPPED.closer` (m, rad) for `STOPPED.seconds`, as
+ * the last final poses have it — a hand held off its target, not one still on its way, however its turn or its goal wavers there. Read
+ * once a sub-step.
  */
 export class Progress {
-  private readonly tip = new Vector3();
-  private readonly turn = new Quaternion();
-  private readonly target = new Vector3();
+  private best = { distance: Infinity, angle: Infinity };
   private since = NaN;
 
-  stopped(f: Frame, tip: number, at: Readonly<Vector3>): boolean {
-    const now = f.prev.position(tip), turn = f.prev.rotation(tip);
-    const moved = now.distanceTo(this.tip) > STOPPED.moved || turn.angleTo(this.turn) > STOPPED.turned || at.distanceTo(this.target) > STOPPED.moved;
-    if (Number.isNaN(this.since) || moved) {
-      this.tip.copy(now);
-      this.turn.copy(turn);
-      this.target.copy(at);
-      this.since = f.time;
-    }
+  stopped(f: Pick<Frame, 'time'>, off: { distance: number; angle: number }): boolean {
+    const closer = off.distance < this.best.distance - STOPPED.closer || off.angle < this.best.angle - STOPPED.turned;
+    if (Number.isNaN(this.since) || closer) [this.best, this.since] = [{ distance: off.distance, angle: off.angle }, f.time];
     return f.time - this.since > STOPPED.seconds;
   }
 
@@ -229,8 +221,8 @@ export class Progress {
   }
 }
 
-/** how near (m) a stopped tip and its target keep to where they were, how little (rad) the tip turns, and for how long (s) */
-const STOPPED = { moved: 0.003, turned: 0.02, seconds: 0.5 };
+/** how much nearer (m) and less turned off (rad) a tip must come to be still closing on its goal, and for how long it may not (s) */
+const STOPPED = { closer: 0.003, turned: 0.02, seconds: 0.5 };
 
 /**
  * A late reach reports each unmet constraint, never a zero distance for a blocked turn, saying in `detail` where the tip stopped in the

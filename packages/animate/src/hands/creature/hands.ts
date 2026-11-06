@@ -149,7 +149,7 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
     // (past its planned end, a tip that has stopped off its goal fails at once; one still moving, `REACHING` s on. The legs stepping
     // under it, it is watched afresh after)
     if (!self.locomotion.settled) progress.reset();
-    if (!late && f.time > ends && (progress.stopped(f, bone, unmet(f, bone, target, on).at) || f.time > ends + REACHING)) {
+    if (!late && f.time > ends && (progress.stopped(f, unmet(f, bone, target, on)) || f.time > ends + REACHING)) {
       late = true;
       if (lateReach(f, bone, target, chain, on)) request.fail();
     }

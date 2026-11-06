@@ -286,10 +286,11 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  for (const driven of [false, true]) it(`throws overhand at a target${driven ? ', its root driven' : ''}: cocked behind the head, whipped through, let go ahead of it aimed at the target, following through`, () => {
+  for (const [driven, height] of [[false, 1.75], [true, 1.75], [true, 1.6], [false, 1.9]] as const) it(`throws overhand at a target (${height} m${driven ? ', its root driven' : ''}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through`, () => {
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
-    const body = person({ dev: true, ...(driven && { drive: () => root }) }), room = roomOf(body);
-    const ball = box(room, new Vector3(-0.2, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
+    const body = person({ dev: true, ...(driven && { drive: () => root }) }, height), room = roomOf(body);
+    // (taken up from low, before the belly)
+    const ball = box(room, new Vector3(-0.12, 0.55 * height, 0.28), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
     Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const target = new Vector3(0, 0, 15);
     let behind = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), done = false;

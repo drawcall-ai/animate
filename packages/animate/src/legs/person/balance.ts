@@ -281,10 +281,9 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
         prev.multiply(impact.prev.clone().invert());
       }
       const turned = back[k].follow(prev2, prev, local, poise.twistRate > 0 ? AIMING : TURN, dt, new Quaternion());
-      if (impact.active) {
-        turned.multiply(impact.rotation);
-        if (limit) clampRotation(turned, limit);
-      }
+      if (impact.active) turned.multiply(impact.rotation);
+      // (within the joint's range however quickly it was followed there: an aim's quick turn on top of a throw's hips overshot it)
+      if (limit) clampRotation(turned, limit);
       f.current.setLocal(bone, turned);
     });
     // the legs down to the feet
