@@ -14,12 +14,11 @@ import { Joints, FLAT } from './joints';
 import { blendShape, digitOf, DIGITS, PINCH, POINT, RELAXED, shapeOf, withValues, type Digit, type Fingers, type Shape } from './shape';
 import { vectorOf } from '../things/thing';
 
-/** A placement as a hand takes it: the shape its fingers close to there, its node's place and turn there and the thing's triangles about
- * it (the thing's frame), all worked out once, as it is first asked for. */
+/** A placement as a hand takes it: the shape its fingers close to there and the thing's triangles about it (the thing's frame), worked
+ * out once, as it is first asked for. */
 interface Taken {
   placement: HandPlacement;
   shape: Shape;
-  node: Placement;
   near: Triangles;
 }
 
@@ -203,7 +202,7 @@ export class FingerState {
       const world = toWorld(node, frame), matrix = new Matrix4().compose(world.position, world.quaternion, _scale.setScalar(scale));
       shape = closedOn(joints, thing, lineOf(placement, frame), skins, matrix);
     }
-    const taken = { placement, shape, node, near };
+    const taken = { placement, shape, near };
     hand.taken.set(placement, taken);
     return taken;
   }
@@ -235,7 +234,7 @@ export class FingerState {
 
   /** whether `hand`'s node is within `ARRIVED` of where `taken` puts it */
   private arrived(hand: Hand, taken: Taken): boolean {
-    const wrist = toWorld(taken.node, worldOf(taken.placement.on)).position;
+    const wrist = toWorld(this.nodeOf(hand, taken.placement), worldOf(taken.placement.on)).position;
     return hand.joints.hand.getWorldPosition(_at).distanceTo(wrist) <= ARRIVED;
   }
 
@@ -245,7 +244,7 @@ export class FingerState {
    */
   private onto(hand: Hand, placement: HandPlacement): Shape {
     const taken = this.take(hand, placement);
-    const wrist = toWorld(taken.node, worldOf(taken.placement.on)).position, distance = hand.joints.hand.getWorldPosition(_at).distanceTo(wrist);
+    const wrist = toWorld(this.nodeOf(hand, placement), worldOf(placement.on)).position, distance = hand.joints.hand.getWorldPosition(_at).distanceTo(wrist);
     const point = taken.placement.point, pad = point !== 'palm' && point !== 'pinch' ? point : null;
     // (a fingertip's hand comes as a loose fist, its digit curled with the others, and points before its way's final run alone, as its
     // verb says how far it has gone; any other hand keeps the shape it set off in and opens as it nears)

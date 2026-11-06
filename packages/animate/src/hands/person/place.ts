@@ -31,13 +31,13 @@ export function handOn(point: HandPoint, placement: Pick<HandPlacement, 'positio
 }
 
 /**
- * The placement a hand takes `grip` of `thing` by: of the placements the grip leaves free, the one that `cost`s least — how
- * uncomfortably the body holds its hand bone so (the thing's frame), from where it stands — and on a handle free to roll, with its palm on
- * an end of the narrowest chord, the thumb opposing across it. A fingertip's pad pressed into a face points along its pressing line,
+ * The placement a hand takes `grip` of `thing` by: of the placements the grip leaves free — a spread of them, and the one nearest the
+ * hand bone turned as `natural` has it (the thing's frame) — the one that `cost`s least — how uncomfortably the body holds its hand bone
+ * so, from where it stands — and on a handle free to roll, with its palm on an end of the narrowest chord, the thumb opposing across it. A fingertip's pad pressed into a face points along its pressing line,
  * rolled as a pointing hand is. `point`: where each point of the hand is (the hand bone's frame, scaled); `up`: the world's up in the
  * thing's frame.
  */
-export function pick(thing: Object3D, grip: Grip, point: (part: HandPart) => HandPoint, up: Vector3, cost: (hand: Placement) => number): HandPlacement {
+export function pick(thing: Object3D, grip: Grip, point: (part: HandPart) => HandPoint, up: Vector3, natural: Quaternion, cost: (hand: Placement) => number): HandPlacement {
   const part = grip.pad ?? 'palm', at = point(part), centre = grip.at.position;
   // (its digits read from the grip's empty as they are asked for: an app may lay a trigger finger on the trigger or off it every update)
   const placement = (position: Vector3, quaternion: Quaternion): HandPlacement => ({
@@ -57,12 +57,15 @@ export function pick(thing: Object3D, grip: Grip, point: (part: HandPart) => Han
     for (const facing of facings) for (const slide of slides) {
       tried.push({ position: centre.clone().addScaledVector(handle.axis, slide).addScaledVector(facing, -handle.radius), facing, axis: handle.axis });
     }
-  } else {
-    const facings = grip.facing ? [grip.facing] : sphere(DIRECTIONS);
-    for (const facing of facings) for (const axis of around(facing, grip.facing ? ROLLS : TURNS)) {
-      tried.push({ position: centre.clone().addScaledVector(facing, -(grip.ball?.radius ?? 0)), facing, axis });
-    }
   }
+  // (and the one nearest the hand turned as `natural` has it: its grasp line onto a handle's axis, its facing onto a facing asked; on
+  // what leaves the palm free over a ball, or to roll about its facing, that one alone)
+  const turn = natural.clone().multiply(framed(at.axis, at.facing)), axis = new Vector3(1, 0, 0).applyQuaternion(turn), facing = new Vector3(0, 1, 0).applyQuaternion(turn);
+  if (handle && !grip.facing) {
+    const onto = facing.projectOnPlane(handle.axis).normalize();
+    tried.push({ position: centre.clone().addScaledVector(onto, -handle.radius), facing: onto, axis: handle.axis });
+  } else if (!handle && grip.facing) tried.push({ position: centre.clone(), facing: grip.facing, axis: axis.projectOnPlane(grip.facing).normalize() });
+  else if (!handle) tried.push({ position: centre.clone().addScaledVector(facing, -(grip.ball?.radius ?? 0)), facing, axis });
   if (tried.length === 1) return placement(tried[0].position, framed(tried[0].axis, tried[0].facing));
   // (on a handle free to roll: how much wider than its narrowest the chord the palm would lie on is, a share of the narrowest)
   const widths = handle ? tried.map(({ facing }) => handle.width(facing)) : [];
@@ -84,7 +87,7 @@ function framed(axis: Vector3, facing: Vector3): Quaternion {
 
 /** what a placement on `grip` asks of the fingers: a fingertip's hand points, any other closes on the thing; and the digits its
  * `userData.fingers` puts apart, each its values or the empty its pad presses on */
-function fingersOf(thing: Object3D, grip: Grip): Pick<HandPlacement, 'fingers' | 'digits'> {
+export function fingersOf(thing: Object3D, grip: Grip): Pick<HandPlacement, 'fingers' | 'digits'> {
   const fingers = grip.pad && grip.pad !== 'pinch' ? structuredClone(POINT) : 'close' as const;
   const asked: unknown = grip.node.userData.fingers;
   if (asked === undefined) return { fingers };
@@ -104,8 +107,8 @@ function fingersOf(thing: Object3D, grip: Grip): Pick<HandPlacement, 'fingers' |
   return { fingers, digits };
 }
 
-/** how many rolls about a free axis (and about a free facing), slides along a handle's length and ways round a free facing a pick weighs */
-const ROLLS = 36, TURNS = 12, SLIDES = 5, DIRECTIONS = 32;
+/** how many rolls about a handle's axis, and slides along its length, a pick weighs */
+const ROLLS = 36, SLIDES = 5;
 /** what the palm on a handle's chord wider than its narrowest costs a placement, per share of the narrowest it is wider (as a radian
  * of an arm's joints out of comfort; on no chord at all, the whole) */
 const CHORD = 1;
@@ -116,14 +119,6 @@ function around(axis: Vector3, count: number): Vector3[] {
   if (square.lengthSq() < 1e-6) square.set(0, 1, 0).cross(axis);
   square.normalize();
   return Array.from({ length: count }, (_, k) => square.clone().applyAxisAngle(axis, (2 * Math.PI * k) / count));
-}
-
-/** `count` unit vectors spread evenly over the sphere (a Fibonacci lattice) */
-function sphere(count: number): Vector3[] {
-  return Array.from({ length: count }, (_, k) => {
-    const y = 1 - (2 * (k + 0.5)) / count, r = Math.sqrt(1 - y * y), a = k * Math.PI * (3 - Math.sqrt(5));
-    return new Vector3(r * Math.cos(a), y, r * Math.sin(a));
-  });
 }
 
 const _x = new Vector3(), _y = new Vector3();

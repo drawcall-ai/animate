@@ -45,9 +45,11 @@ export class Thing {
 
   /**
    * The named empty, a grip: where a person's hand (a creature's tip) goes, each key below in the empty's frame. A grip declares what of
-   * the hand's placement is fixed and what is free; the hand verb taking it fixes the rest as it starts, from where the body stands
-   * (`Body.placement`), and keeps it so on the thing while it holds it.
-   * - Alone, the empty is where the palm's middle goes, the palm free to face any way and roll.
+   * the hand's placement is fixed and what is free; the hand verb taking it picks the rest as it starts, from where the body stands
+   * (`Body.placement`), and keeps it on the thing while it holds it. What the grip fixes the arm holds exactly; what was picked within
+   * its freedoms is only preferred — the hand keeps its point on the empty and turns off the picked turn where its wrist cannot hold it.
+   * - Alone (no key below), the empty is where the palm's middle goes, the hand turned as the arm brings it, and kept turned as it took
+   *   hold.
    * - `userData.facing`: the way the touching part (the palm, or the pad) faces into the thing; it rolls freely about it.
    * - `userData.handle`: an axis, pointing out of the fist at the thumb's end: a handle running through the empty, the palm against it and
    *   the fingers round it, rolling freely about it (with `facing`, its palm fixed so: the grip fully fixed). `userData.radius` (m) is how

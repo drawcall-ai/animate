@@ -10,7 +10,7 @@ import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Channel, Tier } from '../kernel/requests';
 import type { Fingers } from '../fingers/shape';
-import { takingOf } from '../hands/person/palm';
+import { frozen, takingOf } from '../hands/person/palm';
 import type { HandPlacement } from '../hands/person/place';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
@@ -109,7 +109,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
   placement(side: 'left' | 'right', empty: Object3D): HandPlacement {
     const thing = empty.parent;
     if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
-    return takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement;
+    return frozen(takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement);
   }
 
   /**
