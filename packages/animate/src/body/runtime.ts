@@ -175,11 +175,13 @@ export class Self implements Holder {
   readonly borne = new Map<Thing, Bearing>();
 
   /** where hand `side` goes on what `hold` has it hold (the thing's frame): where its fingers seat it, so their contacts are met from the
-   * shoulder out, once they have closed on it; else where its hold puts it */
+   * shoulder out, once they have closed on it — turned so, not only toward it: the seat is where the grip puts the hand, however it came,
+   * and an arm leaving it short by the wrist's range would leave the digits on contacts met for a hand turned otherwise — else where its
+   * hold puts it */
   seated(side: 'left' | 'right', hold: Hold): Goal {
     const seat = this.fingers?.seat(side);
     if (!seat) return steadied(hold);
-    return { ...hold.goal, position: seat.position, quaternion: seat.quaternion.clone().multiply(_rest.copy(this.restOf(this.hands[side])).invert()), axis: undefined };
+    return { ...hold.goal, position: seat.position, quaternion: seat.quaternion.clone().multiply(_rest.copy(this.restOf(this.hands[side])).invert()), axis: undefined, preferred: undefined };
   }
 
   /** what its hands do for the verbs (made when first asked, once all it is has been made) */

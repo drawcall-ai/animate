@@ -50,7 +50,8 @@ export class Thing {
    * about the empty, or given as `userData.radius` (m). `userData.pad` names a digit whose pad goes on it instead of the palm (a fingertip
    * on a button: the hand comes as a loose fist, points late, comes in along `facing` and holds where the pad meets the face; it draws back
    * the way it came as it is released). `userData.facing` is the way the touching part — the palm, or the pad — faces into the surface,
-   * the hand turned so as far as the wrist allows (a palm without a handle free to roll about it). `userData.fingers` lays digits over the
+   * the hand turned so as far as the wrist allows on its way, and held so once its fingers close, wherever it came from (a palm without a
+   * handle free to roll about it). `userData.fingers` lays digits over the
    * closed hand: a digit's values (`Finger`, `Thumb`), or the name of an empty on the thing its pad presses on (read every update; that
    * empty's own `facing` lays the pad flat on its face). A creature's tip takes the empty's position alone. Attached things' subtrees (their
    * own `userData.mass`) are not searched.

@@ -96,10 +96,10 @@ function keptOut(joints: Joints, near: Triangles, place: Placed, shape: Shape, w
 
 /** the triangles of `thing`'s meshes about the hand `joints` move, in the thing's frame (`frame`, the world's): every mesh shown under it,
  * what hangs from it too (a magazine in a rifle's well) — the body's own `skins` left out — as far as the hand reaches and a seat may move
- * it */
-export function trianglesAbout(joints: Joints, skins: readonly SkinnedMesh[], thing: Object3D, frame: Placement): Triangles {
+ * it, from its wrist at `about` (the thing's frame; default: where it is) */
+export function trianglesAbout(joints: Joints, skins: readonly SkinnedMesh[], thing: Object3D, frame: Placement, about?: Vector3): Triangles {
   const back = new Matrix4().compose(frame.position, frame.quaternion, new Vector3(1, 1, 1)).invert(), meshes: Mesh[] = [];
   thing.traverseVisible((node) => { if (node instanceof Mesh && !skins.some((skin) => skin === node)) meshes.push(node); });
   const at = inFrame(placedOf(joints.hand), frame);
-  return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), at.position, joints.span * at.scale + REACH);
+  return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), about ?? at.position, joints.span * at.scale + REACH);
 }

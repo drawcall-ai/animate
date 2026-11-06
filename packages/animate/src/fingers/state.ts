@@ -86,9 +86,6 @@ const CLOSED = 0.15;
  */
 export class FingerState {
   private readonly hands: Record<'left' | 'right', Hand>;
-  /** where each hand was first seated on each grip (by hand and the grip's empty), as its arm turned it, by what the grip asked of its
-   * digits then and in which hold: held again so, it sits so */
-  private readonly seats = new Map<string, { asks: Asks; on: Hold | Object3D; closed: Closed }[]>();
   /** how long its hands have been shaped (s): by the body's updates, or by its app posing it (`set`) */
   private time = 0;
 
@@ -266,28 +263,22 @@ export class FingerState {
 
   /**
    * `side`'s hand closed on `grip` of `thing` afresh (`on`: the hold or empty it closed for; when it first closed on it kept): pointing
-   * for a fingertip's grip, else round the thing (`closedOn`), its thumb opposing it; then seated on it (`meet`), from where a grab puts it
-   * — moved and turned as its contacts and the thing's surface ask, so that no part of the hand is inside it — unless the thing hangs from
-   * the hand, which carries it as it took it
+   * for a fingertip's grip, else round the thing (`closedOn`), its thumb opposing it; then seated on it (`meet`) from where the grip puts
+   * it — moved and turned as its contacts and the thing's surface ask, so that no part of the hand is inside it — unless the thing hangs
+   * from the hand, which carries it as it took it. A grip that asks a facing seats the hand the same however it came: the way it came
+   * decides only the path to the seat.
    */
   private close(side: 'left' | 'right', grip: Grip, thing: Object3D, on: Hold | Object3D): void {
     const hand = this.hands[side], again = hand.closed && (hand.closed.on === on || hand.closed.on === grip.node) ? hand.closed : null;
     const since = again?.since ?? this.time, asks = asksOf(grip.node);
     thing.updateWorldMatrix(true, true);
-    const frame = worldOf(thing), back = frame.quaternion.clone().invert(), near = trianglesAbout(hand.joints, hand.skins, thing, frame);
-    // (held again later, its grip asking the same of its digits, as it was first held so: seated afresh from how it stood, the same hand
-    // would take a rifle's front back turned otherwise after a reload)
-    const key = `${side} ${grip.node.uuid}`, seats = this.seats.get(key) ?? [], kept = seats.find((seat) => sameAsks(seat.asks, asks));
-    if (kept && kept.on !== on && !(on instanceof Object3D)) {
-      hand.closed = { ...kept.closed, on, near, off: offOn(hand, thing), since };
-      return;
-    }
-    // (seated from its point on the grip's empty, turned as a grab turns it, or, holding it, as the arm has turned it there — turned as
-    // the grip asks, a turn the wrist may not make, the seat would lie off where the arm holds the hand — from the shape it closes to)
-    const now = placedOf(hand.joints.hand);
-    if (on instanceof Object3D) now.quaternion.copy(this.placedOn(side, grip.node).rotation);
+    const frame = worldOf(thing), back = frame.quaternion.clone().invert();
+    // (seated from its point on the grip's empty, turned as the grip turns the hand — as it asks, or, asking nothing, as the arm has
+    // turned it — from the shape it closes to)
+    const now = { ...placedOf(hand.joints.hand), quaternion: this.placedOn(side, grip.node).rotation };
     const point = this.pointOn(side, grip).at.multiplyScalar(now.scale).applyQuaternion(now.quaternion);
     const base = within(thing, hand.joints.hand) ? null : inFrame({ ...now, position: grip.at.position.clone().applyMatrix4(thing.matrixWorld).sub(point) }, frame);
+    const near = trianglesAbout(hand.joints, hand.skins, thing, frame, base?.position);
     const handle = grip.handle && { at: grip.at.position.clone().applyMatrix4(thing.matrixWorld), axis: grip.handle.axis.clone().applyQuaternion(frame.quaternion) };
     // (closed round from where `at` places it, the hand standing so: its shape and where its thumb opposes the handle, in the thing's frame)
     const closing = (at: Placement | null) => {
@@ -297,8 +288,8 @@ export class FingerState {
       return { shape: shapeAsked(asks, closed.shape), thumb };
     };
     let shape = shapeAsked(asks, grip.pad ? POINT : hand.shape), seat: Placement | null = null, thumb: Opposed | null = null;
-    // (closed round from where a grab puts it, then seated with its thumb on where it opposes the handle — so the hand makes room for the
-    // thumb round the back strap — then closed round again from the seat; the digits on contacts kept as the seat put them)
+    // (closed round from where the grip puts it, then seated with its thumb on where it opposes the handle — so the hand makes room for
+    // the thumb round the back strap — then closed round again from the seat; the digits on contacts kept as the seat put them)
     if (!grip.pad) ({ shape, thumb } = closing(base));
     const contacts = contactsOn(grip, thing, thumb), met = structuredClone(shape);
     if (base) {
@@ -314,8 +305,6 @@ export class FingerState {
       }
     }
     hand.closed = { on, shape, thumb, seat, contacts: contactsOn(grip, thing, thumb), near, asks, off: offOn(hand, thing), since };
-    if (on instanceof Object3D) return;
-    this.seats.set(key, [...seats.filter((seat) => seat !== kept), { asks, on, closed: hand.closed }]);
   }
 
   /**
