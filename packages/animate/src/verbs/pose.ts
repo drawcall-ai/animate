@@ -10,7 +10,7 @@ import { NOD } from '../look/offset';
 import { BOW } from '../legs/person/balance';
 import { LOWER } from '../legs/person/posture';
 import { EASING, POSED } from '../legs/creature';
-import { SWING } from '../hands/person/arms';
+import { SWING } from '../hands/person/hang';
 import { SIDES } from '../species/humanoid/bones';
 import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';

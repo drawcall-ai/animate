@@ -10,6 +10,7 @@ import { NECK_PITCH, TRUNK_PITCH } from '../../species/humanoid/limits';
 import { heldMass } from '../../things/hold';
 import { loadFactor } from '../../kernel/load';
 import { floorUnder } from '../../legs/person/legged';
+import { REACH } from '../../kernel/tip';
 
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 export const ARM_REACH = 0.95;
@@ -98,7 +99,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   // Close a low reach against the actual shoulder once the bow is exhausted. Knees can close a vertical deficit,
   // not a horizontal one; the standing lever alone leaves a residual when load balance reduces the bow.
   // Acquiring a load already prepares its lowering above; this feedback closes the remaining deficit of a load already held.
-  const horizontal = Math.hypot(shoulder.x - hand.x, shoulder.z - hand.z), out = 0.98 * proportions.armLength;
+  const horizontal = Math.hypot(shoulder.x - hand.x, shoulder.z - hand.z), out = REACH * proportions.armLength;
   if (deep && mass === 0 && factor > 1 && !carried && person.locomotion.settled && bow >= BOWED * bowLimit && horizontal < out) {
     const missing = shoulder.y - hand.y - Math.sqrt(out ** 2 - horizontal ** 2);
     if (missing > 0) {

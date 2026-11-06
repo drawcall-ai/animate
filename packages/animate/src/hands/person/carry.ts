@@ -1,41 +1,28 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { Carrier } from '../../kernel/carrier';
-import { movingPoint, type Live, type Motion, type Placement, type Goal } from '../../kernel/goal';
+import { movingPoint, type Placement, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
-import { TrackedPoint, TrackedRotation } from '../../kernel/track';
-import { course, type Waypoint } from '../../kernel/course';
-import { follow } from '../../kernel/follow';
+import { type Waypoint } from '../../kernel/course';
 import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
-import { carriedBy, handsOn, heldMass, lift, supported, worn } from '../../things/hold';
+import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import type { Reacher } from './reacher';
 import { paceAt, type HandOptions } from '../handling';
-import type { Clearance, Way } from '../route';
+import type { Way } from '../route';
 import { floorUnder } from '../../legs/person/legged';
-import { handStep, HOLD } from './arms';
 import { SIDES, sideOf } from '../../species/humanoid/bones';
-import { ARM_REACH, bringShoulder, PROTRACTION } from './bend';
-import { ChainTip } from '../../kernel/tip';
-import { BODY_RADIUS, clearBody, LOAD_RESERVE } from './clearance';
-import { following, LEADING, limitOf } from './reach';
+import { ARM_REACH, PROTRACTION } from './bend';
+import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { footing, walking, type WalkUp } from './stand';
-import { grasped, planGrasp } from './grasp';
-import { resolve, type Hold } from '../../things/resolve';
+import { aimsFor, CARRYING, type Aim } from './aim';
+import { END, grasping, holding, restingAt, travel, type Grasping } from './travel';
 
-/** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
-const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
 /** how much faster than its mean a carry's course goes at its quickest (a minimum-jerk profile's peak, 1.875, and some room) */
 const PEAK = 2;
-/** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s); how long it stands still
- * (within `moved`, m) short of it to be as near as the arms take it, and how near it then is there (`close`, m) */
-const RESTING = 2, STALL = { moved: 0.003, seconds: 0.3, close: 0.015 };
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
 const PREPARED = 2;
-/** Tuned: a held goal moved further than this (m, × the body's scale) to clear the neck and head is noted */
-const CLEARED = 0.02;
 /** Artistic calibration (s): a brief preparatory lift, a slower precise raise, begun early enough to overlap arrival. */
 const LIFT = 0.5, RAISE = 1.3, RAISE_LEAD = 0.9;
 /** Tuned: how far (rad) the body may still have to turn to its stand as a transfer's raise begins */
@@ -76,52 +63,6 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   else yield* transferring(person, request, thing, way, plan, aim, resting, grasp);
   request.met();
   yield* holding(person, request, thing, aim(), end, undefined, way.own);
-}
-
-/** Tuned: how long (s) before a carry's course ends the hand holding it alone weighs its grasp for its end (`planGrasp`): about where
- * the body will stand and how it will bow by then, with time for a regrip (`REGRIP`) before it comes there */
-const PLANNED = 0.5;
-/** Tuned: how long (s) a carry's course may be over, its thing not yet at rest at its end, before its hand plans its grasp again */
-const SETTLING = 0.5;
-
-/**
- * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
- * the thing is now): as it nears its end (`nearing`) — weighed each sub-step until its course is over, the end and the body as they
- * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a rifle's well, the rifle
- * held up to the eye, as the head turns from the pouch to it) is weighed where it has gone, not only where it was half a second before
- * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s after its course is over
- * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
- */
-interface Grasping {
-  /** weighed as the course nears its end, the last time as it is `over` */
-  nearing: (f: Frame, over: boolean) => void;
-  settling: (f: Frame) => void;
-}
-
-function grasping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Grasping {
-  const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
-  const plan = (f: Frame, settling = false) => {
-    if (!hold) return false;
-    const at = end(f);
-    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion }, settling);
-  };
-  let kept = true;
-  return {
-    nearing: (f, over) => {
-      if (kept) kept = plan(f) && !over;
-    },
-    settling: once((f) => plan(f, true)),
-  };
-}
-
-/** `act`, done the first time only */
-function once(act: (f: Frame) => void): (f: Frame) => void {
-  let done = false;
-  return (f) => {
-    if (done) return;
-    done = true;
-    act(f);
-  };
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
@@ -229,241 +170,6 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
   yield* travel(person, request, thing, way, aimsFor(person, thing, CARRYING, true), resting, { near: CLEAR.near * person.scale, grasp });
 }
 
-/**
- * Follow a course with load compliance only on support take-up, until the thing rests within `near` of its course's end; report a late
- * settling endpoint. The `end` of a carry fails it instead of waiting on: once late, or once at rest where the body's own trunk and head
- * hold it off its end (a carry ends true only with the thing in place). Late is timed from the course's end — on a leg the carry `walks`,
- * from when the body stands. Its request's eta is `eta` of the course's time left (s; default that time): what the carry does besides the
- * course counted in.
- */
-function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], makeAim: Aim, resting: boolean,
-  { near = END.distance, on, end = false, walks = false, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; eta?: (left: number) => number; grasp?: Grasping } = {}) {
-  const carrier = person.track(thing.object);
-  const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
-  // (a hand carrying alone while the leading hand carries something of its own goes a moment after it; one beside a leading hand that
-  // holds what the body wears — a rifle on its sling — goes at once)
-  const leading = person.holding[LEADING]?.thing;
-  const lag = grips[LEADING] === undefined && leading && !worn(leading) ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
-  const factor = loadFactor(thing.mass);
-  const aim = makeAim(factor);
-  const from = carrier.current.position.y;
-  // (take-up and compliance belong to lifting off a support, not every carried waypoint; mass slows the lift's acceleration and path)
-  const load = resting ? factor - 1 : 0;
-  const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
-  const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0;
-  const was = new Vector3();
-  const left = (f: Frame) => Math.max(0, (Number.isNaN(began) ? f.time : began) + lag.delay + total - f.time);
-  const rested = restingAt(near);
-  const seconds = 2.4 * load;
-  const to = (f: Frame) => {
-    if (Number.isNaN(began)) began = f.time;
-    if (grasp && left(f) <= PLANNED) grasp.nearing(f, left(f) === 0);
-    const goal = path.to(f);
-    const u = Number.isNaN(since) || seconds === 0 ? 0 : Math.min(1, (f.time - since) / seconds);
-    if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
-    return goal;
-  };
-  const there = (f: Frame) => {
-    if (!path.over(f)) return false;
-    if (Number.isNaN(since)) since = f.time;
-    if (grasp && f.time - since > SETTLING) grasp.settling(f);
-    // (its lateness timed from its course's end; on a leg the carry walks, from when the body stands, not while it still walks there)
-    if (Number.isNaN(stood) && (!walks || !person.locomotion.moving)) stood = f.time;
-    aim.read(f, to);
-    const goal = aim.goal.position;
-    // Load compliance: https://pmc.ncbi.nlm.nih.gov/articles/PMC4443842/ (F = k × displacement).
-    // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
-    dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
-    if (rested(f, carrier, goal) && (dip === 0 || f.time - since >= seconds)) {
-      if (!end || aim.off <= near) return true;
-      // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
-      if (!blocked) {
-        blocked = true;
-        f.dev?.append(f.time, { check: 'carry: held clear of its own body, off its end (m)', value: aim.off, limit: near, where: thing.object.name, detail: inTheWay(aim) });
-        request.fail();
-      }
-      return false;
-    }
-    // (standing still short of its end: as near as the arms take it — there, within `STALL.close`, a hand's joints holding it a few
-    // millimetres off; else late, no waiting brings it nearer)
-    if (Number.isNaN(still) || carrier.current.position.distanceTo(was) > STALL.moved) {
-      still = f.time;
-      was.copy(carrier.current.position);
-    }
-    const short = carrier.current.position.distanceTo(goal), stalled = f.time - still > STALL.seconds;
-    if (stalled && short > near && short <= STALL.close && (!end || aim.off <= near)) return true;
-    if (!late && (f.time - stood > RESTING || (stalled && short > STALL.close))) {
-      late = true;
-      f.dev?.append(f.time, { check: `late carry: course end distance after ${(f.time - since).toFixed(1)} s (m)`, value: short, limit: near, where: thing.object.name,
-        detail: `stopped ${cm(short)} cm off it: ${aim.off > near ? inTheWay(aim) : limits(person, thing, aim)}` });
-      if (end) request.fail();
-    }
-    return false;
-  };
-  request.eta = eta(left(person.frame));
-  yield* holding(person, request, thing, aim, (f) => {
-    request.eta = eta(left(f));
-    return to(f);
-  }, there);
-}
-
-/** what holds each hand off where the carried thing's grips would be at its goal, as a late reach says it */
-function limits(person: Reacher, thing: Thing, aim: CarryAim): string {
-  const goal = aim.goal;
-  return Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing
-    ? [`${side} hand ${limitOf(person, sideOf(side))(_g.copy(hold.goal.position).applyQuaternion(goal.quaternion).add(goal.position))}`] : []).join('; ');
-}
-
-/** why a carried thing its own body holds off its end is not there */
-const inTheWay = (aim: CarryAim) => `its own trunk and head hold it ${cm(aim.off)} cm off its end: the body stands too near it`;
-
-const cm = (m: number) => (100 * m).toFixed(1);
-
-/** each hold's arm as a carry moves it: one through all the carry's stages and its keeping after (a new one at each stage, its brakes
- * and its fit taken afresh, threw the arm off the way it went — a belt's tongue held at its end drifted 7 mm off it as the carry ended) */
-const tips = new WeakMap<Hold, ChainTip>();
-function tipOf(hold: Hold, hand: string): ChainTip {
-  let tip = tips.get(hold);
-  if (!tip) tips.set(hold, (tip = new ChainTip(`${hand}Arm`)));
-  return tip;
-}
-
-/** Keep each held grip on its own arm; a released or replaced hold stops participating. */
-function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
-  const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
-    ? [{ side: sideOf(hand), hold, tip: tipOf(hold, hand) }] : []);
-  // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
-  const single = hands.length === 1 ? grasped(person, hands[0].side, thing) : null;
-  const step = ({ side, tip }: (typeof hands)[number]) => (f: Frame) => {
-    const carrier = aim.read(f, to), hold = person.holding[side], carried = carrier.carriedBy === person;
-    if (!hold || hold.thing !== thing) return;
-    // (the hand on the carrier, its motion the carrier's: a goal the body carries — a pouch on its chest — is followed with the body however
-    // briskly it runs, only the way to it braked)
-    if (single) {
-      const goal = single(f);
-      bringShoulder(person, f, side, _g.copy(goal.position).applyQuaternion(carrier.current.quaternion).add(carrier.current.position), 1, 0, carried);
-      handStep(person, f, side, goal, { on: carrier, ...aim.hold, lead: true }, tip);
-      return;
-    }
-    bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carried);
-    person.carrying.set(thing.object, carrier);
-    handStep(person, f, side, hold.goal, { on: carrier, thing, ...aim.hold, lead: true }, tip);
-  };
-  return parallel<Frame>('race', ...hands.map((hand) => {
-    const move = step(hand);
-    if (keep) hand.hold.keep = move;
-    return during(request, `hand.${hand.side}`, 'asked', move, until);
-  }));
-}
-
-/** where a carried course ends, followed as its frame moves it: a thing has come to rest there once within 5 mm of it (or as near as its
- * course asks) and moving with it to within 5 cm/s, read as the thing and the end were a sub-step before */
-const END = { distance: 0.005, speed: 0.05 };
-
-/** whether a carried thing has come to rest at its course's end, as `END` has it, within `near` of it */
-function restingAt(near: number): (f: Frame, carrier: Carrier, at: Readonly<Vector3>) => boolean {
-  let end: Carrier | null = null;
-  return (f, carrier, at) => {
-    end ??= new Carrier(new Vector3().copy(at));
-    if (!end.moved(f.time)) end.move(f.time, at);
-    // (a thing its body moves is moved after the hands, so not yet this sub-step; one hanging from a hand is read where the hand is now)
-    const [thing, before] = carrier.moved(f.time) ? [carrier.prev, carrier.prev2] : [carrier.current, carrier.prev];
-    const off = _v.subVectors(thing.position, before.position).sub(_g.subVectors(end.prev.position, end.prev2.position)).divideScalar(f.dt);
-    return thing.position.distanceTo(end.prev.position) < near && off.length() < END.speed;
-  };
-}
-
-type Aim = (factor?: number, clearance?: Clearance) => CarryAim;
-
-function aimsFor(person: Reacher, thing: Thing, motion: Motion, clear: Clearance): Aim {
-  return (factor = 1, clearance = clear) => new CarryAim(person, thing, { ...motion, accel: motion.accel / factor }, clearance);
-}
-
-/** One load path: clear its course before following it, and judge the same endpoint. */
-class CarryAim {
-  readonly goal = { position: new Vector3(), quaternion: new Quaternion() };
-  private readonly carrier: Carrier;
-  private readonly nominal: Carrier;
-  private readonly position = new TrackedPoint();
-  private readonly rotation = new TrackedRotation();
-  private readonly at = new Vector3();
-  private readonly turned = new Quaternion();
-  private time = NaN;
-  /** whether a goal moved clear of the head has been noted */
-  private cleared = false;
-  /** how far (m) the body's own trunk and head held the last goal read off where it was asked to go: none for a goal on its own head
-   * (a cup put to the mouth stops in front of it by design), else the body stands in the way of its end */
-  off = 0;
-  /** how much of the push clear of the body it has taken up, the two sub-steps before */
-  private readonly pushed = [new Vector3(), new Vector3()];
-
-  /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
-  private readonly pivot = new Vector3();
-
-  /** how briskly the hands keep to it: a held hand's pace (`HOLD`), quickened as much as its aim is past a calm carry's (a throw's swing) */
-  readonly hold: Motion;
-
-  constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: Clearance) {
-    const k = Math.max(1, (motion.speed ?? CARRYING.speed) / CARRYING.speed);
-    this.hold = { accel: HOLD.accel * k * k, speed: HOLD.speed * k, turnAccel: HOLD.turnAccel * k * k, turnSpeed: HOLD.turnSpeed * k };
-    const own = person.track(thing.object);
-    const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
-    // (held in both hands; one hand's thing goes where its course has it, the hand with it)
-    if (grips.length > 1) for (const grip of grips) this.pivot.addScaledVector(grip, 1 / grips.length);
-    this.nominal = new Carrier(own.current.position, own.current.quaternion);
-    this.carrier = new Carrier(own.current.position, own.current.quaternion);
-    this.nominal.prev.position.copy(own.prev.position);
-    this.nominal.prev.quaternion.copy(own.prev.quaternion);
-  }
-
-  read(f: Frame, to: Live<Goal>): Carrier {
-    if (this.time === f.time) return this.carrier;
-    this.time = f.time;
-    const { nominal: aim, goal, person, thing, motion } = this;
-    // (its track read where it stands as the sub-step begins, before the hands move it: what tells when it has come to rest)
-    person.track(thing.object);
-    // (kept clear as it is turned on its way, not as its hand has it: the hand short of the turn its grasp asks, a lance tilted 0.1 rad
-    // by it reached 0.7 m further back, the aim was pushed on ahead, the arm stretched after it and the lance tilted further)
-    const current = aim.current;
-    const target: Goal = typeof to === 'function' ? to(f) : to;
-    this.carrier.carriedBy = target.carriedBy;
-    goal.position.copy(target.position);
-    // (a goal that sets no turn keeps the one the aim set out with: the thing's own turn, a hand's lag in it, is not fed back)
-    goal.quaternion.copy(target.quaternion ?? this.nominal.current.quaternion);
-    // Continue the intended motion, rather than feeding wrist-fitting lag back into it.
-    // (a goal its own body carries is followed in its motion however fast the body moves and turns it, never braked to as a jump)
-    const own = target.carriedBy === person;
-    const turned = this.rotation.follow(aim.prev.quaternion, aim.current.quaternion, goal.quaternion,
-      { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned, own ? Infinity : undefined);
-    // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front: noted once, so it is no silent change)
-    const moved = this.clear ? clearBody(person, f, thing, goal.position, turned, current, this.clear !== 'head', this.clear === 'parts') : 0;
-    this.off = this.clear === 'head' ? 0 : goal.position.distanceTo(target.position);
-    if (moved > CLEARED * person.scale && !this.cleared && f.dev) {
-      this.cleared = true;
-      f.dev.note(f.time, { check: 'held goal moved clear of the head (m)', value: moved, limit: CLEARED * person.scale, where: thing.object.name });
-    }
-    // (followed about the middle of its grips, where the hands are: turning, a thing held off its middle lags about them, not about its
-    // own origin, and does not swing off them)
-    const pivot = this.pivot, held = (at: Placement, turn: Quaternion, out: Vector3) => out.copy(pivot).applyQuaternion(turn).add(at.position);
-    this.position.follow(held(aim.prev, aim.prev.quaternion, _p1), held(aim.current, aim.current.quaternion, _p2), held(goal, goal.quaternion, _p3), motion, f.dt, this.at,
-      own ? Infinity : undefined);
-    this.at.sub(_p1.copy(pivot).applyQuaternion(turned));
-    // Constraint correction is not velocity to feed back into the intended path.
-    aim.move(f.time, this.at, turned);
-    const aimed = _aimed.copy(this.at);
-    if (this.clear) clearBody(person, f, thing, this.at, turned, current, this.clear !== 'head', this.clear === 'parts');
-    // (the push clear of the body is taken up at the aim's own pace, not snapped: a thing set out from against the body — taken there —
-    // is drawn off it, and one that comes up against it on its way — a box lifted close in front of a bowed body — eases round it)
-    const [prev2, prev] = this.pushed;
-    const pushed = follow(prev2, prev, _push.subVectors(this.at, aimed), motion, f.dt, _pushed);
-    prev2.copy(prev);
-    prev.copy(pushed);
-    this.carrier.move(f.time, this.at.copy(aimed).add(pushed), turned);
-    return this.carrier;
-  }
-}
-
 /** A comfortable carry in front of the hips, following the body: where a transfer carries its load, turned `turn` from the body's facing. */
 function carried(person: Reacher, turn: Readonly<Quaternion>): (f: Frame) => Placement & { velocity: Vector3 } {
   // Recalled load law: shorten the lever arm with squared pace effort (35 → 19 cm at 8 kg).
@@ -504,5 +210,4 @@ function inReach(person: Reacher, thing: Thing, wideOnly = false): number {
 /** Tuned carry staging (m at default stature): how far ahead of the hips a load is carried, clear of the thighs with room for two hands,
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
-const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), _placed = { position: new Vector3(), quaternion: new Quaternion() }, _v = new Vector3(), _g = new Vector3(), _aimed = new Vector3(), _push = new Vector3(), _pushed = new Vector3();
-const [_p1, _p2, _p3] = [new Vector3(), new Vector3(), new Vector3()];
+const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), _v = new Vector3();

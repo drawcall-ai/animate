@@ -259,8 +259,8 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
   return _roll.setFromAxisAngle(a, angle).multiply(q);
 }
 
-/** the share of a chain's length its tip is moved out to at most */
-const REACH = 0.98;
+/** the share of a chain's length its tip is moved out to at most: as far as a limb reaches, all but straight */
+export const REACH = 0.98;
 const ZERO = new Vector3();
 const [_position, _braked, _v, _axis, _velocity, _then, _was, _was2, _late, _off] = Array.from({ length: 10 }, () => new Vector3());
 const [_turned, _before, _quaternion, _joint, _r, _d, _roll, _near] = Array.from({ length: 8 }, () => new Quaternion());

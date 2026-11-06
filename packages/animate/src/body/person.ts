@@ -15,7 +15,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied } from '../things/hold';
+import { bear, bodyOf, carryAlong, checkParents, inHand, move } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import type { Proportions } from '../species/humanoid/proportions';
@@ -27,7 +27,8 @@ import { relaxedPose } from '../species/humanoid/relaxed';
 import { standingFeet } from '../species/humanoid/stance';
 import { driven } from '../legs/person/balance';
 import { stride } from '../legs/person/stride';
-import { hanging, handStep, HOLD } from '../hands/person/arms';
+import { handStep, HOLD } from '../hands/person/arms';
+import { hanging } from '../hands/person/hang';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
 import type { ArmPosture } from '../kernel/poise';
@@ -97,14 +98,6 @@ export class Person extends Self {
       },
     };
   }
-  /** where hand `side` goes on what `hold` has it hold (the thing's frame): where its fingers seat it, so their contacts are met from the
-   * shoulder out, once they have closed on it; else where its hold puts it */
-  private seated(side: Side, hold: Hold): Goal {
-    const seat = this.fingers?.seat(side);
-    if (!seat) return steadied(hold);
-    const rest = this.restOf(this.hands[side]);
-    return { ...hold.goal, position: seat.position, quaternion: seat.quaternion.clone().multiply(_q.copy(rest).invert()), axis: undefined };
-  }
 }
 
 /** An idle holding hand keeps its last root-relative pose while the body walks and turns. */
@@ -142,7 +135,7 @@ const HELD = 0.05;
  * it after the hands): where its fingers seated it, once they have; else its goal on the grip (a palm short of a turn its grip asks is
  * put where the turn would have it on the empty, not on the empty itself) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = resolve(person, hold.thing.object, _placed), goal = person.fingers?.seat(side)?.position ?? steadied(hold).position;
+  const at = resolve(person, hold.thing.object, _placed), goal = person.seated(side, hold).position;
   return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
 }
 

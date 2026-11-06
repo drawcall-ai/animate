@@ -3,6 +3,7 @@ import type { Frame } from '../../kernel/frame';
 import { solveChain } from '../../kernel/chain';
 import type { Dev } from '../../kernel/dev';
 import { clampRotation } from '../../kernel/limits';
+import { REACH } from '../../kernel/tip';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -28,8 +29,6 @@ const SECTOR = Math.PI / 3;
 /** Tuned: how far a nudge may move a braked joint in a sub-step, as a share of what its dev-checked acceleration moves it from rest
  * (half: a step that takes no more than half of that check) */
 const NUDGE = 0.5;
-/** the share of the arm's length a wrist goal is judged at, out of reach (as `ChainTip` lets a tip out) */
-const REACH = 0.98;
 /** the elbow's swivels tried about the shoulder–wrist line, each way (`SWIVEL.steps` of `SWIVEL.step` rad) */
 const SWIVEL = { steps: 4, step: Math.PI / 12 };
 
