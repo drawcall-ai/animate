@@ -1,4 +1,4 @@
-import type { Part } from './part';
+import type { HandPoint } from './point';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
 import { Triangles } from '../kernel/triangles';
@@ -211,19 +211,19 @@ export class Joints {
     return out;
   }
 
-  /** where this hand holds a handle of `radius` in its power grasp (see `Part`) */
-  handle(radius: number): Part {
+  /** where this hand holds a handle of `radius` in its power grasp (see `HandPoint`) */
+  handle(radius: number): HandPoint {
     const proximal = this.fingers.middle.joints[0].length;
     const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * proximal).addScaledVector(this.palm, this.palmDepth + radius);
-    return { at, axis: this.across.clone().addScaledVector(this.along, HANDLE.slant).normalize(), facing: this.palm.clone(), palm: this.palm.clone() };
+    return { at, axis: this.across.clone().addScaledVector(this.along, HANDLE.slant).normalize(), facing: this.palm.clone(), palmFacing: this.palm.clone() };
   }
 
   /** where this hand holds a grip with its palm's middle, on its skin, or presses with `digit`'s pad as `shape` has it, `round` off its
-   * length (see `pad`, `Part`) */
-  touch(digit: Digit | null, shape: Shape, round = PRESS): Part {
-    if (!digit) return { at: this.handle(0).at, axis: this.across.clone(), facing: this.palm.clone(), palm: this.palm.clone() };
+   * length (see `pad`, `HandPoint`) */
+  touch(digit: Digit | null, shape: Shape, round = PRESS): HandPoint {
+    if (!digit) return { at: this.handle(0).at, axis: this.across.clone(), facing: this.palm.clone(), palmFacing: this.palm.clone() };
     const facing = new Vector3();
-    return { at: this.pad(digit, shape, new Vector3(), facing, round), axis: this.across.clone(), facing, palm: this.palm.clone() };
+    return { at: this.pad(digit, shape, new Vector3(), facing, round), axis: this.across.clone(), facing, palmFacing: this.palm.clone() };
   }
 
   private chain(digit: Digit): Three {

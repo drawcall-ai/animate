@@ -7,7 +7,7 @@ import { heldTurn } from '../things/hold';
 import type { DigitBones } from './bones';
 import { closedOn, type Opposed } from './closing';
 import { meet, type Arm, type Contact } from './contact';
-import type { Part } from './part';
+import type { HandPoint } from './point';
 import { Joints, PINCH } from './joints';
 import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
 
@@ -169,13 +169,13 @@ export class FingerState {
     const grip = Thing.of(owner).grip(empty.name), hand = this.hands[side].joints.hand, part = this.part(side, grip);
     const placed = worldOf(owner), back = placed.quaternion.clone().invert(), scale = new Vector3().setFromMatrixScale(hand.matrixWorld).x;
     const now = back.clone().multiply(hand.getWorldQuaternion(new Quaternion()));
-    const turn = heldTurn(grip, { at: part.at, turn: () => now, contact: part, up: new Vector3(0, 1, 0).applyQuaternion(back) });
+    const turn = heldTurn(grip, { at: part.at, turn: () => now, hand: part, up: new Vector3(0, 1, 0).applyQuaternion(back) });
     const wrist = part.at.clone().multiplyScalar(scale).applyQuaternion(turn).negate().add(grip.at.position).applyQuaternion(placed.quaternion).add(placed.position);
     return { wrist, rotation: placed.quaternion.clone().multiply(turn) };
   }
 
-  /** where hand `side` holds `grip` (see `Part`): on a handle, in its grasp; with a pad, that digit's as the grip shapes it; else the palm */
-  part(side: 'left' | 'right', grip: Grip): Part {
+  /** where hand `side` holds `grip` (see `HandPoint`): on a handle, in its grasp; with a pad, that digit's as the grip shapes it; else the palm */
+  part(side: 'left' | 'right', grip: Grip): HandPoint {
     const joints = this.hands[side].joints;
     if (!grip.handle) return joints.touch(grip.pad, shapeOf(values(grip.node), grip.pad ? POINT : RELAXED));
     joints.hand.updateWorldMatrix(true, false);
@@ -200,7 +200,7 @@ export class FingerState {
       return { part, at, round: PINCH, ...(toward.lengthSq() > 1e-8 && { facing: toward.normalize() }) };
     };
     const contacts: Contact[] = [grip.pad ? { part: grip.pad, at: centre, facing }
-      : grip.handle ? { part: 'grasp', at: centre, axis: line ?? undefined, facing, radius: grip.handle.radius }
+      : grip.handle ? { part: 'handle', at: centre, axis: line ?? undefined, facing, radius: grip.handle.radius }
         : { part: 'palm', at: centre, facing }];
     for (const [name, value] of Object.entries(asks(grip.node))) {
       if (typeof value !== 'string') continue;
@@ -280,7 +280,7 @@ function opposing(opposed: Opposed | null, contacts: readonly Contact[], thing: 
 
 /** the digits `contacts` put a pad of on the thing */
 function touching(contacts: readonly Contact[]): Digit[] {
-  return contacts.flatMap((c) => c.part === 'palm' || c.part === 'grasp' ? [] : [c.part]);
+  return contacts.flatMap((c) => c.part === 'palm' || c.part === 'handle' ? [] : [c.part]);
 }
 
 /** what `grip` asks of the fingers in `userData.fingers`, by digit: values, or an empty's name (none: nothing) */

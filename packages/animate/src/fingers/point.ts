@@ -5,9 +5,9 @@ import type { Vector3 } from 'three';
  * on a handle's axis where the handle lies in its power grasp — the way that part faces (a pad's, the palm's), the hand's grasp line
  * toward the thumb (where a handle lies, its axis; else across the knuckles toward the index), and the way the palm faces.
  */
-export interface Part {
+export interface HandPoint {
   at: Vector3;
   facing: Vector3;
   axis: Vector3;
-  palm: Vector3;
+  palmFacing: Vector3;
 }

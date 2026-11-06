@@ -5,12 +5,12 @@ import type { Joints } from './joints';
 import { DIGITS, LIFTED, SPLAYED, type Digit, type Shape } from './shape';
 
 /**
- * A part of a hand on a thing (world): the palm's middle, the power grasp's line (where a handle of `radius` lies across the palm), or a
+ * A part of a hand on a thing (world): the palm's middle, the handle's line (where a handle of `radius` lies across the palm in its grasp), or a
  * digit's pad — the point of its fingertip `round` off its length (`Joints.pad`) — at `at`, facing `facing` and its grasp line along `axis`
  * (toward the thumb), where given.
  */
 export interface Contact {
-  part: Digit | 'palm' | 'grasp';
+  part: Digit | 'palm' | 'handle';
   at: Vector3;
   facing?: Vector3;
   axis?: Vector3;
@@ -83,7 +83,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
       const at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at);
       out.push(at.x, at.y, at.z);
       if (c.facing) {
-        const off = part.facing.applyQuaternion(hand.rotation).sub(c.facing).multiplyScalar(c.part === 'palm' || c.part === 'grasp' ? TURN.hand : TURN.pad);
+        const off = part.facing.applyQuaternion(hand.rotation).sub(c.facing).multiplyScalar(c.part === 'palm' || c.part === 'handle' ? TURN.hand : TURN.pad);
         out.push(off.x, off.y, off.z);
       }
       if (c.axis) {
@@ -139,7 +139,7 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
 /** where `contact`'s part of the hand is as `shape` has it, the way it faces and its grasp line, in the hand's frame (`scale`: the hand's
  * world scale, a handle's radius given in the world's metres) */
 function partOf(joints: Joints, contact: Contact, shape: Shape, scale: number) {
-  if (contact.part === 'grasp') return joints.handle((contact.radius ?? 0) / scale);
+  if (contact.part === 'handle') return joints.handle((contact.radius ?? 0) / scale);
   return joints.touch(contact.part === 'palm' ? null : contact.part, shape, contact.round);
 }
 

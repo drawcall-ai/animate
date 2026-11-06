@@ -132,7 +132,7 @@ describe('fingers', () => {
     hand.position.copy(arm.worldToLocal(wrist));
     hand.quaternion.copy(arm.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
     hand.updateMatrixWorld(true);
-    for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+    for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
     expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.05);
     expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.8);
   });
@@ -159,9 +159,9 @@ describe('fingers', () => {
         hand.updateMatrixWorld(true);
       };
       place(off);
-      for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+      for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
       place(0);
-      for (let k = 0; k < 20; k++) body.fingers('right', grip, 0.05);
+      for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
       return bent(body, 'rightMiddleIntermediate');
     };
     const settled = closed(0);

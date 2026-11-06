@@ -100,7 +100,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * is where `gripOn` puts it, the empty's `userData.fingers` laid over that as over a grabbed grip; a shape (`Fingers`; `FIST`, `POINT`,
    * …); or relaxed for `null`. Call it each frame after posing the hand.
    */
-  fingers(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
+  shapeHand(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
     fingerStateOf(this).set(side, to, seconds);
   }
 

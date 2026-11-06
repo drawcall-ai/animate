@@ -47,7 +47,7 @@ export function personHands(person: Reacher): Handling {
 
 /**
  * `side`'s palm on `grip` of `thing`: the point of the hand that goes on the empty — for a hand with fingers, where it holds the grip
- * (`Part`), else the palm's centre beyond the wrist — and the hand's turn in the thing's frame as the body was last posed (mid-update,
+ * (`HandPoint`), else the palm's centre beyond the wrist — and the hand's turn in the thing's frame as the body was last posed (mid-update,
  * the hand's turn may be the free arm's hang's, written before the hand's own step: a reach read so never met its grip)
  */
 function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
@@ -64,9 +64,9 @@ function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
   // one hand, one of them blind to where the fingers go)
   if (grip.turn !== null) throw new Error(`"${grip.node.name}" has userData.handTurn, which a hand with finger bones does not take: describe the grip as a handle, a pad or a palm's facing`);
   // (where the hand holds it, measured in its node's frame, in its bone's)
-  const scale = person.scaleOf(bone), { at, axis, facing, palm: palmFacing } = fingers.part(side, grip), rest = person.restOf(bone);
-  const contact = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis.applyQuaternion(rest), palm: palmFacing.applyQuaternion(rest) };
+  const scale = person.scaleOf(bone), { at, axis, facing, palmFacing } = fingers.part(side, grip), rest = person.restOf(bone);
+  const hand = { at: at.applyQuaternion(rest).multiplyScalar(scale), facing: facing.applyQuaternion(rest), axis: axis.applyQuaternion(rest), palmFacing: palmFacing.applyQuaternion(rest) };
   // (the world's up in the thing's frame, as the hand sets off for it)
   const up = new Vector3(0, 1, 0).applyQuaternion(person.track(thing.object).at(person.frame.time).prev.quaternion.clone().invert());
-  return { at: contact.at, turn: turned, contact, up };
+  return { at: hand.at, turn: turned, hand, up };
 }
