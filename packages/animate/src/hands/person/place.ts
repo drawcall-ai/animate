@@ -4,7 +4,7 @@ import { turnOnto } from '../../kernel/math';
 import type { HandPart, HandPoint } from '../../fingers/point';
 import { digitOf, POINT, valuesOf, type Digit, type Finger, type Fingers, type Thumb } from '../../fingers/shape';
 import type { Grip } from '../../things/thing';
-import { handLine, pressLine, rollToPoint } from './press';
+import { rollToPoint } from './press';
 
 /**
  * Where a hand goes on a thing, exactly: the point of the hand `point` names goes to `position`, its frame turned as `quaternion` has it
@@ -43,10 +43,11 @@ export function pick(thing: Object3D, grip: Grip, point: (part: HandPart) => Han
   const placement = (position: Vector3, quaternion: Quaternion): HandPlacement => ({
     on: thing, point: part, position, quaternion, fingers: fingersOf(thing, grip).fingers, get digits() { return fingersOf(thing, grip).digits; },
   });
-  // (a fingertip pressing into a face: the hand along its pressing line, rolled as a pointing hand is)
+  // (a fingertip pressing into a face: its pad facing straight in, the hand rolled about that as a pointing hand is — pointed along a line
+  // leant down onto the face instead, the fingertip met the button 47° off its normal)
   if (grip.pad && grip.facing) {
-    const line = pressLine(grip.facing, up), turn = new Quaternion().setFromUnitVectors(handLine(at), line);
-    if (rollToPoint(turn, at, line, up)) return placement(centre.clone(), turn.multiply(framed(at.axis, at.facing)));
+    const turn = new Quaternion().setFromUnitVectors(at.facing, grip.facing);
+    if (rollToPoint(turn, at, grip.facing, up)) return placement(centre.clone(), turn.multiply(framed(at.axis, at.facing)));
   }
   // (each placement the grip leaves free, as its target's place, the way the point faces and its grasp line)
   const tried: { position: Vector3; facing: Vector3; axis: Vector3 }[] = [];

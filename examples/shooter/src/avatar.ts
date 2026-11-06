@@ -25,6 +25,8 @@ export interface AvatarState {
   aimPoint?: Vector3;
 }
 
+/** a hand's finger bones, by name (VRM's) */
+const FINGER = /(Thumb|Index|Middle|Ring|Little)(Metacarpal|Proximal|Intermediate|Distal)$/;
 const SPRINTING = new Vector3(0.22, 0.2, 0);
 /** How the rifle turns through a reload (rad, as `SPRINTING`): up before the chest, canted 9° toward the support hand — canted 23°, an
  * upright magazine from the pouch had 24° to turn under the well, which the arm took 0.15 s over; at 9°, 13°. */
@@ -176,6 +178,10 @@ export class Avatar {
   }
 
   private show(animation: ReturnType<typeof animate>) {
+    // (its fingers as the body shown had them, the fresh body easing them on from there: shown as its own, they swapped in one frame)
+    const fingers = new Map<string, Quaternion>();
+    this.animation.person.object.traverse((node) => { if (FINGER.test(node.name)) fingers.set(node.name, node.quaternion); });
+    animation.person.object.traverse((node) => { const was = fingers.get(node.name); if (was) node.quaternion.copy(was); });
     this.next?.dispose();
     this.next = undefined;
     this.animation.dispose();

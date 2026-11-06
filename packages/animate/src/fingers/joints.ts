@@ -203,9 +203,14 @@ export class Joints {
     }
   }
 
-  /** the bones turned as `shape` has them */
-  write(shape: Shape): void {
-    for (const digit of [...DIGITS, 'thumb'] as const) this.turns(digit, shape).forEach((turn, k) => this.chain(digit)[k].node.quaternion.copy(turn));
+  /**
+   * the bones turned as `shape` has them, each from how its node is turned now no further than `FLEXING` in `seconds`: a digit's shape is
+   * braked as it eases (`braked`), and this holds its bones to that cap from the first update too — on a rig its app posed otherwise, a
+   * puppet's fingers handed to a body made afresh, they had swung 66–84 rad/s in its first tick
+   */
+  write(shape: Shape, seconds: number): void {
+    const most = FLEXING * seconds;
+    for (const digit of [...DIGITS, 'thumb'] as const) this.turns(digit, shape).forEach((turn, k) => this.chain(digit)[k].node.quaternion.rotateTowards(turn, most));
   }
 
   /**

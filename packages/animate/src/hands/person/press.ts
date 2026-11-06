@@ -27,9 +27,6 @@ const POINTS = { from: 0.22, to: 0.12 };
 const TOUCH = 0.012;
 /** how far a pointing hand is rolled thumb up off palm down (rad), as a forearm rests between its turns */
 const ROLL = 0.5;
-/** how far below level a hand pressing into an upright face points (rad): its wrist a little above the button, the curled fingers kept
- * off the face and the finger coming onto the button a little from above */
-const LEAN = 0.2;
 /** how far off the face's normal a fingertip draws back along the line from the eyes at most (rad) */
 const SIGHTED = 0.9;
 /** how far a fingertip draws back off its button as it lets go (m, default body) and in how long (s) */
@@ -97,13 +94,6 @@ export function backOff(person: Reacher, grip: Grip, placed: { position: Vector3
   return aside.normalize().multiplyScalar(Math.sin(SIGHTED)).addScaledVector(out, Math.cos(SIGHTED));
 }
 
-/** the line a hand pressing a fingertip in along `push` points along: level into the face, `LEAN` down; into a level face, along `push` */
-export function pressLine(push: Vector3, up: Vector3): Vector3 {
-  const level = push.clone().addScaledVector(up, -push.dot(up));
-  if (level.lengthSq() < 0.25) return push.clone();
-  return level.normalize().multiplyScalar(Math.cos(LEAN)).addScaledVector(up, -Math.sin(LEAN));
-}
-
 /**
  * `turn` (a hand's, its pad `point` pushing along `push`) rolled about `push`, in place, as a hand points to press with a fingertip: its
  * palm as far down as the roll turns it, then `ROLL` thumb up off that. A push straight up or down leaves it as it is (false).
@@ -119,12 +109,6 @@ export function rollToPoint(turn: Quaternion, point: HandPoint, push: Vector3, u
   const roll = _q.setFromAxisAngle(push, ROLL), lifted = thumb.clone().applyQuaternion(roll).dot(up);
   turn.premultiply(lifted >= thumb.clone().applyQuaternion(_q2.copy(roll).invert()).dot(up) ? roll : _q2);
   return true;
-}
-
-/** a hand's own line from its wrist out along its fingers (its frame), square to its grasp line and palm */
-export function handLine(hand: HandPoint): Vector3 {
-  const line = new Vector3().crossVectors(hand.axis, hand.palmFacing).normalize();
-  return line.dot(hand.at) < 0 ? line.negate() : line;
 }
 
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _q2 = new Quaternion(), _cross = new Vector3(), _pad = new Vector3(), _empty = new Vector3();

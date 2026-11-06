@@ -35,8 +35,9 @@ const CHORDS = 12, EVEN = 0.004, TIE = Math.SQRT1_2;
 const FOLD = { steps: 16, halvings: 3 } as const;
 /** the steps each of the thumb's values is tried at across its range, finding where it meets the face it opposes on */
 const REACHING = 8;
-/** how deep a ball of the thumb's flesh may sink into the face it reaches (m: its skin's give is in its size already) */
-const SUNK = 0.001;
+/** how deep a ball of the thumb's flesh may sink into the face it reaches (m: its skin's give is in its size already); and how many of its
+ * balls, from its base, are its web (`sinks`) */
+const SUNK = 0.001, WEB = 4;
 
 /** A grasp's line through what it holds, toward the thumb, and a point on it (the world). */
 export interface Line {
@@ -185,10 +186,18 @@ function reached(hand: Closing, shape: Shape, face: { way: Vector3; end: Vector3
   return best?.thumb ?? { ...wrap };
 }
 
-/** whether any ball of the thumb's flesh (`Joints.flesh`) as `shape` has it sinks into `near`, as its skin gives (`PAD_DEPTH`) */
+/**
+ * whether any ball of the thumb's flesh (`Joints.flesh`) as `shape` has it sinks into `near`, as its skin gives (`PAD_DEPTH`): its web —
+ * the balls along its metacarpal and on to the middle of its first phalanx (`WEB`), which wrap what the grasp holds as the palm does, a
+ * pistol grip's back strap — as far as keeps their bones outside by `SUNK`; the rest no further than `SUNK` (held to that, the thumb
+ * could not wrap the back strap at all and lay forward along the grip's right side)
+ */
 function sinks(at: Closing, shape: Shape): boolean {
   const { joints, near, world } = at, scale = _scale.setFromMatrixScale(world).x;
-  return joints.flesh('thumb', shape).some((ball) => near.depth(ball.at.applyMatrix4(world), ball.radius * scale * PAD_DEPTH, GIRTH) > SUNK);
+  return joints.flesh('thumb', shape).some((ball, k) => {
+    const radius = ball.radius * scale * PAD_DEPTH;
+    return near.depth(ball.at.applyMatrix4(world), radius, GIRTH) > (k < WEB ? radius - SUNK : SUNK);
+  });
 }
 
 /** the middle of the pads of the fingers whose last segment meets `near` as `shape` has them, else of any that meets it, else of all

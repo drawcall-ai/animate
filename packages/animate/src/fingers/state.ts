@@ -39,8 +39,9 @@ interface Hand {
   from: Shape | null;
   pointing: number | null;
   met: { shape: Shape; digits: readonly Digit[] } | null;
-  /** its last solve (`solved`): what it was given and the shape it found, kept while nothing it was given has moved */
-  solve: { at: Placed; contacts: readonly Contact[]; shape: Shape } | null;
+  /** its last solve (`solved`): what it was given, the shape it found and how far it missed, kept once it no longer closes in while nothing
+   * it was given has moved */
+  solve: { at: Placed; contacts: readonly Contact[]; shape: Shape; settled: boolean; miss: number } | null;
 }
 
 /**
@@ -54,6 +55,8 @@ const OPEN = 0.3;
 const NEARING = 0.4, NEAR = 0.2, ARRIVED = 0.015;
 /** how little a hand and its contacts move on what it holds for its last solve to stand (m, rad) */
 const STILL = 1e-4;
+/** how much nearer its contacts a solve must come than the last to go on solving (m) */
+const SETTLED = 1e-4;
 /** how far a contact moves on what the hand holds before its digit is started afresh (m): a trigger squeezed is followed on */
 const SWEPT = 0.02;
 /** how near its goal a hand's shape is to have closed (the most any of its values is off it) */
@@ -76,8 +79,8 @@ export class FingerState {
     const hand = (side: 'left' | 'right'): Hand => {
       const node = nodes[`${side}Hand`];
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
+      // (its bones left as they stand: eased from there by its first update)
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
-      joints.write(shape);
       return { joints, guard: new Guard(joints, skins), skins, shape, posing: null, posed: false, taken: new WeakMap(), coming: null, from: null, pointing: null, met: null, solve: null };
     };
     this.hands = { left: hand('left'), right: hand('right') };
@@ -219,7 +222,7 @@ export class FingerState {
     const preferred = goalOf(taken);
     // (as last solved while the hand and its contacts stay where they were on the thing: a hand held still on a rifle, however it turns)
     const last = hand.solve;
-    if (last && last.at.position.distanceTo(at.position) < STILL && last.at.quaternion.angleTo(at.quaternion) < STILL && sameContacts(last.contacts, contacts)) {
+    if (last?.settled && last.at.position.distanceTo(at.position) < STILL && last.at.quaternion.angleTo(at.quaternion) < STILL && sameContacts(last.contacts, contacts)) {
       return structuredClone(last.shape);
     }
     // (followed on from where they were last met; a digit whose contact has moved on the thing, or is new, started afresh: the trigger
@@ -227,8 +230,9 @@ export class FingerState {
     const shape = structuredClone(preferred), was = hand.met?.shape ?? hand.shape;
     for (const { part } of contacts) withValues(shape, part, was[part]);
     const swept = contacts.filter((c) => !last?.contacts.some((was) => was.part === c.part && was.at.distanceTo(c.at) < SWEPT)).map((c) => c.part);
-    meet(hand.joints, at, contacts, shape, { preferred, near: taken.near, swept });
-    hand.solve = { at, contacts, shape: structuredClone(shape) };
+    const miss = meet(hand.joints, at, contacts, shape, { preferred, near: taken.near, swept });
+    // (kept only once it has stopped closing in: met on from where it got to the next sub-step until then, not frozen short of its contact)
+    hand.solve = { at, contacts, shape: structuredClone(shape), settled: last !== null && sameContacts(last.contacts, contacts) && last.miss - miss < SETTLED, miss };
     return shape;
   }
 
@@ -261,7 +265,7 @@ export class FingerState {
    * `false`: it holds something), and written */
   private ease(hand: Hand, goal: Shape, seconds: number, on: Object3D | null | false, at: readonly Digit[] = []): void {
     hand.guard.ease(hand.shape, goal, seconds, on, at);
-    hand.joints.write(hand.shape);
+    hand.joints.write(hand.shape, seconds);
   }
 }
 

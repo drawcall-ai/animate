@@ -32,25 +32,23 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
   // (how far each contact's pad is off it)
   const off = (c: Contact, facing: Vector3) => joints.pad(c.part, shape, _at, facing, c.round).multiplyScalar(hand.scale).applyQuaternion(hand.quaternion).add(hand.position).sub(c.at);
   // (how far `digit`'s flesh sinks into `near`, each ball's depth)
-  const sunk = (digit: Digit) => joints.flesh(digit, shape).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PAD_DEPTH, WITHIN)) : 0);
-  // (for `swept`, each touching digit started from the best of where it is and a sweep of its two main values — a finger's curl and hook,
-  // a thumb's oppose and spread — by its own contacts' miss and its flesh sunk in: from where it last lay, along a receiver, a trigger
-  // finger could not come round the guard onto the trigger without passing through it)
+  // (its last segment's balls left out: its pad is pressed on the contact's face, the segment lying along it)
+  const sunk = (digit: Digit) => joints.flesh(digit, shape).slice(0, -3).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PAD_DEPTH, WITHIN)) : 0);
+  // (for `swept`, each touching digit started from the best of where it is and a sweep of all three of its values — by its own contacts'
+  // miss and its flesh sunk in: from where it last lay, along a receiver, a trigger finger could not come round the guard onto the
+  // trigger without passing through it; swept in its curl and hook alone, its fan held as it lay, it stopped 2 cm short on the receiver)
   for (const digit of digits) {
     if (!swept.includes(digit)) continue;
     const cost = () => contacts.reduce((sum, c) => c.part === digit ? sum + off(c, _facing).lengthSq() + (c.facing ? _facing.applyQuaternion(hand.quaternion).distanceToSquared(c.facing) * TURN * TURN : 0) : sum, 0)
       + sunk(digit).reduce((sum, d) => sum + d * d * KEEP * KEEP, 0);
-    const [a, b] = digit === 'thumb' ? (['oppose', 'spread'] as const) : (['curl', 'hook'] as const);
-    let best = { cost: cost(), a: read(shape, digit, a), b: read(shape, digit, b) };
-    for (let i = 0; i <= SWEEP; i++) for (let j = 0; j <= SWEEP; j++) {
-      const u = leastOf(digit, a) + ((1 - leastOf(digit, a)) * i) / SWEEP, v = leastOf(digit, b) + ((1 - leastOf(digit, b)) * j) / SWEEP;
-      write(shape, digit, a, u);
-      write(shape, digit, b, v);
+    const keys = keysOf(digit), steps = (key: (typeof keys)[number]) => Array.from({ length: SWEEP + 1 }, (_, i) => leastOf(digit, key) + ((1 - leastOf(digit, key)) * i) / SWEEP);
+    let best = { cost: cost(), values: keys.map((key) => read(shape, digit, key)) };
+    for (const u of steps(keys[0])) for (const v of steps(keys[1])) for (const w of steps(keys[2])) {
+      [u, v, w].forEach((value, k) => write(shape, digit, keys[k], value));
       const now = cost();
-      if (now < best.cost) best = { cost: now, a: u, b: v };
+      if (now < best.cost) best = { cost: now, values: [u, v, w] };
     }
-    write(shape, digit, a, best.a);
-    write(shape, digit, b, best.b);
+    best.values.forEach((value, k) => write(shape, digit, keys[k], value));
   }
   values.forEach((v, j) => (x[j] = read(shape, v.digit, v.key)));
   // (a finger already on its contact, followed on: fanned as it was, its joints taking up how the contact moves, so a small move of the
@@ -117,8 +115,8 @@ const FAN = 8;
 /** how much a metre of flesh sunk into what the hand touches weighs against a metre off a contact (a contact the digits cannot meet
  * clear of it pulls them in a hundredth of its miss), and how far in from a surface a ball is still found inside it (m) */
 const KEEP = 10, WITHIN = 0.03;
-/** how many steps across its range each of a digit's two main values is swept in, to start it from */
-const SWEEP = 5;
+/** how many steps across its range each of a digit's values is swept in, to start it from */
+const SWEEP = 8;
 /** the solve's iterations each sub-step; its finite step (a digit's value) and its damping */
 const ITERATIONS = 4, STEP = 1e-3, DAMPING = 1e-7;
 
