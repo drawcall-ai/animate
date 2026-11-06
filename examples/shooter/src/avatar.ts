@@ -65,12 +65,12 @@ const SNATCH = { speed: 8 };
 const REST_AFTER = 1;
 /** How far a shot draws the trigger back (m), through the shot's interval: back all along while held fire keeps firing. */
 const SQUEEZE = 0.005;
-/** The chest pouches' magazines, side by side on the left of the chest with a hand's room between them: the left hand takes the inner one
- * round its body as it will seat it in the well, and a fresh one is in that pouch again once the hand is back on the rifle; the outer one
- * is a spare's spare. The inner one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its
- * fingers off the body. As high as puts the grip low on the magazine where the hand took it before (2.5 cm lower, the hand turned 0.3 s
- * longer onto it). */
-const POUCHES = [new Vector3(0.07, -0.145, 0.2), new Vector3(0.21, -0.145, 0.2)];
+/** The pouches' magazines on the left of the body: the left hand takes the chest one round its body as it will seat it in the well, and
+ * a fresh one is in that pouch again once the hand is back on the rifle; the one at the belt, out and down from it, is a spare's spare —
+ * beside it on the chest, it hid the thumb on the taken one's outer face from the left. The chest one 5 cm off the middle: nearer, the
+ * left hand reached it with its wrist bent back across the sternum, its fingers off the body. As high as puts the grip low on the
+ * magazine where the hand took it before (2.5 cm lower, the hand turned 0.3 s longer onto it). */
+const POUCHES = [new Vector3(0.07, -0.129, 0.2), new Vector3(0.21, -0.3, 0.17)];
 /** How each pouch turns its magazine about the vertical (rad): standing out from the chest, its front forward and turned out from the
  * body's middle, its faces to the sides, so the hand takes its front edge with its palm toward the chest and the fingers round its inner
  * face (turned in 30°, the hand turned 0.3 s more on it before it closed). Turned flat against the chest (−π/2, its front toward the
@@ -86,15 +86,18 @@ const FLING = new Vector3(0.14, -0.3, 0.3);
 const TOSS = 0.12;
 /** What the wrist's flick adds to a dumped magazine as the hand lets go (the body's frame, +X its left): out to the left and down (m/s),
  * and end over end, its top tipping outward (rad/s about the body's forward): it falls clear of the leg, as at the hand's speed alone it
- * dropped onto the thigh and landed by the boots. With the hand's own flick it lands 0.7 m out to the left a third of a second on and
- * slides to rest about a metre out, level with the feet. */
-const FLICK = { velocity: new Vector3(1.6, -0.3, 0.3), spin: -9 };
+ * dropped onto the thigh and landed by the boots. It lands 0.7 m out to the left and 0.4 m ahead of the left foot 0.38 s on and slides
+ * to rest a metre out, within 5 cm of that whenever in the body's sway it is thrown; spun at −4 and −9 rad/s it tumbled on landing and
+ * came to rest anywhere 0.7–1.1 m out. */
+const FLICK = { velocity: new Vector3(2.2, -0.3, 0), spin: -2 };
 /** How long a hand that has quickly taken a magazine waits for its pinch to close before it takes it away (s). */
 const PINCHING = 0.1;
 const UP = new Vector3(0, 1, 0);
-/** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly:
- * the release reads it a moment on, and one let go 4 mm short, still moving, was 5–11 mm off then, left askew in the well. */
-const ONTO = 0.002;
+/** How near its place under the well, on the well's line, and how near turned as the well (rad), the arm brings a magazine before the
+ * fingers square it onto it (`square`), in how long (s): held to 3° by the arm, it wobbled 2 cm off and 23° round for 0.3 s. */
+const LINED = 0.01, ALIGNED = 0.1, SQUARING = 0.08;
+/** How long a magazine takes to slide along the well's line, pushed home or pulled out (s): not snapped in. */
+const PUSH = 0.18;
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
 export class Avatar {
@@ -349,14 +352,51 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   // The left hand pinches the spent magazine's body under the well, pulls it down out of it and flicks it away down and out, letting go
   // on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and lets it fly on as the hand
   // last moved and turned it), then pinches the full one in its pouch, brings it up under the well and pushes it home.
+  /** `magazine`, held, slid `by` (m) along the well's line (its parent turned as the well) over `PUSH` s, the hand going with it */
+  const slide = (magazine: Object3D, by: number) => {
+    const from = magazine.position.y;
+    let slid = 0;
+    return action({
+      update: (_, clock) => {
+        slid = Math.min(1, slid + clock.delta / PUSH);
+        magazine.position.y = from + by * smooth(slid);
+      },
+      until: () => slid === 1,
+    });
+  };
+
+  /** `magazine`, in the hand, squared onto `place` in its fingers over `SQUARING` s: the last few degrees and millimetres the arm leaves */
+  const square = (magazine: Object3D, place: Object3D) => {
+    const parent = magazine.parent;
+    if (!parent) throw new Error(`"${magazine.name}" hangs from nothing`);
+    const from = magazine.position.clone(), turned = magazine.quaternion.clone(), at = new Vector3(), turn = new Quaternion();
+    let squared = 0;
+    return action({
+      update: (_, clock) => {
+        squared = Math.min(1, squared + clock.delta / SQUARING);
+        parent.updateWorldMatrix(true, false);
+        place.updateWorldMatrix(true, false);
+        parent.worldToLocal(place.getWorldPosition(at));
+        turn.copy(parent.getWorldQuaternion(new Quaternion()).invert().multiply(place.getWorldQuaternion(new Quaternion())));
+        magazine.position.lerpVectors(from, at, smooth(squared));
+        magazine.quaternion.slerpQuaternions(turned, turn, smooth(squared));
+      },
+      until: () => squared === 1,
+    });
+  };
+
   const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, SHORT))) return false;
+    // (still, pinched, before it pulls: pulled as the hand arrived, still rising onto it, it drove the magazine 1.2 cm up into the well first)
+    yield* wait(PINCHING);
     onReload?.('out');
     const clear = () => spent.getWorldPosition(new Vector3()).distanceTo(well.getWorldPosition(new Vector3())) > TOSS;
     thrown.object = spent;
     spent.getWorldPosition(thrown.at);
     spent.getWorldQuaternion(thrown.turn);
-    yield* carry(person, spent, [below, () => fling.getWorldPosition(new Vector3())], { ...QUICK, until: clear });
+    // (slid straight down out of the well along its line, then flicked away: carried out, it went 1.7 cm off the line still in the well)
+    yield* slide(spent, -RIFLE.wellLine);
+    yield* carry(person, spent, () => fling.getWorldPosition(new Vector3()), { ...QUICK, until: clear });
     if (!clear()) return false;
     release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
@@ -369,9 +409,20 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     // (the fingers closing round its far face before it comes out: taken quickly, the hand is on it with its thumb on the near face and
     // the fingers still 2–4 cm open, closing over the next tenth)
     yield* wait(PINCHING);
-    // (brought up under the well and pushed home along its line in the pinch it came out of the pouch in, and let go there: shifted under
-    // its floor plate to drive it home with the palm, the fingers came off its faces and opened)
-    if (!(yield* carry(person, full, [below, well], { ...QUICK, until: near(full, well) }))) return false;
+    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in, and let go
+    // there: shifted under its floor plate to drive it home with the palm, the fingers came off its faces and opened; carried in, it
+    // came in turned as the hand turned it, slanting against the well, its top corner out through the well's wall, and snapped home in
+    // 70 ms)
+    if (!(yield* carry(person, full, below, { ...QUICK, until: () => near(full, below, LINED)() && turnedAs(full, below) < ALIGNED }))) return false;
+    // (squared onto the line in the fingers, let go there and taken again at once where the hand is, then pushed up the line, the hand
+    // going with it)
+    yield* square(full, below);
+    release(person, full, below);
+    if (full.parent !== below) throw new Error(`"${full.name}" was not let go onto "${below.name}"`);
+    // (pushed as the hand takes it again: waiting for the grasp to settle held it under the well 0.2 s)
+    let taken = true;
+    yield* parallel('all', function* () { taken = yield* grab(person, full, { left: 'base' }, QUICK); }, slide(full, RIFLE.wellLine));
+    if (!taken) return false;
     release(person, full, well);
     onReload?.('in');
     return true;
@@ -503,7 +554,9 @@ function spinOf(from: Quaternion, to: Quaternion, seconds: number, out: Vector3)
   return sine < 1e-9 ? out.set(0, 0, 0) : out.set(step.x, step.y, step.z).multiplyScalar(angle / sine / seconds);
 }
 
-/** Whether `thing` has come within `ONTO` of `place`: near enough to be let go onto it there, the rest of a carry's slow end left out. */
-const near = (thing: Object3D, place: Object3D) => () => thing.getWorldPosition(new Vector3()).distanceTo(place.getWorldPosition(new Vector3())) < ONTO;
+/** whether `thing` has come within `within` (m) of `place` */
+const near = (thing: Object3D, place: Object3D, within: number) => () => thing.getWorldPosition(new Vector3()).distanceTo(place.getWorldPosition(new Vector3())) < within;
+/** the angle between how `thing` and `place` are turned (rad) */
+const turnedAs = (thing: Object3D, place: Object3D) => thing.getWorldQuaternion(new Quaternion()).angleTo(place.getWorldQuaternion(new Quaternion()));
 const ease = (weight: number, goal: number, seconds: number, over = EASE) => weight + MathUtils.clamp(goal - weight, -seconds / over, seconds / over);
 const smooth = (weight: number) => weight * weight * (3 - 2 * weight);
