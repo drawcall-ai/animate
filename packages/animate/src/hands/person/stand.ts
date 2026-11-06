@@ -38,7 +38,7 @@ const LOWERED_BELOW = 0.7;
 /** What a person stands to: grips to take (by the hand that takes each, where each is now, the heaviest load's mass), or a placing point. */
 type Stand =
   | { grips: readonly { side: Side; at: Vector3 }[]; mass: number; things?: readonly Placed[] }
-  | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[] };
+  | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[]; things?: readonly Placed[] };
 
 /** a thing's envelope (its own frame) where it is */
 interface Placed { bounds: Box3; position: Vector3; quaternion: Quaternion }
@@ -113,7 +113,7 @@ export function footing(person: Reacher, to: Stand, step = true) {
   const both = !point && grips.length === 2 ? Math.sqrt(Math.max(0, spare ** 2 - (height - standing + bowed.drop) ** 2)) + bowed.forward : Infinity;
   // (what the hands take stands clear of the trunk: the body no nearer it than its envelope's back reaches toward the body, but for what
   // lies below the hips, which the trunk bows over)
-  const clearOf = point ? 0 : backOf(to.things ?? [], middle, forwardOf(face), floor + proportions.hipHeight);
+  const clearOf = point && !to.things ? 0 : backOf(to.things ?? [], middle, forwardOf(face), floor + proportions.hipHeight);
   const trunk = clearOf > -Infinity ? clearOf + BODY_RADIUS * proportions.height + LOAD_RESERVE * proportions.scale : 0;
   let ahead = Math.max(trunk, Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both));
   const nowhere = (check: string, value: number, limit = reach) => {
@@ -131,13 +131,13 @@ export function footing(person: Reacher, to: Stand, step = true) {
   const at = middle.clone(), there = new Vector3();
   // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
   const feetOut = Math.max(proportions.hipHalfWidth, defaultStance(proportions).width);
-  const clear = () => [...person.near].every((other) => {
+  const clear = (spot = there) => [...person.near].every((other) => {
     const pose = other.posesFor(person)[0];
     return pose.skeleton.bones.every((bone, b) => {
       if (!b) return true;
       const a = pose.position(bone.parent), end = pose.position(b);
       // Low segments, including any crouched trunk, bound the space occupied near the feet.
-      return Math.min(a.y, end.y) > floor + proportions.hipHeight || pointSegmentDistance(there, a, end) >= feetOut + proportions.toeFront + SEGMENT_RADIUS;
+      return Math.min(a.y, end.y) > floor + proportions.hipHeight || pointSegmentDistance(spot, a, end) >= feetOut + proportions.toeFront + SEGMENT_RADIUS;
     });
   });
   // If a single hand's comfortable stand crowds another body, use its remaining reach before giving up.
@@ -189,6 +189,9 @@ export function footing(person: Reacher, to: Stand, step = true) {
     const anchor = entry ? there : middle.clone().addScaledVector(way, ON * ROUND * proportions.scale / length);
     const side = Math.sign(body.clone().sub(anchor).dot(leftOf(yaw))) || 1;
     const beside = anchor.clone().addScaledVector(leftOf(yaw), side * ROUND * proportions.scale);
+    // (out from what it faces until the feet passing there are clear of another body's legs, as the stand is: beside a horse's flank,
+    // off its hind legs)
+    for (let k = 0; k < 8 && !clear(beside); k++) beside.addScaledVector(forwardOf(yaw), -ROUND / 4 * proportions.scale);
     via.push((f) => moved(beside, f));
   }
   const walk = new Walk(person, { to: destination, face: facing, within: ahead, via });

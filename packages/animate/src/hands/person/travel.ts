@@ -81,7 +81,7 @@ function once(act: (f: Frame) => void): (f: Frame) => void {
  * course counted in.
  */
 export function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], makeAim: Aim, resting: boolean,
-  { near = END.distance, on, end = false, walks = false, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; eta?: (left: number) => number; grasp?: Grasping } = {}) {
+  { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Grasping } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
   // (a hand carrying alone while the leading hand carries something of its own goes a moment after it; one beside a leading hand that
@@ -110,7 +110,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     return goal;
   };
   const there = (f: Frame) => {
-    if (!path.over(f)) return false;
+    if (!path.over(f) || ready?.() === false) return false;
     if (Number.isNaN(since)) since = f.time;
     if (grasp && f.time - since > SETTLING) grasp.settling(f);
     // (its lateness timed from its course's end; on a leg the carry walks, from when the body stands, not while it still walks there)
@@ -209,10 +209,10 @@ export function holding(person: Reacher, request: Request, thing: Thing, aim: Ca
 
 /** where a carried course ends, followed as its frame moves it: a thing has come to rest there once within 5 mm of it (or as near as its
  * course asks) and moving with it to within 5 cm/s, read as the thing and the end were a sub-step before */
-export const END = { distance: 0.005, speed: 0.05 };
+const END = { distance: 0.005, speed: 0.05 };
 
 /** whether a carried thing has come to rest at its course's end, as `END` has it, within `near` of it */
-export function restingAt(near: number): (f: Frame, carrier: Carrier, at: Readonly<Vector3>) => boolean {
+function restingAt(near: number): (f: Frame, carrier: Carrier, at: Readonly<Vector3>) => boolean {
   let end: Carrier | null = null;
   return (f, carrier, at) => {
     end ??= new Carrier(new Vector3().copy(at));

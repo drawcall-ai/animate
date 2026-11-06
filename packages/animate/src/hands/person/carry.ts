@@ -17,7 +17,7 @@ import { ARM_REACH, PROTRACTION } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { footing, walking, type WalkUp } from './stand';
 import { aimsFor, CARRYING, type Aim } from './aim';
-import { END, grasping, holding, restingAt, travel, type Grasping } from './travel';
+import { grasping, holding, travel, type Grasping } from './travel';
 
 /** how much faster than its mean a carry's course goes at its quickest (a minimum-jerk profile's peak, 1.875, and some room) */
 const PEAK = 2;
@@ -47,7 +47,10 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
     // (stood to as by its grip empties, as a grab is: a palm's way back from each turns with the hand on the way there)
     return { side, hold, at: thing.grip(hold.grip).at.position };
   });
-  const plan = way.own ? 'there' : footing(person, { place: way.points[way.points.length - 1], held }, options.step ?? true);
+  // (stood back far enough that the thing, as it will be placed, keeps clear of the trunk)
+  const placed = way.points[way.points.length - 1](person.frame);
+  const things = [{ bounds: thing.bounds, position: placed.position.clone(), quaternion: (placed.quaternion ?? person.track(thing.object).current.quaternion).clone() }];
+  const plan = way.own ? 'there' : footing(person, { place: way.points[way.points.length - 1], held, things }, options.step ?? true);
   if (plan === 'nowhere') {
     request.fail();
     return;
@@ -99,9 +102,9 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
       lifted = true;
       yield* holding(person, request, thing, aim(), walked, near);
       yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), aim, false, { grasp, walks: true });
-      // (come to rest on it, not merely passing within reach of it, or it is let go of past it)
-      const rested = restingAt(END.distance);
-      yield* holding(person, request, thing, aim(), end, (f) => approached && rested(f, carrier, end(f).position));
+      // (come to rest on it once the body has come there, not merely passing within reach of it, or it is let go of past it — or stalled
+      // short of it, or late: a carry ends what it cannot finish)
+      yield* travel(person, request, thing, [[0, end]], aim, false, { walks: true, end: true, ready: () => approached });
     });
   });
 }
