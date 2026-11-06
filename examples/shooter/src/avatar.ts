@@ -311,7 +311,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     aiming = ease(aiming, Number(input.aim), seconds);
     sprinted = ease(sprinted, Number(sprinting()), seconds);
     reloaded = ease(reloaded, Number(swapping), seconds);
-    lowered = ease(lowered, lowering ? 1 : low && acquired && !pressWanted && !input.aim ? LOW : 0, seconds);
+    // (back from a press to the rifle held as low as at the panel, not up to the shoulder: raised all the way as the hand drew back, the
+    // rifle went up as the hand came for it, which dipped to the waist and climbed after it for a second)
+    lowered = ease(lowered, lowering ? 1 : low && acquired && !input.aim ? LOW : 0, seconds);
     motion.update(seconds, chest.getWorldPosition(new Vector3()).sub(root.position));
     root.position.copy(input.position);
     root.velocity.copy(input.velocity);

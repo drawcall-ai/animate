@@ -36,6 +36,9 @@ const APERTURE: Shape = {
   little: { curl: 0.3, hook: 0.08, spread: 0.1 },
 };
 const NEARING = 0.22, NEAR = 0.08, ARRIVED = 0.015;
+/** a fingertip's hand points only late, from this far off where it presses until this near (m): from `NEARING`, the index was out half
+ * a second before it met its button */
+const POINTING = { nearing: 0.12, near: 0.05 } as const;
 /** how far a hand's wrist may move on what it holds before it closes on it afresh (m), for how long after it first closed on it (s): it
  * closes as it settles there, not once it has, and then keeps its grasp */
 const MOVED = 0.002, SETTLING = 0.3;
@@ -79,7 +82,8 @@ export class FingerState {
   /**
    * `side`'s contacts met this sub-step (at `time`, s) with `arm` — its joints moved with the fingers where it holds what does not hang
    * from it, the hand placed as the pose has it otherwise — the things where `placed` has them: a hand holding something, or within
-   * `ARRIVED` of a grip it is coming to (a fingertip's within `NEAR`, its pad onto the button as the hand pushes in, the arm still the reach's)
+   * `ARRIVED` of a grip it is coming to, the arm still the reach's (a fingertip's met from `NEAR` out stretched the index 7 cm onto its button
+   * in one sub-step)
    */
   meet(side: 'left' | 'right', arm: Arm, placed: (object: Object3D) => Placement, time: number): void {
     const hand = this.hands[side], hold = this.holding[side];
@@ -88,8 +92,7 @@ export class FingerState {
     if (!empty || !thing) return;
     const grip = Thing.of(thing).grip(empty.name);
     if (!hold) {
-      const off = this.wristOff(side, arm, grip, thing, placed);
-      if (off > (grip.pad ? NEAR : ARRIVED)) return;
+      if (this.wristOff(side, arm, grip, thing, placed) > ARRIVED) return;
       arm = { ...arm, bones: [] };
     }
     const closed = hand.closed && (hand.closed.on === hold || hand.closed.on === empty) ? hand.closed : null;
@@ -256,7 +259,7 @@ export class FingerState {
     const grip = Thing.of(thing).grip(empty.name);
     const { wrist } = this.gripOn(side, empty), distance = hand.joints.hand.getWorldPosition(new Vector3()).distanceTo(wrist);
     const open = grip.pad ? shapeOf(values(empty), POINT) : APERTURE;
-    if (distance > ARRIVED) return blendShape(RELAXED, open, 1 - smoothstep(NEAR, NEARING, distance));
+    if (distance > ARRIVED) return blendShape(RELAXED, open, 1 - (grip.pad ? smoothstep(POINTING.near, POINTING.nearing, distance) : smoothstep(NEAR, NEARING, distance)));
     if (hand.closed?.on !== empty || hand.closed.off.distanceTo(offOn(hand, thing)) > MOVED) this.close(hand, grip, thing, empty, time);
     return shapeOf(values(empty), hand.closed?.shape ?? open);
   }

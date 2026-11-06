@@ -22,6 +22,8 @@ import { ARM } from './trunk';
 const STAGING = 0.4;
 /** how far before its button a fingertip comes to first, and draws back to after (m, default body) */
 export const PRESSING = 0.07;
+/** how near a hand comes to the point before its button before it goes on in (m, default body) */
+const THROUGH = 0.02;
 
 /** A hand's hold to take: the hand, and the hold it takes. */
 export interface Taking {
@@ -83,10 +85,11 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const through = (corner: Vector3, next: Vector3) => world(corner).sub(hips).dot(toward) < 0 && pointSegmentDistance(hips, world(corner), world(next)) < trunk;
     const detour = onBody(person, take.thing) ? [] : aroundHeld(person, take.side, world(from), world(take.goal.position))
       .map((point) => point.sub(frame.position).applyQuaternion(frame.quaternion.clone().invert()));
-    // (a fingertip comes to its button from before it, pointing, and pushes straight in)
+    // (a fingertip comes to its button straight from before it, pointing, and pushes straight in — not round the thing's bounds first: its
+    // face is the side it comes from, and round a panel's post the hand came over its top and down past the other button)
     const grip = take.thing.grip(take.grip);
     const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(grip.facing, -PRESSING * person.scale)] : [];
-    const route = [...detour, ...(onBody(person, take.thing) ? []
+    const route = [...detour, ...(onBody(person, take.thing) || before.length ? []
       : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`]))))), ...before]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
     const points = route.length ? route : [take.goal.position];
@@ -96,7 +99,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const at = gripAt(person, take, person.frame);
     const { delay, slower } = takes.length > 1 && take.side !== LEADING ? following(seed, { [take.side]: take.grip }) : { delay: 0, slower: 0 };
     const seconds = reachTime(distance / person.scale, seedOf(take.grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower) / person.tempo;
-    return { ...take, points, lengths, distance, route, delay, seconds };
+    return { ...take, points, lengths, distance, route, delay, seconds, before: before.length > 0 };
   });
   const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
   const lasts = (hand: (typeof plan)[number]) => motion ? hand.distance / motion.speed + motion.speed / motion.accel : Math.max(hand.delay, finish - hand.seconds) + hand.seconds;
@@ -105,6 +108,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   for (const take of takes) grasp(person, take.side, null);
   let staged = 0;
   yield* parallel<Frame>('all', ...plan.map((hand) => function* () {
+    const before = hand.before;
     for (const [i, position] of hand.points.entries()) {
       const began = person.frame.time;
       const seconds = hand.distance > 0 ? hand.seconds * hand.lengths[i] / hand.distance : hand.seconds;
@@ -112,8 +116,11 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
       ends = Math.max(ends, began + seconds + after);
       // (on the way round, already turning as it will hold it)
       const goal = hand.route.length ? { ...hand.goal, position } : hand.goal;
+      // (a fingertip's point before its button passed through as the tip comes within `THROUGH` of it, or on time, not stopped at: it
+      // hovered there 0.3 s before it pushed in)
+      const through = (f: Frame) => before && unmet(f, person.hands[hand.side], { position }, person.track(hand.thing.object)).distance < THROUGH * person.scale;
       const ready = hand.route.length
-        ? until((f) => i < hand.points.length - 1 ? f.time >= began + seconds + after
+        ? until((f) => i < hand.points.length - 1 || before ? f.time >= began + seconds + after || through(f)
           : reached(f, person.hands[hand.side], { position }, person.track(hand.thing.object)) || f.time >= began + seconds + after + STAGING)
         : until(there);
       const on = person.track(hand.thing.object);
