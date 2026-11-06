@@ -13,7 +13,6 @@ export function transport(steps: Steps, matrix: Matrix4) {
   steps.hips.applyMatrix3(direction);
   steps.shifted.applyMatrix3(direction);
   steps.yaw += yaw;
-  steps.last += yaw;
   steps.rootYaw += yaw;
   steps.yaws[0] += yaw;
   steps.yaws[1] += yaw;

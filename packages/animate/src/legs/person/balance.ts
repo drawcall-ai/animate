@@ -122,7 +122,19 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
   // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
   // (the feet where they stand as it is made: in its stance under it)
   const standing = standingFeet(proportions, person.pose.position(0).x, person.pose.position(0).z, person.yaw);
-  const stepperFor = (foreseen: boolean) => (person.stepper = new Stepper(humanStepping(proportions, foreseen, person.stride, individual), feet, standing, person.yaw, person.floor));
+  // (a followed root's feet pivot, turning faster than they step — spun on the end that swings the other away from the other foot: turning
+  // in toward it on its ball, the heel swinging out; turning out from it on its heel, the toes swinging out: spun on its ball, the foot
+  // inside a quick turn swung its heel in under the other foot's landing. A walker's planner turns it no faster than its feet step.)
+  const pivoting: Feet = {
+    ...feet,
+    turnAbout: (i, anchor, from, to) => {
+      const end = (to - from) * feet.legs[i].sign < 0 ? ballOf(proportions, SIDES[i], _b) : heelOf(proportions, _b);
+      end.setY(0);
+      anchor.add(_v.copy(end).applyQuaternion(footRotation(from, 0))).sub(end.applyQuaternion(footRotation(to, 0)));
+    },
+  };
+  const stepperFor = (foreseen: boolean) =>
+    (person.stepper = new Stepper(humanStepping(proportions, foreseen, person.stride, individual), foreseen ? feet : pivoting, standing, person.yaw, person.floor));
   let stepper = stepperFor(true), first = true;
   const { toeOut, crouch: crouching } = humanStepping(proportions, true, person.stride);
   const poise = new Poise();

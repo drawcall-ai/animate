@@ -62,6 +62,26 @@ it('keeps both hands on the rifle through a 10 rad/s flick the body cannot keep 
   expect(off).toBeLessThan(0.06);
 });
 
+it('keeps the rifle on the camera and both hands on it through two 8 rad/s turns, the body pivoting round after them', async () => {
+  const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
+  acquire();
+  const pistol = node(avatar.group, 'pistol'), foregrip = node(avatar.group, 'foregrip');
+  const muzzle = () => { const at = avatar.muzzle.getWorldDirection(new Vector3()); return Math.atan2(at.x, at.z); };
+  const zero = wrapAngle(muzzle() - movement.input.yaw);
+  let lag = 0, jump = 0, off = 0, last = 0;
+  for (let frame = 0; frame < 120; frame++) {
+    // Half a second's turn, 20 ticks still, then 0.3 s more.
+    if (frame < 30 || (frame >= 50 && frame < 68)) movement.input.yaw += 8 * DT;
+    world.update(DT);
+    const behind = wrapAngle(muzzle() - movement.input.yaw - zero);
+    [lag, jump, last] = [Math.max(lag, Math.abs(behind)), Math.max(jump, Math.abs(behind - last)), behind];
+    off = Math.max(off, offGrip(avatar.body, 'right', pistol), offGrip(avatar.body, 'left', foregrip));
+  }
+  expect(lag).toBeLessThan(0.05);
+  expect(jump).toBeLessThan(0.02);
+  expect(off).toBeLessThan(0.01);
+});
+
 it('keeps the sights on the mouse through a 6 rad/s flick aiming down them', async () => {
   const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
   movement.input.aim = true;
