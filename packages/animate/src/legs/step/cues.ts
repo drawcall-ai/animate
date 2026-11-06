@@ -140,9 +140,11 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   const { st, feet } = steps, s = st.scale, { r, airborne, air, vy, yaw, most } = now;
   // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
   if (airborne) return !leg.swing && air > 0;
-  // (a planned walk keeps its supporting foot down even when short of reach; so does a walking landing while its knees recover)
+  // (a planned walk keeps its supporting foot down even when short of reach; so does a walking landing while its knees recover, and a foot
+  // the body pivots on or turns quickly over: lifted, both feet were in the air)
   const recovering = !!now.contact && now.run === 0 && (steps.jumping.phase === 'down' || steps.jumping.phase === 'up');
-  if (other.swing && (r.forecast || recovering) && !steps.clocked) return false;
+  const pivoting = leg.pivot !== undefined || (now.spinning && steps.pivots(leg));
+  if (other.swing && (r.forecast || recovering || pivoting) && !steps.clocked) return false;
   // A lower leading foot takes the weight as the pelvis descends. A foot already home cannot improve its reach by stepping in place.
   const ahead = aheadOf(steps, now, leg) < 0;
   const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (!!r.forecast && leg.planted < SETTLING * now.C));
@@ -196,11 +198,14 @@ function walkerYields(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg):
   return !steps.clocked && behind(steps, now, other, leg) && !turnedOff(steps, now, cues, leg);
 }
 
-/** A followed foot — an unforeseen root's — lets the other step first if it would have to cross it, or will be nearer its home than the
- * other a swing on (a gait's feet keep its order: none waits on the one across its girdle). */
+/** A followed foot — an unforeseen root's — lets the other step first if it would have to cross it and the other would not, else if it
+ * will be nearer its home than the other a swing on (a gait's feet keep its order: none waits on the one across its girdle). Each waiting
+ * on the other — the nearer one for the further, which waits for it not to cross — a body turned far from its feet stood so. */
 function followerYields(steps: Steps, now: Now, leg: Leg, other: Leg): boolean {
   if (steps.clocked) return false;
-  return landing(steps, now, leg, now.Tsw - now.dt)[2] > BLOCKED * steps.st.scale || behind(steps, now, other, leg);
+  const crosses = (foot: Leg) => landing(steps, now, foot, now.Tsw - now.dt)[2] > BLOCKED * steps.st.scale;
+  const crossing = crosses(leg);
+  return crossing !== crosses(other) ? crossing : behind(steps, now, other, leg);
 }
 
 /** whether `other` will be further from its home than `leg` a swing on, by more than a step */

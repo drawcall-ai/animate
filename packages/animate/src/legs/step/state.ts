@@ -126,6 +126,8 @@ export interface Leg {
   leapt?: boolean;
   sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean;
   planted: number; lifted: number; strike: number; landed: boolean; swing: Swing | null;
+  /** the way a planted foot headed as it began to pivot (rad; `Steps.pivots`); none: it has not since it landed */
+  pivot?: number;
   /** The planted foot or swing landing, in its own platform's frame. */
   on?: { platform?: Object3D; anchor: Vector3; yaw: number };
 }
@@ -158,6 +160,8 @@ export interface Reading extends Physics {
   rise: number; vy: number; airborne: boolean; air: number;
   /** the facing it asks (rad, unwrapped near the pelvis'), its turn rate (rad/s), the turn a gait's feet step for and whether it is held back */
   wanted: number; spin: number; pressed: number; held: boolean;
+  /** whether its feet step for a turn quicker than a landing foresees (`pressed`): a biped's then pivot */
+  spinning: boolean;
 }
 
 /** A sub-step's stepping time: the cycle and its stance and swing (s), how far a stance travels (m) and a landing leads (s). */
@@ -210,8 +214,13 @@ export const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, s
 export const SETTLED_AFTER = 0.4;
 /** Tuned: the pelvis turns at most `PELVIS_TURN` (rad) from a planted foot's facing (the trunk and gaze take the rest) */
 const PELVIS_TURN = (50 * Math.PI) / 180;
+/** Tuned: one pivot turns the pelvis at most `PIVOTING` (rad) past the way the foot headed as it began: further, its hip turning about
+ * the root over a foot that stays, the legs would cross */
+export const PIVOTING = 3 * Math.PI / 4;
+/** Tuned: a pivoting foot stays turned at most `PIVOTED` (rad) off the pelvis turning over it */
+export const PIVOTED = (25 * Math.PI) / 180;
 /** Tuned: the pelvis turns toward its facing at most at `TURN` (rad/s², rad/s) */
-export const TURN = { accel: 80, speed: 8 };
+export const TURN = { accel: 100, speed: 12 };
 /** Tuned: slower than `SHUFFLING` (m/s), a walker's feet alternate */
 export const SHUFFLING = 0.6;
 /** Tuned: the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend */
@@ -316,8 +325,6 @@ export class Steps {
   /** the pelvis turned off its facing (rad, + to the left) as the body has it with the stride: the hips the legs reach from turned with it */
   turn = 0;
   readonly crouches = [0, 0];
-  /** the pelvis' turn motion, its velocity the root's turn rate this sub-step */
-  readonly turning = { ...TURN, velocity: 0 };
   /** each leg's one before it in the gait and its share of a cycle after it; the leg across its girdle and its share after that */
   readonly before: number[]; readonly gap: number[];
   readonly pair: number[]; readonly apart: number[];
@@ -325,7 +332,7 @@ export class Steps {
   readonly yaws: number[];
   /** how high the pelvis stands over the ground (m), as it first stood */
   stand = NaN;
-  asked: number | undefined; last: number; rootYaw: number;
+  asked: number | undefined; rootYaw: number;
   /** the way (±1) the root went round, turning faster than `SPUN`, while it leads the pelvis by more than a quarter turn (`turnTo`); 0: none */
   way = 0;
   readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
@@ -378,7 +385,7 @@ export class Steps {
     this.gap = st.offsets.map((o, i) => mod(o - st.offsets[this.before[i]]));
     this.pair = feet.legs.map((leg, i) => leg.partner ?? this.before[i]);
     this.apart = st.offsets.map((o, i) => mod(o - st.offsets[this.pair[i]]));
-    this.yaw = this.last = this.rootYaw = yaw;
+    this.yaw = this.rootYaw = yaw;
     this.yaws = [yaw, yaw];
     this.footfalls = [...st.offsets];
     const strays = feet.legs.map((leg) => leg.stray);
@@ -399,4 +406,14 @@ export class Steps {
 
   /** the most the pelvis turns from a planted foot (rad) */
   get pelvisTurn() { return this.st.twist ?? PELVIS_TURN; }
+
+  /** whether its feet pivot: a biped's that spin on the floor (`Feet.turnAbout`), each standing alone (`pivots`) */
+  get pivoting() { return !this.clocked && !!this.feet.turnAbout; }
+
+  /** whether foot `leg` pivots: planted, the other in the air — the pelvis turns over it as far as `PIVOTING` past the way it headed as it
+   * began (`Leg.pivot`), the foot turned after it (both pivoting, the legs would twist round each other) */
+  pivots(leg: Leg): boolean { return this.pivoting && !leg.swing && !!this.legs[this.pair[leg.i]].swing; }
+
+  /** the way pivoting foot `leg` headed as it began, its toe-out taken off (rad, unwrapped near `near`) */
+  pivotFrom(leg: Leg, near: number): number { return near + wrapAngle((leg.pivot ?? leg.yaw) - this.st.toeOut * leg.sign - near); }
 }

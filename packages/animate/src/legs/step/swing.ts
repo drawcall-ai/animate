@@ -2,7 +2,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, smoothstep, softplus, wrapAngle, yawOf } from '../../kernel/math';
 import { hullOf, outside } from '../support';
-import { AIMED, PASSING, SETTLE, SHUFFLING, STEP, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, beyond, remaining, type FootPose, type Leg, type Now, type Steps, type Swing } from './state';
+import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, STEP, TURN, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, beyond, remaining, type FootPose, type Leg, type Now, type Steps, type Swing } from './state';
 import { foldLength, hipOf, home, homeOf, lengthOf, pace, shankLean, staysOn, travelOf, widthAt, xcomAhead } from './reach';
 import { FLAT, foothold, LEVEL } from '../floor';
 import { arcOf, stepping, swingOver, RISE } from './way';
@@ -10,13 +10,13 @@ import { arcOf, stepping, swingOver, RISE } from './way';
 /** Where a foot lands `remaining` s on, the way it faces then, and how far across the other foot it would have landed (m). */
 export function landing(steps: Steps, now: Now, leg: Leg, remaining: number): [Vector3, number, number] {
   const { st, feet, legs, pair, yaws } = steps, toeOut = st.toeOut, { r, v, lead, wanted, spin, Ts, sitting } = now;
-  // turned toward the root's facing, as far as the other foot lets the pelvis
-  const other = legs[pair[leg.i]];
-  const body = other.yaw - other.sign * toeOut;
   // (where the root will be and face as it lands, foreseen: as it says, or running on as it turns)
   // (a gait's foot lands as the root goes now, not as its forecast hopes: the legs of a long body hold it back more than a person's)
   const forecast = steps.clocked ? undefined : r.forecast, then = forecast?.(remaining + lead);
   const ahead = then ? wanted + wrapAngle(then.yaw - wanted) : wanted + spin * (remaining + lead);
+  // turned toward the root's facing, as far past the other foot as the pelvis turns from it: as it stands, or as it will stand by then,
+  // pivoting after the pelvis (`Steps.pivots`) — aimed from where it stood, a quick turn's landing fell behind and the foot stepped again
+  const other = legs[pair[leg.i]], body = steps.pivoting && !other.swing ? pivoted(steps, other, ahead, remaining) : other.yaw - other.sign * toeOut;
   // (a gait's foot lands under its hip for the body turned as it is turning now, on to the middle of its stance: one ahead of or
   // behind the root swings out with the turn, from one side of where it stands to the other)
   // (the foot itself heading the body's way as it lands: it pivots on the floor as the body comes round over it)
@@ -50,6 +50,15 @@ export function landing(steps: Steps, now: Now, leg: Leg, remaining: number): [V
     : balance;
   const { onto, stays } = keptTo(now, w);
   return [foothold(steps.floor, feet, leg.i, to, yaw, keeps, onto, stays), yaw, across];
+}
+
+/** which way pivoting foot `foot` will head `remaining` s on, its toe-out taken off (rad): the pelvis turned toward `ahead` as fast as it
+ * turns and as far as the pivot lets it, the foot within `PIVOTED` of it */
+function pivoted(steps: Steps, foot: Leg, ahead: number, remaining: number): number {
+  const { yaws } = steps, most = TURN.speed * remaining, from = steps.pivotFrom(foot, yaws[1]);
+  const pelvis = clamp(yaws[1] + clamp(turnTo(yaws[1], ahead, steps.way), -most, most), from - PIVOTING, from + PIVOTING);
+  const now = pelvis + wrapAngle(foot.yaw - foot.sign * steps.st.toeOut - pelvis);
+  return clamp(now, pelvis - PIVOTED, pelvis + PIVOTED);
 }
 
 /** whether a landing heading `yaw`, `remaining` s on, keeps the extrapolated centre of mass within `capture` of the feet, as it will be
@@ -222,7 +231,8 @@ export function swingOn(steps: Steps, now: Now, leg: Leg, w: Swing) {
   }
   // (re-aimed through the first half of the swing in time, frozen after: but for a hard stop, pulling it back into reach till late; a catch
   // as long as it may still move)
-  const aiming = w.age < remaining(w);
+  // (and through a quick turn the other foot pivots under: a step under way as one began landed behind it, the pelvis held back for it)
+  const aiming = w.age < remaining(w) || (now.spinning && steps.pivots(legs[steps.pair[leg.i]]));
   if (airborne || (!leg.leapt && w.u < settling && (aiming || w.capture))) [leg.anchor, leg.yaw] = landing(steps, now, leg, airborne ? air : remaining(w));
   if (!leg.leapt && w.u < settling && !airborne) settle(steps, now, leg, w, aiming);
   // (landed at the pitch it was last posed coming down at — its strike, the heel let down as far as the shank leans past the ankle's bend
