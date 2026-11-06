@@ -90,6 +90,9 @@ Give a movable prop its `userData.mass` and named grip empties, and describe on 
 - A digit apart from the rest (a trigger finger, a thumb on a spoon): `userData.fingers` on the grip names an empty its pad goes to, read every update; hang that empty under the part it presses and move the part to move the digit.
 
 ```ts
+import type { Object3D } from 'three';
+declare const pistolGrip: Object3D, button: Object3D, grenadeBody: Object3D, ringEdge: Object3D, aiming: boolean;
+
 Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }); // palm on the grip's right, thumb up and round its back
 Object.assign(button.userData, { pad: 'index', facing: [0, 0, -1] });
 pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };
@@ -106,11 +109,17 @@ A part of a held thing (a magazine in its rifle, a grenade's pin) is a thing of 
 To throw what one hand holds, `throwAt` it: the body's whole throw, aimed at the target, whose `released` motion you give to your physics. Turn the body toward the target first, and let a two-handed weapon hang (above), since the trunk's coil swings what the other hand holds.
 
 ```ts
-yield* grab(soldier, grenade, { right: 'body' });
-yield* grab(soldier, pin, { left: 'ring' });               // the pin: a thing of its own (its own mass) under the grenade
-yield* carry(soldier, pin, () => soldier.armPoint('left', new Vector3(1, -0.5, 0.7), 0.75), { step: false });
-release(soldier, pin);                                     // left in the world where it is: it falls in your physics
-yield* throwAt(soldier, grenade, target, { released: ({ velocity, spin }) => throwInto(physics, grenade, velocity, spin) });
+import { Vector3, type Object3D } from 'three';
+import { carry, grab, release, throwAt, type Body } from '@drawcall/animate';
+declare function throwInto(thing: Object3D, velocity: Vector3, spin: Vector3): void; // your physics
+
+function* pullAndThrow(soldier: Body, grenade: Object3D, pin: Object3D, target: Vector3) {
+  if (!(yield* grab(soldier, grenade, { right: 'body' }))) return false;
+  if (!(yield* grab(soldier, pin, { left: 'ring' }))) return false; // the pin: a thing of its own (its own mass) under the grenade
+  yield* carry(soldier, pin, () => soldier.armPoint('left', new Vector3(1, -0.5, 0.7), 0.75), { step: false });
+  release(soldier, pin);                                            // left in the world where it is: it falls in your physics
+  return yield* throwAt(soldier, grenade, target, { released: ({ velocity, spin }) => throwInto(grenade, velocity, spin) });
+}
 ```
 
 ## Puppets

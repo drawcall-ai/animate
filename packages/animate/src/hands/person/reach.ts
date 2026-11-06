@@ -111,13 +111,14 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
 /**
  * A reach's lateness, watched each sub-step against when it was planned to end (`ends`, s): past it, a hand off its goal that has
  * stopped closing on it makes the reach late at once, one still moving `REACHING` s on — said in development, the reach failed if a hand
- * is off its goal. The legs stepping under the hands, each is watched afresh: that is not its own lack of progress.
+ * is off its goal. While the legs are still stepping or settling under the hands, each is watched afresh: the body carrying a hand past
+ * its goal and back is not the hand's own lack of progress.
  */
 export function lateWatch(person: Reacher, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => Carrier; where: string }[]) {
   const progress = hands.map(() => new Progress());
   let late = false;
   return (f: Frame, ends: number) => {
-    if (stepping(person)) progress.forEach((hand) => hand.reset());
+    if (!person.locomotion.settled) progress.forEach((hand) => hand.reset());
     if (late || f.time <= ends) return;
     const stopped = hands.some(({ side, goal, on }, k) => {
       const off = unmet(f, person.hands[side], goal(f), on?.());
