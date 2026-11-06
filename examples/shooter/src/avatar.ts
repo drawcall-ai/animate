@@ -242,9 +242,11 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   const view = () => {
     let pitch = kicked(), yaw = input.yaw;
     if (input.aimPoint) ({ yaw, pitch } = anglesOf(input.aimPoint.clone().sub(look.eye)));
-    // Reload in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body.
-    pitch *= 1 - smooth(reloaded);
-    yaw += wrapAngle(person.facing - yaw) * smooth(reloaded);
+    // Reload, or hold it low, in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body (held
+    // low as the view looked down at a lift's button, its muzzle pointed at the feet, the support hand could not take it back).
+    const before = smooth(Math.max(reloaded, lowered));
+    pitch *= 1 - before;
+    yaw += wrapAngle(person.facing - yaw) * before;
     return new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ'));
   };
   const ahead = () => new Vector3(0, 0, ZERO).applyQuaternion(view()).add(look.eye);
