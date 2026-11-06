@@ -1,113 +1,61 @@
-import { Matrix4, Quaternion, Vector3 } from 'three';
-import { limited } from '../kernel/limits';
-import type { Pose } from '../kernel/pose';
+import { Quaternion, Vector3 } from 'three';
 import type { Joints } from './joints';
 import { DIGITS, LIFTED, SPLAYED, type Digit, type Shape } from './shape';
 
 /**
- * A part of a hand on a thing (world): the palm's middle, the handle's line (where a handle of `radius` lies across the palm in its grasp), or a
- * digit's pad — the point of its fingertip `round` off its length (`Joints.pad`) — at `at`, facing `facing` and its grasp line along `axis`
- * (toward the thumb), where given; its miss counting `weight` against the others' (default 1: a digit's own pad on what the hand holds
- * counts `DIGIT`, so the digit bends to meet it and the arm barely gives).
+ * A digit's pad on a thing (world): the point of its fingertip `round` off its length (`Joints.pad`) at `at`, facing `facing` where given.
  */
 export interface Contact {
-  part: Digit | 'palm' | 'handle';
+  part: Digit;
   at: Vector3;
   facing?: Vector3;
-  axis?: Vector3;
-  radius?: number;
   round?: number;
-  weight?: number;
 }
 
-/** The arm a contact solve moves with the fingers: its bones in `pose` from the upper arm to the hand, and the hand node's rest turn and
- * scale (its rotation is the hand bone's times `rest`). None: the hand stays where its node is (a hand its app poses). */
-export interface Arm {
-  pose: Pose;
-  /** the hand's bone, and the bones it moves from the upper arm down to it (none: the hand stays as the pose has it) */
-  hand: number;
-  bones: readonly number[];
-  rest: Readonly<Quaternion>;
+/** Where a hand is in the world as its contacts are met: its node's position, turn and scale. */
+export interface Placed {
+  position: Vector3;
+  quaternion: Quaternion;
   scale: number;
-  /** how much of the solved turns its joints take (0 … 1: the pose's as it stands … met), eased in as a hold begins (default 1) */
-  share?: number;
 }
 
 /**
- * `shape` (in place) and `arm`'s joints (in its pose) solved together so that every contact is met, as one chain from the shoulder to
- * each fingertip: damped least squares over the arm's joints' turns and the touching digits' values, each pulled toward where it starts
- * — the arm as its reach posed it, a digit toward `preferred` (relaxed, pointing, the shape a grip closed to) — so the arm gives a little
- * where the fingers cannot reach and the fingers take up the rest; each joint kept within its range every iteration. Returns the
- * contacts' miss (m) as it is left.
+ * `shape` (in place) solved so that each contact's digit meets it, the hand where `hand` places it — the hand is placed by its hold, as
+ * the arm keeps it on its grip; moved here too, for its digits, it went through the rifle on a flick, chasing what the arm had left: damped
+ * least squares over the touching digits' values, each pulled toward `preferred` (relaxed, pointing, the shape a grip closed to) and kept
+ * in range every iteration. Returns the contacts' miss (m) as it is left.
  */
-export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact[], shape: Shape, preferred: Shape): number {
+export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, preferred: Shape): number {
   if (!contacts.length) return 0;
   const digits = (['thumb', ...DIGITS] as const).filter((digit) => contacts.some((c) => c.part === digit));
   const values = digits.flatMap((digit) => keysOf(digit).map((key) => ({ digit, key, least: digit === 'thumb' ? (key === 'curl' ? 0 : SPLAYED) : key === 'curl' ? LIFTED : 0 })));
-  const turns = arm ? arm.bones.length * 3 : 0, n = turns + values.length;
-  const start = arm ? arm.bones.map((bone) => arm.pose.local(bone).clone()) : [];
-  const locals = start.map((q) => q.clone());
-  const x = new Float64Array(n);
-  values.forEach((v, j) => (x[turns + j] = read(shape, v.digit, v.key)));
+  const n = values.length, x = new Float64Array(n);
+  values.forEach((v, j) => (x[j] = read(shape, v.digit, v.key)));
   const pulled = values.map((v) => read(preferred, v.digit, v.key));
-  // (a digit's pull toward its preferred value weighed as its contact is: a weighted contact moves the arm less, not the digit)
-  const held = values.map((v) => Math.min(...contacts.filter((c) => c.part === v.digit).map((c) => c.weight ?? 1)));
-  // (the hand node in the world as `x` has the arm: from the pose, or where its node stands)
-  const hand = { position: new Vector3(), rotation: new Quaternion(), scale: 1 };
-  const node = new Matrix4();
-  const place = (x: Float64Array) => {
-    if (!arm) {
-      joints.hand.updateWorldMatrix(true, false);
-      node.copy(joints.hand.matrixWorld).decompose(hand.position, hand.rotation, _s);
-      hand.scale = _s.x;
-      return;
-    }
-    const { pose, bones } = arm, skeleton = pose.skeleton;
-    if (!bones.length) {
-      hand.position.copy(pose.position(arm.hand));
-      hand.rotation.copy(pose.rotation(arm.hand)).multiply(arm.rest);
-      hand.scale = arm.scale;
-      return;
-    }
-    hand.position.copy(pose.position(bones[0]));
-    hand.rotation.copy(pose.rotation(skeleton.bones[bones[0]].parent));
-    bones.forEach((bone, k) => {
-      if (k > 0) hand.position.add(_v.copy(skeleton.bones[bone].offset).applyQuaternion(hand.rotation));
-      hand.rotation.multiply(_q.copy(locals[k]).multiply(spin(x, 3 * k, _r)));
-    });
-    hand.rotation.multiply(arm.rest);
-    hand.scale = arm.scale;
-  };
+  // (how far each contact's pad is off it, in the world)
+  const off = (c: Contact, facing: Vector3) => joints.pad(c.part, shape, _at, facing, c.round).multiplyScalar(hand.scale).applyQuaternion(hand.quaternion).add(hand.position).sub(c.at);
   const residual = (x: Float64Array, out: number[]) => {
     out.length = 0;
-    values.forEach((v, j) => write(shape, v.digit, v.key, x[turns + j]));
-    place(x);
+    values.forEach((v, j) => write(shape, v.digit, v.key, x[j]));
     for (const c of contacts) {
-      const part = pointOf(joints, c, shape, hand.scale);
-      const weight = c.weight ?? 1, at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at).multiplyScalar(weight);
+      const at = off(c, _facing);
       out.push(at.x, at.y, at.z);
-      if (c.facing) {
-        const off = part.facing.applyQuaternion(hand.rotation).sub(c.facing).multiplyScalar(weight * (c.part === 'palm' || c.part === 'handle' ? TURN.hand : TURN.pad));
-        out.push(off.x, off.y, off.z);
-      }
-      if (c.axis) {
-        const off = part.axis.applyQuaternion(hand.rotation).sub(c.axis).multiplyScalar(TURN.hand);
-        out.push(off.x, off.y, off.z);
-      }
+      if (!c.facing) continue;
+      const turned = _facing.applyQuaternion(hand.quaternion).sub(c.facing).multiplyScalar(TURN);
+      out.push(turned.x, turned.y, turned.z);
     }
-    for (let j = 0; j < turns; j++) out.push(x[j] * (j >= turns - 3 ? PULL.wrist : PULL.arm));
-    values.forEach((_, j) => out.push((x[turns + j] - pulled[j]) * PULL.finger * held[j]));
+    values.forEach((_, j) => out.push((x[j] - pulled[j]) * PULL));
   };
   const r: number[] = [], moved: number[] = [];
   for (let iteration = 0; iteration < ITERATIONS; iteration++) {
     residual(x, r);
     const m = r.length, jacobian = new Float64Array(m * n);
     for (let j = 0; j < n; j++) {
-      const was = x[j], h = j < turns ? 1e-4 : 1e-3;
-      x[j] = was + h;
+      const was = x[j];
+      x[j] = was + STEP;
       residual(x, moved);
       x[j] = was;
-      for (let i = 0; i < m; i++) jacobian[i * n + j] = (moved[i] - r[i]) / h;
+      for (let i = 0; i < m; i++) jacobian[i * n + j] = (moved[i] - r[i]) / STEP;
     }
     // (JᵀJ + λ) Δ = −Jᵀ r
     const a = new Float64Array(n * n), b = new Float64Array(n);
@@ -120,44 +68,18 @@ export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact
     for (let j = 0; j < n; j++) a[j * n + j] += DAMPING;
     const step = solved(a, b, n);
     if (!step.every(Number.isFinite)) break;
-    for (let j = 0; j < n; j++) x[j] += step[j];
-    // (each joint within its range: an arm's turn clamped into its limit, folded into its rest, a digit's value into its own)
-    if (arm) arm.bones.forEach((bone, k) => {
-      locals[k].multiply(spin(x, 3 * k, _r)).normalize();
-      limited(arm.pose.skeleton, bone, locals[k]);
-      x[3 * k] = x[3 * k + 1] = x[3 * k + 2] = 0;
-    });
-    values.forEach((v, j) => (x[turns + j] = Math.min(1, Math.max(v.least, x[turns + j]))));
+    values.forEach((v, j) => (x[j] = Math.min(1, Math.max(v.least, x[j] + step[j]))));
   }
-  residual(x, r);
-  if (arm) arm.bones.forEach((bone, k) => arm.pose.setLocal(bone, locals[k], arm.share ?? 1));
-  // (the miss: the contacts' positions alone)
-  place(x);
-  return Math.max(...contacts.map((c) => {
-    const part = pointOf(joints, c, shape, hand.scale);
-    const at = part.at.multiplyScalar(hand.scale).applyQuaternion(hand.rotation).add(hand.position).sub(c.at);
-    return at.length();
-  }));
+  values.forEach((v, j) => write(shape, v.digit, v.key, x[j]));
+  return Math.max(...contacts.map((c) => off(c, _facing).length()));
 }
 
-/** where `contact`'s part of the hand is as `shape` has it, the way it faces and its grasp line, in the hand's frame (`scale`: the hand's
- * world scale, a handle's radius given in the world's metres) */
-function pointOf(joints: Joints, contact: Contact, shape: Shape, scale: number) {
-  if (contact.part === 'handle') return joints.handle((contact.radius ?? 0) / scale);
-  return joints.touch(contact.part === 'palm' ? null : contact.part, shape, contact.round);
-}
-
-/** how much a digit's own pad on what the hand holds counts against the hand's grip (`Contact.weight`): moved as much as its grip, the
- * trigger finger drew the hand 4 cm and 58° off the pistol grip, and a thumb's pad the support hand off the receiver */
-export const DIGIT = 0.1;
-/** how much a unit of a part's facing or grasp line off its contact's weighs against a metre off it: the hand's as 2 mm, so it turns only
- * as far as the arm lets it; a pad's as 1 cm, so it presses with its flat */
-const TURN = { hand: 0.002, pad: 0.01 } as const;
-/** how much a radian of an arm's joint (its hand's, `wrist`), or a unit of a digit's value, off where it starts weighs against a metre
- * off a contact (each joint pulled toward its preferred pose, not held to it) */
-const PULL = { arm: 0.05, wrist: 0.02, finger: 0.008 } as const;
-/** the solve's iterations each sub-step, and its damping */
-const ITERATIONS = 4, DAMPING = 1e-7;
+/** how much a unit of a pad's facing off its contact's weighs against a metre off it: as 1 cm, so it presses with its flat */
+const TURN = 0.01;
+/** how much a unit of a digit's value off its preferred weighs against a metre off a contact (pulled toward it, not held to it) */
+const PULL = 0.008;
+/** the solve's iterations each sub-step, its finite step and its damping */
+const ITERATIONS = 4, STEP = 1e-3, DAMPING = 1e-7;
 
 function keysOf(digit: Digit) {
   return digit === 'thumb' ? (['curl', 'oppose', 'spread'] as const) : (['curl', 'hook', 'spread'] as const);
@@ -172,13 +94,6 @@ function write(shape: Shape, digit: Digit, key: 'curl' | 'hook' | 'spread' | 'op
   if (digit === 'thumb') {
     if (key !== 'hook') shape.thumb[key] = value;
   } else if (key !== 'oppose') shape[digit][key] = value;
-}
-
-/** the turn of the rotation vector at `x[k]` (into `out`) */
-function spin(x: Float64Array, k: number, out: Quaternion): Quaternion {
-  const angle = Math.hypot(x[k], x[k + 1], x[k + 2]);
-  if (angle < 1e-12) return out.identity();
-  return out.setFromAxisAngle(_axis.set(x[k] / angle, x[k + 1] / angle, x[k + 2] / angle), angle);
 }
 
 /** `a` x = `b` (`n` × `n`, row-major) by Gaussian elimination with partial pivoting, in place */
@@ -209,4 +124,4 @@ function solved(a: Float64Array, b: Float64Array, n: number): Float64Array {
   return x;
 }
 
-const _v = new Vector3(), _q = new Quaternion(), _r = new Quaternion(), _s = new Vector3(), _axis = new Vector3();
+const _at = new Vector3(), _facing = new Vector3();

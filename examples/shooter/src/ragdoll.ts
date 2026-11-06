@@ -37,7 +37,9 @@ const limbs = (side: Side): Part[] => [
   },
   {
     bone: `${side}LowerArm`, mass: 2, joint: { parent: `${side}UpperArm`, bend: 2.6, knee: false },
-    boxes: [{ from: `${side}LowerArm`, to: `${side}MiddleDistal_end`, width: 0.08, depth: 0.08 }],
+    // The forearm reaches on along itself past the wrist a hand's length, not to the middle fingertip: boxed to where the fingers were,
+    // closed round a grip they point back across the wrist, and the box lay across the chest, the corpse jittering until it flew apart.
+    boxes: [{ from: `${side}LowerArm`, to: `${side}Hand`, width: 0.08, depth: 0.08, reach: 0.17 }],
   },
   {
     bone: `${side}UpperLeg`, mass: 9, joint: { parent: 'hips', flex: 1, twist: 0.5, side: 0.6 },

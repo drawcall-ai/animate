@@ -21,7 +21,7 @@ import { anchors, movers, oriented, resolve, type Hold, type Holder, type Interp
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Placement } from '../kernel/goal';
-import { bear, checkParents, hangsFrom, heldMass, wornOf, type Bearing } from '../things/hold';
+import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
 import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
@@ -388,19 +388,13 @@ export class Self implements Holder {
     this.fingers?.update(seconds, this.time);
   }
 
-  /** each hand's contacts met with its arm this sub-step (`FingerState.meet`): the arm moved with the fingers where it holds what does not
-   * hang from it */
+  /** each hand's digits' contacts met this sub-step (`FingerState.meet`), the hand where its hold left it */
   private meetContacts(fingers: FingerState, f: Frame): void {
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands[side];
       if (hand === undefined) continue;
-      const chain = f.current.skeleton.chain(`${side}Arm`), hold = this.holding[side];
-      // (only on what stands apart from the body, or what it wears in both hands, turned by itself: what one hand carries follows it, and a
-      // hand moved for it chased itself — a rifle riding the chest in one hand held the other's magazine off its well)
-      const anchor = hold ? hangsFrom(this, hold.thing.object) : NaN;
-      const both = Object.values(this.holding).filter((other) => other?.thing === hold?.thing).length > 1;
-      const moves = hold !== null && hold !== undefined && !this.carried.has(hold.thing.object) && !chain.includes(anchor) && (Number.isNaN(anchor) || both);
-      fingers.meet(side, { pose: f.current, hand, bones: moves ? chain : [], rest: this.restOf(hand), scale: this.scaleOf(hand) }, (object) => this.track(object).at(f.time).current, f.time);
+      const at = { position: f.current.position(hand).clone(), quaternion: f.current.rotation(hand).clone().multiply(this.restOf(hand)), scale: this.scaleOf(hand) };
+      fingers.meet(side, at, (object) => this.track(object).at(f.time).current);
     }
   }
 
