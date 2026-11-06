@@ -4,6 +4,9 @@ import { RIFLE } from '.';
 
 /** A magazine's body as it collides (m, its frame): its 2.8 cm thick, 15.5 cm long, 8 cm deep curved box, squared off. */
 const BODY = { size: [0.028, 0.155, 0.08] as const, at: new Vector3(0, -0.004, -0.005) };
+/** How a magazine's steel body meets the floor: gripping it and not bouncing, so it slides on a little and stops rather than skipping
+ * and tumbling on to wherever it happens to. */
+const MATERIAL = { staticFriction: 1, dynamicFriction: 1, restitution: 0 };
 /** How many spent magazines lie about before the oldest is cleared. */
 const KEPT = 6;
 
@@ -19,7 +22,7 @@ export class Litter {
 
   /** `object` let go of, moving at `velocity` (m/s) and turning at `spin` (rad/s about the world's axes): it flies on from where it is */
   drop(object: Object3D, velocity: Readonly<Vector3>, spin: Readonly<Vector3>) {
-    const body = new RigidBody({ mass: RIFLE.magazine.mass, velocity: { linear: velocity.toArray(), angular: spin.toArray() } });
+    const body = new RigidBody({ mass: RIFLE.magazine.mass, material: MATERIAL, velocity: { linear: velocity.toArray(), angular: spin.toArray() } });
     object.matrixWorld.decompose(body.position, body.quaternion, new Vector3());
     this.scene.add(body);
     body.updateMatrixWorld();
