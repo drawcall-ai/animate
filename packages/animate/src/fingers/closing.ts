@@ -1,4 +1,4 @@
-import { Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
+import { Ray, Vector3, type Matrix4, type Object3D, type SkinnedMesh } from 'three';
 import { meshesOf } from '../things/thing';
 import { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
@@ -23,7 +23,7 @@ const GIRTH = 0.09;
  * how far a digit's palm side is taken to touch, as a share of its depth from the bone: a fifth pressed in, as the pad's flesh gives (a
  * segment lying along a thing's surface, grazing it, does not stop the fold)
  */
-export const PRESSED = 0.8;
+export const PAD_DEPTH = 0.8;
 /**
  * the ways across a grip its chords are tried in (over half a turn); how much nearer the way the palm faces counts for against a chord's
  * width (m per unit of the cosine between them: a round rung's chords alike, the one along it); and how squarely the palm must face along
@@ -33,12 +33,19 @@ export const PRESSED = 0.8;
  */
 const CHORDS = 12, EVEN = 0.004, TIE = Math.SQRT1_2;
 /** the steps each fold is tried at, and the halvings within the step it first meets the thing in: 1/128 of its range */
-const STEPS = 16, HALVINGS = 3;
+const FOLD = { steps: 16, halvings: 3 } as const;
 
 /** A handle's middle and its line, toward the thumb (the world). */
 export interface Line {
   at: Vector3;
   axis: Vector3;
+}
+
+/** A hand as a grasp closes it: its digits, the thing's triangles about it and where the hand stands (the world). */
+interface Closing {
+  joints: Joints;
+  near: Triangles;
+  world: Matrix4;
 }
 
 /** Where a grasp's thumb goes on the handle (the world): its pad at `at`, facing `facing`, back against the fingers or the palm across it. */
@@ -59,34 +66,35 @@ export interface Opposed {
  * things attached to it (their own `userData.mass`), hidden meshes and the body's own skin (`skins`: an empty in a scene held every mesh
  * under it, the body's too) are not touched; other skinned meshes are touched as they stand at rest.
  */
-export function closedOn(joints: Joints, object: Object3D, handle: Line | null, skins: readonly SkinnedMesh[]): { shape: Shape; thumb: Opposed | null } {
-  const shape = structuredClone(WRAP), near = nearHand(joints, object, skins);
+export function closedOn(joints: Joints, object: Object3D, handle: Line | null, skins: readonly SkinnedMesh[], world: Matrix4 = joints.hand.matrixWorld): { shape: Shape; thumb: Opposed | null } {
+  joints.hand.updateWorldMatrix(true, false);
+  const shape = structuredClone(WRAP), at: Closing = { joints, near: nearHand(joints, world, object, skins), world };
   for (const digit of DIGITS) {
     const finger = shape[digit];
     const curl = (value: number) => (finger.curl = value), hook = (value: number) => (finger.hook = value);
-    if (!opening(joints, near, digit, shape, curl, 1)) closing(joints, near, digit, shape, curl, 1);
-    if (!opening(joints, near, digit, shape, hook, 1 - finger.curl)) closing(joints, near, digit, shape, hook, 1 - finger.curl);
+    if (!opening(at, digit, shape, curl, 1)) closing(at, digit, shape, curl, 1);
+    if (!opening(at, digit, shape, hook, 1 - finger.curl)) closing(at, digit, shape, hook, 1 - finger.curl);
   }
-  return { shape, thumb: handle && opposite(joints, near, shape, handle) };
+  return { shape, thumb: handle && opposite(at, shape, handle) };
 }
 
 /**
  * whether `digit` meets `near` as `shape` has it, against how it met it with `set`'s value at 0: one of its segments' palm side
- * (`PRESSED`) passing into it where it did not at 0 — or one lying on it at 0 (a finger along a receiver's flat underside) sinking past
+ * (`PAD_DEPTH`) passing into it where it did not at 0 — or one lying on it at 0 (a finger along a receiver's flat underside) sinking past
  * half its flesh
  */
-function meeting(joints: Joints, near: Triangles, digit: DigitName, shape: Shape, set: (value: number) => void): () => boolean {
+function meeting(at: Closing, digit: DigitName, shape: Shape, set: (value: number) => void): () => boolean {
   set(0);
-  const lying = touches(joints, near, digit, shape, PRESSED), deep = touches(joints, near, digit, shape, PRESSED / 2);
-  return () => touches(joints, near, digit, shape, PRESSED).some((k) => !lying.includes(k))
-    || touches(joints, near, digit, shape, PRESSED / 2).some((k) => !deep.includes(k));
+  const lying = touches(at, digit, shape, PAD_DEPTH), deep = touches(at, digit, shape, PAD_DEPTH / 2);
+  return () => touches(at, digit, shape, PAD_DEPTH).some((k) => !lying.includes(k))
+    || touches(at, digit, shape, PAD_DEPTH / 2).some((k) => !deep.includes(k));
 }
 
 /** `set`'s value of `shape` (0 … `most`) raised from 0 until `digit` meets `near` (`meeting`): stepped up, then halved within the step it
  * first meets it in (1/128 of its range); whether it met it (none met: `most`) */
-function closing(joints: Joints, near: Triangles, digit: DigitName, shape: Shape, set: (value: number) => void, most: number): boolean {
-  const met = meeting(joints, near, digit, shape, set), step = most / STEPS;
-  for (let k = 1; k <= STEPS; k++) {
+function closing(at: Closing, digit: DigitName, shape: Shape, set: (value: number) => void, most: number): boolean {
+  const met = meeting(at, digit, shape, set), step = most / FOLD.steps;
+  for (let k = 1; k <= FOLD.steps; k++) {
     set(k * step);
     if (!met()) continue;
     set(halved(met, set, (k - 1) * step, k * step));
@@ -97,12 +105,12 @@ function closing(joints: Joints, near: Triangles, digit: DigitName, shape: Shape
 
 /** `set`'s value of `shape` lowered from `most` until `digit` comes clear of `near` (`meeting`), as `closing` steps it; whether it met it
  * at `most` (clear there: left at `most`) */
-function opening(joints: Joints, near: Triangles, digit: DigitName, shape: Shape, set: (value: number) => void, most: number): boolean {
-  const met = meeting(joints, near, digit, shape, set), step = most / STEPS;
-  for (let k = STEPS; k >= 0; k--) {
+function opening(at: Closing, digit: DigitName, shape: Shape, set: (value: number) => void, most: number): boolean {
+  const met = meeting(at, digit, shape, set), step = most / FOLD.steps;
+  for (let k = FOLD.steps; k >= 0; k--) {
     set(k * step);
     if (met()) continue;
-    if (k === STEPS) return false;
+    if (k === FOLD.steps) return false;
     set(halved(met, set, k * step, (k + 1) * step));
     return true;
   }
@@ -110,9 +118,9 @@ function opening(joints: Joints, near: Triangles, digit: DigitName, shape: Shape
   return true;
 }
 
-/** the value between `free` (clear: `met` false) and `hit` it halves down to, `HALVINGS` times: the clear one nearest `hit` */
+/** the value between `free` (clear: `met` false) and `hit` it halves down to, `FOLD.halvings` times: the clear one nearest `hit` */
 function halved(met: () => boolean, set: (value: number) => void, free: number, hit: number): number {
-  for (let h = 0; h < HALVINGS; h++) {
+  for (let h = 0; h < FOLD.halvings; h++) {
     const mid = (free + hit) / 2;
     set(mid);
     if (met()) hit = mid;
@@ -130,8 +138,9 @@ function halved(met: () => boolean, set: (value: number) => void, free: number, 
  * the line along the chord through its pad as `WRAP` has it meets it (within the chord's width of its end; else at the end), facing back
  * along the chord; no chord (nothing about the line within `GIRTH`), none.
  */
-function opposite(joints: Joints, near: Triangles, shape: Shape, handle: Line): Opposed | null {
-  const world = joints.hand.matrixWorld, palm = joints.touch(null, shape);
+function opposite(hand: Closing, shape: Shape, handle: Line): Opposed | null {
+  const { joints, near, world } = hand;
+  const palm = joints.touch(null, shape);
   const at = palm.at.applyMatrix4(world), faces = palm.facing.transformDirection(world), axis = handle.axis;
   const thumb = joints.pad('thumb', shape, new Vector3(), _facing, PINCH).applyMatrix4(world);
   // (how far the surface is from `from` along `way`: where a line in from `GIRTH` out first meets it)
@@ -156,7 +165,7 @@ function opposite(joints: Joints, near: Triangles, shape: Shape, handle: Line): 
   if (!best) return null;
   // (along the chord, from its middle: the palm, and the fingers' pads)
   const width = best.ahead + best.behind, centre = middle.clone().addScaledVector(best.way, (best.ahead - best.behind) / 2);
-  const along = (point: Vector3) => point.clone().sub(centre).dot(best.way) / (width / 2), pads = padsOn(joints, near, shape);
+  const along = (point: Vector3) => point.clone().sub(centre).dot(best.way) / (width / 2), pads = padsOn(hand, shape);
   const side = -Math.sign(along(Math.abs(faces.dot(best.way)) > TIE ? at : pads));
   const end = middle.clone().addScaledVector(best.way, side >= 0 ? best.ahead : -best.behind), way = end.clone().sub(middle).normalize();
   // (on that face where the thumb already is, in along the chord through its pad as `WRAP` has it: at the chord's own end, a support
@@ -168,27 +177,23 @@ function opposite(joints: Joints, near: Triangles, shape: Shape, handle: Line): 
 
 /** the middle of the pads of the fingers whose last segment meets `near` as `shape` has them, else of any that meets it, else of all
  * (the world) */
-function padsOn(joints: Joints, near: Triangles, shape: Shape): Vector3 {
-  const met = DIGITS.filter((digit) => touches(joints, near, digit, shape, PRESSED).length);
-  const tips = met.filter((digit) => touches(joints, near, digit, shape, PRESSED).includes(2));
+function padsOn(at: Closing, shape: Shape): Vector3 {
+  const { joints, world } = at;
+  const met = DIGITS.filter((digit) => touches(at, digit, shape, PAD_DEPTH).length);
+  const tips = met.filter((digit) => touches(at, digit, shape, PAD_DEPTH).includes(2));
   const pressing = tips.length ? tips : met.length ? met : DIGITS;
   const sum = new Vector3();
-  for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, PINCH).applyMatrix4(joints.hand.matrixWorld));
+  for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, PINCH).applyMatrix4(world));
   return sum.divideScalar(pressing.length);
 }
 
-/** the world's scale of `node` */
-function scaleOf(node: Object3D): number {
-  return _scale.setFromMatrixScale(node.matrixWorld).x;
-}
 
 /** `object`'s triangles about `joints`' hand as they stand now, in the world, as far as it reaches (`Joints.span`) — meshes of things
  * attached to it (their own `userData.mass`), hidden meshes and `skins` left out, other skinned meshes as they stand at rest */
-function nearHand(joints: Joints, object: Object3D, skins: readonly SkinnedMesh[]): Triangles {
-  joints.hand.updateWorldMatrix(true, false);
+function nearHand(joints: Joints, world: Matrix4, object: Object3D, skins: readonly SkinnedMesh[]): Triangles {
   object.updateWorldMatrix(true, true);
   const meshes = meshesOf(object).filter((mesh) => !skins.some((skin) => skin === mesh)).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
-  return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), joints.span * scaleOf(joints.hand) + SLACK);
+  return new Triangles(meshes, new Vector3().setFromMatrixPosition(world), joints.span * _scale.setFromMatrixScale(world).x + SLACK);
 }
 
 /**
@@ -196,8 +201,9 @@ function nearHand(joints: Joints, object: Object3D, skins: readonly SkinnedMesh[
  * by index: crossing its surface, or lying inside it (a thumb sunk whole in a stile's flat bar crosses none of its faces), a part a
  * handle's girth thick at most
  */
-function touches(joints: Joints, near: Triangles, digit: DigitName, shape: Shape, side = 1): number[] {
-  return joints.segments(digit, shape, side).flatMap(([start, end], k) => {
+function touches(at: Closing, digit: DigitName, shape: Shape, side = 1): number[] {
+  const { joints, near, world } = at;
+  return joints.segments(digit, shape, side, world).flatMap(([start, end], k) => {
     const length = _to.subVectors(end, start).length();
     _ray.set(start, _to.normalize());
     return near.first(_ray, length) === null && !near.inside(_ray, GIRTH) ? [] : [k];

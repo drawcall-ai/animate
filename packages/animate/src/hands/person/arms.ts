@@ -13,7 +13,7 @@ import type { Reacher } from './reacher';
 import type { Step } from '../../kernel/frame';
 import type { Pose, ReadonlyPose } from '../../kernel/pose';
 import type { Thing } from '../../things/thing';
-import { hangsFrom, onBody } from '../../things/hold';
+import { boneOf, onBody } from '../../things/hold';
 import { bringShoulder, ELEVATION, PROTRACTION, twistToward } from './bend';
 import { ArmClear, checkArms, clearWrist, holdsClear, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
@@ -136,7 +136,7 @@ export function clearArm(person: Reacher, f: Frame, side: Side, at: Vector3, yaw
   const pad = CLEAR * person.proportions.height;
   let out = sign * local.x;
   for (const thing of obstacles) {
-    if (f.current.skeleton.chain(`${side}Arm`).includes(hangsFrom(person, thing.object))) continue;
+    if (f.current.skeleton.chain(`${side}Arm`).includes(boneOf(person, thing.object))) continue;
     const placed = person.track(thing.object).at(f.time).current;
     const position = _d.subVectors(placed.position, hips).applyQuaternion(inverse);
     const rotation = _q.copy(inverse).multiply(placed.quaternion);
@@ -290,7 +290,7 @@ interface Toward {
 /** one sub-step of `reaching`, its arm's tip `arm` */
 export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, options: HandOptions, arm: ChainTip, toward?: Toward) {
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
-  if (options.thing && f.current.skeleton.chain(`${side}Arm`).includes(hangsFrom(person, options.thing.object))) return;
+  if (options.thing && f.current.skeleton.chain(`${side}Arm`).includes(boneOf(person, options.thing.object))) return;
   const proportions = person.proportions;
   const at = options.on ? options.on.toWorld(target, _target, f.time).position : target.position;
   shrug(f, proportions, side, toward?.at ?? at, toward);

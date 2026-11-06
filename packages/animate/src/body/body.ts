@@ -92,7 +92,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * posed; `null` lets it go.
    * Set it before each `update`; the node's own rotation is written to match as the update ends. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    selfOf(this).orient(node, rotation);
+    selfOf(this).oriented.set(node, rotation);
   }
 
   /**

@@ -14,10 +14,10 @@ import type { Root } from '../legs/legged';
 import type { Stepper } from '../legs/step/stepper';
 import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
-import { smoothstep, yawOf } from '../kernel/math';
+import { yawOf } from '../kernel/math';
 import { Binding } from './model';
 import { PlatformFrame } from './platform';
-import { anchors, movers, oriented, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
+import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Placement } from '../kernel/goal';
@@ -27,6 +27,7 @@ import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
 import { FLAT, type Floor } from '../legs/floor';
 import { FingerState } from '../fingers/state';
+import { Orient } from './orient';
 
 /** How a body is made. */
 export interface SelfOptions {
@@ -109,10 +110,8 @@ export class Self implements Holder {
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
-  /** the nodes on it its app keeps turned in the world (`orient`): as it asks, and as each sub-step lets it (`holdable`), written so as it
-   * updates */
-  private readonly asked = new Map<Object3D, Quaternion>();
-  private readonly turned = new Map<Object3D, Quaternion>();
+  /** the nodes on it its app keeps turned in the world (`orient`) */
+  readonly oriented = new Orient(this);
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
   lastMover = -Infinity;
@@ -383,11 +382,8 @@ export class Self implements Holder {
     }
     this.updates++;
     this.binding.write(this.pose, this.floor);
-    for (const [node, rotation] of this.turned) {
-      node.parent?.updateWorldMatrix(true, false);
-      node.quaternion.copy(node.parent ? node.parent.getWorldQuaternion(_turn).invert().multiply(rotation) : rotation);
-    }
-    this.fingers?.update(seconds, this.time);
+    this.oriented.write();
+    this.fingers?.update(seconds);
   }
 
   /** each hand's digits' contacts met this sub-step (`FingerState.meet`), the hand where its hold left it */
@@ -398,57 +394,6 @@ export class Self implements Holder {
       const at = { position: f.current.position(hand).clone(), quaternion: f.current.rotation(hand).clone().multiply(this.restOf(hand)), scale: this.scaleOf(hand) };
       fingers.meet(side, at, (object) => this.track(object).at(f.time).current);
     }
-  }
-
-  /** keeps `node` turned to `rotation` in the world, its position following its parent (none: lets it go) */
-  orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    if (!rotation) {
-      oriented.delete(node);
-      this.asked.delete(node);
-      this.turned.delete(node);
-      return;
-    }
-    this.asked.set(node, (this.asked.get(node) ?? new Quaternion()).copy(rotation));
-    // (as each sub-step lets it, `holdable`)
-    const turned = this.turned.get(node) ?? rotation.clone();
-    oriented.set(node, turned);
-    this.turned.set(node, turned);
-  }
-
-  /** each node its app keeps turned (`orient`) turned as it asks, brought within reach of the hands on it (`reached`) */
-  private holdable(f: Frame): void {
-    for (const [node, asked] of this.asked) this.turned.get(node)?.copy(this.reached(f, node, _goal.copy(asked)));
-  }
-
-  /** `turned` (`node`'s, in place) turned back about the node toward the shoulder of each hand holding what hangs from it, or taking hold
-   * of it, as far as brings its grip within its arm's reach (`HOLDABLE.far` of its length): held low at a lift's panel, the support hand
-   * came back from the button 1.6 cm short of the rifle's front and never took it */
-  private reached(f: Frame, node: Object3D, turned: Quaternion): Quaternion {
-    const was = _kept.copy(this.turned.get(node) ?? turned);
-    this.turned.get(node)?.copy(turned);
-    const pivot = resolve(this, node, _pivot).position;
-    for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of this.species.hands ?? []) {
-      const hold = this.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : this.fingers?.coming(side);
-      const thing = hold?.thing.object ?? coming?.thing, goal = hold ? this.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
-      if (!thing || !goal || !under(thing, node)) continue;
-      const bones = this.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
-      const reach = HOLDABLE.far * bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
-      const placed = resolve(this, thing, _placed);
-      const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
-      const far = out.length(), near = toward.length();
-      if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
-      // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder; for a hand still on
-      // its way, only as it nears — turned at once as it set off back from a lift's button, its hand still turned as it pressed and so
-      // its grip seemingly farther, the rifle swung 10° toward it in a sub-step)
-      const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
-      const axis = _axis.crossVectors(out, toward);
-      if (axis.lengthSq() < 1e-12) continue;
-      const off = hold ? 0 : _off.addVectors(out, pivot).distanceTo(f.current.position(bones[bones.length - 1])) / this.scale;
-      turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), (out.angleTo(toward) - wanted) * (1 - smoothstep(COMING.near, COMING.far, off))));
-      this.turned.get(node)?.copy(turned);
-    }
-    this.turned.get(node)?.copy(was);
-    return turned;
   }
 
   /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
@@ -495,7 +440,7 @@ export class Self implements Holder {
     if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
-    this.holdable(f);
+    this.oriented.step(f);
     for (const request of [...this.requests]) {
       request.stage(f);
       if (!request.owned) continue;
@@ -595,20 +540,5 @@ const IDENTITY = new Matrix4();
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
-/** how far out of a chain's full length a hand's grip on what its body turns is kept: within its reach (a chain's tip goes 0.98 of it at
- * most) */
-const HOLDABLE = { far: 0.975 } as const;
-const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _turn = new Quaternion();
-const _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3(), _kept = new Quaternion(), _goal = new Quaternion();
-const _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-/** from how far off its grip a hand on its way to it turns what it takes toward itself (`reached`), fully by how near (m, default body) */
-const COMING = { far: 0.15, near: 0.03 };
-const _off = new Vector3();
-
-/** whether `object` hangs from `node` (is it, or under it) */
-function under(object: Object3D, node: Object3D): boolean {
-  for (let at: Object3D | null = object; at; at = at.parent) if (at === node) return true;
-  return false;
-}
+const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const EMPTY: readonly LogEntry[] = Object.freeze([]);

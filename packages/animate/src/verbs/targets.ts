@@ -2,7 +2,7 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Self } from '../body/runtime';
 import type { Goal } from '../kernel/goal';
-import { bodyOf, hangsFrom } from '../things/hold';
+import { bodyOf, boneOf } from '../things/hold';
 import { resolve } from '../things/resolve';
 import { Carrier } from '../kernel/carrier';
 
@@ -63,7 +63,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     found.quaternion = turn.copy(frame.current.quaternion);
     found.velocity = frame.velocity(velocity);
     found.object = at;
-    found.carriedBy = on && hangsFrom(on, at) >= 0 ? on : undefined;
+    found.carriedBy = on && boneOf(on, at) >= 0 ? on : undefined;
     return found;
   };
 }
