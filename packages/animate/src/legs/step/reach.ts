@@ -27,7 +27,7 @@ export function reach(steps: Steps, now: Now, leg: Leg, given?: Vector3): number
 }
 
 export function lengthOf(steps: Steps, leg: Leg): number { return steps.feet.legs[leg.i].length ?? steps.feet.length; }
-export function homeOf(steps: Steps, leg: Leg): number { return steps.feet.legs[leg.i].home ?? steps.feet.legs[leg.i].ahead ?? 0; }
+export function homeOf(steps: Steps, leg: Leg): number { return (steps.feet.legs[leg.i].home ?? steps.feet.legs[leg.i].ahead ?? 0) + (steps.stagger?.[leg.i] ?? 0); }
 
 /** a foot's home `ahead` s on: under its hip as the root goes, the stance's width out */
 export function home(steps: Steps, now: Now, leg: Leg, ahead: number, out: Vector3): Vector3 {

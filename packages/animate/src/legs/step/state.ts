@@ -32,6 +32,8 @@ export interface Steering {
   com?: Vector3;
   /** how far up on the balls of its feet (m): the planted feet roll onto them as the hips rise */
   tiptoe?: number;
+  /** each foot's home put this far ahead of where it stands (m, by leg): a foot off it steps there (a throw's stride) */
+  stagger?: readonly number[];
   /** the feet stay where they stand but to keep the balance or even out a staggered stance (a body let down or up to reach) */
   still?: boolean;
   /** the extrapolated centre of mass on the floor now, if the body knows it better than its root's (a pose's: its centre of mass carried
@@ -305,6 +307,8 @@ export class Steps {
   unloading: number | null = null;
   /** how far the pelvis is shifted over the feet standing, a moment (m, on the floor: `Steering.shifted`) */
   readonly shifted = new Vector3();
+  /** each foot's home put ahead (`Steering.stagger`), as this sub-step asks */
+  stagger: readonly number[] | undefined = undefined;
   /**
    * where the centre of mass at `com` goes as the weight goes off `unloading`: just inside the other planted feet's prints (`INSIDE` m), on
    * the floor — no further than it must to stand on them; none: not going

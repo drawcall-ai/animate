@@ -63,6 +63,7 @@ export class Stepper extends Steps {
       this.heights[1] += r.position.y - this.pelvis.y;
       this.heights[0] = this.heights[1];
     }
+    this.stagger = r.stagger;
     const root = this.read(f, r, physics);
     const timing = this.timing(root, stroke);
     const yaw = this.face(root);
