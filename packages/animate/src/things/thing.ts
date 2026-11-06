@@ -172,7 +172,8 @@ function boundsOf(object: Object3D, centre: Vector3): Box3[] {
   return boxes.length ? boxes : [new Box3().setFromPoints(points)];
 }
 
-function vectorOf(value: unknown, what: string): Vector3 {
+/** `value` as a vector: a `Vector3` or [x, y, z]; none, the zero vector; anything else a misuse, said at once (`what`: what gave it) */
+export function vectorOf(value: unknown, what: string): Vector3 {
   if (value === undefined) return new Vector3();
   if (value instanceof Vector3) return value.clone();
   if (Array.isArray(value) && value.length === 3 && value.every((x) => typeof x === 'number' && Number.isFinite(x))) return new Vector3(value[0], value[1], value[2]);

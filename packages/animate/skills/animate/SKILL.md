@@ -99,7 +99,7 @@ Object.assign(face.userData, { pad: 'index', facing: [0, 0, -1] });
 if (yield* grab(person, button, { left: 'face' })) lit(); yield* wait(0.5); release(person, { left: button });
 ```
 
-A grip's `userData.fingers` lays digits over the closed hand: a digit's values, or the name of an empty on the thing its pad goes to, pressing on the part the empty hangs from (hang a trigger's empty under the trigger's own part). Move that empty to move the digit. `handle`, `facing` and `pad` are the fingers' to hold by: a body without finger bones refuses them, and so do `reach` and `track` — take such a grip with `grab`.
+A grip's `userData.fingers` lays digits over the closed hand: a digit's values, or the name of an empty on the thing its pad goes to, pressing on the part the empty hangs from (hang a trigger's empty under the trigger's own part). Move that empty to move the digit; give it `userData.facing`, the way the pad presses into the face it lies on, where the pad should lie flat on that face rather than press toward the grip's middle. `handle`, `facing` and `pad` are the fingers' to hold by: a body without finger bones refuses them, and so do `reach` and `track` — take such a grip with `grab`.
 
 ```ts
 pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' }; // read every update

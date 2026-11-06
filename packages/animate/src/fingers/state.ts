@@ -1,7 +1,7 @@
 import { Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
 import { smoothstep } from '../kernel/math';
 import type { Placement } from '../kernel/goal';
-import { Thing, type Grip } from '../things/thing';
+import { Thing, vectorOf, type Grip } from '../things/thing';
 import type { Hold } from '../things/resolve';
 import { heldTurn } from '../things/hold';
 import type { DigitBones } from './bones';
@@ -196,7 +196,11 @@ export class FingerState {
       // (where the empty is on the thing as it stands, carried to where `placed` has the thing)
       thing.updateWorldMatrix(true, true);
       const local = new Vector3().setFromMatrixPosition(empty.matrixWorld).applyMatrix4(new Matrix4().copy(thing.matrixWorld).invert());
-      contacts.push(pinching(digitOf(name, `"${grip.node.name}" userData.fingers`), world(local)));
+      const digit = digitOf(name, `"${grip.node.name}" userData.fingers`), facing: unknown = empty.userData.facing;
+      // (an empty's own `userData.facing`, the way the pad presses into the face it is on, overrides the way toward the grip's middle: a
+      // thumb laid along a stile's outer face tipped toward the handle's line through the bar)
+      if (facing === undefined) contacts.push(pinching(digit, world(local)));
+      else contacts.push({ part: digit, at: world(local), round: PINCH, facing: vectorOf(facing, `"${value}" userData.facing`).normalize().applyQuaternion(empty.getWorldQuaternion(new Quaternion()).premultiply(thing.getWorldQuaternion(new Quaternion()).invert()).premultiply(at.quaternion)) });
     }
     if (thumb && !contacts.some((c) => c.part === 'thumb')) contacts.push({ part: 'thumb', at: world(thumb.at), facing: turned(thumb.facing), round: PINCH });
     return contacts;
