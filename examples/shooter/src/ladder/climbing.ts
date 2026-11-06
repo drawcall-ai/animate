@@ -170,13 +170,14 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
 const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
 /**
  * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
- * `turn` (the tangent) to face back toward the climber, its heel off the face
+ * `turn` (the tangent) to face back toward the climber, its heel off the face; its thumb's pad flat on the outer face `thumb` (m) above
+ * the grasp, abeam the edge, so it presses square into the face (a flat bar taken as a round one, the thumb hooked onto its edge)
  */
-const STILE_HOLD = { proud: 0.003, turn: 0.6 } as const;
+const STILE_HOLD = { proud: 0.003, turn: 0.6, thumb: 0.04 } as const;
 /**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
  * upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing in, the fingers round the edge onto
- * its inner face, as `STILE_HOLD`); below, the rung, as `RUNG`.
+ * its inner face and the thumb along the outer face, as `STILE_HOLD`); below, the rung, as `RUNG`.
  */
 function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
@@ -186,10 +187,13 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   empty.name = name;
   if (y > ladder.height) {
     // (a flat bar is as thick about its edge as half the bar)
-    const radius = STILE_BAR.thick / 2;
-    empty.position.set(sign * STILE, y, STILE_BAR.deep / 2 - radius);
+    const radius = STILE_BAR.thick / 2, edge = STILE_BAR.deep / 2 - radius, thumb = new Object3D();
+    empty.position.set(sign * STILE, y, edge);
+    thumb.name = `${name}: thumb`;
+    thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.thumb, edge);
+    ladder.body.add(thumb);
     Object.assign(empty.userData, {
-      handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud,
+      handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud, fingers: { thumb: thumb.name },
     });
   } else {
     empty.position.set(sign * BODY.apart.hand, y, 0);

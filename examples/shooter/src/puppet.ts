@@ -16,6 +16,9 @@ export const BONES = [
 ] as const satisfies readonly Bone[];
 
 const Z = new Vector3(0, 0, 1);
+/** How much of the hand's turn about the forearm the forearm takes, as the radius rolls round the ulna: half (taken by the wrist alone,
+ * a hand turned palm out on a ladder's stile twisted the sleeve's skin through itself at the wrist). */
+const PRONATION = 0.5;
 const REST = new Map(SOLDIER.map((bone) => [bone.name, new Vector3(...bone.position)]));
 
 /** The direction from `from` to `to` in the skeleton as written, at rest. */
@@ -99,10 +102,16 @@ export class Puppet {
     this.turn(`${side}Toes`, foot);
   }
 
-  /** Bends an arm so its wrist reaches `wrist`, its elbow pointing along `elbow`, the hand then turned to `hand`. */
+  /** Bends an arm so its wrist reaches `wrist`, its elbow pointing along `elbow`, the hand then turned to `hand`; the forearm rolls with
+   * the hand about its length by `PRONATION` of the way. */
   arm(side: Side, wrist: Readonly<Vector3>, elbow: Readonly<Vector3>, hand: Readonly<Quaternion>) {
+    const lower = `${side}LowerArm` as const;
     // An arm reaches out sideways at rest, palm down, its elbow behind (−Z).
-    this.limb(`${side}UpperArm`, `${side}LowerArm`, `${side}Hand`, wrist, elbow, Z.clone().negate());
+    this.limb(`${side}UpperArm`, lower, `${side}Hand`, wrist, elbow, Z.clone().negate());
+    // (the hand's turn off the forearm's, its twist about the forearm's rest axis: the roll a forearm's bones make)
+    const forearm = this.rotation(lower), off = forearm.clone().invert().multiply(hand), axis = restAxis(lower, `${side}Hand`);
+    const along = axis.dot(new Vector3(off.x, off.y, off.z)), twist = new Quaternion(axis.x * along, axis.y * along, axis.z * along, off.w).normalize();
+    this.turn(lower, forearm.multiply(new Quaternion().slerp(twist, PRONATION)));
     this.turn(`${side}Hand`, hand);
   }
 
