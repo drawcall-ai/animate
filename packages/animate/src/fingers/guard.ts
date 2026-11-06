@@ -43,8 +43,12 @@ export class Guard {
       if (digit === 'thumb') shape.thumb = { ...goal.thumb };
       else shape[digit] = { ...goal[digit] };
     }
-    if (!kept || !place || !this.kept) return;
-    for (const digit of ['thumb', ...DIGITS] as const) if (!at.includes(digit)) keptOut(this.joints, kept.near, place, shape, was, digit);
+    if (kept && place && this.kept) {
+      for (const digit of ['thumb', ...DIGITS] as const) if (!at.includes(digit)) keptOut(this.joints, kept.near, place, shape, was, digit);
+    }
+    // (as fast as its joints turn, however it is put: a digit on its contact or opened out of a thing at once swung there in a step — a
+    // thumb's base 100–130 rad/s as its hand seated or let go)
+    this.joints.braked(shape, was, seconds);
   }
 
   /** what the hand is kept out of as it is `on` that: its triangles about the hand, gathered afresh once it has moved `GUARD.regather` */

@@ -1,6 +1,7 @@
 import type { HandPoint } from './point';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
+import { bisect } from '../kernel/math';
 import { Triangles } from '../kernel/triangles';
 import { DIGITS, type Digit, type DigitName, type Shape } from './shape';
 
@@ -62,6 +63,13 @@ const OPPOSE = 0.9;
  * (`Thumb.spread`, `oppose`, whichever further), by at most `most` (rad).
  */
 const PRONATE = { lifted: 0.4, most: (70 * Math.PI) / 180 } as const;
+/**
+ * How fast a digit's joints turn at the most (rad/s), as a fast grasp's do, its tendons and muscles no faster: about 860°/s — a finger
+ * closing from straight to a fist in a tenth of a second, a thumb's base swinging across in about as long
+ */
+const FLEXING = 15;
+/** the halvings a digit braked to `FLEXING` is held back in (to 1/64 of its way on) */
+const BRAKING = 6;
 /** how far off its length toward its palm side the point of a fingertip that touches is: pressing a button nearly end on (`TIP`), and
  * pressing with the flat of the pad on what the hand holds (`PINCH`) (rad) */
 export const TIP = (25 * Math.PI) / 180, PINCH = (70 * Math.PI) / 180;
@@ -181,6 +189,19 @@ export class Joints {
       const chain = this.chain(digit);
       return point(bones[digit][0]).length() + chain.reduce((sum, joint) => sum + joint.length, chain[2].depth);
     }));
+  }
+
+  /** each digit of `shape` (in place) moved off `was` no further than turns any of its joints `FLEXING` in `seconds`: its values held
+   * back together, short of the way to it */
+  braked(shape: Shape, was: Shape, seconds: number): void {
+    const most = FLEXING * seconds;
+    for (const digit of ['thumb', ...DIGITS] as const) {
+      const from = this.turns(digit, was), turned = (at: Shape) => Math.max(...this.turns(digit, at).map((turn, k) => turn.angleTo(from[k])));
+      if (turned(shape) <= most) continue;
+      const now: Record<string, number> = shape[digit], before: Readonly<Record<string, number>> = was[digit], goal = { ...now };
+      const set = (share: number) => { for (const key of Object.keys(now)) now[key] = before[key] + (goal[key] - before[key]) * share; };
+      set(bisect((share) => (set(share), turned(shape) <= most), 0, 1, BRAKING));
+    }
   }
 
   /** the bones turned as `shape` has them */
