@@ -314,6 +314,30 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
+  it('comes back up from a throw\'s follow-through, the trunk checked rather than bowing on past it', () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4, solid: false });
+    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
+    let thrown = false, ahead = 0, upright = Infinity;
+    play(function* () {
+      yield* grab(body, ball, { right: 'body' });
+      yield* throwAt(body, ball, new Vector3(0, 0, 15));
+      thrown = true;
+      yield* wait(1.5);
+    }, [body], 8, () => {
+      if (!thrown) return;
+      // (how far ahead of the feet the head runs on once the throw has ended, and how far it is still ahead as the story ends)
+      const head = body.object.worldToLocal(body.bones.head.getWorldPosition(new Vector3()));
+      ahead = Math.max(ahead, head.z);
+      upright = head.z;
+    });
+    // (bowing on, it ran 0.5 m ahead, its centre of mass out past its feet)
+    expect(ahead).toBeLessThan(0.36);
+    expect(upright).toBeLessThan(0.05);
+    // (the stride's foot stepping back in slides the planted one some 4 mm, with or without the bow: not what this checks)
+    expect(body.log.filter(({ check }) => check !== 'planted slide (m)')).toEqual([]);
+  });
+
   // (a target on the body given as an object or by a function: either way the carry ends with the thing there and turned, and keeps it so)
   for (const kind of ['an object', 'a function'] as const) it(`turns what one hand holds as a turned empty on the body asks, given as ${kind}`, () => {
     const body = person({ dev: true }), room = roomOf(body);

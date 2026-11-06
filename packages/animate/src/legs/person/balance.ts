@@ -194,17 +194,17 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     const posed = poise.posture, twisting = poise.twistRate * dt, lower = poise.lower + posed.lower;
     const twist = twisting > 0
       ? asked.twist[1] + clamp(poise.twist + posed.twist - asked.twist[1], -twisting, twisting)
-      : follow(asked.twist[0], asked.twist[1], poise.twist + posed.twist, BOW, dt);
+      : follow(paced(asked.twist, BOW, dt), asked.twist[1], poise.twist + posed.twist, BOW, dt);
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
     // (the pelvis turned off the facing as asked, at the twist's rate; given up at balance's own pace)
-    const hipsTurn = twisting > 0 ? asked.hips[1] + clamp(poise.hips - asked.hips[1], -twisting, twisting) : follow(asked.hips[0], asked.hips[1], poise.hips, BOW, dt);
+    const hipsTurn = twisting > 0 ? asked.hips[1] + clamp(poise.hips - asked.hips[1], -twisting, twisting) : follow(paced(asked.hips, BOW, dt), asked.hips[1], poise.hips, BOW, dt);
     [asked.hips[0], asked.hips[1]] = [asked.hips[1], hipsTurn];
     const bowed = Math.min(poise.bow + Math.min(posed.bow, WALKING_BOW + Math.PI * (1 - smoothstep(0.2, 0.8, speed))), poise.bowLimit);
     // (bowed at the asked rate — a throw's — else at a squat's pace)
     const bowing = poise.bowRate * dt, bow0 = asked.bow[1];
     const requested = {
       lower: followed(asked.lower, lower < 0 && !stepper.settled ? 0 : lower, LOWER, dt),
-      bow: bowing > 0 ? (([asked.bow[0], asked.bow[1]] = [bow0, bow0 + clamp(bowed - bow0, -bowing, bowing)]), asked.bow[1]) : followed(asked.bow, bowed, BOW, dt),
+      bow: bowing > 0 ? (([asked.bow[0], asked.bow[1]] = [bow0, bow0 + clamp(bowed - bow0, -bowing, bowing)]), asked.bow[1]) : (asked.bow[0] = paced(asked.bow, BOW, dt), followed(asked.bow, bowed, BOW, dt)),
       lean: followed(asked.lean, posed.lean, BOW, dt),
       twist,
       hips: hipsTurn,
@@ -447,6 +447,15 @@ export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
 export const feetBehind = (stepper: Pick<Stepper, 'yaw'>, scale: number) => forwardOf(stepper.yaw).multiplyScalar(OVER * scale);
 
 /** a scalar followed to `goal` from its history (`[prev2, prev]`, shifted on) */
+/**
+ * `history`'s older value, moved so it says no faster a motion than `motion`'s top speed: what a part taken at an asked rate (a throw's
+ * bow) hands on to its own pace once the rate is no longer asked — the trunk checked by the hips, not carried on by a throw's 3 rad/s into
+ * a squat's braking, which bowed it 40° past the follow-through
+ */
+function paced(history: readonly number[], motion: { speed: number }, dt: number): number {
+  return history[1] - clamp(history[1] - history[0], -motion.speed * dt, motion.speed * dt);
+}
+
 function followed(history: number[], goal: number, motion: { accel: number; speed: number }, dt: number): number {
   const next = follow(history[0], history[1], goal, motion, dt);
   [history[0], history[1]] = [history[1], next];
