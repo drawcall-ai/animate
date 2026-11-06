@@ -110,6 +110,11 @@ export function cues(ladder: Ladder, end: End): Cue[] {
   ];
 }
 
+/**
+ * How far the chest turns right (rad), the spine half as far, passing up between the stiles at the top: the magazines in the left
+ * chest's pouches, standing out a hand's length before it, otherwise came within a centimetre of the left hand holding its stile.
+ */
+const SQUEEZE = 0.55;
 /** How far the body steps in toward the ladder at each end (m), feet and all: standing clear of it, its rifle too, it then reaches it. */
 const INSET: Record<End, number> = { foot: 0.75, top: 0.42 };
 
@@ -141,8 +146,10 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
   puppet.place('hips', frame.point(hips.set(MathUtils.lerp(hips.x, 0, on), MathUtils.lerp(hips.y, height, phase(t, BEATS.hips[end].down)),
     MathUtils.lerp(hips.z, -BODY.back, on))));
   puppet.turn('hips', frame.turn(frame.was('hips').slerp(heading(0.06 * sway, 0), on)));
-  puppet.turn('spine', frame.turn(frame.was('spine').slerp(heading(0.1 * gaze.yaw, 0.03), on)));
-  puppet.turn('chest', frame.turn(frame.was('chest').slerp(heading(0.2 * gaze.yaw, 0.03), on)));
+  // (at the top the trunk turns right as it passes up between the stiles, the left chest's pouches past the left hand on its stile)
+  const squeeze = end === 'top' ? -SQUEEZE * Math.sin(Math.PI * on) : 0;
+  puppet.turn('spine', frame.turn(frame.was('spine').slerp(heading(0.1 * gaze.yaw + squeeze / 2, 0.03), on)));
+  puppet.turn('chest', frame.turn(frame.was('chest').slerp(heading(0.2 * gaze.yaw + squeeze, 0.03), on)));
   shoulders(puppet, frame);
   // (squared on the chest as at rest once on the ladder, from however the rifle held them: else one arm reaches a hand further)
   for (const side of ['left', 'right'] as const) puppet.turn(`${side}Shoulder`, puppet.rotation(`${side}Shoulder`).slerp(puppet.rotation('chest'), on));
