@@ -88,3 +88,14 @@ export function turnOnto(axis: Readonly<Vector3>, facing: Readonly<Vector3>, toA
   };
   return new Quaternion().setFromRotationMatrix(basis(toAxis, toFacing).multiply(basis(axis, facing).transpose()));
 }
+
+/** halved in from `free` (where `clear` holds) toward `hit` (where it does not), `times` times or until within `within` of it: the clear
+ * value nearest `hit`. `clear` is last tried on whichever half came last, not on what it returns: set that afresh */
+export function bisect(clear: (value: number) => boolean, free: number, hit: number, times: number, within = 0): number {
+  for (let k = 0; k < times && Math.abs(hit - free) > within; k++) {
+    const mid = (free + hit) / 2;
+    if (clear(mid)) free = mid;
+    else hit = mid;
+  }
+  return free;
+}

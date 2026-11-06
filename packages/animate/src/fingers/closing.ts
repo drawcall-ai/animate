@@ -1,5 +1,6 @@
 import { Ray, Vector3, type Matrix4, type Object3D, type SkinnedMesh } from 'three';
 import { meshesOf } from '../things/thing';
+import { bisect } from '../kernel/math';
 import { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
 import { DIGITS, type DigitName, type Shape } from './shape';
@@ -96,7 +97,7 @@ function closing(at: Closing, digit: DigitName, shape: Shape, set: (value: numbe
   for (let k = 1; k <= FOLD.steps; k++) {
     set(k * step);
     if (!met()) continue;
-    set(halved(met, set, (k - 1) * step, k * step));
+    set(bisect((value) => (set(value), !met()), (k - 1) * step, k * step, FOLD.halvings));
     return true;
   }
   return false;
@@ -110,22 +111,11 @@ function opening(at: Closing, digit: DigitName, shape: Shape, set: (value: numbe
     set(k * step);
     if (met()) continue;
     if (k === FOLD.steps) return false;
-    set(halved(met, set, k * step, (k + 1) * step));
+    set(bisect((value) => (set(value), !met()), k * step, (k + 1) * step, FOLD.halvings));
     return true;
   }
   set(0);
   return true;
-}
-
-/** the value between `free` (clear: `met` false) and `hit` it halves down to, `FOLD.halvings` times: the clear one nearest `hit` */
-function halved(met: () => boolean, set: (value: number) => void, free: number, hit: number): number {
-  for (let h = 0; h < FOLD.halvings; h++) {
-    const mid = (free + hit) / 2;
-    set(mid);
-    if (met()) hit = mid;
-    else free = mid;
-  }
-  return free;
 }
 
 /**
@@ -167,8 +157,8 @@ function opposite(hand: Closing, shape: Shape, handle: Line): Opposed | null {
   const along = (point: Vector3) => point.clone().sub(centre).dot(best.way) / (width / 2), pads = padsOn(hand, shape);
   const side = -Math.sign(along(Math.abs(faces.dot(best.way)) > TIE ? at : pads));
   const end = middle.clone().addScaledVector(best.way, side >= 0 ? best.ahead : -best.behind), way = end.clone().sub(middle).normalize();
-  // (on that face where the thumb already is, in along the chord through its pad as `WRAP` has it: at the chord's own end, a support
-  // thumb under a receiver reached 2 cm short for the middle of its side and lay through the face on the way)
+  // (on that face where the thumb already is, in along the chord through its pad as `WRAP` has it, rather than at the chord's own end,
+  // which can lie short of the side's middle with the thumb through the face on the way)
   const hit = near.first(_ray.set(thumb.clone().addScaledVector(way, GIRTH), way.clone().negate()), 2 * GIRTH);
   const on = hit === null ? end : thumb.clone().addScaledVector(way, GIRTH - hit);
   return { at: on.distanceTo(end) < width ? on : end, facing: way.negate() };

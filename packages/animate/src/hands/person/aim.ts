@@ -66,8 +66,8 @@ export class CarryAim {
     const { nominal: aim, goal, person, thing, motion } = this;
     // (its track read where it stands as the sub-step begins, before the hands move it: what tells when it has come to rest)
     person.track(thing.object);
-    // (kept clear as it is turned on its way, not as its hand has it: the hand short of the turn its grasp asks, a lance tilted 0.1 rad
-    // by it reached 0.7 m further back, the aim was pushed on ahead, the arm stretched after it and the lance tilted further)
+    // (kept clear as it is turned on its way, not as its hand has it: a hand short of its turn would feed back into the aim, pushing it
+    // on ahead, the arm stretching after it and the turn falling shorter still)
     const current = aim.current;
     const target: Goal = typeof to === 'function' ? to(f) : to;
     this.carrier.carriedBy = target.carriedBy;

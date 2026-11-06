@@ -4,6 +4,7 @@ import { solveChain } from '../../kernel/chain';
 import type { Dev } from '../../kernel/dev';
 import { clampRotation } from '../../kernel/limits';
 import { REACH } from '../../kernel/tip';
+import { bisect } from '../../kernel/math';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -141,17 +142,8 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
       if (limit) clampRotation(q, limit);
       pose.setLocal(bone, q);
     });
-    let out = 0, inn = most;
-    toward(most);
-    if (armDepth(pose, proportions, side, upper, clear) <= clear) {
-      for (let k = 0; k < 10; k++) {
-        const mid = (out + inn) / 2;
-        toward(mid);
-        if (armDepth(pose, proportions, side, upper, clear) <= clear) inn = mid;
-        else out = mid;
-      }
-    }
-    toward(inn);
+    const clears = (share: number) => (toward(share), armDepth(pose, proportions, side, upper, clear) <= clear);
+    toward(clears(most) ? bisect(clears, most, 0, 10) : most);
   };
   const fits = (push: number) => {
     const goal = _goal.copy(tip.position).addScaledVector(forward, push);
@@ -184,11 +176,7 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
     if (hi > least + most) return null;
     [lo, hi] = [hi, hi + step];
   }
-  for (let k = 0; k < halvings && hi - lo > within; k++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) hi = mid;
-    else lo = mid;
-  }
+  hi = bisect(fits, hi, lo, halvings, within);
   fits(hi);
   return hi;
 }

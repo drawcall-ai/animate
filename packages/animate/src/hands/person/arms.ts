@@ -58,8 +58,8 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
   let kept: [number, Quaternion][] | null = null;
   const joints = new Map<number, TrackedRotation>();
   let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
-  // (the hand turned on from how it set off as far as it has come toward its goal (`at`, the world's), in the frame of `on`: turned at its
-  // own pace, at 1.8 m/s it trailed the hand 40–50° and wobbled 4–5° onto the grip after it got there)
+  // (the hand turned on from how it set off as far as it has come toward its goal (`at`, the world's), in the frame of `on`: tied to the
+  // hand's way, its turn arrives with it however fast it goes, rather than trailing it at its own pace)
   let setOff: { off: number; turn: Quaternion } | null = null;
   const turnedOn = (f: Frame, goal: Goal, at: Readonly<Vector3>, on?: Carrier): Goal => {
     if (!goal.quaternion) return goal;
@@ -79,7 +79,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       // (the shoulder and the body still go for the goal itself)
       const toward = wait ? { at: goal.position, clavicle: f.prev.local(INDEX[`${side}Shoulder`]), share: 1 } : undefined;
       const at = options.on ? options.on.toWorld(goal, _world, f.time).position : goal.position;
-      // (its turn, eased on with the hand's way, followed as briskly as a held hand's: at its own pace it came 0.2 s after the hand)
+      // (its turn, eased on with the hand's way, followed as briskly as a held hand's, so it does not lag the hand)
       return void handStep(person, f, side, wait ? { position: wait } : turnedOn(f, goal, at, options.on), { turnAccel: HOLD.turnAccel, turnSpeed: HOLD.turnSpeed, ...options }, arm, toward);
     }
     if (waiting > 0) {
@@ -137,7 +137,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(aim.position) / start.off) : 1;
     const bent = _bend.copy(start.elbow).applyQuaternion(chest).add(shoulder);
     // (onto a thing, the elbow set off as it stood keeps the hand on a grip moving fast; to a point, the elbow goes as a reach there
-    // bends it: held to where it set off, a hand swept across the body asked the elbow round past the shoulder's range, and it leapt)
+    // bends it, since an elbow held to where it set off cannot follow a hand swept across the body within the shoulder's range)
     const reached = elbowPole(f.current, person.proportions, side, world.position, _pole);
     const pole = options.pole ?? (options.thing ? reached.lerp(bent, 1 - share) : reached);
     const glided = turnedOn(f, { ...aim, position: _glided.position, velocity: _glided.velocity }, world.position, own);
@@ -182,9 +182,9 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     ...options,
     pole,
     contact,
-    // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better: chosen afresh as the goal
-    // moved on, the elbow leapt between two fits about as good by turns and the magazine in the hand whipped about; a hand on a thing
-    // something else moves is put back on it after its brakes, `contact`)
+    // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better: two fits about as good
+    // would otherwise take turns as the goal moves on, swinging the elbow and what is in the hand; a hand on a thing something else moves
+    // is put back on it after its brakes, `contact`)
     keep: Boolean(person.holding[side]) && !contact,
     letOut: toward !== undefined || contact,
     clear: (frame, tip, braked) => {
@@ -197,7 +197,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     const mass = options.on && options.thing ? options.thing.mass : 0, carried = target.carriedBy === person || options.on?.carriedBy === person;
     bringShoulder(person, f, side, toward?.at ?? at, toward?.share ?? 1, mass, carried);
     // (the trunk turns toward the middle of the thing the hands hold on to; a hand only riding on a carrier — what hangs from it carried
-    // — toward where the hand goes: a lance held upright turned it toward the lance's far origin, and the arm's fit was solved round)
+    // — toward where the hand goes, since the thing's origin may lie far from the hand)
     const goal = (options.thing ? options.on?.current.position : undefined) ?? toward?.center ?? toward?.at ?? at;
     twistToward(person, f.current, goal, toward?.share ?? 1, held, carried);
   }

@@ -107,8 +107,8 @@ export function footing(person: Reacher, to: Stand, step = true) {
   const distance = !point && grips.length === 2 && height < proportions.hipHeight ? LOW_STAND / Math.sqrt(loadFactor('mass' in to ? to.mass : 0)) : WITHIN;
   const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
   const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
-  // (two grips taken: no further than the arms reach them with `TURNED` to spare, as far as the body bows and lowers: stood at the arms'
-  // whole reach, a box under the hips was 1.1 cm out of it as the walk arrived a centimetre short)
+  // (two grips taken: no further than the arms reach them with `TURNED` to spare, as far as the body bows and lowers, since a walk may
+  // arrive a little short of its stand)
   const bowed = stoop(proportions, Math.max(0, standing - height)), spare = TURNED * reach;
   const both = !point && grips.length === 2 ? Math.sqrt(Math.max(0, spare ** 2 - (height - standing + bowed.drop) ** 2)) + bowed.forward : Infinity;
   // (what the hands take stands clear of the trunk: the body no nearer it than its envelope's back reaches toward the body, but for what

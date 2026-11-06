@@ -59,8 +59,8 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
     write(shape, digit, b, best.b);
   }
   values.forEach((v, j) => (x[free + j] = read(shape, v.digit, v.key)));
-  // (a finger already on its contact, followed on: fanned as it was, its joints taking up how the contact moves — fanned as freely, a
-  // trigger finger squeezing 5 mm swung its tip 1.7 cm across the guard)
+  // (a finger already on its contact, followed on: fanned as it was, its joints taking up how the contact moves, so a small move of the
+  // contact does not swing the tip sideways)
   const weights = values.map((v, j) => {
     const held = !seat && v.key === 'spread' && v.digit !== 'thumb' && !swept.includes(v.digit);
     if (held) pulled[j] = x[free + j];

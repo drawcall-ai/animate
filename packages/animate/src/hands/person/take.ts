@@ -28,8 +28,7 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
   yield* action<Frame>({ until: (f) => takes.every((take) => drawnBack(person, take.side, f.time)) });
   const began = person.frame.time;
-  // (a fingertip is there as its pad meets its button, the hand's turn still settling: held to the turn, it stood on the cap's rim 0.4 s
-  // with the arm out at full reach)
+  // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
   const there = (f: Frame) => takes.every((take) => touching(person, take, f) || reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
   const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm)));
   if (there(person.frame)) return close();

@@ -1,5 +1,6 @@
 import { Matrix4, Mesh, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { Triangles } from '../kernel/triangles';
+import { bisect } from '../kernel/math';
 import type { Placement } from '../kernel/goal';
 import { inFrame, placedOf, worldOf, type Placed } from '../kernel/scene';
 import { PAD_DEPTH } from './closing';
@@ -85,18 +86,12 @@ function keptOut(joints: Joints, near: Triangles, place: Placed, shape: Shape, w
   const before = depth();
   // (from where it was toward where it eased to, or, sunk already, from where it eased to toward straight)
   const [a, b] = before <= GUARD.sunk ? [from, to] : [to, Object.fromEntries(Object.keys(to).map((key) => [key, 0]))];
-  let free = before <= GUARD.sunk ? 0 : 1, hit = before <= GUARD.sunk ? 1 : 0;
   if (before > GUARD.sunk) {
     set(a, b, 1);
     if (depth() > GUARD.sunk) return;
   }
-  for (let k = 0; k < GUARD.halvings; k++) {
-    const mid = (free + hit) / 2;
-    set(a, b, mid);
-    if (depth() <= GUARD.sunk) free = mid;
-    else hit = mid;
-  }
-  set(a, b, free);
+  const free = before <= GUARD.sunk ? 0 : 1;
+  set(a, b, bisect((t) => (set(a, b, t), depth() <= GUARD.sunk), free, 1 - free, GUARD.halvings));
 }
 
 /** the triangles of `thing`'s meshes about the hand `joints` move, in the thing's frame (`frame`, the world's): every mesh shown under it,

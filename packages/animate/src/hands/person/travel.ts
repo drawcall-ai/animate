@@ -162,8 +162,8 @@ const inTheWay = (aim: CarryAim) => `its own trunk and head hold it ${cm(aim.off
 
 const cm = (m: number) => (100 * m).toFixed(1);
 
-/** each hold's arm as a carry moves it: one through all the carry's stages and its keeping after (a new one at each stage, its brakes
- * and its fit taken afresh, threw the arm off the way it went — a belt's tongue held at its end drifted 7 mm off it as the carry ended) */
+/** each hold's arm as a carry moves it: one through all the carry's stages and its keeping after, so its brakes and its fit carry on
+ * across them rather than starting afresh at each */
 const tips = new WeakMap<Hold, ChainTip>();
 function tipOf(hold: Hold, hand: string): ChainTip {
   let tip = tips.get(hold);

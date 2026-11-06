@@ -99,7 +99,7 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
       lifted = true;
       yield* holding(person, request, thing, aim(), walked, near);
       yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), aim, false, { grasp, walks: true });
-      // (come to rest on it, not passing it: ended as it went by within reach of its end, it was let go of past it)
+      // (come to rest on it, not merely passing within reach of it, or it is let go of past it)
       const rested = restingAt(END.distance);
       yield* holding(person, request, thing, aim(), end, (f) => approached && rested(f, carrier, end(f).position));
     });

@@ -119,7 +119,7 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   trial.copy(posed);
   const strain = (hand: Readonly<Quaternion>) => strainAt(person, posed, trial, side, at, hand);
   // (settling, the thing held turned off its end: the arm as it stands does not hold this grasp there, whatever an arm brought there
-  // afresh would — a bucket by its handle held 0.15 rad off, 8 cm off its place, for as long as the carry waited)
+  // afresh would, so waiting longer would not bring it there)
   const off = settling && resolve(person, thing.object, _placed).quaternion.angleTo(end.quaternion) > TURNED_OFF;
   const kept = Math.max(strain(_kept.copy(end.quaternion).multiply(turn)), off ? UNHELD : 0);
   if (kept <= STRAINED) return true;
