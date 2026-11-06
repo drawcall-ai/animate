@@ -356,14 +356,21 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     const home = partWay.worldToLocal(well.getWorldPosition(new Vector3()));
     let pushed = 0;
     const onPlate = () => person.gripOn('left', floor).wrist.distanceTo(person.bones.leftHand.getWorldPosition(new Vector3())) < ON_PLATE;
+    // (pushed along the well's line wherever the magazine hangs: the grab closing first, it is in the hand, which goes up with it)
+    const push = () => action({
+      update: (_, clock) => {
+        pushed = Math.min(1, pushed + clock.delta / PUSH);
+        const at = partWay.localToWorld(new Vector3().lerpVectors(ORIGIN, home, smooth(pushed)));
+        full.position.copy(full.parent ? full.parent.worldToLocal(at) : at);
+      },
+      until: () => pushed === 1,
+    });
     yield* parallel('race', grab(person, full, { left: 'floor' }, QUICK), function* () {
       yield* wait(onPlate);
-      yield* action({
-        update: (_, clock) => { pushed = Math.min(1, pushed + clock.delta / PUSH); full.position.lerpVectors(ORIGIN, home, smooth(pushed)); },
-        until: () => pushed === 1,
-      });
+      yield* push();
     });
-    if (pushed < 1) return false;
+    // (the grab closing on the plate before the push is through — a hand quick under it — the push finished in its hand)
+    if (pushed < 1) yield* push();
     if (person.holds(full)) release(person, full, well);
     else {
       well.attach(full);
