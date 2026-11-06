@@ -47,10 +47,12 @@ const HELD = (1 - 2 * SWING - 2 * LETTING) / 2;
  */
 const BODY = { back: 0.36, feet: 0.6, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /**
- * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
- * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
+ * How far below the stiles' heads the hands hold them at the most (m): a hand's breadth under their bends over toward the landing (the
+ * index 9 cm above the grasp line: 10 cm under the heads it met the bend, and the fingers stood open past the bar's edge on the thumb's
+ * side), a little above a standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top
+ * rungs.
  */
-const HEAD = 0.1;
+const HEAD = 0.2;
 /**
  * How high the hips are on the ladder at each end (m), all four limbs holding: at the foot, one foot on the first rung and the other on the
  * ground at the ladder's foot (rung 0), the hands on rungs a standing body reaches; at the top, the feet on the top two rungs, the top one

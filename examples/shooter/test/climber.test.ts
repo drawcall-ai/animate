@@ -112,10 +112,17 @@ describe('Climber', () => {
     }
   });
 
-  it('gets on from the landing and climbs down to the foot', async () => {
-    const { soldier, climber, until } = await yard('top');
+  it('gets on from the landing, its fingers round the stiles opposite its thumbs, and climbs down to the foot', async () => {
+    const { ladder, soldier, climber, until } = await yard('top');
     climber.mount();
     until(() => climber.state === 'on', 10);
+    // (each hand on its stile's highest hold, under the bend at its head: the fingers on the bar's inner face, the thumb on its outer)
+    for (const side of ['left', 'right'] as const) {
+      const sign = side === 'left' ? 1 : -1, tip = (finger: string) => soldier.avatar.body.object.getObjectByName(`${side}${finger}Distal_end`);
+      const out = (finger: string) => sign * (ladder.body.worldToLocal(tip(finger)?.getWorldPosition(new Vector3()) ?? new Vector3(NaN)).x - sign * STILE);
+      expect(out('Thumb')).toBeGreaterThan(0);
+      for (const finger of ['Index', 'Middle', 'Ring', 'Little']) expect(out(finger), `${side} ${finger}`).toBeLessThan(0);
+    }
     climber.climb(-1);
     until(() => climber.state === 'off', 12);
     expect(soldier.movement.grounded).toBe(true);
