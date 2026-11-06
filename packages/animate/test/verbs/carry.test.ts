@@ -314,4 +314,28 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
+  // (a target on the body given as an object or by a function: either way the carry ends with the thing there and turned, and keeps it so)
+  for (const kind of ['an object', 'a function'] as const) it(`turns what one hand holds as a turned empty on the body asks, given as ${kind}`, () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.2, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4 });
+    Object.assign(empty(ball, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [0, 0, -1], radius: 0.03 });
+    const place = empty(body.object, 'ready', new Vector3());
+    place.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), -2.2);
+    const ready = () => {
+      place.position.copy(body.object.worldToLocal(body.armPoint('right', new Vector3(0.18, 0.08, 0.98), 0.85)));
+      place.updateMatrixWorld();
+      return place;
+    };
+    const off = () => ball.getWorldQuaternion(new Quaternion()).angleTo(place.getWorldQuaternion(new Quaternion()));
+    const outcomes: boolean[] = [];
+    let ended = Infinity;
+    play(function* () {
+      outcomes.push(yield* grab(body, ball, { right: 'grip' }));
+      outcomes.push(yield* carry(body, ball, kind === 'an object' ? ready() : () => ready(), { step: false }));
+      ended = off();
+    }, [body], 6, () => void ready());
+    expect(outcomes).toEqual([true, true]);
+    expect(ended).toBeLessThan(0.06);
+    expect(off()).toBeLessThan(0.06);
+  });
 });

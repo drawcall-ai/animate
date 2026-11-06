@@ -23,7 +23,9 @@ import type { Aim, CarryAim } from './aim';
 
 /** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s); how long it stands still
  * (within `moved`, m) short of it to be as near as the arms take it, and how near it then is there (`close`, m) */
-const RESTING = 2, STALL = { moved: 0.003, seconds: 0.3, close: 0.015 };
+const RESTING = 2, STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: 0.015, turn: 0.15 };
+/** how near its end's turn (rad) a thing carried to a turned end is to have arrived: there, turned too */
+const TURNED = 0.05;
 
 /** Tuned: how long (s) before a carry's course ends the hand holding it alone weighs its grasp for its end (`planGrasp`): about where
  * the body will stand and how it will bow by then, with time for a regrip (`REGRIP`) before it comes there */
@@ -93,8 +95,8 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0;
-  const was = new Vector3();
+  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0, turns = false;
+  const was = new Vector3(), wasTurned = new Quaternion();
   const left = (f: Frame) => Math.max(0, (Number.isNaN(began) ? f.time : began) + lag.delay + total - f.time);
   const rested = restingAt(near);
   const seconds = 2.4 * load;
@@ -102,6 +104,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     if (Number.isNaN(began)) began = f.time;
     if (grasp && left(f) <= PLANNED) grasp.nearing(f, left(f) === 0);
     const goal = path.to(f);
+    turns = goal.quaternion !== undefined;
     const u = Number.isNaN(since) || seconds === 0 ? 0 : Math.min(1, (f.time - since) / seconds);
     if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
     return goal;
@@ -117,7 +120,9 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     // Load compliance: https://pmc.ncbi.nlm.nih.gov/articles/PMC4443842/ (F = k × displacement).
     // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
     dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
-    if (rested(f, carrier, goal) && (dip === 0 || f.time - since >= seconds)) {
+    // (an end that sets a turn is arrived at turned too, not on its place alone — or, once late, on its place however it is turned)
+    const turnedOff = turns ? carrier.current.quaternion.angleTo(aim.goal.quaternion) : 0;
+    if (rested(f, carrier, goal) && (turnedOff <= TURNED || late) && (dip === 0 || f.time - since >= seconds)) {
       if (!end || aim.off <= near) return true;
       // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
       if (!blocked) {
@@ -129,16 +134,19 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     }
     // (standing still short of its end: as near as the arms take it — there, within `STALL.close`, a hand's joints holding it a few
     // millimetres off; else late, no waiting brings it nearer)
-    if (Number.isNaN(still) || carrier.current.position.distanceTo(was) > STALL.moved) {
+    if (Number.isNaN(still) || carrier.current.position.distanceTo(was) > STALL.moved || carrier.current.quaternion.angleTo(wasTurned) > STALL.turned) {
       still = f.time;
       was.copy(carrier.current.position);
+      wasTurned.copy(carrier.current.quaternion);
     }
     const short = carrier.current.position.distanceTo(goal), stalled = f.time - still > STALL.seconds;
-    if (stalled && short > near && short <= STALL.close && (!end || aim.off <= near)) return true;
-    if (!late && (f.time - stood > RESTING || (stalled && short > STALL.close))) {
+    const close = short <= STALL.close && turnedOff <= STALL.turn;
+    if (stalled && (short > near || turnedOff > TURNED) && close && (!end || aim.off <= near)) return true;
+    if (!late && (f.time - stood > RESTING || (stalled && !close))) {
       late = true;
+      const turned = turnedOff > TURNED ? `, turned ${(turnedOff * 180 / Math.PI).toFixed(0)}° off its turn` : '';
       f.dev?.append(f.time, { check: `late carry: course end distance after ${(f.time - since).toFixed(1)} s (m)`, value: short, limit: near, where: thing.object.name,
-        detail: `stopped ${cm(short)} cm off it: ${aim.off > near ? inTheWay(aim) : limits(person, thing, aim)}` });
+        detail: `stopped ${cm(short)} cm off it${turned}: ${aim.off > near ? inTheWay(aim) : limits(person, thing, aim)}` });
       if (end) request.fail();
     }
     return false;

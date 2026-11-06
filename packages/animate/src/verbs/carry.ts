@@ -13,12 +13,14 @@ import type { HandOptions } from '../hands/handling';
  * (its hip, a pouch, a well; a heavy one after a knee dip), out the way its empty's approach comes in (from the point of it nearest the
  * thing), and in to the last target the way that target's approach comes (`userData.approach`: the names of empties beside it, under its
  * parent, outermost first; slowing to its `userData.speed`); an
- * `Object3D` target turns it as the target is turned, reached by the start of the last straight; a point keeps it turned as it is. In one
+ * `Object3D` target (or a function returning one) turns it as the target is turned, reached by the start of the last straight; a point keeps
+ * it turned as it is. In one
  * hand by a grip that sets no turn it goes as the hand holds it, the arm turning it: if the arm cannot hold it so at the end — in the
  * trunk, past a joint's range, or strained — the hand regrips it in its fingers as it comes there, onto a grasp the arm holds there
  * comfortably (people choose a grasp for the posture it ends in), the thing still ending turned as asked. When it must walk there (and `step`
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
- * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, and keeps it there. It
+ * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, turned as its target
+ * is (within 3°), and keeps it there. It
  * returns `false` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried
  * straight there, if the thing does not come to rest in place: stopped getting nearer more than 1.5 cm short of it, held off by the arms
  * (`late carry`; within that, it ends `true` there), or its own trunk and
@@ -37,7 +39,8 @@ export function carry(body: Body, thing: Object3D, target: Target | readonly Tar
       // (only the last turns it)
       return (f: Frame): Goal => last ? find(f) : { position: find(f).position };
     });
-    const last = targets[targets.length - 1];
-    yield* self.handling.bring(request, carried, points, last instanceof Object3D ? last : null, options);
+    // (the last target's object, given as one or by a function as it starts: its approach, and whether it rides on the body)
+    const last = targets[targets.length - 1], end = typeof last === 'function' ? last(self.time) : last;
+    yield* self.handling.bring(request, carried, points, end instanceof Object3D ? end : null, options);
   }, options.until);
 }
