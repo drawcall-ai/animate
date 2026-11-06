@@ -65,6 +65,13 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
     write(shape, digit, b, best.b);
   }
   values.forEach((v, j) => (x[free + j] = read(shape, v.digit, v.key)));
+  // (a finger already on its contact, followed on: fanned as it was, its joints taking up how the contact moves — fanned as freely, a
+  // trigger finger squeezing 5 mm swung its tip 1.7 cm across the guard)
+  const weights = values.map((v, j) => {
+    const held = !seat && v.key === 'spread' && v.digit !== 'thumb' && !swept.includes(v.digit);
+    if (held) pulled[j] = x[free + j];
+    return held ? PULL * FAN : PULL;
+  });
   // (the hand as `x` places it: moved and turned off where it started)
   const place = (x: Float64Array) => {
     if (!seat) return;
@@ -84,7 +91,7 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
       const turned = _facing.applyQuaternion(hand.quaternion).sub(c.facing).multiplyScalar(TURN);
       out.push(turned.x, turned.y, turned.z);
     }
-    values.forEach((_, j) => out.push((x[free + j] - pulled[j]) * PULL));
+    values.forEach((_, j) => out.push((x[free + j] - pulled[j]) * weights[j]));
     if (seat) for (let j = 0; j < 6; j++) out.push(x[j] * (j < 3 ? HELD.move : HELD.turn));
     matrix.compose(hand.position, hand.quaternion, scale);
     for (const part of seat ? [null, 'thumb', ...DIGITS] as const : digits) for (const depth of sunk(part, part === null || digits.includes(part))) out.push(depth * KEEP);
@@ -122,6 +129,8 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
 const TURN = 0.01;
 /** how much a unit of a digit's value off its preferred weighs against a metre off a contact (pulled toward it, not held to it) */
 const PULL = 0.008;
+/** how much more a finger's fan off where it was weighs, followed on along its contact (see `meet`) */
+const FAN = 8;
 /** how much a metre and a radian of a seated hand off where its grip put it weigh against a metre off a contact: it moves for what its
  * digits cannot reach and what it would sink into, not on its own */
 const HELD = { move: 3, turn: 0.6 } as const;
