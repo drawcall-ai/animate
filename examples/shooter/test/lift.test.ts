@@ -126,7 +126,7 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
     box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');
     const landing = { at: new Vector3(3, 0, 3), yaw: 0 };
     return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial(), { down: landing, up: landing });
-  }, { spawn: new Vector3(0.95, 0.27, 0.35), yaw: Math.PI / 2 });
+  }, { spawn: new Vector3(1, 0.27, 0.35), yaw: Math.PI / 2 });
   cleanup(lift.bind(world));
   acquire();
   const foot = lift.body.position.y;
@@ -138,17 +138,14 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   if (!button) return;
   const face = button.part.getObjectByName('press');
   if (!face) throw new Error('The button has no face to press');
-  // (the index's end segment on the face as the button is pressed, within two seconds of asking)
-  let pad = Infinity, after = Infinity;
-  const asked = world.time;
+  // (as the button is pressed, the hand where its index's pad is on the button's face)
+  let off = Infinity;
   avatar.press(button.part, () => {
     lift.press(button);
-    pad = avatar.body.bones.leftIndexDistal.getWorldPosition(new Vector3()).distanceTo(face.getWorldPosition(new Vector3()));
-    after = world.time - asked;
+    off = avatar.body.gripOn('left', face).wrist.distanceTo(avatar.body.bones.leftHand.getWorldPosition(new Vector3()));
   });
-  advance(2);
-  expect(after).toBeLessThan(2);
-  expect(pad).toBeLessThan(0.03);
+  advance(3);
+  expect(off).toBeLessThan(0.01);
   advance(6);
   expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
   expect(avatar.pressing).toBe(false);

@@ -77,16 +77,19 @@ export function heldTurn(grip: Grip, palm: Palm, asked = palmTurn(grip, palm)): 
 /**
  * the hand's turn (the thing's frame) a grip's `facing` asks of `hand`: on a handle, the hand's grasp line along the handle's axis, its
  * thumb toward the axis's end, the palm facing so, as far as the wrist turns it so (`Goal.preferred`: a palm up under a rifle's receiver
- * as it points at the ground, asked strictly, failed the grab); a pad pushing so, the hand rolled about that as a pointing hand is
- * (`pointing`), as far as the wrist turns it so too (a fingertip on a low button, asked strictly, crept its last 2 cm onto it for a
- * second); the palm facing so, free to roll about it. None asked: none (a handle without one takes the hand turned as the arm brings
- * it, its palm on the handle's line).
+ * as it points at the ground, asked strictly, failed the grab); a pad pressed in so, the hand pointing along its pressing line
+ * (`pressingLine`) rolled as a pointing hand is (`pointing`), as far as the wrist turns it so too (a fingertip on a low button, asked
+ * strictly, crept its last 2 cm onto it for a second); the palm facing so, free to roll about it. None asked: none (a handle without
+ * one takes the hand turned as the arm brings it, its palm on the handle's line).
  */
 function palmTurn(grip: Grip, { point, up }: Palm): { quaternion: Quaternion; axis?: Vector3; preferred?: true } | null {
   if (!grip.facing || !point) return null;
   if (grip.handle) return { quaternion: turnOnto(point.axis, point.facing, grip.handle.axis, grip.facing), preferred: true };
+  if (grip.pad && up) {
+    const line = pressingLine(grip.facing, up), quaternion = new Quaternion().setFromUnitVectors(handLine(point), line);
+    if (pointing(quaternion, point, line, up)) return { quaternion, preferred: true };
+  }
   const quaternion = new Quaternion().setFromUnitVectors(point.facing, grip.facing);
-  if (grip.pad && up && pointing(quaternion, point, grip.facing, up)) return { quaternion, preferred: true };
   return { quaternion, axis: grip.facing.clone(), preferred: true };
 }
 
@@ -111,6 +114,23 @@ function pointing(turn: Quaternion, point: HandPoint, push: Vector3, up: Vector3
 }
 /** how far a pointing hand is rolled thumb up off palm down (rad) */
 const POINTING = 0.5;
+/** how far above level a hand pressing a fingertip into an upright face points (rad), its wrist straight on a forearm that rises a
+ * little to it: the fingertip, curved down from the hand, meets the face some 30° off square from above. Its pad pushed straight in
+ * along the face's normal, the hand pointed 50° up off a level forearm, the wrist bent back, the finger up along the face. */
+const LEAN = 0.15;
+
+/** the line a hand pressing a fingertip in along `push` points along: level into the face, `LEAN` up; into a level face, along `push` */
+function pressingLine(push: Vector3, up: Vector3): Vector3 {
+  const level = push.clone().addScaledVector(up, -push.dot(up));
+  if (level.lengthSq() < 0.25) return push.clone();
+  return level.normalize().multiplyScalar(Math.cos(LEAN)).addScaledVector(up, Math.sin(LEAN));
+}
+
+/** a hand's own line from its wrist out along its fingers (its frame), square to its grasp line and palm */
+function handLine(hand: HandPoint): Vector3 {
+  const line = new Vector3().crossVectors(hand.axis, hand.palmFacing).normalize();
+  return line.dot(hand.at) < 0 ? line.negate() : line;
+}
 
 /** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
 export function holdOn(thing: Thing, grip: string, goal: Goal, palm?: Palm): Hold {
