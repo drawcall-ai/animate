@@ -1,7 +1,7 @@
 import { Box3, Matrix4, Object3D, Vector3 } from 'three';
 import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
-import { attach, bodyOf, grasp, handsOn, take } from '../things/hold';
+import { attach, bodyOf, grasp, handsOn, take, worn } from '../things/hold';
 import { backOff } from '../hands/person/press';
 import { personOf } from '../body/person';
 import type { Self } from '../body/runtime';
@@ -21,7 +21,8 @@ export interface Released {
 
 /**
  * Lets go, at once (no `yield*`). Given a thing, every hand of the body holding it lets go of it; given hands by name (`{ right: rope }`),
- * those hands let go of what each names and the body's others keep holding (one hand left on a thing carries it alone). A thing no hand
+ * those hands let go of what each names and the body's others keep holding (one hand left on a thing carries it alone; one left on what
+ * the body wears, a rifle on its mount, keeps hold of it there). A thing no hand
  * of the body holds any more is attached onto the empty `onto` (set there exactly if it is within 5 mm), else to another body still
  * holding it (that body carries it now), else to the parent it was lifted from, where it is now. The hands that let go back out of it,
  * carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb for it waits until it has.
@@ -48,8 +49,9 @@ export function release(body: Body, which: Object3D | Partial<Record<string, Obj
   return released[0];
 }
 
-/** `self`'s `hands` letting go of `thing` (see `release`), and backing out of it: how it was moving as they did */
-function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object3D): Released {
+/** `self`'s `hands` letting go of `thing` (see `release`), and backing out of it unless they go on to something else (`backOut`
+ * false): how it was moving as they did */
+export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object3D, backOut = true): Released {
   const f = self.frame, object = thing.object, trail = self.track(object).at(f.time);
   const released = { velocity: new Vector3().subVectors(trail.current.position, trail.prev.position).divideScalar(f.dt), spin: spinOf(trail.prev.quaternion, trail.current.quaternion, f.dt, new Vector3()) };
   const placed = trail.current, moving = released.velocity.length();
@@ -59,12 +61,13 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
     const hold = self.holding[hand], way = hold && self.species.person ? backOff(personOf(self), hold.thing.grip(hold.grip), placed) : null;
     return way ? [[hand, way]] : [];
   }));
+  const wearing = worn(thing);
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
-  self.handling.backOut(hands, away);
-  // (a hand of its own still on it: that hand carries it alone)
+  if (backOut) self.handling.backOut(hands, away);
+  // (a hand of its own still on it: that hand carries it alone — what the body wears, a rifle on its mount, stays where it is worn)
   if (handsOn(self, thing).length) {
-    take(self, thing);
+    if (!wearing) take(self, thing);
     return released;
   }
   const holder = [...thing.holders].find((other): other is Self => other !== self);

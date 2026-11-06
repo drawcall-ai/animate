@@ -1,4 +1,5 @@
-import { Vector3, type Group, type Object3D, type Quaternion } from 'three';
+import { Quaternion, Vector3, type Group, type Object3D } from 'three';
+import { INDEX } from '../species/humanoid/bones';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
@@ -114,6 +115,19 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return fingerStateOf(this).gripOn(side, empty);
   }
 
+  /**
+   * A point for a person's hand `side`, scaled to its body: out from its shoulder (the upper arm's joint) along `direction` (the body's
+   * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`). Up to about 0.95 the arm
+   * reaches it, joint ranges allowing (behind the shoulder, only with the trunk turned: `pose`'s `twist`). Read where the body stands now:
+   * as a hand verb's target, give it as a function so it moves with the body, `() => body.armPoint('right', ahead, 0.8)`.
+   */
+  armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {
+    const person = this.species.person;
+    if (!person) throw new Error(`armPoint: a ${this.species.name ?? 'custom species'} has no arms`);
+    const pose = this.pose, turn = new Quaternion().setFromAxisAngle(UP, pose.facing);
+    return direction.clone().normalize().applyQuaternion(turn).multiplyScalar(share * person.armLength).add(pose.position(INDEX[`${side}UpperArm`]));
+  }
+
   /** A world-space impulse (N·s) at a world-space point: a humanoid's supported torso reacts and recovers before its hands are solved.
    * Locomotion or the physics controller continues to own the root. */
   applyImpulse(impulse: Readonly<Vector3>, point: Readonly<Vector3>): void {
@@ -199,6 +213,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
 }
 
 const selves = new WeakMap<Body, Self>();
+const UP = new Vector3(0, 1, 0);
 
 /** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */
 function fingerStateOf(body: Body): NonNullable<Self['fingers']> {

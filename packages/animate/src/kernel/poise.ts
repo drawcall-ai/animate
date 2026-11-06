@@ -9,7 +9,7 @@ import type { Vector3 } from 'three';
 export interface Posture {
   /** the trunk bowed forward at the hips and back (rad, + forward; − arches it back, the chest lifting) */
   bow?: number;
-  /** the chest turned off the hips (rad, + to its left) */
+  /** the chest turned off the hips (rad, + to its left: the right shoulder forward, the left back; − winds a right-handed throw up) */
   twist?: number;
   /** the trunk bent sideways (rad, + its left side up: leaning to its right) */
   lean?: number;

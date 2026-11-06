@@ -15,7 +15,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied, worn } from '../things/hold';
+import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
 import { palmOf } from '../species/humanoid/landmarks';
@@ -135,13 +135,15 @@ export function personOf(self: Self): Person {
  * hold step and fit have an additional 2 cm allowance: artistic calibration for apparent contact during acquisition, not measured anatomy.
  */
 const GRIP_TAKEN = REACHED.distance + 0.02;
-/** How far a palm may be from the grip it holds on what the body carries (m; tuned: a load carried at the body as it walks and turns
- * lags its turn, the hands up to ~4 cm off their grips) */
+/** How far a hand may be from the grip it holds on what is on the body (m; tuned: a load carried at the body as it walks and turns lags
+ * its turn, and a hand on a rifle snapped up to the eye lags it, up to ~4 cm off their grips) */
 const HELD = 0.05;
 
-/** how far hand `side`'s palm is from `hold`'s grip as the body is posed now (read afresh: a thing hanging from a hand moves with it after the hands) */
+/** how far hand `side` is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with it after
+ * the hands): its wrist from where its fingers seated it, once they have; else its palm from the grip's empty */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = resolve(person, hold.thing.object, _placed);
+  const at = resolve(person, hold.thing.object, _placed), seat = person.fingers?.seat(side);
+  if (seat) return f.current.position(person.hands[side]).distanceTo(_grip.copy(seat.position).applyQuaternion(at.quaternion).add(at.position));
   // (the palm as the hold has it: on a handle, where the handle lies in the hand's grasp)
   const palm = f.current.point(person.hands[side], _palm.copy(hold.palm ?? palmOf(person.proportions, side)), _palm);
   return palm.distanceTo(_grip.copy(hold.thing.grip(hold.grip).at.position).applyQuaternion(at.quaternion).add(at.position));
@@ -158,16 +160,16 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
   }
 }
 
-/** Check final grip distance after fitting. Report carried-load separation once per hold.
- * Worn grips have one rigid owner; unreachable carries draw the wrists together and off their grips. */
+/** Check final grip distance after fitting, once per hold: unreachable carries draw the wrists together and off their grips, and a hand
+ * on what the body wears is held off it by its joints. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
-    if (!hold || !bodyOf(hold.thing.object)) continue;
-    const carried = !worn(hold.thing), value = gripGap(person, f, side, hold), limit = carried ? HELD : REACHED.distance;
-    if (value <= limit || (carried && noted.has(hold))) continue;
-    if (carried) noted.add(hold);
-    f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${hold.thing.object.name} ${side}` });
+    if (!hold || !bodyOf(hold.thing.object) || noted.has(hold)) continue;
+    const value = gripGap(person, f, side, hold);
+    if (value <= HELD) continue;
+    noted.add(hold);
+    f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where: `${hold.thing.object.name} ${side}` });
   }
 }
 

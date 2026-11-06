@@ -31,8 +31,8 @@ export interface PoseOptions {
  * most 0.25 rad of bow and 0.15 of twist or lean (combined, they can still ask more than a big creature's legs follow). A pose that ends
  * before it has come two thirds of the way to an angle comes out that much smaller: hold it longer, or ask more within the joints;
  * `dev: { notes: true }` notes it. A walking person bows at most 0.5 rad. An aimer, it keeps on until `until`. It asks for the trunk's
- * posture with a trunk field, for the head's turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over
- * where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
+ * posture with a trunk field (taking the trunk from a `lookAt` given a `trunk` share, or giving it up to a newer one), for the head's
+ * turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
  * (a skeleton with finger bones) take each hand's shape as asked rather than adding onto anything, easing in within about a quarter
  * second and back to relaxed once the pose ends; a hand holding something keeps its grasp.
  */

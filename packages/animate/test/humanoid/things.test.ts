@@ -99,6 +99,20 @@ describe('what a body wears', () => {
   // (however fast its app spins it, a soldier turning on the spot takes a magazine from its chest and puts it into the well of the rifle
   // it holds, aimed the way the body faces — spun faster than its feet let it follow, its root led it by more than half a turn and it
   // turned back the other way, the well swinging off as the carry closed on it)
+  it('lets go of the rifle with a hand that takes something else, the rifle staying on its mount in the other hand', () => {
+    const { body, h, rifle, orient } = armed((body) => body.facing);
+    const magazine = new Object3D();
+    magazine.userData.mass = 0.5;
+    empty(body.bones.chest, 'pouch', new Vector3(0.1, -0.12, 0.14)).add(magazine);
+    empty(magazine, 'base', new Vector3(0, -0.05, 0));
+    const mount = rifle.parent;
+    let held: boolean | undefined;
+    play(function* () { held = yield* grab(body, magazine, { left: 'base' }, { speed: 1.8 }); }, [body], 4, () => (orient(), held !== undefined));
+    expect(held).toBe(true);
+    expect([h.holding.left?.thing.object, h.holding.right?.thing.object, rifle.parent]).toEqual([magazine, rifle, mount]);
+    expect(body.log).toEqual([]);
+  });
+
   it('takes what it wears and carries it into a slot on what it holds while its app spins it', () => {
     const { root, body, rifle, orient } = armed((body) => body.facing);
     const well = empty(rifle, 'well', new Vector3(0, -0.1, 0.3)), magazine = new Object3D();

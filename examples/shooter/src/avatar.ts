@@ -63,8 +63,10 @@ const SQUEEZE = 0.005;
 const POUCHES = [new Vector3(0.07, -0.129, 0.2), new Vector3(0.21, -0.25, 0.15)];
 /** Where a spent magazine is flung toward from the bottom of its pull (m, the body's frame: +X its left), how fast (m/s), and how far on
  * its way it is let go (m): out to the left and down, clear of the leg. */
-const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 5, after: 0.2 };
+const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 2.8, after: 0.2 };
 const UP = new Vector3(0, 1, 0);
+/** Whether the bodies check their motion and say what went wrong (`Body.log`): in the dev server, not in tests or a build. */
+const DEV = import.meta.env.MODE === 'development';
 /** How near its place under the well, on the well's line, and how near turned as the well (rad), the arm brings a magazine before the
  * fingers square it onto it (`square`), in how long (s): held to 3° by the arm, it wobbled 2 cm off and 23° round for 0.3 s. */
 const LINED = 0.015, ALIGNED = 0.1, SQUARING = 0.08;
@@ -187,7 +189,7 @@ export class Avatar {
 function animate(model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void) {
   const root: Root & { velocity: Vector3 } = { position: position.clone(), velocity: new Vector3(), yaw, support: position.clone() };
   let aiming = 0;
-  const person = new Body(humanoid(SOLDIER), { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) } });
+  const person = new Body(humanoid(SOLDIER), { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) }, dev: DEV });
   person.object.traverse((node) => (node.frustumCulled = false));
   const proportions = person.species.person;
   if (!proportions) throw new Error('The shooter requires a humanoid');
@@ -214,6 +216,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   for (const place of [well, ...pouches]) issue(place);
   let input: AvatarState = { position, velocity: new Vector3(), yaw, pitch: 0, aim: false, sprint: false, crouch: false, support: position.clone(), firstPerson: false };
   const look: Look = { eye: new Vector3(), yaw, pitch: 0, intent: { yaw, pitch: 0 } };
+  let logged = 0;
   let time = 0, acquired = false, swapping = false, reloadWanted = false, reloads = 0;
   /** a button the left hand is asked to press, and what to tell as it does: until the hand is back on the rifle */
   let pressWanted: { button: Object3D; pressed: () => void } | null = null;
@@ -453,6 +456,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
       input = state;
       step(undefined, seconds);
       person.update(seconds);
+      // (what development finds wrong with the motion, each once, in the dev server's console)
+      for (const entry of person.log.slice(logged)) console.warn('animate:', entry);
+      logged = person.log.length;
       see();
     },
     dispose: () => {

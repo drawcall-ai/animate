@@ -27,6 +27,8 @@ import { resolve, type Hold } from '../../things/resolve';
 
 /** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
 const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
+/** how much faster than its mean a carry's course goes at its quickest (a minimum-jerk profile's peak, 1.875, and some room) */
+const PEAK = 2;
 /** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s) */
 const RESTING = 2;
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
@@ -65,8 +67,10 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   const end = way.points[way.points.length - 1];
   // (in one hand, its grasp planned for its end as it comes there)
   const grasp = grasping(person, thing, end);
-  // (the hands as brisk as the way is quick: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
-  const aim = aimsFor(person, thing, { ...CARRYING, accel: paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel }, way.clear);
+  // (the hands as brisk as the way is quick: `CARRYING` is a calm carry's, along its way at `ALONG.speed`; a quicker one peaks at
+  // about twice its mean speed — a throw's swing — and its aim keeps up)
+  const pace = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel });
+  const aim = aimsFor(person, thing, { ...CARRYING, accel: pace.accel, speed: Math.max(CARRYING.speed, PEAK * pace.speed) }, way.clear);
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, aim, resting, grasp, options.speed));
   else yield* transferring(person, request, thing, way, plan, aim, resting, grasp);
   request.met();
@@ -161,22 +165,24 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(person: Reacher, request: Request, thing: Thing, way: Way, aim: Aim, resting: boolean, grasp: Grasping, speed = ALONG.speed * person.tempo) {
+function* along(person: Reacher, request: Request, thing: Thing, way: Way, aim: Aim, resting: boolean, grasp: Grasping, asked?: number) {
+  // (a calm carry takes `ALONG.least` at least; one told its speed, as quick as it is told: a throw's swing)
+  const speed = asked ?? ALONG.speed * person.tempo, least = asked === undefined ? ALONG.least : 0;
   let points = way.points;
   if (way.outside > 0) {
-    yield* travel(person, request, thing, timed(person, thing, points.slice(0, way.outside), speed),
+    yield* travel(person, request, thing, timed(person, thing, points.slice(0, way.outside), speed, least),
       (factor) => aim(factor, 'parts'), resting);
     points = points.slice(way.outside);
     resting = false;
   }
   const straight = (way.last !== undefined || way.outside > 0) && points.length > 1;
   const first = straight ? points.slice(0, -1) : points;
-  yield* travel(person, request, thing, timed(person, thing, first, speed), aim, resting, { end: !straight, grasp: straight ? undefined : grasp });
-  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed), aim, false, { on: points[points.length - 2], end: true, grasp });
+  yield* travel(person, request, thing, timed(person, thing, first, speed, least), aim, resting, { end: !straight, grasp: straight ? undefined : grasp });
+  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed, least), aim, false, { on: points[points.length - 2], end: true, grasp });
 }
 
-/** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `ALONG.least` s */
-function timed(person: Reacher, thing: Thing, points: readonly ((f: Frame) => Goal)[], speed: number): Waypoint[] {
+/** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `least` s */
+function timed(person: Reacher, thing: Thing, points: readonly ((f: Frame) => Goal)[], speed: number, least: number): Waypoint[] {
   const f = person.frame;
   let from = person.track(thing.object).current.position.clone();
   const lengths = points.map((point) => {
@@ -184,7 +190,7 @@ function timed(person: Reacher, thing: Thing, points: readonly ((f: Frame) => Go
     from = to.clone();
     return length;
   });
-  const total = lengths.reduce((sum, length) => sum + length, 0), seconds = Math.max(ALONG.least, total / speed);
+  const total = lengths.reduce((sum, length) => sum + length, 0), seconds = Math.max(least, total / speed);
   return points.map((point, k) => [total > 0 ? seconds * lengths[k] / total : seconds / points.length, point]);
 }
 
@@ -328,12 +334,12 @@ function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim,
     if (single) {
       const goal = single(f);
       bringShoulder(person, f, side, _g.copy(goal.position).applyQuaternion(carrier.current.quaternion).add(carrier.current.position), 1, 0, carried);
-      handStep(person, f, side, goal, { on: carrier, ...HOLD, lead: true }, tip);
+      handStep(person, f, side, goal, { on: carrier, ...aim.hold, lead: true }, tip);
       return;
     }
     bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carried);
     person.carrying.set(thing.object, carrier);
-    handStep(person, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
+    handStep(person, f, side, hold.goal, { on: carrier, thing, ...aim.hold, lead: true }, tip);
   };
   return parallel<Frame>('race', ...hands.map((hand) => {
     const move = step(hand);
@@ -386,7 +392,12 @@ class CarryAim {
   /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
   private readonly pivot = new Vector3();
 
+  /** how briskly the hands keep to it: a held hand's pace (`HOLD`), quickened as much as its aim is past a calm carry's (a throw's swing) */
+  readonly hold: Motion;
+
   constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: Clearance) {
+    const k = Math.max(1, (motion.speed ?? CARRYING.speed) / CARRYING.speed);
+    this.hold = { accel: HOLD.accel * k * k, speed: HOLD.speed * k, turnAccel: HOLD.turnAccel * k * k, turnSpeed: HOLD.turnSpeed * k };
     const own = person.track(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its course has it, the hand with it)

@@ -1,6 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { arriving, carry, grab, release, wait, type Body } from '../../src/index';
+import { parallel } from '@pmndrs/timeline';
+import { arriving, carry, grab, pose, release, wait, type Body } from '../../src/index';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -286,23 +287,30 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  it('lets go of a thing it carries on the way, telling how it was moving: a throw', () => {
-    const body = person(), room = roomOf(body);
-    const ball = box(room, new Vector3(-0.2, 0.9, 0.4), { mass: 0.4, solid: false });
-    let thrown = new Vector3(), seen = new Vector3();
+  it('throws overhand: cocked behind the shoulder, whipped through and let go on the way at a throw\'s speed, following through', () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.2, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
+    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.03 });
+    const arm = (x: number, y: number, z: number, share: number) => () => body.armPoint('right', new Vector3(x, y, z), share);
+    let thrown = new Vector3(), after = new Vector3(), done = false;
     play(function* () {
-      yield* grab(body, ball, { right: 'right' });
-      // (swung out to the right and up, let go on the way: moving as it was over the frame before)
-      const from = worldOf(ball), last = from.clone();
-      yield* carry(body, ball, from.clone().add(new Vector3(-0.4, 0.2, 0)), { speed: 2, until: () => {
-        seen = worldOf(ball).sub(last).multiplyScalar(60);
-        last.copy(worldOf(ball));
-        return last.distanceTo(from) > 0.15;
-      } });
+      yield* grab(body, ball, { right: 'body' });
+      const cocked = arm(-0.4, 0.9, -0.3, 0.8);
+      yield* parallel('race', pose(body, { twist: -0.6, bow: -0.15 }), carry(body, ball, cocked, { speed: 1.5, step: false, until: () => worldOf(ball).distanceTo(cocked()) < 0.03 }));
+      const from = worldOf(ball);
+      yield* parallel('race', pose(body, { twist: 0.4, bow: 0.35 }), carry(body, ball, arm(0.1, -0.1, 1, 0.9), { speed: 4, step: false, until: () => worldOf(ball).distanceTo(from) > 0.45 }));
       thrown = release(body, ball).velocity;
-    }, [body], 6, () => !body.holds(ball) && thrown.lengthSq() > 0);
-    expect(thrown.x).toBeLessThan(-0.2);
-    expect(thrown.distanceTo(seen)).toBeLessThan(0.5 * seen.length());
+      yield* wait(0.4);
+      after = body.object.worldToLocal(body.bones.rightHand.getWorldPosition(new Vector3()));
+      done = true;
+    }, [body], 6, () => done);
+    expect(thrown.length()).toBeGreaterThan(4);
+    expect(body.object.worldToLocal(thrown.clone().add(body.object.getWorldPosition(new Vector3()))).z).toBeGreaterThan(3);
+    // (followed through down to the hips, toward the other side)
+    expect(after.y).toBeLessThan(1.1);
+    expect(after.x).toBeGreaterThan(-0.1);
+    expect(body.log).toEqual([]);
   });
+
 
 });
