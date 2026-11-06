@@ -16,6 +16,10 @@ export class Triangles {
   private readonly bounds: Float32Array;
   /** all of theirs, as far as a ray from inside them goes to leave them */
   private readonly extent = new Float32Array([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+  /** its triangles by the cells of a grid over their extent (`gridded`, built for the first `depth`), and when each was last looked at */
+  private grid: { size: number[]; cells: number[][] } | null = null;
+  private seen = new Uint32Array(0);
+  private stamp = 0;
 
   constructor(meshes: readonly PlacedGeometry[], centre: Readonly<Vector3>, radius: number) {
     const kept: number[] = [], a = new Vector3(), b = new Vector3(), c = new Vector3(), triangle = new Triangle(), nearest = new Vector3();
@@ -59,6 +63,49 @@ export class Triangles {
     return _normal.crossVectors(_b.sub(_a), _c.sub(_a)).dot(ray.direction) > 0;
   }
 
+  /**
+   * How far a ball of `radius` at `point` sinks into the meshes (m; 0 or less: clear of them by as much): its radius less how far the
+   * nearest surface is, or its radius more where the point is inside — on the inner side of the nearest triangle (a closed mesh's faces
+   * wound outward; of triangles as near as each other, at an edge or a corner, the one the point lies most squarely off). Only triangles
+   * within `within` (m) of the point are looked at: a point further than that from every surface reads as clear, inside or not.
+   */
+  depth(point: Readonly<Vector3>, radius: number, within: number): number {
+    const c = this.corners, b = this.bounds, grid = (this.grid ??= this.gridded()), e = this.extent, stamp = ++this.stamp;
+    const cell = (value: number, axis: number) => Math.min(grid.size[axis] - 1, Math.max(0, Math.floor((value - e[axis]) / CELL)));
+    const p = [point.x, point.y, point.z], from = p.map((v, axis) => cell(v - within, axis)), to = p.map((v, axis) => cell(v + within, axis));
+    let nearest = within, off = 0;
+    for (let x = from[0]; x <= to[0]; x++) for (let y = from[1]; y <= to[1]; y++) for (let z = from[2]; z <= to[2]; z++) {
+      for (const triangle of grid.cells[(x * grid.size[1] + y) * grid.size[2] + z] ?? []) {
+        if (this.seen[triangle] === stamp) continue;
+        this.seen[triangle] = stamp;
+        const k = triangle * 9, t = triangle * 6;
+        const dx = Math.max(b[t] - point.x, 0, point.x - b[t + 3]), dy = Math.max(b[t + 1] - point.y, 0, point.y - b[t + 4]), dz = Math.max(b[t + 2] - point.z, 0, point.z - b[t + 5]);
+        if (dx * dx + dy * dy + dz * dz > nearest * nearest + 1e-12) continue;
+        _a.set(c[k], c[k + 1], c[k + 2]); _b.set(c[k + 3], c[k + 4], c[k + 5]); _c.set(c[k + 6], c[k + 7], c[k + 8]);
+        const distance = _triangle.set(_a, _b, _c).closestPointToPoint(point, _hit).distanceTo(point);
+        if (distance > nearest + 1e-6) continue;
+        // (which side: the way off the surface against the triangle's outward normal, the squarest of those as near)
+        const square = distance > 1e-9 ? _triangle.getNormal(_normal).dot(_end.subVectors(point, _hit)) / distance : 0;
+        if (distance < nearest - 1e-6 || Math.abs(square) > Math.abs(off)) off = square;
+        nearest = Math.min(nearest, distance);
+      }
+    }
+    return off < 0 ? radius + nearest : radius - nearest;
+  }
+
+  /** each triangle by the `CELL`-wide cells of their extent its bounds reach into, for `depth` to look only about its point */
+  private gridded(): { size: number[]; cells: number[][] } {
+    const e = this.extent, b = this.bounds, size = [0, 1, 2].map((axis) => Math.max(1, Math.ceil((e[3 + axis] - e[axis]) / CELL)));
+    const cells: number[][] = [], cell = (value: number, axis: number) => Math.min(size[axis] - 1, Math.max(0, Math.floor((value - e[axis]) / CELL)));
+    for (let triangle = 0, t = 0; t < b.length; triangle++, t += 6) {
+      for (let x = cell(b[t], 0); x <= cell(b[t + 3], 0); x++) for (let y = cell(b[t + 1], 1); y <= cell(b[t + 4], 1); y++) for (let z = cell(b[t + 2], 2); z <= cell(b[t + 5], 2); z++) {
+        (cells[(x * size[1] + y) * size[2] + z] ??= []).push(triangle);
+      }
+    }
+    this.seen = new Uint32Array(b.length / 6);
+    return { size, cells };
+  }
+
   /** the first triangle `ray` meets within `far`, by its first corner's index (-1: none), and how far along it */
   private met(ray: Readonly<Ray>, far: number): [number, number] {
     let nearest = far, first = -1;
@@ -76,4 +123,6 @@ export class Triangles {
   }
 }
 
-const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _hit = new Vector3(), _end = new Vector3(), _normal = new Vector3();
+/** how wide a cell of the grid `depth` looks through is (m) */
+const CELL = 0.02;
+const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _hit = new Vector3(), _end = new Vector3(), _normal = new Vector3(), _triangle = new Triangle();

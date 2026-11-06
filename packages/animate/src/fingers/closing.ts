@@ -23,7 +23,7 @@ const GIRTH = 0.09;
  * how far a digit's palm side is taken to touch, as a share of its depth from the bone: a fifth pressed in, as the pad's flesh gives (a
  * segment lying along a thing's surface, grazing it, does not stop the fold)
  */
-const PRESSED = 0.8;
+export const PRESSED = 0.8;
 /**
  * the ways across a grip its chords are tried in (over half a turn); how much nearer the way the palm faces counts for against a chord's
  * width (m per unit of the cosine between them: a round rung's chords alike, the one along it); and how squarely the palm must face along

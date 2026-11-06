@@ -109,7 +109,9 @@ export class Self implements Holder {
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
-  /** the nodes on it its app keeps turned in the world (`orient`), each written so as it updates */
+  /** the nodes on it its app keeps turned in the world (`orient`): as it asks, and as each sub-step lets it (`holdable`), written so as it
+   * updates */
+  private readonly asked = new Map<Object3D, Quaternion>();
   private readonly turned = new Map<Object3D, Quaternion>();
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
@@ -402,12 +404,44 @@ export class Self implements Holder {
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
     if (!rotation) {
       oriented.delete(node);
+      this.asked.delete(node);
       this.turned.delete(node);
       return;
     }
+    this.asked.set(node, (this.asked.get(node) ?? new Quaternion()).copy(rotation));
     const turned = (this.turned.get(node) ?? new Quaternion()).copy(rotation);
     oriented.set(node, turned);
     this.turned.set(node, turned);
+  }
+
+  /**
+   * each node its app keeps turned (`orient`) turned as it asks, then back about itself toward the shoulder of each hand holding what hangs
+   * from it as far as keeps the hand's grip within its arm's reach (`HOLDABLE` of its length; where the fingers seat the hand, once they
+   * have): what the hands hold goes only where they hold it — a rifle swung faster than the body turns came round 4.5 cm past the
+   * support arm's reach, and the hand slid off it and through it
+   */
+  private holdable(f: Frame): void {
+    for (const [node, asked] of this.asked) {
+      const turned = this.turned.get(node);
+      if (!turned) continue;
+      turned.copy(asked);
+      const pivot = resolve(this, node, _pivot).position;
+      for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of this.species.hands ?? []) {
+        const hold = this.holding[hand];
+        if (!hold || !under(hold.thing.object, node)) continue;
+        const bones = this.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
+        const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
+        const placed = resolve(this, hold.thing.object, _placed), goal = this.fingers?.seat(hand as 'left' | 'right')?.position ?? hold.goal.position;
+        const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
+        const far = out.length(), near = toward.length();
+        if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
+        // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder)
+        const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
+        const axis = _axis.crossVectors(out, toward);
+        if (axis.lengthSq() < 1e-12) continue;
+        turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), out.angleTo(toward) - wanted));
+      }
+    }
   }
 
   /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
@@ -454,6 +488,7 @@ export class Self implements Holder {
     if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
+    this.holdable(f);
     for (const request of [...this.requests]) {
       request.stage(f);
       if (!request.owned) continue;
@@ -553,5 +588,15 @@ const IDENTITY = new Matrix4();
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
+/** how far out of a chain's full length a hand's grip on what its body turns is kept (a chain's tip goes 0.98 of it at most) */
+const HOLDABLE = 0.975;
 const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _turn = new Quaternion();
+const _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3();
+
+/** whether `object` hangs from `node` (is it, or under it) */
+function under(object: Object3D, node: Object3D): boolean {
+  for (let at: Object3D | null = object; at; at = at.parent) if (at === node) return true;
+  return false;
+}
 const EMPTY: readonly LogEntry[] = Object.freeze([]);
