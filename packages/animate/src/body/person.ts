@@ -86,7 +86,7 @@ export class Person extends Self {
         // (what both hands hold before the body goes with the chest they hang from: with the hips, a saddle taken bowed stayed where they
         // had it as the trunk straightened, and the palms came 5 cm off its grips)
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);
-        handStep(this, f, side, steadied(hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
+        handStep(this, f, side, this.seated(side, hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
         checkParents(this, f);
@@ -97,6 +97,14 @@ export class Person extends Self {
         bear(this, f, this.worn, this.borne);
       },
     };
+  }
+  /** where hand `side` goes on what `hold` has it hold (the thing's frame): where its fingers seat it, so their contacts are met from the
+   * shoulder out, once they have closed on it; else where its hold puts it */
+  private seated(side: Side, hold: Hold): Goal {
+    const seat = this.fingers?.seat(side);
+    if (!seat) return steadied(hold);
+    const rest = this.restOf(this.hands[side]);
+    return { ...hold.goal, position: seat.position, quaternion: seat.quaternion.clone().multiply(_q.copy(rest).invert()), axis: undefined };
   }
 }
 

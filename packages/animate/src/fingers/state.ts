@@ -1,5 +1,6 @@
-import { Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
+import { Matrix4, Mesh, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
 import { smoothstep } from '../kernel/math';
+import { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import { Thing, vectorOf, type Grip } from '../things/thing';
 import type { Hold } from '../things/resolve';
@@ -11,16 +12,19 @@ import type { HandPoint } from './point';
 import { Joints, PINCH } from './joints';
 import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
 
-/** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds (and where
- * its thumb's pad opposes it, in the thing's frame), the grip a hand verb is bringing it to, and the shape its contacts were last met in,
- * when. */
+/** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds — where its
+ * thumb's pad opposes it, where the hand sits on it (`seat`: its node's place and turn, none where the thing hangs from the hand) and the
+ * thing's triangles about it, all in the thing's frame — the grip a hand verb is bringing it to, and the shape its contacts were last met
+ * in, when. */
 interface Hand {
   joints: Joints;
   shape: Shape;
   asked: Shape | null;
-  closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; off: Vector3; since: number } | null;
+  closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; seat: Placement | null; near: Triangles; asked: string; off: Vector3; since: number } | null;
   coming: Object3D | null;
   met: { shape: Shape; digits: readonly Digit[] } | null;
+  /** its last solve (`solved`): what it was given and the shape it found, kept while nothing it was given has moved */
+  solve: { at: Placed; contacts: readonly Contact[]; near: Triangles | null; shape: Shape } | null;
   /** the body's own skinned meshes, which the hand never closes on, and how long its app has shaped it (s, `set`) */
   skins: readonly SkinnedMesh[];
   clock: number;
@@ -46,6 +50,12 @@ const POINTING = { nearing: 0.09, near: 0.04 } as const;
 /** how far a hand's wrist may move on what it holds before it closes on it afresh (m), for how long after it first closed on it (s): it
  * closes as it settles there, not once it has, and then keeps its grasp */
 const MOVED = 0.002, SETTLING = 0.3;
+/** how little a hand and its contacts move on what it holds for its last solve to stand (m, rad) */
+const STILL = 1e-4;
+/** how far a contact moves on what the hand holds before its digit is started afresh (m) */
+const SWEPT = 0.005;
+/** how much further than the hand reaches its seat may move it, and the triangles about it are kept for (m) */
+const REACH = 0.05;
 
 /**
  * A person's fingers: the shape each hand takes — closed on what it holds (`closedOn`), pointing for a fingertip's grip, opening on its
@@ -63,7 +73,7 @@ export class FingerState {
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, coming: null, met: null, skins, clock: 0 };
+      return { joints, shape, asked: null, closed: null, coming: null, met: null, solve: null, skins, clock: 0 };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -80,31 +90,46 @@ export class FingerState {
 
   /**
    * `side`'s contacts met this sub-step, the hand where `at` places it (its node, in the world) and the things where `placed` has them: a
-   * hand holding something, or within `ARRIVED` of a grip it is coming to (a fingertip's met from `NEAR` out stretched the index 7 cm onto
-   * its button in one sub-step)
+   * hand holding something, the arm having brought it to its seat — not one still coming to its grip, shaped as it comes (met from 1.5 cm
+   * out, a fingertip's index straightened onto its button in one sub-step, its tip jumping 1.5–2 cm)
    */
   meet(side: 'left' | 'right', at: Placed, placed: (object: Object3D) => Placement): void {
-    const hand = this.hands[side], hold = this.holding[side];
-    const empty = hold ? hold.thing.grip(hold.grip).node : hand.coming;
-    const thing = empty?.parent;
-    if (!empty || !thing) return;
-    const grip = Thing.of(thing).grip(empty.name);
-    if (!hold && this.wristOff(side, at, grip, thing, placed) > ARRIVED) return;
+    const hand = this.hands[side], hold = this.holding[side], thing = hold?.thing.object;
+    if (!hold || !thing) return;
+    const grip = hold.thing.grip(hold.grip), empty = grip.node;
     const closed = hand.closed && (hand.closed.on === hold || hand.closed.on === empty) ? hand.closed : null;
     const preferred = shapeOf(values(grip.node), closed ? closed.shape : this.shaped(hand, grip));
-    const contacts = this.contacts(grip, thing, placed, closed?.thumb ?? null);
-    hand.met = { shape: this.solved(hand, at, contacts, preferred), digits: contacts.map((c) => c.part) };
+    const contacts = this.contacts(grip, thing, closed?.thumb ?? null);
+    // (on what hangs from the hand, the hand where it carries it: placed as the body last read it, a sub-step behind the hand, it moved on
+    // the magazine with every step of a carry, and the thumb with it)
+    const local = hangsFrom(hand.joints.hand, thing) ? { ...inFrame(placedOf(hand.joints.hand), worldOf(thing)), scale: at.scale } : inFrame(at, placed(thing));
+    hand.met = { shape: this.solved(hand, local, contacts, preferred, closed?.near ?? null), digits: contacts.map((c) => c.part) };
   }
 
-  /** `preferred` with the digits `contacts` touch met where `at` places the hand (`meet`), from where they were last met */
-  private solved(hand: Hand, at: Placed, contacts: readonly Contact[], preferred: Shape): Shape {
+  /** `preferred` with the digits `contacts` touch met where `at` places the hand, clear of `near` (`meet`; all in the thing's frame), from
+   * where they were last met */
+  private solved(hand: Hand, at: Placed, contacts: readonly Contact[], preferred: Shape, near: Triangles | null): Shape {
+    // (as last solved while the hand and its contacts stay where they were on the thing: a hand held still on a rifle, however it turns)
+    const last = hand.solve;
+    if (last && last.near === near && last.at.position.distanceTo(at.position) < STILL && last.at.quaternion.angleTo(at.quaternion) < STILL
+      && last.contacts.length === contacts.length && last.contacts.every((c, k) => c.part === contacts[k].part && c.at.distanceTo(contacts[k].at) < STILL)) return structuredClone(last.shape);
     const shape = structuredClone(preferred), was = hand.met?.shape ?? hand.shape;
     for (const { part } of contacts) {
       if (part === 'thumb') shape.thumb = { ...was.thumb };
       else shape[part] = { ...was[part] };
     }
-    meet(hand.joints, at, contacts, shape, preferred);
+    // (a digit whose contact has moved on the thing, or is new, started afresh: the trigger finger off the receiver onto the trigger)
+    const swept = contacts.filter((c) => !last?.contacts.some((was) => was.part === c.part && was.at.distanceTo(c.at) < SWEPT)).map((c) => c.part);
+    meet(hand.joints, at, contacts, shape, preferred, near, false, swept);
+    hand.solve = { at, contacts, near, shape: structuredClone(shape) };
     return shape;
+  }
+
+  /** where `side`'s hand sits on what it holds, once it has closed on it: its node's place and turn in the thing's frame (none: not
+   * closed on it yet, or it hangs from the hand) — where the arm brings the hand, so its contacts are met from the shoulder out */
+  seat(side: 'left' | 'right'): Placement | null {
+    const hand = this.hands[side], hold = this.holding[side];
+    return hold && hand.closed?.on === hold ? hand.closed.seat : null;
   }
 
   /** each hand eased `seconds` on toward what it holds, what a pose asked of it this update, or relaxed — one whose contacts were met
@@ -112,14 +137,25 @@ export class FingerState {
   update(seconds: number, time: number): void {
     for (const side of ['left', 'right'] as const) {
       const hand = this.hands[side], hold = this.holding[side];
-      if (hold && (hand.closed?.on !== hold || (time - hand.closed.since < SETTLING && hand.closed.off.distanceTo(offOn(hand, hold.thing.object)) > MOVED))) {
-        this.close(hand, hold.thing.grip(hold.grip), hold.thing.object, hold, time);
+      // (closed afresh, and seated so, as its grip asks its digits elsewhere: the trigger finger onto the trigger from along the receiver)
+      const grip = hold?.thing.grip(hold.grip);
+      if (hold && grip && (hand.closed?.on !== hold || hand.closed.asked !== JSON.stringify(asks(grip.node))
+        || (time - hand.closed.since < SETTLING && hand.closed.off.distanceTo(offOn(hand, hold.thing.object)) > MOVED))) {
+        this.close(side, hold.thing.grip(hold.grip), hold.thing.object, hold, time);
       }
       const { met, asked } = hand;
       [hand.met, hand.asked] = [null, null];
       if (met) this.ease(hand, met.shape, seconds, met.digits);
       else this.ease(hand, hold ? shapeOf(values(hold.thing.grip(hold.grip).node), hand.closed?.shape ?? hand.shape) : hand.coming ? this.onto(side, hand.coming, time) : asked ?? RELAXED, seconds);
     }
+  }
+
+  /** where a hand verb is bringing `side`'s wrist to, before it holds it: the thing and the wrist in its frame, as a grab puts it (none:
+   * nowhere) */
+  coming(side: 'left' | 'right'): { thing: Object3D; wrist: Vector3 } | null {
+    const empty = this.hands[side].coming, thing = empty?.parent;
+    if (!empty || !thing) return null;
+    return { thing, wrist: inFrame({ ...placedOf(this.hands[side].joints.hand), position: this.placedOn(side, empty).wrist }, worldOf(thing)).position };
   }
 
   /** a hand verb is bringing `side` to the grip `empty`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`) */
@@ -139,18 +175,23 @@ export class FingerState {
     const goal = this.onto(side, to, hand.clock), thing = to.parent;
     const grip = thing && Thing.of(thing).grip(to.name);
     if (!grip || !thing || hand.closed?.on !== to) return this.ease(hand, goal, seconds);
-    hand.joints.hand.updateWorldMatrix(true, false);
-    const node = { position: new Vector3(), quaternion: new Quaternion(), scale: new Vector3() };
-    hand.joints.hand.matrixWorld.decompose(node.position, node.quaternion, node.scale);
-    const contacts = this.contacts(grip, thing, worldOf, hand.closed.thumb);
-    this.ease(hand, this.solved(hand, { ...node, scale: node.scale.x }, contacts, goal), seconds, contacts.map((c) => c.part));
+    const contacts = this.contacts(grip, thing, hand.closed.thumb);
+    this.ease(hand, this.solved(hand, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts, goal, hand.closed.near), seconds, contacts.map((c) => c.part));
   }
 
   /**
    * Where hand `side`'s bone goes to hold `empty` (a grip of its parent): its wrist and its bone's rotation (world) — see `Body.gripOn`:
-   * as a grab puts it (`goalOn`), from the hand's turn now
+   * where it sits on it once it has closed on it (`seat`), else as a grab puts it
    */
   gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
+    const closed = this.hands[side].closed, seat = closed && (closed.on === empty || (closed.on instanceof Object3D ? null : closed.on.thing.grip(closed.on.grip).node === empty)) ? closed.seat : null;
+    if (!seat || !empty.parent) return this.placedOn(side, empty);
+    const at = toWorld(seat, worldOf(empty.parent));
+    return { wrist: at.position, rotation: at.quaternion };
+  }
+
+  /** where hand `side`'s bone goes to hold `empty` as a grab puts it (`goalOn`), from the hand's turn now: its wrist and turn (world) */
+  private placedOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
     const owner = empty.parent;
     if (!owner) throw new Error(`gripOn: "${empty.name}" hangs from nothing`);
     const grip = Thing.of(owner).grip(empty.name), hand = this.hands[side].joints.hand, point = this.pointOn(side, grip);
@@ -170,14 +211,12 @@ export class FingerState {
   }
 
   /**
-   * the contacts a hand's digits make on `grip` of `thing` (`placed` where it is): the pad a fingertip grip names on its empty; each digit
+   * the contacts a hand's digits make on `grip` of `thing`, in its frame: the pad a fingertip grip names on its empty; each digit
    * `userData.fingers` names to an empty with its pad there; and the thumb's pad on `thumb` (the thing's frame), where it opposes the
    * handle it closed on (`closedOn`), unless an empty has it
    */
-  private contacts(grip: Grip, thing: Object3D, placed: (object: Object3D) => Placement, thumb: Opposed | null): Contact[] {
-    const at = placed(thing), world = (local: Vector3) => local.clone().applyQuaternion(at.quaternion).add(at.position);
-    const turned = (local: Vector3 | null) => local?.clone().applyQuaternion(at.quaternion);
-    const centre = world(grip.at.position), line = turned(grip.handle?.axis ?? null);
+  private contacts(grip: Grip, thing: Object3D, thumb: Opposed | null): Contact[] {
+    const centre = grip.at.position.clone(), line = grip.handle?.axis ?? null;
     // (a digit's pad on what the hand holds presses with its flat toward the grip's middle — its line, on a handle — as a grasp opposes the
     // thumb to the fingers and the palm across it: a thumb's on a magazine's face toward the fingers on the other, a trigger finger's back
     // toward the grip)
@@ -194,24 +233,17 @@ export class FingerState {
       if (name === grip.pad) throw new Error(`"${grip.node.name}" userData.fingers.${name}: its pad is the grip's own, on it`);
       const empty = thing.getObjectByName(value);
       if (!empty) throw new Error(`"${grip.node.name}" userData.fingers.${name}: "${thing.name}" has no empty named "${value}"`);
-      // (where the empty is on the thing as it stands, carried to where `placed` has the thing)
+      // (where the empty is on the thing as it stands)
       thing.updateWorldMatrix(true, true);
       const local = new Vector3().setFromMatrixPosition(empty.matrixWorld).applyMatrix4(new Matrix4().copy(thing.matrixWorld).invert());
       const digit = digitOf(name, `"${grip.node.name}" userData.fingers`), facing: unknown = empty.userData.facing;
       // (an empty's own `userData.facing`, the way the pad presses into the face it is on, overrides the way toward the grip's middle: a
       // thumb laid along a stile's outer face tipped toward the handle's line through the bar)
-      if (facing === undefined) contacts.push(pinching(digit, world(local)));
-      else contacts.push({ part: digit, at: world(local), round: PINCH, facing: vectorOf(facing, `"${value}" userData.facing`).normalize().applyQuaternion(empty.getWorldQuaternion(new Quaternion()).premultiply(thing.getWorldQuaternion(new Quaternion()).invert()).premultiply(at.quaternion)) });
+      if (facing === undefined) contacts.push(pinching(digit, local));
+      else contacts.push({ part: digit, at: local, round: PINCH, facing: vectorOf(facing, `"${value}" userData.facing`).normalize().applyQuaternion(empty.getWorldQuaternion(new Quaternion()).premultiply(thing.getWorldQuaternion(new Quaternion()).invert())) });
     }
-    if (thumb && !contacts.some((c) => c.part === 'thumb')) contacts.push({ part: 'thumb', at: world(thumb.at), facing: turned(thumb.facing), round: PINCH });
+    if (thumb && !contacts.some((c) => c.part === 'thumb')) contacts.push({ part: 'thumb', at: thumb.at.clone(), facing: thumb.facing.clone(), round: PINCH });
     return contacts;
-  }
-
-  /** how far the hand `hand` places is off where it holds `grip` of `thing` as `placed` has it, turned as it is (m) */
-  private wristOff(side: 'left' | 'right', hand: Placed, grip: Grip, thing: Object3D, placed: (object: Object3D) => Placement): number {
-    const at = placed(thing), point = this.pointOn(side, grip);
-    const wrist = point.at.clone().multiplyScalar(hand.scale).applyQuaternion(hand.quaternion).negate().add(grip.at.position.clone().applyQuaternion(at.quaternion).add(at.position));
-    return wrist.distanceTo(hand.position);
   }
 
   /** the shape `hand` takes for `grip` before it has closed on it: pointing for a pad, else relaxed */
@@ -219,20 +251,44 @@ export class FingerState {
     return grip.pad ? POINT : hand.shape;
   }
 
-  /** `hand` closed on `grip` of `thing` afresh (`on`: the hold or empty it closed for; `since`, when it first closed on it, kept) */
-  private close(hand: Hand, grip: Grip, thing: Object3D, on: Hold | Object3D, time: number): void {
-    const again = hand.closed && (hand.closed.on === on || hand.closed.on === grip.node) ? hand.closed : null;
+  /**
+   * `side`'s hand closed on `grip` of `thing` afresh (`on`: the hold or empty it closed for; `since`, when it first closed on it, kept):
+   * pointing for a fingertip's grip, else round the thing (`closedOn`), its thumb opposing it; then seated on it (`meet`), from where a
+   * grab puts it — moved and turned as its contacts and the thing's surface ask, so that no part of the hand is inside it — unless the
+   * thing hangs from the hand, which carries it as it took it
+   */
+  private close(side: 'left' | 'right', grip: Grip, thing: Object3D, on: Hold | Object3D, time: number): void {
+    const hand = this.hands[side], again = hand.closed && (hand.closed.on === on || hand.closed.on === grip.node) ? hand.closed : null;
     const since = again?.since ?? time;
-    if (grip.pad) {
-      hand.closed = { on, shape: shapeOf(values(grip.node), POINT), thumb: null, off: offOn(hand, thing), since };
-      return;
+    thing.updateWorldMatrix(true, true);
+    const frame = worldOf(thing), back = frame.quaternion.clone().invert(), near = trianglesAbout(hand, thing, frame);
+    // (seated by what its digits are put on and by its palm and knuckles, from the digits as they were last met — from its point on the
+    // grip's empty, turned as a grab turns it, or, holding it, as the arm has turned it there: turned as the grip asks, a turn the wrist
+    // could not make, the seat lay 26° off where the arm held the hand and the palm sank in where it did hold it — then closed round from
+    // there, the thumb opposing the handle as it can reach clear of it from there)
+    const now = placedOf(hand.joints.hand);
+    if (on instanceof Object3D) now.quaternion.copy(this.placedOn(side, grip.node).rotation);
+    const point = this.pointOn(side, grip).at.multiplyScalar(now.scale).applyQuaternion(now.quaternion);
+    const base = hangsFrom(hand.joints.hand, thing) ? null : inFrame({ ...now, position: grip.at.position.clone().applyMatrix4(thing.matrixWorld).sub(point) }, frame);
+    let shape = shapeOf(values(grip.node), grip.pad ? POINT : hand.shape), seat: Placement | null = null, thumb: Opposed | null = null;
+    const contacts = this.contacts(grip, thing, null), met = structuredClone(shape);
+    if (base) {
+      meet(hand.joints, base, contacts, met, structuredClone(met), near, true);
+      seat = { position: base.position, quaternion: base.quaternion };
     }
-    thing.updateWorldMatrix(true, false);
-    const turn = thing.getWorldQuaternion(new Quaternion()), handle = grip.handle && { at: grip.at.position.clone().applyMatrix4(thing.matrixWorld), axis: grip.handle.axis.clone().applyQuaternion(turn) };
-    const closed = closedOn(hand.joints, thing, handle, hand.skins);
-    turn.invert();
-    const thumb = closed.thumb && { at: thing.worldToLocal(closed.thumb.at).multiply(new Vector3().setFromMatrixScale(thing.matrixWorld)), facing: closed.thumb.facing.applyQuaternion(turn) };
-    hand.closed = { on, shape: closed.shape, thumb, off: offOn(hand, thing), since };
+    shape = met;
+    if (!grip.pad) {
+      const handle = grip.handle && { at: grip.at.position.clone().applyMatrix4(thing.matrixWorld), axis: grip.handle.axis.clone().applyQuaternion(frame.quaternion) };
+      const closing = () => closedOn(hand.joints, thing, handle, hand.skins), closed = seat ? placedAt(hand.joints.hand, toWorld(seat, frame), closing) : closing();
+      shape = shapeOf(values(grip.node), closed.shape);
+      thumb = closed.thumb && { at: closed.thumb.at.sub(frame.position).applyQuaternion(back), facing: closed.thumb.facing.applyQuaternion(back) };
+      // (what the seat put on its contacts stays so)
+      for (const { part } of contacts) {
+        if (part === 'thumb') shape.thumb = met.thumb;
+        else shape[part] = met[part];
+      }
+    }
+    hand.closed = { on, shape, thumb, seat, near, asked: JSON.stringify(asks(grip.node)), off: offOn(hand, thing), since };
   }
 
   /**
@@ -251,7 +307,7 @@ export class FingerState {
     if (distance > ARRIVED) return blendShape(from, open, 1 - (grip.pad ? smoothstep(POINTING.near, POINTING.nearing, distance) : smoothstep(NEAR, NEARING, distance)));
     // (closed afresh only while it settles there: a hand kept on a moving empty closed again every sub-step, a search of its meshes each time)
     const closed = hand.closed?.on === empty ? hand.closed : null;
-    if (!closed || (time - closed.since < SETTLING && closed.off.distanceTo(offOn(hand, thing)) > MOVED)) this.close(hand, grip, thing, empty, time);
+    if (!closed || (time - closed.since < SETTLING && closed.off.distanceTo(offOn(hand, thing)) > MOVED)) this.close(side, grip, thing, empty, time);
     return shapeOf(values(empty), hand.closed?.shape ?? open);
   }
 
@@ -283,6 +339,57 @@ function values(grip: Object3D): Fingers {
 function offOn(hand: Hand, thing: Object3D): Vector3 {
   thing.updateWorldMatrix(true, false);
   return thing.worldToLocal(hand.joints.hand.getWorldPosition(new Vector3()));
+}
+
+/** where `node` is in the world as the scene stands now: its position, turn and scale */
+function placedOf(node: Object3D): Placed {
+  node.updateWorldMatrix(true, false);
+  const placed = { position: new Vector3(), quaternion: new Quaternion(), scale: new Vector3() };
+  node.matrixWorld.decompose(placed.position, placed.quaternion, placed.scale);
+  return { ...placed, scale: placed.scale.x };
+}
+
+/** `at` (the frame of what `frame` places) in the world */
+function toWorld(at: Placement, frame: Placement): Placement {
+  return { position: at.position.clone().applyQuaternion(frame.quaternion).add(frame.position), quaternion: frame.quaternion.clone().multiply(at.quaternion) };
+}
+
+/** what `read` finds with `node` put at `at` (the world) for it, put back after */
+function placedAt<T>(node: Object3D, at: Placement, read: () => T): T {
+  const position = node.position.clone(), quaternion = node.quaternion.clone(), parent = node.parent;
+  parent?.updateWorldMatrix(true, false);
+  const world = new Matrix4().compose(at.position, at.quaternion, new Vector3().setFromMatrixScale(node.matrixWorld));
+  if (parent) world.premultiply(new Matrix4().copy(parent.matrixWorld).invert());
+  world.decompose(node.position, node.quaternion, new Vector3());
+  node.updateMatrixWorld(true);
+  try {
+    return read();
+  } finally {
+    node.position.copy(position);
+    node.quaternion.copy(quaternion);
+    node.updateMatrixWorld(true);
+  }
+}
+
+/** `at` (the world) in the frame of what `frame` places */
+function inFrame(at: Placed, frame: Placement): Placed {
+  const back = frame.quaternion.clone().invert();
+  return { position: at.position.clone().sub(frame.position).applyQuaternion(back), quaternion: back.multiply(at.quaternion), scale: at.scale };
+}
+
+/** whether `thing` hangs from `node` (under it in the scene) */
+function hangsFrom(node: Object3D, thing: Object3D): boolean {
+  for (let at = thing.parent; at; at = at.parent) if (at === node) return true;
+  return false;
+}
+
+/** the triangles of `thing`'s meshes about `hand`, in the thing's frame (`frame`, the world's): every mesh shown under it, what hangs from
+ * it too (a magazine in a rifle's well) — the body's own skin left out — as far as the hand reaches and a seat may move it */
+function trianglesAbout(hand: Hand, thing: Object3D, frame: Placement): Triangles {
+  const back = new Matrix4().compose(frame.position, frame.quaternion, new Vector3(1, 1, 1)).invert(), meshes: Mesh[] = [];
+  thing.traverseVisible((node) => { if (node instanceof Mesh && !hand.skins.some((skin) => skin === node)) meshes.push(node); });
+  const at = inFrame(placedOf(hand.joints.hand), frame);
+  return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), at.position, hand.joints.span * at.scale + REACH);
 }
 
 /** where `object` is in the world as the scene stands now (its scale left out) */

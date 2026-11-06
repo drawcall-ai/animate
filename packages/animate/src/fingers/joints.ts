@@ -211,6 +211,19 @@ export class Joints {
     return out;
   }
 
+  /**
+   * Balls along `digit`'s bones as `shape` would have them, each as thick as its skin is there — at each joint, halfway along each
+   * segment and at the tip — or, for none, across the palm (the wrist, and halfway from it to each knuckle): what of the hand must stay out
+   * of what it touches (the hand's frame)
+   */
+  flesh(digit: Digit | null, shape: Shape): { at: Vector3; radius: number }[] {
+    if (!digit) return [new Vector3(), ...DIGITS.map((name) => new Vector3().setFromMatrixPosition(this.fingers[name].joints[0].offset).multiplyScalar(0.5))]
+      .map((at) => ({ at, radius: this.palmDepth }));
+    const frames = this.frames(digit, shape);
+    return this.chain(digit).flatMap((joint, k) => [0, 0.5, ...(k === 2 ? [1] : [])]
+      .map((t) => ({ at: joint.along.clone().multiplyScalar(t * joint.length).applyMatrix4(frames[k]), radius: joint.depth })));
+  }
+
   /** where this hand holds a handle of `radius` in its power grasp (see `HandPoint`) */
   handle(radius: number): HandPoint {
     const proximal = this.fingers.middle.joints[0].length;

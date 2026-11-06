@@ -189,6 +189,16 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
   let kept: [number, Quaternion][] | null = null;
   const joints = new Map<number, TrackedRotation>();
   let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
+  // (the hand turned on from how it set off as far as it has come toward its goal (`at`, the world's), in the frame of `on`: turned at its
+  // own pace, at 1.8 m/s it trailed the hand 40–50° and wobbled 4–5° onto the grip after it got there)
+  let setOff: { off: number; turn: Quaternion } | null = null;
+  const turnedOn = (f: Frame, goal: Goal, at: Readonly<Vector3>, on?: Carrier): Goal => {
+    if (!goal.quaternion) return goal;
+    const placed = on?.at(f.time), off = f.prev.position(bone).distanceTo(at);
+    setOff ??= { off, turn: placed ? placed.prev.quaternion.clone().invert().multiply(f.prev.rotation(bone)) : f.prev.rotation(bone).clone() };
+    const share = setOff.off > 1e-6 ? smoothstep(0, 1, 1 - off / setOff.off) : 1;
+    return { ...goal, quaternion: _gliding.copy(setOff.turn).slerp(goal.quaternion, share) };
+  };
   return (f) => {
     const goal = typeof target === 'function' ? target(f) : target;
     if (seconds === undefined) {
@@ -199,7 +209,9 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
       }
       // (the shoulder and the body still go for the goal itself)
       const toward = wait ? { at: goal.position, clavicle: f.prev.local(INDEX[`${side}Shoulder`]), share: 1 } : undefined;
-      return void handStep(person, f, side, wait ? { position: wait } : goal, options, arm, toward);
+      const at = options.on ? options.on.toWorld(goal, _world, f.time).position : goal.position;
+      // (its turn, eased on with the hand's way, followed as briskly as a held hand's: at its own pace it came 0.2 s after the hand)
+      return void handStep(person, f, side, wait ? { position: wait } : turnedOn(f, goal, at, options.on), { turnAccel: HOLD.turnAccel, turnSpeed: HOLD.turnSpeed, ...options }, arm, toward);
     }
     if (waiting > 0) {
       waiting -= f.dt;
@@ -259,7 +271,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     // bends it: held to where it set off, a hand swept across the body asked the elbow round past the shoulder's range, and it leapt)
     const reached = elbowPole(f.current, person.proportions, side, world.position, _pole);
     const pole = options.pole ?? (options.thing ? reached.lerp(bent, 1 - share) : reached);
-    const glided = { ...aim, position: _glided.position, velocity: _glided.velocity };
+    const glided = turnedOn(f, { ...aim, position: _glided.position, velocity: _glided.velocity }, world.position, own);
     const toward = { at: world.position, center: on?.current.position, clavicle: start.clavicle, share, held };
     handStep(person, f, side, glided, { ...options, on: own, pole }, arm, toward);
   };
@@ -428,7 +440,7 @@ const IDENTITY = new Quaternion(), _frame = new Quaternion(), _s2 = new Quaterni
 const _left = new Vector3(), _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _hung = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _wrist = new Vector3(), _along = new Vector3();
-const _turnAt = new Quaternion(), _held = new Vector3(), _coordinates = coordinates();
+const _turnAt = new Quaternion(), _gliding = new Quaternion(), _held = new Vector3(), _coordinates = coordinates();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _glided = { position: new Vector3(), velocity: new Vector3() };
