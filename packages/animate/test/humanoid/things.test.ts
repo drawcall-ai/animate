@@ -143,6 +143,25 @@ describe('what a body wears', () => {
   });
 });
 
+describe('a part of a held thing', () => {
+  it('comes off it in the other hand: a pin pulled from a grenade', () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const grenade = box(room, new Vector3(-0.15, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false, name: 'grenade' });
+    const pin = empty(grenade, 'pin', new Vector3(0.05, 0.05, 0));
+    pin.userData.mass = 0.01;
+    empty(pin, 'ring', new Vector3(0.02, 0, 0));
+    const results: boolean[] = [];
+    play(function* () {
+      results.push(yield* grab(body, grenade, { right: 'right' }));
+      results.push(yield* grab(body, pin, { left: 'ring' }));
+      results.push(yield* carry(body, pin, body.object.localToWorld(new Vector3(0.3, 1.1, 0.35))));
+    }, [body], 8, () => results.length === 3);
+    expect(results).toEqual([true, true, true]);
+    expect([pin.parent, grenade.parent]).toEqual([body.bones.leftHand, body.bones.rightHand]);
+    expect(body.log).toEqual([]);
+  });
+});
+
 describe('a sword in a scabbard on the hips', () => {
   /** a scabbard at the left hip, its throat presented before the belly as a left hand tilts it (the reference knight's), its mouth up
    * and an approach out of it; a sword in it, its hilt at the mouth */

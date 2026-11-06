@@ -76,7 +76,7 @@ const SEATED = 0.06;
 /** how far a contact moves on what the hand holds before its digit is started afresh (m): a trigger squeezed is followed on */
 const SWEPT = 0.02;
 /** how near its goal a hand's shape is to have closed (the most any of its values is off it) */
-const CLOSED = 0.08;
+const CLOSED = 0.15;
 
 /**
  * A person's fingers: the shape each hand takes — closed on what it holds (`closedOn`), pointing for a fingertip's grip, opening on its
@@ -108,6 +108,11 @@ export class FingerState {
   /** a pose asks `side`'s fingers to take `shape` this update */
   ask(side: 'left' | 'right', shape: Shape): void {
     this.hands[side].posing = shape;
+  }
+
+  /** `side`'s free hand keeps the shape it has this update, as a pose asked it (a fingertip drawing back off its button) */
+  keep(side: 'left' | 'right'): void {
+    this.hands[side].posing = structuredClone(this.hands[side].shape);
   }
 
   /**
@@ -183,7 +188,7 @@ export class FingerState {
       // (what it holds keeps its digits out itself, closed round it and its contacts met clear of it)
       const on = hold ? false : hand.coming?.parent ?? null;
       if (hold) hand.guard.holding(hold.thing.object);
-      const goal = met ? met.shape : grip ? shapeOf(values(asksOf(grip.node)), hand.closed?.shape ?? hand.shape) : hand.coming ? this.onto(side, hand.coming) : posing ?? RELAXED;
+      const goal = met ? met.shape : grip ? shapeOf(values(asksOf(grip.node)), hand.closed?.shape ?? hand.shape) : posing ?? (hand.coming ? this.onto(side, hand.coming) : RELAXED);
       this.ease(hand, goal, seconds, on, met?.digits);
     }
   }

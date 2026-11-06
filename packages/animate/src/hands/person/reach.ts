@@ -8,7 +8,7 @@ import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, held, onBody, worn } from '../../things/hold';
 import { gripAt, holdOn, type Taking } from './palm';
-import { pressingIn, runOf, touching } from './press';
+import { drawnBack, pressingIn, runOf, touching } from './press';
 import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
@@ -24,6 +24,8 @@ const STAGING = 0.4;
 
 /** Hands close together after reaching every grip; route staging is separate from final closure. */
 export function* reachFor(person: Reacher, request: Request, takes: readonly Taking[], motion?: Pace) {
+  // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
+  yield* action<Frame>({ until: (f) => takes.every((take) => drawnBack(person, take.side, f.time)) });
   const began = person.frame.time;
   // (a fingertip is there as its pad meets its button, the hand's turn still settling: held to the turn, it stood on the cap's rim 0.4 s
   // with the arm out at full reach)

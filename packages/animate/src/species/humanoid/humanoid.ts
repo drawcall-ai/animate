@@ -31,7 +31,8 @@ export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
  * off the crown (an end bone above the head), else off the head. Its masses are Dempster's shares of a body of that height; its
  * hands are `left` and `right`, with fingers if it has VRM's finger bones (all fifteen a hand: `leftThumbMetacarpal`, `leftThumbProximal`,
  * `leftThumbDistal`, `leftIndexProximal`, `leftIndexIntermediate`, `leftIndexDistal`, the same for `Middle`, `Ring` and `Little`, and the
- * right's), each hanging from the one before it from the hand out. It steps as its legs' length has it — longer legs slower and longer — and as `stride` styles it.
+ * right's), each hanging from the one before it from the hand out and ending in a tip bone, every joint on its finger's centre line at the
+ * crease, inside the mesh and rigged with it (fingers a few voxels thick need a high rig resolution). It steps as its legs' length has it — longer legs slower and longer — and as `stride` styles it.
  * Each joint goes on its limb's centre line, where the mesh bends: the limbs are measured straightened, so a joint moved off it to gain
  * reach or to quiet a check (an upper-arm joint pulled in toward the spine) is a limb of another length, and its arm moves as that one.
  */

@@ -8,7 +8,7 @@ import { PINCH } from './joints';
 /**
  * how a grasp starts to close on a thing: the fingers straight along the palm (a rig's rest fingers, a little curled, would start in a
  * handle the palm lies on); the thumb, which its contact then brings onto the thing (`opposite`), already turned across the palm and out
- * in front of it, its pad toward the fingers' — started beside the index, the solve brought its pad round through the thing it opposes
+ * in front of it, its pad toward the fingers' (so its pad does not come round through the thing it opposes)
  */
 const WRAP: Shape = {
   thumb: { curl: 0.3, oppose: 0.5, spread: 0.6 },
@@ -28,8 +28,7 @@ export const PAD_DEPTH = 0.8;
  * the ways across a grip its chords are tried in (over half a turn); how much nearer the way the palm faces counts for against a chord's
  * width (m per unit of the cosine between them: a round rung's chords alike, the one along it); and how squarely the palm must face along
  * the chord to lie on its end (the cosine), the thumb going to the other (a pistol grip's palm on its side, a rung's) — facing across it
- * (on a magazine's edge, under a receiver's corner), the thumb goes away from the fingers' pads instead: judged by where the palm lies, a
- * support hand's palm at the receiver's lower corner sent the thumb through it to the right face, with the fingers
+ * (on a magazine's edge, under a receiver's corner), the thumb goes away from the fingers' pads instead
  */
 const CHORDS = 12, EVEN = 0.004, TIE = Math.SQRT1_2;
 /** the steps each fold is tried at, and the halvings within the step it first meets the thing in: 1/128 of its range */

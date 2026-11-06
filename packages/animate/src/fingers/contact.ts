@@ -86,7 +86,7 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
       out.push(turned.x, turned.y, turned.z);
     }
     values.forEach((_, j) => out.push((x[free + j] - pulled[j]) * weights[j]));
-    if (seat) for (let j = 0; j < 6; j++) out.push(x[j] * (j < 3 ? HELD.move : HELD.turn));
+    if (seat) for (let j = 0; j < 6; j++) out.push(x[j] * (j < 3 ? ANCHORED.move : ANCHORED.turn));
     matrix.compose(hand.position, hand.quaternion, scale);
     for (const part of seat ? [null, 'thumb', ...DIGITS] as const : digits) for (const depth of sunk(part, part === null || digits.includes(part))) out.push(depth * KEEP);
   };
@@ -136,7 +136,7 @@ const PULL = 0.008;
 const FAN = 8;
 /** how much a metre and a radian of a seated hand off where its grip put it weigh against a metre off a contact: it moves for what its
  * digits cannot reach and what it would sink into, not on its own */
-const HELD = { move: 3, turn: 0.6 } as const;
+const ANCHORED = { move: 3, turn: 0.6 } as const;
 /** how much a metre of flesh sunk into what the hand touches weighs against a metre off a contact (a contact the digits cannot meet
  * clear of it pulls them in a hundredth of its miss), and how far in from a surface a ball is still found inside it (m) */
 const KEEP = 10, WITHIN = 0.03;

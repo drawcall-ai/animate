@@ -52,20 +52,14 @@ export const RELAXED = {
 } as const satisfies Shape;
 /** Every finger folded into the palm, the thumb across them. */
 export const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
-/** Every finger straight, fanned a little. */
-export const OPEN = {
-  thumb: { curl: 0, oppose: 0, spread: 0 }, index: digit(0, 0, 0.3), middle: digit(0), ring: digit(0, 0, 0.3), little: digit(0, 0, 0.4),
-} as const satisfies Shape;
 /**
  * The index pointing, as a hand presses a button: nearly straight, each joint given a little as a relaxed finger's is (straight as a rod,
- * it read as a stick); the other fingers curled loosely into the palm, each a little more than the one before (as a fist, the hand read
- * as one, and the skin creased at the knuckles); the thumb resting along the middle finger's side.
+ * it reads as a stick); the other fingers curled into the palm, each a little more than the one before; the thumb resting along the
+ * middle finger's side.
  */
 export const POINT = {
-  thumb: { curl: 0.3, oppose: 0.45, spread: 0.25 }, index: digit(0.05, 0.1), middle: digit(0.5, 0.22), ring: digit(0.56, 0.24), little: digit(0.62, 0.26),
+  thumb: { curl: 0.3, oppose: 0.45, spread: 0.25 }, index: digit(0.05, 0.1), middle: digit(0.8, 0.3), ring: digit(0.85, 0.3), little: digit(0.9, 0.3),
 } as const satisfies Shape;
-/** The fingers folded, the thumb up. */
-export const THUMBS_UP = { ...FIST, thumb: { curl: 0, oppose: 0, spread: 0 } } as const satisfies Shape;
 
 /** `fingers` over `base`: each value given replaces `base`'s; out of 0 … 1 (a finger's curl `LIFTED` … 1, a thumb's oppose and spread
  * `SPLAYED` … 1) is a misuse, said at once */

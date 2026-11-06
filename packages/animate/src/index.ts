@@ -13,11 +13,11 @@ export { grab } from './verbs/grab';
 export { reach } from './verbs/reach';
 export { carry } from './verbs/carry';
 export type { HandOptions } from './hands/handling';
-export { release } from './verbs/release';
+export { release, type Released } from './verbs/release';
 export { wait, watch, type Until, type Verb } from './verbs/story';
 export type { Target } from './verbs/targets';
 export type { Posture } from './kernel/poise';
-export { FIST, OPEN, POINT, RELAXED, THUMBS_UP, type Finger, type Fingers, type Thumb } from './fingers/shape';
+export { FIST, POINT, type Finger, type Fingers, type Thumb } from './fingers/shape';
 
 export type { Gazer, LegRole, Range, Roles, Tuning, Vec3 } from './species/define';
 export type { Inertial } from './kernel/inertia';

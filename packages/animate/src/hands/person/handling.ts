@@ -13,7 +13,7 @@ import { backingOut } from './release';
 import { goalOn, palmOn } from './palm';
 
 /** the longest a grab waits, its hands on their grips, for their fingers to close (s) */
-const CLOSING = 0.3;
+const CLOSING = 0.2;
 
 /** Human hand staging; the right hand leads coordinated reaches. */
 export function personHands(person: Reacher): Handling {

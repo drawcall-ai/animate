@@ -6,42 +6,53 @@ import { backOff } from '../hands/person/press';
 import { personOf } from '../body/person';
 import type { Self } from '../body/runtime';
 import { Thing } from '../things/thing';
+import { spinOf } from '../kernel/rotation';
 
 /** how near an empty a thing put onto it must be (m): nearer, it is set exactly there */
 const ONTO = 0.005;
 /** let go in mid-air: its lowest point this far above the ground (m), or moving this fast (m/s) */
 const MID_AIR = { height: 0.02, speed: 0.2 };
 
+/** How a thing was moving as it was let go (world): its velocity (m/s) and its spin (rad/s about the world's axes). */
+export interface Released {
+  velocity: Vector3;
+  spin: Vector3;
+}
+
 /**
  * Lets go, at once (no `yield*`). Given a thing, every hand of the body holding it lets go of it; given hands by name (`{ right: rope }`),
  * those hands let go of what each names and the body's others keep holding (one hand left on a thing carries it alone). A thing no hand
  * of the body holds any more is attached onto the empty `onto` (set there exactly if it is within 5 mm), else to another body still
  * holding it (that body carries it now), else to the parent it was lifted from, where it is now. The hands that let go back out of it,
- * carrying on the way they were going (a fingertip off its button, back the way it pushed). Development says when a thing is let go in mid-air, put onto an empty more than 5 mm off or onto
- * one another thing already sits in.
+ * carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb for it waits until it has.
+ * Returns how the thing (the first named) was moving as it left the hand: to throw it, let go while a carry still moves it and give that
+ * motion to your physics. Development says when a thing is put onto an empty more than 5 mm off or onto one another thing already sits in,
+ * and notes (`dev: { notes: true }`) one let go in mid-air.
  */
-export function release(body: Body, thing: Object3D, onto?: Object3D): void;
-export function release<S extends AnySpecies>(body: Body<S>, hands: ByHand<S, Object3D>): void;
-export function release(body: Body, which: Object3D | Partial<Record<string, Object3D>>, onto?: Object3D): void {
+export function release(body: Body, thing: Object3D, onto?: Object3D): Released;
+export function release<S extends AnySpecies>(body: Body<S>, hands: ByHand<S, Object3D>): Released;
+export function release(body: Body, which: Object3D | Partial<Record<string, Object3D>>, onto?: Object3D): Released {
   const self = selfOf(body);
   if (which instanceof Object3D) {
     const held = Thing.of(which), hands = handsOn(self, held);
     if (!hands.length) throw new Error(`release: no hand of the body holds "${which.name}"`);
-    letGo(self, held, hands, onto);
-  } else {
-    const named = Object.entries(which).flatMap(([hand, thing]) => thing ? [{ hand, thing: Thing.of(thing) }] : []);
-    for (const { hand, thing } of named) {
-      if (!(hand in self.holding)) throw new Error(`release: the body has no hand "${hand}"`);
-      if (self.holding[hand]?.thing !== thing) throw new Error(`release: the ${hand} hand does not hold "${thing.object.name}"`);
-    }
-    for (const thing of new Set(named.map(({ thing }) => thing))) letGo(self, thing, named.filter((n) => n.thing === thing).map((n) => n.hand));
+    return letGo(self, held, hands, onto);
   }
+  const named = Object.entries(which).flatMap(([hand, thing]) => thing ? [{ hand, thing: Thing.of(thing) }] : []);
+  if (!named.length) throw new Error('release: name a hand and what it holds');
+  for (const { hand, thing } of named) {
+    if (!(hand in self.holding)) throw new Error(`release: the body has no hand "${hand}"`);
+    if (self.holding[hand]?.thing !== thing) throw new Error(`release: the ${hand} hand does not hold "${thing.object.name}"`);
+  }
+  const released = [...new Set(named.map(({ thing }) => thing))].map((thing) => letGo(self, thing, named.filter((n) => n.thing === thing).map((n) => n.hand)));
+  return released[0];
 }
 
-/** `self`'s `hands` letting go of `thing` (see `release`), and backing out of it */
-function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object3D): void {
-  const f = self.frame, object = thing.object;
-  const placed = self.track(object).at(f.time).current, moving = self.track(object).velocity(new Vector3()).length();
+/** `self`'s `hands` letting go of `thing` (see `release`), and backing out of it: how it was moving as they did */
+function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object3D): Released {
+  const f = self.frame, object = thing.object, trail = self.track(object).at(f.time);
+  const released = { velocity: new Vector3().subVectors(trail.current.position, trail.prev.position).divideScalar(f.dt), spin: spinOf(trail.prev.quaternion, trail.current.quaternion, f.dt, new Vector3()) };
+  const placed = trail.current, moving = released.velocity.length();
   const lowest = new Box3().copy(thing.bounds).applyMatrix4(new Matrix4().compose(placed.position, placed.quaternion, object.scale)).min.y;
   // (a fingertip draws back off its button the way it came in)
   const away = Object.fromEntries(hands.flatMap((hand) => {
@@ -54,7 +65,7 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
   // (a hand of its own still on it: that hand carries it alone)
   if (handsOn(self, thing).length) {
     take(self, thing);
-    return;
+    return released;
   }
   const holder = [...thing.holders].find((other): other is Self => other !== self);
   if (onto) put(self, thing, onto, placed.position);
@@ -65,9 +76,10 @@ function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object
     if (!bodyOf(object)) thing.lifted = false;
     const back = thing.taken && placed.position.distanceTo(thing.taken) < ONTO;
     if (f.dev && !back && (lowest > MID_AIR.height || moving > MID_AIR.speed)) {
-      f.dev.append(f.time, { check: 'let go in mid-air: its lowest point above the ground (m)', value: lowest, limit: MID_AIR.height, where: object.name });
+      f.dev.note(f.time, { check: 'let go in mid-air: its lowest point above the ground (m)', value: lowest, limit: MID_AIR.height, where: object.name });
     }
   }
+  return released;
 }
 
 /**

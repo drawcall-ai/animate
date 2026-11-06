@@ -7,7 +7,7 @@ import { SHAPING } from '../../fingers/shape';
 import type { HandPoint } from '../../fingers/point';
 import type { Grip } from '../../things/thing';
 import { worn } from '../../things/hold';
-import { INDEX } from '../../species/humanoid/bones';
+import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { HOLD, reaching } from './arms';
 import { emptyAt, type Taking } from './palm';
@@ -32,7 +32,20 @@ const LEAN = 0.2;
 /** how far off the face's normal a fingertip draws back along the line from the eyes at most (rad) */
 const SIGHTED = 0.9;
 /** how far a fingertip draws back off its button as it lets go (m, default body) and in how long (s) */
-export const BACK = { distance: 0.07, seconds: 0.25 } as const;
+export const BACK = { distance: 0.07, seconds: 0.15 } as const;
+
+/** until when each person's hands draw back off a button (s, the body's time) */
+const drawing = new WeakMap<Reacher, Partial<Record<Side, number>>>();
+
+/** `side` of `person` draws back off a button until `until` (s) */
+export function drawBack(person: Reacher, side: Side, until: number): void {
+  drawing.set(person, { ...drawing.get(person), [side]: until });
+}
+
+/** whether `side` of `person` is clear of a button it drew back off, at `time` (s): a hand verb for it waits until it is */
+export function drawnBack(person: Reacher, side: Side, time: number): boolean {
+  return time >= (drawing.get(person)?.[side] ?? -Infinity);
+}
 
 /** where a fingertip's way to `grip` turns in for its run (`RUN`, the thing's frame), its goal `goal`, `up` the world's up there; none:
  * no fingertip's grip */
