@@ -15,6 +15,12 @@ const TRACK = 1.49;
 const ARCH = 0.5, ARCH_CORNER = 0.18;
 /** How far above level the hands hold the steering wheel's rim: a little above nine and three (rad). */
 const HELD = 0.5;
+/**
+ * How much of the steering wheel's turn the hands on its rim turn with it: half, the rest slipping through them, so the palms stay in
+ * toward the hub (turned all the way with it at full lock, the hand on top of the wheel lay over it palm down, its fingers meeting the rim
+ * edge-on).
+ */
+const FOLLOW = 0.5;
 /** The driver's seat's middle: right-hand drive sits on −X. */
 const DRIVER = -0.4;
 /** The cab floor's height (m). */
@@ -94,7 +100,7 @@ export function createRover(maps?: PaintMaps) {
   const column = new Group();
   column.position.set(DRIVER, 1.3, 0.18);
   column.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.PI).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.87));
-  const steering = steeringWheel({ plastic, steel });
+  const { wheel: steering, rim } = steeringWheel({ plastic, steel });
   column.add(steering);
   const shaft = new Parts();
   shaft.tube(0.026, 0, 0.32, [0, 0, -0.2], plastic);
@@ -117,7 +123,7 @@ export function createRover(maps?: PaintMaps) {
   // so the fingers come over its front and the thumb round its back — the rim lies across the palm with the wrist straight on a forearm
   // that comes up from the lap)
   const grip = (side: -1 | 1) => {
-    const at = mark(steering, `${side < 0 ? 'left' : 'right'} grip`, [side * RIM.radius * Math.cos(HELD), RIM.radius * Math.sin(HELD), 0]);
+    const at = mark(rim, `${side < 0 ? 'left' : 'right'} grip`, [side * RIM.radius * Math.cos(HELD), RIM.radius * Math.sin(HELD), 0]);
     at.rotation.z = side * HELD;
     Object.assign(at.userData, { handle: [0, 1, 0], facing: [-side * 0.9, 0, -0.45], radius: RIM.thick });
     return at;
@@ -134,7 +140,7 @@ export function createRover(maps?: PaintMaps) {
     seat: mark(body, 'driver seat', [DRIVER, 1.09, -0.11]),
     /** where each ankle rests: the left beside the clutch, the right on the accelerator */
     pedals: { left: mark(body, 'clutch', [DRIVER + 0.14, 0.73, 0.47]), right: mark(body, 'accelerator', [DRIVER - 0.07, 0.75, 0.48]) },
-    /** where the hands hold the rim, a little above nine and three, each turned with it: +Y along the rim upward, +Z out of the wheel's face */
+    /** where the hands hold the rim, a little above nine and three, each turned `FOLLOW` as far as the wheel: +Y along the rim upward, +Z out of the wheel's face */
     grips: { left: grip(-1), right: grip(1) },
     /** the grab handle's upright behind the windscreen's right pillar, held from the doorway as the forearm reaches it, in and forward:
      * thumb up along it, the palm on its outboard back facing in and a little forward, the fingers round its front between it and the
@@ -151,7 +157,12 @@ export function createRover(maps?: PaintMaps) {
   };
 
   return {
-    body, wheels, steering, marks,
+    body, wheels, marks,
+    /** turns the steering wheel `angle` (rad, anticlockwise as the driver sees it), the hands' grips on its rim `FOLLOW` of the way */
+    steer(angle: number) {
+      steering.rotation.z = angle;
+      rim.rotation.z = (FOLLOW - 1) * angle;
+    },
     dispose() {
       body.removeFromParent();
       const geometries = new Set<BufferGeometry>();

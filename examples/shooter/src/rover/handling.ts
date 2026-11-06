@@ -89,7 +89,7 @@ export class Handling {
       wheel.pivot.rotation.y = 0;
       wheel.spin.rotation.x = 0;
     }
-    this.rover.steering.rotation.z = 0;
+    this.rover.steer(0);
   }
 
   /** How hard the rover has been jolted since this was last asked: how fast its spring compressed fastest has compressed (m/s). */
@@ -115,7 +115,7 @@ export class Handling {
     const steer = MathUtils.clamp(this.input.steer, -1, 1);
     this.lock = MathUtils.damp(this.lock, steer * TUNING.steerAngle / (1 + Math.abs(this.speed) * TUNING.lockFade), TUNING.steerRate, delta);
     // (the steering wheel turns anticlockwise, as the driver sees it, to steer left)
-    this.rover.steering.rotation.z = this.lock * STEERING_RATIO;
+    this.rover.steer(this.lock * STEERING_RATIO);
     for (const wheel of wheels) {
       const origin = body.localToWorld(wheel.mount.clone());
       const hit = this.world.raycast(origin, down, CHASSIS.suspension + CHASSIS.radius, { excludeBodies: [body] });

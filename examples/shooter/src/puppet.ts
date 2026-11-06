@@ -1,4 +1,4 @@
-import { Quaternion, Vector3, type Object3D } from 'three';
+import { MathUtils, Quaternion, Vector3, type Object3D } from 'three';
 import type { Body } from '@drawcall/animate';
 import { frame } from './angles';
 import type { Hold } from './choreography';
@@ -16,9 +16,12 @@ export const BONES = [
 ] as const satisfies readonly Bone[];
 
 const Z = new Vector3(0, 0, 1);
-/** How much of the hand's turn about the forearm the forearm takes, as the radius rolls round the ulna: half (taken by the wrist alone,
- * a hand turned palm out on a ladder's stile twisted the sleeve's skin through itself at the wrist). */
-const PRONATION = 0.5;
+/**
+ * How far the wrist twists at the most (rad): the rest of the hand's turn about the forearm the forearm takes, as the radius rolls round
+ * the ulna (half the turn left in the wrist, a hand turned far at the landing still tore the cuff's skin there; taken by the wrist alone,
+ * the sleeve twisted through itself).
+ */
+const WRIST_TWIST = 0.2;
 const REST = new Map(SOLDIER.map((bone) => [bone.name, new Vector3(...bone.position)]));
 
 /** The direction from `from` to `to` in the skeleton as written, at rest. */
@@ -103,15 +106,16 @@ export class Puppet {
   }
 
   /** Bends an arm so its wrist reaches `wrist`, its elbow pointing along `elbow`, the hand then turned to `hand`; the forearm rolls with
-   * the hand about its length by `PRONATION` of the way. */
+   * the hand about its length, all but `WRIST_TWIST` of the way (or half, turned less). */
   arm(side: Side, wrist: Readonly<Vector3>, elbow: Readonly<Vector3>, hand: Readonly<Quaternion>) {
     const lower = `${side}LowerArm` as const;
     // An arm reaches out sideways at rest, palm down, its elbow behind (−Z).
     this.limb(`${side}UpperArm`, lower, `${side}Hand`, wrist, elbow, Z.clone().negate());
     // (the hand's turn off the forearm's, its twist about the forearm's rest axis: the roll a forearm's bones make)
     const forearm = this.rotation(lower), off = forearm.clone().invert().multiply(hand), axis = restAxis(lower, `${side}Hand`);
-    const along = axis.dot(new Vector3(off.x, off.y, off.z)), twist = new Quaternion(axis.x * along, axis.y * along, axis.z * along, off.w).normalize();
-    this.turn(lower, forearm.multiply(new Quaternion().slerp(twist, PRONATION)));
+    const along = axis.dot(new Vector3(off.x, off.y, off.z)), angle = 2 * Math.atan2(along, off.w);
+    const turned = Math.atan2(Math.sin(angle), Math.cos(angle)), roll = turned - MathUtils.clamp(turned / 2, -WRIST_TWIST, WRIST_TWIST);
+    this.turn(lower, forearm.multiply(new Quaternion().setFromAxisAngle(axis, roll)));
     this.turn(`${side}Hand`, hand);
   }
 

@@ -173,7 +173,7 @@ const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
  * `turn` (the tangent) to face back toward the climber, its heel off the face; its thumb's pad flat on the outer face `thumb` (m) above
  * the grasp, abeam the edge, so it presses square into the face (a flat bar taken as a round one, the thumb hooked onto its edge)
  */
-const STILE_HOLD = { proud: 0.003, turn: 0.6, thumb: 0.04 } as const;
+const STILE_HOLD = { proud: 0.003, turn: 0.1, thumb: { up: 0.075, back: 0.015 } } as const;
 /**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
  * upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing in, the fingers round the edge onto
@@ -190,7 +190,7 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
     const radius = STILE_BAR.thick / 2, edge = STILE_BAR.deep / 2 - radius, thumb = new Object3D();
     empty.position.set(sign * STILE, y, edge);
     thumb.name = `${name}: thumb`;
-    thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.thumb, edge);
+    thumb.position.set(sign * (STILE + radius), y + STILE_HOLD.thumb.up, edge - STILE_HOLD.thumb.back);
     ladder.body.add(thumb);
     Object.assign(empty.userData, {
       handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud, fingers: { thumb: thumb.name },
