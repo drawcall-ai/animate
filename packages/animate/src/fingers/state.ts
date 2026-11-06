@@ -21,9 +21,11 @@ interface Hand {
   joints: Joints;
   shape: Shape;
   asked: Shape | null;
-  closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; seat: Placement | null; near: Triangles; asked: string; off: Vector3; since: number } | null;
+  closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; seat: Placement | null; contacts: readonly Contact[]; near: Triangles; asked: string; off: Vector3; since: number } | null;
   coming: Object3D | null;
   from: Shape | null;
+  /** whether its shape was last eased toward one a pose asked of it (a fist after a press), not one it took holding something */
+  posed: boolean;
   pointing: number | null;
   met: { shape: Shape; digits: readonly Digit[] } | null;
   /** its last solve (`solved`): what it was given and the shape it found, kept while nothing it was given has moved */
@@ -59,6 +61,8 @@ const MOVED = 0.002, SETTLING = 0.3;
 const GUARD = 0.04, LEAVING = 0.01, REGATHER = 0.03, SUNK = 0.001, HALVINGS = 5;
 /** how little a hand and its contacts move on what it holds for its last solve to stand (m, rad) */
 const STILL = 1e-4;
+/** how far a hand may be turned off its seat and still be on it (rad) */
+const SEATED = 0.06;
 /** how far a contact moves on what the hand holds before its digit is started afresh (m): a trigger drawn back 5 mm is followed on, not
  * started afresh (its pad jumped 1.7 cm) */
 const SWEPT = 0.02;
@@ -75,13 +79,16 @@ const REACH = 0.05;
  */
 export class FingerState {
   private readonly hands: Record<'left' | 'right', Hand>;
+  /** where each hand was first seated holding each grip (by hand and the grip's empty), as its arm turned it, and in which hold: held
+   * again, it sits so */
+  private readonly seats = new Map<string, { on: Hold | Object3D; closed: NonNullable<Hand['closed']> }>();
   constructor(bones: { left: DigitBones; right: DigitBones }, nodes: Readonly<Record<string, Object3D>>, private readonly holding: Readonly<Record<string, Hold | null>>, model: Object3D) {
     const hand = (side: 'left' | 'right'): Hand => {
       const node = nodes[`${side}Hand`];
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, coming: null, from: null, pointing: null, met: null, solve: null, guard: null, skins, clock: 0 };
+      return { joints, shape, asked: null, closed: null, coming: null, from: null, posed: false, pointing: null, met: null, solve: null, guard: null, skins, clock: 0 };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -111,7 +118,12 @@ export class FingerState {
     // (on what hangs from the hand, the hand where it carries it: placed as the body last read it, a sub-step behind the hand, it moved on
     // the magazine with every step of a carry, and the thumb with it)
     const local = hangsFrom(hand.joints.hand, thing) ? { ...inFrame(placedOf(hand.joints.hand), worldOf(thing)), scale: at.scale } : inFrame(at, placed(thing));
-    hand.met = { shape: this.solved(hand, local, contacts, preferred, closed?.near ?? null), digits: contacts.map((c) => c.part) };
+    // (on its seat, its contacts where it was seated with them, as it was seated: met afresh along its way there, its digits took up
+    // whatever arrival it came by — a thumb up a receiver's side one time, along its lower edge the next)
+    const seated = closed?.seat && local.position.distanceTo(closed.seat.position) < MOVED && local.quaternion.angleTo(closed.seat.quaternion) < SEATED
+      && closed.contacts.length === contacts.length && closed.contacts.every((c, k) => c.part === contacts[k].part && c.at.distanceTo(contacts[k].at) < STILL);
+    if (seated && closed) hand.solve = { at: local, contacts, near: closed.near, shape: structuredClone(preferred) };
+    hand.met = { shape: seated ? structuredClone(preferred) : this.solved(hand, local, contacts, preferred, closed?.near ?? null), digits: contacts.map((c) => c.part) };
   }
 
   /** `preferred` with the digits `contacts` touch met where `at` places the hand, clear of `near` (`meet`; all in the thing's frame), from
@@ -121,13 +133,15 @@ export class FingerState {
     const last = hand.solve;
     if (last && last.near === near && last.at.position.distanceTo(at.position) < STILL && last.at.quaternion.angleTo(at.quaternion) < STILL
       && last.contacts.length === contacts.length && last.contacts.every((c, k) => c.part === contacts[k].part && c.at.distanceTo(contacts[k].at) < STILL)) return structuredClone(last.shape);
-    const shape = structuredClone(preferred), was = hand.met?.shape ?? hand.shape;
+    // (closed afresh, from the shape it closed to — not from how the digits last lay: a thumb kept on from where it came lay up a receiver's
+    // side one time and along its lower edge the next — then followed on from where they were last met)
+    const fresh = last?.near !== near, shape = structuredClone(preferred), was = fresh ? preferred : hand.met?.shape ?? hand.shape;
     for (const { part } of contacts) {
       if (part === 'thumb') shape.thumb = { ...was.thumb };
       else shape[part] = { ...was[part] };
     }
     // (a digit whose contact has moved on the thing, or is new, started afresh: the trigger finger off the receiver onto the trigger)
-    const swept = contacts.filter((c) => !last?.contacts.some((was) => was.part === c.part && was.at.distanceTo(c.at) < SWEPT)).map((c) => c.part);
+    const swept = contacts.filter((c) => fresh || !last?.contacts.some((was) => was.part === c.part && was.at.distanceTo(c.at) < SWEPT)).map((c) => c.part);
     meet(hand.joints, at, contacts, shape, preferred, near, false, swept);
     hand.solve = { at, contacts, near, shape: structuredClone(shape) };
     return shape;
@@ -153,6 +167,8 @@ export class FingerState {
       }
       const { met, asked } = hand;
       [hand.met, hand.asked] = [null, null];
+      if (hold) hand.posed = false;
+      else if (!hand.coming) hand.posed = asked !== null;
       // (what it holds keeps its digits out itself, closed round it and its contacts met clear of it)
       const on = hold ? false : hand.coming?.parent ?? null;
       if (hold) this.held(hand, hold.thing.object);
@@ -170,10 +186,11 @@ export class FingerState {
   }
 
   /** a hand verb is bringing `side` to the grip `empty`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`),
-   * from the shape it sets off in */
+   * from the shape it sets off in if a pose asked it of it — a fist kept back from a button — else from relaxed: set off from what it had
+   * just let go of, a hand carried its pinch round an empty magazine to the pouch and arrived closed */
   toward(side: 'left' | 'right', empty: Object3D | null): void {
     const hand = this.hands[side];
-    [hand.coming, hand.from, hand.pointing] = [empty, empty ? structuredClone(hand.shape) : null, null];
+    [hand.coming, hand.from, hand.pointing] = [empty, empty && hand.posed ? structuredClone(hand.shape) : null, null];
   }
 
   /** how far `side`'s hand, on its way to a fingertip's grip, points (0 … 1): as far as the verb bringing it has gone its final run in */
@@ -280,10 +297,16 @@ export class FingerState {
     const since = again?.since ?? time;
     thing.updateWorldMatrix(true, true);
     const frame = worldOf(thing), back = frame.quaternion.clone().invert(), near = trianglesAbout(hand, thing, frame);
-    // (seated by what its digits are put on and by its palm and knuckles, from the digits as they were last met — from its point on the
-    // grip's empty, turned as a grab turns it, or, holding it, as the arm has turned it there: turned as the grip asks, a turn the wrist
-    // could not make, the seat lay 26° off where the arm held the hand and the palm sank in where it did hold it — then closed round from
-    // there, the thumb opposing the handle as it can reach clear of it from there)
+    // (seated from its point on the grip's empty, turned as a grab turns it, or, holding it, as the arm has turned it there — turned as the
+    // grip asks, a turn the wrist could not make, the seat lay 26° off where the arm held the hand and its digits took up whatever way it
+    // came — and from the shape it closes to there; held again later, its grip asking the same of its digits, as it was first held so:
+    // seated afresh from how it stood, the same hand took a rifle's front back after a reload turned 20° otherwise, its thumb up the
+    // receiver's side, not along its edge)
+    const asked = JSON.stringify(asks(grip.node)), key = `${side} ${grip.node.uuid} ${asked}`, kept = this.seats.get(key);
+    if (kept && kept.on !== on && !(on instanceof Object3D)) {
+      hand.closed = { ...kept.closed, on, near: trianglesAbout(hand, thing, worldOf(thing)), off: offOn(hand, thing), since };
+      return;
+    }
     const now = placedOf(hand.joints.hand);
     if (on instanceof Object3D) now.quaternion.copy(this.placedOn(side, grip.node).rotation);
     const point = this.pointOn(side, grip).at.multiplyScalar(now.scale).applyQuaternion(now.quaternion);
@@ -301,10 +324,6 @@ export class FingerState {
     if (!grip.pad) ({ shape, thumb } = closing(base));
     const contacts = this.contacts(grip, thing, thumb), met = structuredClone(shape);
     if (base) {
-      for (const { part } of contacts) {
-        if (part === 'thumb') continue;
-        met[part] = { ...hand.shape[part] };
-      }
       meet(hand.joints, base, contacts, met, structuredClone(met), near, true);
       seat = { position: base.position, quaternion: base.quaternion };
     }
@@ -316,7 +335,8 @@ export class FingerState {
         else shape[part] = met[part];
       }
     }
-    hand.closed = { on, shape, thumb, seat, near, asked: JSON.stringify(asks(grip.node)), off: offOn(hand, thing), since };
+    hand.closed = { on, shape, thumb, seat, contacts: this.contacts(grip, thing, thumb), near, asked, off: offOn(hand, thing), since };
+    if (!(on instanceof Object3D)) this.seats.set(key, { on, closed: hand.closed });
   }
 
   /**
