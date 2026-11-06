@@ -83,8 +83,7 @@ export function touching(person: Reacher, take: Taking, f: Frame): boolean {
 
 /**
  * the way (world, unit) a fingertip on `grip` of a thing placed so draws back off its button as it lets go: back along the line from
- * the button to the eyes that watch it, as far as `SIGHTED` off the face's normal (straight out along the normal, seen from above it came
- * over the button below and drew back down over it); none: no fingertip's grip
+ * the button to the eyes that watch it, as far as `SIGHTED` off the face's normal; none: no fingertip's grip
  */
 export function backOff(person: Reacher, grip: Grip, placed: { position: Vector3; quaternion: Quaternion }): Vector3 | null {
   if (!grip.pad || !grip.facing) return null;

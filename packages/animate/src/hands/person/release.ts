@@ -49,7 +49,7 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
     });
     return goals;
   };
-  // (a fingertip drawn back is held there, off its button, until the hand is asked elsewhere; let go at once, it fell to its hang)
+  // (a fingertip drawn back is held there, off its button, until the hand is asked elsewhere)
   const done = (f: Frame) => f.time - began > LETTING_GO || hands.every(({ away }, k) => !away && reached(f, person.hands[sides[k]], off(f)[k]));
   // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over; nor is
   // one whose arm a pose asks for)

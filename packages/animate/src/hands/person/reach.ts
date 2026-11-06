@@ -64,9 +64,8 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const through = (corner: Vector3, next: Vector3) => world(corner).sub(hips).dot(toward) < 0 && pointSegmentDistance(hips, world(corner), world(next)) < trunk;
     const detour = onBody(person, take.thing) ? [] : aroundHeld(person, take.side, world(from), world(take.goal.position))
       .map((point) => point.sub(frame.position).applyQuaternion(frame.quaternion.clone().invert()));
-    // (a fingertip comes to its button in one sweep ending in a run straight in along the face's normal (`pressing`) — not round the
-    // thing's bounds first: its face is the side it comes from, and round a panel's post the hand came over its top and down past the other
-    // button)
+    // (a fingertip comes to its button in one sweep ending in a run in along the face's normal (`pressingIn`), not round the thing's
+    // bounds: its face is the side it comes from)
     const run = runOf(person, take.thing.grip(take.grip), take.goal, _up.set(0, 1, 0).applyQuaternion(frame.quaternion.clone().invert()));
     const route = run ? [] : [...detour, ...(onBody(person, take.thing) ? []
       : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`])))))]

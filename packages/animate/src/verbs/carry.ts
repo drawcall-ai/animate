@@ -20,7 +20,8 @@ import type { HandOptions } from '../hands/handling';
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
  * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, and keeps it there. It
  * returns `false` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried
- * straight there, if the thing does not come to rest in place: its arms short of it two seconds on (`late carry`), or its own trunk and
+ * straight there, if the thing does not come to rest in place: stopped getting nearer more than 1.5 cm short of it, held off by the arms
+ * (`late carry`; within that, it ends `true` there), or its own trunk and
  * head holding it off a target too near them (a target on its own head, a cup put to the mouth, is held in front of it by design); the
  * dev log's entry says which, and by how much. It holds the thing where it got to either way.
  */
