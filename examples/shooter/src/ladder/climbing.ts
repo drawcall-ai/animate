@@ -170,14 +170,13 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
 const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
 /**
  * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
- * `turn` (the tangent) to face back toward the climber, its heel off the face, and its thumb laid along that face up beside the index, in
- * the palm's plane (its pad put on the face, the thumb stood out off it turned onto its pad)
+ * `turn` (the tangent) to face back toward the climber, its heel off the face
  */
-const STILE_HOLD = { proud: 0.003, turn: 0.6, thumb: { curl: 0.1, oppose: 0.1, spread: 0 } } as const;
+const STILE_HOLD = { proud: 0.003, turn: 0.6 } as const;
 /**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
  * upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing in, the fingers round the edge onto
- * its inner face, the thumb along the outer one, as `STILE_HOLD`); below, the rung, as `RUNG`.
+ * its inner face, as `STILE_HOLD`); below, the rung, as `RUNG`.
  */
 function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
@@ -190,7 +189,7 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
     const radius = STILE_BAR.thick / 2;
     empty.position.set(sign * STILE, y, STILE_BAR.deep / 2 - radius);
     Object.assign(empty.userData, {
-      handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud, fingers: { thumb: STILE_HOLD.thumb },
+      handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud,
     });
   } else {
     empty.position.set(sign * BODY.apart.hand, y, 0);

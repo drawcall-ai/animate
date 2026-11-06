@@ -57,11 +57,12 @@ const SQUEEZE = 0.005;
  * is a spare's spare. The inner one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its
  * fingers off the body. */
 const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
-/** How each pouch turns its magazine about the vertical (rad): standing out from the chest, its front forward and turned in toward the
- * body's middle, its faces to the sides. Turned flat against the chest (−π/2, its front toward the middle), the arm held the grasp it took
- * there strained in the well, and the hand regripped it in its fingers on the way up, the magazine sliding up through a still hand;
- * turned −1 rad, it still did. */
-const POUCHED = -Math.PI / 6;
+/** How each pouch turns its magazine about the vertical (rad): standing out from the chest, its front forward and turned out from the
+ * body's middle, its faces to the sides, so the hand takes its front edge with its palm toward the chest and the fingers round its inner
+ * face (turned in 30°, the hand turned 0.3 s more on it before it closed). Turned flat against the chest (−π/2, its front toward the
+ * middle), the arm held the grasp it took there strained in the well, and the hand regripped it in its fingers on the way up, the
+ * magazine sliding up through a still hand; turned −1 rad, it still did. */
+const POUCHED = Math.PI / 6;
 /** Where the left hand flings a spent magazine, out from the left hip and forward (the chest's frame as `POUCHES`), letting go of it on the
  * way once it is `TOSS` (m) clear of the well: it falls from there at the hand's speed. The fling is a point, the magazine kept turned as
  * it left the well, so the hand keeps its grasp on it: turned on the way, the hand turned it in its fingers onto its palm, held like a

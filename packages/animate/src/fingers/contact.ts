@@ -40,8 +40,7 @@ export interface Arm {
  */
 export function meet(joints: Joints, arm: Arm | null, contacts: readonly Contact[], shape: Shape, preferred: Shape): number {
   if (!contacts.length) return 0;
-  const digits = DIGITS.filter((digit) => contacts.some((c) => c.part === digit)) as Digit[];
-  if (contacts.some((c) => c.part === 'thumb')) digits.unshift('thumb');
+  const digits = (['thumb', ...DIGITS] as const).filter((digit) => contacts.some((c) => c.part === digit));
   const values = digits.flatMap((digit) => keysOf(digit).map((key) => ({ digit, key, least: digit === 'thumb' ? (key === 'curl' ? 0 : SPLAYED) : key === 'curl' ? LIFTED : 0 })));
   const turns = arm ? arm.bones.length * 3 : 0, n = turns + values.length;
   const start = arm ? arm.bones.map((bone) => arm.pose.local(bone).clone()) : [];

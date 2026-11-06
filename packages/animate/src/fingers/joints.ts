@@ -46,15 +46,19 @@ interface Opposing {
  */
 const BEND = { knuckle: Math.PI / 2, middle: (100 * Math.PI) / 180, thumb: [(55 * Math.PI) / 180, (75 * Math.PI) / 180] } as const;
 const DIP = 0.7;
-/** how far a full spread fans each finger (rad), and how far a thumb's swings out in front of the palm (its `spread`; palmar abduction
- * ~60°) and across it (its `oppose`; ~50° flexion at its base: Cooney et al. 1981) */
-const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4, thumb: 1.0 } as const;
+/**
+ * how far a full spread fans each finger (rad); and the thumb's base, its saddle joint's two ways: how far it swings out in front of the
+ * palm (its `spread`: palmar abduction 0–70°, Greene & Heckman 1994) and across it toward the little finger (its `oppose`: ~50°, the
+ * flexion–extension arc of 53°, Cooney et al. 1981) — at 60°, the thumb's pad came short of a magazine's far face by 2–3 cm
+ */
+const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4, thumb: (70 * Math.PI) / 180 } as const;
 const OPPOSE = 0.9;
 /**
- * A thumb lifted out in front of the palm turns about its own length to face its pad onto the palm's middle, as the saddle joint at its
- * base couples the two (Cooney et al. 1981; Kapandji's conjunct rotation): fully once it is lifted this far (`Thumb.spread`), by at most
- * `most` (rad). Swung out alone, its pad kept facing the way it did along the palm, and its outer joints folded it back toward the hand's
- * back instead of round a handle.
+ * A thumb lifted out in front of the palm or swung across it turns about its own length to face its pad onto the palm's middle, as the
+ * saddle joint at its base couples the two (Cooney et al. 1981; Kapandji's conjunct rotation): fully once it is lifted or swung this far
+ * (`Thumb.spread`, `oppose`, whichever further), by at most `most` (rad). Swung out alone, its pad kept facing the way it did along the
+ * palm, and its outer joints folded it back toward the hand's back instead of round a handle; swung across alone, its pad lay flat on
+ * the palm's side instead of facing the fingers.
  */
 const PRONATE = { lifted: 0.4, most: (70 * Math.PI) / 180 } as const;
 /** how far off its length toward its palm side a fingertip presses a button, and a pad presses on what the hand holds (rad) */
@@ -233,7 +237,7 @@ export class Joints {
       const { curl, oppose, spread } = shape.thumb, { palmward, ulnar } = this.thumb;
       const swing = new Quaternion().setFromAxisAngle(palmward, spread * SPREAD.thumb).multiply(_q.setFromAxisAngle(ulnar, oppose * OPPOSE));
       return [
-        joints[0].rest.clone().multiply(swing).multiply(_q.setFromAxisAngle(joints[0].along, this.pronation(swing, spread))),
+        joints[0].rest.clone().multiply(swing).multiply(_q.setFromAxisAngle(joints[0].along, this.pronation(swing, spread, oppose))),
         bent(joints[1], curl * BEND.thumb[0], null, 0),
         bent(joints[2], curl * BEND.thumb[1], null, 0),
       ];
@@ -247,14 +251,14 @@ export class Joints {
     ];
   }
 
-  /** how far the thumb's metacarpal, swung `swing` off its rest and lifted `spread`, turns about its length (`PRONATE`): the turn that
-   * brings its palm side, the way its outer joints fold it, square to it toward the palm's middle */
-  private pronation(swing: Quaternion, spread: number): number {
+  /** how far the thumb's metacarpal, swung `swing` off its rest, lifted `spread` and swung across `oppose`, turns about its length
+   * (`PRONATE`): the turn that brings its palm side, the way its outer joints fold it, square to it toward the palm's middle */
+  private pronation(swing: Quaternion, spread: number, oppose: number): number {
     const { joints: [metacarpal], inward } = this.thumb;
     const length = _u.copy(metacarpal.along).applyQuaternion(swing), folds = _c.copy(metacarpal.palmar).applyQuaternion(swing);
     const toward = _d.copy(inward).addScaledVector(length, -inward.dot(length));
     const angle = Math.atan2(_cross.crossVectors(folds, toward).dot(length), folds.dot(toward));
-    return Math.min(1, Math.max(0, spread) / PRONATE.lifted) * Math.max(-PRONATE.most, Math.min(PRONATE.most, angle));
+    return Math.min(1, Math.max(0, spread, oppose) / PRONATE.lifted) * Math.max(-PRONATE.most, Math.min(PRONATE.most, angle));
   }
 
   /** each joint's frame in the hand's, as `shape` turns them: its offset at rest, its rest turn swapped for the shape's */

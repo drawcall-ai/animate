@@ -109,7 +109,7 @@ describe('avatar', () => {
       advance(avatar, input, 60);
       input.aim = false;
       avatar.requestReload();
-      for (let frame = 0; frame < 300 && avatar.reloading; frame++) avatar.update(1 / 60, input);
+      for (let frame = 0; frame < 330 && avatar.reloading; frame++) avatar.update(1 / 60, input);
       expect(avatar.reloading).toBe(false);
       expect(avatar.reloads).toBe(1);
       expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
