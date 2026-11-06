@@ -49,7 +49,9 @@ const HELD = 0.15, DRAWN = 0.25;
 /** How a hand goes to a button from where the soldier stands (m/s): briskly, pressed some 0.7 s after it leaves the rifle. */
 const POKE = { step: false };
 /** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, and back. Briskly, a short move still
- * took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. */
+ * took 0.2 s, most of it in a tenth, and read as a snap; at this it takes 0.3 s. Back onto the rifle from the seated magazine at the
+ * brisk 1.8 a longer reach goes, the hand overshot the grip by 3 cm and turned back onto it, held 0.73 s after the magazine was home;
+ * at this, 0.5 s. */
 const SHORT = { speed: 0.7 };
 /** How fast a fresh body's hands take the rifle it stands up with (m/s): at once, to take over from a pose held elsewhere. */
 const SNATCH = { speed: 8 };
@@ -59,8 +61,9 @@ const SQUEEZE = 0.005;
 /** The chest pouches' magazines, side by side on the left of the chest with a hand's room between them: the left hand takes the inner one
  * round its body as it will seat it in the well, and a fresh one is in that pouch again once the hand is back on the rifle; the outer one
  * is a spare's spare. The inner one 5 cm off the middle: nearer, the left hand reached it with its wrist bent back across the sternum, its
- * fingers off the body. */
-const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
+ * fingers off the body. As high as puts the grip low on the magazine where the hand took it before (2.5 cm lower, the hand turned 0.3 s
+ * longer onto it). */
+const POUCHES = [new Vector3(0.07, -0.145, 0.2), new Vector3(0.21, -0.145, 0.2)];
 /** How each pouch turns its magazine about the vertical (rad): standing out from the chest, its front forward and turned out from the
  * body's middle, its faces to the sides, so the hand takes its front edge with its palm toward the chest and the fingers round its inner
  * face (turned in 30°, the hand turned 0.3 s more on it before it closed). Turned flat against the chest (−π/2, its front toward the
@@ -76,15 +79,15 @@ const FLING = new Vector3(0.14, -0.3, 0.3);
 const TOSS = 0.12;
 /** What the wrist's flick adds to a dumped magazine as the hand lets go (the body's frame, +X its left): out to the left and down (m/s),
  * and end over end, its top tipping outward (rad/s about the body's forward): it falls clear of the leg, as at the hand's speed alone it
- * dropped onto the thigh and landed by the boots. */
-const FLICK = { velocity: new Vector3(2.2, -0.3, 0.3), spin: -9 };
+ * dropped onto the thigh and landed by the boots. With the hand's own flick it lands 0.7 m out to the left a third of a second on and
+ * slides to rest about a metre out, level with the feet. */
+const FLICK = { velocity: new Vector3(1.6, -0.3, 0.3), spin: -9 };
+/** How long a hand that has quickly taken a magazine waits for its pinch to close before it takes it away (s). */
+const PINCHING = 0.1;
 const UP = new Vector3(0, 1, 0);
 /** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly:
  * the release reads it a moment on, and one let go 4 mm short, still moving, was 5–11 mm off then, left askew in the well. */
 const ONTO = 0.002;
-/** How near its place under a magazine's floor plate the palm comes before it drives the magazine home (m), and in how long (s). */
-const ON_PLATE = 0.01, PUSH = 0.15;
-const ORIGIN = new Vector3();
 
 /** The soldier's story: a shouldered rifle, aim, recoil and magazine swaps, with its root supplied by the capsule controller. */
 export class Avatar {
@@ -210,7 +213,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   // it palm up, 5.5 cm nearer it than with the butt out at the joint, where the short arm fell 2 cm short)
   const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.09, 0.19, 0.1).multiplyScalar(proportions.scale));
   const mount = empty(pocket, 'aim', new Vector3());
-  const { rifle, pistol, blade, well, below, partWay, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
+  const { rifle, pistol, blade, well, below, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
   rifle.position.copy(stock.position).negate();
   const motion = new WeaponMotion();
   const pouches = POUCHES.map((at, i) => {
@@ -338,10 +341,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     hold(seconds);
   };
 
-  // The left hand takes the spent magazine round its body in the well, pulls it down out of it and flicks it away down and out, letting
-  // go on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and lets it fly on as the hand
-  // last moved and turned it), then takes the full one from its pouch, brings it up under the well and pushes it part way in, shifts under
-  // its floor plate and pushes it home with the palm.
+  // The left hand pinches the spent magazine's body under the well, pulls it down out of it and flicks it away down and out, letting go
+  // on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and lets it fly on as the hand
+  // last moved and turned it), then pinches the full one in its pouch, brings it up under the well and pushes it home.
   const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, SHORT))) return false;
     onReload?.('out');
@@ -359,38 +361,13 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     litter.drop(spent, flung, spun);
     thrown.object = null;
     if (!(yield* grab(person, full, { left: 'base' }, QUICK))) return false;
-    // (brought up under the well and in from there along its line, let go part way in, where the well holds it)
-    if (!(yield* carry(person, full, [below, partWay], { ...QUICK, until: near(full, partWay) }))) return false;
-    release(person, full, partWay);
-    // (the palm coming under its floor plate drives it home as it meets the plate, and the hand goes on back to the rifle as it is home, not
-    // waiting for a grasp to settle on a magazine the well holds: pushed by a carry of its own once that grasp had closed, it stood part
-    // way in for 0.7 s, the hand settling and the carry setting off)
-    const floor = full.getObjectByName('floor');
-    if (!floor) throw new Error(`"${full.name}" has no grip "floor"`);
-    const home = partWay.worldToLocal(well.getWorldPosition(new Vector3()));
-    let pushed = 0;
-    const onPlate = () => person.gripOn('left', floor).wrist.distanceTo(person.bones.leftHand.getWorldPosition(new Vector3())) < ON_PLATE;
-    // (pushed along the well's line wherever the magazine hangs: the grab closing first, it is in the hand, which goes up with it)
-    const push = () => action({
-      update: (_, clock) => {
-        pushed = Math.min(1, pushed + clock.delta / PUSH);
-        const at = partWay.localToWorld(new Vector3().lerpVectors(ORIGIN, home, smooth(pushed)));
-        full.position.copy(full.parent ? full.parent.worldToLocal(at) : at);
-      },
-      until: () => pushed === 1,
-    });
-    yield* parallel('race', grab(person, full, { left: 'floor' }, QUICK), function* () {
-      yield* wait(onPlate);
-      yield* push();
-    });
-    // (the grab closing on the plate before the push is through — a hand quick under it — the push finished in its hand)
-    if (pushed < 1) yield* push();
-    if (person.holds(full)) release(person, full, well);
-    else {
-      well.attach(full);
-      full.position.set(0, 0, 0);
-      full.quaternion.identity();
-    }
+    // (the fingers closing round its far face before it comes out: taken quickly, the hand is on it with its thumb on the near face and
+    // the fingers still 2–4 cm open, closing over the next tenth)
+    yield* wait(PINCHING);
+    // (brought up under the well and pushed home along its line in the pinch it came out of the pouch in, and let go there: shifted under
+    // its floor plate to drive it home with the palm, the fingers came off its faces and opened)
+    if (!(yield* carry(person, full, [below, well], { ...QUICK, until: near(full, well) }))) return false;
+    release(person, full, well);
     onReload?.('in');
     return true;
   };
@@ -405,7 +382,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     if (!(yield* swap(spent, full))) throw new Error('The soldier could not swap magazines');
     reloads++;
     // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it)
-    if (!(yield* grab(person, rifle, { left: 'foregrip' }, QUICK)))
+    if (!(yield* grab(person, rifle, { left: 'foregrip' }, SHORT)))
       throw new Error('The support hand could not return to the rifle after reloading');
     issue(pouch);
     swapping = false;

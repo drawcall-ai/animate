@@ -1,14 +1,14 @@
 import { Mesh, MeshBasicMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
-import { RELAXED } from '@drawcall/animate';
 import { stockBack, WeaponModel } from './model';
 
 // Physical grip, sight, and magazine frames on the procedural carbine.
 export const RIFLE = {
   mass: 3, foregrip: new Vector3(-0.02, 0.06, 0.185), sight: new Vector3(0, 0.12, 0),
-  well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.145, 0.077), partWay: new Vector3(0, -0.092, 0.085), muzzle: new Vector3(0, 0.06, 0.68),
-  /** a magazine's grips: `base` on the line through its front edge's rounding, half its thickness in from the edge; `floor` a hand's half
-   * thickness under the middle of its floor plate */
-  magazine: { base: new Vector3(0, -0.045, 0.013), floor: new Vector3(0, -0.092, -0.015), mass: 0.5 },
+  well: new Vector3(0, -0.055, 0.09), belowWell: new Vector3(0, -0.145, 0.077), muzzle: new Vector3(0, 0.06, 0.68),
+  /** a magazine's grip, `base`: on the line through its front edge's rounding, half its thickness in from the edge, 7 cm under its
+   * well's mouth (of the 8 cm it shows below it), so the thumb and index pinch its body below the well; 4.5 cm under, the thumb's tip was
+   * at the well's edge and the index's on the receiver's face over it */
+  magazine: { base: new Vector3(0, -0.07, 0.009), mass: 0.5 },
   /** where the trigger finger's pad rests: on the blade's face, a little right of its middle (the finger coming in from the right), and
    * off it laid straight along the receiver's side above the guard */
   trigger: new Vector3(-0.004, -0.018, 0.043), frame: new Vector3(-0.028, 0.008, 0.058),
@@ -48,11 +48,9 @@ export function rifleOn(mount: Object3D, arms: number) {
   const muzzle = empty(rifle, 'muzzle', RIFLE.muzzle);
   const well = empty(rifle, 'well', RIFLE.well);
   well.rotation.x = -0.15;
-  // (a magazine comes in to the well from below it, its lips just under the well's mouth and turned as the well is, up the well's line
-  // part way in, where the well holds it as the hand shifts under its floor plate to push it home)
+  // (a magazine comes in to the well from below it, its lips just under the well's mouth and turned as the well is, then up the well's line)
   const below = empty(rifle, 'below the well', RIFLE.belowWell);
-  const partWay = empty(rifle, 'part way in', RIFLE.partWay);
-  below.rotation.x = partWay.rotation.x = well.rotation.x;
+  below.rotation.x = well.rotation.x;
   const magazineIn = (place: Object3D, name: string) => {
     const magazine = empty(place, name, new Vector3());
     model.magazine(magazine);
@@ -60,12 +58,9 @@ export function rifleOn(mount: Object3D, arms: number) {
     // (taken by its front edge, thumb up toward its lips, the palm on the edge facing back: the fingers round onto its right face, the
     // thumb opposing them on its left)
     Object.assign(empty(magazine, 'base', RIFLE.magazine.base).userData, { handle: [0, 1, 0.18], facing: [0, 0, -1], radius: 0.014 });
-    // (the palm under the floor plate, tilted in from its left as the hand comes from there, its fingers relaxed round the front to push
-    // it home, not closed into a fist on its side)
-    Object.assign(empty(magazine, 'floor', RIFLE.magazine.floor).userData, { facing: [-1, 1, 0], fingers: RELAXED });
     return magazine;
   };
-  return { rifle, pistol, blade, well, below, partWay, flash, muzzle, stock, magazineIn, dispose: () => { model.dispose(); flash.material.dispose(); } };
+  return { rifle, pistol, blade, well, below, flash, muzzle, stock, magazineIn, dispose: () => { model.dispose(); flash.material.dispose(); } };
 }
 
 export function empty(parent: Object3D, name: string, position: Vector3): Object3D {
