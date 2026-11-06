@@ -64,11 +64,15 @@ const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
  * magazine sliding up through a still hand; turned −1 rad, it still did. */
 const POUCHED = Math.PI / 6;
 /** Where the left hand flings a spent magazine, out from the left hip and forward (the chest's frame as `POUCHES`), letting go of it on the
- * way once it is `TOSS` (m) clear of the well: it falls from there at the hand's speed. The fling is a point, the magazine kept turned as
- * it left the well, so the hand keeps its grasp on it: turned on the way, the hand turned it in its fingers onto its palm, held like a
- * tray. */
+ * way once it is `TOSS` (m) clear of the well: it flies off at the hand's speed and the wrist's flick (`FLICK`). The fling is a point, the
+ * magazine kept turned as it left the well, so the hand keeps its grasp on it: turned on the way, the hand turned it in its fingers onto
+ * its palm, held like a tray. */
 const FLING = new Vector3(0.36, -0.36, 0.3);
 const TOSS = 0.2;
+/** What the wrist's flick adds to a flung magazine as the hand lets go (the body's frame, +X its left): out to the left and down (m/s), and
+ * end over end, its top tipping outward (rad/s about the body's forward). At the hand's speed alone it dropped from the hand onto the
+ * thigh and landed by the boots. */
+const FLICK = { velocity: new Vector3(1.8, -0.4, 0.3), spin: -9 };
 const UP = new Vector3(0, 1, 0);
 /** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly:
  * the release reads it a moment on, and one let go 4 mm short, still moving, was 5–11 mm off then, left askew in the well. */
@@ -344,7 +348,10 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     if (!clear()) return false;
     release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
-    litter.drop(spent, thrown.velocity, thrown.spin);
+    const facing = new Quaternion().setFromAxisAngle(UP, person.facing);
+    const flung = thrown.velocity.clone().add(FLICK.velocity.clone().applyQuaternion(facing));
+    const spun = thrown.spin.clone().add(new Vector3(0, 0, FLICK.spin).applyQuaternion(facing));
+    litter.drop(spent, flung, spun);
     thrown.object = null;
     if (!(yield* grab(person, full, { left: 'base' }, QUICK))) return false;
     // (brought up under the well and in from there along its line, let go part way in, where the well holds it)
@@ -393,7 +400,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     if (!(yield* swap(spent, full))) throw new Error('The soldier could not swap magazines');
     reloads++;
     // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it)
-    if (!(yield* grab(person, rifle, { left: 'foregrip' }, SHORT)))
+    if (!(yield* grab(person, rifle, { left: 'foregrip' }, QUICK)))
       throw new Error('The support hand could not return to the rifle after reloading');
     issue(pouch);
     swapping = false;
