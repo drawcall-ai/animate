@@ -6,8 +6,9 @@ import { within } from '../kernel/scene';
 import { oriented, resolve } from '../things/resolve';
 import type { Self } from './runtime';
 
-/** how far out of a chain's full length a hand's grip on what its body turns is kept: just within its reach (`REACH`) */
-const HOLDABLE = 0.975;
+/** how far out of a chain's full length a hand's grip on what its body turns is kept: just within its reach (`REACH`; at 0.975, a rifle's
+ * support hand at its seat, 95% of the arm out at rest, had the rifle pulled off the camera by 8 rad/s turns) */
+const HOLDABLE = 0.985;
 /** from how far off its grip a hand on its way to it turns what it takes toward itself, fully by how near (m, default body) */
 const COMING = { far: 0.15, near: 0.03 };
 

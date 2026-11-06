@@ -31,6 +31,9 @@ const SPRINTING = new Vector3(0.22, 0.2, 0);
 /** How the rifle turns through a reload (rad, as `SPRINTING`): up before the chest, canted 9° toward the support hand — canted 23°, an
  * upright magazine from the pouch had 24° to turn under the well, which the arm took 0.15 s over; at 9°, 13°. */
 const RELOADING = new Vector3(-0.05, 0, 0.15);
+/** How far the rifle turns in toward the support side (rad, about its up) as that hand goes back onto its front after a reload, as a
+ * soldier brings it in close for the hand. */
+const RETURNING = 0.3;
 /** The rifle held low at a lift's panel, its muzzle down and a little to the right, clear of the panel (which stands to its left), both
  * hands on it and through a press in the right hand alone: the same turn, so it stays still as the left hand leaves it and takes it again.
  * Turned 0.6 rad right, the support hand's grip was past its arm's reach and the rifle swung toward it as it let go and came back; held
@@ -223,14 +226,14 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   let input: AvatarState = { position, velocity: new Vector3(), yaw, pitch: 0, aim: false, sprint: false, crouch: false, support: position.clone(), firstPerson: false };
   const look: Look = { eye: new Vector3(), yaw, pitch: 0, intent: { yaw, pitch: 0 } };
   let logged = 0;
-  let time = 0, acquired = false, swapping = false, reloadWanted = false, reloads = 0;
+  let time = 0, acquired = false, swapping = false, riding = false, reloadWanted = false, reloads = 0;
   /** a button the left hand is asked to press, and what to tell as it does: until the hand is back on the rifle */
   let pressWanted: { button: Object3D; pressed: () => void } | null = null;
   /** the left hand off the rifle for a press, the rifle lowered meanwhile (it comes up again as the hand draws back off the button) */
   let lowering = false;
   /** standing at a lift's panel: the rifle held low unless it aims */
   let low = false;
-  let sprinted = 0, reloaded = 0, lowered = 0, lastShot = -Infinity, stillSince = 0;
+  let sprinted = 0, reloaded = 0, returned = 0, lowered = 0, lastShot = -Infinity, stillSince = 0;
   const sprinting = () => input.sprint && !input.aim;
   const atEase = () => time - stillSince > REST_AFTER;
   const reloading = () => swapping || reloadWanted;
@@ -249,8 +252,10 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   /** How the rifle rode the chest through a reload (its turn on the shoulder pocket), to ease back to the aim from. */
   let rode: Quaternion | undefined;
   const hold = (seconds: number) => {
-    // Through the swap the rifle rides the chest as it sways and twists under a running body, its well where the hand last found it.
-    if (swapping && reloaded === 1) {
+    // Through the swap the rifle rides the chest as it sways and twists under a running body, its well where the hand last found it. As
+    // the support hand goes back onto its front it is held as it rode, turned in toward that side (`RETURNING`): the body keeps it within
+    // that arm's reach as it turns, and it eases out to the aim from there as the reload ends.
+    if (riding && reloaded === 1) {
       person.orient(mount, null);
       rode = mount.quaternion.clone();
       return;
@@ -272,6 +277,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     aimed.slerp(facing, smooth(reloaded));
     const turned = aimed.multiply(new Quaternion().setFromEuler(new Euler(turn.x, turn.y, turn.z)));
     if (rode) turned.slerp(pocket.getWorldQuaternion(new Quaternion()).multiply(rode), smooth(reloaded));
+    if (returned > 0) turned.multiply(new Quaternion().setFromAxisAngle(UP, RETURNING * smooth(returned)));
     if (reloaded === 0) rode = undefined;
     person.orient(mount, turned);
   };
@@ -299,6 +305,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     aiming = ease(aiming, Number(input.aim), seconds);
     sprinted = ease(sprinted, Number(sprinting()), seconds);
     reloaded = ease(reloaded, Number(swapping), seconds);
+    returned = ease(returned, Number(swapping && !riding), seconds);
     lowered = ease(lowered, Number(lowering || (low && acquired && !input.aim)), seconds, LOWERING);
     motion.update(seconds, chest.getWorldPosition(new Vector3()).sub(root.position));
     root.position.copy(input.position);
@@ -390,7 +397,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     if (!spent || !full) throw new Error('Reload requires an inserted magazine and a spare in the first pouch');
     // (the rifle turning up to the chest with the hand still on its front, the hand leaving it half way)
     yield* wait(() => reloaded > 0.5);
+    riding = true;
     if (!(yield* swap(spent, full))) throw new Error('The soldier could not swap magazines');
+    riding = false;
     reloads++;
     // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it)
     if (!(yield* grab(person, rifle, { left: 'foregrip' }, QUICK)))

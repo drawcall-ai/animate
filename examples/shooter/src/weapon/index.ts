@@ -3,7 +3,7 @@ import { stockBack, WeaponModel } from './model';
 
 // Physical grip, sight, and magazine frames on the procedural carbine.
 export const RIFLE = {
-  mass: 3, foregrip: new Vector3(-0.0215, 0.058, 0.1875), sight: new Vector3(0, 0.12, 0),
+  mass: 3, foregrip: new Vector3(-0.0217, 0.0574, 0.2019), sight: new Vector3(0, 0.12, 0),
   well: new Vector3(0, -0.055, 0.09), muzzle: new Vector3(0, 0.06, 0.68),
   /** how far below its seat a magazine comes in to the well along the well's line (m): its lips 2 cm under the receiver */
   wellLine: 0.095,
@@ -27,17 +27,16 @@ export function rifleOn(mount: Object3D, arms: number) {
   // the receiver's front in the left, ahead of the magazine well with room for four fingers before it (2 cm nearer, the little finger lay
   // in the well), round the receiver's 6 × 7 cm body: palm up and turned in under it, the fingers round its right side, the thumb
   // opposing them up its left, the grasp slanting forward-right across it as the forearm comes from the left shoulder; the empty right of
-  // the middle and below it, so the fingertips come up the right side rather than stopping on its lower edge; turned as the last library
-  // seated the hand from its fingers' contacts, a centimetre short of where it moved it and its palm 4 mm further off — tuned between two
-  // failures: further back, the wrist stood in the receiver; further forward, the arm, at the end of its reach, lost the rifle swung round
-  // at 7 rad/s)
+  // the middle and below it, so the fingertips come up the right side rather than stopping on its lower edge: where the last library seated
+  // the hand from its fingers' contacts, its wrist steadiest through fast turns (a centimetre nearer, the hand rolled further off it on an
+  // 8 rad/s reversal); the reload brings the rifle in for it as it returns (`RETURNING`, avatar.ts))
   // (the pistol grip held high and forward on it, the knuckles at its front edge so the fingers wrap its front to the left side and the
   // index reaches the trigger, the web round the back strap so the thumb closes round it onto the left; its axis leant 10° past the
   // grip's own, so the fingers wrap a little downward; the palm on its flat right side, turned a little down and back onto it)
   const pistol = empty(rifle, 'pistol', new Vector3(-0.0002, -0.0663, -0.0063));
   Object.assign(pistol.userData, { handle: [0.005, 0.907, 0.422], facing: [0.964, -0.117, 0.241], radius: 0.0174 });
   const foregrip = empty(rifle, 'foregrip', RIFLE.foregrip);
-  Object.assign(foregrip.userData, { handle: [0.314, 0.002, 0.949], facing: [-0.338, 0.935, 0.11], radius: 0.037 });
+  Object.assign(foregrip.userData, { handle: [0.314, 0.002, 0.949], facing: [-0.338, 0.935, 0.11], radius: 0.0331 });
   // (the trigger drawn back as a part, the trigger finger's pad on its face going with it)
   const blade = empty(rifle, 'blade', new Vector3());
   model.trigger(blade);
