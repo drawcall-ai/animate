@@ -14,7 +14,8 @@ import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, ty
 
 /** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds — where its
  * thumb's pad opposes it, where the hand sits on it (`seat`: its node's place and turn, none where the thing hangs from the hand) and the
- * thing's triangles about it, all in the thing's frame — the grip a hand verb is bringing it to, and the shape its contacts were last met
+ * thing's triangles about it, all in the thing's frame — the grip a hand verb is bringing it to, the shape it set off for it in and, for a
+ * fingertip's, how far it points (0 … 1, as the verb has its way gone: none, as it gets there), and the shape its contacts were last met
  * in, when. */
 interface Hand {
   joints: Joints;
@@ -22,6 +23,8 @@ interface Hand {
   asked: Shape | null;
   closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; seat: Placement | null; near: Triangles; asked: string; off: Vector3; since: number } | null;
   coming: Object3D | null;
+  from: Shape | null;
+  pointing: number | null;
   met: { shape: Shape; digits: readonly Digit[] } | null;
   /** its last solve (`solved`): what it was given and the shape it found, kept while nothing it was given has moved */
   solve: { at: Placed; contacts: readonly Contact[]; near: Triangles | null; shape: Shape } | null;
@@ -44,10 +47,6 @@ const APERTURE: Shape = {
   little: { curl: 0.3, hook: 0.08, spread: 0.1 },
 };
 const NEARING = 0.14, NEAR = 0.05, ARRIVED = 0.015;
-/** a fingertip's hand points as it comes to straight before its button (12 cm out: `SQUARE` in the reach), from this far off where it
- * presses until this near (m), and pushes in pointing: from 9 cm to 4 cm, its index was still curling out as it met the button and
- * straightened onto it in a sub-step */
-const POINTING = { nearing: 0.22, near: 0.12 } as const;
 /** how far a hand's wrist may move on what it holds before it closes on it afresh (m), for how long after it first closed on it (s): it
  * closes as it settles there, not once it has, and then keeps its grasp */
 const MOVED = 0.002, SETTLING = 0.3;
@@ -75,7 +74,7 @@ export class FingerState {
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, coming: null, met: null, solve: null, skins, clock: 0 };
+      return { joints, shape, asked: null, closed: null, coming: null, from: null, pointing: null, met: null, solve: null, skins, clock: 0 };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -160,9 +159,16 @@ export class FingerState {
     return { thing, wrist: inFrame({ ...placedOf(this.hands[side].joints.hand), position: this.placedOn(side, empty).wrist }, worldOf(thing)).position };
   }
 
-  /** a hand verb is bringing `side` to the grip `empty`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`) */
+  /** a hand verb is bringing `side` to the grip `empty`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`),
+   * from the shape it sets off in */
   toward(side: 'left' | 'right', empty: Object3D | null): void {
-    this.hands[side].coming = empty;
+    const hand = this.hands[side];
+    [hand.coming, hand.from, hand.pointing] = [empty, empty ? structuredClone(hand.shape) : null, null];
+  }
+
+  /** how far `side`'s hand, on its way to a fingertip's grip, points (0 … 1): as far as the verb bringing it has gone its final run in */
+  pointing(side: 'left' | 'right', share: number): void {
+    this.hands[side].pointing = share;
   }
 
   /** `side`'s fingers eased `seconds` on toward `to`, for a hand its app poses: an empty's grip as they come to it and take it (`onto`),
@@ -313,10 +319,13 @@ export class FingerState {
     const grip = Thing.of(thing).grip(empty.name);
     const { wrist } = this.gripOn(side, empty), distance = hand.joints.hand.getWorldPosition(new Vector3()).distanceTo(wrist);
     const open = grip.pad ? shapeOf(values(empty), POINT) : APERTURE;
-    // (a fingertip's hand comes as a loose fist, its digit curled with the others until it points late: from the relaxed hand's open
-    // fingers it travelled as a flat claw)
-    const from = !grip.pad ? RELAXED : grip.pad === 'thumb' ? open : { ...open, [grip.pad]: open.middle };
-    if (distance > ARRIVED) return blendShape(from, open, 1 - (grip.pad ? smoothstep(POINTING.near, POINTING.nearing, distance) : smoothstep(NEAR, NEARING, distance)));
+    // (a fingertip's hand comes as a loose fist, its digit curled with the others, and points over its way's final run alone, as its verb
+    // says how far it has gone: pointing as its wrist came near, it pointed beside the panel, held up for 0.3 s; any other hand keeps the
+    // shape it set off in and opens as it nears: from the relaxed hand's open fingers, a fingertip's hand travelled as a flat claw, and a
+    // hand back from a button to its rifle passed its index out over the panel again)
+    if (grip.pad && hand.pointing !== null && hand.pointing < 1) return blendShape(grip.pad === 'thumb' ? open : { ...open, [grip.pad]: open.middle }, open, hand.pointing);
+    if (!grip.pad && distance > ARRIVED) return blendShape(hand.from ?? RELAXED, open, 1 - smoothstep(NEAR, NEARING, distance));
+    if (distance > ARRIVED) return open;
     // (closed afresh only while it settles there: a hand kept on a moving empty closed again every sub-step, a search of its meshes each time)
     const closed = hand.closed?.on === empty ? hand.closed : null;
     if (!closed || (time - closed.since < SETTLING && closed.off.distanceTo(offOn(hand, thing)) > MOVED)) this.close(side, grip, thing, empty, time);

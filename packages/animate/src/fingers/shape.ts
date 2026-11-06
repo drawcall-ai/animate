@@ -94,9 +94,9 @@ export function digitOf(name: unknown, what: string): Digit {
   return digit;
 }
 
-/** `shape` eased `seconds` on toward `goal` in place: about two thirds of the way in `EASE` (a fist closes from open in about a quarter second) */
+/** `shape` eased `seconds` on toward `goal` in place: about two thirds of the way in `SHAPING` (s) (a fist closes from open in about a quarter second) */
 export function easeShape(shape: Shape, goal: Shape, seconds: number): void {
-  const k = 1 - Math.exp(-seconds / EASE);
+  const k = 1 - Math.exp(-seconds / SHAPING);
   shape.thumb.curl += (goal.thumb.curl - shape.thumb.curl) * k;
   shape.thumb.oppose += (goal.thumb.oppose - shape.thumb.oppose) * k;
   shape.thumb.spread += (goal.thumb.spread - shape.thumb.spread) * k;
@@ -119,4 +119,4 @@ export function blendShape(from: Shape, to: Shape, t: number): Shape {
 }
 
 /** how quickly fingers take up a new shape (s): their time constant */
-const EASE = 0.07;
+export const SHAPING = 0.07;

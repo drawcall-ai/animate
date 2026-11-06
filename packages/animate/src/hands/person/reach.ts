@@ -2,7 +2,9 @@ import { Box3, Matrix4, Ray, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
-import { lerp, pointSegmentDistance } from '../../kernel/math';
+import { lerp, minimumJerk, pointSegmentDistance } from '../../kernel/math';
+import { course } from '../../kernel/course';
+import { SHAPING } from '../../fingers/shape';
 import { seeded, seedOf } from '../../kernel/random';
 import { lateReach, Progress, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
@@ -22,12 +24,12 @@ import { ARM } from './trunk';
 const STAGING = 0.4;
 /** how far a fingertip draws back off its button as it lets go (m, default body) */
 export const PRESSING = 0.07;
-/** how far straight out before its button a fingertip's wrist comes first, level with where it presses, to push in from along the face's
- * normal, its index pointing by then (m, default body): from 7 cm before it along the line from the eyes, 40° off the normal, the hand
- * came down onto the button and its finger, still curling out, up from below it across the button below */
-const SQUARE = 0.12;
-/** how near a hand comes to the point before its button before it goes on in (m, default body) */
-const THROUGH = 0.02;
+/** how far a fingertip's way to its button runs in along the face's normal at its end (m, default body): its index points over that run
+ * alone. Through a point 12 cm before it where the way turned in, the hand stood there 0.3 s, its finger raised; from 7 cm before it
+ * along the line from the eyes, 40° off the normal, it came down onto the button and its finger, still curling out, up from below it */
+const RUN = 0.1;
+/** how much of that run its index takes to point (share): pointing on to its end, it was still curling out as the pad met the button */
+const POINTED = 0.35;
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
 const TOUCHING = 0.012;
 
@@ -93,21 +95,22 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
     const through = (corner: Vector3, next: Vector3) => world(corner).sub(hips).dot(toward) < 0 && pointSegmentDistance(hips, world(corner), world(next)) < trunk;
     const detour = onBody(person, take.thing) ? [] : aroundHeld(person, take.side, world(from), world(take.goal.position))
       .map((point) => point.sub(frame.position).applyQuaternion(frame.quaternion.clone().invert()));
-    // (a fingertip comes to its button straight from before it, pointing, and pushes straight in — not round the thing's bounds first: its
-    // face is the side it comes from, and round a panel's post the hand came over its top and down past the other button)
+    // (a fingertip comes to its button in one sweep ending in a run straight in along the face's normal (`pressing`) — not round the
+    // thing's bounds first: its face is the side it comes from, and round a panel's post the hand came over its top and down past the other
+    // button)
     const grip = take.thing.grip(take.grip);
-    const before = grip.pad && grip.facing ? [take.goal.position.clone().addScaledVector(grip.facing, -SQUARE * person.scale)] : [];
-    const route = [...detour, ...(onBody(person, take.thing) || before.length ? []
-      : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`]))))), ...before]
+    const run = grip.pad && grip.facing ? take.goal.position.clone().addScaledVector(grip.facing, -RUN * person.scale) : null;
+    const route = run ? [] : [...detour, ...(onBody(person, take.thing) ? []
+      : outside(take.thing.bounds, take.goal, detour.at(-1) ?? from, handOf(person, take.side, local(person.pose.position(INDEX[`${take.side}UpperArm`])))))]
       .filter((point, k, all) => k === all.length - 1 || !through(point, all[k + 1]));
-    const points = route.length ? route : [take.goal.position];
+    const points = run ? [run, take.goal.position] : route.length ? route : [take.goal.position];
     let was = from;
     const lengths = points.map((point) => { const length = was.distanceTo(point); was = point; return length; });
     const distance = lengths.reduce((sum, length) => sum + length, 0);
     const at = gripAt(person, take, person.frame);
     const { delay, slower } = takes.length > 1 && take.side !== LEADING ? following(seed, { [take.side]: take.grip }) : { delay: 0, slower: 0 };
     const seconds = reachTime(distance / person.scale, seedOf(take.grip, Math.round(at.x * 1000), Math.round(at.z * 1000))) / (1 - slower) / person.tempo;
-    return { ...take, points, lengths, distance, route, delay, seconds, before: before.length > 0 };
+    return { ...take, from, points, lengths, distance, route, delay, seconds, run };
   });
   const finish = plan.find(({ side }) => side === LEADING)?.seconds ?? plan[0].seconds;
   const lasts = (hand: (typeof plan)[number]) => motion ? hand.distance / motion.speed + motion.speed / motion.accel : Math.max(hand.delay, finish - hand.seconds) + hand.seconds;
@@ -116,7 +119,12 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
   for (const take of takes) grasp(person, take.side, null);
   let staged = 0;
   yield* parallel<Frame>('all', ...plan.map((hand) => function* () {
-    const before = hand.before;
+    if (hand.run) {
+      const after = Math.max(hand.delay, finish - hand.seconds);
+      ends = Math.max(ends, person.frame.time + after + hand.seconds);
+      yield* during(request, `hand.${hand.side}`, 'asked', pressing(person, hand, hand.run, after), until(there));
+      return;
+    }
     for (const [i, position] of hand.points.entries()) {
       const began = person.frame.time;
       const seconds = hand.distance > 0 ? hand.seconds * hand.lengths[i] / hand.distance : hand.seconds;
@@ -124,11 +132,8 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
       ends = Math.max(ends, began + seconds + after);
       // (on the way round, already turning as it will hold it)
       const goal = hand.route.length ? { ...hand.goal, position } : hand.goal;
-      // (a fingertip's point before its button passed through as the tip comes within `THROUGH` of it, or on time, not stopped at: it
-      // hovered there 0.3 s before it pushed in)
-      const through = (f: Frame) => before && unmet(f, person.hands[hand.side], { position }, person.track(hand.thing.object)).distance < THROUGH * person.scale;
       const ready = hand.route.length
-        ? until((f) => i < hand.points.length - 1 || before ? f.time >= began + seconds + after || through(f)
+        ? until((f) => i < hand.points.length - 1 ? f.time >= began + seconds + after
           : reached(f, person.hands[hand.side], { position }, person.track(hand.thing.object)) || f.time >= began + seconds + after + STAGING)
         : until(there);
       const on = person.track(hand.thing.object);
@@ -146,6 +151,26 @@ export function* reachFor(person: Reacher, request: Request, takes: readonly Tak
       reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), until(there))));
   }
   close();
+}
+
+/**
+ * a fingertip's way to its button (the thing's frame), as one motion: a smooth curve from where its hand sets off through `run`, straight
+ * before the button, and on in along the face's normal to its grip, timed by one minimum-jerk profile over its length (`course`: it
+ * passes `run` without stopping and comes to rest only on the button), set off `after` s on, the hand following it as a held hand
+ * follows; its index points over the run alone (`FingerState.pointing`), as the share of the run the way has gone
+ */
+function pressing(person: Reacher, hand: Taking & { from: Vector3; seconds: number; lengths: number[] }, run: Vector3, after: number) {
+  const [sweep, push] = hand.lengths, total = sweep + push;
+  const path = course({ current: { position: hand.from, quaternion: IDENTITY } }, [[hand.seconds * sweep / total, { position: run }], [hand.seconds * push / total, { position: hand.goal.position }]], { delay: after });
+  let began = NaN;
+  const goal = (f: Frame): Goal => {
+    if (Number.isNaN(began)) began = f.time;
+    // (its pointing asked as far ahead as the fingers take to ease into a shape: asked as the way went, it pointed the last centimetre late)
+    const gone = minimumJerk(Math.min(1, Math.max(0, (f.time + SHAPING - began - after) / hand.seconds)));
+    person.fingers?.pointing(hand.side, Math.min(1, Math.max(0, (gone * total - sweep) / (POINTED * push))));
+    return { ...hand.goal, position: path.to(f).position };
+  };
+  return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
 }
 
 /** whether `take`'s grip is a digit's pad, and that pad, where the hand last stood, is within `TOUCHING` of its empty */
@@ -344,7 +369,7 @@ const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
 const _middle = new Vector3(), _turn = new Quaternion(), _toward = new Vector3(), _fingers = new Vector3();
-const _pad = new Vector3(), _empty = new Vector3();
+const _pad = new Vector3(), _empty = new Vector3(), IDENTITY = new Quaternion();
 
 /** whether a foot is in the air under `person`: a support step under way */
 const stepping = (person: Reacher) => person.stepper?.legs.some((leg) => leg.swing) ?? false;
