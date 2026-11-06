@@ -67,7 +67,7 @@ describe('avatar', () => {
     avatar.requestReload();
     expect(avatar.reloading).toBe(true);
     // (each magazine held as taken, the spent one out of the well until it is thrown, the full one from its pouch up part way into the
-    // well: regripped, they slid through a still hand; then let go there and taken again under its floor plate to be pushed home)
+    // well: regripped, they slid through a still hand; then let go there and driven home as the palm comes under its floor plate)
     const held: number[] = [], thrown: number[] = [], places: string[] = [];
     let frames = 0;
     for (; frames < 600 && avatar.reloading; frames++) {
@@ -78,7 +78,7 @@ describe('avatar', () => {
       if (magazine.parent === hand) thrown.push(magazine.getWorldPosition(new Vector3()).distanceTo(hand.getWorldPosition(new Vector3())));
     }
     expect(frames / 60).toBeLessThan(4.2);
-    expect(places).toEqual(['pouch 1', hand.name, 'part way in', hand.name, 'well']);
+    expect(places).toEqual(['pouch 1', hand.name, 'part way in', 'well']);
     for (const distances of [held, thrown]) expect(Math.max(...distances) - Math.min(...distances)).toBeLessThan(0.01);
     expect(avatar.reloads).toBe(1);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
