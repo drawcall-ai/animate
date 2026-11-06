@@ -5,9 +5,12 @@ import type { Thing } from '../things/thing';
 import { bodyOf, boneOf } from '../things/hold';
 import type { Handed } from './handed';
 
-/** A carry's way: its points (placements in the world, a sub-step at a time), the last one's orientation the thing takes. */
+/** How a carried thing is kept clear of the body: of its trunk and head (true); of its head alone (`head`: on its way to a place on the
+ * body); of its trunk, and of its head by each of its parts' bounds (`parts`: on its way along the outside to a place on the body); or
+ * not at all. */
 export type Clearance = boolean | 'head' | 'parts';
 
+/** A carry's way: its points (placements in the world, a sub-step at a time), the last one's orientation the thing takes. */
 export type Way = ReturnType<typeof wayOf>;
 
 /** Exit the source approach from its nearest point, then traverse targets and the destination approach. */
