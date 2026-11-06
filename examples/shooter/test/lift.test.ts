@@ -142,7 +142,7 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   let off = Infinity;
   avatar.press(button.part, () => {
     lift.press(button);
-    off = avatar.body.gripOn('left', face).wrist.distanceTo(avatar.body.bones.leftHand.getWorldPosition(new Vector3()));
+    off = avatar.body.gripOn('left', avatar.body.placement('left', face)).wrist.distanceTo(avatar.body.bones.leftHand.getWorldPosition(new Vector3()));
   });
   advance(3);
   expect(off).toBeLessThan(0.01);

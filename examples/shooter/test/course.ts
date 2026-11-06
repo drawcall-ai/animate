@@ -130,7 +130,7 @@ export function soles(body: Body, side: 'left' | 'right') {
 
 /** How far hand `side`'s wrist is from where its grip `empty` puts it (m): off the rifle, by that much. */
 export function offGrip(body: Body, side: 'left' | 'right', empty: Object3D) {
-  return body.bones[`${side}Hand`].getWorldPosition(new Vector3()).distanceTo(body.gripOn(side, empty).wrist);
+  return body.bones[`${side}Hand`].getWorldPosition(new Vector3()).distanceTo(body.gripOn(side, body.placement(side, empty)).wrist);
 }
 
 /**

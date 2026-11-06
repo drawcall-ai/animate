@@ -26,8 +26,9 @@ const DRIVER = -0.4;
 /** The cab floor's height (m). */
 const FLOOR = 0.62;
 /** The grab handle on the windscreen's right pillar: where on the pillar's line its brackets are (x; y, z at each), how far its upright
- * stands back off the pillar, centre to centre, and how thick its rods are (m). */
-const GRAB = { x: -0.86, brackets: [[1.38, 0.633], [1.57, 0.611]], standoff: 0.07, radius: 0.012 } as const;
+ * stands back off the pillar, centre to centre, how thick its rods are, and how far off the upright's line a palm holding it is, its skin
+ * pressed into the rod (m). */
+const GRAB = { x: -0.86, brackets: [[1.38, 0.633], [1.57, 0.611]], standoff: 0.07, radius: 0.012, palm: 0.0076 } as const;
 /** The dash's top: its height, its outboard end, the rounding of its edges (m), and where along it (z) the left hand leans getting in. */
 const DASH = { top: 1.115, end: -0.86, round: 0.012, lean: 0.52 };
 export type Wheel = { mount: Vector3; pivot: Group; spin: Group; front: boolean };
@@ -145,7 +146,7 @@ export function createRover(maps?: PaintMaps) {
     /** the grab handle's upright behind the windscreen's right pillar, held from the doorway as the forearm reaches it, in and forward:
      * thumb up along it, the palm on its outboard back facing in and a little forward, the fingers round its front between it and the
      * pillar */
-    handle: holdable('grab handle', [GRAB.x, (lower[0] + upper[0]) / 2, (lower[1] + upper[1]) / 2 - GRAB.standoff], [0, upper[0] - lower[0], upper[1] - lower[1]], [0.9, 0, 0.45], GRAB.radius),
+    handle: holdable('grab handle', [GRAB.x, (lower[0] + upper[0]) / 2, (lower[1] + upper[1]) / 2 - GRAB.standoff], [0, upper[0] - lower[0], upper[1] - lower[1]], [0.898, 0.053, 0.436], GRAB.palm),
     /** the dash top's outboard edge, a rounded corner leant on getting in as the forearm comes onto it from inboard: the palm flat on the
      * top, facing down, the fingers out over the end and closing down its face */
     dash: holdable('dash top', [DASH.end + DASH.round, DASH.top - DASH.round, DASH.lean], [0, 0, -1], [0, -1, 0], DASH.round),

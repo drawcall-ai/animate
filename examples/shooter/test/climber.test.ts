@@ -47,7 +47,7 @@ describe('Climber', () => {
       const foot = ladder.body.worldToLocal(bones[`${side}Foot`].getWorldPosition(new Vector3()));
       const wrist = bones[`${side}Hand`].getWorldPosition(new Vector3());
       const holds = ladder.body.children.filter((child) => child.name.startsWith(`${side} hand on rung`));
-      const nearest = Math.min(...holds.map((hold) => soldier.avatar.body.gripOn(side, hold).wrist.distanceTo(wrist)));
+      const nearest = Math.min(...holds.map((hold) => soldier.avatar.body.gripOn(side, soldier.avatar.body.placement(side, hold)).wrist.distanceTo(wrist)));
       return nearest < 0.01 && offRung(foot, ladder.spacing) < 0.12;
     });
     expect(holding()).toBe(true);

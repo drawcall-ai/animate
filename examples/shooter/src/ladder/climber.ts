@@ -1,4 +1,4 @@
-import { MathUtils, type Object3D } from 'three';
+import { MathUtils, Object3D } from 'three';
 import type { PhysicsWorld } from '@drawcall/physics';
 import { yawOf } from '../angles';
 import type { Standing } from '../choreography';
@@ -55,7 +55,10 @@ export class Climber extends Mount {
 
   protected pose(puppet: Puppet, standing: Standing, dt: number) {
     const { body, rifle } = this.soldier.avatar, onto = hang(puppet, standing, this.ladder, rifle, this.end(), this.progress, this.height, this.view);
-    for (const side of ['left', 'right'] as const) body.shapeHand(side, onto[side], dt);
+    for (const side of ['left', 'right'] as const) {
+      const to = onto[side];
+      body.shapeHand(side, to instanceof Object3D ? puppet.placement(side, to) : to, dt);
+    }
   }
 
   protected cues() { return cues(this.ladder, this.end()); }
