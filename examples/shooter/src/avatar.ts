@@ -27,12 +27,12 @@ export interface AvatarState {
 
 const SPRINTING = new Vector3(0.22, 0.2, 0);
 const RELOADING = new Vector3(-0.05, 0, 0.4);
-/** The rifle held low, its muzzle down and well off to the right, clear of a lift's panel: in the right hand alone while the left presses
- * its button; standing at one, both hands on it, `LOW` of the way (half way, a soldier just left of the panel's middle held its fore-end
- * 4 cm off the panel's side, its muzzle out past the panel's back; at this, 9 cm). It comes up as the left hand draws back from a button to take it again (taken held low, it took seconds to
- * settle on its front). */
-const LOWERED = new Vector3(0.75, -0.6, 0);
-const LOW = 0.8;
+/** The rifle held low at a lift's panel, its muzzle down and a little to the right, clear of the panel (which stands to its left), both
+ * hands on it and through a press in the right hand alone: the same turn, so it stays still as the left hand leaves it and takes it again.
+ * Turned 0.6 rad right, the support hand's grip was past its arm's reach and the rifle swung toward it as it let go and came back; held
+ * there by the support arm, it lay against a panel straight before it. Turned to it over `LOWERING` (s). */
+const LOWERED = new Vector3(0.6, -0.1, 0);
+const LOWERING = 0.5;
 const EASE = 0.25;
 /** Seconds between shots. */
 const SHOT_INTERVAL = 0.1;
@@ -330,9 +330,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     aiming = ease(aiming, Number(input.aim), seconds);
     sprinted = ease(sprinted, Number(sprinting()), seconds);
     reloaded = ease(reloaded, Number(swapping), seconds);
-    // (back from a press to the rifle held as low as at the panel, not up to the shoulder: raised all the way as the hand drew back, the
-    // rifle went up as the hand came for it, which dipped to the waist and climbed after it for a second)
-    lowered = ease(lowered, lowering ? 1 : low && acquired && !input.aim ? LOW : 0, seconds);
+    lowered = ease(lowered, Number(lowering || (low && acquired && !input.aim)), seconds, LOWERING);
     motion.update(seconds, chest.getWorldPosition(new Vector3()).sub(root.position));
     root.position.copy(input.position);
     root.velocity.copy(input.velocity);
@@ -507,5 +505,5 @@ function spinOf(from: Quaternion, to: Quaternion, seconds: number, out: Vector3)
 
 /** Whether `thing` has come within `ONTO` of `place`: near enough to be let go onto it there, the rest of a carry's slow end left out. */
 const near = (thing: Object3D, place: Object3D) => () => thing.getWorldPosition(new Vector3()).distanceTo(place.getWorldPosition(new Vector3())) < ONTO;
-const ease = (weight: number, goal: number, seconds: number) => weight + MathUtils.clamp(goal - weight, -seconds / EASE, seconds / EASE);
+const ease = (weight: number, goal: number, seconds: number, over = EASE) => weight + MathUtils.clamp(goal - weight, -seconds / over, seconds / over);
 const smooth = (weight: number) => weight * weight * (3 - 2 * weight);

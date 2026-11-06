@@ -14,7 +14,7 @@ import type { Root } from '../legs/legged';
 import type { Stepper } from '../legs/step/stepper';
 import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
 import { Carrier } from '../kernel/carrier';
-import { yawOf } from '../kernel/math';
+import { smoothstep, yawOf } from '../kernel/math';
 import { Binding } from './model';
 import { PlatformFrame } from './platform';
 import { anchors, movers, oriented, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
@@ -437,11 +437,14 @@ export class Self implements Holder {
         const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
         const far = out.length(), near = toward.length();
         if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
-        // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder)
+        // (the turn about the pivot that brings the grip to the reach's edge, in the plane through it and the shoulder; for a hand still on
+        // its way, only as it nears — turned at once as it set off back from a lift's button, its hand still turned as it pressed and so
+        // its grip seemingly farther, the rifle swung 10° toward it in a sub-step)
         const wanted = Math.acos(Math.min(1, Math.max(-1, (far * far + near * near - reach * reach) / (2 * far * near))));
         const axis = _axis.crossVectors(out, toward);
         if (axis.lengthSq() < 1e-12) continue;
-        turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), out.angleTo(toward) - wanted));
+        const off = hold ? 0 : _off.addVectors(out, pivot).distanceTo(f.current.position(bones[bones.length - 1])) / this.scale;
+        turned.premultiply(_turn.setFromAxisAngle(axis.normalize(), (out.angleTo(toward) - wanted) * (1 - smoothstep(COMING.near, COMING.far, off))));
       }
     }
   }
@@ -592,9 +595,11 @@ const MOST = 0.1;
 const STALE = 1;
 /** how far out of a chain's full length a hand's grip on what its body turns is kept (a chain's tip goes 0.98 of it at most) */
 const HOLDABLE = 0.975;
+/** from how far off its grip a hand on its way to it turns what it takes toward itself (`holdable`), fully by how near (m, default body) */
+const COMING = { far: 0.15, near: 0.03 };
 const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _turn = new Quaternion();
 const _pivot: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
-const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3();
+const _out = new Vector3(), _toward = new Vector3(), _axis = new Vector3(), _off = new Vector3();
 
 /** whether `object` hangs from `node` (is it, or under it) */
 function under(object: Object3D, node: Object3D): boolean {

@@ -44,9 +44,10 @@ const APERTURE: Shape = {
   little: { curl: 0.3, hook: 0.08, spread: 0.1 },
 };
 const NEARING = 0.14, NEAR = 0.05, ARRIVED = 0.015;
-/** a fingertip's hand points only as it pushes in, from this far off where it presses until this near (m): from 12 cm off, the index was
- * out a quarter second before it met its button */
-const POINTING = { nearing: 0.09, near: 0.04 } as const;
+/** a fingertip's hand points as it comes to straight before its button (12 cm out: `SQUARE` in the reach), from this far off where it
+ * presses until this near (m), and pushes in pointing: from 9 cm to 4 cm, its index was still curling out as it met the button and
+ * straightened onto it in a sub-step */
+const POINTING = { nearing: 0.22, near: 0.12 } as const;
 /** how far a hand's wrist may move on what it holds before it closes on it afresh (m), for how long after it first closed on it (s): it
  * closes as it settles there, not once it has, and then keeps its grasp */
 const MOVED = 0.002, SETTLING = 0.3;
