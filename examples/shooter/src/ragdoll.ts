@@ -78,10 +78,12 @@ const STRAIGHT = 0.2;
 /** The dropped rifle's box across and through, about its receiver and magazine (m); its length runs from the stock to the muzzle. */
 const RIFLE_BOX = { width: 0.06, height: 0.2 };
 /**
- * Below these the remains are at rest (m/s, rad/s); once they stay so for `time` seconds, or `most` seconds after they last woke, they sleep,
- * so a corpse lies still instead of trembling on its joint limits.
+ * Below these the remains are at rest (m/s, rad/s); once they stay so for `time` seconds they sleep. Still trembling `most` seconds after
+ * they last woke — limbs piled on one another — they are slowed by `damping` (1/s, linear and angular) until they come to rest, so a
+ * corpse lies still. (Put to sleep while still moving, Rapier woke the pile a moment later without its contacts with the ground, and it
+ * fell through the floor, flying apart.)
  */
-const REST = { speed: 0.12, spin: 0.4, time: 0.5, most: 5 };
+const REST = { speed: 0.12, spin: 0.4, time: 0.5, most: 5, damping: 20 };
 const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0);
 
 /** Where the bones a ragdoll moves stood over the last two animated steps, for the velocity each part falls with. */
@@ -194,6 +196,8 @@ export class Ragdoll {
     }
     this.still = moving ? 0 : this.still + dt;
     this.awake += dt;
+    const damping = this.awake < REST.most ? 0 : REST.damping;
+    for (const body of this.bodies) body.setLinearDamping(damping).setAngularDamping(Math.max(SPIN_DRAG, damping));
     for (const { bone, body, offset } of this.parts) {
       const parent = bone.parent;
       if (!parent) throw new Error(`Bone ${bone.name} has no parent`);
@@ -202,7 +206,7 @@ export class Ragdoll {
       this.matrix.copy(parent.matrixWorld).invert().multiply(body.matrixWorld).multiply(offset)
         .decompose(bone.position, bone.quaternion, this.scale);
     }
-    if (this.still < REST.time && this.awake < REST.most) return;
+    if (this.still < REST.time) return;
     for (const body of this.bodies) body.sleep();
     this.asleep = true;
   }
