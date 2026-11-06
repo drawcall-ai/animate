@@ -158,8 +158,9 @@ describe('fingers', () => {
         hand.position.copy(parent.worldToLocal(wrist.clone().add(new Vector3(along, 0, 0))));
         hand.updateMatrixWorld(true);
       };
+      // (settling: on it within a fifth of a second)
       place(off);
-      for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
+      for (let k = 0; k < 4; k++) body.shapeHand('right', grip, 0.05);
       place(0);
       for (let k = 0; k < 20; k++) body.shapeHand('right', grip, 0.05);
       return bent(body, 'rightMiddleIntermediate');

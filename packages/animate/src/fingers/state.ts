@@ -21,6 +21,9 @@ interface Hand {
   closed: { on: Hold | Object3D; shape: Shape; thumb: Opposed | null; off: Vector3; since: number } | null;
   coming: Object3D | null;
   met: { shape: Shape; digits: readonly Digit[] } | null;
+  /** the body's own skinned meshes, which the hand never closes on, and how long its app has shaped it (s, `set`) */
+  skins: readonly SkinnedMesh[];
+  clock: number;
 }
 
 /**
@@ -57,9 +60,9 @@ export class FingerState {
     const hand = (side: 'left' | 'right'): Hand => {
       const node = nodes[`${side}Hand`];
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
-      const joints = new Joints(node, bones[side], nodes, side, skinsOf(model, node)), shape = shapeOf({});
+      const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, coming: null, met: null };
+      return { joints, shape, asked: null, closed: null, coming: null, met: null, skins, clock: 0 };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -131,7 +134,8 @@ export class FingerState {
       hand.closed = null;
       return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds);
     }
-    const goal = this.onto(side, to), thing = to.parent;
+    hand.clock += seconds;
+    const goal = this.onto(side, to, hand.clock), thing = to.parent;
     const grip = thing && Thing.of(thing).grip(to.name);
     if (!grip || !thing || hand.closed?.on !== to) return this.ease(hand, goal, seconds);
     hand.joints.hand.updateWorldMatrix(true, false);
@@ -220,7 +224,7 @@ export class FingerState {
     }
     thing.updateWorldMatrix(true, false);
     const turn = thing.getWorldQuaternion(new Quaternion()), handle = grip.handle && { at: grip.at.position.clone().applyMatrix4(thing.matrixWorld), axis: grip.handle.axis.clone().applyQuaternion(turn) };
-    const closed = closedOn(hand.joints, thing, handle);
+    const closed = closedOn(hand.joints, thing, handle, hand.skins);
     turn.invert();
     const thumb = closed.thumb && { at: thing.worldToLocal(closed.thumb.at).multiply(new Vector3().setFromMatrixScale(thing.matrixWorld)), facing: closed.thumb.facing.applyQuaternion(turn) };
     hand.closed = { on, shape: closed.shape, thumb, off: offOn(hand, thing), since };
@@ -240,7 +244,9 @@ export class FingerState {
     // fingers it travelled as a flat claw)
     const from = !grip.pad ? RELAXED : grip.pad === 'thumb' ? open : { ...open, [grip.pad]: open.middle };
     if (distance > ARRIVED) return blendShape(from, open, 1 - (grip.pad ? smoothstep(POINTING.near, POINTING.nearing, distance) : smoothstep(NEAR, NEARING, distance)));
-    if (hand.closed?.on !== empty || hand.closed.off.distanceTo(offOn(hand, thing)) > MOVED) this.close(hand, grip, thing, empty, time);
+    // (closed afresh only while it settles there: a hand kept on a moving empty closed again every sub-step, a search of its meshes each time)
+    const closed = hand.closed?.on === empty ? hand.closed : null;
+    if (!closed || (time - closed.since < SETTLING && closed.off.distanceTo(offOn(hand, thing)) > MOVED)) this.close(hand, grip, thing, empty, time);
     return shapeOf(values(empty), hand.closed?.shape ?? open);
   }
 

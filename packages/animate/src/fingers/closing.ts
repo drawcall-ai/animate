@@ -1,4 +1,4 @@
-import { Ray, Vector3, type Object3D } from 'three';
+import { Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { meshesOf } from '../things/thing';
 import { Triangles } from '../kernel/triangles';
 import type { Joints } from './joints';
@@ -56,10 +56,11 @@ export interface Opposed {
  * On a handle (`handle`, its middle and line, the world's) the thumb then opposes them (`opposite`): a grasp clamps what it holds between
  * the thumb's pad on one face and the fingers' pads, or the palm, on the other — its pad there is a contact of its own, met once the arm
  * has brought the hand, from the thumb `WRAP` has; a palm elsewhere presses on what it is on, the thumb as `WRAP` has it. Meshes of
- * things attached to it (their own `userData.mass`) and hidden meshes are not touched; skinned meshes are touched as they stand at rest.
+ * things attached to it (their own `userData.mass`), hidden meshes and the body's own skin (`skins`: an empty in a scene held every mesh
+ * under it, the body's too) are not touched; other skinned meshes are touched as they stand at rest.
  */
-export function closedOn(joints: Joints, object: Object3D, handle: Line | null): { shape: Shape; thumb: Opposed | null } {
-  const shape = structuredClone(WRAP), near = nearHand(joints, object);
+export function closedOn(joints: Joints, object: Object3D, handle: Line | null, skins: readonly SkinnedMesh[]): { shape: Shape; thumb: Opposed | null } {
+  const shape = structuredClone(WRAP), near = nearHand(joints, object, skins);
   for (const digit of DIGITS) {
     const finger = shape[digit];
     const curl = (value: number) => (finger.curl = value), hook = (value: number) => (finger.hook = value);
@@ -182,11 +183,11 @@ function scaleOf(node: Object3D): number {
 }
 
 /** `object`'s triangles about `joints`' hand as they stand now, in the world, as far as it reaches (`Joints.span`) — meshes of things
- * attached to it (their own `userData.mass`) and hidden meshes left out, skinned meshes as they stand at rest */
-function nearHand(joints: Joints, object: Object3D): Triangles {
+ * attached to it (their own `userData.mass`), hidden meshes and `skins` left out, other skinned meshes as they stand at rest */
+function nearHand(joints: Joints, object: Object3D, skins: readonly SkinnedMesh[]): Triangles {
   joints.hand.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, true);
-  const meshes = meshesOf(object).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
+  const meshes = meshesOf(object).filter((mesh) => !skins.some((skin) => skin === mesh)).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
   return new Triangles(meshes, joints.hand.getWorldPosition(new Vector3()), joints.span * scaleOf(joints.hand) + SLACK);
 }
 
