@@ -1,4 +1,4 @@
-import { RELAXED, type Fingers } from '@drawcall/animate';
+import type { Fingers } from '@drawcall/animate';
 import { MathUtils, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { heading } from '../angles';
 import { between, Frame, phase, planted, shoulders, type Beat, type Cue, type Effect, type Gaze, type Hold, type Standing } from '../choreography';
@@ -129,7 +129,7 @@ export function slung(puppet: Puppet) {
 /**
  * Poses `puppet`'s body on `ladder`, its hips `height` (m) up it, `t` of the way from `standing` at `end` (0) to on it (1), its head turned
  * to `gaze`. Returns what each hand's fingers take: the rifle's grip it held standing (the right hand's until it lets go of the rifle on
- * its sling), then the rung or stile it holds or moves to — `LEAVING` while it moves off or onto a stile.
+ * its sling), then the rung or stile it holds or moves to — relaxed while it moves off or onto a stile.
  */
 export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: Object3D, end: End, t: number, height: number, gaze: Gaze): Record<Side, Object3D | Fingers | null> {
   // Standing where it got on, stepped in toward the ladder.
@@ -157,7 +157,7 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
       arm(puppet, frame, ladder, limb, height, t, s);
       const { from, to, leaving } = rungs(ladder, limb, height), standing = limb.side === 'left' ? 'foregrip' : t <= BEATS.take ? 'pistol' : null;
       const off = leaving && [from, to].some((rung) => stile(ladder, rung));
-      onto[limb.side] = s <= 0 ? standing && (rifle.getObjectByName(standing) ?? null) : off ? LEAVING : rungHold(ladder, limb.side, leaving ? to : from);
+      onto[limb.side] = s <= 0 ? standing && (rifle.getObjectByName(standing) ?? null) : off ? null : rungHold(ladder, limb.side, leaving ? to : from);
       continue;
     }
     const stood = planted(standing, limb.side, phase(t, BEATS.inset));
@@ -175,13 +175,6 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
  * skin's crease at its base).
  */
 const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
-/**
- * A hand's fingers from letting go of a stile, or of the rung below it, until it holds the next: relaxed, the thumb kept straight along
- * the stile's outer face as it lay holding it — opening toward the next hold as a hand does, its thumb swung out in front of the palm,
- * went 2.5 cm into the bar, as the hand's digits are kept out of what they touch only once it holds it (laid flat as an open hand's,
- * 0.5 cm)
- */
-const LEAVING: Fingers = { ...RELAXED, thumb: { curl: 0, oppose: 0.25, spread: -0.05 } };
 /**
  * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
  * `turn` (the tangent) a little back toward the climber, nearly parallel to the face; its thumb's pad `thumb.off` (m) off the outer face,

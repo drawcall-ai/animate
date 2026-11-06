@@ -6,11 +6,11 @@ import { Thing, vectorOf, type Grip } from '../things/thing';
 import type { Hold } from '../things/resolve';
 import { heldTurn } from '../things/hold';
 import type { DigitBones } from './bones';
-import { closedOn, type Opposed } from './closing';
+import { closedOn, PRESSED, type Opposed } from './closing';
 import { meet, type Contact, type Placed } from './contact';
 import type { HandPoint } from './point';
 import { Joints, PINCH } from './joints';
-import { blendShape, digitOf, easeShape, POINT, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
+import { blendShape, digitOf, DIGITS, easeShape, POINT, RELAXED, shapeOf, type Digit, type Fingers, type Shape } from './shape';
 
 /** One hand's fingers: its bones, its shape as last written, what a pose asks of it, the shape it closed to on what it holds — where its
  * thumb's pad opposes it, where the hand sits on it (`seat`: its node's place and turn, none where the thing hangs from the hand) and the
@@ -25,6 +25,9 @@ interface Hand {
   met: { shape: Shape; digits: readonly Digit[] } | null;
   /** its last solve (`solved`): what it was given and the shape it found, kept while nothing it was given has moved */
   solve: { at: Placed; contacts: readonly Contact[]; near: Triangles | null; shape: Shape } | null;
+  /** what its eased shape is kept out of (`ease`): the thing it holds or comes to, else the last it held, till it is clear of it — and that
+   * thing's triangles about the hand, in its frame, gathered about `at` */
+  guard: { thing: Object3D; left: boolean; near: Triangles; at: Vector3 } | null;
   /** the body's own skinned meshes, which the hand never closes on, and how long its app has shaped it (s, `set`) */
   skins: readonly SkinnedMesh[];
   clock: number;
@@ -51,6 +54,10 @@ const POINTING = { nearing: 0.22, near: 0.12 } as const;
 /** how far a hand's wrist may move on what it holds before it closes on it afresh (m), for how long after it first closed on it (s): it
  * closes as it settles there, not once it has, and then keeps its grasp */
 const MOVED = 0.002, SETTLING = 0.3;
+/** how near the last thing a hand held its digits are kept out of it, and how near it its shape is held as it was (m); how far a hand
+ * moves before the triangles about it are gathered afresh (m); how deep a digit may sink into what it is kept out of (m: its skin's give
+ * is in its balls' size already); and how many times a digit's ease is halved down to where it is kept out */
+const GUARD = 0.04, LEAVING = 0.01, REGATHER = 0.03, SUNK = 0.001, HALVINGS = 5;
 /** how little a hand and its contacts move on what it holds for its last solve to stand (m, rad) */
 const STILL = 1e-4;
 /** how far a contact moves on what the hand holds before its digit is started afresh (m): a trigger drawn back 5 mm is followed on, not
@@ -75,7 +82,7 @@ export class FingerState {
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
       joints.write(shape);
-      return { joints, shape, asked: null, closed: null, coming: null, met: null, solve: null, skins, clock: 0 };
+      return { joints, shape, asked: null, closed: null, coming: null, met: null, solve: null, guard: null, skins, clock: 0 };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -147,8 +154,11 @@ export class FingerState {
       }
       const { met, asked } = hand;
       [hand.met, hand.asked] = [null, null];
-      if (met) this.ease(hand, met.shape, seconds, met.digits);
-      else this.ease(hand, hold ? shapeOf(values(hold.thing.grip(hold.grip).node), hand.closed?.shape ?? hand.shape) : hand.coming ? this.onto(side, hand.coming, time) : asked ?? RELAXED, seconds);
+      // (what it holds keeps its digits out itself, closed round it and its contacts met clear of it)
+      const on = hold ? false : hand.coming?.parent ?? null;
+      if (hold) this.held(hand, hold.thing.object);
+      if (met) this.ease(hand, met.shape, seconds, on, met.digits);
+      else this.ease(hand, hold ? shapeOf(values(hold.thing.grip(hold.grip).node), hand.closed?.shape ?? hand.shape) : hand.coming ? this.onto(side, hand.coming, time) : asked ?? RELAXED, seconds, on);
     }
   }
 
@@ -171,14 +181,14 @@ export class FingerState {
     const hand = this.hands[side];
     if (!(to instanceof Object3D)) {
       hand.closed = null;
-      return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds);
+      return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds, null);
     }
     hand.clock += seconds;
     const goal = this.onto(side, to, hand.clock), thing = to.parent;
     const grip = thing && Thing.of(thing).grip(to.name);
-    if (!grip || !thing || hand.closed?.on !== to) return this.ease(hand, goal, seconds);
+    if (!grip || !thing || hand.closed?.on !== to) return this.ease(hand, goal, seconds, thing);
     const contacts = this.contacts(grip, thing, hand.closed.thumb);
-    this.ease(hand, this.solved(hand, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts, goal, hand.closed.near), seconds, contacts.map((c) => c.part));
+    this.ease(hand, this.solved(hand, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts, goal, hand.closed.near), seconds, thing, contacts.map((c) => c.part));
   }
 
   /**
@@ -323,15 +333,88 @@ export class FingerState {
     return shapeOf(values(empty), hand.closed?.shape ?? open);
   }
 
-  /** `hand` eased `seconds` on toward `goal`, the digits `at` put there at once (their contacts met), and written */
-  private ease(hand: Hand, goal: Shape, seconds: number, at: readonly Digit[] = []): void {
-    easeShape(hand.shape, goal, seconds);
+  /**
+   * `hand` eased `seconds` on toward `goal`, the digits `at` put there at once (their contacts met), and written — every other digit kept
+   * out of `on` (what it comes to; false: it holds something, which keeps its digits out itself) or, once it has let go, of the last thing
+   * it held or came to while it is within `GUARD` of it: no further
+   * into it than it was, and opened as far as takes it out where the thing came into it — held as it was while it is still within
+   * `LEAVING` of it, so a hand letting go opens only as its fingers must to clear the bar, not into a claw (eased open to relaxed, a thumb
+   * swung through a ladder's stile 2.5 cm; and closing on a stile, the fingers curled across its face before the palm was on it)
+   */
+  private ease(hand: Hand, goal: Shape, seconds: number, on: Object3D | null | false, at: readonly Digit[] = []): void {
+    const guard = on === false ? null : this.guarded(hand, on), was = structuredClone(hand.shape);
+    const place = guard && inFrame(placedOf(hand.joints.hand), worldOf(guard.thing));
+    const leaving = guard && place && guard.left ? this.clear(hand, guard.near, place, hand.shape) : Infinity;
+    if (guard?.left && leaving > GUARD) hand.guard = null;
+    easeShape(hand.shape, leaving < LEAVING ? was : goal, seconds);
     for (const digit of at) {
       if (digit === 'thumb') hand.shape.thumb = { ...goal.thumb };
       else hand.shape[digit] = { ...goal[digit] };
     }
+    if (guard && place && hand.guard) {
+      for (const digit of ['thumb', ...DIGITS] as const) if (!at.includes(digit)) keptOut(hand.joints, guard.near, place, hand.shape, was, digit);
+    }
     hand.joints.write(hand.shape);
   }
+
+  /** `hand` holding `thing`: the last it held once it lets go (`guarded`; while it holds it, its closing and its contacts keep it out) */
+  private held(hand: Hand, thing: Object3D): void {
+    if (hand.guard?.thing === thing && hand.guard.left) return;
+    hand.guard = { thing, left: true, near: new Triangles([], new Vector3(), 0), at: new Vector3(Infinity, Infinity, Infinity) };
+  }
+
+  /** what `hand`'s shape is kept out of as it is `on` that (see `ease`): its triangles about the hand, gathered afresh once it has moved
+   * `REGATHER` from where they were gathered */
+  private guarded(hand: Hand, on: Object3D | null): Hand['guard'] {
+    const thing = on ?? (hand.guard?.left || hand.guard?.thing !== on ? hand.guard?.thing : null) ?? null;
+    if (!thing) return (hand.guard = null);
+    const frame = worldOf(thing), at = inFrame(placedOf(hand.joints.hand), frame).position, left = on === null;
+    if (hand.guard?.thing === thing && hand.guard.at.distanceTo(at) < REGATHER) return Object.assign(hand.guard, { left });
+    return (hand.guard = { thing, left, near: trianglesAbout(hand, thing, frame), at });
+  }
+
+  /** how far `hand`'s palm and digits as `shape` has them are clear of `near` (m; `place`: the hand in its frame) */
+  private clear(hand: Hand, near: Triangles, place: Placed, shape: Shape): number {
+    const matrix = new Matrix4().compose(place.position, place.quaternion, new Vector3().setScalar(place.scale));
+    let least = Infinity;
+    for (const part of [null, 'thumb', ...DIGITS] as const) for (const ball of hand.joints.flesh(part, shape)) {
+      least = Math.min(least, -near.depth(ball.at.applyMatrix4(matrix), ball.radius * place.scale * PRESSED, GUARD));
+    }
+    return least;
+  }
+}
+
+/**
+ * `digit` of `shape` (in place, eased on from `was`) kept out of `near` (`place`: the hand in its frame): as far on from `was` as it goes
+ * no deeper into it than it was, halved down to that — or, where it was in it already (the thing come into it, the hand leaving it),
+ * opened toward straight as far as takes it out
+ */
+function keptOut(joints: Joints, near: Triangles, place: Placed, shape: Shape, was: Shape, digit: Digit): void {
+  const matrix = new Matrix4().compose(place.position, place.quaternion, new Vector3().setScalar(place.scale));
+  const depth = () => Math.max(0, ...joints.flesh(digit, shape).map((ball) => near.depth(ball.at.applyMatrix4(matrix), ball.radius * place.scale * PRESSED, GUARD)));
+  const to = { ...shape[digit] } as Record<string, number>, from = { ...was[digit] } as Record<string, number>;
+  const set = (a: Record<string, number>, b: Record<string, number>, t: number) => {
+    const mixed = Object.fromEntries(Object.keys(a).map((key) => [key, a[key] + (b[key] - a[key]) * t]));
+    if (digit === 'thumb') shape.thumb = mixed as Shape['thumb'];
+    else shape[digit] = mixed as Shape['index'];
+  };
+  if (depth() <= SUNK) return;
+  set(from, from, 0);
+  const before = depth();
+  // (from where it was toward where it eased to, or, sunk already, from where it eased to toward straight)
+  const [a, b] = before <= SUNK ? [from, to] : [to, Object.fromEntries(Object.keys(to).map((key) => [key, 0]))];
+  let free = before <= SUNK ? 0 : 1, hit = before <= SUNK ? 1 : 0;
+  if (before > SUNK) {
+    set(a, b, 1);
+    if (depth() > SUNK) return;
+  }
+  for (let k = 0; k < HALVINGS; k++) {
+    const mid = (free + hit) / 2;
+    set(a, b, mid);
+    if (depth() <= SUNK) free = mid;
+    else hit = mid;
+  }
+  set(a, b, free);
 }
 
 /** what `grip` asks of the fingers in `userData.fingers`, by digit: values, or an empty's name (none: nothing) */
