@@ -114,16 +114,17 @@ function pointing(turn: Quaternion, point: HandPoint, push: Vector3, up: Vector3
 }
 /** how far a pointing hand is rolled thumb up off palm down (rad) */
 const POINTING = 0.5;
-/** how far above level a hand pressing a fingertip into an upright face points (rad), its wrist straight on a forearm that rises a
- * little to it: the fingertip, curved down from the hand, meets the face some 30° off square from above. Its pad pushed straight in
- * along the face's normal, the hand pointed 50° up off a level forearm, the wrist bent back, the finger up along the face. */
-const LEAN = 0.15;
+/** how far below level a hand pressing a fingertip into an upright face points (rad), its wrist a little above the button: the fingers
+ * curled under it kept off the face (pointing 0.15 rad above level, the knuckles came within 2.8 cm of the face, the fist against it),
+ * the finger coming onto the button a little from above. Its pad pushed straight in along the face's normal, the hand pointed 50° up off
+ * a level forearm, the wrist bent back, the finger up along the face. */
+const LEAN = 0.2;
 
-/** the line a hand pressing a fingertip in along `push` points along: level into the face, `LEAN` up; into a level face, along `push` */
+/** the line a hand pressing a fingertip in along `push` points along: level into the face, `LEAN` down; into a level face, along `push` */
 function pressingLine(push: Vector3, up: Vector3): Vector3 {
   const level = push.clone().addScaledVector(up, -push.dot(up));
   if (level.lengthSq() < 0.25) return push.clone();
-  return level.normalize().multiplyScalar(Math.cos(LEAN)).addScaledVector(up, Math.sin(LEAN));
+  return level.normalize().multiplyScalar(Math.cos(LEAN)).addScaledVector(up, -Math.sin(LEAN));
 }
 
 /** how far off the face's normal a fingertip comes in and draws back along the line from its eyes at most (rad) */

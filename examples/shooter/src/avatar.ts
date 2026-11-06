@@ -48,12 +48,13 @@ const BRISK = { speed: 2.6 };
 /** How long a pressing pad stays on its button before it lifts off (s): as long as the cap takes to go in under it (0.15 s read as a
  * dwell). */
 const HELD = 0.08;
-/** How a fingertip lifts off its button before the hand goes back to the rifle (m, at `LIFTING`): `out` off the face and `aside` across it
- * toward the rifle's front, out past the panel's edge, at once, curling into a fist as it goes and coming back so (drawn back by the
+/** How a fingertip lifts off its button before the hand goes back to the rifle (m, at `LIFTING`): `out` off the face, `aside` across it
+ * level toward the rifle's front, out past the panel's edge, and `up`, so that it comes down onto the rifle in a high, flat arc in view
+ * (toward the rifle's front, lower, it went out of the eyes' view for 0.3 s), at once, curling into a fist as it goes and coming back so (drawn back by the
  * release's eased 0.25 s, the index curled while the hand still stood, dragging its tip down the face; its index held out off the button,
  * then relaxed, it read as a second press as it passed back over the panel; lifted straight out, it came back across the panel's corner
  * within 3 cm of it); it goes on to the rifle `through` (m) short of there, not stopping. */
-const LIFT = { out: 0.12, aside: 0.14, through: 0.03 };
+const LIFT = { out: 0.12, aside: 0.14, up: 0.03, through: 0.03 };
 /** How fast a fingertip lifts off its button (m/s): quickly, off it 0.05 s after it lets go. */
 const LIFTING = { speed: 2 };
 /** How a hand goes to a button from where the soldier stands (m/s): briskly, pressed some 0.7 s after it leaves the rifle. */
@@ -454,8 +455,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     const wrist = face.worldToLocal(person.bones.leftHand.getWorldPosition(new Vector3())), out = new Vector3(...face.userData.facing).negate();
     const foregrip = rifle.getObjectByName('foregrip');
     if (!foregrip) throw new Error('The rifle has no foregrip to go back to');
-    const aside = face.worldToLocal(foregrip.getWorldPosition(new Vector3())).projectOnPlane(out).normalize();
-    const off = () => face.localToWorld(wrist.clone().addScaledVector(out, LIFT.out).addScaledVector(aside, LIFT.aside));
+    const up = new Vector3(0, 1, 0).applyQuaternion(face.getWorldQuaternion(new Quaternion()).invert());
+    const aside = face.worldToLocal(foregrip.getWorldPosition(new Vector3())).projectOnPlane(out).projectOnPlane(up).normalize();
+    const off = () => face.localToWorld(wrist.clone().addScaledVector(out, LIFT.out).addScaledVector(aside, LIFT.aside).addScaledVector(up, LIFT.up));
     let lifted = false;
     yield* parallel('all', pose(person, { fingers: { left: FIST } }, { until: () => lifted }), function* () {
       const there = () => person.bones.leftHand.getWorldPosition(new Vector3()).distanceTo(off()) < LIFT.through;
