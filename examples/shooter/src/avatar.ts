@@ -66,16 +66,17 @@ const POUCHES = [new Vector3(0.07, -0.17, 0.2), new Vector3(0.21, -0.17, 0.2)];
  * middle), the arm held the grasp it took there strained in the well, and the hand regripped it in its fingers on the way up, the
  * magazine sliding up through a still hand; turned −1 rad, it still did. */
 const POUCHED = Math.PI / 6;
-/** Where the left hand flings a spent magazine, out from the left hip and forward (the chest's frame as `POUCHES`), letting go of it on the
- * way once it is `TOSS` (m) clear of the well: it flies off at the hand's speed and the wrist's flick (`FLICK`). The fling is a point, the
- * magazine kept turned as it left the well, so the hand keeps its grasp on it: turned on the way, the hand turned it in its fingers onto
- * its palm, held like a tray. */
-const FLING = new Vector3(0.36, -0.36, 0.3);
-const TOSS = 0.2;
-/** What the wrist's flick adds to a flung magazine as the hand lets go (the body's frame, +X its left): out to the left and down (m/s), and
- * end over end, its top tipping outward (rad/s about the body's forward). At the hand's speed alone it dropped from the hand onto the
- * thigh and landed by the boots. */
-const FLICK = { velocity: new Vector3(1.8, -0.4, 0.3), spin: -9 };
+/** Where the left hand dumps a spent magazine: a short flick down and out from under the well, the hand kept low and near the body (the
+ * chest's frame as `POUCHES`), letting go of it on the way once it is `TOSS` (m) clear of the well: it flies off at the hand's speed and
+ * the wrist's flick (`FLICK`). Flung out by the hip, 36 cm out, the arm swung out nearly straight at chest height, a theatrical throw. The
+ * fling is a point, the magazine kept turned as it left the well, so the hand keeps its grasp on it: turned on the way, the hand turned it
+ * in its fingers onto its palm, held like a tray. */
+const FLING = new Vector3(0.14, -0.3, 0.3);
+const TOSS = 0.12;
+/** What the wrist's flick adds to a dumped magazine as the hand lets go (the body's frame, +X its left): out to the left and down (m/s),
+ * and end over end, its top tipping outward (rad/s about the body's forward): it falls clear of the leg, as at the hand's speed alone it
+ * dropped onto the thigh and landed by the boots. */
+const FLICK = { velocity: new Vector3(2.2, -0.3, 0.3), spin: -9 };
 const UP = new Vector3(0, 1, 0);
 /** How near a carried magazine comes to its place before it is let go onto it there (m), within the 5 mm a release sets a thing exactly:
  * the release reads it a moment on, and one let go 4 mm short, still moving, was 5–11 mm off then, left askew in the well. */
@@ -336,7 +337,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     hold(seconds);
   };
 
-  // The left hand takes the spent magazine round its body in the well, pulls it down out of it and flings it away out by the hip, letting
+  // The left hand takes the spent magazine round its body in the well, pulls it down out of it and flicks it away down and out, letting
   // go on the way (the release has nowhere to put it: the litter takes it from the well, where it would go, and lets it fly on as the hand
   // last moved and turned it), then takes the full one from its pouch, brings it up under the well and pushes it part way in, shifts under
   // its floor plate and pushes it home with the palm.
