@@ -27,9 +27,10 @@ export interface Placed {
  * the shape a grip closed to) and kept in range every iteration, every ball of their flesh (`Joints.flesh`) pushed out of `near` as its
  * skin gives (`PRESSED`). `seat`: the hand itself is solved too, from where `hand` places it (moved there, in place), pulled back toward
  * it, its palm and each knuckle kept out of `near` with the touching digits — where the hand sits on what it holds, the arm bringing it
- * there, so a fingertip's contact moves the wrist, the elbow and the shoulder. Returns the contacts' miss (m) as it is left.
+ * there, so a fingertip's contact moves the wrist, the elbow and the shoulder. `swept`: digits whose contacts have moved, started afresh.
+ * Returns the contacts' miss (m) as it is left.
  */
-export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, preferred: Shape, near: Triangles | null, seat = false): number {
+export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[], shape: Shape, preferred: Shape, near: Triangles | null, seat = false, swept: readonly Digit[] = []): number {
   const digits = (['thumb', ...DIGITS] as const).filter((digit) => contacts.some((c) => c.part === digit));
   if (!digits.length && !seat) return 0;
   const values = digits.flatMap((digit) => keysOf(digit).map((key) => ({ digit, key, least: leastOf(digit, key) })));
@@ -43,11 +44,12 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
     const balls = joints.flesh(digit, shape);
     return (all ? balls : balls.slice(0, 1)).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PRESSED, WITHIN)) : 0);
   };
-  // (seating, each touching digit started from the best of where it is and a sweep of its two main values — a finger's curl and hook, a
-  // thumb's oppose and spread — by its own contacts' miss and its flesh sunk in: from where it last lay, along a receiver, a trigger finger
-  // could not come round the guard onto the trigger without passing through it)
+  // (seating, or for `swept`, each touching digit started from the best of where it is and a sweep of its two main values — a finger's curl
+  // and hook, a thumb's oppose and spread — by its own contacts' miss and its flesh sunk in: from where it last lay, along a receiver, a
+  // trigger finger could not come round the guard onto the trigger without passing through it)
   matrix.compose(hand.position, hand.quaternion, scale);
-  if (seat) for (const digit of digits) {
+  for (const digit of digits) {
+    if (!seat && !swept.includes(digit)) continue;
     const cost = () => contacts.reduce((sum, c) => c.part === digit ? sum + off(c, _facing).lengthSq() + (c.facing ? _facing.applyQuaternion(hand.quaternion).distanceToSquared(c.facing) * TURN * TURN : 0) : sum, 0)
       + sunk(digit).reduce((sum, d) => sum + d * d * KEEP * KEEP, 0);
     const [a, b] = digit === 'thumb' ? (['oppose', 'spread'] as const) : (['curl', 'hook'] as const);

@@ -416,9 +416,10 @@ export class Self implements Holder {
 
   /**
    * each node its app keeps turned (`orient`) turned as it asks, then back about itself toward the shoulder of each hand holding what hangs
-   * from it as far as keeps the hand's grip within its arm's reach (`HOLDABLE` of its length; where the fingers seat the hand, once they
-   * have): what the hands hold goes only where they hold it — a rifle swung faster than the body turns came round 4.5 cm past the
-   * support arm's reach, and the hand slid off it and through it
+   * from it, or taking hold of it, as far as keeps the hand's grip within its arm's reach (`HOLDABLE` of its length; where the fingers seat
+   * the hand, once they have): what the hands hold goes only where they hold it — a rifle swung faster than the body turns came round
+   * 4.5 cm past the support arm's reach, and the hand slid off it and through it; held low at a lift's panel, the support hand came back
+   * from the button 1.6 cm short of its front and never took it
    */
   private holdable(f: Frame): void {
     for (const [node, asked] of this.asked) {
@@ -427,11 +428,12 @@ export class Self implements Holder {
       turned.copy(asked);
       const pivot = resolve(this, node, _pivot).position;
       for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of this.species.hands ?? []) {
-        const hold = this.holding[hand];
-        if (!hold || !under(hold.thing.object, node)) continue;
+        const hold = this.holding[hand], side = hand as 'left' | 'right', coming = hold ? null : this.fingers?.coming(side);
+        const thing = hold?.thing.object ?? coming?.thing, goal = hold ? this.fingers?.seat(side)?.position ?? hold.goal.position : coming?.wrist;
+        if (!thing || !goal || !under(thing, node)) continue;
         const bones = this.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
         const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + this.skeleton.bones[bone].offset.length(), 0);
-        const placed = resolve(this, hold.thing.object, _placed), goal = this.fingers?.seat(hand as 'left' | 'right')?.position ?? hold.goal.position;
+        const placed = resolve(this, thing, _placed);
         const out = _out.copy(goal).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
         const far = out.length(), near = toward.length();
         if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
