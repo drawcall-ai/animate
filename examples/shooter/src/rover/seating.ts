@@ -51,6 +51,12 @@ const INSET = 0.18;
 /** For the right hand to reach down across to the rack: how far the trunk turns left (rad, spine and chest), leans in (rad, each) and
  * the hips dip (m). */
 const BEND = { spine: 0.35, chest: 0.6, lean: 0.6, dip: 0.06 };
+/**
+ * When the hips go back and when in, as shares of their way onto the seat: back first, so the chest's pouches, standing out a hand's
+ * length before it, pass behind the dash's end rather than through it and the left wrist leaning there (moved in and back together, the
+ * outer pouch's magazine went through the wrist).
+ */
+const CLEAR = { back: [0, 0.9], in: [0.2, 1] } as const satisfies Record<string, Beat>;
 const UP = new Vector3(0, 1, 0), INBOARD = new Vector3(1, 0, 0);
 /** Which way the left elbow points as that hand leans on the dash's end: in and up, the forearm coming onto it from inboard. */
 const LEANING = new Vector3(1, 0.1, -0.3);
@@ -76,8 +82,10 @@ export function seat(puppet: Puppet, standing: Standing, rover: Rover, rifle: Ob
   const sit = phase(t, BEATS.sit), swing = Math.sin(Math.PI * sit);
   const bend = Math.sin(Math.PI * linear(t, [BEATS.take - BEATS.bend, BEATS.take + BEATS.bend]));
 
-  // Hips: up over the sill and round, backing onto the seat; the trunk leans in as they go and settles back against the seat.
-  const hips = standing.hips.clone().addScaledVector(INBOARD, inset(t)).lerp(rover.marks.seat.position, sit);
+  // Hips: up over the sill and round, backing onto the seat, back before in (`CLEAR`); the trunk leans in as they go and settles back
+  // against the seat.
+  const hips = standing.hips.clone().addScaledVector(INBOARD, inset(t)), seated = rover.marks.seat.position;
+  hips.set(MathUtils.lerp(hips.x, seated.x, phase(sit, CLEAR.in)), MathUtils.lerp(hips.y, seated.y, sit), MathUtils.lerp(hips.z, seated.z, phase(sit, CLEAR.back)));
   puppet.place('hips', frame.point(hips.addScaledVector(UP, 0.06 * swing - BEND.dip * bend)));
   puppet.turn('hips', frame.turn(frame.was('hips').slerp(heading(0, -0.18), sit).premultiply(heading(-0.75 * swing))));
   const look = gaze.yaw * phase(t, BEATS.look);
