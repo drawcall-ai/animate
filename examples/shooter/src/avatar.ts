@@ -1,4 +1,4 @@
-import { Body, carry, grab, humanoid, lookAt, release, wait, type Floor, type Root } from '@drawcall/animate';
+import { Body, carry, grab, humanoid, lookAt, pose, POINT, reach, release, wait, type Floor, type Root } from '@drawcall/animate';
 import { action, parallel, runTimeline } from '@pmndrs/timeline';
 import { BufferGeometry, Euler, Group, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -28,11 +28,11 @@ export interface AvatarState {
 const SPRINTING = new Vector3(0.22, 0.2, 0);
 const RELOADING = new Vector3(-0.05, 0, 0.4);
 /** The rifle held low, its muzzle down and well off to the right, clear of a lift's panel: in the right hand alone while the left presses
- * its button; standing at one, both hands on it, `LOW` of the way (turned 0.35 rad right, a soldier close before the panel held its front
- * into the panel's edge). It comes up as the left hand draws back from a button to take it again (taken held low, it took seconds to
+ * its button; standing at one, both hands on it, `LOW` of the way (half way, a soldier just left of the panel's middle held its fore-end
+ * 4 cm off the panel's side, its muzzle out past the panel's back; at this, 9 cm). It comes up as the left hand draws back from a button to take it again (taken held low, it took seconds to
  * settle on its front). */
 const LOWERED = new Vector3(0.75, -0.6, 0);
-const LOW = 0.5;
+const LOW = 0.8;
 const EASE = 0.25;
 /** Seconds between shots. */
 const SHOT_INTERVAL = 0.1;
@@ -43,9 +43,16 @@ const REACH = 0.35;
 /** Radians a second the arms turn the rifle at most, closing on where it should point without passing it. */
 const SWING = 12;
 const QUICK = { speed: 1.8 };
-/** How long a pressing pad stays on its button before it draws back (s), and how long it draws straight back off it before the hand
- * goes back to the rifle (s): as long as the release takes to draw it back; taken up at once, the hand snapped off the button toward the rifle. */
-const HELD = 0.15, DRAWN = 0.25;
+/** How long a pressing pad stays on its button before it lifts off (s): as long as the cap takes to go in under it (0.15 s read as a
+ * dwell). */
+const HELD = 0.08;
+/** How a fingertip lifts off its button before the hand goes back to the rifle: `out` (m) straight back off the face (at `LIFTING`),
+ * at once, the index pointing until the wrist is `pointing` (m) off and relaxing as it goes on (drawn back by the release's eased 0.25 s,
+ * the index curled while the hand still stood, dragging its tip down the face), then `rebound` (m) of that back toward it, as a fingertip
+ * sprung off a button settles. */
+const LIFT = { out: 0.08, pointing: 0.015, rebound: 0.01 };
+/** How fast a fingertip lifts off its button (m/s): quickly, off it 0.05 s after it lets go. */
+const LIFTING = { speed: 2 };
 /** How a hand goes to a button from where the soldier stands (m/s): briskly, pressed some 0.7 s after it leaves the rifle. */
 const POKE = { step: false };
 /** How fast a hand goes a hand's breadth (m/s): off the rifle's front to the magazine under it, and back. Briskly, a short move still
@@ -389,7 +396,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
   };
 
   // The left hand lets go of the rifle's front, the right holding it on, and presses the button's face with its index's pad, `pressed` as
-  // it meets it; it holds a moment, draws straight back off it and goes straight back to the rifle's front.
+  // it meets it; it holds a moment, lifts straight off it (see `LIFT`) and goes straight back to the rifle's front.
   const press = function* (button: Object3D, pressed: () => void) {
     lowering = true;
     if (!(yield* grab(person, button, { left: 'press' }, POKE))) throw new Error(`The soldier could not press "${button.name}"`);
@@ -397,7 +404,16 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     yield* wait(HELD);
     lowering = false;
     release(person, { left: button });
-    yield* wait(DRAWN);
+    // (the wrist's way off, in the frame of the face it pressed — out of it, against its grip's `facing` — moving with what it is on)
+    const face = button.getObjectByName('press');
+    if (!face) throw new Error(`"${button.name}" has no face to press`);
+    const wrist = face.worldToLocal(person.bones.leftHand.getWorldPosition(new Vector3())), out = new Vector3(...face.userData.facing).negate();
+    const off = (distance: number) => () => face.localToWorld(wrist.clone().addScaledVector(out, distance));
+    const lifted = () => person.bones.leftHand.getWorldPosition(new Vector3()).distanceTo(off(0)()) > LIFT.pointing;
+    yield* parallel('all', pose(person, { fingers: { left: POINT } }, { until: lifted }), function* () {
+      for (const distance of [LIFT.out, LIFT.out - LIFT.rebound])
+        if (!(yield* reach(person, { left: off(distance) }, LIFTING))) throw new Error(`The soldier could not lift its fingertip off "${button.name}"`);
+    });
     if (!(yield* grab(person, rifle, { left: 'foregrip' }))) throw new Error('The support hand could not return to the rifle after pressing');
   };
 
