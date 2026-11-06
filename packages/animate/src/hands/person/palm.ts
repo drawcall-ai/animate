@@ -98,7 +98,7 @@ function palmTurn(grip: Grip, { point, up }: Palm): { quaternion: Quaternion; ax
 
 /** the hold a hand takes on `grip` of `thing`, its goal `goal`, its `palm` holding it: a grip that sets no turn keeps the hand's */
 export function holdOn(thing: Thing, grip: string, goal: Goal, palm: Palm): Hold {
-  return { thing, grip, goal, palm: palm.point.at, ...(!goal.quaternion && { turn: palm.turn }) };
+  return { thing, grip, goal, ...(!goal.quaternion && { turn: palm.turn }) };
 }
 
 /** where the hand bone goes on a grip in the world this sub-step (its goal: a palm back from the empty), as the person tracks its thing */

@@ -18,7 +18,6 @@ import { resolve, type Hold } from '../things/resolve';
 import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
-import { palmOf } from '../species/humanoid/landmarks';
 import type { Proportions } from '../species/humanoid/proportions';
 import type { Stride } from '../species/humanoid/humanoid';
 import { footRotation } from '../legs/person/foot';
@@ -139,14 +138,12 @@ const GRIP_TAKEN = REACHED.distance + 0.02;
  * its turn, and a hand on a rifle snapped up to the eye lags it, up to ~4 cm off their grips) */
 const HELD = 0.05;
 
-/** how far hand `side` is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with it after
- * the hands): its wrist from where its fingers seated it, once they have; else its palm from the grip's empty */
+/** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
+ * it after the hands): where its fingers seated it, once they have; else its goal on the grip (a palm short of a turn its grip asks is
+ * put where the turn would have it on the empty, not on the empty itself) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = resolve(person, hold.thing.object, _placed), seat = person.fingers?.seat(side);
-  if (seat) return f.current.position(person.hands[side]).distanceTo(_grip.copy(seat.position).applyQuaternion(at.quaternion).add(at.position));
-  // (the palm as the hold has it: on a handle, where the handle lies in the hand's grasp)
-  const palm = f.current.point(person.hands[side], _palm.copy(hold.palm ?? palmOf(person.proportions, side)), _palm);
-  return palm.distanceTo(_grip.copy(hold.thing.grip(hold.grip).at.position).applyQuaternion(at.quaternion).add(at.position));
+  const at = resolve(person, hold.thing.object, _placed), goal = person.fingers?.seat(side)?.position ?? steadied(hold).position;
+  return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
 }
 
 /** development: each grip a hand has just taken, its palm as near it as a grip taken is */
@@ -160,12 +157,12 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
   }
 }
 
-/** Check final grip distance after fitting, once per hold: unreachable carries draw the wrists together and off their grips, and a hand
- * on what the body wears is held off it by its joints. */
+/** Check final grip distance after fitting, once per hold (not of what hangs from its hand, which goes with it): unreachable carries draw
+ * the wrists together and off their grips, and a hand on what the body wears is held off it by its joints. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
-    if (!hold || !bodyOf(hold.thing.object) || noted.has(hold)) continue;
+    if (!hold || !bodyOf(hold.thing.object) || inHand(person, hold.thing) || noted.has(hold)) continue;
     const value = gripGap(person, f, side, hold);
     if (value <= HELD) continue;
     noted.add(hold);
@@ -197,4 +194,4 @@ function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3
   return pose;
 }
 
-const _palm = new Vector3(), _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };
+const _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };

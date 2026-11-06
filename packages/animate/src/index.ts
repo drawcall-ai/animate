@@ -14,6 +14,7 @@ export { reach } from './verbs/reach';
 export { carry } from './verbs/carry';
 export type { HandOptions } from './hands/handling';
 export { release, type Released } from './verbs/release';
+export { throwAt, type ThrowOptions } from './verbs/throw';
 export { wait, watch, type Until, type Verb } from './verbs/story';
 export type { Target } from './verbs/targets';
 export type { Posture } from './kernel/poise';

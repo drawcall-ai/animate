@@ -50,7 +50,7 @@ export function skeletonOf(proportions: Proportions, mass = massFor(proportions.
     const segment = SEGMENT[name], speed = snapSpeed(name);
     return {
       name,
-      snap: { speed, accel: speed / 0.03 },
+      snap: { speed, accel: speed / (/Arm|Hand/.test(name) ? THROWING : 0.03) },
       parent: name === 'hips' ? -1 : INDEX[PARENT[name]],
       offset: name === 'hips' ? proportions.hips.clone() : proportions.offsets[name].clone(),
       mass: segment ? segment.mass * mass : 0,
@@ -58,6 +58,10 @@ export function skeletonOf(proportions: Proportions, mass = massFor(proportions.
     };
   });
 }
+
+/** how long an arm's joints take to their snap speed at the most (s): a throw's arm accelerates in some 15 ms (Fleisig 1999: ~500 000 °/s²
+ * at the shoulder), the rest of the body over 30 */
+const THROWING = 0.015;
 
 /** A snap heuristic (°/s): elite joint speeds over 30 ms, a little under a throw's ~50 ms acceleration (Fleisig 1999); fault detectors, not clinical limits. */
 function snapSpeed(name: BoneName): number {

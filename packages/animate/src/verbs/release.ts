@@ -22,13 +22,13 @@ export interface Released {
 /**
  * Lets go, at once (no `yield*`). Given a thing, every hand of the body holding it lets go of it; given hands by name (`{ right: rope }`),
  * those hands let go of what each names and the body's others keep holding (one hand left on a thing carries it alone; one left on what
- * the body wears, a rifle on its mount, keeps hold of it there). A thing no hand
- * of the body holds any more is attached onto the empty `onto` (set there exactly if it is within 5 mm), else to another body still
- * holding it (that body carries it now), else to the parent it was lifted from, where it is now. The hands that let go back out of it,
- * carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb for it waits until it has.
- * Returns how the thing (the first named) was moving as it left the hand: to throw it, let go while a carry still moves it and give that
- * motion to your physics. Development says when a thing is put onto an empty more than 5 mm off or onto one another thing already sits in,
- * and notes (`dev: { notes: true }`) one let go in mid-air.
+ * the body wears, a rifle on its mount, keeps hold of it there). A thing no hand of the body holds any more is attached onto the empty
+ * `onto` (set there exactly if it is within 5 mm), else to another body still holding it (that body carries it now), else, if a hand
+ * lifted it, left in the world where it is (under the scene's root; take it into your physics from there), else where it is. The hands
+ * that let go back out of it, carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb
+ * for it waits until it has. Returns how the thing (the first named) was moving as it left the hand: to throw it, let go while a carry
+ * still moves it and give that motion to your physics. Development says when a thing is put onto an empty more than 5 mm off or onto one
+ * another thing already sits in, and notes (`dev: { notes: true }`) one let go in mid-air.
  */
 export function release(body: Body, thing: Object3D, onto?: Object3D): Released;
 export function release<S extends AnySpecies>(body: Body<S>, hands: ByHand<S, Object3D>): Released;
@@ -74,8 +74,9 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
   if (onto) put(self, thing, onto, placed.position);
   else if (holder) take(holder, thing);
   else {
-    const home = thing.home ?? object.parent;
-    if (home) attach(thing, home);
+    // (a thing lifted is left in the world where it is, under the scene's root; one never lifted — a button, a part still in its place —
+    // stays where it is)
+    if (thing.lifted) attach(thing, rootOf(object));
     if (!bodyOf(object)) thing.lifted = false;
     const back = thing.taken && placed.position.distanceTo(thing.taken) < ONTO;
     if (f.dev && !back && (lowest > MID_AIR.height || moving > MID_AIR.speed)) {
@@ -102,4 +103,11 @@ function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Vector3>): v
     thing.object.quaternion.identity();
   }
   if (!bodyOf(thing.object)) thing.lifted = false;
+}
+
+/** the root of the scene `object` is in */
+function rootOf(object: Object3D): Object3D {
+  let root = object;
+  while (root.parent) root = root.parent;
+  return root;
 }

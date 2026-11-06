@@ -29,8 +29,9 @@ import { resolve, type Hold } from '../../things/resolve';
 const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
 /** how much faster than its mean a carry's course goes at its quickest (a minimum-jerk profile's peak, 1.875, and some room) */
 const PEAK = 2;
-/** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s) */
-const RESTING = 2;
+/** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s); and how long it may stand
+ * still (within `moved`, m) more than `short` (m) off it before it is as near as the arms take it */
+const RESTING = 2, STALL = { moved: 0.003, seconds: 0.3, short: 0.03 };
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
 const PREPARED = 2;
 /** Tuned: a held goal moved further than this (m, × the body's scale) to clear the neck and head is noted */
@@ -250,7 +251,8 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, stood = NaN, late = false, blocked = false, dip = 0;
+  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0;
+  const was = new Vector3();
   const left = (f: Frame) => Math.max(0, (Number.isNaN(began) ? f.time : began) + lag.delay + total - f.time);
   const rested = restingAt(near);
   const seconds = 2.4 * load;
@@ -283,10 +285,15 @@ function* travel(person: Reacher, request: Request, thing: Thing, waypoints: rea
       }
       return false;
     }
-    if (!late && f.time - stood > RESTING) {
+    // (still where it was a moment ago, short of its end: as near as the arms take it, no waiting brings it nearer)
+    if (Number.isNaN(still) || carrier.current.position.distanceTo(was) > STALL.moved) {
+      still = f.time;
+      was.copy(carrier.current.position);
+    }
+    if (!late && (f.time - stood > RESTING || (f.time - still > STALL.seconds && carrier.current.position.distanceTo(goal) > STALL.short))) {
       late = true;
       const off = carrier.current.position.distanceTo(goal);
-      f.dev?.append(f.time, { check: `late carry: course end distance after ${RESTING} s (m)`, value: off, limit: near, where: thing.object.name,
+      f.dev?.append(f.time, { check: `late carry: course end distance after ${(f.time - since).toFixed(1)} s (m)`, value: off, limit: near, where: thing.object.name,
         detail: `stopped ${cm(off)} cm off it: ${aim.off > near ? inTheWay(aim) : limits(person, thing, aim)}` });
       if (end) request.fail();
     }

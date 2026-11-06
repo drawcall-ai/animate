@@ -83,7 +83,7 @@ For a nod, a bow, an arched back, a head tilt or a gesture of the arms (raised, 
 
 ## Hands on props
 
-Give a movable prop its `userData.mass` and named grip empties, and describe on each empty what the hand touches, not where the wrist goes: the hand and arm are solved from it, and a person whose skeleton has finger bones (see `humanoid`) also closes its fingers round the prop's meshes there. The same prop works for a person with or without finger bones. `userData.facing` always means the way the touching part — the palm, or a fingertip's pad — faces into the prop; leave it out where any way round will do. Choose the grip by what the hand does:
+Give a movable prop its `userData.mass` and named grip empties, and describe on each empty what the hand touches, not where the wrist goes: the hand and arm are solved from it, and a person whose skeleton has finger bones (see `humanoid`) also closes its fingers round the prop's meshes there. The same prop works for a person with or without finger bones. `userData.facing` always points from the hand into the prop: the way the touching part (the palm, or a fingertip's pad) faces, so a hand coming at a ring from its +X side gives −X. Leave it out where any way round will do (a ball). Choose the grip by what the hand does:
 
 - Laid on a surface (a box's side, a tabletop): a plain empty where the palm's middle goes, a hand's half-thickness out from the surface — never where the wrist would be. Without a facing the hand comes as the arm brings it and the grasp keeps it so.
 - Round something (a handle, a bar, a rung, a ball or can in the fist, the wire of a ring): `userData.handle`, the line it runs along pointing out of the fist at the thumb's end, with the empty on that line where the palm's middle closes on it, and `radius` for a thin wire or a ball (a ball's line runs through its middle). Round all over, any facing is right: give the one the arm reaches most easily, the palm toward the body's middle for something held before it. A ring or loop the hand pulls is a handle along its wire at the edge it pulls by; the fingers past the wire's ends fold into the palm. To pinch something flat across its thickness (a magazine, a book), put the handle along an edge, facing onto that edge.
@@ -97,32 +97,24 @@ pistolGrip.userData.fingers = { index: aiming ? 'trigger' : 'frame' };
 ```
 
 ```ts
-Object.assign(grenadeBody.userData, { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.032 }); // a 6.4 cm ball in the right fist, fuze up
-Object.assign(ringEdge.userData, { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.0015 });   // the ring's wire, held at its edge
+Object.assign(grenadeBody.userData, { handle: [0, 1, 0], radius: 0.032 });                  // a 6.4 cm ball in the fist, fuze up
+Object.assign(ringEdge.userData, { handle: [0, 1, 0], facing: [-1, 0, 0], radius: 0.0015 });  // a ring's wire on its +X edge, hooked from outside
 ```
 
-`grab` ends once the fingers have closed, so what follows it may pull at once. A hand that holds something else lets go of it as `grab` sets off: a two-handed weapon left by both hands stays wherever its mount holds it, in mid-air if that is where the mount is, so when both hands are needed elsewhere sling it first — `release` it onto an empty on the body (a sling point on the back or hip) — or keep one hand on it. Make a button a massless thing of its own, its cap's mesh beside it rather than under it (a hand goes round a thing's meshes to its grip), and move the thing in as it is pressed. `reach` and `track` refuse a handle or pad, whose empty is not where the wrist goes; take it with `grab`.
+`grab` ends once the fingers have closed, so what follows it may pull at once. A hand that holds something else lets go of it as `grab` sets off: a two-handed weapon left by both hands stays wherever its mount holds it, in mid-air if that is where the mount is, so when both hands are needed elsewhere sling it first — `release` it onto an empty on the body (a sling point on the back or hip) — or keep one hand on it. Take it back the way a soldier does: the support hand first (on a rifle, the front grip), bring it up toward the aim, then the firing hand; a firing hand going first reaches for a grip against the trunk and is held off it. Make a button a massless thing of its own, its cap's mesh beside it rather than under it (a hand goes round a thing's meshes to its grip), and move the thing in as it is pressed. `reach` and `track` refuse a handle or pad, whose empty is not where the wrist goes; take it with `grab`.
 
-Hand targets for what a person does about itself (a pouch, a windup, a throw) come out of `body.armPoint(side, direction, share)`, which scales with the body; give it as a function target, `() => body.armPoint(…)`, so it moves with the body. Any verb's target may be such a function of the body's time returning a point or an object.
+Hand targets for what a person does about itself (holding something up to look at it, drawing a pin out) come out of `body.armPoint(side, direction, share)`, which scales with the body; give it as a function target, `() => body.armPoint(…)`, so it moves with the body. Any verb's target may be such a function of the body's time returning a point or an object. A carry whose thing stops short of its target (the arm's joints holding it off) ends `false` a moment later, saying so in development.
 
 A part of a held thing (a magazine in its rifle, a grenade's pin) is a thing of its own: give it its own mass and grips under its parent. The other hand grabs it where it sits, leaving it in place and following it; `carry` lifts it off into that hand, and a release onto an empty puts it back. To move a part along its parent (a magazine up its well), hold it with `grab` and move its local position yourself: the hand follows it.
 
-To throw, compose the throw from a cocking carry and a whipping carry, each raced against a trunk `pose`: cock the hand behind the shoulder with the trunk coiled away (`twist` −, a little `bow` back), then whip it over the shoulder ahead and down at a brisk `speed` with the trunk uncoiling into a bow, and `release` on the way while it still moves fast. The hand then follows through across the body. End the cock on nearness, not arrival: a carry fails a target the arm holds 1 cm off, two seconds on. A body whose root you drive steps into the throw only as you move its root. `release` returns the thing's `velocity` (about 5–9 m/s from a whip like this) and `spin` as it left the hand. A real overhand throw leaves at 15–20 m/s, so give your physics a velocity aimed for the range you want, keeping the release's spin. Let go with nowhere given, a thing goes back under the parent it was lifted from, where it is now — a pouch on the body, the grenade a pin came off — so attach it to your scene or physics body right after.
+To throw what one hand holds, `throwAt` it: the throw is the body's whole motion, cocked, whipped and followed through, aimed at the target. Turn the body toward the target first. Its `released` callback gives the velocity aimed at the target and the hand's spin as the thing leaves the hand, left in the world where it was let go; give them to your physics. `release` also returns how a thing was moving, for one simply let go of on the way of a carry.
 
 ```ts
-const arm = (side: 'left' | 'right', x: number, y: number, z: number, share: number) => () => soldier.armPoint(side, new Vector3(x, y, z), share); // +X its left
-const off = (from: Vector3) => grenade.getWorldPosition(new Vector3()).distanceTo(from);
 yield* grab(soldier, grenade, { right: 'body' });
 yield* grab(soldier, pin, { left: 'ring' });               // the pin: a thing of its own (its own mass) under the grenade
-yield* carry(soldier, pin, arm('left', 0.5, -0.5, 0.7, 0.85), { step: false });
-release(soldier, pin);
-scene.attach(pin);                                         // dropped: back under the grenade otherwise
-const cocked = arm('right', -0.4, 0.9, -0.3, 0.8);
-yield* parallel('race', pose(soldier, { twist: -0.6, bow: -0.15 }), carry(soldier, grenade, cocked, { speed: 1.5, step: false, until: () => off(cocked()) < 0.03 }));
-const from = grenade.getWorldPosition(new Vector3());
-yield* parallel('race', pose(soldier, { twist: 0.4, bow: 0.35 }), carry(soldier, grenade, arm('right', 0.1, -0.1, 1, 0.9), { speed: 4, step: false, until: () => off(from) > 0.45 }));
-const { spin } = release(soldier, grenade);
-throwInto(physics, grenade, aimed(target, 15), spin);      // your physics' own call, aimed at what is thrown at
+yield* carry(soldier, pin, () => soldier.armPoint('left', new Vector3(1, -0.5, 0.7), 0.85), { step: false });
+release(soldier, pin);                                     // left in the world where it is: it falls in your physics
+yield* throwAt(soldier, grenade, target, { released: ({ velocity, spin }) => throwInto(physics, grenade, velocity, spin) });
 ```
 
 ## Puppets

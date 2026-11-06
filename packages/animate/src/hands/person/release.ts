@@ -51,7 +51,8 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
   };
   // (a fingertip drawn back is held there, off its button, until the hand is asked elsewhere; let go at once, it fell to its hang)
   const done = (f: Frame) => f.time - began > LETTING_GO || hands.every(({ away }, k) => !away && reached(f, person.hands[sides[k]], off(f)[k]));
-  // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over)
+  // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over; nor is
+  // one whose arm a pose asks for)
   yield* parallel<Frame>('all', ...hands.map(({ side, away }, k) => {
     // (a fast hand brought to rest within `THROWN.over` of its way on, not braked as a calm one)
     const speed = person.frame.prev.position(person.hands[side]).distanceTo(person.frame.prev2.position(person.hands[side])) / person.frame.dt;
@@ -60,7 +61,7 @@ export function* backingOut(person: Reacher, request: Request, hands: readonly {
     return during(request, `hand.${side}`, 'borrowed', (f: Frame) => {
       if (away && f.time < drawn) person.fingers?.keep(side);
       return step(f);
-    }, (f) => done(f) || person.holding[side] !== null);
+    }, (f) => done(f) || person.holding[side] !== null || (!away && person.owner(`arm.${side}`) !== undefined));
   }));
 }
 

@@ -111,7 +111,7 @@ function placeUnder(reader: Resolving, object: Object3D, parent: Object3D, posit
 /** `thing` lifted into `self`'s hands (`take`), where it was taken from kept unless it was lifted already */
 export function lift(self: Holder, thing: Thing): void {
   const parent = thing.object.parent;
-  if (parent && !thing.lifted) [thing.home, thing.taken] = [parent, self.track(thing.object).current.position.clone()];
+  if (parent && !thing.lifted) thing.taken = self.track(thing.object).current.position.clone();
   thing.lifted = true;
   take(self, thing);
 }

@@ -1,7 +1,6 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { parallel } from '@pmndrs/timeline';
-import { arriving, carry, grab, pose, release, wait, type Body } from '../../src/index';
+import { arriving, carry, grab, release, throwAt, wait, type Body } from '../../src/index';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -192,7 +191,7 @@ describe('carry', () => {
     const far = outcome(new Vector3(0, 1.3, 0.76));
     expect(far.carried).toBe(false);
     expect(far.off).toBeGreaterThan(0.01);
-    expect(far.log).toEqual([{ check: 'late carry: course end distance after 2 s (m)', detail: expect.stringContaining('beyond the arm’s reach') }]);
+    expect(far.log).toEqual([{ check: expect.stringMatching(/^late carry: course end distance after/), detail: expect.stringContaining('beyond the arm’s reach') }]);
   });
 
   it('throws when no hand holds what it is asked to carry', () => {
@@ -287,30 +286,30 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  it('throws overhand: cocked behind the shoulder, whipped through and let go on the way at a throw\'s speed, following through', () => {
+  it('throws overhand at a target: cocked behind the head, whipped through, let go ahead of it aimed at the target, following through', () => {
     const body = person({ dev: true }), room = roomOf(body);
     const ball = box(room, new Vector3(-0.2, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
-    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.03 });
-    const arm = (x: number, y: number, z: number, share: number) => () => body.armPoint('right', new Vector3(x, y, z), share);
-    let thrown = new Vector3(), after = new Vector3(), done = false;
+    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
+    const target = new Vector3(0, 0, 15);
+    let highest = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), done = false;
     play(function* () {
       yield* grab(body, ball, { right: 'body' });
-      const cocked = arm(-0.4, 0.9, -0.3, 0.8);
-      yield* parallel('race', pose(body, { twist: -0.6, bow: -0.15 }), carry(body, ball, cocked, { speed: 1.5, step: false, until: () => worldOf(ball).distanceTo(cocked()) < 0.03 }));
-      const from = worldOf(ball);
-      yield* parallel('race', pose(body, { twist: 0.4, bow: 0.35 }), carry(body, ball, arm(0.1, -0.1, 1, 0.9), { speed: 4, step: false, until: () => worldOf(ball).distanceTo(from) > 0.45 }));
-      thrown = release(body, ball).velocity;
-      yield* wait(0.4);
+      yield* throwAt(body, ball, target, { released: ({ velocity }) => { thrown = velocity; thrownFrom = worldOf(ball); } });
       after = body.object.worldToLocal(body.bones.rightHand.getWorldPosition(new Vector3()));
       done = true;
-    }, [body], 6, () => done);
-    expect(thrown.length()).toBeGreaterThan(4);
-    expect(body.object.worldToLocal(thrown.clone().add(body.object.getWorldPosition(new Vector3()))).z).toBeGreaterThan(3);
-    // (followed through down to the hips, toward the other side)
+    }, [body], 6, () => {
+      if (body.holds(ball)) highest = Math.max(highest, worldOf(ball).y);
+      return done;
+    });
+    expect(highest).toBeGreaterThan(1.75);
+    expect(ball.parent).toBe(room);
+    // (aimed: on its arc from where it left the hand, it comes down at the target)
+    const v = thrown ?? new Vector3(), flight = (2 * v.y) / 9.81 + 0.3;
+    expect(Math.abs(thrownFrom.z + v.z * flight - target.z)).toBeLessThan(3);
     expect(after.y).toBeLessThan(1.1);
-    expect(after.x).toBeGreaterThan(-0.1);
     expect(body.log).toEqual([]);
   });
+
 
 
 });
