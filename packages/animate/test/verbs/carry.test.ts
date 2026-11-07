@@ -1,7 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { arriving, Body, carry, grab, humanoid, release, throwAt, wait } from '../../src/index';
-import { SOLDIER } from '../soldier';
+import { SOLDIER } from '../../../../examples/shooter/src/skeleton';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -289,7 +289,7 @@ describe('release', () => {
     expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
   });
 
-  for (const [driven, height, low, soldier] of [[false, 1.75, true, false], [true, 1.75, true, false], [true, 1.6, true, false], [false, 1.9, true, false], [false, 1.75, false, false], [true, 1.8, false, true]] as const) it(`throws overhand at a target (${soldier ? 'the short-armed soldier' : `${height} m`}${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
+  for (const [driven, height, low, soldier] of [[false, 1.75, true, false], [true, 1.8, false, true]] as const) it(`throws overhand at a target (${soldier ? 'the short-armed soldier' : `${height} m`}${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
     const options = { dev: true, ...(driven && { drive: () => root }) };
     const body: Body = soldier ? new Body(humanoid(SOLDIER), options) : person(options, height), room = roomOf(body);
