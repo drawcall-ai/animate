@@ -44,7 +44,11 @@ const DEGREES = 180 / Math.PI;
 
 const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [['', undefined], [' on the soldier', SOLDIER]];
 const test = cases([
-  'gaze shifts between story tasks', // Task gaze reverses or exceeds its shift bound.
+  // Task gaze exceeds its shift bound: the head's peak in the world is the gaze's pace plus the trunk's turn beneath it, which nothing
+  // bounds, so whichever body's timing lines the two up fails (the default body until the shoulder stopped drifting, 416°/s against 399;
+  // the soldier since, 396 against 366, the same 91° turn begun 0.1 s sooner). Capped at the main sequence, the head lagged a walking
+  // trunk and the knight's strides went lopsided (asymmetry 0.10, max 0.05).
+  'gaze shifts between story tasks on the soldier',
   'leading posture and clearance on the soldier', // Leading posture/clearance bound.
 ]);
 

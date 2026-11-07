@@ -7,6 +7,7 @@ import { clearBody } from '../../src/hands/person/clearance';
 import { grasp } from '../../src/things/hold';
 import { Thing } from '../../src/things/thing';
 import { pointSegmentDistance } from '../../src/kernel/math';
+import { coordinatesOf } from '../../src/kernel/limits';
 import type { Person } from '../../src/body/person';
 import { handSpeeds } from '../hands';
 import { dt, feetOf, insides, palmAt, person, play, run } from '../bodies';
@@ -169,4 +170,29 @@ it('follows a smoothly moving point without treating every sample as a stationar
     if (time > 2) error = Math.max(error, h.pose.position(INDEX.rightHand).distanceTo(target(time)));
   });
   expect(error).toBeLessThan(0.03);
+});
+
+// (both hands held still out before the shoulders, a little above them: the clavicles go where the hands ask, swaying only with the body's
+// breath and sway — shrugged on from where they stood each sub-step, they rose 30–40° up their range)
+it('holds the clavicles where still hands ask, not shrugging them on, on both sides', () => {
+  const body = person({ dev: true }), h = insides(body);
+  run(body, 0.5);
+  const targets = (['left', 'right'] as const).map((side) => body.armPoint(side, new Vector3(0, 0.15, 1), 0.85));
+  // (each clavicle's protraction and elevation, °, the left's signs for both)
+  const clavicles = () => (['left', 'right'] as const).map((side) => {
+    const bone = INDEX[`${side}Shoulder`], [protraction, elevation] = coordinatesOf(h.pose.local(bone), h.pose.skeleton.limits[bone]!).value;
+    return [protraction, elevation].map((x) => (side === 'left' ? x : -x) / (Math.PI / 180));
+  });
+  const seen: number[][][] = [];
+  play(function* () { yield* reach(body, { left: targets[0], right: targets[1] }, { until: Infinity }); }, [body], 6, (time) => {
+    if (time >= 2) seen.push(clavicles());
+  });
+  for (const [k, side] of (['left', 'right'] as const).entries()) {
+    const elevations = seen.map((c) => c[k][1]), protractions = seen.map((c) => c[k][0]);
+    expect(Math.max(...elevations), `${side} elevation`).toBeLessThan(20);
+    expect(Math.max(...elevations) - Math.min(...elevations), `${side} elevation`).toBeLessThan(8);
+    expect(Math.max(...protractions) - Math.min(...protractions), `${side} protraction`).toBeLessThan(8);
+    expect(worldOf(body.bones[`${side}Hand`]).distanceTo(targets[k]), side).toBeLessThan(0.01);
+  }
+  expect(body.log).toEqual([]);
 });

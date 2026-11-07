@@ -14,14 +14,19 @@ import { REACH } from '../../kernel/tip';
 
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
 export const ARM_REACH = 0.95;
-/** how far the clavicle draws the shoulder joint toward a hand reaching out past 85% of the arm, at most (× height) */
+/** how far a reach is planned on the clavicle drawing the shoulder joint toward a hand out past 85% of the arm (× height): a little short
+ * of what its range gives (`shrug`, arms.ts) */
 export const PROTRACTION = 0.035;
-/** how far the clavicle lifts the shoulder joint for a hand high overhead, at most (× height) */
-export const ELEVATION = 0.03;
-/** how far the clavicle has lifted the shoulder joint for a hand `height` up (m, on the floor): from a hand at the shoulder to one 0.6 of
- * the arm above it */
-const elevationFor = (proportions: Proportions, height: number) =>
-  ELEVATION * proportions.height * smoothstep(-0.05, 0.6, (height - proportions.shoulderHeight) / proportions.armLength);
+/** how far above the shoulder joint at rest the clavicle aims it for a hand `above` (m) the joint at rest: from none for a hand at the
+ * shoulder to a clavicle's length for one 0.6 of the arm above it */
+export const liftFor = (proportions: Proportions, above: number) =>
+  smoothstep(-0.05, 0.6, above / proportions.armLength) * proportions.offsets.leftUpperArm.length();
+/** how far the clavicle has lifted the shoulder joint for a hand `height` up (m, on the floor): aimed `liftFor` up, it swings up round
+ * the clavicle's length */
+const elevationFor = (proportions: Proportions, height: number) => {
+  const length = proportions.offsets.leftUpperArm.length(), lift = liftFor(proportions, height - proportions.shoulderHeight);
+  return length * lift / Math.hypot(length, lift);
+};
 
 /** Tuned trunk recruitment: bearing beyond 0.75 rad recruits 60%, capped at 20°, keeps reaches within lumbar rotation and leaves the neck
  * to finish an over-shoulder look (requests combine by magnitude, so task order cannot cancel a stronger turn). A hand the trunk holds

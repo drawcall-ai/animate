@@ -13,10 +13,10 @@ import type { Reacher } from './reacher';
 import { Pose, type ReadonlyPose } from '../../kernel/pose';
 import type { Thing } from '../../things/thing';
 import { boneOf, onBody } from '../../things/hold';
-import { bringShoulder, ELEVATION, PROTRACTION, twistToward } from './bend';
+import { bringShoulder, liftFor, twistToward } from './bend';
 import { clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { followJoint } from './hang';
-import { clamp, smoothstep } from '../../kernel/math';
+import { smoothstep } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 import { palmOf } from '../../species/humanoid/landmarks';
 
@@ -24,6 +24,8 @@ import { palmOf } from '../../species/humanoid/landmarks';
 
 /** calm, everyday motion of a hand (Herneth 2024): how a hand moves unless asked otherwise, its joints braked at ~6× a reach's peak */
 export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
+/** how many times `shrug` draws the shoulder joint on toward the hand, round the clavicle, to settle where it goes (within a millimetre) */
+const DRAWS = 4;
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 
@@ -208,23 +210,32 @@ export function placeArm(person: Reacher, f: Pick<Frame, 'current'>, side: Side,
   solveChain(f, `${side}Arm`, { tip: { position: goal.position, quaternion: goal.quaternion }, pole: elbowPole(f.current, person.proportions, side, goal.position, _pole) });
 }
 
-/** the clavicle (chest-relative) turned so the shoulder joint goes up for a hand high up and forward toward one far out */
+/**
+ * the clavicle (chest-relative) turned as the hand asks of it now: the shoulder joint up for a hand high up, and toward a hand beyond 85%
+ * of the arm as far as brings it within that (its range permitting) — settled on from where the clavicle at rest has it each sub-step, as
+ * the shoulder joint swings round the clavicle's length. Drawn on from where it stands instead, each sub-step's lift added to the last's
+ * shrugged it to the end of its range for any hand held still at the shoulder.
+ */
 function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
   const pose = f.current;
   const bone = INDEX[`${side}Shoulder`];
   const clavicle = pose.position(bone);
   const chest = pose.rotation(INDEX.chest);
-  const shoulder = _s.copy(pose.position(INDEX[`${side}UpperArm`]));
+  const inverse = _c.copy(chest).invert();
+  const offset = proportions.offsets[`${side}UpperArm`], length = offset.length();
   const up = _up.set(0, 1, 0).applyQuaternion(chest);
   const L = proportions.armLength;
+  const want = _s.copy(offset).applyQuaternion(chest).add(clavicle);
+  want.addScaledVector(up, liftFor(proportions, _d.subVectors(hand, want).dot(up)));
   // (a hand across the body draws the shoulder forward, never back: the arm goes round the front)
-  const v = _d.subVectors(hand, shoulder).applyQuaternion(_c.copy(chest).invert());
-  if ((side === 'left' ? 1 : -1) * _w.subVectors(hand, pose.position(INDEX.chest)).applyQuaternion(_c).x < 0) v.z = Math.max(0, v.z);
-  v.applyQuaternion(chest);
-  const elevation = smoothstep(-0.05, 0.6, v.dot(up) / L);
-  const reach = v.length();
-  const want = shoulder.addScaledVector(up, elevation * ELEVATION * proportions.height);
-  if (reach > 1e-6) want.addScaledVector(v, clamp(reach - 0.85 * L, 0, PROTRACTION * proportions.height) / reach);
+  const across = (side === 'left' ? 1 : -1) * _w.subVectors(hand, pose.position(INDEX.chest)).applyQuaternion(inverse).x < 0;
+  for (let pass = 0; pass < DRAWS; pass++) {
+    const v = _d.subVectors(hand, want).applyQuaternion(inverse);
+    if (across) v.z = Math.max(0, v.z);
+    const reach = v.length();
+    if (reach <= 0.85 * L) break;
+    want.addScaledVector(v.applyQuaternion(chest), (reach - 0.85 * L) / reach).sub(clavicle).setLength(length).add(clavicle);
+  }
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(proportions.offsets[`${side}UpperArm`]).normalize(), to);
   if (from) goal.slerpQuaternions(from.clavicle, _q.copy(goal), from.share);
