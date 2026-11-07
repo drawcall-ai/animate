@@ -32,9 +32,6 @@ export interface Hold {
   grip: string;
   goal: Goal;
   placement?: HandPlacement;
-  /** a person's hand on a bare grip, which sets no turn: its turn in the thing's frame as it holds it, which the hand keeps while the
-   * thing is held by more than its hand (worn, on another body, resting) — the palm stays on the empty as the thing turns */
-  turn?: () => Quaternion;
   keep?: (f: Frame) => void;
 }
 

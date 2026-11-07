@@ -25,21 +25,20 @@ export interface Taking {
 
 /**
  * `side`'s take of `grip` of `thing`: its placement, and where the hand bone goes for it. What the grip fixes the hand is held to exactly;
- * what it leaves free is picked as the take starts and only preferred, as far as the wrist turns it so — the point of the hand kept on
- * its target, the wrist wherever has it there as the hand is turned (`gripOf`):
- * - fixed whole (`fixes`): that placement;
- * - free in part (a handle rolling free, a facing, a ball, a slide): picked from where the body stands (`pick`) — the hand turned as near
- *   as it may be to how the arm brings it there (`broughtTurn`: the forearm and the wrist unturned), its palm clear of the thing (`SUNK`);
- *   the grip beyond its reach, as if it had stepped up to it, as it will walk up; never from where the hand is on its way;
- * - a bare empty (nothing declared): the palm's middle on it, the hand turned as the arm brings it — its goal following the hand's turn
- *   on the way, the placement taken afresh as it takes hold (`holdOn`), and kept turned so (`Hold.turn`).
+ * what it leaves free is picked as the take starts (`picked`) and only preferred, as far as the wrist turns it so — the point of the hand
+ * kept on its target, the wrist wherever has it there as the hand is turned (`gripOf`).
  */
 export function takingOf(person: Reacher, side: Side, thing: Thing, grip: string): Taking {
-  const on = thing.grip(grip), placement = bare(on) ? followed(person, side, thing, on) : picked(person, side, thing, on);
+  const on = thing.grip(grip), placement = picked(person, side, thing, on);
   return { side, thing, grip, placement, ...gripOf(person, side, thing, on, placement) };
 }
 
-/** the placement `side` takes the free parts of `grip` by, picked from where the body stands (see `takingOf`) */
+/**
+ * the placement `side` takes `grip` by: what it fixes as it fixes it; what it leaves free (a handle rolling free, a facing, a ball, a
+ * slide, or a bare empty's whole turn) picked from where the body stands (`pick`) — the hand turned as near as it may be to how the arm
+ * brings it there (`broughtTurn`: the forearm and the wrist unturned), its palm clear of the thing (`SUNK`); the grip beyond its reach, as
+ * if it had stepped up to it, as it will walk up; never from where the hand is on its way
+ */
 function picked(person: Reacher, side: Side, thing: Thing, on: Grip): HandPlacement {
   const placed = person.track(thing.object).current, rest = person.restOf(person.hands[side]);
   const up = new Vector3(0, 1, 0).applyQuaternion(placed.quaternion.clone().invert());
@@ -52,19 +51,6 @@ function picked(person: Reacher, side: Side, thing: Thing, on: Grip): HandPlacem
   return pick(thing.object, on, (part) => pointOf(person, side, part), up, back, cost);
 }
 
-/** the palm's middle on bare `grip`, turned as `side`'s hand is turned in `thing`'s frame as the body was last posed */
-function followed(person: Reacher, side: Side, thing: Thing, on: Grip): HandPlacement {
-  const point = pointOf(person, side, 'palm'), quaternion = turnIn(person, side, thing, new Quaternion()).multiply(framed(point.axis, point.facing));
-  return { on: thing.object, point: 'palm', position: palmTarget(person, on, quaternion), quaternion, fingers: 'close', digits: digitsOf(thing.object, on) };
-}
-
-/** where the palm's middle goes on bare `grip` with its point's frame turned `turn` (the thing's frame): its skin on the empty, its middle
- * a skin's depth further in (a hand measured off its finger bones has its point on its skin already) */
-function palmTarget(person: Reacher, grip: Grip, turn: Quaternion): Vector3 {
-  const skin = person.fingers ? 0 : NOMINAL.palm * person.proportions.height;
-  return grip.at.position.clone().addScaledVector(_y.set(0, 1, 0).applyQuaternion(turn), skin);
-}
-
 /** how `side`'s hand bone is turned in `thing`'s frame as the body was last posed (into `out`) */
 function turnIn(person: Reacher, side: Side, thing: Thing, out: Quaternion): Quaternion {
   return out.copy(person.track(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(person.hands[side]));
@@ -72,27 +58,28 @@ function turnIn(person: Reacher, side: Side, thing: Thing, out: Quaternion): Qua
 
 /**
  * the point of `side`'s hand `placement` puts on its target (the hand bone's frame, scaled), and the hand bone's goal there (the thing's
- * frame): on a grip that fixes the hand, turned as it asks; else turned so only as preferred, and on a bare grip not at all, the wrist
- * wherever has the point on its target as the hand is turned now (read afresh: a hand short of its turn still puts its point there)
+ * frame): on a grip that fixes the hand, turned as it asks; else turned so only as preferred, the wrist wherever has the point on its
+ * target as the hand is turned now (read afresh: a hand short of its turn still puts its point there)
  */
 function gripOf(person: Reacher, side: Side, thing: Thing, grip: Grip, placement: HandPlacement): { point: HandPoint; goal: Goal } {
   const point = pointOf(person, side, placement.point, placement.fingers === 'close' ? undefined : shapeOf(placement.fingers));
   const { position, quaternion } = handOn(point, placement), turn = new Quaternion(), wrist = new Vector3();
   if (fixes(grip)) return { point, goal: { position, quaternion, preferred: true } };
-  const frame = framed(point.axis, point.facing), free = bare(grip);
-  // (on a bare grip the palm's target turns with the hand too: its skin stays on the empty)
-  const target = () => free ? palmTarget(person, grip, _turn.copy(turn).multiply(frame)) : placement.position;
-  return { point, goal: { get position() { turnIn(person, side, thing, turn); return wrist.copy(point.at).applyQuaternion(turn).negate().add(target()); }, ...(!free && { quaternion, preferred: true }) } };
-}
-
-/** whether `grip` fixes the hand on it whole — a handle with a facing, a pad with a facing — leaving the library none of its turn to pick */
-export function fixes(grip: Grip): boolean {
-  return grip.facing !== null && (grip.point !== 'palm' || (grip.handle !== null && grip.handle.length === 0));
+  // (a bare grip, which declares nothing of the hand, asks no turn of it — its turn follows the hand — and takes the palm's middle, a
+  // nominal palm's skin's depth in from its skin)
+  const free = bare(grip);
+  if (free && !person.fingers) point.at.addScaledVector(point.facing, -NOMINAL.palm * person.proportions.height);
+  return { point, goal: { get position() { turnIn(person, side, thing, turn); return wrist.copy(point.at).applyQuaternion(turn).negate().add(placement.position); }, ...(!free && { quaternion, preferred: true }) } };
 }
 
 /** whether `grip` declares nothing of the hand: the palm's middle on it, turned as the arm brings it */
 function bare(grip: Grip): boolean {
   return !grip.handle && !grip.facing && !grip.ball && grip.point === 'palm';
+}
+
+/** whether `grip` fixes the hand on it whole — a handle with a facing, a pad with a facing — leaving the library none of its turn to pick */
+export function fixes(grip: Grip): boolean {
+  return grip.facing !== null && (grip.point !== 'palm' || (grip.handle !== null && grip.handle.length === 0));
 }
 
 /**
@@ -140,19 +127,21 @@ function stepped(person: Reacher, side: Side, empty: Vector3): ((hand: Placement
  * the hand to its placement exactly, turned as it asks — the turn its reach left it short of (only preferred on its way, as far as the
  * wrist turned it so) made up over `SETTLING` s, not at the wrist's top speed in a few sub-steps; on one that left the library some of
  * the turn to pick, its point kept on its target and its turn only preferred, as on its way (a box carried by its sides, the palms
- * keeping on them as the box turns through what the wrists allow); on a bare grip, the placement as the hand now holds it, kept turned so
+ * keeping on them as the box turns through what the wrists allow)
  */
 export function holdOn(person: Reacher, take: Taking): Hold {
-  const grip = take.thing.grip(take.grip), held = { thing: take.thing, grip: take.grip };
-  if (bare(grip)) {
-    const turn = new Quaternion();
-    return { ...held, goal: take.goal, placement: followed(person, take.side, take.thing, grip), turn: () => turnIn(person, take.side, take.thing, turn) };
-  }
-  if (!fixes(grip)) return { ...held, goal: take.goal, placement: take.placement };
+  const held = { thing: take.thing, grip: take.grip, placement: take.placement };
+  if (!fixes(take.thing.grip(take.grip))) return { ...held, goal: take.goal };
   const { position, quaternion } = handOn(take.point, take.placement), began = person.frame.time, from = turnIn(person, take.side, take.thing, new Quaternion());
   const turn = new Quaternion();
   const goal = { position, get quaternion() { return turn.slerpQuaternions(from, quaternion, smoothstep(0, SETTLING, person.frame.time - began)); } };
-  return { ...held, goal, placement: take.placement };
+  return { ...held, goal };
+}
+
+/** where `side`'s hand holding `hold` goes on its thing while the thing is held by more than the hand (worn, on another body, resting):
+ * its goal, turned as the hand holds it when the grip asks no turn — the palm stays on the empty as the thing turns */
+export function steadied(person: Reacher, side: Side, hold: Hold): Goal {
+  return hold.goal.quaternion ? hold.goal : { position: hold.goal.position, quaternion: turnIn(person, side, hold.thing, new Quaternion()) };
 }
 
 /** how long a hand that has taken hold makes up the turn its reach left it short of (s) */
@@ -259,4 +248,4 @@ function rollToPoint(turn: Quaternion, point: HandPoint, push: Vector3, up: Vect
 /** how far a pointing hand is rolled thumb up off palm down (rad), as a forearm rests between its turns */
 const ROLL = 0.5;
 
-const UP = new Vector3(0, 1, 0), _x = new Vector3(), _y = new Vector3(), _turn = new Quaternion(), _q = new Quaternion(), _q2 = new Quaternion(), _cross = new Vector3();
+const UP = new Vector3(0, 1, 0), _x = new Vector3(), _y = new Vector3(), _q = new Quaternion(), _q2 = new Quaternion(), _cross = new Vector3();
