@@ -13,7 +13,7 @@ export type Verb = Generator<TimelineYield<unknown>, boolean, unknown>;
 /**
  * A verb's request on `body`, filed when the story reaches it and kept until it ends (its `finally` runs on a race's cancel too): ends
  * `true` once its staging has met its goal and `false` once that staging fails — or, given `until`, `true` once that holds, whatever
- * the goal (a target followed out of reach a while is followed on), but `false` at once on a failure it `gives up` on (a walk's stall).
+ * the goal (a target followed out of reach a while is followed on), but `false` at once on a failure it `gives up` on (a walk's stall, a carry's).
  * Each frame the story steps it renews the request. An aimer (it never meets a goal of its own) never ends without `until`. With
  * development on, the request is labelled by where the story asked for it (`file:line`, as the engine's stack shows it; a bundle's own
  * frames are not told apart from the library's).

@@ -377,7 +377,9 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     // there: shifted under its floor plate to drive it home with the palm, the fingers came off its faces and opened; carried in, it
     // came in turned as the hand turned it, slanting against the well, its top corner out through the well's wall, and snapped home in
     // 70 ms)
-    if (!(yield* carry(person, full, below, { ...BRISK, until: () => near(full, below, LINED)() && turnedAs(full, below) < ALIGNED }))) return false;
+    // (or as near as the arm brings it, a crouching arm a couple of centimetres short: waiting on for it to come nearer held the reload
+    // there for ever)
+    yield* carry(person, full, below, { ...BRISK, until: () => near(full, below, LINED)() && turnedAs(full, below) < ALIGNED });
     // (squared onto the line in the fingers, let go there and taken again at once where the hand is, then pushed up the line, the hand
     // going with it)
     yield* square(full, below);

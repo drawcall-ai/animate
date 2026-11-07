@@ -42,5 +42,7 @@ export function carry(body: Body, thing: Object3D, target: Target | readonly Tar
     // (the last target's object, given as one or by a function as it starts: its approach, and whether it rides on the body)
     const last = targets[targets.length - 1], end = typeof last === 'function' ? last(self.time) : last;
     yield* self.handling.bring(request, carried, points, end instanceof Object3D ? end : null, options);
-  }, options.until);
+    // (its failures are final, `until` or not: short of its end it holds the thing where it got to, and no waiting brings it nearer — a
+    // reload's magazine waited on under the well for ever)
+  }, options.until, false, true);
 }
