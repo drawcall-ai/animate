@@ -156,7 +156,7 @@ declare const model: Object3D;
 
 const fighter = {
   ...humanoid(skeleton),
-  springs: { braid: { stiffness: 18, damping: 0.55, rest: [-2.2, 0, 0] } },
+  springs: { braid: { stiffness: 18, damping: 0.55, rest: [-2.2, 0, 0] as const } },
 };
 const body = new Body(fighter, { model });
 ```
