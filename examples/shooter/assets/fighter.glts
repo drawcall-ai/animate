@@ -1,0 +1,53 @@
+import * as THREE from 'three';
+import { isPreview, loadingManager, onDispose, scene } from '@drawcall/glts';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { skin, pose } from '@drawcall/rig';
+import { FIGHTER } from './fighter.ts';
+
+const source = await new GLTFLoader(loadingManager).loadAsync(new URL('./fighter-source.glb', import.meta.url).href);
+// The generated model faces -X and is one unit tall including its braid. The body itself is 1.82 m tall here.
+source.scene.rotation.y = Math.PI / 2;
+source.scene.scale.setScalar(2.3);
+source.scene.position.y = 1.15;
+source.scene.updateMatrixWorld(true);
+const model = new THREE.Group();
+source.scene.traverse(node => {
+  if (!(node instanceof THREE.Mesh)) return;
+  const geometry = node.geometry.clone().applyMatrix4(node.matrixWorld);
+  const positions = geometry.getAttribute('position'), normals = geometry.getAttribute('normal');
+  // The generator left the braid disconnected. Its separate component lies behind z=-0.14 or above y=1.84;
+  // the body's measured minimum z is -0.123 and maximum y is 1.820. Rotate this whole component 180° about
+  // Z and put its thick end in the hair tie. The braid now points up, clear of the head and body for skinning.
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+    if (y <= 1.84 && z >= -0.14) continue;
+    positions.setXYZ(i, -x, 4.07 - y, z);
+    normals.setXYZ(i, -normals.getX(i), -normals.getY(i), normals.getZ(i));
+  }
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geometry, node.material);
+  mesh.castShadow = mesh.receiveShadow = true;
+  model.add(mesh);
+  node.geometry.dispose();
+});
+scene.add(model);
+console.log('fighter rig', JSON.stringify(await skin(model, FIGHTER, 512)));
+onDispose(() => model.traverse(node => {
+  if (!(node instanceof THREE.Mesh)) return;
+  node.geometry.dispose();
+  for (const material of [node.material].flat()) {
+    if (material instanceof THREE.MeshStandardMaterial) {
+      for (const texture of [material.map, material.normalMap, material.roughnessMap, material.metalnessMap]) texture?.dispose();
+    }
+    material.dispose();
+  }
+}));
+if (isPreview) {
+  pose(model, { rotations: { braid: [-2.2, 0, 0], leftLowerArm: [0, -0.65, 0], rightLowerArm: [0, 0.65, 0] } });
+  scene.background = new THREE.Color('#ced5dc');
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x526079, 2.5));
+  const light = new THREE.DirectionalLight(0xffffff, 3);
+  light.position.set(3, 5, 4);
+  scene.add(light);
+}

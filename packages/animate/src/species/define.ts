@@ -10,6 +10,7 @@ import { Skeleton, type BoneDef, type Limit } from '../kernel/skeleton';
 import type { Proportions } from './humanoid/proportions';
 import type { Stride } from './humanoid/humanoid';
 import type { DigitBones } from '../fingers/bones';
+import type { Spring } from '../springs/springs';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {
@@ -58,6 +59,8 @@ export interface Species<Bone extends string = string, Hand extends string = str
   };
   /** how its trunk takes its root's acceleration (none: it does not lean) */
   readonly inertia?: Inertial;
+  /** Spring bones by root: each descendant chain swings after animation, with its rig's lengths and rest pose. */
+  readonly springs?: Readonly<Partial<Record<Bone, Spring>>>;
   /** its size against the body its distances were tuned for */
   readonly scale: number;
   /** what it weighs in all (kg), as its bones' masses add up */
@@ -154,6 +157,7 @@ export interface Tuning<Name extends string> {
   centres?: Partial<Record<Name, Vec3 | readonly [toward: Name, share: number]>>;
   limits?: Partial<Record<Name, Range>>;
   inertia?: Inertial;
+  springs?: Readonly<Partial<Record<Name, Spring>>>;
   snaps?: Partial<Record<Name, { speed: number; accel: number }>>;
 }
 
@@ -232,6 +236,7 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
       carriage: roles.carriage,
     },
     inertia: tuning.inertia,
+    springs: tuning.springs,
     scale: 1,
     mass: bones.reduce((sum, bone) => sum + bone.mass, 0),
   };

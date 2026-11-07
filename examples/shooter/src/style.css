@@ -56,3 +56,5 @@ body.playing .menu { display: none; }
   .combat { margin-left: auto; gap: 18px; }
 }
 .prompt:not(:empty) { margin-right: 12px; color: #f3d27a; font-weight: 700; }
+
+.watching .reticle, .watching .hit { display: none; }

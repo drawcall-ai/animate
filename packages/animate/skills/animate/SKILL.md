@@ -140,6 +140,32 @@ A bare body and a skinned body use the same skeleton. To skin a mesh, follow the
 
 Bodies of one size that start together move in sync and read as copies: give each its own `life.seed`, and do not start identical bodies' walks on the same frame. A person at attention takes `life: { steady: 1 }`.
 
+## Spring bones
+
+For hair, tails, antennae and other freely swinging bone chains, add `springs` to the species, keyed by an existing root bone:
+
+```ts
+import { Body, humanoid, type HumanoidBone } from '@drawcall/animate';
+import type { SkeletonBone } from '@drawcall/rig';
+import type { Object3D } from 'three';
+
+declare const skeleton: readonly SkeletonBone<HumanoidBone | 'braid' | 'braidTip'>[];
+declare const model: Object3D;
+
+const fighter = {
+  ...humanoid(skeleton),
+  springs: { braid: { stiffness: 18, damping: 0.55 } },
+};
+const body = new Body(fighter, { model });
+// body.update(dt) advances the springs after the normal pose, at the body's fixed timestep.
+```
+
+`{ braid: {} }` uses defaults: stiffness 40 s⁻², damping ratio 0.7, world gravity `[0, -9.81, 0]` m/s². Higher stiffness holds the input pose more firmly; damping 1 is critical, lower values swing longer. `gravity: [0, 0, 0]` removes gravity. Settings apply to the entire descendant hierarchy; custom `species()` also accepts the same record in its tuning argument. Each body owns its own simulation state.
+
+The rig supplies links, lengths and endpoints. A joint with multiple bone children keeps its input rotation; each child chain swings independently. A leaf is an endpoint and needs no setting. Overlapping spring roots and zero-length links are errors. The simulation changes rotations, preserving joint offsets and lengths; it does not simulate mesh cloth, collisions or self-collision. Keep spring motion on bones whose final rotations may yield to it.
+
+Rig hair clear of the body (an upright braid is useful for weight separation). After skinning, turn its root into the desired hanging rest pose on the model **before constructing the body**; keep the skin's inverse bind matrices unchanged. The shooter example's `assets/fighter.glts` and `src/fighter.ts` show this workflow.
+
 ## Places and paths
 
 A point in a body's frame is `body.object.localToWorld(new Vector3(x, y, z))`; an empty parented to `body.object` turns with it. A mark is an empty on the floor where a body is to stand, its +Z the way it should face, at the floor's height. Grips and approach empties belong to the prop, so the same story works with moved furniture. Build hand targets from `body.species.person`'s measures (`armLength`, …), not in metres.

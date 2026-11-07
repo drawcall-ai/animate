@@ -5,3 +5,16 @@ Procedural motion for three.js characters and creatures rigged with [@drawcall/r
 Install with `pnpm add @drawcall/animate @drawcall/rig @pmndrs/timeline three`.
 
 The shipped [animate skill](skills/animate/SKILL.md) includes a runnable example, skeletons and authoring patterns. Import bodies, verbs and custom-species helpers from `@drawcall/animate`.
+
+Hair and tails can swing through their existing bones:
+
+```ts
+const fighter = {
+  ...humanoid(skeleton),
+  springs: { braid: { stiffness: 18, damping: 0.55 } },
+};
+const body = new Body(fighter, { model });
+body.update(dt);
+```
+
+Settings apply to the whole hierarchy below the named root. Bone lengths stay fixed; gravity and inertia produce the motion. This is spring-bone animation without collision, with no physics-engine dependency.

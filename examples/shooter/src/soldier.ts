@@ -1,4 +1,5 @@
 import type { PhysicsWorld } from '@drawcall/physics';
+import type { Species } from '@drawcall/animate';
 import { Group, Mesh, Object3D, Scene, SkinnedMesh, Vector3 } from 'three';
 import { lookDirection } from './angles';
 import { Avatar, type AvatarState } from './avatar';
@@ -21,7 +22,11 @@ const READY = 3;
 const KILL = 25;
 
 /** What a soldier can get on: a rover's seat, a ladder. */
-export interface Mounts { vehicle?: { rover: Rover; handling: Handling }; ladder?: Ladder }
+export interface SoldierOptions {
+  vehicle?: { rover: Rover; handling: Handling };
+  ladder?: Ladder;
+  species?: Species<string, 'left' | 'right'>;
+}
 
 /** The player and opponent share the same body, controller, weapon and magazine lifecycle. */
 export class Soldier implements Combatant {
@@ -47,7 +52,7 @@ export class Soldier implements Combatant {
   constructor(
     readonly name: string, private readonly world: PhysicsWorld, scene: Scene, model: Object3D | undefined,
     private readonly spawn: Vector3, readonly firstPerson: boolean, readonly sound: Play,
-    { vehicle, ladder }: Mounts = {},
+    { vehicle, ladder, species }: SoldierOptions = {},
   ) {
     if (vehicle) this.driver = new Driver(this, vehicle.rover, vehicle.handling, world, model);
     if (ladder) this.climber = new Climber(this, ladder, world, model);
@@ -60,7 +65,7 @@ export class Soldier implements Combatant {
     this.avatar = new Avatar(scene, model, this.terrain.floor, phase => {
       if (phase === 'out') sound('reload', 0.2, 0, 0.2);
       else sound('reload', 0.2, 0.318, 0.962);
-    });
+    }, species);
     this.avatar.group.name = name;
     this.remains.name = `${name} remains`;
     scene.add(this.remains);

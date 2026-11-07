@@ -6,7 +6,7 @@ import { Object3D, Scene, Vector3 } from 'three';
 import { Avatar, type AvatarState } from '../src/avatar';
 import type { Sound } from '../src/audio';
 import { GRAVITY, Movement } from '../src/movement';
-import { Soldier, type Mounts } from '../src/soldier';
+import { Soldier, type SoldierOptions } from '../src/soldier';
 import { Terrain } from '../src/terrain';
 
 export const DT = 1 / 60;
@@ -138,7 +138,7 @@ export function offGrip(body: Body, side: 'left' | 'right', empty: Object3D) {
  * the sounds it has made since; and `until`, which steps the world until `done`, failing if that takes more than `seconds`, and returns
  * the seconds it took.
  */
-export async function mountable<T extends Mounts>(scene: Scene, at: Vector3, mounts: (world: PhysicsWorld) => T) {
+export async function mountable<T extends SoldierOptions>(scene: Scene, at: Vector3, mounts: (world: PhysicsWorld) => T) {
   const world = await buildWorld({ scene, fixedDelta: DT, gravity: [0, GRAVITY, 0] });
   cleanup(() => world.dispose());
   const made = mounts(world);

@@ -29,6 +29,7 @@ import { FLAT, type Floor } from '../legs/floor';
 import { FingerState } from '../fingers/state';
 import { Orient } from './orient';
 import { checkShear, massed, restPose } from './setup';
+import { Springs } from '../springs/springs';
 
 /** How a body is made. */
 export interface SelfOptions {
@@ -129,6 +130,7 @@ export class Self implements Holder {
   private behaviours: Behaviours | null = null;
   /** its fingers, for a species with finger bones: written over each update's pose */
   readonly fingers: FingerState | null;
+  private readonly springs: Springs | null;
 
   constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose) {
     const dev = options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined;
@@ -166,6 +168,7 @@ export class Self implements Holder {
     });
     if (this.frame.dev && options.model) checkShear(this.binding, this.frame.dev);
     this.binding.write(this.pose, this.floor);
+    this.springs = species.springs ? new Springs(species, binding) : null;
     this.fingers = species.fingers ? new FingerState(species.fingers, binding.bones, this.holding, binding.object) : null;
     /** Construct creature behaviours now so infeasible legs fail before the first update. */
     if (!species.person) this.behaviours = this.behave();
@@ -382,6 +385,12 @@ export class Self implements Holder {
       for (let i = 0; i < steps; i++) {
         this.share = (i + 1) / steps;
         this.step();
+        if (this.springs) {
+          this.springs.restore();
+          this.binding.write(this.pose, this.floor);
+          this.oriented.write();
+          this.springs.step(STEP);
+        }
       }
     } finally {
       this.stepping = false;
@@ -390,6 +399,7 @@ export class Self implements Holder {
     this.binding.write(this.pose, this.floor);
     this.oriented.write();
     this.fingers?.update(seconds);
+    this.springs?.write();
   }
 
   /** each hand's digits' contacts met this sub-step (`FingerState.meet`), the hand where its hold left it */

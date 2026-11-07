@@ -4,6 +4,7 @@ import type { LegChain } from './leg';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton } from '../kernel/skeleton';
 import type { Species } from './define';
+import type { Spring } from '../springs/springs';
 
 /**
  * `species` at `size` times its size: its bones, its feet and its eyes `size` times as far apart, each bone `size`³ as heavy, and its
@@ -28,7 +29,19 @@ export function scaled<Bone extends string, Hand extends string>(species: Specie
     legs: legs && { ...legs, chains: legs.chains.map((chain) => feet(chain, size)), gait: gaitAt(legs.gait, size) },
     // (its trunk's lean as quick as its stride: ∝ 1/√length)
     inertia: inertia && { ...inertia, frequency: inertia.frequency / Math.sqrt(size) },
+    springs: springsAt(species.springs, size),
   };
+}
+
+/** Spring periods scale with √length, keeping the same sag under gravity. */
+function springsAt<Bone extends string>(springs: Species<Bone>['springs'], size: number): Species<Bone>['springs'] {
+  if (!springs) return undefined;
+  const result: Partial<Record<Bone, Spring>> = {};
+  for (const root in springs) {
+    const spring = springs[root];
+    if (spring) result[root] = { ...spring, stiffness: (spring.stiffness ?? 40) / size };
+  }
+  return result;
 }
 
 /** `eyes` reading each pose with points given in a bone's frame `size` times as far from it (a view made once a pose: a body's poses last) */

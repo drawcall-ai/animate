@@ -5,6 +5,7 @@ import { Audio } from './audio';
 import { CameraRig } from './camera';
 import { MAGAZINE } from './combat';
 import { Enemy } from './enemy';
+import { fighter, loadFighter } from './fighter';
 import { createEnvironment } from './environment';
 import { Input } from './input';
 import { GRAVITY } from './movement';
@@ -46,6 +47,7 @@ const play = element('play', HTMLButtonElement);
 const notice = element('notice', HTMLElement);
 const prompt = element('prompt', HTMLElement);
 const labels = {
+  view: element('view', HTMLElement),
   motion: element('motion', HTMLElement), speed: element('speed', HTMLElement),
   ammo: element('ammo', HTMLElement), reload: element('reload', HTMLElement), feedback: element('feedback', HTMLElement), hit: element('hit', HTMLElement),
   health: element('health', HTMLElement), enemy: element('enemy', HTMLElement), damage: element('damage', HTMLElement),
@@ -84,7 +86,9 @@ async function start() {
   const url = 'models/soldier.glb';
   // (fine enough for the gloved fingers, some 5 voxels thick: solved once and cached)
   const rig = await new RigLoader().loadAsync({ url, skeleton: SOLDIER, resolution: 640, source: { url, dependencyUrls: [] } });
-  rig.scene.traverse((node) => {
+  notice.textContent = 'Loading the braided fighter…';
+  const opponentModel = await loadFighter();
+  for (const model of [rig.scene, opponentModel.scene]) model.traverse((node) => {
     node.frustumCulled = false;
     if (node instanceof Mesh) node.castShadow = node.receiveShadow = true;
   });
@@ -101,8 +105,8 @@ async function start() {
   const roverSound = new RoverSound(audio, rover, handling);
   const player = new Soldier('Player', world, scene, rig.scene, environment.spawn, true, (...args) => audio.play(...args),
     { vehicle: { rover, handling }, ladder: environment.ladder });
-  const opponent = new Soldier('Opponent', world, scene, rig.scene, new Vector3(0, 0.04, 13.5), false,
-    (sound, gain, offset, duration) => audio.play(sound, gain, offset, duration, opponent.position));
+  const opponent = new Soldier('Opponent', world, scene, opponentModel.scene, new Vector3(0, 0.04, 13.5), false,
+    (sound, gain, offset, duration) => audio.play(sound, gain, offset, duration, opponent.position), { species: fighter });
   // (a function's result, as the hoisted functions below see no narrowing of `player.driver` and `player.climber`)
   const { driver, climber } = mountsOf(player);
   // (the view settles onto the wheel and bonnet, and up the ladder)
@@ -138,6 +142,7 @@ async function start() {
   let dead = 0;
   let stopped = false;
   let resetting = false;
+  let watching = new URLSearchParams(location.search).has('braid');
 
   function reset() {
     resetting = true;
@@ -170,6 +175,7 @@ async function start() {
   function draw(dt: number) {
     input.direction();
     if (input.locked) {
+      if (input.pressed('KeyV')) watching = !watching;
       // E uses what the player is on or setting off for, else what it stands near: a mount, or a lift panel it faces, its button pressed
       // with the left hand's fingertip.
       if (input.pressed('KeyE')) {
@@ -201,7 +207,7 @@ async function start() {
     camera.update(look, free ? avatar.aimWeight : 0);
     audio.listen(camera.camera);
     roverSound.update();
-    if (input.locked && input.trigger && !active()) {
+    if (input.locked && input.trigger && !active() && !watching) {
       // The shot leaves the muzzle for what the crosshair covers, recoil's kick included; along the view when that is nearer than
       // the muzzle (pressed against a wall) or nothing.
       const sighted = world.raycast(look.eye, camera.direction, 120);
@@ -230,7 +236,10 @@ async function start() {
     labels.damage.style.opacity = String(hurt / VIGNETTE);
     labels.health.textContent = String(player.health);
     labels.enemy.textContent = `${enemy.status} · ${opponent.health}`;
+    labels.view.textContent = watching ? 'Fighter close-up · V to return' : 'First person · V to watch fighter';
+    document.body.classList.toggle('watching', watching);
     show();
+    if (watching) camera.watch(opponent.avatar.body.bones.head.getWorldPosition(new Vector3()), opponent.movement.input.yaw);
     try {
       avatar.beforeRender();
       renderer.render(scene, camera.camera);
@@ -324,7 +333,7 @@ async function start() {
     roverSound.dispose();
     void audio.dispose().catch(showError);
     reflections.dispose();
-    stopAnimation(); handling.dispose(); rover.dispose(); maps.dispose(); input.dispose(); player.dispose(); opponent.dispose(); environment.dispose(); world.dispose(); rig.dispose(); renderer.dispose();
+    stopAnimation(); handling.dispose(); rover.dispose(); maps.dispose(); input.dispose(); player.dispose(); opponent.dispose(); environment.dispose(); world.dispose(); rig.dispose(); opponentModel.dispose(); renderer.dispose();
     window.removeEventListener('resize', resize);
   };
   window.addEventListener('pagehide', dispose, { once: true });

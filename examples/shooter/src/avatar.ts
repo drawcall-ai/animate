@@ -1,4 +1,4 @@
-import { Body, carry, grab, humanoid, lookAt, release, wait, type Floor, type Root } from '@drawcall/animate';
+import { Body, carry, grab, humanoid, lookAt, release, wait, type Floor, type Root, type Species } from '@drawcall/animate';
 import { action, parallel, runTimeline } from '@pmndrs/timeline';
 import { BufferGeometry, Euler, Group, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -94,9 +94,10 @@ export class Avatar {
     scene: Object3D, private readonly model?: Object3D,
     private readonly floor: Floor = () => 0,
     private readonly onReload?: (phase: 'out' | 'in') => void,
+    private readonly species: Species<string, 'left' | 'right'> = humanoid(SOLDIER),
   ) {
     this.litter = new Litter(scene);
-    this.animation = animate(model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload);
+    this.animation = animate(this.species, model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload);
     this.group.add(this.animation.person.object);
     scene.add(this.group);
   }
@@ -143,7 +144,7 @@ export class Avatar {
   /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take, the magazines it threw away cleared. */
   reset(position: Vector3, yaw = 0) {
     this.litter.clear();
-    this.show(animate(this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload));
+    this.show(animate(this.species, this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload));
   }
 
   update(dt: number, input: AvatarState) {
@@ -154,7 +155,7 @@ export class Avatar {
   /** Starts readying a fresh body off screen, standing at `position` and snatching up the rifle, while this one is still shown. */
   prepare(position: Vector3, yaw: number) {
     this.next?.dispose();
-    this.next = animate(this.model && clone(this.model), position, yaw, this.floor, true, this.litter, this.onReload);
+    this.next = animate(this.species, this.model && clone(this.model), position, yaw, this.floor, true, this.litter, this.onReload);
   }
 
   /** Steps the fresh body; once its hands have the rifle it is shown in place of this one, and true is returned. */
@@ -195,10 +196,10 @@ export class Avatar {
   }
 }
 
-function animate(model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void) {
+function animate(species: Species<string, 'left' | 'right'>, model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void) {
   const root: Root & { velocity: Vector3 } = { position: position.clone(), velocity: new Vector3(), yaw, support: position.clone() };
   let aiming = 0;
-  const person = new Body(humanoid(SOLDIER), { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) }, dev: DEV });
+  const person = new Body(species, { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) }, dev: DEV });
   person.object.traverse((node) => (node.frustumCulled = false));
   const proportions = person.species.person;
   if (!proportions) throw new Error('The shooter requires a humanoid');

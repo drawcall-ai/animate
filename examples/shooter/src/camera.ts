@@ -26,4 +26,15 @@ export class CameraRig {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }
+
+  /** A rear three-quarter view of the fighter's head and braid, following its heading. */
+  watch(head: Vector3, yaw: number) {
+    const target = head.clone().add(new Vector3(0, -0.35, 0));
+    this.camera.position.copy(new Vector3(1.2, 0.15, -1.8).applyAxisAngle(UP, yaw)).add(target);
+    this.camera.lookAt(target);
+    this.camera.fov = 45;
+    this.camera.updateProjectionMatrix();
+  }
 }
+
+const UP = new Vector3(0, 1, 0);
