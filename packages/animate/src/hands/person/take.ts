@@ -67,9 +67,9 @@ function gripOf(person: Reacher, side: Side, thing: Thing, grip: Grip, placement
   if (fixes(grip)) return { point, goal: { position, quaternion, preferred: true } };
   // (a bare grip, which declares nothing of the hand, asks no turn of it — its turn follows the hand — and takes the palm's middle, a
   // nominal palm's skin's depth in from its skin)
-  const free = bare(grip);
-  if (free && !person.fingers) point.at.addScaledVector(point.facing, -NOMINAL.palm * person.proportions.height);
-  return { point, goal: { get position() { turnIn(person, side, thing, turn); return wrist.copy(point.at).applyQuaternion(turn).negate().add(placement.position); }, ...(!free && { quaternion, preferred: true }) } };
+  const follows = bare(grip);
+  if (follows && !person.fingers) point.at.addScaledVector(point.facing, -NOMINAL.palm * person.proportions.height);
+  return { point, goal: { get position() { turnIn(person, side, thing, turn); return wrist.copy(point.at).applyQuaternion(turn).negate().add(placement.position); }, ...(!follows && { quaternion, preferred: true }) } };
 }
 
 /** whether `grip` declares nothing of the hand: the palm's middle on it, turned as the arm brings it */
