@@ -31,7 +31,7 @@ Open http://localhost:5289 and click **Enter the course**. Requires a keyboard a
 
 The course has stairs, a ramp, raised walkways, step-height blocks, a crouch tunnel, cover, a lift that rides up and down at the press of a button on its panel, or is called by the post at either landing, targets, physics crates and an open-topped military Land Rover to drive.
 
-The player's three grenades are visible on the vest. The rifle hangs from its sling while `grab` and `carry` bring the grenade and its pin into the hands; `throwAt` supplies the overhand wind-up, release, and follow-through. Aim stays free until release. The lever springs off as the grenade leaves the hand, starting a three-second fuse. Grenades bounce against the course, blast nearby soldiers (including the player), and push physics props; cover blocks the blast. Backspace replenishes the loadout. Reloading, using a mount, and throwing cannot overlap.
+The player carries three grenades on the vest per encounter (Backspace refills them). The view stays free until a grenade leaves the hand, which starts its three-second fuse. A blast hurts soldiers in the open, the player too, and throws the crates; cover stops it.
 
 Serve it with COOP/COEP headers (configured for dev and preview).
 
