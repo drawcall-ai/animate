@@ -47,12 +47,10 @@ const HELD = (1 - 2 * SWING - 2 * LETTING) / 2;
  */
 const BODY = { back: 0.36, feet: 0.6, reach: 5, apart: { hand: 0.13, foot: 0.12 }, ankle: { up: 0.07, back: 0.07 } };
 /**
- * How far below the stiles' heads the hands hold them at the most (m): a hand's breadth under their bends over toward the landing (the
- * index 9 cm above the grasp line: 10 cm under the heads it met the bend, and the fingers stood open past the bar's edge on the thumb's
- * side), a little above a standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top
- * rungs.
+ * How far below the stiles' heads the hands hold them at the most (m): just under their bends over toward the landing, a little above a
+ * standing body's hanging wrists there, so that arms bent a little reach them from the landing as from the top rungs.
  */
-const HEAD = 0.2;
+const HEAD = 0.1;
 /**
  * How high the hips are on the ladder at each end (m), all four limbs holding: at the foot, one foot on the first rung and the other on the
  * ground at the ladder's foot (rung 0), the hands on rungs a standing body reaches; at the top, the feet on the top two rungs, the top one
@@ -187,18 +185,9 @@ export function hang(puppet: Puppet, standing: Standing, ladder: Ladder, rifle: 
  */
 const RUNG = { palm: new Vector3(0, -0.4, 0.92).normalize() } as const;
 /**
- * How a hand takes a stile by its front edge: its palm `proud` (m) off the bar's outer face where a handle lies across it and turned
- * `turn` (the tangent) a little back toward the climber, nearly parallel to the face; its thumb's pad `thumb.off` (m) off the outer face,
- * `thumb.up` above the grasp and `thumb.back` behind the edge, where the thumb reaches lying straight along the face and its skin clear
- * of it — the palm held off the face as far as the thumb lying beside it is thick (turned 0.6 back, the palm's heel stood 4 cm off the
- * face with the thumb's base, and the pad 4 cm up, the thumb stood up at the edge, its tip bone 50° into the face; the palm and the pad
- * on the face, the thumb lay half through the bar)
- */
-const STILE_HOLD = { proud: 0.016, turn: 0.1, thumb: { up: 0.075, back: 0.015, off: 0.009 } } as const;
-/**
  * The empty hand `side` holds rung `rung` of `ladder` by, as a handle (made the first time it is asked for): above the landing the stile,
- * upright, its thumb up, taken from outside by its front edge (the palm against its outer face, facing in, the fingers round the edge onto
- * its inner face and the thumb along the outer face, as `STILE_HOLD`); below, the rung, as `RUNG`.
+ * upright, its thumb up, taken from behind by its near edge as a rung is (the palm on the edge facing the wall, the fingers round one face
+ * and the thumb round the other); below, the rung, as `RUNG`.
  */
 function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   const name = `${side} hand on rung ${rung}`, found = ladder.body.getObjectByName(name);
@@ -208,14 +197,9 @@ function rungHold(ladder: Ladder, side: Side, rung: number): Object3D {
   empty.name = name;
   if (stile(ladder, rung)) {
     // (a flat bar is as thick about its edge as half the bar)
-    const radius = STILE_BAR.thick / 2, edge = STILE_BAR.deep / 2 - radius, thumb = new Object3D();
-    empty.position.set(sign * STILE, y, edge);
-    thumb.name = `${name}: thumb`;
-    thumb.position.set(sign * (STILE + radius + STILE_HOLD.thumb.off), y + STILE_HOLD.thumb.up, edge - STILE_HOLD.thumb.back);
-    ladder.body.add(thumb);
-    Object.assign(empty.userData, {
-      handle: [0, 1, 0], facing: [-sign, 0, -STILE_HOLD.turn], radius: radius + STILE_HOLD.proud, fingers: { thumb: thumb.name },
-    });
+    const radius = STILE_BAR.thick / 2;
+    empty.position.set(sign * STILE, y, radius - STILE_BAR.deep / 2);
+    Object.assign(empty.userData, { handle: [0, 1, 0], facing: [0, 0, 1], radius });
   } else {
     empty.position.set(sign * BODY.apart.hand, y, 0);
     Object.assign(empty.userData, { handle: [-sign, 0, 0], facing: RUNG.palm.toArray(), radius: RUNG_RADIUS });
