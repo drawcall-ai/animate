@@ -63,6 +63,7 @@ interface Closing {
  */
 export function closedOn(joints: Joints, object: Object3D, line: Line, skins: readonly SkinnedMesh[], world: Matrix4 = joints.hand.matrixWorld): Shape {
   joints.hand.updateWorldMatrix(true, false);
+  object.updateWorldMatrix(true, true);
   const near = trianglesAbout(object, skins, WORLD, _centre.setFromMatrixPosition(world), joints.span * _scale.setFromMatrixScale(world).x + SLACK);
   const shape = structuredClone(WRAP), at: Closing = { joints, near, world };
   for (const digit of DIGITS) {
@@ -214,13 +215,13 @@ function padsOn(at: Closing, shape: Shape): Vector3 {
 
 
 /**
- * `thing`'s triangles within `radius` of `centre`, in the frame `frame` places (the world's; `centre` in it): every mesh shown under it,
+ * `thing`'s triangles within `radius` of `centre`, in the frame `frame` places (the world's; `centre` in it), as its meshes' world matrices
+ * stand (it updates none: refreshing them mid-update would change what the rest of the update reads): every mesh shown under it,
  * what hangs from it too (a magazine in a rifle's well) — a hand touches whatever is there — but the body's own skin (`skins`: an empty
  * in a scene holds every mesh under it, the body's too); skinned meshes as they stand at rest
  */
 export function trianglesAbout(thing: Object3D, skins: readonly SkinnedMesh[], frame: Placement, centre: Readonly<Vector3>, radius: number): Triangles {
   const back = new Matrix4().compose(frame.position, frame.quaternion, _one).invert(), meshes: Mesh[] = [];
-  thing.updateWorldMatrix(true, true);
   thing.traverseVisible((node) => { if (node instanceof Mesh && !skins.some((skin) => skin === node)) meshes.push(node); });
   return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), centre, radius);
 }
