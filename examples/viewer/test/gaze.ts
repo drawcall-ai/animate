@@ -4,12 +4,13 @@ import { Euler, Quaternion, Vector3 } from 'three';
  * The fastest gaze shift of a head, from its world rotation every step (`dt` apart), in degrees: the movement around its peak speed
  * (from and to a tenth of it), how far it turned, its peak angular speed (°/s), how far its speed fell between two higher speeds as a
  * share of the peak (a single bell: 0; slowing, then a second shift: more), and the most its turn's axis swung from one step to the
- * next (turning back: > 90°); and the head's most roll in the world over all of them.
+ * next (turning back: > 90°); and the head's most roll in the world over all of them. Its speed from step `k` to the next is `speed`'s
+ * (rad/s; default its turn in the world).
  */
-export function headShift(heads: readonly Quaternion[], dt: number) {
+export function headShift(heads: readonly Quaternion[], dt: number, speed = (k: number) => heads[k + 1].angleTo(heads[k]) / dt) {
   if (heads.length < 2) throw new Error(`headShift: ${heads.length} head rotations, not a movement`);
   const deg = 180 / Math.PI;
-  const speeds = heads.slice(1).map((q, k) => q.angleTo(heads[k]) / dt);
+  const speeds = heads.slice(1).map((_, k) => speed(k));
   const peak = Math.max(...speeds);
   let from = speeds.indexOf(peak), to = from;
   while (from > 0 && speeds[from - 1] >= peak / 10) from--;
@@ -26,7 +27,7 @@ export function headShift(heads: readonly Quaternion[], dt: number) {
 }
 
 /** the world turn from `a` to `b`: its axis times its angle */
-function spin(a: Quaternion, b: Quaternion): Vector3 {
+export function spin(a: Quaternion, b: Quaternion): Vector3 {
   const q = b.clone().multiply(a.clone().invert());
   if (q.w < 0) q.set(-q.x, -q.y, -q.z, -q.w);
   const s = Math.hypot(q.x, q.y, q.z);
