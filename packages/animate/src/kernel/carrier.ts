@@ -63,6 +63,13 @@ export class Carrier implements Trail {
     copy(this.prev2, this.current);
   }
 
+  /** placed at `time` (s) and the two sub-steps before as a pose's history has it (a frame read off a bone), unturned */
+  trace(time: number, prev2: Readonly<Vector3>, prev: Readonly<Vector3>, current: Readonly<Vector3>): void {
+    this.move(time, current);
+    this.prev2.position.copy(prev2);
+    this.prev.position.copy(prev);
+  }
+
   /** its velocity (m/s) over the last sub-step */
   velocity(out: Vector3): Vector3 {
     return out.subVectors(this.current.position, this.prev.position).divideScalar(STEP);
@@ -79,6 +86,25 @@ export class Carrier implements Trail {
     out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(out.spin, r));
     return out;
   }
+
+  /** `world` in its frame as it is at `time` (s), into `out`: its velocity and spin as seen moving with it (`toWorld`'s inverse) */
+  toLocal(world: Goal, out: Goal & { velocity: Vector3; spin: Vector3 }, time: number): Goal & { velocity: Vector3; spin: Vector3 } {
+    const { prev, current: { position, quaternion } } = this.at(time);
+    const inverse = _q.copy(quaternion).invert();
+    const r = _r.subVectors(world.position, position);
+    out.position.copy(r).applyQuaternion(inverse);
+    out.quaternion = world.quaternion && (out.quaternion ?? new Quaternion()).copy(inverse).multiply(world.quaternion);
+    out.axis = world.axis && (out.axis ?? new Vector3()).copy(world.axis).applyQuaternion(inverse);
+    const spin = spinOf(prev.quaternion, quaternion, STEP, _s);
+    // (the world's velocity less the frame's at the point, v + ω × r, then turned into it)
+    out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(spin, r)).negate();
+    if (world.velocity) out.velocity.add(world.velocity);
+    out.velocity.applyQuaternion(inverse);
+    out.spin.copy(world.spin ?? ZERO).sub(spin).applyQuaternion(inverse);
+    out.preferred = world.preferred;
+    out.carriedBy = world.carriedBy;
+    return out;
+  }
 }
 
 function copy(to: Placement, from: Placement) {
@@ -86,4 +112,4 @@ function copy(to: Placement, from: Placement) {
   to.quaternion.copy(from.quaternion);
 }
 
-const [_r, _v] = [new Vector3(), new Vector3()];
+const [_r, _v, _s] = [new Vector3(), new Vector3(), new Vector3()], _q = new Quaternion(), ZERO = new Vector3();

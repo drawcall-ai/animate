@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame, Step } from '../../kernel/frame';
-import type { Carrier } from '../../kernel/carrier';
+import { Carrier } from '../../kernel/carrier';
 import { followRotation, toLocal } from '../../kernel/follow';
 import { Glide } from '../../kernel/glide';
 import { type Live, type Motion, type Goal } from '../../kernel/goal';
@@ -181,9 +181,14 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
   // (a grip held, as a reach setting off, is let out as far as the arm hangs: a hand holding something by an arm all but straight —
   // something long taken up from a hanging hand — is not drawn off its grip)
   const contact = options.thing !== undefined && options.thing === person.holding[side]?.thing;
-  arm.to(f, target, {
+  // (a goal in the world followed from the shoulder the arm hangs from (`shoulderOf`), its own motion fed forward as seen from there: the
+  // trunk carries the arm and the hand's brakes act on its own way only — followed in the world at a hand's 8 m/s², a hand gliding to a
+  // box as the body squatted to it hung back in the air as the shoulder dropped past it, 0.7 m off its way, the arm swung out level)
+  const shoulder = options.on ? undefined : shoulderOf(person, f, side);
+  arm.to(f, shoulder ? shoulder.toLocal(target, _tipGoal, f.time) : target, {
     ...CALM,
     ...options,
+    on: options.on ?? shoulder,
     pole,
     contact,
     // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better, and swivels on from it
@@ -296,7 +301,25 @@ const _q = new Quaternion(), _r = new Quaternion(), _c = new Quaternion(), _g = 
 const _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _along = new Vector3();
+const _tipGoal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
+const shoulders = new WeakMap<Reacher, Record<Side, Carrier>>();
 const _turnAt = new Quaternion(), _gliding = new Quaternion(), _wrist = new Vector3();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _glided = { position: new Vector3(), velocity: new Vector3() };
+
+/**
+ * where arm `side` of `person` hangs from as a frame its hand is carried in: the shoulder's root as the trunk moves it, unturned — the arm
+ * hangs from the shoulder joint, so the trunk's tilt does not swing it (carried on the chest's turn, a hand as the body bowed to a box swung
+ * up out in front as if the arm were fixed to the chest). Placed as the pose's last sub-steps had it, the first time it is read each
+ * sub-step, so its motion is the shoulder's however long it went unread (moved only when read, a hand set off from the hang read its
+ * walking speed as its own and was flung out in front).
+ */
+function shoulderOf(person: Reacher, f: Frame, side: Side): Carrier {
+  const bone = INDEX[`${side}Shoulder`], at = f.current.position(bone);
+  let carriers = shoulders.get(person);
+  if (!carriers) shoulders.set(person, (carriers = { left: new Carrier(at), right: new Carrier(at) }));
+  const shoulder = carriers[side];
+  if (!shoulder.moved(f.time)) shoulder.trace(f.time, f.prev2.position(bone), f.prev.position(bone), at);
+  return shoulder;
+}

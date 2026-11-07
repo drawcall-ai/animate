@@ -197,7 +197,7 @@ export function holdAlong(person: Reacher, request: Request, thing: Thing, guide
 /** where a carried course ends, followed as its frame moves it: a thing has come to rest there once within 5 mm of it (or as near as its
  * course asks) and moving with it to within 5 cm/s and turning with it to within 0.5 rad/s (5 cm/s a hand's breadth out), read as the
  * thing and the end were a sub-step before */
-const END = { distance: 0.005, speed: 0.05, spin: 0.5 };
+export const END = { distance: 0.005, speed: 0.05, spin: 0.5 };
 
 /** how a carried thing stands at its course's end (`at`): whether it has come to rest there, as `END` has it, within `near` of it, and
  * whether, at an end that sets a turn (`turn`), it still turns there — a thing swung through its end's turn is not in it as it passes */

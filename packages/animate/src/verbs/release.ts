@@ -3,13 +3,16 @@ import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
 import { attach, bodyOf, grasp, handsOn, take, worn } from '../things/hold';
 import { backOff } from '../hands/person/press';
+import { END } from '../hands/person/travel';
+import { STEP } from '../kernel/frame';
 import { personOf } from '../body/person';
 import type { Self } from '../body/runtime';
 import { Thing } from '../things/thing';
 import { spinOf } from '../kernel/rotation';
 
-/** how near an empty a thing put onto it must be (m): nearer, it is set exactly there */
-const ONTO = 0.005;
+/** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — as near as a carry there leaves it at rest (`END`,
+ * read a sub-step before), a sub-step on */
+const ONTO = END.distance + END.speed * STEP;
 /** let go in mid-air: its lowest point this far above the ground (m), or moving this fast (m/s) */
 const MID_AIR = { height: 0.02, speed: 0.2 };
 
