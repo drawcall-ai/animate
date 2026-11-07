@@ -42,8 +42,9 @@ export class ChainTip {
     placedTurn: new Quaternion(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
   /** the chain's joints as its last solve left them, before the brakes */
   private solved: Quaternion[] = [];
-  /** whether its last solve kept its fit (`keep`) and turned the tip (`moved.turned`) */
-  private kept = false;
+  /** whether its last call turned the tip along an intended turn it runs on (`moved.turned`): its fit kept (`keep`), or its turn only
+   * preferred — resumed only by a call that runs one on too */
+  private resumes = false;
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
   private on?: Carrier;
@@ -82,8 +83,11 @@ export class ChainTip {
       // down stuck 2.3 rad short, turned half round — and one braked behind its turn was asked on at the pace the brakes left it: the
       // ask overshot, the brakes lagged it again, and a knot in the hand swung 3 cm about its end for a second. A fit chosen afresh (a
       // reach) turns on from the tip as its joints left it: an intended turn run on ahead of a reach the brakes hold back had the arm
-      // solved into the trunk. 1 − |dot|, not `angleTo`, for "as it was left": acos loses the precision near zero, ~1e-8 rad.)
-      const resumed = own && this.kept && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
+      // solved into the trunk. A turn only preferred runs on too: it is the last joint's alone, never swivelling the arm for it, and read
+      // back from a hand its wrist holds short, the hand's motion along the wrist's range ran the ask round its turn at 5 rad/s, never
+      // nearer — a hand at a rifle's foregrip spun on, 157° off its turn. 1 − |dot|, not `angleTo`, for "as it was left": acos loses
+      // the precision near zero, ~1e-8 rad.)
+      const resumed = own && this.resumes && (options.keep === true || target.preferred === true) && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
       const before = resumed ? moved.turnedBefore : f.prev2.rotation(tip), last = resumed ? moved.turned : f.prev.rotation(tip);
       quaternion = followRotation(before, last, goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
       moved.turnedBefore.copy(last);
@@ -106,12 +110,14 @@ export class ChainTip {
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
     // (a fit kept is the last solve's, as production IK seeds a pole-vector solve from the last frame: seeded from the arm as its brakes
     // left it, between the fit asked and the one before, the solve could settle into another — a belt's tongue held at its end swung 4 cm
-    // off it as the other hand's carry ended)
-    if (own && options.keep && this.solved.length === bones.length) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));
+    // off it as the other hand's carry ended. Unless what it may not pass through held the arm off it (`nudged`): then the fit is the
+    // arm's as it was left — the last solve's, kept on the trunk's far side, was braked toward and pushed back out each sub-step, a ball
+    // regripped in the hand left 70° off its turn for good)
+    if (own && options.keep && this.solved.length === bones.length && !this.nudged.size) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));
     // (a turn only preferred is the tip's own, as far as its last joint turns it: the bend is not swivelled off the pole's plane for it)
     solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep, poleFirst: target.preferred });
     this.solved = bones.map((b, k) => (this.solved[k] ?? new Quaternion()).copy(f.current.local(b)));
-    this.kept = options.keep === true && quaternion !== undefined;
+    this.resumes = (options.keep === true || target.preferred === true) && quaternion !== undefined;
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       const nudged = continued ? this.nudged : null;
@@ -157,7 +163,7 @@ export class ChainTip {
 type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
 
 /** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative speed;
- * a turn only preferred, within REACHED angle or no longer closing on it (`TURNING`). */
+ * a turn only preferred, within REACHED angle or no longer turning (`TURNING`). */
 export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);
@@ -176,20 +182,28 @@ export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: nu
   const moving = _v.subVectors(at, prev2.position(tip)).divideScalar(dt).sub(velocity);
   if (at.distanceTo(then) > REACHED.distance || moving.length() > REACHED.speed) return false;
   const angle = angleOff(f, tip, target, on);
-  return angle <= REACHED.angle || (target.preferred === true && (angleOff(f, tip, target, on, true) - angle) / dt <= TURNING);
+  return angle <= REACHED.angle || (target.preferred === true && turning(f, tip, placed) <= TURNING);
 }
 
-/** how fast (rad/s) a tip may still close on a turn only preferred and be as far as it goes: a grasp closed on a hand still turning
- * would be shaped for a turn the hand goes on from — and one held short of it by the wrist's range, on what still turns, would follow it
- * without coming any nearer, the hand waiting short of its grip */
+/** how fast (rad/s) a tip short of a turn only preferred may still turn, in the frame its target is in, and be as far as it goes: a grasp
+ * closed on a hand still turning would be shaped for a turn the hand goes on from. The tip's own turning, not how fast it comes nearer the
+ * turn: a hand swinging back off its turn, still turning, comes no nearer for a moment at the swing's end (one taken so, 32° short of it,
+ * came to rest 2° short), and one taken as it swung back came to rest further off than the fingers had closed for. (A swing reversing
+ * about one axis alone still passes through rest for a sub-step.) */
 const TURNING = 0.2;
 
-/** The unmet turn, in radians, allowing the target’s free roll and using the last final pose (`before`: the one before it). */
-function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; prev2?: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: Carrier, before = false): number {
+/** how fast `tip` turns (rad/s) in the frame of `placed` (else the world's), as the last two final poses have it */
+function turning(f: { prev2: TipPose; prev: TipPose; dt: number }, tip: number, placed?: Trail): number {
+  const was = _turnedBefore.copy(near(f.prev2.rotation(tip), placed && { current: placed.prev2 }));
+  return near(f.prev.rotation(tip), placed && { current: placed.prev }).angleTo(was) / f.dt;
+}
+
+/** The unmet turn, in radians, allowing the target’s free roll, as the last final pose has it. */
+function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: Carrier): number {
   if (!target.quaternion) return 0;
-  const placed = on?.at(f.time), pose = before && f.prev2 ? f.prev2 : f.prev;
+  const placed = on?.at(f.time);
   // (in the frame the target is given in, rolled about its axis as near the tip as it may be)
-  const turned = near(pose.rotation(tip), placed && { current: before ? placed.prev2 : placed.prev });
+  const turned = near(f.prev.rotation(tip), placed && { current: placed.prev });
   return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned);
 }
 
@@ -261,7 +275,7 @@ function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quate
 
 /** the share of a chain's length its tip is moved out to at most: as far as a limb reaches, all but straight */
 export const REACH = 0.98;
-const ZERO = new Vector3();
+const ZERO = new Vector3(), _turnedBefore = new Quaternion();
 const [_position, _braked, _v, _axis, _velocity, _then, _was, _was2, _late, _off] = Array.from({ length: 10 }, () => new Vector3());
 const [_turned, _before, _quaternion, _joint, _r, _d, _roll, _near] = Array.from({ length: 8 }, () => new Quaternion());
 const _goal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

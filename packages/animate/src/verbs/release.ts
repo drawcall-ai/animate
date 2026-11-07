@@ -11,7 +11,8 @@ import { Thing } from '../things/thing';
 import { spinOf } from '../kernel/rotation';
 
 /** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — as near as a carry there leaves it at rest (`END`,
- * read a sub-step before), a sub-step on */
+ * read a sub-step before), a sub-step on; and how near where it was taken from a thing let go is to be put back there, not let go in
+ * mid-air */
 const ONTO = END.distance + END.speed * STEP;
 /** let go in mid-air: its lowest point this far above the ground (m), or moving this fast (m/s) */
 const MID_AIR = { height: 0.02, speed: 0.2 };

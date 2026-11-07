@@ -63,7 +63,8 @@ export class Carrier implements Trail {
     copy(this.prev2, this.current);
   }
 
-  /** placed at `time` (s) and the two sub-steps before as a pose's history has it (a frame read off a bone), unturned */
+  /** placed at `time` (s) and the two sub-steps before as a pose's history has it (a frame read off a bone), turned as it is — a frame
+   * only ever placed so is unturned */
   trace(time: number, prev2: Readonly<Vector3>, prev: Readonly<Vector3>, current: Readonly<Vector3>): void {
     this.move(time, current);
     this.prev2.position.copy(prev2);

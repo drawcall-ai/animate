@@ -88,7 +88,9 @@ it('a child reaches a dog’s head while it looks up at the child', () => {
   expect([...child.log, ...pet.log]).toEqual([]);
 });
 
-it('finishes a low loaded reach against the actual shoulder when balance reduces its bow', () => {
+// (a knee feedback off the actual shoulder squatted further while the bow still came, and stood back up with the bucket on the ground:
+// the hand turned with the rising body, the bucket by its handle 11 mm off its place)
+it('sets a low load down on its place though balance reduces its bow', () => {
   const farmer = person({ dev: true, at: new Vector3(0, 0, 3), face: Math.PI });
   const room = roomOf(farmer);
   const bucket = empty(room, 'bucket', new Vector3(0, 0, 2.6));
