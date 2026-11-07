@@ -1,7 +1,8 @@
 import { carry, grab, release, wait, type Body } from '@drawcall/animate';
 import { action } from '@pmndrs/timeline';
 import { Object3D, Vector3 } from 'three';
-import { empty, onBone, RIFLE, type Rifle } from './weapon';
+import { onBone } from './bones';
+import { empty, RIFLE, type Rifle } from './weapon';
 import type { Litter } from './weapon/litter';
 
 /** The pouches' magazines on the left of the body: the left hand takes the chest one round its body as it will seat it in the well, and

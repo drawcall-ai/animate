@@ -5,7 +5,8 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { anglesOf, lookDirection, wrapAngle } from './angles';
 import type { Look } from './playback';
 import { SOLDIER } from './skeleton';
-import { empty, onBone, RIFLE, rifleOn } from './weapon';
+import { onBone } from './bones';
+import { empty, RIFLE, rifleOn } from './weapon';
 import { Litter } from './weapon/litter';
 import { WeaponMotion } from './weapon/motion';
 import type { Grenades } from './grenade';
@@ -229,7 +230,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
 
   /** How the rifle rode the chest through a reload (its turn on the shoulder pocket), to ease back to the aim from. */
   let rode: Quaternion | undefined;
-  const hold = (seconds: number) => {
+  const hold = () => {
     if (slung > 0) {
       // Hanging from its shoulder sling, muzzle down across the left side, clear of the grenade at the right chest.
       const hanging = pocket.getWorldQuaternion(new Quaternion()).multiply(new Quaternion().setFromEuler(new Euler(1.25, 0, 0.4)));
@@ -305,11 +306,11 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     // it back for a shot; the other fingers and the thumb close round the grip themselves.
     pistol.userData.digits = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame' };
     blade.position.z = time - lastShot < SHOT_INTERVAL ? -SQUEEZE : 0;
-    hold(seconds);
+    hold();
   };
 
   eye.getWorldPosition(look.eye);
-  hold(0);
+  hold();
   const step = runTimeline(() => parallel('all',
     function* () {
       acquired = yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, snatch ? SNATCH : {});
@@ -341,6 +342,8 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     action({ update: (_, clock) => frame(clock.delta) }),
   ));
 
+  /** whether the hands are free for a new task: on the rifle, neither reloading, pressing a button nor throwing */
+  const free = () => acquired && !reload.reloading && !press.wanted && !throwing;
   return {
     person, look, muzzle, eye, rifle,
     acquired: () => acquired,
@@ -349,21 +352,21 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     grenadePhase: () => !throwing ? '' : returning ? 'Returning to rifle' : grenade?.phase ?? 'Lowering rifle',
     dropGrenade: () => grenade?.interrupt(look.eye),
     requestGrenade: () => {
-      if (!grenade || !grenades?.count || !acquired || reload.reloading || press.wanted || throwing) return false;
+      if (!grenade || !grenades?.count || !free()) return false;
       throwing = true;
       return true;
     },
     aimWeight: () => smooth(aiming),
     reloads: () => reload.count,
-    requestReload: () => { if (acquired && !reload.swapping && !press.wanted && !throwing) reload.wanted = true; },
-    press: (button: Object3D, pressed: () => void) => { if (acquired && !reload.reloading && !press.wanted && !throwing) press.wanted = { button, pressed }; },
+    requestReload: () => { if (free()) reload.wanted = true; },
+    press: (button: Object3D, pressed: () => void) => { if (free()) press.wanted = { button, pressed }; },
     pressing: () => press.wanted !== null,
     lower: (at: boolean) => { low = at; },
     fire: () => {
       // The rifle fires once it has come halfway up from the sprint carry, about 0.13 s after the sprint ends.
       // Held fire keeps its cadence on the shot clock, not the simulation steps the shots land on (1e-9: float steps).
       const next = lastShot + SHOT_INTERVAL;
-      if (!acquired || reload.reloading || press.wanted || throwing || sprinted > 0.5 || time < next - 1e-9) return false;
+      if (!free() || sprinted > 0.5 || time < next - 1e-9) return false;
       lastShot = time - next < SHOT_INTERVAL ? next : time;
       motion.fire();
       // 12 N·s keeps sustained 600 rpm fire to a torso sway of about 0.08 rad.
