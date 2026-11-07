@@ -20,7 +20,7 @@ import { lerp, smoothstep } from '../kernel/math';
 /** How a throw goes. */
 export interface ThrowOptions {
   /** the speed it leaves the hand at (m/s; default the least that carries it to the target on a 40° arc, at most 25): what `released`
-   * reports, aimed at the target */
+   * reports, aimed at the target — out of reach at that speed, at 45°, as far as it goes, which development says */
   speed?: number;
   /** the gravity your physics flies it under (m/s², down; default 9.81): what the aim at the target is worked out for */
   gravity?: number;
@@ -111,7 +111,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   const through = () => ({ position: new Vector3(x * THROUGH.direction.x, THROUGH.direction.y, THROUGH.direction.z).multiplyScalar(THROUGH.share * person.proportions.armLength)
     .applyQuaternion(facing()).add(person.pose.position(INDEX[`${side}UpperArm`])) });
   const elbow = () => person.pose.position(INDEX[`${side}UpperArm`]).clone().add(new Vector3(x * ELBOW.x, ELBOW.y, ELBOW.z).applyQuaternion(facing()));
-  let whip: ReturnType<typeof course> | null = null, let_go = false, began = NaN;
+  let whip: ReturnType<typeof course> | null = null, gone = false, began = NaN;
   const since = (f: Frame) => f.time - (Number.isNaN(began) ? (began = f.time) : began);
   const uncoiled = (f: Frame) => since(f) >= TIMES.windup + TIMES.cocked - TIMES.lead;
   // (a body standing strides into the throw, sinks into it and turns its hips with it; one already walking or running throws over its
@@ -125,7 +125,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
     const twist = lerp(COILED.twist, UNCOILED.twist, turn(0)), hips = lerp(COILED.hips, UNCOILED.hips, turn(HIPS_LEAD));
     // (bowed into the throw as the hand lets go, not before, so the head does not run on past the hand)
     return {
-      twist: x * twist, hips: strides ? x * hips : 0, twistRate: TWISTING, bow: let_go ? UNCOILED.bow : COILED.bow, bowRate: BOWING,
+      twist: x * twist, hips: strides ? x * hips : 0, twistRate: TWISTING, bow: gone ? UNCOILED.bow : COILED.bow, bowRate: BOWING,
       ...(strides && { lower: ask.lower * scale, shift: new Vector3(0, 0, ask.shift * scale).applyQuaternion(facing()) }), ...(strides && since(f) >= STRIDE.from && { stagger: stride }),
     };
   };
@@ -145,12 +145,14 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
       // elbow over the shoulder from one sub-step to the next)
       handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, lead: false, pole: elbow() }, arm);
       // (let go as it passes ahead of the head, or as the whip reaches where that is, whichever is first)
-      if (let_go || (local(f.current.position(bone)).z < PATH.out.z * scale && since(f) < TIMES.windup + TIMES.cocked + TIMES.whip / 2)) return;
-      let_go = true;
+      if (gone || (local(f.current.position(bone)).z < PATH.out.z * scale && since(f) < TIMES.windup + TIMES.cocked + TIMES.whip / 2)) return;
+      gone = true;
       const motion = letGo(person, thing, [side], undefined, false);
       if (target) {
         const at = typeof target === 'function' ? target(f.time) : target;
-        motion.velocity.copy(aimed(thing.object.getWorldPosition(new Vector3()), at instanceof Object3D ? at.getWorldPosition(new Vector3()) : at, options.speed, options.gravity ?? G));
+        const aim = aimed(thing.object.getWorldPosition(new Vector3()), at instanceof Object3D ? at.getWorldPosition(new Vector3()) : at, options.speed, options.gravity ?? G);
+        motion.velocity.copy(aim.velocity);
+        if (aim.short) f.dev?.append(f.time, { ...aim.short, where: thing.object.name });
       }
       options.released?.(motion);
     }, (f) => whip !== null && whip.over(f)));
@@ -162,20 +164,31 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   request.met();
 }
 
-/** the velocity from `from` that carries a thing to `to` under gravity `g`: at `speed`, on its lower arc (none: the least on `ARC`) */
-function aimed(from: Vector3, to: Vector3, speed: number | undefined, g: number): Vector3 {
+/**
+ * the velocity from `from` that carries a thing to `to` under gravity `g`: at `speed`, on its lower arc (none: the least on `ARC`, at
+ * most `MOST`); and, where it cannot, what falls short — out of reach at that speed it goes at 45°, as far as it goes; straight above or
+ * below with no speed it is dropped
+ */
+function aimed(from: Vector3, to: Vector3, speed: number | undefined, g: number): { velocity: Vector3; short: { check: string; value: number; limit: number } | null } {
   const flat = new Vector3(to.x - from.x, 0, to.z - from.z), d = flat.length(), h = to.y - from.y;
-  if (d < 1e-6) return new Vector3(0, speed ?? 0, 0);
+  if (d < 1e-6) {
+    const short = speed === undefined ? { check: 'throw: a target straight above or below, and no speed to throw it at (m)', value: Math.abs(h), limit: 0 } : null;
+    return { velocity: new Vector3(0, speed ?? 0, 0), short };
+  }
   flat.divideScalar(d);
   let v = speed;
   if (v === undefined) {
     const lift = d * Math.tan(ARC) - h;
     v = lift > 0 ? Math.min(MOST, Math.sqrt((g * d * d) / (2 * Math.cos(ARC) ** 2 * lift))) : MOST;
   }
-  // (the lower of the two arcs at that speed; out of its reach, 45°, as far as it goes)
   const root = v ** 4 - g * (g * d * d + 2 * h * v * v);
-  const angle = root >= 0 ? Math.atan((v * v - Math.sqrt(root)) / (g * d)) : Math.PI / 4;
-  return flat.multiplyScalar(v * Math.cos(angle)).setY(v * Math.sin(angle));
+  if (root < 0) {
+    // (the least speed that reaches it: v² = g (h + √(h² + d²)))
+    const least = Math.sqrt(g * (h + Math.hypot(h, d)));
+    return { velocity: flat.multiplyScalar(v * Math.SQRT1_2).setY(v * Math.SQRT1_2), short: { check: 'throw: a target out of reach at its speed (m/s)', value: v, limit: least } };
+  }
+  const angle = Math.atan((v * v - Math.sqrt(root)) / (g * d));
+  return { velocity: flat.multiplyScalar(v * Math.cos(angle)).setY(v * Math.sin(angle)), short: null };
 }
 
 const G = 9.81, UP = new Vector3(0, 1, 0), _turn = new Quaternion(), _held = new Quaternion();

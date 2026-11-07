@@ -14,7 +14,7 @@ import { sideOf } from '../../species/humanoid/bones';
 import { bringShoulder } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { following, LEADING, limitOf } from './reach';
-import { grasped, seat, type Grasping } from './grasp';
+import { grasped, seat, type Regripping } from './grasp';
 import type { Hold } from '../../things/resolve';
 import type { Guide, Guides } from './guide';
 
@@ -44,7 +44,7 @@ const SETTLING = 0.5;
  * course counted in.
  */
 export function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
-  { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Grasping } = {}) {
+  { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Regripping } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
   // (a hand carrying alone while the leading hand carries something of its own goes a moment after it; one beside a leading hand that

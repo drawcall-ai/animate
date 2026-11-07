@@ -8,7 +8,8 @@ export interface PlacedGeometry {
 
 /**
  * The triangles of `meshes` within `radius` of `centre` (all in one frame: each geometry's positions taken through its matrix), gathered
- * once, for many rays cast near there: a hand closing on a handle tests a few hundred, not the whole thing's thousands.
+ * once, for many rays cast near there: a hand closing on a handle tests a few hundred, not the whole thing's thousands. Hand-rolled
+ * rather than three-mesh-bvh: its BufferGeometry augmentation broke type narrowing, and this is ~120 lines with no dependency.
  */
 export class Triangles {
   private readonly corners: Float32Array;

@@ -144,6 +144,13 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   return false;
 }
 
+/** when a carry's one-handed grasp is weighed for its end (`regripping`) */
+export interface Regripping {
+  /** weighed as the course nears its end, the last time as it is `over` */
+  nearing: (f: Frame, over: boolean) => void;
+  settling: (f: Frame) => void;
+}
+
 /**
  * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
  * the thing is now): as it nears its end (`nearing`, from `PLANNED` s before it, travel.ts) — weighed each sub-step until its course is over, the end and the body as they
@@ -152,13 +159,7 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
  * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s (travel.ts) after its course is over
  * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
  */
-export interface Grasping {
-  /** weighed as the course nears its end, the last time as it is `over` */
-  nearing: (f: Frame, over: boolean) => void;
-  settling: (f: Frame) => void;
-}
-
-export function grasping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Grasping {
+export function regripping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Regripping {
   const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
   const plan = (f: Frame, settling = false) => {
     if (!hold) return false;

@@ -18,7 +18,7 @@ import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { footing, walking, type WalkUp } from './stand';
 import { guidesFor, CARRYING, type Guides } from './guide';
 import { holdAlong, travel } from './travel';
-import { grasping, type Grasping } from './grasp';
+import { regripping, type Regripping } from './grasp';
 
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
 const PREPARED = 2;
@@ -56,7 +56,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   }
   const end = way.points[way.points.length - 1];
   // (in one hand, its grasp planned for its end as it comes there)
-  const grasp = grasping(person, thing, end);
+  const grasp = regripping(person, thing, end);
   // (the hands as brisk as the way is quick, in turning it as in moving it: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
   const brisk = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel / CARRYING.accel;
   const guides = guidesFor(person, thing, { ...CARRYING, accel: CARRYING.accel * brisk, turnAccel: CARRYING.turnAccel * brisk, turnSpeed: CARRYING.turnSpeed * Math.sqrt(brisk) }, way.clear);
@@ -67,7 +67,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
-function* transferring(person: Reacher, request: Request, thing: Thing, way: Way, plan: WalkUp, guides: Guides, resting: boolean, grasp: Grasping) {
+function* transferring(person: Reacher, request: Request, thing: Thing, way: Way, plan: WalkUp, guides: Guides, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
   const carrier = person.track(thing.object);
   const from = carrier.current.position.y, watched = carrier.current.position.clone();
@@ -108,7 +108,7 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(person: Reacher, request: Request, thing: Thing, way: Way, guides: Guides, resting: boolean, grasp: Grasping, speed = ALONG.speed * person.tempo) {
+function* along(person: Reacher, request: Request, thing: Thing, way: Way, guides: Guides, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
   const least = ALONG.least;
   let points = way.points;
   if (way.outside > 0) {
@@ -166,7 +166,7 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
   const way: Waypoint[] = [[CLEAR.seconds / person.tempo, { position: up, quaternion }]];
   if (out > most) way.push([(out - most) / ALONG.speed / person.tempo, { position: clear, quaternion }]);
   // (in one hand, its grasp planned for where it comes clear)
-  const grasp = grasping(person, thing, () => ({ position: clear, quaternion }));
+  const grasp = regripping(person, thing, () => ({ position: clear, quaternion }));
   yield* travel(person, request, thing, way, guidesFor(person, thing, CARRYING, true), resting, { near: CLEAR.near * person.scale, grasp });
 }
 

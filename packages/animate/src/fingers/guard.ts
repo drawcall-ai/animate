@@ -5,7 +5,7 @@ import type { Placement } from '../kernel/goal';
 import { inFrame, placedOf, worldOf, type Placed } from '../kernel/scene';
 import { PAD_DEPTH, trianglesAbout } from './closing';
 import type { Joints } from './joints';
-import { DIGITS, easeShape, type Digit, type Shape } from './shape';
+import { blendShape, DIGITS, easeShape, withValues, type Digit, type Shape } from './shape';
 
 /** how near the last thing a hand held its digits are kept out of it, and how near it its shape is held as it was (m); how far a hand
  * moves before the triangles about it are gathered afresh (m); how deep a digit may sink into what it is kept out of (m: its skin's give
@@ -79,17 +79,15 @@ export class Guard {
 function keptOut(joints: Joints, near: Triangles, place: Placed, shape: Shape, was: Shape, digit: Digit): void {
   const matrix = new Matrix4().compose(place.position, place.quaternion, new Vector3().setScalar(place.scale));
   const depth = () => Math.max(0, ...joints.flesh(digit, shape).map((ball) => near.depth(ball.at.applyMatrix4(matrix), ball.radius * place.scale * PAD_DEPTH, GUARD.within)));
-  const to = { ...shape[digit] } as Record<string, number>, from = { ...was[digit] } as Record<string, number>;
-  const set = (a: Record<string, number>, b: Record<string, number>, t: number) => {
-    const mixed = Object.fromEntries(Object.keys(a).map((key) => [key, a[key] + (b[key] - a[key]) * t]));
-    if (digit === 'thumb') shape.thumb = mixed as Shape['thumb'];
-    else shape[digit] = mixed as Shape['index'];
-  };
+  const to = structuredClone(shape), from = structuredClone(was);
+  const set = (a: Shape, b: Shape, t: number) => withValues(shape, digit, blendShape(a, b, t)[digit]);
   if (depth() <= GUARD.sunk) return;
   set(from, from, 0);
   const before = depth();
   // (from where it was toward where it eased to, or, sunk already, from where it eased to toward straight)
-  const [a, b] = before <= GUARD.sunk ? [from, to] : [to, Object.fromEntries(Object.keys(to).map((key) => [key, 0]))];
+  const straight = structuredClone(to);
+  withValues(straight, digit, digit === 'thumb' ? { curl: 0, oppose: 0, spread: 0 } : { curl: 0, hook: 0, spread: 0 });
+  const [a, b] = before <= GUARD.sunk ? [from, to] : [to, straight];
   if (before > GUARD.sunk) {
     set(a, b, 1);
     if (depth() > GUARD.sunk) return;

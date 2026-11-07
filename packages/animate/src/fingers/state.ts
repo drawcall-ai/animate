@@ -134,7 +134,7 @@ export class FingerState {
   /** whether `side`'s hand has closed on what it holds: its shape within `CLOSED` of the one it closes to */
   closed(side: 'left' | 'right'): boolean {
     const hand = this.hands[side], taken = this.held(side);
-    return taken !== null && near(hand.shape, hand.solve?.shape ?? goalOf(taken));
+    return taken !== null && closedTo(hand.shape, hand.solve?.shape ?? goalOf(taken));
   }
 
   /** each hand eased `seconds` on toward what it holds, what a pose asked of it this update, or relaxed — one whose contacts were met
@@ -338,7 +338,7 @@ function sameContacts(a: readonly Contact[], b: readonly Contact[]): boolean {
 }
 
 /** whether `shape` is within `CLOSED` of `goal`, every value */
-function near(shape: Shape, goal: Shape): boolean {
+function closedTo(shape: Shape, goal: Shape): boolean {
   const off = (a: Readonly<Record<string, number>>, b: Readonly<Record<string, number>>) => Object.keys(a).every((key) => Math.abs(a[key] - b[key]) <= CLOSED);
   return off(shape.thumb, goal.thumb) && off(shape.index, goal.index) && off(shape.middle, goal.middle) && off(shape.ring, goal.ring) && off(shape.little, goal.little);
 }
