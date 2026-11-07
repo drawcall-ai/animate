@@ -342,6 +342,34 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
+  // (crouched as its player drives it, a hand at its chest is no low reach: judged as from standing, the short-armed soldier bowed 57° for
+  // a grenade carried up from its vest, its head came into the grenade's way and the carry failed; and it throws from the crouch, its wrist
+  // within the joints' speeds — its windup's turn let run to 60 rad/s, the wrist turned at 3100°/s cocking the grenade)
+  it('crouched, its root driven: takes a thing up from its chest to before its face, and throws it', () => {
+    const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, crouch: 1 };
+    const body = new Body(humanoid(SOLDIER), { dev: true, drive: () => root }), room = roomOf(body);
+    play(function* () { yield* wait(1); }, [body], 1);
+    const chest = body.object.worldToLocal(body.bones.chest.getWorldPosition(new Vector3()));
+    const ball = box(room, new Vector3(-0.15, chest.y, 0.3), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
+    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], facing: [0, 0, -1], radius: 0.035 });
+    let carrying = false, carried = false, bowed = 0, done = false;
+    play(function* () {
+      if (!(yield* grab(body, ball, { right: 'body' }, { step: false }))) return;
+      carrying = true;
+      carried = yield* carry(body, ball, () => body.armPoint('right', new Vector3(0.3, 0.35, 1), 0.8), { step: false });
+      carrying = false;
+      yield* throwAt(body, ball, new Vector3(0, 0, 15));
+      done = true;
+    }, [body], 6, () => {
+      if (carrying) bowed = Math.max(bowed, Math.asin(-new Vector3(0, 0, 1).applyQuaternion(body.bones.chest.getWorldQuaternion(new Quaternion())).y));
+      return done;
+    });
+    expect(carried).toBe(true);
+    expect(done).toBe(true);
+    expect(bowed).toBeLessThan(0.6);
+    expect(body.log).toEqual([]);
+  });
+
   // (a target on the body given as an object or by a function: either way the carry ends with the thing there and turned, and keeps it so)
   for (const kind of ['an object', 'a function'] as const) it(`turns what one hand holds as a turned empty on the body asks, given as ${kind}`, () => {
     const body = person({ dev: true }), room = roomOf(body);

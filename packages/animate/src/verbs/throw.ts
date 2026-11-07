@@ -10,6 +10,7 @@ import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import { handStep } from '../hands/person/arms';
 import { INDEX, sideOf, type Side } from '../species/humanoid/bones';
+import { crouchOf } from '../legs/person/legged';
 import type { Asked } from '../kernel/poise';
 import { letGo, type Released } from './release';
 import { verb, type Verb } from './story';
@@ -52,8 +53,9 @@ export function throwAt(body: Body, thing: Object3D, target?: Target, options: T
   return verb(body, 'throwAt', (request) => () => throwing(person, request, held, side, target, options));
 }
 
-/** where the throwing hand's wrist goes, from the head standing upright (the body's frame for a right hand, +X its left, × its scale;
- * a left hand mirrors it): out beside the shoulder, cocked behind the ear, past the side of the head, and let go ahead of it */
+/** where the throwing hand's wrist goes, from the head standing upright, as low as its root crouches it (the body's frame for a right
+ * hand, +X its left, × its scale; a left hand mirrors it): out beside the shoulder, cocked behind the ear, past the side of the head, and
+ * let go ahead of it */
 const PATH = {
   aside: new Vector3(-0.42, -0.12, 0), cocked: new Vector3(-0.36, 0, -0.22), passing: new Vector3(-0.33, 0.07, 0.12),
   out: new Vector3(-0.25, 0.08, 0.42),
@@ -78,21 +80,21 @@ const STRIDE = { ahead: 0.33, from: 0.16 };
 const OFF = { pointing: { forward: 1.4, out: 0.4, twist: 0, elbow: 0.2 }, pulled: { forward: 0.5, out: -0.3, twist: -0.9, elbow: 1.7 } };
 /** where the throwing elbow points through the cock and whip (from the shoulder, the body's frame for a right hand): out and level */
 const ELBOW = new Vector3(-1, -0.1, -0.4);
-/** how briskly the hand keeps to its path: quick enough for a throw's 8–10 m/s */
-const QUICK = { accel: 600, speed: 40, turnAccel: 2000, turnSpeed: 60 };
-/** how briskly the hand turns through the whip (rad/s², rad/s): a throw's wrist peaks near 2000°/s */
-const WHIPPED = { turnAccel: 400, turnSpeed: 35 };
+/** how briskly the hand keeps to its path (m/s², m/s: quick enough for a throw's 8–10 m/s) and turns, the arm's joints with it (rad/s²,
+ * rad/s: a throw's wrist peaks near 2000°/s), its turn's rate rising and falling within these all through the throw rather than braked at
+ * the joints' cap where the windup or the swing over the shoulder turns the forearm fastest */
+const QUICK = { accel: 600, speed: 40, turnAccel: 400, turnSpeed: 35 };
 /** the fastest a default throw sets out (m/s) and the arc it sets out on (rad) */
 const MOST = 25, ARC = (40 * Math.PI) / 180;
 
 function* throwing(person: Person, request: Request, thing: Thing, side: Side, target: Target | undefined, options: ThrowOptions) {
   const off: Side = side === 'right' ? 'left' : 'right', x = side === 'right' ? 1 : -1, scale = person.proportions.scale, bone = person.hands[side];
   const facing = () => _turn.setFromAxisAngle(UP, person.locomotion.facing).clone();
-  // (the body's frame as it stands — its root's ground point, turned as it faces — and where its head is standing upright: not where it
-  // is as the throw begins, a body that took the thing up from low still bowed over it)
+  // (the body's frame as it stands — its root's ground point, turned as it faces, let down as far as its root crouches it — and where its
+  // head is standing upright: not where it is as the throw begins, a body that took the thing up from low still bowed over it)
   const ground = () => {
     const root = person.pose.position(0);
-    return new Vector3(root.x, person.floor(root.x, root.z), root.z);
+    return new Vector3(root.x, person.floor(root.x, root.z) - crouchOf(person), root.z);
   };
   const head = new Vector3(0, person.proportions.eyeHeight - person.proportions.eyes.y, 0);
   const local = (point: Vector3) => point.clone().sub(ground()).applyQuaternion(facing().invert()).sub(head);
@@ -138,11 +140,10 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
       if (since(f) < TIMES.windup + TIMES.cocked) return void handStep(person, f, side, { position: windup.to(f).position, quaternion: wrist(f) }, { ...QUICK, lead: false, pole: elbow() }, arm);
       whip ??= course({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
         [[TIMES.whip * 0.3, at(PATH.passing)], [TIMES.whip * 0.2, at(PATH.out)], [TIMES.whip * 0.5, through]]);
-      // (the hand turned with the forearm through the whip, its turn's rate rising and falling within `WHIPPED` rather than braked at the
-      // joints' cap where the swing over the shoulder turns the forearm fastest)
+      // (the hand turned with the forearm through the whip)
       // (the elbow kept out and level through the follow-through as well: let loose after the release, a short arm's solve could pick the
       // elbow over the shoulder from one sub-step to the next)
-      handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, ...WHIPPED, lead: false, pole: elbow() }, arm);
+      handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, lead: false, pole: elbow() }, arm);
       // (let go as it passes ahead of the head, or as the whip reaches where that is, whichever is first)
       if (let_go || (local(f.current.position(bone)).z < PATH.out.z * scale && since(f) < TIMES.windup + TIMES.cocked + TIMES.whip / 2)) return;
       let_go = true;
@@ -157,7 +158,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   // stride come back on their own as the next verb begins)
   yield* parallel<Frame>('race',
     during(request, 'trunk', 'asked', (f) => person.poise.add(trunk(f))),
-    during(request, `hand.${side}`, 'asked', (f) => handStep(person, f, side, { ...through(), quaternion: f.prev.rotation(forearm) }, { ...QUICK, ...WHIPPED, lead: false }, arm), (f) => since(f) >= TIMES.windup + TIMES.cocked + TIMES.whip + TIMES.held));
+    during(request, `hand.${side}`, 'asked', (f) => handStep(person, f, side, { ...through(), quaternion: f.prev.rotation(forearm) }, { ...QUICK, lead: false }, arm), (f) => since(f) >= TIMES.windup + TIMES.cocked + TIMES.whip + TIMES.held));
   request.met();
 }
 

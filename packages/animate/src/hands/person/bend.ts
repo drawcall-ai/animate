@@ -9,7 +9,7 @@ import type { Proportions } from '../../species/humanoid/proportions';
 import { NECK_PITCH, TRUNK_PITCH } from '../../species/humanoid/limits';
 import { heldMass } from '../../things/hold';
 import { loadFactor } from '../../kernel/load';
-import { floorUnder } from '../../legs/person/legged';
+import { crouchOf, floorUnder } from '../../legs/person/legged';
 import { REACH } from '../../kernel/tip';
 
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
@@ -51,7 +51,10 @@ const BOWED = 0.95;
 export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Readonly<Vector3>, share = 1, mass = 0, carried = false) {
   const proportions = person.proportions;
   const factor = loadFactor(Math.max(mass, heldMass(person)));
-  const floor = floorUnder(person), height = carried ? hand.y - f.current.position(0).y + proportions.hipHeight : hand.y - floor;
+  // (crouched as its root is driven — a player's crouch — it reaches from the crouch, as from a floor that much lower: a hand at its chest
+  // is no low reach; what it asks the knees to let it down is from standing, as `lower` is, so it takes the crouch in)
+  const crouched = crouchOf(person);
+  const floor = floorUnder(person) - crouched, height = carried ? hand.y - f.current.position(0).y + proportions.hipHeight : hand.y - floor;
   const low = height < proportions.hipHeight;
   // Tuned load strategy, not an empirical dose-response: heavier low reaches trade bow for knees.
   let bowLimit = low ? MOST_BOW / factor ** 2 : MOST_BOW;
@@ -80,7 +83,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   // Tuned 2% reserve for the articulated shoulder arc: its single lever overestimates the reach a deep squat's tucked pelvis leaves.
   const reach = 0.98 * ARM_REACH * proportions.armLength;
   const { lower, bow } = handLowering(proportions, { ahead, lateral, height: height - elevation, reach, bowLimit });
-  if (share > 0) person.poise.add({ lower: lower * share });
+  if (share > 0) person.poise.add({ lower: (crouched + lower) * share });
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it, as far
   // as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it. Short of it from the
   // shoulder as low as the knees are asked to let it: a crouch still coming closes the reach by itself — leaning for it meanwhile, the
@@ -100,7 +103,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   const span = proportions.shoulderHeight - proportions.hipHeight;
   const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
     : Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * span;
-  if (low && overflow > 0) person.poise.add({ lower: Math.min(squatOf(proportions), lower + overflow) * share });
+  if (low && overflow > 0) person.poise.add({ lower: Math.min(squatOf(proportions), crouched + lower + overflow) * share });
   // Close a low reach against the actual shoulder once the bow is exhausted. Knees can close a vertical deficit,
   // not a horizontal one; the standing lever alone leaves a residual when load balance reduces the bow.
   // Acquiring a load already prepares its lowering above; this feedback closes the remaining deficit of a load already held.
@@ -109,7 +112,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
     const missing = shoulder.y - hand.y - Math.sqrt(out ** 2 - horizontal ** 2);
     if (missing > 0) {
       const lowered = floor + proportions.hipHeight - f.current.position(0).y;
-      person.poise.add({ lower: Math.min(squatOf(proportions), Math.max(lower, lowered + missing)) * share });
+      person.poise.add({ lower: Math.min(squatOf(proportions), crouched + Math.max(lower, lowered + missing)) * share });
     }
   }
   person.poise.add({ bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
