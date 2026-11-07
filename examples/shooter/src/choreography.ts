@@ -1,6 +1,6 @@
 import { MathUtils, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import type { Play } from './audio';
-import { grip, type Bone, type Pose, type Puppet, type Side } from './puppet';
+import type { Bone, Pose, Puppet, Side } from './puppet';
 
 /** The span of progress, from and to, over which one part moves. */
 export type Beat = readonly [from: number, to: number];
@@ -25,14 +25,6 @@ export interface Gaze { yaw: number; pitch: number }
 
 /** Where a hand goes and how it is turned there. */
 export interface Hold { wrist: Vector3; hand: Quaternion }
-
-/** How far back from where the hand closes the wrist is (m). */
-export const PALM = 0.075;
-
-/** `side`'s hand closed on `at`, its fingers running along `fingers` and its thumb toward `thumb` (world directions). */
-export function grasp(side: Side, at: Vector3, fingers: Vector3, thumb: Vector3): Hold {
-  return { wrist: at.clone().addScaledVector(fingers.clone().normalize(), -PALM), hand: grip(side, fingers, thumb) };
-}
 
 /** `s` of the way from `a` to `b`. */
 export function between(a: Hold, b: Hold, s: number): Hold {

@@ -1,0 +1,253 @@
+import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
+import { palmFacing, type DigitBones } from './bones';
+import { Triangles } from '../kernel/triangles';
+import { DIGITS, type DigitName, type Shape } from './shape';
+import type { HandleLine } from './line';
+
+export type Digit = 'thumb' | DigitName;
+
+
+/** One finger joint: its node and rest rotation, where it stands at rest from the joint before it (the hand, for the first), the axis it
+ * bends toward the palm about, and its segment out to the next joint, with how far its palm side lies from it (all its own frame). */
+interface Joint {
+  node: Object3D;
+  rest: Quaternion;
+  offset: Matrix4;
+  flex: Vector3;
+  along: Vector3;
+  palmar: Vector3;
+  length: number;
+  /** how far the segment's palm side is from its bone: the skin's, measured at rest; else a share of the digit's length */
+  depth: number;
+}
+
+type Three = readonly [Joint, Joint, Joint];
+
+/** A finger's joints from the palm out, and the axis its knuckle fans it about away from the middle finger (none: the middle finger). */
+interface FingerJoints {
+  joints: Three;
+  spread: Vector3 | null;
+}
+
+/** The thumb's joints from the wrist out, and the axes its metacarpal swings about in front of the palm, then across it. */
+interface Opposing {
+  joints: Three;
+  palmward: Vector3;
+  ulnar: Vector3;
+}
+
+/**
+ * How far each joint bends at a full curl (rad): a finger's knuckle 90°, its middle joint 100° and its end joint `DIP` of that, as the
+ * tendons couple it (Rijpkema & Girard 1991: ~2/3; Lin et al. 2000); the thumb's two outer joints 55° and 75° (Hume et al. 1990)
+ */
+const BEND = { knuckle: Math.PI / 2, middle: (100 * Math.PI) / 180, thumb: [(55 * Math.PI) / 180, (75 * Math.PI) / 180] } as const;
+const DIP = 0.7;
+/** how far a full spread fans each finger (rad), and how far a thumb opposed all the way swings in front of the palm and across it */
+const SPREAD = { index: 0.3, middle: 0, ring: 0.22, little: 0.4 } as const;
+const OPPOSE = { palmward: 1.0, ulnar: 0.45 } as const;
+/** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
+ * knuckles' bones as a share of the wrist-to-knuckle length */
+const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
+/**
+ * Where a handle lies in a power grasp: across the palm just short of the knuckles (this share of a proximal phalanx back from them), its
+ * index end a little further out than its little-finger end — the palm's distal crease runs ~15° off square to the hand (Napier 1956) —
+ * and as far out from the palm's skin as its radius
+ */
+const HANDLE = { back: 0.25, slant: Math.tan((15 * Math.PI) / 180) } as const;
+
+/**
+ * One hand's finger bones and how a `Shape` turns them: each joint bends about the axis square to its segment and to the palm's facing,
+ * worked out once from where the bones stand at rest under the hand — so it fits any rig named so, whatever its bones' own axes — and is
+ * written as a turn on top of its rest rotation. Given the skin they are rigged in, it measures how far each segment's palm side and the
+ * palm lie from the bones, so the fingers close onto a thing with their skin rather than their bones, and a handle sits against the palm.
+ */
+export class Joints {
+  private readonly fingers: Record<DigitName, FingerJoints>;
+  private readonly thumb: Opposing;
+  /** the palm's facing, the knuckles' middle, the hand's long axis and the line across the knuckles toward the index (the hand's frame) */
+  private readonly palm: Vector3;
+  private readonly knuckles: Vector3;
+  private readonly along: Vector3;
+  private readonly across: Vector3;
+  /** how far the palm's skin lies out from the knuckles' bones toward the palm */
+  private readonly palmDepth: number;
+
+  constructor(readonly hand: Object3D, bones: DigitBones, nodes: Readonly<Record<string, Object3D>>, side: 'left' | 'right', skins: readonly SkinnedMesh[]) {
+    const node = (name: string) => {
+      const found = nodes[name];
+      if (!found) throw new Error(`fingers: no bone "${name}"`);
+      return found;
+    };
+    // (each bone where it stands at rest in the hand's frame)
+    const rest = new Map<string, Matrix4>([[hand.name, new Matrix4()]]);
+    const named = Object.values(bones).flat();
+    for (const name of named) {
+      const matrix = new Matrix4();
+      for (let at: Object3D | null = node(name); at !== hand; at = at.parent) {
+        if (!at) throw new Error(`fingers: "${name}" does not hang from "${hand.name}"`);
+        at.updateMatrix();
+        matrix.premultiply(at.matrix);
+      }
+      rest.set(name, matrix);
+    }
+    const at = (name: string) => {
+      const found = rest.get(name);
+      if (!found) throw new Error(`fingers: no bone "${name}"`);
+      return found;
+    };
+    const point = (name: string) => new Vector3().setFromMatrixPosition(at(name));
+    const turnOf = (name: string) => new Quaternion().setFromRotationMatrix(at(name));
+    const palm = palmFacing(point, hand.name, bones, side, new Vector3());
+    const across = point(bones.index[0]).sub(point(bones.little[0])).normalize();
+    const knuckles = DIGITS.reduce((sum, digit) => sum.add(point(bones[digit][0])), new Vector3()).divideScalar(DIGITS.length);
+    const along = knuckles.clone().normalize();
+    const measure = skins.length ? measuring(skins, hand) : undefined;
+    const chain = (names: readonly [string, string, string], thick: number, bending: (segment: Vector3) => Vector3): Three => {
+      const segments = names.map((name, k) => {
+        const next = names[k + 1];
+        // (the last segment out to the bone's own child, if it has one, else as long as four fifths of the one before)
+        if (next) return point(next).sub(point(name));
+        const tip = node(name).children.find((child) => !named.includes(child.name));
+        if (tip) return tip.position.clone().applyQuaternion(turnOf(name));
+        return point(name).sub(point(names[k - 1])).multiplyScalar(0.8);
+      });
+      const [a, b, c] = names.map((name, k): Joint => {
+        const back = turnOf(name).invert(), segment = segments[k], unit = segment.clone().normalize();
+        const flex = bending(unit).normalize(), palmar = new Vector3().crossVectors(flex, unit).normalize();
+        const middle = point(name).addScaledVector(segment, 0.5);
+        return {
+          node: node(name), rest: node(name).quaternion.clone(),
+          offset: k === 0 ? at(name).clone() : at(names[k - 1]).clone().invert().multiply(at(name)),
+          flex: flex.applyQuaternion(back), along: unit.applyQuaternion(back), palmar: palmar.clone().applyQuaternion(back),
+          length: segment.length(), depth: measure ? measure(middle, palmar) : thick * segments[0].length(),
+        };
+      });
+      return [a, b, c];
+    };
+    // (a finger fans away from the middle finger, square to itself)
+    const finger = (digit: DigitName): FingerJoints => {
+      const joints = chain(bones[digit], THICK.finger, (unit) => new Vector3().crossVectors(unit, palm));
+      if (digit === 'middle') return { joints, spread: null };
+      const first = turnOf(bones[digit][0]), unit = joints[0].along.clone().applyQuaternion(first);
+      const away = point(bones[digit][0]).sub(point(bones.middle[0]));
+      away.addScaledVector(unit, -away.dot(unit)).normalize();
+      return { joints, spread: new Vector3().crossVectors(unit, away).normalize().applyQuaternion(first.clone().invert()) };
+    };
+    this.fingers = { index: finger('index'), middle: finger('middle'), ring: finger('ring'), little: finger('little') };
+    // (a thumb bends toward the palm's far side, the little finger's, and a little into the palm; it swings out in front of the palm
+    // square to the hand's length, then across toward the little finger)
+    const ulnar = across.clone().negate(), toward = ulnar.clone().addScaledVector(palm, 0.4).normalize();
+    const joints = chain(bones.thumb, THICK.thumb, (unit) => new Vector3().crossVectors(unit, toward));
+    const metacarpal = turnOf(bones.thumb[0]), back = metacarpal.clone().invert(), unit = joints[0].along.clone().applyQuaternion(metacarpal);
+    const square = unit.clone().addScaledVector(along, -unit.dot(along));
+    this.thumb = {
+      joints,
+      palmward: new Vector3().crossVectors(square, palm).normalize().applyQuaternion(back),
+      ulnar: new Vector3().crossVectors(unit, ulnar).normalize().applyQuaternion(back),
+    };
+    this.palm = palm;
+    this.knuckles = knuckles;
+    this.along = along;
+    this.across = across;
+    // (the palm's skin, measured a third of the way back from the knuckles to the wrist)
+    this.palmDepth = measure ? measure(knuckles.clone().multiplyScalar(2 / 3), palm) : THICK.palm * knuckles.length();
+  }
+
+  /** the bones turned as `shape` has them */
+  write(shape: Shape): void {
+    for (const digit of [...DIGITS, 'thumb'] as const) this.turns(digit, shape).forEach((turn, k) => this.chain(digit)[k].node.quaternion.copy(turn));
+  }
+
+  /**
+   * Each segment of `digit` as `shape` would have it, along its palm side, in the world as the hand stands now (its matrix up to date):
+   * from its joint to the next, the last out to its tip
+   */
+  segments(digit: Digit, shape: Shape): [Vector3, Vector3][] {
+    const frames = this.frames(digit, shape);
+    return this.chain(digit).map((joint, k) => {
+      const start = joint.palmar.clone().multiplyScalar(joint.depth), end = start.clone().addScaledVector(joint.along, joint.length + (k === 2 ? joint.depth : 0));
+      return [start.applyMatrix4(frames[k]).applyMatrix4(this.hand.matrixWorld), end.applyMatrix4(frames[k]).applyMatrix4(this.hand.matrixWorld)];
+    });
+  }
+
+  /** where `digit`'s pad is as `shape` would have it, in the hand's frame (into `out`): on its last segment's palm side, two thirds out */
+  pad(digit: Digit, shape: Shape, out: Vector3): Vector3 {
+    const last = this.chain(digit)[2];
+    return out.copy(last.palmar).multiplyScalar(last.depth).addScaledVector(last.along, (2 / 3) * last.length).applyMatrix4(this.frames(digit, shape)[2]);
+  }
+
+  /**
+   * Where a handle of `radius` lies in this hand's power grasp, in the hand's frame: a point on its axis, the axis (toward the thumb) and
+   * the way the palm faces onto it
+   */
+  handleLine(radius: number): HandleLine {
+    const proximal = this.fingers.middle.joints[0].length;
+    const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * proximal).addScaledVector(this.palm, this.palmDepth + radius);
+    return { at, axis: this.across.clone().addScaledVector(this.along, HANDLE.slant).normalize(), facing: this.palm.clone() };
+  }
+
+  /** the palm's middle on its skin, in the hand's frame: where a grip without a handle goes */
+  centre(): Vector3 {
+    return this.handleLine(0).at;
+  }
+
+  private chain(digit: Digit): Three {
+    return digit === 'thumb' ? this.thumb.joints : this.fingers[digit].joints;
+  }
+
+  /** each joint of `digit` turned as `shape` has it, from its rest */
+  private turns(digit: Digit, shape: Shape): Quaternion[] {
+    const joints = this.chain(digit);
+    if (digit === 'thumb') {
+      const { curl, oppose } = shape.thumb, { palmward, ulnar } = this.thumb;
+      return [
+        joints[0].rest.clone().multiply(_q.setFromAxisAngle(palmward, oppose * OPPOSE.palmward)).multiply(_q.setFromAxisAngle(ulnar, oppose * OPPOSE.ulnar)),
+        bent(joints[1], curl * BEND.thumb[0], null, 0),
+        bent(joints[2], curl * BEND.thumb[1], null, 0),
+      ];
+    }
+    const { curl, hook, spread } = shape[digit], middle = Math.min(1, curl + hook) * BEND.middle;
+    return [
+      bent(joints[0], curl * BEND.knuckle, this.fingers[digit].spread, spread * SPREAD[digit] * (1 - curl)),
+      bent(joints[1], middle, null, 0),
+      bent(joints[2], DIP * middle, null, 0),
+    ];
+  }
+
+  /** each joint's frame in the hand's, as `shape` turns them: its offset at rest, its rest turn swapped for the shape's */
+  private frames(digit: Digit, shape: Shape): Matrix4[] {
+    const turns = this.turns(digit, shape), frames: Matrix4[] = [];
+    this.chain(digit).forEach((joint, k) => {
+      const turned = new Quaternion().setFromRotationMatrix(joint.offset).multiply(_back.copy(joint.rest).invert()).multiply(turns[k]);
+      const local = new Matrix4().compose(new Vector3().setFromMatrixPosition(joint.offset), turned, _one);
+      frames.push(k === 0 ? local : frames[k - 1].clone().multiply(local));
+    });
+    return frames;
+  }
+}
+
+/** `joint` turned from its rest: fanned `fanned` rad about `fan`, then bent `bend` rad */
+function bent(joint: Joint, bend: number, fan: Vector3 | null, fanned: number): Quaternion {
+  const turn = joint.rest.clone();
+  if (fan && fanned) turn.multiply(_q.setFromAxisAngle(fan, fanned));
+  return turn.multiply(_q.setFromAxisAngle(joint.flex, bend));
+}
+
+/**
+ * How far the surface of `skins` (the skinned meshes `hand` bends) lies from a point in its frame along a direction there, as they stand at
+ * rest (their bind pose): the nearest within 6 cm; none there is a misuse, said at once — the bones lie outside the skin
+ */
+function measuring(skins: readonly SkinnedMesh[], hand: Object3D) {
+  // (each skin's triangles about the hand at rest, in its frame: the geometry through the mesh's bind matrix and the hand's bind pose)
+  const near = new Triangles(skins.map((skin) => {
+    const k = skin.skeleton.bones.findIndex((bone) => bone === hand);
+    return { geometry: skin.geometry, matrix: new Matrix4().copy(skin.skeleton.boneInverses[k]).multiply(skin.bindMatrix) };
+  }), new Vector3(), 0.3), ray = new Ray();
+  return (from: Vector3, direction: Vector3): number => {
+    const met = near.first(ray.set(from, direction.clone().normalize()), 0.06);
+    if (met === null) throw new Error(`fingers: no skin within 6 cm of "${hand.name}"'s bones at rest, from ${from.toArray().map((v) => v.toFixed(3))}: are they inside the mesh?`);
+    return met;
+  };
+}
+
+const _q = new Quaternion(), _back = new Quaternion(), _one = new Vector3(1, 1, 1);

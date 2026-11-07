@@ -1,6 +1,6 @@
-import { Quaternion, Vector3, type Object3D } from 'three';
+import { Vector3, type Object3D } from 'three';
 import { heading } from '../angles';
-import { between, Frame, grasp, linear, phase, planted, shoulders, type Beat, type Cue, type Gaze, type Hold, type Standing } from '../choreography';
+import { between, Frame, linear, phase, planted, shoulders, type Beat, type Cue, type Gaze, type Hold, type Standing } from '../choreography';
 import type { Puppet, Side } from '../puppet';
 import type { Rover } from './model';
 
@@ -55,9 +55,10 @@ const SIDES = ['left', 'right'] as const satisfies readonly Side[];
  * Poses `puppet`'s body `t` of the way from `standing` at the doorway, rifle in hand, to seated, each part on its beat: stepping up to the
  * sill, the left hand onto the dash's edge, the right hand putting the rifle in its rack and taking the pillar's handle, the left foot into
  * the footwell, the hips over the sill and round onto the seat, the right foot onto the accelerator and both hands onto the wheel; seated,
- * its head and shoulders turn to `gaze`.
+ * its head and shoulders turn to `gaze`. Returns the empty each hand is on or on its way to, for its fingers: the rifle's grip it held
+ * standing, then the dash's edge or the pillar's handle, then the wheel's grip.
  */
-export function seat(puppet: Puppet, standing: Standing, rover: Rover, t: number, gaze: Gaze) {
+export function seat(puppet: Puppet, standing: Standing, rover: Rover, rifle: Object3D, t: number, gaze: Gaze): Record<Side, Object3D | null> {
   const frame = new Frame(rover.body, standing);
   const sit = phase(t, BEATS.sit), swing = Math.sin(Math.PI * sit);
   const bend = Math.sin(Math.PI * linear(t, [BEATS.take - BEATS.bend, BEATS.take + BEATS.bend]));
@@ -76,26 +77,15 @@ export function seat(puppet: Puppet, standing: Standing, rover: Rover, t: number
   puppet.turn('neck', frame.turn(frame.was('neck').slerp(heading(0.6 * look, 0), toRoad)));
   puppet.turn('head', frame.turn(frame.was('head').slerp(heading(look, -gaze.pitch * toRoad + 0.25 * swing), toRoad)));
 
-  arms(puppet, frame, rover, t);
   legs(puppet, frame, rover, t);
+  return arms(puppet, frame, rover, rifle, t);
 }
 
-function arms(puppet: Puppet, frame: Frame, rover: Rover, t: number) {
-  const { standing, rotation } = frame, { grips, handle, dash, rack } = rover.marks, steering = rover.steering;
-  const into = new Vector3(0, 0, -1).applyQuaternion(steering.getWorldQuaternion(new Quaternion()));
-  const center = steering.getWorldPosition(new Vector3());
-  const onWheel = (side: Side): Hold => {
-    const at = grips[side].getWorldPosition(new Vector3());
-    const thumb = new Vector3(0, 1, 0).applyQuaternion(grips[side].getWorldQuaternion(new Quaternion()));
-    const held = grasp(side, at, into, thumb);
-    held.wrist.addScaledVector(at.sub(center).normalize(), 0.02);
-    return held;
-  };
-  const on = (mark: Object3D, side: Side, fingers: Vector3, thumb: Vector3) =>
-    grasp(side, mark.getWorldPosition(new Vector3()), fingers.applyQuaternion(rotation), thumb.applyQuaternion(rotation));
+function arms(puppet: Puppet, frame: Frame, rover: Rover, rifle: Object3D, t: number): Record<Side, Object3D | null> {
+  const { standing, rotation } = frame, { grips, handle, dash, rack } = rover.marks;
+  const onWheel = (side: Side): Hold => puppet.hold(side, grips[side]);
   // The left hand leans on the dash's edge, fingers over it; the right takes the pillar's upright handle.
-  const leaning = on(dash, 'left', new Vector3(0, -0.5, 1), new Vector3(1, 0, 0));
-  const holding = on(handle, 'right', new Vector3(0.4, 0, 1), UP.clone());
+  const leaning = puppet.hold('left', dash), holding = puppet.hold('right', handle);
   const racked = frame.carrying(rack.matrixWorld);
   const { leftHand, rightHand } = BEATS;
   const right = () => {
@@ -112,6 +102,11 @@ function arms(puppet: Puppet, frame: Frame, rover: Rover, t: number) {
     const elbow = frame.direction(standing.elbows[side]).lerp(new Vector3(sign * 0.7, -1, -0.35).applyQuaternion(rotation), phase(t, BEATS.elbows));
     puppet.arm(side, hands[side].wrist, elbow, hands[side].hand);
   }
+  // (the right hand carries the rifle to its rack, letting go of it there, before it heads for the handle)
+  return {
+    left: t < leftHand.dash[0] ? rifle.getObjectByName('foregrip') ?? null : t < leftHand.wheel[0] ? dash : grips.left,
+    right: t < BEATS.rack[0] ? rifle.getObjectByName('pistol') ?? null : t < rightHand.wheel[0] ? handle : grips.right,
+  };
 }
 
 function legs(puppet: Puppet, frame: Frame, rover: Rover, t: number) {

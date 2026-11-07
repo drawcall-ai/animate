@@ -1,4 +1,4 @@
-import { Euler, Quaternion, Vector3 } from 'three';
+import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 
 /** standard gravity (m/s²) */
 export const GRAVITY = 9.81;
@@ -78,4 +78,13 @@ export function quintic(x: number, v: number, a: number, x1: number, v1: number,
     v + t * (2 * c2 + t * (3 * c3 + t * (4 * c4 + t * 5 * c5))),
     2 * c2 + t * (6 * c3 + t * (12 * c4 + t * 20 * c5)),
   ];
+}
+
+/** the turn taking `axis` onto `toAxis` and, square to them, `facing` onto `toFacing` (each pair need not be square, nor unit) */
+export function turnOnto(axis: Readonly<Vector3>, facing: Readonly<Vector3>, toAxis: Readonly<Vector3>, toFacing: Readonly<Vector3>): Quaternion {
+  const basis = (a: Readonly<Vector3>, f: Readonly<Vector3>) => {
+    const x = a.clone().normalize(), y = f.clone().addScaledVector(x, -f.dot(x)).normalize();
+    return new Matrix4().makeBasis(x, y, x.clone().cross(y));
+  };
+  return new Quaternion().setFromRotationMatrix(basis(toAxis, toFacing).multiply(basis(axis, facing).transpose()));
 }

@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { wrapAngle } from '../src/angles';
 import { Playback } from '../src/playback';
-import { box, DT, node, palm, soldierOn, soldiers } from './course';
+import { box, DT, node, offGrip, soldierOn, soldiers } from './course';
 
 const RATE = 2;
 
@@ -56,8 +56,7 @@ it.each([6, 10])('keeps both hands on the rifle through a %s rad/s flick the bod
     // Flick half a turn, then hold, three times over.
     if (frame % 90 < Math.ceil(Math.PI / (rate * DT))) movement.input.yaw += rate * DT;
     world.update(DT);
-    off = Math.max(off, palm(avatar.body, 'right').distanceTo(pistol.getWorldPosition(new Vector3())),
-      palm(avatar.body, 'left').distanceTo(foregrip.getWorldPosition(new Vector3())));
+    off = Math.max(off, offGrip(avatar.body, 'right', pistol), offGrip(avatar.body, 'left', foregrip));
   }
   expect(off).toBeLessThan(0.06);
 }, 30000);

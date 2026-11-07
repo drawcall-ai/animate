@@ -109,10 +109,19 @@ export function createRover(maps?: PaintMaps) {
   const rack = mark(body, 'rifle rack', [-0.93, 0.95, 0.64]);
   rack.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
   // (left of the wheel's centre as the driver sees it is −X: the wheel faces back, turned half round)
+  // (each a handle: the rim, its thumb up along it, the palm on the rim's back and outside, facing away from the driver and in toward
+  // the hub)
   const grip = (side: -1 | 1) => {
     const at = mark(steering, side < 0 ? 'left grip' : 'right grip', [side * RIM * Math.cos(TEN_TO_TWO), RIM * Math.sin(TEN_TO_TWO), 0]);
     at.rotation.z = side * TEN_TO_TWO;
+    Object.assign(at.userData, { handle: [0, 1, 0], palm: [-side * 0.6, 0, -0.8] });
     return at;
+  };
+  /** an empty a hand holds as a handle along `axis` (its thumb toward the axis's end), its palm facing onto it along `palm`, `radius` thick */
+  const holdable = (name: string, at: Point, axis: Point, palm: Point, radius: number) => {
+    const empty = mark(body, name, at);
+    Object.assign(empty.userData, { handle: axis, palm, radius });
+    return empty;
   };
   const marks = {
     /** where the driver's hips sit */
@@ -121,10 +130,10 @@ export function createRover(maps?: PaintMaps) {
     pedals: { left: mark(body, 'clutch', [DRIVER + 0.14, 0.73, 0.47]), right: mark(body, 'accelerator', [DRIVER - 0.07, 0.75, 0.48]) },
     /** where the hands hold the rim, ten to two, each turned with it: +Y along the rim upward, +Z out of the wheel's face */
     grips: { left: grip(-1), right: grip(1) },
-    /** the grab handle on the windscreen's right pillar */
-    handle: mark(body, 'grab handle', [-0.84, 1.47, 0.62]),
-    /** the dash's top edge by the doorway, to lean on getting in */
-    dash: mark(body, 'dash edge', [-0.68, 1.12, 0.46]),
+    /** the grab handle on the windscreen's right pillar, its upright held from the doorway: thumb up, the palm facing in and forward */
+    handle: holdable('grab handle', [-0.82, 1.475, 0.62], [0, 1, 0], [0.7, 0, 0.7], 0.012),
+    /** the dash's top edge by the doorway, to lean on getting in: the palm on top of it, the fingers over its front, the thumb inboard */
+    dash: holdable('dash edge', [-0.68, 1.12, 0.46], [1, 0, 0], [0, -0.8, 0.6], 0.015),
     rack,
     /** the engine under the bonnet, where it is heard from */
     engine: mark(body, 'engine', [0, 0.85, 1.35]),

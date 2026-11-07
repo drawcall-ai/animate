@@ -6,6 +6,7 @@ import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName, 
 import { NECK_PITCH, ranges } from './limits';
 import { derive, type Proportions } from './proportions';
 import { CHAINS, massFor, skeletonOf } from './skeleton';
+import { fingersOf } from '../../fingers/bones';
 
 /**
  * How a person strides, as multipliers on its defaults (1: as it is): its `cadence` (below 1 slower, so longer strides at a pace — its
@@ -28,7 +29,9 @@ export type HumanoidBone = Exclude<BoneName, 'leftToes' | 'rightToes'>;
  * A person of a skeleton (as rigged with @drawcall/rig, `as const`): its bones named as `HumanoidBone` (camelCase: `hips`, `spine`,
  * `leftUpperArm`, …), its proportions measured off where they stand — limbs straight or bent (an A-pose) — and the standing height
  * off the crown (an end bone above the head), else off the head. Its masses are Dempster's shares of a body of that height; its
- * hands are `left` and `right`. It steps as its legs' length has it — longer legs slower and longer — and as `stride` styles it.
+ * hands are `left` and `right`, with fingers if it has VRM's finger bones (all fifteen a hand: `leftThumbMetacarpal`, `leftThumbProximal`,
+ * `leftThumbDistal`, `leftIndexProximal`, `leftIndexIntermediate`, `leftIndexDistal`, the same for `Middle`, `Ring` and `Little`, and the
+ * right's), each hanging from the one before it from the hand out. It steps as its legs' length has it — longer legs slower and longer — and as `stride` styles it.
  * Each joint goes on its limb's centre line, where the mesh bends: the limbs are measured straightened, so a joint moved off it to gain
  * reach or to quiet a check (an upper-arm joint pulled in toward the spine) is a limb of another length, and its arm moves as that one.
  */
@@ -41,6 +44,7 @@ export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & 
     while (up !== undefined && up !== PARENT[bone]) up = parents.get(up);
     if (up === undefined) throw new Error(`humanoid: "${bone}" does not hang from "${PARENT[bone]}"`);
   }
+  const fingers = fingersOf(skeleton);
   const { proportions, turns } = measure(perBone((bone) => at.get(bone) ?? null), crownOf(skeleton)), eyes = proportions.eyes.clone();
   return {
     name: 'humanoid',
@@ -55,6 +59,7 @@ export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & 
     mass: massFor(proportions.height),
     person: proportions,
     stride: options.stride ?? {},
+    ...(fingers && { fingers }),
   };
 }
 

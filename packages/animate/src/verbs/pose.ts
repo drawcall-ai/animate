@@ -13,6 +13,7 @@ import { EASING, POSED } from '../legs/creature';
 import { SWING } from '../hands/person/arms';
 import { SIDES } from '../species/humanoid/bones';
 import { verb, type Until, type Verb } from './story';
+import { shapeOf } from '../fingers/shape';
 
 /** How a pose goes. */
 export interface PoseOptions {
@@ -31,10 +32,12 @@ export interface PoseOptions {
  * before it has come two thirds of the way to an angle comes out that much smaller: hold it longer, or ask more within the joints;
  * `dev: { notes: true }` notes it. A walking person bows at most 0.5 rad. An aimer, it keeps on until `until`. It asks for the trunk's
  * posture with a trunk field, for the head's turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over
- * where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`).
+ * where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
+ * (a skeleton with finger bones) take each hand's shape as asked rather than adding onto anything, easing in within about a quarter
+ * second and back to relaxed once the pose ends; a hand holding something keeps its grasp.
  */
 export function pose(body: Body, posture: Posture, options: PoseOptions = {}): Verb {
-  const { head, arms, ...trunk } = posture;
+  const { head, arms, fingers, ...trunk } = posture;
   const angles = { ...trunk, ...head, ...Object.fromEntries(SIDES.flatMap((side) => Object.entries(arms?.[side] ?? {}).map(([name, value]) => [`${side} ${name}`, value]))) };
   for (const [name, value] of Object.entries(angles)) {
     if (!Number.isFinite(value)) throw new Error(`pose: ${name} ${value} is no number of radians or metres`);
@@ -42,6 +45,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   const self = selfOf(body);
   if (head && !self.gazer) throw new Error(`pose: a ${body.species.name ?? 'custom species'} has no head to turn (no gaze)`);
   if (arms && !body.species.person) throw new Error(`pose: arms are a person's; a ${body.species.name ?? 'custom species'} has none to pose`);
+  const shapes = fingers ? shapesOf(self, body, fingers) : [];
   const asked = { bow: trunk.bow ?? 0, twist: trunk.twist ?? 0, lean: trunk.lean ?? 0, lower: trunk.lower ?? 0 };
   const posed = Object.keys(trunk).length > 0;
   return verb(body, 'pose', (request) => function* () {
@@ -53,8 +57,19 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
       self.frame.dev !== undefined && pacing(self, posture),
       posed && during(request, 'trunk', 'asked', () => self.poise.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
-      ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))));
+      ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))),
+      ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape, self.time))));
   }, options.until, true);
+}
+
+/** each hand's shape `fingers` asks of `self`, with the fingers it is written to; a skeleton without finger bones has none to pose */
+function shapesOf(self: Self, body: Body, fingers: NonNullable<Posture['fingers']>) {
+  const state = self.fingers;
+  if (!state) throw new Error(`pose: a ${body.species.name ?? 'custom species'} skeleton has no finger bones to pose`);
+  return SIDES.flatMap((side) => {
+    const asked = fingers[side];
+    return asked ? [{ side, shape: shapeOf(asked), state }] : [];
+  });
 }
 
 /** `arm` added onto `to` */

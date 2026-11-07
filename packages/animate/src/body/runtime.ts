@@ -26,6 +26,7 @@ import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
 import { FLAT, type Floor } from '../legs/floor';
+import { FingerState } from '../fingers/state';
 
 /** How a body is made. */
 export interface SelfOptions {
@@ -124,6 +125,8 @@ export class Self implements Holder {
   /** whether it is posing a sub-step (its current pose is being written) */
   private stepping = false;
   private behaviours: Behaviours | null = null;
+  /** its fingers, for a species with finger bones: written over each update's pose */
+  readonly fingers: FingerState | null;
 
   constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose) {
     const dev = options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined;
@@ -161,6 +164,7 @@ export class Self implements Holder {
     });
     if (this.frame.dev && options.model) checkShear(this.binding, this.frame.dev);
     this.binding.write(this.pose, this.floor);
+    this.fingers = species.fingers ? new FingerState(species.fingers, binding.bones, this.holding, binding.object) : null;
     /** Construct creature behaviours now so infeasible legs fail before the first update. */
     if (!species.person) this.behaviours = this.behave();
   }
@@ -381,6 +385,7 @@ export class Self implements Holder {
       node.parent?.updateWorldMatrix(true, false);
       node.quaternion.copy(node.parent ? node.parent.getWorldQuaternion(_turn).invert().multiply(rotation) : rotation);
     }
+    this.fingers?.update(seconds, this.time, this.frame.dt);
   }
 
   /** keeps `node` turned to `rotation` in the world, its position following its parent (none: lets it go) */
@@ -461,6 +466,7 @@ export class Self implements Holder {
     this.headOffset.write(f);
     this.run('trunk', f);
     for (const arm of this.arms) this.run(arm, f);
+    if (this.fingers) for (const hand of Object.keys(this.hands)) this.run(`fingers.${hand}`, f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
       if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);

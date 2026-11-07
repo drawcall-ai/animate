@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { Scene, Vector3 } from 'three';
-import { PALM } from '../src/choreography';
 import { STILE, createLadder } from '../src/ladder/model';
 import { box, DT, jerkless, mountable } from './course';
 
@@ -37,10 +36,13 @@ describe('Climber', () => {
     expect(heard).toEqual(['cloth', 'rung', 'rung', 'rung', 'rung']);
     expect(soldier.avatar.rifle.parent).toBe(bones.chest);
 
-    // On, each wrist is a palm off a rung, and each ankle just above and behind one.
+    // On, each hand holds a rung as its grasp has it, its wrist where that puts it, and each ankle is just above and behind one.
     for (const side of ['left', 'right'] as const) {
       const at = (bone: 'Hand' | 'Foot') => ladder.body.worldToLocal(bones[`${side}${bone}`].getWorldPosition(new Vector3()));
-      expect(Math.abs(offRung(at('Hand'), ladder.spacing) - PALM)).toBeLessThan(0.02);
+      const wrist = bones[`${side}Hand`].getWorldPosition(new Vector3());
+      const holds = ladder.body.children.filter((child) => child.name.startsWith(`${side} hand on rung`));
+      const nearest = Math.min(...holds.map((hold) => soldier.avatar.body.gripOn(side, hold).wrist.distanceTo(wrist)));
+      expect(nearest).toBeLessThan(0.01);
       expect(offRung(at('Foot'), ladder.spacing)).toBeLessThan(0.12);
     }
 

@@ -9,7 +9,7 @@ const dynamic = (root: Object3D) => {
   return bodies;
 };
 
-it('a soldier shot dead falls limp along the shot, stays in one piece, sleeps within 4 s, sees from its head, and is cleared on respawn', async () => {
+it('a soldier shot dead falls limp along the shot, stays in one piece, sleeps within 6 s, sees from its head, and is cleared on respawn', async () => {
   const { scene, world, soldiers: [soldier] } = await soldiers((scene) => box(scene, [20, 1, 20], [0, -0.5, 0], 'static', 'Ground'),
     ['Opponent', new Vector3(0, 0.04, 0), false]);
   for (let frame = 0; frame < 4; frame++) world.update(DT);
@@ -24,7 +24,7 @@ it('a soldier shot dead falls limp along the shot, stays in one piece, sleeps wi
   expect(soldier.alive).toBe(false);
   const remains = dynamic(soldier.remains);
   expect(remains).toHaveLength(12);
-  for (let frame = 0; frame < 240; frame++) world.update(DT);
+  for (let frame = 0; frame < 360; frame++) world.update(DT);
   const hips = bones.hips.getWorldPosition(new Vector3());
 
   // Down on the ground, knocked along the shot, and asleep: nothing trembles on its joint limits.

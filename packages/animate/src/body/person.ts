@@ -134,7 +134,8 @@ const HELD = 0.05;
 /** how far hand `side`'s palm is from `hold`'s grip as the body is posed now (read afresh: a thing hanging from a hand moves with it after the hands) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
   const at = resolve(person, hold.thing.object, _placed);
-  const palm = f.current.point(person.hands[side], _palm.copy(palmOf(person.proportions, side)), _palm);
+  // (the palm as the hold has it: on a handle, where the handle lies in the hand's grasp)
+  const palm = f.current.point(person.hands[side], _palm.copy(hold.palm ?? palmOf(person.proportions, side)), _palm);
   return palm.distanceTo(_grip.copy(hold.thing.grip(hold.grip).at.position).applyQuaternion(at.quaternion).add(at.position));
 }
 

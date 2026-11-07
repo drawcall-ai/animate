@@ -9,6 +9,7 @@ import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton, type BoneDef, type Limit } from '../kernel/skeleton';
 import type { Proportions } from './humanoid/proportions';
 import type { Stride } from './humanoid/humanoid';
+import type { DigitBones } from '../fingers/bones';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {
@@ -65,6 +66,8 @@ export interface Species<Bone extends string = string, Hand extends string = str
   readonly person?: Proportions;
   /** how a person strides (`humanoid`'s `stride`) */
   readonly stride?: Stride;
+  /** a person's finger bones, each hand's, if its skeleton has them */
+  readonly fingers?: { readonly left: DigitBones; readonly right: DigitBones };
 }
 
 /** Any species, whatever its names. */

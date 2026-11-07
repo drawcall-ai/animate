@@ -6,6 +6,7 @@ import { follow } from '../kernel/follow';
 import { anchors, movers, resolve, written, type Hold, type Holder, type Resolving } from './resolve';
 import { Thing, type Grip } from './thing';
 import type { Goal, Placement } from '../kernel/goal';
+import { turnOnto } from '../kernel/math';
 
 /** the nearest anchor among `object` and its ancestors: a body's object (bone −1) or moving bone */
 function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined {
@@ -31,11 +32,13 @@ export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
 }
 
-/** A person's palm, as a grip takes it: its centre in the hand bone's frame, and the hand bone's turn in the thing's frame as the body was
- * last posed. */
+/** A person's palm, as a grip takes it: its centre in the hand bone's frame — on a handle, where the handle's axis lies in the hand's
+ * grasp — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers on a handle, the line the
+ * handle lies along in the hand (toward the thumb) and the way the palm faces onto it (the hand bone's frame). */
 export interface Palm {
   at: Readonly<Vector3>;
   turn: () => Quaternion;
+  line?: { axis: Vector3; facing: Vector3 };
 }
 
 /**
@@ -47,13 +50,22 @@ export interface Palm {
  * creature's tip, with no palm, goes on the empty.
  */
 export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goal {
-  const quaternion = grip.turn === null ? undefined : grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
-  const axis = grip.turn instanceof Vector3 ? grip.turn.clone().applyQuaternion(grip.at.quaternion) : undefined;
+  const onHandle = grip.handle && palm?.line && handleTurn(palm.line, grip.handle);
+  const quaternion = onHandle ? onHandle.quaternion : grip.turn === null ? undefined : grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
+  const axis = onHandle ? onHandle.axis : grip.turn instanceof Vector3 ? grip.turn.clone().applyQuaternion(grip.at.quaternion) : undefined;
   const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }) };
   if (!palm) return { position: grip.at.position.clone(), ...turns };
   // (the wrist, the palm on the empty, the hand turned `turn` in the thing's frame)
   const empty = grip.at.position, wrist = new Vector3();
   return { get position() { return wrist.copy(palm.at).applyQuaternion(palm.turn()).negate().add(empty); }, ...turns };
+}
+
+/**
+ * the hand's turn (the thing's frame) with `hand`'s grasp line along `handle`'s axis, its thumb toward the axis's end and its palm facing
+ * as the handle's `palm` asks; a handle without one takes the hand turned as the arm brings it, its palm on the handle's line
+ */
+function handleTurn(hand: NonNullable<Palm['line']>, handle: NonNullable<Grip['handle']>): { quaternion: Quaternion; axis?: Vector3 } | null {
+  return handle.palm ? { quaternion: turnOnto(hand.axis, hand.facing, handle.axis, handle.palm) } : null;
 }
 
 /** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
