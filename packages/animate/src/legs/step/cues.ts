@@ -311,9 +311,10 @@ const SIDE = 0.5;
 /** Tuned: still, the feet step only to even out feet `STAGGERED` (m) apart fore and aft */
 const STAGGERED = 0.08;
 /** Tuned (m, default body): how much sooner the stepper finds the weight on a foot than the dev check does (`bears`): its forecast and
- * prints part from the final pose and its heel-wide soles by ~5 mm at the margin (measured: the heroes' turn on a tread, finale); 2 cm holds
- * every lift the check finds borne in the scenes and suites */
-const FORESEEN = 0.02;
+ * prints part from the final pose by ~5 mm at the margin (measured: the heroes' turn on a tread, finale), and its prints, a heel's middle
+ * and the toes, from the check's heel-wide soles by up to half a heel's width (`heelSides`, ~3.3 cm) where the centre lies beside the heel:
+ * covering only the first, a body setting off with its weight between its feet lifted the foot the check found it on */
+const FORESEEN = 0.035;
 /** Tuned: a root slower than `UNLOADED` (m/s, × scale) stands: a foot lifts only once the weight is off it (a little quicker than the
  * dev check's still body, `checkSupport`, whose centre of mass lags its root setting off; quicker, walk starts held back slipped a step on
  * stairs) */
