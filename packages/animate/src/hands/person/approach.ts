@@ -102,8 +102,15 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
     if (hand.route.length) yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, { ...hand.goal, position: hand.points[hand.points.length - 1] },
       { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), () => staged === plan.length);
   }));
-  // (both hands reach the outside staging points before closing on the actual grips)
+  // (both hands reach the outside staging points before closing on the actual grips: the closing judged late from as long after it sets
+  // off as a reach that far takes — a hand held up short of its staging point, by as long as it may wait there, `STAGING`, found the end
+  // planned for the whole approach already past as it set off for its grip, and was failed on its way)
   if (plan.some(({ route }) => route.length)) {
+    const f = person.frame;
+    for (const hand of plan) {
+      const distance = f.prev.position(person.hands[hand.side]).distanceTo(gripAt(person, hand, f));
+      ends = Math.max(ends, f.time + reachTime(distance / person.scale, seedOf(hand.grip, Math.round(distance * 1000))) / person.tempo);
+    }
     yield* parallel<Frame>('all', ...plan.map((hand) => during(request, `hand.${hand.side}`, 'asked',
       reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), until(there))));
   }
