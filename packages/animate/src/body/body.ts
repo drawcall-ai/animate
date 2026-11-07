@@ -139,12 +139,13 @@ export class Body<S extends AnySpecies = AnySpecies> {
   /**
    * A point for a person's hand `side`, scaled to its body: out from its shoulder (the upper arm's joint) along `direction` (the body's
    * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`): 0.5 a thing held up
-   * before the chest, the elbow tucked (a ready hold); 0.75 a comfortable reach; 0.9 all but straight, held out before the face. Past about 0.8, and behind the shoulder, the joints' ranges may hold the hand a
-   * little short (a carry there ends once it has stopped closing, within 1.5 cm of it). A carry keeps what it holds out of the trunk, whose
-   * room is a share of the body's height, not of its arm (about 0.06 × height + 4 cm round the spine, the thing's own depth beyond): on a
-   * short-armed body 0.5 ahead may lie inside it, and a carry there fails, held off it — hold it further out. Read where the body stands
-   * now: as a hand verb's target, give it as a function so it moves with the body, `() => body.armPoint('right', ahead, 0.8)`. A point keeps a
-   * carried thing turned as the hand holds it; to turn it too, carry it to an empty turned so (parented to `object`, it moves with the body).
+   * before the chest, the elbow tucked (a ready hold); 0.75 a comfortable reach; 0.9 all but straight, held out before the face. Past
+   * about 0.8, and behind the shoulder, the joints' ranges may hold the hand a little short (a carry there ends once it has stopped
+   * closing, within 1.5 cm of it). A carry keeps what it holds out of the trunk and head, sized by the body's height: on a body
+   * whose arms are far shorter than a person's for its height, a point close before it may lie within them, and a carry there fails. Read
+   * where the body stands now: as a hand verb's target, give it as a function so it moves with the body,
+   * `() => body.armPoint('right', ahead, 0.8)`. A point keeps a carried thing turned as the hand holds it; to turn it too, carry it to an
+   * empty turned so (parented to `object`, it moves with the body).
    */
   armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {
     const person = this.species.person;
