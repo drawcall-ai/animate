@@ -1,7 +1,7 @@
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
-import { smoothstep } from '../kernel/math';
+import { bisect, smoothstep } from '../kernel/math';
 import { within } from '../kernel/scene';
 import { orienters, resolve } from '../things/resolve';
 import type { Self } from './runtime';
@@ -58,6 +58,7 @@ export class Orient {
     const self = this.self, was = _kept.copy(this.turned.get(node) ?? turned);
     this.turned.get(node)?.copy(turned);
     const pivot = resolve(self, node, _pivot).position;
+    // (twice round the hands: the turn that brings one hand's grip within its reach moves every other grip on the node)
     for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of self.species.hands ?? []) {
       const grip = this.gripOf(hand);
       if (!grip || !within(grip.thing, node)) continue;
@@ -99,13 +100,7 @@ export class Orient {
     if (!rest || holds(turned) || !holds(rest)) return;
     // (the furthest toward `turned` from its parent's frame that they hold, halved in on)
     const asked = _asked.copy(turned);
-    let lo = 0, hi = 1;
-    for (let k = 0; k < 8; k++) {
-      const mid = (lo + hi) / 2;
-      if (holds(_try.slerpQuaternions(rest, asked, mid))) lo = mid;
-      else hi = mid;
-    }
-    turned.slerpQuaternions(rest, asked, lo);
+    turned.slerpQuaternions(rest, asked, bisect((t) => holds(_try.slerpQuaternions(rest, asked, t)), 0, 1, 8));
   }
 
   /** what hand `hand` holds or is taking hold of, and its wrist's goal on it (the thing's frame), if anything */

@@ -26,6 +26,8 @@ import { palmOf } from '../../species/humanoid/landmarks';
 export const CALM = { accel: 8, speed: 1.5, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
 /** how many times `shrug` draws the shoulder joint on toward the hand, round the clavicle, to settle where it goes (within a millimetre) */
 const DRAWS = 4;
+/** how far out a hand is (of the arm's length, from the shoulder) before the clavicle draws the shoulder toward it */
+const DRAWN = 0.85;
 /** how fast the clavicle moves (rad/s²) */
 const CLAVICLE = { accel: 30 };
 
@@ -211,10 +213,10 @@ export function placeArm(person: Reacher, f: Pick<Frame, 'current'>, side: Side,
 }
 
 /**
- * the clavicle (chest-relative) turned as the hand asks of it now: the shoulder joint up for a hand high up, and toward a hand beyond 85%
+ * the clavicle (chest-relative) turned as the hand asks of it now: the shoulder joint up for a hand high up, and toward a hand beyond `DRAWN`
  * of the arm as far as brings it within that (its range permitting) — settled on from where the clavicle at rest has it each sub-step, as
- * the shoulder joint swings round the clavicle's length. Drawn on from where it stands instead, each sub-step's lift added to the last's
- * shrugged it to the end of its range for any hand held still at the shoulder.
+ * the shoulder joint swings round the clavicle's length (not from where it stands: each sub-step's lift would add to the last's, to the end
+ * of its range).
  */
 function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Vector3>, from?: { clavicle: Readonly<Quaternion>; share: number }) {
   const pose = f.current;
@@ -226,15 +228,15 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
   const up = _up.set(0, 1, 0).applyQuaternion(chest);
   const L = proportions.armLength;
   const want = _s.copy(offset).applyQuaternion(chest).add(clavicle);
-  want.addScaledVector(up, liftFor(proportions, _d.subVectors(hand, want).dot(up)));
+  want.addScaledVector(up, liftFor(proportions, side, _d.subVectors(hand, want).dot(up)));
   // (a hand across the body draws the shoulder forward, never back: the arm goes round the front)
   const across = (side === 'left' ? 1 : -1) * _w.subVectors(hand, pose.position(INDEX.chest)).applyQuaternion(inverse).x < 0;
   for (let pass = 0; pass < DRAWS; pass++) {
     const v = _d.subVectors(hand, want).applyQuaternion(inverse);
     if (across) v.z = Math.max(0, v.z);
     const reach = v.length();
-    if (reach <= 0.85 * L) break;
-    want.addScaledVector(v.applyQuaternion(chest), (reach - 0.85 * L) / reach).sub(clavicle).setLength(length).add(clavicle);
+    if (reach <= DRAWN * L) break;
+    want.addScaledVector(v.applyQuaternion(chest), (reach - DRAWN * L) / reach).sub(clavicle).setLength(length).add(clavicle);
   }
   const to = want.sub(clavicle).applyQuaternion(_c.copy(chest).invert()).normalize();
   const goal = _g.setFromUnitVectors(_rest.copy(proportions.offsets[`${side}UpperArm`]).normalize(), to);

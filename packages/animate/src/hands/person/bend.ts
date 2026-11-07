@@ -19,12 +19,12 @@ export const ARM_REACH = 0.95;
 export const PROTRACTION = 0.035;
 /** how far above the shoulder joint at rest the clavicle aims it for a hand `above` (m) the joint at rest: from none for a hand at the
  * shoulder to a clavicle's length for one 0.6 of the arm above it */
-export const liftFor = (proportions: Proportions, above: number) =>
-  smoothstep(-0.05, 0.6, above / proportions.armLength) * proportions.offsets.leftUpperArm.length();
+export const liftFor = (proportions: Proportions, side: Side, above: number) =>
+  smoothstep(-0.05, 0.6, above / proportions.armLength) * proportions.offsets[`${side}UpperArm`].length();
 /** how far the clavicle has lifted the shoulder joint for a hand `height` up (m, on the floor): aimed `liftFor` up, it swings up round
  * the clavicle's length */
-const elevationFor = (proportions: Proportions, height: number) => {
-  const length = proportions.offsets.leftUpperArm.length(), lift = liftFor(proportions, height - proportions.shoulderHeight);
+const elevationFor = (proportions: Proportions, side: Side, height: number) => {
+  const length = proportions.offsets[`${side}UpperArm`].length(), lift = liftFor(proportions, side, height - proportions.shoulderHeight);
   return length * lift / Math.hypot(length, lift);
 };
 
@@ -68,7 +68,7 @@ export function bringShoulder(person: Reacher, f: Frame, side: Side, hand: Reado
   if (low) person.poise.add({ lower: proportions.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // (a hand high up reached for with the shoulder lifted as the arm lifts it, not on the toes)
-  const elevation = elevationFor(proportions, height);
+  const elevation = elevationFor(proportions, side, height);
   // (walking, the clavicle drawn toward the hand, `PROTRACTION`, takes up a small stride's deficit)
   const allowance = person.locomotion.moving ? PROTRACTION * proportions.height : 0;
   // (judged from the shoulder standing upright, not as low as the reach has let it down, so a lowering reach keeps asking while it is short

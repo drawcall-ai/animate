@@ -205,8 +205,8 @@ export class Joints {
 
   /**
    * the bones turned as `shape` has them, each from how its node is turned now no further than `FLEXING` in `seconds`: a digit's shape is
-   * braked as it eases (`braked`), and this holds its bones to that cap from the first update too — on a rig its app posed otherwise, a
-   * puppet's fingers handed to a body made afresh, they had swung 66–84 rad/s in its first tick
+   * braked as it eases (`braked`), and this holds its bones to that cap from the first update too, on a rig its app posed otherwise (a
+   * puppet's fingers handed to a body made afresh)
    */
   write(shape: Shape, seconds: number): void {
     const most = FLEXING * seconds;

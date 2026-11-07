@@ -77,7 +77,7 @@ interface Solving {
 /** a limb: its middle joint as a hinge (bent to the distance), its first bone onto the goal and toward the pole, the middle joint aimed again */
 function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean, poleFirst: boolean, keeps: boolean) {
   const { skeleton, bones, local, start } = c;
-  const o1 = skeleton.bones[bones[1]].offset, was = _was.copy(c.base).multiply(local[0]);
+  const o1 = skeleton.bones[bones[1]].offset;
   const o2 = skeleton.bones[bones[2]].offset;
   const hinge = hingeOf(skeleton.limits[bones[1]], local[1], o1, o2);
   const { axis: h, neutral } = hinge;
@@ -113,9 +113,9 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   if (!swivels && twist === undefined) twist = twisted;
   const kept = keeps ? twisted : undefined;
 
-  /** how far the first bone is swivelled now about the line to the target from where `placed` (world) has it: its elbow round from there
-   * (read off `along`, the elbow; or the hinge's axis, which an arm all but straight still shows, its elbow on the line) */
-  const swivelNow = (placed: Quaternion, along = o1) => {
+  /** how far the first bone is swivelled now about the line to the target from where `placed` (world) has it, read off `along` in its
+   * frame: the elbow, or the hinge's axis, which an arm all but straight still shows, its elbow on the line */
+  const swivelNow = (placed: Quaternion, along: Vector3) => {
     const from = _f.copy(along).applyQuaternion(placed), to = _g.copy(along).applyQuaternion(now);
     from.addScaledVector(T, -from.dot(T));
     to.addScaledVector(T, -to.dot(T));
@@ -158,7 +158,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     // ±1 rad round by turns, the magazine in the hand whipped about)
     let swivel = 0;
     let left = strain(0);
-    if (left >= FITS && swivels) [swivel, left] = least(first, tip, -Math.PI, Math.PI, 0, (x) => SWIVEL * x * x, keeps ? swivelNow(r0) : undefined);
+    if (left >= FITS && swivels) [swivel, left] = least(first, tip, -Math.PI, Math.PI, 0, (x) => SWIVEL * x * x, keeps ? swivelNow(r0, o1) : undefined);
     swivelled(swivel);
     return left;
   };
@@ -174,10 +174,7 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   // straight still shows, its elbow on the line: two fits about as good, or the pole's side fitting again, would leap it round a radian
   // or more in one sub-step)
   if (keeps) {
-    const from = _f.copy(h).applyQuaternion(was), to = _g.copy(h).applyQuaternion(_q.copy(c.base).multiply(local[0]));
-    from.addScaledVector(T, -from.dot(T));
-    to.addScaledVector(T, -to.dot(T));
-    const moved = from.lengthSq() > 1e-12 && to.lengthSq() > 1e-12 ? signedAngle(to, from, T) : 0;
+    const moved = swivelNow(_q.copy(c.base).multiply(local[0]), h);
     if (Math.abs(moved) > SWIVELLING) local[0].premultiply(_q.copy(c.base).invert().multiply(_q2.setFromAxisAngle(T, moved - Math.sign(moved) * SWIVELLING)).multiply(c.base));
   }
   limited(skeleton, bones[0], local[0]);
@@ -388,7 +385,7 @@ const IDENTITY = new Quaternion(), _neutral = new Quaternion();
 const _local = Array.from({ length: LONGEST }, () => new Quaternion());
 const _joints = Array.from({ length: LONGEST }, () => new Vector3());
 const _rotations = Array.from({ length: LONGEST }, () => new Quaternion());
-const _coords = coordinates(), _was = new Quaternion();
+const _coords = coordinates();
 const _m = new Matrix4();
 const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s, _start, _pole, _axis, _f, _g] = Array.from({ length: 17 }, () => new Vector3());
 const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept, _fixed, _base] = Array.from({ length: 13 }, () => new Quaternion());
