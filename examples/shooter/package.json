@@ -124,7 +124,8 @@
     "preview": "vite preview",
     "typecheck": "tsc",
     "test": "vitest run",
-    "test:browser": "node scripts/check.mjs"
+    "test:browser": "node scripts/check.mjs",
+    "fighter": "npx drawcall glts export assets/fighter.glts -o /tmp/shooter-fighter.glb && npx --yes @gltf-transform/cli@4.5.1 optimize /tmp/shooter-fighter.glb public/models/fighter.glb --compress meshopt --flatten false --join false --instance false --palette false --simplify-ratio 0.08 --simplify-error 0.0005 --texture-compress webp --texture-size 2048"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",

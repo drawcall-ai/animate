@@ -76,8 +76,6 @@ const POUCHES = [new Vector3(0.07, -0.129, 0.2), new Vector3(0.21, -0.25, 0.15)]
  * its way it is let go (m): out to the left and down, clear of the leg. */
 const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 5, after: 0.2 };
 const UP = new Vector3(0, 1, 0);
-/** Whether the bodies check their motion and say what went wrong (`Body.log`): in the dev server, not in tests or a build. */
-const DEV = import.meta.env.MODE === 'development';
 /** How long a magazine takes to be pushed up the well's line to its seat (s), slowing as it seats: its last 4 cm over 0.16 s, not
  * snapped in (pushed evenly over 0.18 s, they took 0.10 s). */
 const PUSH = 0.25;
@@ -208,7 +206,9 @@ export class Avatar {
 function animate(species: Species<string, 'left' | 'right'>, model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void, grenades?: Grenades) {
   const root: Root & { velocity: Vector3 } = { position: position.clone(), velocity: new Vector3(), yaw, support: position.clone() };
   let aiming = 0;
-  const person = new Body(species, { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) }, dev: DEV });
+  // (it checks its motion and says what went wrong, `Body.log`, in the dev server, not in a build or a test that does not ask for it)
+  const dev = import.meta.env.MODE === 'development';
+  const person = new Body(species, { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) }, dev });
   person.object.traverse((node) => (node.frustumCulled = false));
   const proportions = person.species.person;
   if (!proportions) throw new Error('The shooter requires a humanoid');

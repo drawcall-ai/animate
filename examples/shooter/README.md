@@ -45,15 +45,10 @@ pnpm -F shooter test:browser  # with the dev server running; SHOOTER_CAPTURE_DIR
 
 ## Braided fighter
 
-The opponent is a generated fighter with a seven-link braid, using `springs: { braid: { stiffness: 60, damping: 0.9 } }` in `src/fighter.ts`. **V** toggles a close-up camera during play; `http://localhost:5289/?braid` starts in that view. The encounter and opponent AI continue normally.
+The opponent is a generated fighter with a seven-link braid, swung by the species' `springs` in `src/fighter.ts`. **V** toggles a close-up camera during play; `http://localhost:5289/?braid` starts in that view. The encounter and opponent AI continue normally.
 
-`assets/fighter-source.glb` was generated with `npx drawcall generate model`, requesting a T-pose and a long braid extending upward clear of the torso. The generator left the braid as a disconnected piece. `assets/fighter.glts` normalizes the character, attaches that piece to the hair tie, and skins the measured skeleton in `assets/fighter.ts`. The exported bind pose keeps the braid upright; `loadFighter()` turns it into its hanging rest pose before constructing the body.
+`assets/fighter-source.glb` was generated with `npx drawcall generate model`, requesting a T-pose and a long braid extending upward clear of the torso. The generator left the braid as a disconnected piece. `assets/fighter.glts` normalizes the character, attaches that piece to the hair tie, and skins the measured skeleton in `assets/fighter.ts`. The exported bind pose keeps the braid upright; its spring's `rest` turn hangs it behind the head.
 
-Rebuild the runtime model from the source (run in this example's directory):
-
-```sh
-npx drawcall glts export assets/fighter.glts -o /tmp/shooter-fighter.glb
-npx --yes @gltf-transform/cli@4.5.1 optimize /tmp/shooter-fighter.glb public/models/fighter.glb --compress meshopt --flatten false --join false --instance false --palette false --simplify-ratio 0.08 --simplify-error 0.0005 --texture-compress webp --texture-size 2048
-```
+`pnpm -F shooter fighter` rebuilds `public/models/fighter.glb` from `assets/fighter-source.glb`, which is not committed yet; until it is, the built model is used as it is.
 
 The braid uses fixed-step spring-bone motion, without body or environment collision. It follows the head with its last pose when the opponent becomes a ragdoll.
