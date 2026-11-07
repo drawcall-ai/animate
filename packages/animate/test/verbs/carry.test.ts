@@ -1,7 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { arriving, Body, carry, grab, humanoid, release, throwAt, wait } from '../../src/index';
-import { SOLDIER } from '../../../../examples/shooter/src/skeleton';
+import { SOLDIER } from '../skeletons/soldier';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
