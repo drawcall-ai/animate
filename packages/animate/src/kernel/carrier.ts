@@ -88,7 +88,7 @@ export class Carrier implements Trail {
     return out;
   }
 
-  /** `world` in its frame as it is at `time` (s), into `out`: its velocity and spin as seen moving with it (`toWorld`'s inverse) */
+  /** `world` in its frame as it is at `time` (s), into `out`: its velocity and spin as seen moving with it (its placement `toWorld`'s inverse) */
   toLocal(world: Goal, out: Goal & { velocity: Vector3; spin: Vector3 }, time: number): Goal & { velocity: Vector3; spin: Vector3 } {
     const { prev, current: { position, quaternion } } = this.at(time);
     const inverse = _q.copy(quaternion).invert();

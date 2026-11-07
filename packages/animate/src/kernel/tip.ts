@@ -110,7 +110,7 @@ export class ChainTip {
     if (out > most) position.sub(base).multiplyScalar(most / out).add(base);
     // (a fit kept is the last solve's, as production IK seeds a pole-vector solve from the last frame: seeded from the arm as its brakes
     // left it, between the fit asked and the one before, the solve could settle into another — a belt's tongue held at its end swung 4 cm
-    // off it as the other hand's carry ended. Unless what it may not pass through held the arm off it (`nudged`): then the fit is the
+    // off it as the other hand's carry ended. Unless what it may not pass through held the arm off it after its brakes (`nudged`): then the fit is the
     // arm's as it was left — the last solve's, kept on the trunk's far side, was braked toward and pushed back out each sub-step, a ball
     // regripped in the hand left 70° off its turn for good)
     if (own && options.keep && this.solved.length === bones.length && !this.nudged.size) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));

@@ -29,7 +29,8 @@ const WAIT = 0.1;
 const SQUARED = 0.15;
 /** how far ahead of the centre of mass the eyes are standing upright (m, default body), and the share of a bow's sweep (`bowAhead`) that
  * takes them further ahead, the hips going back the rest: measured 0.58–0.60 bowing 0.84–1.05 rad, standing and let down 0.22–0.34 m
- * (the sweep a rigid trunk would make, which a squat's tucked pelvis falls short of, gave 0.52 standing and 0.41 let down) */
+ * (the sweep a rigid trunk would make, which a squat's tucked pelvis falls short of, gave 0.52 standing and 0.41 let down). The bow asked
+ * for a sweep is `lowering`'s, through its lever: a standing articulated bow's sweep to within 5% */
 const EYES_AHEAD = 0.085;
 const BOW_AHEAD = 0.6;
 /** how quickly the way where the body stands moves is picked up (1/s) */
