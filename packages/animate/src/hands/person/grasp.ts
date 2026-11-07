@@ -2,19 +2,18 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Goal, Placement } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
-import { Pose } from '../../kernel/pose';
 import { inHand } from '../../things/hold';
 import { resolve, type Hold } from '../../things/resolve';
 import type { Thing } from '../../things/thing';
 import { palmOf } from '../../species/humanoid/landmarks';
-import { INDEX, type Side } from '../../species/humanoid/bones';
-import { elbowPole } from './arms';
+import type { Side } from '../../species/humanoid/bones';
+import { broughtTurn, elbowPole, scratch } from './arms';
 import { holdsClear } from './trunk';
 import { solveChain } from '../../kernel/chain';
 import { coordinates, coordinatesOf } from '../../kernel/limits';
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { Pose, ReadonlyPose } from '../../kernel/pose';
 import type { Reacher } from './reacher';
-import { fixes } from './palm';
+import { fixes } from './take';
 
 /**
  * A thing in one hand hangs from the hand as the hand took it: the grasp fixes the hand on the thing, and the thing goes and turns with
@@ -145,22 +144,6 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
 }
 
 /**
- * How the arm brings hand `side` to have its palm at `at` (world): the hand bone's turn (world, into `out`) with the arm posed onto it
- * from `pose` on `scratch` — its elbow bent the way a reach there bends it, the forearm and the wrist unturned, as a hanging arm's are
- */
-export function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
-  scratch.copy(pose);
-  const proportions = person.proportions, hand = INDEX[`${side}Hand`], palm = palmOf(proportions, side), wrist = _wrist;
-  // (the wrist a palm back from `at` along the hand as the last pass turned it: two more passes bring it within a millimetre)
-  for (let pass = 0; pass < 3; pass++) {
-    scratch.setLocal(hand, IDENTITY);
-    wrist.copy(palm).applyQuaternion(scratch.rotation(hand)).negate().add(at);
-    solveChain({ current: scratch }, `${side}Arm`, { tip: { position: wrist }, pole: elbowPole(scratch, proportions, side, wrist, _pole) });
-  }
-  return out.copy(scratch.rotation(hand));
-}
-
-/**
  * How uncomfortably arm `side` holds its hand turned `turn` (world) with its palm at `at`: solved there on `scratch` (a pose as the body
  * stands, the arm set off as `pose` has it), how far (rad, summed) its joints are out of the middle `COMFORTABLE` share of their ranges,
  * and its hand short of the turn where a range stops it; `UNHELD` more if it cannot hold it so — no elbow keeps the arm out of the trunk,
@@ -194,15 +177,6 @@ const SHORT = 0.5;
 /** what a hand its arm cannot hold so counts for against its joints' discomfort (rad): more than any */
 const UNHELD = 10;
 
-/** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
-const scratches = new WeakMap<Reacher, { brought: Pose; trial: Pose }>();
-export function scratch(person: Reacher): { brought: Pose; trial: Pose } {
-  let poses = scratches.get(person);
-  const skeleton = person.frame.prev.skeleton;
-  if (!poses) scratches.set(person, (poses = { brought: new Pose(skeleton), trial: new Pose(skeleton) }));
-  return poses;
-}
-
 const _placed: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const _back = new Quaternion(), _turn = new Quaternion(), _brought = new Quaternion(), _kept = new Quaternion(), _candidate = new Quaternion(), _facing = new Quaternion();
 const UP = new Vector3(0, 1, 0), _left = new Vector3(), _along = new Vector3(), _q = new Quaternion();
@@ -214,4 +188,4 @@ const TURNS = (() => {
   return turns.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 })();
 const _palm = new Vector3(), _at = new Vector3();
-const IDENTITY = new Quaternion(), _pole = new Vector3(), _wrist = new Vector3(), _held = new Vector3(), _turnAt = new Quaternion(), _coordinates = coordinates();
+const _pole = new Vector3(), _held = new Vector3(), _turnAt = new Quaternion(), _coordinates = coordinates();

@@ -48,7 +48,7 @@ export interface Handling {
   /** the hands holding `thing` bring it through `points` (each a sub-step at a time; the last sets its turn), in to `end` (an empty) by its approach, and keep it there */
   bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, options: HandOptions): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */
-  reach(request: Request, aims: readonly { hand: string; target: (f: Frame) => Goal }[], options: HandOptions): Handwork;
+  reach(request: Request, targets: readonly { hand: string; target: (f: Frame) => Goal }[], options: HandOptions): Handwork;
   /** `hands`, having let go, back out of what they held, first along `away` (world) where given: a request of the body's own */
   backOut(hands: readonly string[], away: Readonly<Record<string, Vector3>>): void;
 }

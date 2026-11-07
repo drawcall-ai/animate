@@ -6,7 +6,7 @@ import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName, 
 import { NECK_PITCH, ranges } from './limits';
 import { derive, type Proportions } from './proportions';
 import { CHAINS, massFor, skeletonOf } from './skeleton';
-import { fingersOf } from '../../fingers/bones';
+import { digitBonesOf } from '../../fingers/bones';
 
 /**
  * How a person strides, as multipliers on its defaults (1: as it is): its `cadence` (below 1 slower, so longer strides at a pace — its
@@ -45,7 +45,7 @@ export function humanoid<const S extends readonly SkeletonBone[]>(skeleton: S & 
     while (up !== undefined && up !== PARENT[bone]) up = parents.get(up);
     if (up === undefined) throw new Error(`humanoid: "${bone}" does not hang from "${PARENT[bone]}"`);
   }
-  const fingers = fingersOf(skeleton);
+  const fingers = digitBonesOf(skeleton);
   const { proportions, turns } = measure(perBone((bone) => at.get(bone) ?? null), crownOf(skeleton)), eyes = proportions.eyes.clone();
   return {
     name: 'humanoid',

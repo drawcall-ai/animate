@@ -1,4 +1,4 @@
-import type { HandPart, HandPoint } from './point';
+import type { HandPart, HandPoint } from './placement';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { palmFacing, type DigitBones } from './bones';
 import { bisect } from '../kernel/math';
@@ -252,18 +252,13 @@ export class Joints {
 
   /**
    * The point `part` of this hand as `shape` has it (see `HandPoint`): the palm's middle on its skin, where a handle lies in a power
-   * grasp — across the palm just short of the knuckles, along its slanted crease; the pinch, midway between the thumb's and the index's
-   * pads, facing as the palm does; or a digit's pad, `TIP` off its length
+   * grasp — across the palm just short of the knuckles, along its slanted crease; or a digit's pad, `TIP` off its length
    */
   point(part: HandPart, shape: Shape): HandPoint {
     const palm = this.palm.clone(), axis = this.across.clone();
     if (part === 'palm') {
       const at = this.knuckles.clone().addScaledVector(this.along, -HANDLE.back * this.fingers.middle.joints[0].length).addScaledVector(this.palm, this.palmDepth);
       return { at, axis: axis.addScaledVector(this.along, HANDLE.slant).normalize(), facing: palm.clone(), palmFacing: palm };
-    }
-    if (part === 'pinch') {
-      const at = this.pad('thumb', shape, new Vector3(), new Vector3(), FLAT).add(this.pad('index', shape, new Vector3(), new Vector3(), FLAT)).multiplyScalar(0.5);
-      return { at, axis, facing: palm.clone(), palmFacing: palm };
     }
     const facing = new Vector3();
     return { at: this.pad(part, shape, new Vector3(), facing), axis, facing, palmFacing: palm };

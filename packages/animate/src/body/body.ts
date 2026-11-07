@@ -10,8 +10,8 @@ import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Channel, Tier } from '../kernel/requests';
 import type { Fingers } from '../fingers/shape';
-import { frozen, takingOf } from '../hands/person/palm';
-import type { HandPlacement } from '../hands/person/place';
+import { takingOf } from '../hands/person/take';
+import type { HandPlacement } from '../fingers/placement';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
  * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
@@ -97,7 +97,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * Set it before each `update`; the node's own rotation is written to match as the update ends. With no hand on what hangs from it, it
    * simply turns as asked. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    selfOf(this).oriented.set(node, rotation);
+    selfOf(this).orient.set(node, rotation);
   }
 
   /**
@@ -109,7 +109,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
   placement(side: 'left' | 'right', empty: Object3D): HandPlacement {
     const thing = empty.parent;
     if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
-    return frozen(takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement);
+    return takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement;
   }
 
   /**

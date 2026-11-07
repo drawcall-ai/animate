@@ -319,7 +319,7 @@ function animate(model: Object3D | undefined, position: Vector3, yaw: number, fl
     flash.visible = time - lastShot < 0.06;
     // The trigger finger lies along the receiver above the guard until the rifle is asked up or fires, then rests on the trigger, squeezing
     // it back for a shot; the other fingers and the thumb close round the grip themselves.
-    pistol.userData.fingers = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame' };
+    pistol.userData.digits = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame' };
     blade.position.z = time - lastShot < SHOT_INTERVAL ? -SQUEEZE : 0;
     hold(seconds);
   };

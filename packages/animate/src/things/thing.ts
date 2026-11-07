@@ -50,35 +50,33 @@ export class Thing {
    * its freedoms is only preferred — the hand keeps its point on the empty and turns off the picked turn where its wrist cannot hold it.
    * - Alone (no key below), the empty is where the palm's middle goes, the hand turned as the arm brings it, and kept turned as it took
    *   hold.
-   * - `userData.facing`: the way the touching part (the palm, or the pad) faces into the thing; it rolls freely about it.
+   * - `userData.facing`: the way the touching point (the palm, or the pad) faces into the thing; it rolls freely about it.
    * - `userData.handle`: an axis, pointing out of the fist at the thumb's end: a handle running through the empty, the palm against it and
    *   the fingers round it, rolling freely about it (with `facing`, its palm fixed so: the grip fully fixed). `userData.radius` (m) is how
    *   far the palm lies off the axis, else measured off the thing's meshes about the empty; `userData.length` (m) lets the hand slide along
    *   the axis that far, centred on the empty (a rail, a rope, a long rung).
    * - `userData.radius` without a handle: a ball about the empty, the palm anywhere on it facing its middle (with `facing`, there).
-   * - `userData.pad`: a digit whose pad goes on the empty instead of the palm — a fingertip on a button: the hand comes as a loose fist,
-   *   points before its last run in along `facing`, holds where the pad meets the face and draws back the way it came — or `'pinch'`,
-   *   the point between the thumb's and the index's pads.
-   * - `userData.fingers` lays digits over the hand closed on the thing: a digit's values (`Finger`, `Thumb`), or the name of an empty on
+   * - `userData.point`: the digit whose pad goes on the empty instead of the palm's middle — a fingertip on a button: the hand comes as a
+   *   loose fist, points before its last run in along `facing`, holds where the pad meets the face and draws back the way it came.
+   * - `userData.digits` lays digits over the hand closed on the thing: a digit's values (`Finger`, `Thumb`), or the name of an empty on
    *   the thing its pad presses on (read every update; that empty's own `facing` lays the pad flat on its face).
    * A creature's tip takes the empty's position alone. Attached things' subtrees (their own `userData.mass`) are not searched.
    */
   grip(name: string) {
     const node = find(this.object, name);
     if (!node) throw new Error(`"${this.object.name}" has no empty named "${name}"`);
-    const { handle, facing, radius, pad, length } = node.userData, at = localOf(node, this.object), object = this.object;
+    const { handle, facing, radius, point, length } = node.userData, at = localOf(node, this.object), object = this.object;
     const inThing = (value: unknown, what: string) => vectorOf(value, `"${name}" userData.${what}`).normalize().applyQuaternion(at.quaternion);
     if (radius !== undefined && !(typeof radius === 'number' && radius > 0)) throw new Error(`"${name}" userData.radius ${String(radius)}: give it in m`);
     if (length !== undefined && !(typeof length === 'number' && length >= 0)) throw new Error(`"${name}" userData.length ${String(length)}: give it in m`);
-    if (pad !== undefined && (handle !== undefined || radius !== undefined)) throw new Error(`"${name}" has both userData.pad and userData.${handle !== undefined ? 'handle' : 'radius'}: a pad goes on a point`);
+    if (point !== undefined && (handle !== undefined || radius !== undefined)) throw new Error(`"${name}" has both userData.point and userData.${handle !== undefined ? 'handle' : 'radius'}: a pad goes on one point`);
     if (length !== undefined && handle === undefined) throw new Error(`"${name}" has userData.length without userData.handle: a hand slides along a handle`);
-    const digit = pad === undefined ? null : pad === 'pinch' ? 'pinch' as const : digitOf(pad, `"${name}" userData.pad`);
     const axis = handle === undefined ? null : inThing(handle, 'handle');
     const scale = () => (object.updateWorldMatrix(true, false), new Vector3().setFromMatrixScale(object.matrixWorld).x);
     return {
       node, at,
       facing: facing === undefined ? null : inThing(facing, 'facing'),
-      pad: digit,
+      point: point === undefined ? 'palm' as const : digitOf(point, `"${name}" userData.point`),
       ball: axis === null && typeof radius === 'number' ? { get radius(): number { return radius * scale(); } } : null,
       handle: axis === null ? null : {
         axis,

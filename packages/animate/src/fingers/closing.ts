@@ -1,5 +1,5 @@
-import { Ray, Vector3, type Matrix4, type Object3D, type SkinnedMesh } from 'three';
-import { meshesOf } from '../things/thing';
+import { Matrix4, Mesh, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
+import type { Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { Triangles } from '../kernel/triangles';
 import { FLAT, type Joints } from './joints';
@@ -58,13 +58,13 @@ interface Closing {
  * underside, the fingers lie along it and fold up its side) — opened from a fist until it comes clear (what a finger passes on its way in,
  * a trigger guard before a grip's front, does not stop it); clear of it even as a fist, it lies on what it meets curling from straight
  * instead (a finger under a box folded into the palm below it) — a finger meeting nothing folding into the palm (past the end of a grip).
- * The thumb then opposes them across the grasp (`opposite`; `line`: the grasp's line through the thing, the world's). Meshes of things
- * attached to it (their own `userData.mass`), hidden meshes and the body's own skin (`skins`: an empty in a scene held every mesh under
- * it, the body's too) are not touched; other skinned meshes are touched as they stand at rest.
+ * The thumb then opposes them across the grasp (`opposite`; `line`: the grasp's line through the thing, the world's). It touches what
+ * `trianglesAbout` gathers.
  */
 export function closedOn(joints: Joints, object: Object3D, line: Line, skins: readonly SkinnedMesh[], world: Matrix4 = joints.hand.matrixWorld): Shape {
   joints.hand.updateWorldMatrix(true, false);
-  const shape = structuredClone(WRAP), at: Closing = { joints, near: nearHand(joints, world, object, skins), world };
+  const near = trianglesAbout(object, skins, WORLD, _centre.setFromMatrixPosition(world), joints.span * _scale.setFromMatrixScale(world).x + SLACK);
+  const shape = structuredClone(WRAP), at: Closing = { joints, near, world };
   for (const digit of DIGITS) {
     const finger = shape[digit];
     const curl = (value: number) => (finger.curl = value), hook = (value: number) => (finger.hook = value);
@@ -213,12 +213,16 @@ function padsOn(at: Closing, shape: Shape): Vector3 {
 }
 
 
-/** `object`'s triangles about `joints`' hand as they stand now, in the world, as far as it reaches (`Joints.span`) — meshes of things
- * attached to it (their own `userData.mass`), hidden meshes and `skins` left out, other skinned meshes as they stand at rest */
-function nearHand(joints: Joints, world: Matrix4, object: Object3D, skins: readonly SkinnedMesh[]): Triangles {
-  object.updateWorldMatrix(true, true);
-  const meshes = meshesOf(object).filter((mesh) => !skins.some((skin) => skin === mesh)).map((mesh) => ({ geometry: mesh.geometry, matrix: mesh.matrixWorld }));
-  return new Triangles(meshes, new Vector3().setFromMatrixPosition(world), joints.span * _scale.setFromMatrixScale(world).x + SLACK);
+/**
+ * `thing`'s triangles within `radius` of `centre`, in the frame `frame` places (the world's; `centre` in it): every mesh shown under it,
+ * what hangs from it too (a magazine in a rifle's well) — a hand touches whatever is there — but the body's own skin (`skins`: an empty
+ * in a scene holds every mesh under it, the body's too); skinned meshes as they stand at rest
+ */
+export function trianglesAbout(thing: Object3D, skins: readonly SkinnedMesh[], frame: Placement, centre: Readonly<Vector3>, radius: number): Triangles {
+  const back = new Matrix4().compose(frame.position, frame.quaternion, _one).invert(), meshes: Mesh[] = [];
+  thing.updateWorldMatrix(true, true);
+  thing.traverseVisible((node) => { if (node instanceof Mesh && !skins.some((skin) => skin === node)) meshes.push(node); });
+  return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), centre, radius);
 }
 
 /**
@@ -235,4 +239,5 @@ function touches(at: Closing, digit: DigitName, shape: Shape, side = 1): number[
   });
 }
 
-const _ray = new Ray(), _to = new Vector3(), _pad = new Vector3(), _facing = new Vector3(), _scale = new Vector3();
+const WORLD: Placement = { position: new Vector3(), quaternion: new Quaternion() };
+const _ray = new Ray(), _to = new Vector3(), _pad = new Vector3(), _facing = new Vector3(), _scale = new Vector3(), _centre = new Vector3(), _one = new Vector3(1, 1, 1);

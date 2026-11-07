@@ -101,6 +101,7 @@ export class Self implements Holder {
   /** each hand's arm, as a pose asks for it */
   private readonly arms: readonly `arm.${string}`[];
   readonly holding: Record<string, Hold | null>;
+  readonly coming: Record<string, Hold | null>;
   readonly drive?: (time: number) => Root;
   /** the root its app drove it to this sub-step: `drive` read once, as the sub-step starts */
   driven: Root | undefined;
@@ -111,8 +112,8 @@ export class Self implements Holder {
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
-  /** the nodes on it its app keeps turned in the world (`orient`) */
-  readonly oriented = new Orient(this);
+  /** the nodes on it its app keeps turned in the world (`Body.orient`) */
+  readonly orient = new Orient(this);
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
   lastMover = -Infinity;
@@ -155,6 +156,7 @@ export class Self implements Holder {
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
     this.arms = Object.keys(this.hands).map((hand) => `arm.${hand}` as const);
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
+    this.coming = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
     this.platform = new PlatformFrame(this.skeleton);
     this.before = [this.poses[3], this.poses[4]];
@@ -388,7 +390,7 @@ export class Self implements Holder {
     }
     this.updates++;
     this.binding.write(this.pose, this.floor);
-    this.oriented.write();
+    this.orient.write();
     this.fingers?.update(seconds);
   }
 
@@ -446,7 +448,7 @@ export class Self implements Holder {
     if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
-    this.oriented.step(f);
+    this.orient.step(f);
     for (const request of [...this.requests]) {
       request.stage(f);
       if (!request.owned) continue;

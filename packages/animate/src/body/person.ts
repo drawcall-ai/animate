@@ -42,12 +42,13 @@ const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist
 export class Person extends Self {
   readonly impact = new Impact();
   declare readonly gazer: Gazer;
-  /** what its hands carry this sub-step and along which aim: fitted to the wrists after the hands */
+  /** what its hands carry this sub-step and along which guide: fitted to the wrists after the hands */
   readonly carrying = new Map<Object3D, Carrier>();
   readonly proportions: Proportions;
   readonly stride: Stride;
   /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
   readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
+  readonly drawingBack: Record<Side, number> = { left: -Infinity, right: -Infinity };
   /** a pose to try an arm on (`holds`) */
   private readonly scratch = new Pose(this.skeleton);
 

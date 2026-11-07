@@ -15,8 +15,8 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { reachFor } from './take';
-import { emptyAt, gripAt, holdOn, type Taking } from './palm';
+import { approach } from './approach';
+import { emptyAt, gripAt, holdOn, type Taking } from './take';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 
@@ -78,7 +78,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     // (the hands rising halfway toward what they take, before the body has come up to it)
     yield* parallel<Frame>('race', action<Frame>({ until: () => stood || near() }), () => parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked',
       reaching(person, take.side, (f) => raisedHand(f, take), { lead: false })))));
-    yield* parallel<Frame>('race', reachFor(person, request, takes, motion), function* () {
+    yield* parallel<Frame>('race', approach(person, request, takes, motion), function* () {
       yield* action<Frame>({ until: () => stood || preparing() });
       yield* during(request, 'trunk', 'borrowed', (f) => {
         takes.forEach((take, k) => {

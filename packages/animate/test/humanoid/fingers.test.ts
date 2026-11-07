@@ -96,7 +96,7 @@ describe('fingers', () => {
     panel.name = 'panel';
     panel.position.set(-0.2, 1.2, 0.5);
     const button = empty(panel, 'button', new Vector3(0, 0, -0.012));
-    Object.assign(button.userData, { pad: 'index', facing: [0, 0, 1] });
+    Object.assign(button.userData, { point: 'index', facing: [0, 0, 1] });
     room.add(panel);
     let held = false, off = Infinity, back = 0;
     play(function* () {
@@ -123,7 +123,7 @@ describe('fingers', () => {
     rod.rotation.x = Math.PI / 2;
     // (the index asked straight, off the rod the others close on)
     const grip = empty(rod, 'grip', new Vector3());
-    Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], fingers: { index: { curl: 0, hook: 0 } } });
+    Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], digits: { index: { curl: 0, hook: 0 } } });
     room.add(rod);
     // (the hand bone put where its placement holds the rod, as a puppet would)
     const placement = body.placement('right', grip), hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = body.gripOn('right', placement);
@@ -242,9 +242,9 @@ describe('fingers', () => {
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.15 … 1/);
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
-    Object.assign(both.userData, { handle: [0, 1, 0], pad: 'index' });
-    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.pad and userData.handle/);
-    Object.assign(both.userData, { handle: undefined, pad: 'pinky' });
+    Object.assign(both.userData, { handle: [0, 1, 0], point: 'index' });
+    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.point and userData.handle/);
+    Object.assign(both.userData, { handle: undefined, point: 'pinky' });
     expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/a hand has a thumb/);
   });
 });
