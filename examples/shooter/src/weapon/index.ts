@@ -1,3 +1,4 @@
+import type { Body } from '@drawcall/animate';
 import { Mesh, MeshBasicMaterial, Object3D, SphereGeometry, Vector3 } from 'three';
 import { stockBack, WeaponModel } from './model';
 
@@ -16,6 +17,9 @@ export const RIFLE = {
    * off it laid straight along the receiver's side above the guard */
   trigger: new Vector3(-0.004, -0.018, 0.043), frame: new Vector3(-0.028, 0.008, 0.058),
 };
+
+/** a rifle built onto its mount, and its parts the hands and the story use */
+export type Rifle = ReturnType<typeof rifleOn>;
 
 export function rifleOn(mount: Object3D, arms: number) {
   const model = new WeaponModel();
@@ -78,3 +82,13 @@ export function empty(parent: Object3D, name: string, position: Vector3): Object
   return object;
 }
 
+
+/** an empty `name` on `bone` of `person`, `offset` from the bone in the body's frame, turned as the body faces */
+export function onBone(person: Body, bone: Object3D, name: string, offset: Vector3): Object3D {
+  const placed = new Object3D();
+  placed.name = name;
+  placed.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), person.facing);
+  placed.position.copy(offset).applyQuaternion(placed.quaternion).add(bone.getWorldPosition(new Vector3()));
+  bone.attach(placed);
+  return placed;
+}
