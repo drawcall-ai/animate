@@ -51,4 +51,4 @@ The opponent is a generated fighter with a seven-link braid, swung by the specie
 
 `pnpm -F shooter fighter` rebuilds `public/models/fighter.glb` from `assets/fighter-source.glb`, which is not committed yet; until it is, the built model is used as it is.
 
-The braid uses fixed-step spring-bone motion, without body or environment collision. It follows the head with its last pose when the opponent becomes a ragdoll.
+The braid uses fixed-step spring-bone motion that keeps out of the fighter's head and torso but not the environment. It follows the head with its last pose when the opponent becomes a ragdoll.

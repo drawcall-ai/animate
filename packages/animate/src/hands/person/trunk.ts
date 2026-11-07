@@ -4,7 +4,7 @@ import { solveChain } from '../../kernel/chain';
 import type { Dev } from '../../kernel/dev';
 import { clampRotation } from '../../kernel/limits';
 import { REACH } from '../../kernel/tip';
-import { bisect } from '../../kernel/math';
+import { bisect, nearestBetween } from '../../kernel/math';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -288,7 +288,7 @@ function armDepth(pose: ReadonlyPose, proportions: Proportions, side: Side, uppe
 function deepest(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): { depth: number; capsule: string } {
   let depth = -Infinity, capsule = '';
   for (const [from, to, r] of TRUNK) {
-    const d = (radius + r) * proportions.height - segmentDistance(a, b, pose.position(INDEX[from]), pose.position(INDEX[to]));
+    const d = (radius + r) * proportions.height - nearestBetween(a, b, pose.position(INDEX[from]), pose.position(INDEX[to]), _sp, _sq);
     if (d > depth) [depth, capsule] = [d, `${from}–${to}`];
   }
   return { depth, capsule };
@@ -307,24 +307,11 @@ export function checkArms(pose: ReadonlyPose, proportions: Proportions, time: nu
   }
 }
 
-/** the least distance between segments `a`–`b` and `c`–`d` (their nearest points left in `_sp`, `_sq`) */
-function segmentDistance(a: Readonly<Vector3>, b: Readonly<Vector3>, c: Readonly<Vector3>, d: Readonly<Vector3>): number {
-  const u = _su.subVectors(b, a), v = _sv.subVectors(d, c), w = _sw.subVectors(a, c);
-  const uu = u.dot(u), vv = v.dot(v), uv = u.dot(v), uw = u.dot(w), vw = v.dot(w);
-  const det = uu * vv - uv * uv;
-  // (the closest points' parameters, each clamped to its segment and the other's redone for it)
-  let s = det > 1e-12 ? unit((uv * vw - vv * uw) / det) : 0;
-  let r = vv > 1e-12 ? unit((uv * s + vw) / vv) : 0;
-  s = uu > 1e-12 ? unit((uv * r - uw) / uu) : 0;
-  r = vv > 1e-12 ? unit((uv * s + vw) / vv) : 0;
-  return _sp.copy(a).addScaledVector(u, s).distanceTo(_sq.copy(c).addScaledVector(v, r));
-}
 
 const DEGREE = Math.PI / 180;
-const unit = (x: number) => Math.min(1, Math.max(0, x));
 const _forward = new Vector3(), _left = new Vector3(), _pushed = new Vector3(), _d = new Vector3(), _tip = new Vector3(), _front = new Vector3();
 const _was = [new Quaternion(), new Quaternion(), new Quaternion()], _fit = [new Quaternion(), new Quaternion(), new Quaternion()], _blend = new Quaternion();
 const _waitPole = new Vector3(), _wFront = new Vector3(), _wIn = new Vector3(), _wFlat = new Vector3(), _goal = new Vector3(), _swivel = new Vector3();
 const _elbow = new Vector3(), _hand = new Vector3(), _end = new Vector3(), _axis = new Vector3(), _center = new Vector3(), _u = new Vector3(), _v = new Vector3();
 const _points: Readonly<Vector3>[] = [], _handEnd = new Vector3(), _along = new Vector3();
-const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3(), _sp = new Vector3(), _sq = new Vector3();
+const _sp = new Vector3(), _sq = new Vector3();

@@ -156,12 +156,12 @@ declare const model: Object3D;
 
 const fighter = {
   ...humanoid(skeleton),
-  springs: { braid: { stiffness: 18, damping: 0.55, rest: [-2.2, 0, 0] as const } },
+  springs: { braid: { stiffness: 18, damping: 0.55, hang: [-2.2, 0, 0] as const } },
 };
 const body = new Body(fighter, { model });
 ```
 
-A joint with several bone children keeps its input rotation while each child chain swings on its own; a leaf is an endpoint. Springs turn bones but never collide, with the body or anything else, so put them only on bones no verb poses. Skin hair standing clear of the body, so its weights do not bleed into the head or torso, and give its root the hanging `rest` turn.
+A joint with several bone children keeps its input rotation while each child chain swings on its own; a leaf is an endpoint. A person's springs keep out of its own head and trunk, and nothing else, but for a chain that already rests within that coarse volume as rigged, such as hair at the nape, which swings free of it; other species' springs collide with nothing. A body refuses springs on bones it poses itself. Skin hair standing clear of the body, so its weights do not bleed into the head or torso, and give its root the `hang` turn it falls from.
 
 ## Places and paths
 

@@ -54,5 +54,5 @@ export const FIGHTER = [
   }),
 ] as const satisfies readonly SkeletonBone[];
 
-/** The braid's hanging rest turn: the skin binds it upright, clear of the torso, and it hangs behind the head from here. */
-export const BRAID_REST = [-2.2, 0, 0] as const;
+/** The turn the braid hangs from: the skin binds it upright, clear of the torso, and from this turn it falls behind the head. */
+export const BRAID_HANG = [-2.2, 0, 0] as const;

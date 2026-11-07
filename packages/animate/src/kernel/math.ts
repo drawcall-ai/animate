@@ -59,6 +59,20 @@ export function pointSegmentDistance(point: Readonly<Vector3>, a: Readonly<Vecto
   return Math.hypot(point.x - a.x - t * x, point.z - a.z - t * z);
 }
 
+/** the least distance between segments `a`–`b` and `c`–`d`, their nearest points left in `onAB` and `onCD` */
+export function nearestBetween(a: Readonly<Vector3>, b: Readonly<Vector3>, c: Readonly<Vector3>, d: Readonly<Vector3>, onAB: Vector3, onCD: Vector3): number {
+  const u = _su.subVectors(b, a), v = _sv.subVectors(d, c), w = _sw.subVectors(a, c);
+  const uu = u.dot(u), vv = v.dot(v), uv = u.dot(v), uw = u.dot(w), vw = v.dot(w);
+  const det = uu * vv - uv * uv, unit = (x: number) => clamp(x, 0, 1);
+  // (the closest points' parameters, each clamped to its segment and the other's redone for it)
+  let s = det > 1e-12 ? unit((uv * vw - vv * uw) / det) : 0;
+  let r = vv > 1e-12 ? unit((uv * s + vw) / vv) : 0;
+  s = uu > 1e-12 ? unit((uv * r - uw) / uu) : 0;
+  r = vv > 1e-12 ? unit((uv * s + vw) / vv) : 0;
+  return onAB.copy(a).addScaledVector(u, s).distanceTo(onCD.copy(c).addScaledVector(v, r));
+}
+const _su = new Vector3(), _sv = new Vector3(), _sw = new Vector3();
+
 /** the facing (rad about +Y) an orientation's +Z points along */
 export function headingOfTurn(quaternion: Readonly<Quaternion>): number {
   const forward = new Vector3(0, 0, 1).applyQuaternion(quaternion);

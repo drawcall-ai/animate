@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { clamp, forwardOf, leftOf, wrapAngle } from '../kernel/math';
+import { clamp, forwardOf, leftOf, nearestBetween, wrapAngle } from '../kernel/math';
 import type { Frame, Step } from '../kernel/frame';
 import { Poise } from '../kernel/poise';
 import { Pose } from '../kernel/pose';
@@ -62,7 +62,7 @@ export function creature(body: Legged): Step {
     if (!f.dev) return;
     for (const [a, b] of across) {
       const gap = Math.min(...bones[a].slice(1).flatMap((bone, k) => bones[b].slice(1).map((other, m) =>
-        segmentGap(f.prev.position(bones[a][k]), f.prev.position(bone), f.prev.position(bones[b][m]), f.prev.position(other)))));
+        nearestBetween(f.prev.position(bones[a][k]), f.prev.position(bone), f.prev.position(bones[b][m]), f.prev.position(other), _p1, _p2))));
       const limit = CLEARANCE * feet.length;
       if (gap < limit) f.dev.append(f.time - f.dt, { check: 'leg clearance (m)', value: gap, limit, where: f.prev.skeleton.bones[bones[a][bones[a].length - 1]].name });
     }
@@ -201,13 +201,4 @@ function ease([x, v]: Eased, goal: number, dt: number): Eased {
 const _p = new Vector3(), _at = new Vector3(), _left = new Vector3(), _gap = new Vector3(), _to = new Vector3();
 const _bow = new Quaternion(), _turn = new Quaternion(), _q = new Quaternion(), _yaw = new Quaternion(), _m = new Vector3();
 
-/** the least distance between segments `a0`–`a1` and `b0`–`b1` (m) */
-function segmentGap(a0: Vector3, a1: Vector3, b0: Vector3, b1: Vector3): number {
-  const d1 = _d1.subVectors(a1, a0), d2 = _d2.subVectors(b1, b0), r = _r.subVectors(a0, b0);
-  const a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r), c = d1.dot(r), b = d1.dot(d2), den = a * e - b * b;
-  let s = den > 1e-12 ? Math.min(1, Math.max(0, (b * f - c * e) / den)) : 0;
-  let t = e > 1e-12 ? (b * s + f) / e : 0;
-  if (t < 0) { t = 0; s = a > 1e-12 ? Math.min(1, Math.max(0, -c / a)) : 0; } else if (t > 1) { t = 1; s = a > 1e-12 ? Math.min(1, Math.max(0, (b - c) / a)) : 0; }
-  return _p1.copy(a0).addScaledVector(d1, s).distanceTo(_p2.copy(b0).addScaledVector(d2, t));
-}
-const _d1 = new Vector3(), _d2 = new Vector3(), _r = new Vector3(), _p1 = new Vector3(), _p2 = new Vector3();
+const _p1 = new Vector3(), _p2 = new Vector3();

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { isPreview, loadingManager, onDispose, scene } from '@drawcall/glts';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { skin, pose } from '@drawcall/rig';
-import { BRAID_REST, FIGHTER } from './fighter.ts';
+import { BRAID_HANG, FIGHTER } from './fighter.ts';
 
 const source = await new GLTFLoader(loadingManager).loadAsync(new URL('./fighter-source.glb', import.meta.url).href);
 // The generated model faces -X and is one unit tall including its braid. The body itself is 1.82 m tall here.
@@ -44,7 +44,7 @@ onDispose(() => model.traverse(node => {
   }
 }));
 if (isPreview) {
-  pose(model, { rotations: { braid: BRAID_REST, leftLowerArm: [0, -0.65, 0], rightLowerArm: [0, 0.65, 0] } });
+  pose(model, { rotations: { braid: BRAID_HANG, leftLowerArm: [0, -0.65, 0], rightLowerArm: [0, 0.65, 0] } });
   scene.background = new THREE.Color('#ced5dc');
   scene.add(new THREE.HemisphereLight(0xffffff, 0x526079, 2.5));
   const light = new THREE.DirectionalLight(0xffffff, 3);

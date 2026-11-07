@@ -2,12 +2,12 @@ import { humanoid } from '@drawcall/animate';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Mesh, SkinnedMesh, Texture } from 'three';
-import { BRAID_REST, FIGHTER } from '../assets/fighter';
+import { BRAID_HANG, FIGHTER } from '../assets/fighter';
 
 /** One setting for the whole braid; its seven links come from the rig's existing hierarchy. */
 export const fighter = {
   ...humanoid(FIGHTER),
-  springs: { braid: { stiffness: 60, damping: 0.9, rest: BRAID_REST } },
+  springs: { braid: { stiffness: 60, damping: 0.6, hang: BRAID_HANG } },
 };
 
 export async function loadFighter() {
