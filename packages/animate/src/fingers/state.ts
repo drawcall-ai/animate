@@ -35,6 +35,8 @@ interface Hand {
   /** whether its shape was last eased toward one a pose asked of it (a fist after a press), not one it took holding something */
   posed: boolean;
   taken: WeakMap<HandPlacement, Taken>;
+  /** each placement as the hand took what hangs from it: closed where the hand holds it, not where the placement puts it */
+  hung: WeakMap<HandPlacement, Taken>;
   coming: HandPlacement | null;
   from: Shape | null;
   pointing: number | null;
@@ -81,7 +83,7 @@ export class FingerState {
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       // (its bones left as they stand: eased from there by its first update)
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
-      return { joints, guard: new Guard(joints, skins), skins, shape, posing: null, posed: false, taken: new WeakMap(), coming: null, from: null, pointing: null, met: null, solve: null };
+      return { joints, guard: new Guard(joints, skins), skins, shape, posing: null, posed: false, taken: new WeakMap(), hung: new WeakMap(), coming: null, from: null, pointing: null, met: null, solve: null };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -187,21 +189,29 @@ export class FingerState {
 
   /** what `side` holds, as its hand takes it (none: nothing, or nothing placed) */
   private held(side: 'left' | 'right'): Taken | null {
-    const placement = this.holding[side]?.placement;
-    return placement ? this.take(this.hands[side], placement) : null;
+    const placement = this.holding[side]?.placement, hand = this.hands[side];
+    if (!placement) return null;
+    // (what hangs from the hand hangs as the hand took it, which may be turned off its placement — a reach's turn is only preferred, a
+    // magazine taken from its pouch 20° off it: closed for the placement, the fingers missed its faces by 2 cm)
+    if (!within(placement.on, hand.joints.hand)) return this.take(hand, placement);
+    const known = hand.hung.get(placement);
+    if (known) return known;
+    const taken = this.take(hand, placement, inFrame(placedOf(hand.joints.hand), worldOf(placement.on)));
+    hand.hung.set(placement, taken);
+    return taken;
   }
 
   /**
    * `placement` as `hand` takes it, worked out the first time it is asked for: where its node goes, and the shape its fingers take there
-   * — closed round the thing (`closedOn`) from the hand placed so, or the shape it holds
+   * — closed round the thing (`closedOn`) from the hand placed so (or at `at`, the thing's frame), or the shape it holds
    */
-  private take(hand: Hand, placement: HandPlacement): Taken {
-    const known = hand.taken.get(placement);
+  private take(hand: Hand, placement: HandPlacement, at?: Placement): Taken {
+    const known = at ? undefined : hand.taken.get(placement);
     if (known) return known;
     const thing = placement.on, { joints, skins } = hand;
     thing.updateWorldMatrix(true, true);
     const frame = worldOf(thing), scale = placedOf(joints.hand).scale, held = placement.fingers === 'close' ? null : shapeOf(placement.fingers);
-    const node = this.nodeOf(hand, placement);
+    const node = at ?? this.nodeOf(hand, placement);
     const near = trianglesAbout(joints, skins, thing, frame, node.position);
     let shape = held ?? RELAXED;
     if (!held) {
@@ -209,7 +219,7 @@ export class FingerState {
       shape = closedOn(joints, thing, lineOf(placement, frame), skins, matrix);
     }
     const taken = { placement, shape, near };
-    hand.taken.set(placement, taken);
+    if (!at) hand.taken.set(placement, taken);
     return taken;
   }
 

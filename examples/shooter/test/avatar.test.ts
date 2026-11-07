@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Quaternion, Vector3 } from 'three';
+import { Box3, Mesh, Quaternion, Vector3 } from 'three';
 import { lookDirection } from '../src/angles';
 import { Avatar, type AvatarState } from '../src/avatar';
 import { TUNNEL_CLEARANCE } from '../src/environment';
@@ -67,7 +67,18 @@ describe('avatar', () => {
     const before = offGrips();
     movement.input.aim = false;
     avatar.requestReload();
-    for (let frame = 0; frame < 600 && avatar.reloading; frame++) world.update(DT);
+    // (the full magazine's face under the index fingertip as the hand carries it to the well: the hand took it from the pouch turned off
+    // its placement, and the fingers, closed for the placement, missed its face by 2 cm)
+    let fingertip = NaN;
+    for (let frame = 0; frame < 600 && avatar.reloading; frame++) {
+      world.update(DT);
+      const full = node(avatar.group, 'magazine 2');
+      if (full.parent !== avatar.body.bones.leftHand) continue;
+      const back = full.matrixWorld.clone().invert(), box = new Box3();
+      full.traverse((mesh) => { if (mesh instanceof Mesh) box.union(new Box3().setFromBufferAttribute(mesh.geometry.getAttribute('position')).applyMatrix4(back.clone().multiply(mesh.matrixWorld))); });
+      fingertip = box.distanceToPoint(full.worldToLocal(node(avatar.body.object, 'leftIndexDistal_end').getWorldPosition(new Vector3())));
+    }
+    expect(fingertip).toBeLessThan(0.008);
     expect(avatar.reloading).toBe(false);
     expect(avatar.reloads).toBe(1);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
