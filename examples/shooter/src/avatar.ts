@@ -41,6 +41,10 @@ const RETURNING = 0.3;
 const LOWERED = new Vector3(0.6, -0.1, 0);
 const LOWERING = 0.5;
 const EASE = 0.25;
+/** Where the butt sits off the right shoulder joint (m at the soldier's scale, the chest's frame): 8.5 cm in toward the chest's middle,
+ * 2 cm up, 10 cm ahead of it — the receiver's front, where the left hand holds it palm up, near enough for the short-armed soldier's
+ * reach (with the butt out at the joint its hand fell 2 cm short) */
+const POCKET = new Vector3(0.085, 0.02, 0.1);
 /** Seconds between shots. */
 const SHOT_INTERVAL = 0.1;
 /** Metres ahead of the eye at which a player's barrel line crosses the view. */
@@ -203,9 +207,10 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const arms = proportions.arms;
   const eye = onBone(person, person.bones.head, 'right eye', new Vector3(-proportions.head.eye.x, proportions.head.eye.y, proportions.head.eye.z));
   const chest = person.bones.chest;
-  // (the butt in the pocket inside the shoulder joint, 9 cm right of the chest's middle: the receiver's front, where the left hand holds
-  // it palm up, 5.5 cm nearer it than with the butt out at the joint, where the short arm fell 2 cm short)
-  const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-0.09, 0.19, 0.1).multiplyScalar(proportions.scale));
+  // (the butt in the pocket inside the shoulder joint, `POCKET` in from it and up, wherever the skeleton has the joint: a broad
+  // shouldered body holds its rifle further out)
+  const joint = proportions.offsets.leftShoulder.clone().add(proportions.offsets.leftUpperArm);
+  const pocket = onBone(person, chest, 'shoulder pocket', new Vector3(-joint.x, joint.y, 0).addScaledVector(POCKET, proportions.scale));
   const mount = empty(pocket, 'aim', new Vector3());
   const { rifle, pistol, blade, well, below, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
   rifle.position.copy(stock.position).negate();
