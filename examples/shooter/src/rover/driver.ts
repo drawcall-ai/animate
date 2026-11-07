@@ -67,7 +67,7 @@ export class Driver extends Mount {
     const { body, rifle } = this.soldier.avatar, onto = seat(puppet, standing, this.rover, rifle, this.progress, { yaw, pitch: this.view.pitch });
     for (const side of ['left', 'right'] as const) {
       const to = onto[side];
-      body.shapeHand(side, to && puppet.placement(side, to), dt);
+      body.shapeHand(side, to && body.placement(side, to), dt);
     }
   }
 

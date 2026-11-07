@@ -20,7 +20,8 @@ import type { HandOptions } from '../hands/handling';
  * comfortably (people choose a grasp for the posture it ends in), the thing still ending turned as asked. When it must walk there (and `step`
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
  * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, turned as its target
- * is (within 3°), and keeps it there. It
+ * is (within 3°), and keeps it there; a thing in one hand carried to an `Object3D` is seated on it in the fingers once the arm has
+ * brought it within 1.5 cm, so a `release` onto that object puts it there exactly. It
  * returns `false` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried
  * straight there, if the thing does not come to rest in place: stopped getting nearer more than 1.5 cm short of it, held off by the arms
  * (`late carry`; within that, it ends `true` there), or its own trunk and

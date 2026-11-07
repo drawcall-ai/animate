@@ -35,8 +35,9 @@ interface Hand {
   /** whether its shape was last eased toward one a pose asked of it (a fist after a press), not one it took holding something */
   posed: boolean;
   taken: WeakMap<HandPlacement, Taken>;
-  /** each placement as the hand took what hangs from it: closed where the hand holds it, not where the placement puts it */
-  hung: WeakMap<HandPlacement, Taken>;
+  /** each placement as the hand took what hangs from it: closed where the hand holds it, not where the placement puts it — and where it
+   * hung in the hand then */
+  hung: WeakMap<HandPlacement, Taken & { local: Placement }>;
   coming: HandPlacement | null;
   from: Shape | null;
   pointing: number | null;
@@ -63,6 +64,8 @@ const SETTLED = 1e-4;
 const SWEPT = 0.02;
 /** how near its goal a hand's shape is to have closed (the most any of its values is off it) */
 const CLOSED = 0.15;
+/** how far a thing hanging from the hand moves in it before the fingers close on it afresh (m, rad, in the hand's frame) */
+const MOVED = 1e-3;
 /** how far into the thing from a placement's point the grasp's line runs, which the thumb opposes the fingers across and a digit pressing
  * on an empty presses toward (m) */
 const INTO = 0.02;
@@ -191,12 +194,13 @@ export class FingerState {
   }
 
   /** `placement` as `hand` takes it — what hangs from the hand closed on where the hand holds it, which may be turned off its placement
-   * (a reach's turn is only preferred), so the fingers meet its faces as it hangs */
+   * (a reach's turn is only preferred), so the fingers meet its faces as it hangs; closed afresh once it has moved in the hand (a regrip,
+   * a seat on its place) */
   private hung(hand: Hand, placement: HandPlacement): Taken {
     if (!within(placement.on, hand.joints.hand)) return this.take(hand, placement);
-    const known = hand.hung.get(placement);
-    if (known) return known;
-    const taken = this.take(hand, placement, inFrame(placedOf(hand.joints.hand), worldOf(placement.on)));
+    const known = hand.hung.get(placement), { position, quaternion } = placement.on;
+    if (known && known.local.position.distanceTo(position) < MOVED && known.local.quaternion.angleTo(quaternion) < MOVED) return known;
+    const taken = { ...this.take(hand, placement, inFrame(placedOf(hand.joints.hand), worldOf(placement.on))), local: { position: position.clone(), quaternion: quaternion.clone() } };
     hand.hung.set(placement, taken);
     return taken;
   }

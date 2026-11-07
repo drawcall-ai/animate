@@ -56,8 +56,9 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   const end = way.points[way.points.length - 1];
   // (in one hand, its grasp planned for its end as it comes there)
   const grasp = grasping(person, thing, end);
-  // (the hands as brisk as the way is quick: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
-  const guides = guidesFor(person, thing, { ...CARRYING, accel: paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel }, way.clear);
+  // (the hands as brisk as the way is quick, in turning it as in moving it: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
+  const brisk = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel / CARRYING.accel;
+  const guides = guidesFor(person, thing, { ...CARRYING, accel: CARRYING.accel * brisk, turnAccel: CARRYING.turnAccel * brisk, turnSpeed: CARRYING.turnSpeed * Math.sqrt(brisk) }, way.clear);
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, guides, resting, grasp, options.speed));
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   request.met();

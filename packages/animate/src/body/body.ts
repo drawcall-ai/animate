@@ -102,15 +102,22 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /**
    * The placement hand `side` takes the grip `empty` by (its thing the empty's parent): what the grip leaves free fixed as a grab fixes it,
-   * from where the body stands now (`Thing.grip`). For a body its app poses itself, to hand to `gripOn` and `shapeHand`: pick it once as
-   * the hand sets off for the grip and keep it while it holds it — picked afresh as the body moves, a grip with freedoms may be taken
-   * otherwise.
+   * from where the body stood at its last update (`Thing.grip`). For a body its app poses itself, to hand to `gripOn` and `shapeHand`:
+   * asked again before the body's next update, it is the same placement, so a hand holds a grip the same however the app has posed the
+   * body since; after an update it is picked afresh.
    */
   placement(side: 'left' | 'right', empty: Object3D): HandPlacement {
     const thing = empty.parent;
     if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
-    return takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement;
+    const self = personOf(selfOf(this)), kept = this.picked[side].get(empty);
+    if (kept?.updates === self.updates) return kept.placement;
+    const placement = takingOf(self, side, Thing.of(thing), empty.name).placement;
+    this.picked[side].set(empty, { updates: self.updates, placement });
+    return placement;
   }
+
+  /** each hand's placements `placement` picked, by grip, and at how many updates */
+  private readonly picked = { left: new WeakMap<Object3D, { updates: number; placement: HandPlacement }>(), right: new WeakMap<Object3D, { updates: number; placement: HandPlacement }>() };
 
   /**
    * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet: its update stopped,

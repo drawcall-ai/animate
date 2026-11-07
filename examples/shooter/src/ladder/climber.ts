@@ -57,7 +57,7 @@ export class Climber extends Mount {
     const { body, rifle } = this.soldier.avatar, onto = hang(puppet, standing, this.ladder, rifle, this.end(), this.progress, this.height, this.view);
     for (const side of ['left', 'right'] as const) {
       const to = onto[side];
-      body.shapeHand(side, to instanceof Object3D ? puppet.placement(side, to) : to, dt);
+      body.shapeHand(side, to instanceof Object3D ? body.placement(side, to) : to, dt);
     }
   }
 
