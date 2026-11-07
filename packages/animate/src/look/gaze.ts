@@ -113,10 +113,9 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     else eyes.step(f.dt, worldDown, pitchAlong(_line.subVectors(aimed, origin), facing), resting, shift >= SETTLED);
     (aimed ??= new Vector3()).copy(point);
     const ways = (line: Vector3) => {
-      // (eased off the line's heading toward the trunk's facing only as the head's own line nears the vertical, the eyes' share of the
-      // pitch taken off it: the head looking 60° down at what the eyes see 80° down keeps its heading, unrolled)
-      const down = Math.asin(Math.max(-1, Math.min(1, -line.y)));
-      const vertical = smoothstep(0.1, 0.35, down > 0 ? Math.cos(Math.max(0, down - eyes.value)) : Math.hypot(line.x, line.z));
+      // (as far as the line itself has a heading: one passing straight down under the eyes swings its heading round in a moment, and
+      // the eyes' own pitch, reset at each new sight, would make it jump too: judged by either, a squat over a box snapped the head ~450°/s)
+      const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
       const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
       upright(line, facing + toward * vertical, _q);
       upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
@@ -293,11 +292,11 @@ function unwrapped(v: Vector3): Vector3 {
 /** how far `line` points down (rad, + down) in the vertical plane turned `yaw`, past straight down for a line behind it */
 const pitchAlong = (line: Vector3, yaw: number) => Math.atan2(-line.y, line.x * Math.sin(yaw) + line.z * Math.cos(yaw));
 
-/** looking along `d` (unit), turned `yaw` about the vertical and pitched in that plane (`pitchAlong`), then turned the least way onto
- * `d` (off that plane only where the yaw eased off its heading: nearly straight up or down), into `out` */
+/** looking along `d` (unit) unrolled: turned `yaw` about the vertical and pitched in that plane (`pitchAlong`), into `out`. Where the yaw
+ * eased off `d`'s heading (nearly straight up or down) the eyes take the little left aside: turned the least way onto `d` instead, the
+ * head rolled by as much as the yaw eased off, plain to see once the eyes' pitch is taken back off it (9° looking at a knot 80° down) */
 function upright(d: Vector3, yaw: number, out: Quaternion): Quaternion {
-  out.setFromAxisAngle(Y, yaw).multiply(_p.setFromAxisAngle(X, pitchAlong(d, yaw)));
-  return out.premultiply(_p.setFromUnitVectors(_l.set(0, 0, 1).applyQuaternion(out), d));
+  return out.setFromAxisAngle(Y, yaw).multiply(_p.setFromAxisAngle(X, pitchAlong(d, yaw)));
 }
 
 const X = new Vector3(1, 0, 0);

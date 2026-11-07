@@ -60,7 +60,10 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   // (the hands as brisk as the way is quick, in turning it as in moving it: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
   const brisk = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel / CARRYING.accel;
   const guides = guidesFor(person, thing, { ...CARRYING, accel: CARRYING.accel * brisk, turnAccel: CARRYING.turnAccel * brisk, turnSpeed: CARRYING.turnSpeed * Math.sqrt(brisk) }, way.clear);
-  if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, guides, resting, grasp, options.speed));
+  // (brought to a place on its own body, the eyes are not borrowed for it: that place rides with the body — a spot before the chest stood
+  // behind the eyes of a body bowed over what it lifts, the head turned back over its shoulder for it — and one on the head moves with them)
+  const moving = () => along(person, request, thing, way, guides, resting, grasp, options.speed);
+  if (plan === 'there') yield* way.own ? moving() : parallel<Frame>('race', noticing(person, request, (f) => end(f).position), moving());
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   request.met();
   yield* holdAlong(person, request, thing, guides(), end, undefined, way.own);

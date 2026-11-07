@@ -118,8 +118,9 @@ describe('looking', () => {
       const eyes = eyesOf(body);
       if (k >= 60) missed = Math.max(missed, new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(2)).angleTo(point.clone().sub(eyes)));
     }
-    // (on it but for the eyes' share, the head turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
-    expect(missed).toBeLessThan(0.3 * 0.35 + 0.03);
+    // (on it but for the eyes' share — down, and the little aside an unrolled head leaves them this steeply down: ~0.02 rad — the head
+    // turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
+    expect(missed).toBeLessThan(0.3 * 0.35 + 0.05);
     expect(Math.max(...heads.slice(61).map((q, k) => q.angleTo(heads[60 + k])))).toBeLessThan(0.02);
   });
 

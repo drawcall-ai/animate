@@ -1,11 +1,12 @@
 // Scenario statistics and task accuracy: these are regression tests, not runtime invariants.
+import { Quaternion, Vector3 } from 'three';
 import { ArmTurns, FreeArms } from './arms';
 import { Clearance } from './clearance';
 import { FinalStance, Landings } from './body';
-import type { Frame } from './frame';
 import { leftOf } from './actor';
 import { GaitKinematics, RUNNING, type Stride } from './gait';
 import { Targets } from './targets';
+import { Peak, type Frame } from './frame';
 
 export interface MetricsOptions {
   strides?: { straight: number; curve: number };
@@ -14,8 +15,36 @@ export interface MetricsOptions {
   /** setting off and stopping, the most the trunk and the pelvis pitch, against walking's own peak pitch rate (×) */
   startStop: { trunk: number; pelvis: number } | null;
   clearance?: number;
+  /** the most the head's turn on the chest accelerates (rad/s²; default `NECK`) */
+  neck?: number;
 }
 const TRACKED = 0.8;
+/**
+ * Tuned (rad/s²): the most the head's turn on the chest accelerates from one frame to the next — a gaze shift's head is braked at 60
+ * (`SHIFT`), the chest's own turning and stopping beneath it adds the rest: ≤ 152 measured over every scenario but knight-arming, at
+ * v0.3.0 and since. A head flung round by its gaze (a heading taken off a line of sight straight down, a look at a spot behind the eyes)
+ * measured 430–490.
+ */
+const NECK = 160;
+/** the peak acceleration of the head's turn on the chest (rad/s²), frame to frame, past the first half second */
+class NeckPace {
+  peak = new Peak();
+  private was: Quaternion | null = null;
+  private spin = new Vector3();
+  private t = 0;
+  see(f: Frame) {
+    const turn = f.h.turn('chest').invert().multiply(f.h.turn('head')), dt = f.t - this.t;
+    if (this.was && dt > 0) {
+      const step = this.was.invert().premultiply(turn);
+      if (step.w < 0) step.set(-step.x, -step.y, -step.z, -step.w);
+      const sin = Math.sqrt(Math.max(0, 1 - step.w * step.w));
+      const spin = sin < 1e-9 ? new Vector3() : new Vector3(step.x, step.y, step.z).multiplyScalar(2 * Math.acos(Math.min(1, step.w)) / sin / dt);
+      if (f.t > 0.5) this.peak.see(spin.distanceTo(this.spin) / dt, f.t);
+      this.spin.copy(spin);
+    }
+    [this.was, this.t] = [turn, f.t];
+  }
+}
 const LATE_RETARGET = 0.03;
 /** a gaze target past the eyes' comfortable turn by `PAST` at most this long (s, tuned), and at most this far in the head (°) */
 const GAZE = { held: 0.3, eyes: 45 };
@@ -36,15 +65,16 @@ export function measure(steps: Iterable<readonly Frame[]>) {
   const turns = new ArmTurns();
   const stance = new FinalStance();
   const clearance = new Clearance();
+  const neck = new NeckPace();
   for (const step of steps) {
     step.forEach((f, i) => {
       if (f.h.joint('leftFoot').sub(f.h.joint('rightFoot')).dot(leftOf(f.h.locomotion.facing)) < 0.02) crossings++;
       landings.see(f);
       if (i > 0) return;
-      for (const m of [targets, gait, arms, turns, stance, clearance]) m.see(f);
+      for (const m of [targets, gait, arms, turns, stance, clearance, neck]) m.see(f);
     });
   }
-  return { crossings, landings, targets, gait, arms, turns, stance, clearance };
+  return { crossings, landings, targets, gait, arms, turns, stance, clearance, neck };
 }
 
 export type Measured = ReturnType<typeof measure>;
@@ -114,6 +144,7 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   // oculomotor range of ±45–55°, Guitton & Volle 1987, recalled; the time on end tuned, a reach's longest measured 0.18 s)
   add("gaze target beyond the eyes' comfortable turn by 5°: longest (s)", m.targets.pastPeak.value, 'max', GAZE.held, m.targets.pastPeak.at);
   add('gaze target in the head (°)', m.targets.eyesPeak.value, 'max', GAZE.eyes, m.targets.eyesPeak.at);
+  add("the head's turn on the chest: peak acceleration (rad/s²)", m.neck.peak.value, 'max', limit.neck ?? NECK, m.neck.peak.at);
   // (a gaze asked is judged somewhere: one always behind the body would pass unseen)
   if (m.targets.asked > 0) add('gaze: frames judged', m.targets.judged, 'min', 1);
   if (limit.strides) {
