@@ -53,6 +53,11 @@ describe('Driver', () => {
       }
     }
 
+    // (the two thumbs alike, each round the rim opposite its fingers: mirror images in their grips' frames, not one lying along the rim)
+    const thumb = (side: 'left' | 'right') => rover.marks.grips[side].worldToLocal(soldier.avatar.body.object.getObjectByName(`${side}ThumbDistal_end`)
+      ?.getWorldPosition(new Vector3()) ?? new Vector3(NaN)).multiply(new Vector3(side === 'left' ? -1 : 1, 1, 1));
+    expect(thumb('left').distanceTo(thumb('right'))).toBeLessThan(0.02);
+
     // (held back while still rolling forward, the pedal brakes)
     until(() => { handling.drive(-1, 0, false); return driver.canExit; }, 6);
     handling.park();

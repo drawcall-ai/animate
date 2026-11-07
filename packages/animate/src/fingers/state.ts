@@ -172,8 +172,11 @@ export class FingerState {
     const hand = this.hands[side];
     if (to === null || !('on' in to)) return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds, null);
     const taken = this.take(hand, to), thing = to.on, goal = this.onto(hand, to), contacts = contactsOf(to);
-    if (!this.arrived(hand, taken) || !contacts.length) return this.ease(hand, goal, seconds, thing);
-    this.ease(hand, this.solved(hand, taken, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts), seconds, thing, contacts.map((c) => c.part));
+    if (!this.arrived(hand, taken)) return this.ease(hand, goal, seconds, thing);
+    // (there, it holds it, as `update` has a hand holding: closed round it, kept out of it by its shape, not by where its digits came in)
+    hand.guard.holding(thing);
+    if (!contacts.length) return this.ease(hand, goal, seconds, false);
+    this.ease(hand, this.solved(hand, taken, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts), seconds, false, contacts.map((c) => c.part));
   }
 
   /** where hand `side`'s bone goes for `placement`: its wrist and its node's rotation (world) — see `Body.gripOn` */
