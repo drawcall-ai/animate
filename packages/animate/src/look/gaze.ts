@@ -270,8 +270,9 @@ function levelness(q: Readonly<Quaternion>): number {
 }
 
 /** how much of a line of sight is horizontal (the cosine of its pitch) where a head is followed in its own angles, from none to all:
- * from 75° to 60° up or down (tuned) */
-const LEVEL = [0.25, 0.5];
+ * from 83° to 70° up or down (tuned: as steep as they still tell a turn about the vertical from a roll, short of a look past straight
+ * down, where they turn round and roll over; from 75°, a shift off a knot 80° down went the shortest way and came up rolled 5–6°) */
+const LEVEL = [0.12, 0.35];
 
 /** `q` (world) in a head's own angles, Fick's gimbal: turned about the vertical, pitched (+ down) about its side axis, then rolled
  * about its line — (pitch, yaw, roll), into `out`, each angle wound as near `near` as it goes. A head turns so, its roll kept small
