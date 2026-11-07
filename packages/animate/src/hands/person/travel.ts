@@ -24,6 +24,9 @@ import type { Guide, Guides } from './guide';
 /** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s); how long it stands still
  * (within `moved`, m) short of it to be as near as the arms take it, and how near it then is there (`close`, m) */
 const RESTING = 2, STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: 0.015, turn: 0.15 };
+/** how far off its place (m) the fingers seat a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
+ * push or draw what they hold without the hand moving */
+const SEATS = 0.03;
 /** how near its end's turn (rad) a thing carried to a turned end is to have arrived: there, turned too */
 const TURNED = 0.05;
 
@@ -132,10 +135,10 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     // (an end that sets a turn is arrived at turned too, not on its place alone — or, once late, on its place however it is turned)
     const turnedOff = turns(f) ? carrier.current.quaternion.angleTo(guide.goal.quaternion) : 0;
     const short = carrier.current.position.distanceTo(goal), close = short <= STALL.close && turnedOff <= STALL.turn;
-    // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it, a thing in one hand is seated on it
-    // there, the last millimetres the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it)
+    // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it (`SEATS`), a thing in one hand is
+    // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it)
     const side = seating(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
-    if (side && led && close && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
+    if (side && led && short <= SEATS && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
       // (the thing as it stood with its end a sub-step before, as `restingAt` reads them: a sub-step apart, a moving body's place would
       // seem off it by as far as it moves in one)
       seated = seat(person, side, thing, carrier.moved(f.time) ? carrier.prev : carrier.current, ended);
