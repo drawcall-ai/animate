@@ -4,7 +4,7 @@ import type { Carrier } from '../kernel/carrier';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import type { Thing } from './thing';
-import type { HandPlacement } from '../hands/person/place';
+import type { HandPlacement } from '../fingers/placement';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
@@ -58,8 +58,8 @@ export const anchors = new WeakMap<Object3D, { body: Holder; bone: number }>();
 /** the body that moves each thing it carries in both hands itself (one hand's hangs from that hand's bone) */
 export const movers = new WeakMap<Object3D, Holder>();
 
-/** each node its app keeps turned to a world rotation (`Body.orient`), its position following its parent */
-export const oriented = new WeakMap<Object3D, Quaternion>();
+/** the body that keeps each node turned to a world rotation (`Body.orient`), its position following its parent: the rotation, by node */
+export const orienters = new WeakMap<Object3D, { readonly turned: ReadonlyMap<Object3D, Quaternion> }>();
 
 /** a node's matrix from one update to the next, the update it was last read in, and its parent frame (null for world) */
 export interface Interpolated {
@@ -85,7 +85,7 @@ export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh
 function chainOf(reader: Resolving, node: Object3D, fresh: boolean, chain: Matrix4): Matrix4 {
   chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
-    const turned = oriented.get(at);
+    const turned = orienters.get(at)?.turned.get(at);
     if (turned) {
       // (turned in the world as its app keeps it, where its parent, as found now, carries its position)
       const parent = at.parent ? chainOf(reader, at.parent, fresh, new Matrix4()) : new Matrix4();

@@ -15,8 +15,8 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { reachFor } from './take';
-import { emptyAt, gripAt, holdOn, type Taking } from './palm';
+import { approach } from './approach';
+import { emptyAt, gripAt, holdOn, type Taking } from './take';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 
@@ -33,8 +33,8 @@ const CLOSE = 1.6;
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
 export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], step: boolean, motion?: Pace) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
-  // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so a
-  // support hand going back onto a rifle the other holds to the shoulder bowed the trunk as far as it bows before it got there)
+  // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so the
+  // bow would never bring the grip nearer, only bend the trunk as far as it goes)
   const holding = takes.map((take) => heldThings(person).includes(take.thing));
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
     // (stood to as if the wrist went on the empty: the hand still hangs, so the palm's way back from it is not yet the reach's)
@@ -78,7 +78,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     // (the hands rising halfway toward what they take, before the body has come up to it)
     yield* parallel<Frame>('race', action<Frame>({ until: () => stood || near() }), () => parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked',
       reaching(person, take.side, (f) => raisedHand(f, take), { lead: false })))));
-    yield* parallel<Frame>('race', reachFor(person, request, takes, motion), function* () {
+    yield* parallel<Frame>('race', approach(person, request, takes, motion), function* () {
       yield* action<Frame>({ until: () => stood || preparing() });
       yield* during(request, 'trunk', 'borrowed', (f) => {
         takes.forEach((take, k) => {

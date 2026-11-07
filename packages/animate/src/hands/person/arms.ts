@@ -10,7 +10,7 @@ import { solveChain } from '../../kernel/chain';
 import { TrackedRotation } from '../../kernel/track';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import type { ReadonlyPose } from '../../kernel/pose';
+import { Pose, type ReadonlyPose } from '../../kernel/pose';
 import type { Thing } from '../../things/thing';
 import { boneOf, onBody } from '../../things/hold';
 import { bringShoulder, ELEVATION, PROTRACTION, twistToward } from './bend';
@@ -175,7 +175,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     target = { ...target, position };
   }
   // (a grip held, as a reach setting off, is let out as far as the arm hangs: a hand holding something by an arm all but straight —
-  // a rifle taken up from a hanging hand — is not drawn off its grip)
+  // something long taken up from a hanging hand — is not drawn off its grip)
   const contact = options.thing !== undefined && options.thing === person.holding[side]?.thing;
   arm.to(f, target, {
     ...CALM,
@@ -252,13 +252,38 @@ export function elbowPole(pose: ReadonlyPose, proportions: Proportions, side: Si
 }
 
 /** an arm's joints, from the clavicle out */
+/**
+ * How the arm brings hand `side` to have its palm at `at` (world): the hand bone's turn (world, into `out`) with the arm posed onto it
+ * from `pose` on `scratch` — its elbow bent the way a reach there bends it, the forearm and the wrist unturned, as a hanging arm's are
+ */
+export function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
+  scratch.copy(pose);
+  const proportions = person.proportions, hand = INDEX[`${side}Hand`], palm = palmOf(proportions, side), wrist = _wrist;
+  // (the wrist a palm back from `at` along the hand as the last pass turned it: two more passes bring it within a millimetre)
+  for (let pass = 0; pass < 3; pass++) {
+    scratch.setLocal(hand, IDENTITY);
+    wrist.copy(palm).applyQuaternion(scratch.rotation(hand)).negate().add(at);
+    solveChain({ current: scratch }, `${side}Arm`, { tip: { position: wrist }, pole: elbowPole(scratch, proportions, side, wrist, _pole) });
+  }
+  return out.copy(scratch.rotation(hand));
+}
+
+/** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
+const scratches = new WeakMap<Reacher, { brought: Pose; trial: Pose }>();
+export function scratch(person: Reacher): { brought: Pose; trial: Pose } {
+  let poses = scratches.get(person);
+  const skeleton = person.frame.prev.skeleton;
+  if (!poses) scratches.set(person, (poses = { brought: new Pose(skeleton), trial: new Pose(skeleton) }));
+  return poses;
+}
+
 const ARM = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const;
-const ZERO = new Vector3();
+const ZERO = new Vector3(), IDENTITY = new Quaternion();
 const _q = new Quaternion(), _r = new Quaternion(), _c = new Quaternion(), _g = new Quaternion(), _frame = new Quaternion();
 const _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _along = new Vector3();
-const _turnAt = new Quaternion(), _gliding = new Quaternion();
+const _turnAt = new Quaternion(), _gliding = new Quaternion(), _wrist = new Vector3();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _glided = { position: new Vector3(), velocity: new Vector3() };

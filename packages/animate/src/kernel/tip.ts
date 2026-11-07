@@ -179,9 +179,9 @@ export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: nu
   return angle <= REACHED.angle || (target.preferred === true && (angleOff(f, tip, target, on, true) - angle) / dt <= TURNING);
 }
 
-/** how fast (rad/s) a tip may still close on a turn only preferred and be as far as it goes: a grasp closed on a hand still turning was
- * shaped for a turn the hand went on from — and one held short of it by the wrist's range, on a rifle still lowering, turned on with it
- * for a second without coming any nearer, and the hand waited 1 cm off its grip */
+/** how fast (rad/s) a tip may still close on a turn only preferred and be as far as it goes: a grasp closed on a hand still turning
+ * would be shaped for a turn the hand goes on from — and one held short of it by the wrist's range, on what still turns, would follow it
+ * without coming any nearer, the hand waiting short of its grip */
 const TURNING = 0.2;
 
 /** The unmet turn, in radians, allowing the target’s free roll and using the last final pose (`before`: the one before it). */

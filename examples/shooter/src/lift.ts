@@ -22,18 +22,16 @@ const DEPARTS = 0.8;
  */
 const PANEL = { height: 1.2, post: 0.07, wide: 0.15, deep: 0.06, z: 0.004 };
 const BUTTON = { radius: 0.02, bezel: 0.027, out: 0.012, apart: 0.09, travel: 0.008, pushing: 0.08 };
-/** How near a panel a soldier's feet must stand to press it (m, out from its face), how far to the right of the panel's middle (`aside`),
- * and how squarely it must face it (the cosine of the most it may look away): a little to its right, so that the left hand presses and
- * the rifle in the right passes it (farther, or further right, the arm reached out straight and hunted round the button; from just left
- * of its middle, the rifle held in both hands lay against the panel, its support arm unable to hold it further aside; from 6 cm right, it
- * looked to touch its edge, 6 cm off). */
+/** Where the game offers a press to the player, whose body cannot step to the button itself: its feet within a forearm's to an arm's
+ * reach of the panel's face (m), a little to its right (`aside`, m) so that the left hand presses while the rifle in the right passes the
+ * panel (the library does not keep held things out of props), and facing it (the cosine of the most it may look away). */
 const REACH = { near: 0.38, far: 0.55, aside: { least: 0.085, most: 0.2 }, facing: Math.cos(1.1) };
 const UP = new Vector3(0, 1, 0);
 
 /**
  * The course's lift: a kinematic platform that stays at the foot or at the upper deck until one of its buttons is pressed, then rides to
  * the other level. On it a panel sends it up or down; on each landing a post calls it there. Each button is a thing of its own (massless: a
- * fixture) with one grip, `press`: its cap's face, where the left index's pad goes (`userData.pad`), pressed straight in (`facing`): the
+ * fixture) with one grip, `press`: its cap's face, where the left index's pad goes (`userData.point`), pressed straight in (`facing`): the
  * hand comes as a loose fist to before it, points and pushes in; the cap and the pad on it go in with the press.
  * A pressed button lights until the lift arrives.
  */
@@ -161,7 +159,7 @@ export class Lift {
       const press = new Object3D();
       press.name = 'press';
       press.position.z = BUTTON.out;
-      Object.assign(press.userData, { pad: 'index', facing: [0, 0, -1] });
+      Object.assign(press.userData, { point: 'index', facing: [0, 0, -1] });
       part.add(press);
       frame.add(bezel, cap, part);
       const button = { part, to, call };

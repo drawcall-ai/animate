@@ -6,7 +6,7 @@ import { type Live, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
 import { course, type Waypoint } from '../../kernel/course';
 import { during, type Request } from '../../kernel/requests';
-import { handsOn, worn } from '../../things/hold';
+import { handsOn, inHand, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import type { Reacher } from './reacher';
 import { handStep, HOLD } from './arms';
@@ -14,16 +14,19 @@ import { sideOf } from '../../species/humanoid/bones';
 import { bringShoulder } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { following, LEADING, limitOf } from './reach';
-import { grasped, planGrasp } from './grasp';
+import { grasped, planGrasp, seat } from './grasp';
 import { resolve, type Hold } from '../../things/resolve';
-import type { Aim, CarryAim } from './aim';
+import type { Guide, Guides } from './guide';
 
-// A carried thing along its course: the hands holding it on its aim, until it has come to rest at the course's end — or is late there,
+// A carried thing along its course: the hands holding it on its guide, until it has come to rest at the course's end — or is late there,
 // stalled short of it, or held off it by the body's own trunk and head — its one-handed grasp weighed for the end as it nears it.
 
 /** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s); how long it stands still
  * (within `moved`, m) short of it to be as near as the arms take it, and how near it then is there (`close`, m) */
 const RESTING = 2, STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: 0.015, turn: 0.15 };
+/** how far off its place (m) the fingers seat a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
+ * push or draw what they hold without the hand moving */
+const SEATS = 0.03;
 /** how near its end's turn (rad) a thing carried to a turned end is to have arrived: there, turned too */
 const TURNED = 0.05;
 
@@ -36,8 +39,8 @@ const SETTLING = 0.5;
 /**
  * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
  * the thing is now): as it nears its end (`nearing`) — weighed each sub-step until its course is over, the end and the body as they
- * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a rifle's well, the rifle
- * held up to the eye, as the head turns from the pouch to it) is weighed where it has gone, not only where it was half a second before
+ * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a socket on
+ * something the other hand holds up as the head turns to it) is weighed where it has gone, not only where it was half a second before
  * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s after its course is over
  * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
  */
@@ -80,7 +83,7 @@ function once(act: (f: Frame) => void): (f: Frame) => void {
  * from when the body stands. Its request's eta is `eta` of the course's time left (s; default that time): what the carry does besides the
  * course counted in.
  */
-export function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], makeAim: Aim, resting: boolean,
+export function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
   { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Grasping } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
@@ -89,13 +92,15 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
   const leading = person.holding[LEADING]?.thing;
   const lag = grips[LEADING] === undefined && leading && !worn(leading) ? following(carrier.current.position, grips) : { delay: 0, slower: 0 };
   const factor = loadFactor(thing.mass);
-  const aim = makeAim(factor);
+  const guide = guides(factor);
   const from = carrier.current.position.y;
   // (take-up and compliance belong to lifting off a support, not every carried waypoint; mass slows the lift's acceleration and path)
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = course(carrier, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0;
+  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0, seated = NaN;
+  /** where its end was a sub-step before */
+  const ended = { position: new Vector3(), quaternion: new Quaternion(), time: -Infinity };
   // (whether its end sets a turn — an object, not a point: its course turns the thing on either way, from how it set out)
   const ending = waypoints[waypoints.length - 1][1];
   const turns = (f: Frame) => (typeof ending === 'function' ? ending(f, carrier.current, carrier.current) : ending).quaternion !== undefined;
@@ -111,25 +116,43 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
     return goal;
   };
+  // (the hand a thing hangs from alone, carried to a place: the fingers seat it there)
+  const seating = (f: Frame) => {
+    const [hand, ...others] = handsOn(person, thing);
+    return end && turns(f) && hand !== undefined && !others.length && inHand(person, thing) ? sideOf(hand) : null;
+  };
   const there = (f: Frame) => {
+    if (!Number.isNaN(seated)) return f.time >= seated;
     if (!path.over(f) || ready?.() === false) return false;
     if (Number.isNaN(since)) since = f.time;
     if (grasp && f.time - since > SETTLING) grasp.settling(f);
     // (its lateness timed from its course's end; on a leg the carry walks, from when the body stands, not while it still walks there)
     if (Number.isNaN(stood) && (!walks || !person.locomotion.moving)) stood = f.time;
-    aim.read(f, to);
-    const goal = aim.goal.position;
+    const guided = guide.read(f, to).current, goal = guide.goal.position;
     // Load compliance: https://pmc.ncbi.nlm.nih.gov/articles/PMC4443842/ (F = k × displacement).
     // Tuned, not measured: an upward carry dips 2.7 cm over 0.8 s at 8 kg, then recovers.
     dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
     // (an end that sets a turn is arrived at turned too, not on its place alone — or, once late, on its place however it is turned)
-    const turnedOff = turns(f) ? carrier.current.quaternion.angleTo(aim.goal.quaternion) : 0;
+    const turnedOff = turns(f) ? carrier.current.quaternion.angleTo(guide.goal.quaternion) : 0;
+    const short = carrier.current.position.distanceTo(goal), close = short <= STALL.close && turnedOff <= STALL.turn;
+    // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it (`SEATS`), a thing in one hand is
+    // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it)
+    const side = seating(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
+    if (side && led && short <= SEATS && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
+      // (the thing as it stood with its end a sub-step before, as `restingAt` reads them: a sub-step apart, a moving body's place would
+      // seem off it by as far as it moves in one)
+      seated = seat(person, side, thing, carrier.moved(f.time) ? carrier.prev : carrier.current, ended);
+      return false;
+    }
+    ended.position.copy(guide.goal.position);
+    ended.quaternion.copy(guide.goal.quaternion);
+    ended.time = f.time;
     if (rested(f, carrier, goal) && (turnedOff <= TURNED || late) && (dip === 0 || f.time - since >= seconds)) {
-      if (!end || aim.off <= near) return true;
+      if (!end || guide.off <= near) return true;
       // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
       if (!blocked) {
         blocked = true;
-        f.dev?.append(f.time, { check: 'carry: held clear of its own body, off its end (m)', value: aim.off, limit: near, where: thing.object.name, detail: inTheWay(aim) });
+        f.dev?.append(f.time, { check: 'carry: held clear of its own body, off its end (m)', value: guide.off, limit: near, where: thing.object.name, detail: inTheWay(guide) });
         request.fail();
       }
       return false;
@@ -143,34 +166,33 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
       was.copy(offset);
       wasTurned.copy(carrier.current.quaternion);
     }
-    const short = carrier.current.position.distanceTo(goal), stalled = f.time - still > STALL.seconds;
-    const close = short <= STALL.close && turnedOff <= STALL.turn;
-    if (stalled && (short > near || turnedOff > TURNED) && close && (!end || aim.off <= near)) return true;
+    const stalled = f.time - still > STALL.seconds;
+    if (stalled && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= near)) return true;
     if (!late && (f.time - stood > RESTING || (stalled && !close))) {
       late = true;
       const turned = turnedOff > TURNED ? `, turned ${(turnedOff * 180 / Math.PI).toFixed(0)}° off its turn` : '';
       f.dev?.append(f.time, { check: `late carry: course end distance after ${(f.time - since).toFixed(1)} s (m)`, value: short, limit: near, where: thing.object.name,
-        detail: `stopped ${cm(short)} cm off it${turned}: ${aim.off > near ? inTheWay(aim) : limits(person, thing, aim)}` });
+        detail: `stopped ${cm(short)} cm off it${turned}: ${guide.off > near ? inTheWay(guide) : limits(person, thing, guide)}` });
       if (end) request.fail();
     }
     return false;
   };
   request.eta = eta(left(person.frame));
-  yield* holding(person, request, thing, aim, (f) => {
+  yield* holding(person, request, thing, guide, (f) => {
     request.eta = eta(left(f));
     return to(f);
   }, there);
 }
 
 /** what holds each hand off where the carried thing's grips would be at its goal, as a late reach says it */
-function limits(person: Reacher, thing: Thing, aim: CarryAim): string {
-  const goal = aim.goal;
+function limits(person: Reacher, thing: Thing, guide: Guide): string {
+  const goal = guide.goal;
   return Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing
     ? [`${side} hand ${limitOf(person, sideOf(side))(_g.copy(hold.goal.position).applyQuaternion(goal.quaternion).add(goal.position))}`] : []).join('; ');
 }
 
 /** why a carried thing its own body holds off its end is not there */
-const inTheWay = (aim: CarryAim) => `its own trunk and head hold it ${cm(aim.off)} cm off its end: the body stands too near it`;
+const inTheWay = (guide: Guide) => `its own trunk and head hold it ${cm(guide.off)} cm off its end: the body stands too near it`;
 
 const cm = (m: number) => (100 * m).toFixed(1);
 
@@ -184,13 +206,13 @@ function tipOf(hold: Hold, hand: string): ChainTip {
 }
 
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
-export function holding(person: Reacher, request: Request, thing: Thing, aim: CarryAim, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
+export function holding(person: Reacher, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
     ? [{ side: sideOf(hand), hold, tip: tipOf(hold, hand) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
   const single = hands.length === 1 ? grasped(person, hands[0].side, thing) : null;
   const step = ({ side, tip }: (typeof hands)[number]) => (f: Frame) => {
-    const carrier = aim.read(f, to), hold = person.holding[side], carried = carrier.carriedBy === person;
+    const carrier = guide.read(f, to), hold = person.holding[side], carried = carrier.carriedBy === person;
     if (!hold || hold.thing !== thing) return;
     // (the hand on the carrier, its motion the carrier's: a goal the body carries — a pouch on its chest — is followed with the body however
     // briskly it runs, only the way to it braked)
@@ -200,7 +222,7 @@ export function holding(person: Reacher, request: Request, thing: Thing, aim: Ca
       handStep(person, f, side, goal, { on: carrier, ...HOLD, lead: true }, tip);
       return;
     }
-    bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(aim.goal.position), 1, 0, carried);
+    bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(carrier.current.quaternion).add(guide.goal.position), 1, 0, carried);
     person.carrying.set(thing.object, carrier);
     handStep(person, f, side, hold.goal, { on: carrier, thing, ...HOLD, lead: true }, tip);
   };

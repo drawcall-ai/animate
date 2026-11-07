@@ -113,28 +113,27 @@ describe('what a body wears', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('lets the rifle hang on its mount for both hands to work, and takes it back support hand first', () => {
+  it('lets the rifle hang on its mount for both hands to work, and takes it back with one grab of both grips', () => {
     const { body, h, rifle, aim } = armed((body) => body.facing);
     const mount = rifle.parent;
     if (!mount) throw new Error('no mount');
-    // (hanging: the muzzle down and across the body; the mount turned back halfway as the support hand comes to it)
+    // (hanging: the muzzle down and across the body; the mount eased back to the aim as both hands come to it)
     const hang = (share: number) => aim().multiply(new Quaternion().setFromEuler(new Euler(1.1 * share, 0.5 * share, 0)));
-    let turned = 0;
+    let turned = 0, taking = false;
     const steps: unknown[] = [];
     play(function* () {
       release(body, rifle);
       turned = 1;
       yield* wait(0.5);
       steps.push(h.holding.left === null && h.holding.right === null);
-      turned = 0.5;
-      steps.push(yield* grab(body, rifle, { left: 'foregrip' }));
-      turned = 0;
-      steps.push(yield* grab(body, rifle, { right: 'pistol' }));
+      taking = true;
+      steps.push(yield* grab(body, rifle, { left: 'foregrip', right: 'pistol' }));
     }, [body], 8, () => {
+      if (taking) turned = Math.max(0, turned - 1 / 30);
       body.orient(mount, hang(turned));
-      return steps.length === 3;
+      return steps.length === 2;
     });
-    expect(steps).toEqual([true, true, true]);
+    expect(steps).toEqual([true, true]);
     expect(rifle.parent).toBe(mount);
     expect(body.log).toEqual([]);
   });

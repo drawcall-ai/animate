@@ -8,15 +8,17 @@ import type { Side } from '../../species/humanoid/bones';
 import type { Channel, Claim } from '../../kernel/requests';
 import type { FingerState } from '../../fingers/state';
 
-/** A person as its hands see it: a body with hands, on legs of its proportions — and what its hands carry this sub-step, on which aim. */
+/** A person as its hands see it: a body with hands, on legs of its proportions — and what its hands carry this sub-step, on which guide. */
 export type Reacher = Handed & PersonLegged & {
   readonly gazer: Gazer;
-  /** what the hands carry in both this sub-step, and along which aim: fitted to the wrists after the hands */
+  /** what the hands carry in both this sub-step, and along which guide: fitted to the wrists after the hands */
   readonly carrying: Map<Object3D, Carrier>;
   /** each arm's pose asked this sub-step: the free arm's hang takes it, and clears it */
   readonly armPose: Record<Side, Required<ArmPosture>>;
   /** the claim that has `channel` this sub-step, if a request claims it */
   owner(channel: Channel): Claim | undefined;
+  /** until when each hand draws back off a button it let go of (s, the body's time): a hand verb for it waits until then */
+  readonly drawingBack: Record<Side, number>;
   /** its fingers, if its skeleton has finger bones */
   readonly fingers: Pick<FingerState, 'point' | 'sunk' | 'toward' | 'pointAt' | 'keep' | 'closed'> | null;
   /** how many updates it has finished (0: none of it has been shown yet) */

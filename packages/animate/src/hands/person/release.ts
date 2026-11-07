@@ -9,7 +9,7 @@ import { clearArm } from './hang';
 import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { BACK, drawBack } from './press';
+import { BACK } from './press';
 
 /** Release preserves follow-through within arm reach, without recruiting the trunk; idle arms resume on arrival or timeout. A hand given
  * a way `away` (world: a fingertip off its button, `backOff`) draws straight back along it instead (`BACK`), its fingers kept as they
@@ -17,7 +17,7 @@ import { BACK, drawBack } from './press';
 export function* backingOut(person: Reacher, request: Request, hands: readonly { side: Side; away: Vector3 | null }[]) {
   const sides = hands.map(({ side }) => side);
   const proportions = person.proportions, began = person.frame.time, drawn = began + BACK.seconds / person.tempo;
-  for (const { side, away } of hands) if (away) drawBack(person, side, drawn);
+  for (const { side, away } of hands) if (away) person.drawingBack[side] = drawn;
   let targets: ((f: Frame) => Goal)[] | null = null, time = NaN, goals: Goal[] = [];
   // (where each hand goes, from how it moved as it let go)
   const off = (f: Frame): Goal[] => {

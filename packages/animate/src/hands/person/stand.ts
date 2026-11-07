@@ -65,8 +65,8 @@ export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | 
 }
 /** how far the trunk turns a shoulder toward a free hand's target (rad), read at `TURNS` angles each way */
 const TRUNK_TURN = Math.PI / 4, TURNS = 6;
-/** Tuned: a free hand's reach with the trunk turned and the shoulder drawn is checked within this share of it (measured: a cross-body
- * target 0.594 m from the turned shoulder of the default body, 0.613 m of reach, stopped 3.6 cm short) */
+/** a free hand's reach with the trunk turned and the shoulder drawn is checked within this share of it: across the body the joints'
+ * ranges hold the hand a few centimetres short of the arm's full length */
 const TURNED = 0.95;
 const _arm = new Vector3(), _turned = new Vector3(), _up = new Vector3(0, 1, 0);
 

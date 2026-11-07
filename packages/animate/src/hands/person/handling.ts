@@ -10,7 +10,7 @@ import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
-import { takingOf } from './palm';
+import { takingOf } from './take';
 
 /** the longest a grab waits, its hands on their grips, for their fingers to close (s) */
 const CLOSING = 0.2;
@@ -22,8 +22,11 @@ export function personHands(person: Reacher): Handling {
       const loose = thing.massive && !bodyOf(thing.object);
       // (each hand's placement picked as the grab starts, from where the body stands, and kept on the thing while it holds it)
       const takes = grips.map(({ hand, grip }) => takingOf(person, sideOf(hand), thing, grip));
-      // (each hand shapes for its placement as it comes, until it holds it)
-      for (const { side, placement } of takes) person.fingers?.toward(side, placement);
+      // (each hand on its way to its take, its fingers shaping for its placement as it comes, until it holds it)
+      for (const take of takes) {
+        person.coming[take.side] = take;
+        person.fingers?.toward(take.side, take.placement);
+      }
       try {
         if (options.speed === Infinity) {
           yield* takingAtOnce(person, request, takes);
@@ -37,11 +40,14 @@ export function personHands(person: Reacher): Handling {
         if (loose) yield* liftingClear(person, request, thing);
         request.met();
       } finally {
-        for (const { side } of takes) person.fingers?.toward(side, null);
+        for (const { side } of takes) {
+          person.coming[side] = null;
+          person.fingers?.toward(side, null);
+        }
       }
     },
     bring: (request, thing, points, end, options) => carrying(person, request, thing, wayOf(person, thing, points, end), options),
-    reach: (request, aims, options) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), options),
+    reach: (request, targets, options) => reachingTo(person, request, targets.map(({ hand, target }) => ({ side: sideOf(hand), target })), options),
     backOut(hands, away) {
       const sides = hands.map(sideOf);
       person.own('release', '', (request) => () => backingOut(person, request, sides.map((side) => ({ side, away: away[side] ?? null }))));

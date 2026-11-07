@@ -1,9 +1,9 @@
-import { Matrix4, Mesh, Vector3, type Object3D, type SkinnedMesh } from 'three';
+import { Matrix4, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import { Triangles } from '../kernel/triangles';
 import { bisect } from '../kernel/math';
 import type { Placement } from '../kernel/goal';
 import { inFrame, placedOf, worldOf, type Placed } from '../kernel/scene';
-import { PAD_DEPTH } from './closing';
+import { PAD_DEPTH, trianglesAbout } from './closing';
 import type { Joints } from './joints';
 import { DIGITS, easeShape, type Digit, type Shape } from './shape';
 
@@ -46,8 +46,8 @@ export class Guard {
     if (kept && place && this.kept) {
       for (const digit of ['thumb', ...DIGITS] as const) if (!at.includes(digit)) keptOut(this.joints, kept.near, place, shape, was, digit);
     }
-    // (as fast as its joints turn, however it is put: a digit on its contact or opened out of a thing at once swung there in a step — a
-    // thumb's base had swung 100–130 rad/s as its hand took hold or let go)
+    // (as fast as its joints turn, however it is put: a digit put on its contact or opened out of a thing at once would swing there in
+    // one step)
     this.joints.braked(shape, was, seconds);
   }
 
@@ -57,7 +57,7 @@ export class Guard {
     if (!thing) return (this.kept = null);
     const frame = worldOf(thing), at = inFrame(placedOf(this.joints.hand), frame).position, left = on === null;
     if (this.kept?.thing === thing && this.kept.at.distanceTo(at) < GUARD.regather) return Object.assign(this.kept, { left });
-    return (this.kept = { thing, left, near: trianglesAbout(this.joints, this.skins, thing, frame), at });
+    return (this.kept = { thing, left, near: nearHand(this.joints, this.skins, thing, frame), at });
   }
 
   /** how far the palm and digits as `shape` has them are clear of `near` (m; `place`: the hand in its frame) */
@@ -98,12 +98,9 @@ function keptOut(joints: Joints, near: Triangles, place: Placed, shape: Shape, w
   set(a, b, bisect((t) => (set(a, b, t), depth() <= GUARD.sunk), free, 1 - free, GUARD.halvings));
 }
 
-/** the triangles of `thing`'s meshes about the hand `joints` move, in the thing's frame (`frame`, the world's): every mesh shown under it,
- * what hangs from it too (a magazine in a rifle's well) — the body's own `skins` left out — as far as the hand reaches, from its wrist at
- * `about` (the thing's frame; default: where it is) */
-export function trianglesAbout(joints: Joints, skins: readonly SkinnedMesh[], thing: Object3D, frame: Placement, about?: Vector3): Triangles {
-  const back = new Matrix4().compose(frame.position, frame.quaternion, new Vector3(1, 1, 1)).invert(), meshes: Mesh[] = [];
-  thing.traverseVisible((node) => { if (node instanceof Mesh && !skins.some((skin) => skin === node)) meshes.push(node); });
+/** `thing`'s triangles about the hand `joints` move, in the thing's frame (`frame`, the world's), as far as the hand reaches from its
+ * wrist at `about` (the thing's frame; default: where it is) and on as far as it moves before they are gathered afresh */
+export function nearHand(joints: Joints, skins: readonly SkinnedMesh[], thing: Object3D, frame: Placement, about?: Vector3): Triangles {
   const at = inFrame(placedOf(joints.hand), frame);
-  return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), about ?? at.position, joints.span * at.scale + REACH);
+  return trianglesAbout(thing, skins, frame, about ?? at.position, joints.span * at.scale + REACH);
 }

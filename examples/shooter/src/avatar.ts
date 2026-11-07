@@ -72,9 +72,6 @@ const FLING = { to: new Vector3(1.0, 1.0, 0.3), speed: 5, after: 0.2 };
 const UP = new Vector3(0, 1, 0);
 /** Whether the bodies check their motion and say what went wrong (`Body.log`): in the dev server, not in tests or a build. */
 const DEV = import.meta.env.MODE === 'development';
-/** How near its place under the well, on the well's line, and how near turned as the well (rad), the arm brings a magazine before the
- * fingers square it onto it (`square`), in how long (s): held to 3° by the arm, it wobbled 2 cm off and 23° round for 0.3 s. */
-const LINED = 0.015, ALIGNED = 0.1, SQUARING = 0.08;
 /** How long a magazine takes to be pushed up the well's line to its seat (s), slowing as it seats: its last 4 cm over 0.16 s, not
  * snapped in (pushed evenly over 0.18 s, they took 0.10 s). */
 const PUSH = 0.25;
@@ -243,9 +240,8 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const view = () => {
     let pitch = kicked(), yaw = input.yaw;
     if (input.aimPoint) ({ yaw, pitch } = anglesOf(input.aimPoint.clone().sub(look.eye)));
-    // Reload, or hold it low, in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body (held
-    // low as the view looked down at a lift's button, its muzzle pointed at the feet, the support hand could not take it back).
-    const before = smooth(Math.max(reloaded, lowered));
+    // Reload in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body.
+    const before = smooth(reloaded);
     pitch *= 1 - before;
     yaw += wrapAngle(person.facing - yaw) * before;
     return new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ'));
@@ -320,7 +316,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     flash.visible = time - lastShot < 0.06;
     // The trigger finger lies along the receiver above the guard until the rifle is asked up or fires, then rests on the trigger, squeezing
     // it back for a shot; the other fingers and the thumb close round the grip themselves.
-    pistol.userData.fingers = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame' };
+    pistol.userData.digits = { index: input.aim || time - lastShot < 0.5 ? 'trigger' : 'frame' };
     blade.position.z = time - lastShot < SHOT_INTERVAL ? -SQUEEZE : 0;
     hold(seconds);
   };
@@ -342,26 +338,6 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     });
   };
 
-  /** `magazine`, in the hand, squared onto `place` in its fingers over `SQUARING` s: the last few degrees and millimetres the arm leaves */
-  const square = (magazine: Object3D, place: Object3D) => {
-    const parent = magazine.parent;
-    if (!parent) throw new Error(`"${magazine.name}" hangs from nothing`);
-    const from = magazine.position.clone(), turned = magazine.quaternion.clone(), at = new Vector3(), turn = new Quaternion();
-    let squared = 0;
-    return action({
-      update: (_, clock) => {
-        squared = Math.min(1, squared + clock.delta / SQUARING);
-        parent.updateWorldMatrix(true, false);
-        place.updateWorldMatrix(true, false);
-        parent.worldToLocal(place.getWorldPosition(at));
-        turn.copy(parent.getWorldQuaternion(new Quaternion()).invert().multiply(place.getWorldQuaternion(new Quaternion())));
-        magazine.position.lerpVectors(from, at, smooth(squared));
-        magazine.quaternion.slerpQuaternions(turned, turn, smooth(squared));
-      },
-      until: () => squared === 1,
-    });
-  };
-
   const swap = function* (spent: Object3D, full: Object3D) {
     if (!(yield* grab(person, spent, { left: 'base' }, QUICK))) return false;
     onReload?.('out');
@@ -374,16 +350,9 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     magazines.splice(magazines.indexOf(spent), 1);
     litter.drop(spent, velocity, spin);
     if (!(yield* grab(person, full, { left: 'base' }, BRISK))) return false;
-    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in, and let go
-    // there: shifted under its floor plate to drive it home with the palm, the fingers came off its faces and opened; carried in, it
-    // came in turned as the hand turned it, slanting against the well, its top corner out through the well's wall, and snapped home in
-    // 70 ms)
-    // (or as near as the arm brings it, a crouching arm a couple of centimetres short: waiting on for it to come nearer held the reload
-    // there for ever)
-    yield* carry(person, full, below, { ...BRISK, until: () => near(full, below, LINED)() && turnedAs(full, below) < ALIGNED });
-    // (squared onto the line in the fingers, let go there and taken again at once where the hand is, then pushed up the line, the hand
-    // going with it)
-    yield* square(full, below);
+    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in: let go
+    // onto its place under the well and taken again at once where the hand is, then pushed up the line, the hand going with it)
+    if (!(yield* carry(person, full, below, BRISK))) return false;
     release(person, full, below);
     if (full.parent !== below) throw new Error(`"${full.name}" was not let go onto "${below.name}"`);
     // (pushed as the hand takes it again: waiting for the grasp to settle held it under the well 0.2 s)
@@ -501,9 +470,5 @@ function onBone(person: Body, bone: Object3D, name: string, offset: Vector3): Ob
   return placed;
 }
 
-/** whether `thing` has come within `within` (m) of `place` */
-const near = (thing: Object3D, place: Object3D, within: number) => () => thing.getWorldPosition(new Vector3()).distanceTo(place.getWorldPosition(new Vector3())) < within;
-/** the angle between how `thing` and `place` are turned (rad) */
-const turnedAs = (thing: Object3D, place: Object3D) => thing.getWorldQuaternion(new Quaternion()).angleTo(place.getWorldQuaternion(new Quaternion()));
 const ease = (weight: number, goal: number, seconds: number, over = EASE) => weight + MathUtils.clamp(goal - weight, -seconds / over, seconds / over);
 const smooth = (weight: number) => weight * weight * (3 - 2 * weight);

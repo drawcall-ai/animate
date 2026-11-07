@@ -1,5 +1,5 @@
 import { MathUtils, Quaternion, Vector3, type Object3D } from 'three';
-import type { Body, HandPlacement } from '@drawcall/animate';
+import type { Body } from '@drawcall/animate';
 import { frame } from './angles';
 import type { Hold } from './choreography';
 import { SOLDIER } from './skeleton';
@@ -41,8 +41,6 @@ export class Puppet {
   private readonly rest = new Map<Bone, Quaternion>();
   /** the length of each limb's upper and lower segment (m) */
   private readonly lengths = new Map<Bone, number>();
-  /** each hand's placements on the grips it has held, by grip */
-  private readonly placements: Record<Side, WeakMap<Object3D, HandPlacement>> = { left: new WeakMap(), right: new WeakMap() };
 
   readonly bones: Readonly<Record<Bone, Object3D>>;
 
@@ -83,18 +81,8 @@ export class Puppet {
 
   /** How hand `side` holds the grip `empty`, as `Body.gripOn` places it on `placement`: where its wrist goes and how it is turned. */
   hold(side: Side, empty: Object3D): Hold {
-    const { wrist, rotation } = this.body.gripOn(side, this.placement(side, empty));
+    const { wrist, rotation } = this.body.gripOn(side, this.body.placement(side, empty));
     return { wrist, hand: rotation.multiply(this.restOf(`${side}Hand`).clone().invert()) };
-  }
-
-  /** The placement hand `side` takes the grip `empty` by (`Body.placement`): picked the first time it is asked for, and kept, so the hand
-   * holds a grip the same however the body has come to it. */
-  placement(side: Side, empty: Object3D): HandPlacement {
-    const known = this.placements[side].get(empty);
-    if (known) return known;
-    const placement = this.body.placement(side, empty);
-    this.placements[side].set(empty, placement);
-    return placement;
   }
 
   /** Moves the root bone to a world position. */

@@ -42,9 +42,9 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 }
 
 /** Follow targets with borrowed walking; replan after movement while keeping each hand's motion history. */
-export function* reachingTo(person: Reacher, request: Request, aims: readonly { side: Side; target: (f: Frame) => Goal }[], pace: HandOptions) {
+export function* reachingTo(person: Reacher, request: Request, targets: readonly { side: Side; target: (f: Frame) => Goal }[], pace: HandOptions) {
   const motion = paceAt(pace.speed, CALM);
-  aims = aims.map(({ side, target }) => {
+  targets = targets.map(({ side, target }) => {
     const sample = new PointVelocity();
     let velocity = new Vector3();
     let time = NaN;
@@ -57,9 +57,9 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
       return { ...goal, velocity: goal.velocity ?? velocity };
     } };
   });
-  const middle = (f: Frame) => aims.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(aims.length);
-  const there = (f: Frame) => aims.every(({ side, target }) => reached(f, person.hands[side], target(f)));
-  const going = aims.map(({ side, target }) => {
+  const middle = (f: Frame) => targets.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(targets.length);
+  const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
+  const going = targets.map(({ side, target }) => {
     const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
     const { speed } = pace, { accel } = motion;
     // (at an explicit hand speed, its joints keep to the moving point as briskly as to a held grip)
@@ -69,7 +69,7 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   });
   const lasts = Math.max(...going.map((hand) => hand.lasts));
   let setOff = NaN;
-  const late = lateWatch(person, request, aims.map(({ side, target }) => ({ side, goal: target, where: side })));
+  const late = lateWatch(person, request, targets.map(({ side, target }) => ({ side, goal: target, where: side })));
   const eta = (f: Frame) => {
     // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
     // whole of a stance that never settles
@@ -79,10 +79,10 @@ export function* reachingTo(person: Reacher, request: Request, aims: readonly { 
   };
   yield* parallel<Frame>('all', function* () {
     for (;;) {
-      const planned = aims.map(({ target }) => target(person.frame).position.clone());
-      const moved = (f: Frame) => aims.some(({ target }, i) => target(f).position.distanceTo(planned[i]) > MOVED * person.scale);
-      const inReach = aims.every(({ side }, i) => armReaches(person, planned[i], side, true));
-      const held = aims.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
+      const planned = targets.map(({ target }) => target(person.frame).position.clone());
+      const moved = (f: Frame) => targets.some(({ target }, i) => target(f).position.distanceTo(planned[i]) > MOVED * person.scale);
+      const inReach = targets.every(({ side }, i) => armReaches(person, planned[i], side, true));
+      const held = targets.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
       const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
       let stalled = plan === 'nowhere', arrived = false;
       const setsOff = (f: Frame) => {

@@ -15,7 +15,7 @@ function fingerBones(side: 'left' | 'right'): DigitBones {
 }
 
 /** Each hand's finger bones in `skeleton`, if it has them: all fifteen of both hands or none (some is a misuse, said at once). */
-export function fingersOf(skeleton: readonly SkeletonBone[]): { left: DigitBones; right: DigitBones } | undefined {
+export function digitBonesOf(skeleton: readonly SkeletonBone[]): { left: DigitBones; right: DigitBones } | undefined {
   const names = new Set(skeleton.map((bone) => bone.name));
   const hands = { left: fingerBones('left'), right: fingerBones('right') };
   const all = [...Object.values(hands.left), ...Object.values(hands.right)].flat(), missing = all.filter((name) => !names.has(name));

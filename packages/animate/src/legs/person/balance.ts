@@ -71,7 +71,7 @@ export const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 }, TURN = { accel: 60 };
 /** Tuned (rad/s²): the trunk's joints turning after a look taken up at once (`Poise.twistRate`), an aim tracking a turning view: at
- * `TURN`'s pace, a chest still swinging on as a player's 8 rad/s turn reversed carried the rifle 23° off the sights */
+ * `TURN`'s pace the chest would swing on past a quick turn that reverses, carrying what the body points with it off its line */
 const AIMING = { accel: 300 };
 
 /**
@@ -448,8 +448,8 @@ export const feetBehind = (stepper: Pick<Stepper, 'yaw'>, scale: number) => forw
 
 /**
  * `history`'s older value, moved so it says no faster a motion than `motion`'s top speed: what a part taken at an asked rate (a throw's
- * bow) hands on to its own pace once the rate is no longer asked — the trunk checked by the hips, not carried on by a throw's 3 rad/s into
- * a squat's braking, which bowed it 40° past the follow-through
+ * bow) hands on to its own pace once the rate is no longer asked — the trunk checked by the hips, not carried on at the asked rate into
+ * the slower pace's braking, which would bow it far past where the asked motion ends
  */
 function paced(history: readonly number[], motion: { speed: number }, dt: number): number {
   return history[1] - clamp(history[1] - history[0], -motion.speed * dt, motion.speed * dt);

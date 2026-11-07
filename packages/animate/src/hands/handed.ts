@@ -2,7 +2,7 @@ import type { ReadonlyPose } from '../kernel/pose';
 import type { Request, Staging } from '../kernel/requests';
 import type { Legged } from '../legs/legged';
 import type { Looker } from '../look/gaze';
-import type { Holder, Resolving } from '../things/resolve';
+import type { Hold, Holder, Resolving } from '../things/resolve';
 import type { Thing } from '../things/thing';
 
 /**
@@ -12,6 +12,8 @@ import type { Thing } from '../things/thing';
 export type Handed = Legged & Looker & Holder & {
   /** the bodies it keeps clear of, as they were before this frame's updates */
   readonly near: ReadonlySet<{ posesFor(reader: Resolving): readonly [ReadonlyPose, ReadonlyPose] }>;
+  /** the hold each hand is on its way to take, as its hand verb brings it there (none: it brings it nowhere) */
+  readonly coming: Record<string, Hold | null>;
   /** what it wears: things on its bones its hands do not hold */
   readonly worn: readonly Thing[];
   own(verb: string, site: string, staging: Staging): Request;

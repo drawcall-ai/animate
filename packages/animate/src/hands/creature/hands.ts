@@ -211,9 +211,9 @@ export function creatureHands(self: Handed): Handling {
         };
       }, motion, options.step ?? true);
     },
-    reach: function* (request, aims, options) {
+    reach: function* (request, targets, options) {
       const motion = paceAt(options.speed, DIP);
-      const { hand, target } = only('reach', aims);
+      const { hand, target } = only('reach', targets);
       try {
         yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion, options.step ?? true);
       } finally {

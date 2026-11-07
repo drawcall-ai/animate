@@ -3,11 +3,11 @@ import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import { smoothstep } from '../kernel/math';
 import { within } from '../kernel/scene';
-import { oriented, resolve } from '../things/resolve';
+import { orienters, resolve } from '../things/resolve';
 import type { Self } from './runtime';
 
-/** how far out of a chain's full length a hand's grip on what its body turns is kept: just within its reach (`REACH`; at 0.975, a rifle's
- * support hand at its seat, 95% of the arm out at rest, had the rifle pulled off the camera by 8 rad/s turns) */
+/** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight — the elbow still
+ * bent some 20°, so the arm can follow what it holds as it turns rather than being pulled off it at full stretch */
 const HOLDABLE = 0.985;
 /** from how far off its grip a hand on its way to it turns what it takes toward itself, fully by how near (m, default body) */
 const COMING = { far: 0.15, near: 0.03 };
@@ -19,22 +19,24 @@ const COMING = { far: 0.15, near: 0.03 };
  */
 export class Orient {
   private readonly asked = new Map<Object3D, Quaternion>();
-  private readonly turned = new Map<Object3D, Quaternion>();
+  /** each node as it is turned this sub-step */
+  readonly turned = new Map<Object3D, Quaternion>();
 
   constructor(private readonly self: Self) {}
 
   /** keeps `node` turned to `rotation` in the world, its position following its parent (none: lets it go) */
   set(node: Object3D, rotation: Readonly<Quaternion> | null): void {
+    const by = orienters.get(node);
+    if (by && by !== this) throw new Error(`orient: another body keeps "${node.name}" turned`);
     if (!rotation) {
-      oriented.delete(node);
+      orienters.delete(node);
       this.asked.delete(node);
       this.turned.delete(node);
       return;
     }
     this.asked.set(node, (this.asked.get(node) ?? new Quaternion()).copy(rotation));
-    const turned = this.turned.get(node) ?? rotation.clone();
-    oriented.set(node, turned);
-    this.turned.set(node, turned);
+    if (!this.turned.has(node)) this.turned.set(node, rotation.clone());
+    orienters.set(node, this);
   }
 
   /** each node turned as asked, brought within reach of the hands on it, this sub-step */
@@ -81,7 +83,7 @@ export class Orient {
 
   /** `turned` (`node`'s, in place) turned back toward its parent's frame as far as the hands holding what hangs from it, or taking hold of
    * it, hold their grips with their arms clear of the body (`Self.holds`), if they hold them so there: else, held off its grip, a hand
-   * passed through what it held — a rifle's support hand, the rifle pointed at the feet */
+   * would pass through what it held, or its arm through the trunk */
   private held(f: Frame, node: Object3D, turned: Quaternion): void {
     const self = this.self, rest = node.parent && resolve(self, node.parent, _rest).quaternion;
     const holds = (rotation: Quaternion) => {
@@ -108,10 +110,8 @@ export class Orient {
 
   /** what hand `hand` holds or is taking hold of, and its wrist's goal on it (the thing's frame), if anything */
   private gripOf(hand: string): { thing: Object3D; goal: Goal; held: boolean } | null {
-    const hold = this.self.holding[hand];
-    if (hold) return { thing: hold.thing.object, goal: hold.goal, held: true };
-    const coming = this.self.fingers?.coming(hand as 'left' | 'right');
-    return coming ? { thing: coming.thing, goal: coming.wrist, held: false } : null;
+    const held = this.self.holding[hand], hold = held ?? this.self.coming[hand];
+    return hold ? { thing: hold.thing.object, goal: hold.goal, held: held !== null } : null;
   }
 }
 
