@@ -226,8 +226,8 @@ export class Stepper extends Steps {
       [low, high] = [Math.max(low, body - most), Math.min(high, body + most)];
     }
     // A biped cannot turn its pelvis through the line between its feet while the trailing foot is still leaving the floor — but over a
-    // foot it pivots on as its root turns on, the other swinging round it (catching up once it stops, the pelvis swung the rifle past the
-    // sights)
+    // foot it pivots on as its root turns on, the other swinging round it (catching up once it stops, the pelvis would swing on past the
+    // turn)
     if (!this.clocked && !(Math.abs(spin) >= SPIN && legs.some((leg) => this.pivots(leg)))) for (const leg of legs) {
       const other = legs[pair[leg.i]];
       if (leg.sign < 0 || other.sign > 0) continue;
@@ -241,7 +241,7 @@ export class Stepper extends Steps {
     }
     const goal = low <= high ? clamp(wanted, low, high) : (low + high) / 2;
     // (a gait's body faces as its root does: its planner turns it no faster than its feet keep up; a person's closes on its goal as one
-    // still — braking into a goal that stops turning, never past it: tracked at the goal's rate, a pelvis spun at 8 rad/s ran 23° past it)
+    // still — braking into a goal that stops turning, never past it: tracked at the goal's rate, a fast-spun pelvis would overshoot it)
     let yaw = this.clocked ? wanted : follow(yaws[0], yaws[1], goal, TURN, dt);
     yaw = this.foresee(r, dt, yaw, goal, low, high);
     [yaws[0], yaws[1]] = [yaws[1], yaw];

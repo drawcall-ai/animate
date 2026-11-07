@@ -38,9 +38,9 @@ import { fixes } from './take';
 
 /** Tuned: how long (s) the hand takes to turn a thing in its fingers onto the grasp planned for its carry's end */
 const REGRIP = 0.6;
-/** Tuned: how strained (rad, `strainAt`) the arm may hold a grasp at a carry's end and keep it, its joints working for it (a box held by
- * its side, at 0.37 lifted 20 cm, regripped; one carried beside another, at 0.33, kept: the joints near the ends of their ranges brake
- * into an unsteady hold) */
+/** how strained (rad, `strainAt`) the arm may hold a grasp at a carry's end and keep it, its joints working for it: summed over the
+ * shoulder, elbow and wrist, some 7° each past their comfortable middle — a grasp no one shifts for; past it the joints near the ends of
+ * their ranges brake into an unsteady hold, which people avoid by regripping */
 const STRAINED = 0.35;
 
 /** how far (rad) a thing a carry has not brought to rest may be held turned off its end and its grasp still count as held there */
@@ -168,11 +168,11 @@ function strainAt(person: Reacher, pose: ReadonlyPose, scratch: Pose, side: Side
   return short <= SHORT && holdsClear(scratch, proportions, side, wrist, at, pole) ? strain : strain + UNHELD;
 }
 
-/** Tuned (the knight's lance borne upright, his belt round his hips, a gauntlet held open): the share of each joint's range, about its
- * middle, it is comfortable in */
+/** the share of each joint's range, about its middle, it is comfortable in: all but the last tenth at either end, where the joint's
+ * passive stiffness rises steeply */
 const COMFORTABLE = 0.8;
-/** Tuned (a lance borne upright beside the hip held 0.25 rad short, a bucket set down turned half round): how far (rad) a hand may be
- * left short of its turn and still hold its thing so: further, it is visibly held wrong */
+/** how far (rad) a hand may be left short of its turn and still hold its thing so: as far as the fingers' own give takes up unseen;
+ * further, it is visibly held wrong */
 const SHORT = 0.5;
 /** what a hand its arm cannot hold so counts for against its joints' discomfort (rad): more than any */
 const UNHELD = 10;

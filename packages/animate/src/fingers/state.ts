@@ -233,13 +233,13 @@ export class FingerState {
    * where they were last met */
   private solved(hand: Hand, taken: Taken, at: Placed, contacts: readonly Contact[]): Shape {
     const preferred = goalOf(taken);
-    // (as last solved while the hand and its contacts stay where they were on the thing: a hand held still on a rifle, however it turns)
+    // (as last solved while the hand and its contacts stay where they were on the thing: a hand held still on it, however it turns)
     const last = hand.solve;
     if (last?.settled && last.at.position.distanceTo(at.position) < STILL && last.at.quaternion.angleTo(at.quaternion) < STILL && sameContacts(last.contacts, contacts)) {
       return structuredClone(last.shape);
     }
-    // (followed on from where they were last met; a digit whose contact has moved on the thing, or is new, started afresh: the trigger
-    // finger off the receiver onto the trigger)
+    // (followed on from where they were last met; a digit whose contact has moved on the thing, or is new, started afresh: put onto
+    // another face, it would otherwise follow on from the face it left)
     const shape = structuredClone(preferred), was = hand.met?.shape ?? hand.shape;
     for (const { part } of contacts) withValues(shape, part, was[part]);
     const swept = contacts.filter((c) => !last?.contacts.some((was) => was.part === c.part && was.at.distanceTo(c.at) < SWEPT)).map((c) => c.part);

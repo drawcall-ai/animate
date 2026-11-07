@@ -175,7 +175,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
     target = { ...target, position };
   }
   // (a grip held, as a reach setting off, is let out as far as the arm hangs: a hand holding something by an arm all but straight —
-  // a rifle taken up from a hanging hand — is not drawn off its grip)
+  // something long taken up from a hanging hand — is not drawn off its grip)
   const contact = options.thing !== undefined && options.thing === person.holding[side]?.thing;
   arm.to(f, target, {
     ...CALM,

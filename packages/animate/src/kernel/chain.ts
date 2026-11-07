@@ -171,8 +171,8 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     else local[0].copy(_kept);
   }
   // (kept, round the line to the tip no further from where it was than `SWIVELLING` — read off the hinge's axis, which an arm all but
-  // straight still shows, its elbow on the line: two fits about as good, or the pole's side fitting again, leapt it round 1–2 rad in one
-  // sub-step — a throw's cocked arm, 3400 °/s)
+  // straight still shows, its elbow on the line: two fits about as good, or the pole's side fitting again, would leap it round a radian
+  // or more in one sub-step)
   if (keeps) {
     const from = _f.copy(h).applyQuaternion(was), to = _g.copy(h).applyQuaternion(_q.copy(c.base).multiply(local[0]));
     from.addScaledVector(T, -from.dot(T));

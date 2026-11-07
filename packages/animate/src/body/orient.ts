@@ -6,8 +6,8 @@ import { within } from '../kernel/scene';
 import { orienters, resolve } from '../things/resolve';
 import type { Self } from './runtime';
 
-/** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight, so a grip held
- * near the arm's full stretch is not pulled in by turns of what it holds, and the elbow keeps a little bend to solve */
+/** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight — the elbow still
+ * bent some 20°, so the arm can follow what it holds as it turns rather than being pulled off it at full stretch */
 const HOLDABLE = 0.985;
 /** from how far off its grip a hand on its way to it turns what it takes toward itself, fully by how near (m, default body) */
 const COMING = { far: 0.15, near: 0.03 };

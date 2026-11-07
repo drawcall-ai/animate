@@ -35,8 +35,8 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
   // (its last segment's balls left out: its pad is pressed on the contact's face, the segment lying along it)
   const sunk = (digit: Digit) => joints.flesh(digit, shape).slice(0, -3).map((ball) => near ? Math.max(0, near.depth(ball.at.applyMatrix4(matrix), ball.radius * hand.scale * PAD_DEPTH, WITHIN)) : 0);
   // (for `swept`, each touching digit started from the best of where it is and a sweep of all three of its values — by its own contacts'
-  // miss and its flesh sunk in: from where it last lay, along a receiver, a trigger finger could not come round the guard onto the
-  // trigger without passing through it; swept in its curl and hook alone, its fan held as it lay, it stopped 2 cm short on the receiver)
+  // miss and its flesh sunk in: from where it last lay, a digit may have to come round something to reach its contact, which following on
+  // would pass through, and swept in its curl and hook alone, its fan held, it would stop short against what lies beside the contact)
   for (const digit of digits) {
     if (!swept.includes(digit)) continue;
     const cost = () => contacts.reduce((sum, c) => c.part === digit ? sum + off(c, _facing).lengthSq() + (c.facing ? _facing.applyQuaternion(hand.quaternion).distanceToSquared(c.facing) * TURN * TURN : 0) : sum, 0)

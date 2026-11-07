@@ -46,8 +46,8 @@ export class Guard {
     if (kept && place && this.kept) {
       for (const digit of ['thumb', ...DIGITS] as const) if (!at.includes(digit)) keptOut(this.joints, kept.near, place, shape, was, digit);
     }
-    // (as fast as its joints turn, however it is put: a digit on its contact or opened out of a thing at once swung there in a step — a
-    // thumb's base had swung 100–130 rad/s as its hand took hold or let go)
+    // (as fast as its joints turn, however it is put: a digit put on its contact or opened out of a thing at once would swing there in
+    // one step)
     this.joints.braked(shape, was, seconds);
   }
 

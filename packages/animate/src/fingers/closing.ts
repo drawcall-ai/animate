@@ -142,8 +142,8 @@ function opposite(hand: Closing, shape: Shape, line: Line): Shape['thumb'] {
     const way = square.clone().applyAxisAngle(axis, (k * Math.PI) / CHORDS), ahead = out(from, way), behind = out(from, way.clone().negate());
     return ahead === null || behind === null ? null : { way, ahead, behind, score: ahead + behind - EVEN * Math.abs(way.dot(faces)) };
   }).filter((chord) => chord !== null);
-  // (through the middle of its cross-section, the midpoints of the chords through the line averaged: through a line off to its side, as
-  // a receiver's is, the chord across its corner was the narrowest, and the thumb went for the corner)
+  // (through the middle of its cross-section, the midpoints of the chords through the line averaged: through a line off to its side, the
+  // chord across a corner would be the narrowest, and the thumb would go for the corner)
   const level = line.at.clone().addScaledVector(axis, thumb.clone().sub(line.at).dot(axis)), first = chords(level);
   const middle = first.reduce((sum, c) => sum.add(level.clone().addScaledVector(c.way, (c.ahead - c.behind) / 2)), new Vector3()).divideScalar(Math.max(1, first.length));
   const best = first.length ? chords(middle).reduce<ReturnType<typeof chords>[number] | null>((was, c) => !was || c.score < was.score ? c : was, null) : null;

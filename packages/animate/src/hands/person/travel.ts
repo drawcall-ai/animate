@@ -36,8 +36,8 @@ const SETTLING = 0.5;
 /**
  * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
  * the thing is now): as it nears its end (`nearing`) — weighed each sub-step until its course is over, the end and the body as they
- * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a rifle's well, the rifle
- * held up to the eye, as the head turns from the pouch to it) is weighed where it has gone, not only where it was half a second before
+ * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a socket on
+ * something the other hand holds up as the head turns to it) is weighed where it has gone, not only where it was half a second before
  * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s after its course is over
  * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
  */

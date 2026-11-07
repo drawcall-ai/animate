@@ -20,13 +20,12 @@ const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
 /** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
 const ABDUCTION = (8 * Math.PI) / 180;
 /**
- * How a free arm hangs as the trunk bows (`drawnBack`). Read: a formal standing bow keeps a man's hands "naturally at both sides of
- * their legs" (Wikipedia, Bowing in Japan: eshaku ~15°, keirei ~30°, saikeirei 45–70°), "flat at the sides, resting along the trouser
- * seams" (traveljapan-together.com); drill's attention has the thumbs along the trouser seams (drillpad.net, the Army's manual of arms).
- * Recalled: as a bow deepens the hands slide down the thighs toward the knees, and a relaxed stoop (a toe touch, a stooped lift) lets the
- * arms hang plumb. So the arm turns back at the shoulder as far as keeps the palm beside the thigh as the shoulder comes ahead of the hip,
- * but for a share (`DRAPED`) of that it slides down the thigh's front — tuned: ~1 cm at 0.3 rad, ~3 at 0.6, whatever the build's arms —
- * and past a keirei's (`STOOP.from`, rad) it hangs toward the plumb, all plumb at `STOOP.to` (the deepest saikeirei's; a reach's low bow).
+ * How a free arm hangs as the trunk bows (`drawnBack`). A formal standing bow keeps the hands at the sides of the legs, along the
+ * trouser seams, as drill's attention does; as a bow deepens the hands slide down the thighs toward the knees, and a relaxed stoop (a toe
+ * touch, a stooped lift) lets the arms hang plumb. So the arm turns back at the shoulder as far as keeps the palm beside the thigh as the
+ * shoulder comes ahead of the hip, but for a share (`DRAPED`) of that it slides down the thigh's front — a centimetre or so in a moderate
+ * bow, whatever the build's arms — and past a formal bow's depth (`STOOP.from`, rad) it hangs toward the plumb, all plumb at `STOOP.to`
+ * (the deepest formal bow's; a reach's low bow).
  * But not while the other hand works standing: bowed over a table to take something in one hand, the other is held in by the side, its
  * palm by the thigh however deep the bow, not dangled under the shoulder beside what the first hand takes (`held`).
  */

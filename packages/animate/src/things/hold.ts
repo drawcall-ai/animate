@@ -86,8 +86,8 @@ export function supported(thing: Thing): boolean {
 /**
  * `thing` attached under `parent` where it is as the scene has them, moved by no body. A body re-parenting it mid-update (`reader`) takes
  * it where it was as the scene stood when the body last wrote it: what the app moves read as the body last read it (`written`), not as
- * the app has moved it since — the parent, a bone, still stands as the body last wrote it, and a rifle the app had moved 2 cm on took the
- * magazine in the hand 2 cm off the palm, the grasp keeping it so.
+ * the app has moved it since — the parent, a bone, still stands as the body last wrote it, so read as moved on, the thing would be
+ * taken off the palm by as much, the grasp keeping it so.
  */
 export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void {
   const object = thing.object, mover = movers.get(object);

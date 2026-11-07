@@ -138,8 +138,8 @@ export function personOf(self: Self): Person {
  * hold step and fit have an additional 2 cm allowance: artistic calibration for apparent contact during acquisition, not measured anatomy.
  */
 const GRIP_TAKEN = REACHED.distance + 0.02;
-/** How far a hand may be from the grip it holds on what is on the body (m; tuned: a load carried at the body as it walks and turns lags
- * its turn, and a hand on a rifle snapped up to the eye lags it, up to ~4 cm off their grips) */
+/** How far a hand may be from the grip it holds on what is on the body (m): a hand on what the body carries or turns briskly lags it by
+ * its own braking, a few centimetres, before it closes up again */
 const HELD = 0.05;
 
 /** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
