@@ -208,12 +208,14 @@ export function shoulderHeight(proportions: Proportions, lower: number, bow: num
     + height(offsets.leftShoulder, bow) + height(offsets.leftUpperArm, bow);
 }
 
-/** how far (m, + ahead) a standing bow of `bow` brings the shoulder joint ahead of its hip joint off where it stands upright */
-export function shoulderAhead(proportions: Proportions, bow: number): number {
-  const tilt = pelvisTilt(proportions, 0, bow), offsets = proportions.offsets;
+/** how far (m, + ahead) a bow of `bow` let down `lower` (m) brings the shoulder joint, or the eyes, ahead of the hip joint off where they
+ * stand upright, using the articulated trunk: squatting, the pelvis tucks under and the back takes the bow from higher up (`hingeOf`) */
+export function bowAhead(proportions: Proportions, lower: number, bow: number, upper: 'shoulder' | 'eyes'): number {
+  const tilt = pelvisTilt(proportions, lower, bow), offsets = proportions.offsets;
   const ahead = (offset: Vector3, pitch: number) => offset.y * Math.sin(pitch) + offset.z * (Math.cos(pitch) - 1);
-  return ahead(offsets.spine, tilt) + ahead(offsets.chest, (tilt + bow) / 2) + ahead(offsets.leftShoulder, bow) + ahead(offsets.leftUpperArm, bow)
-    - ahead(offsets.leftUpperLeg, tilt);
+  const top = upper === 'shoulder' ? ahead(offsets.leftShoulder, bow) + ahead(offsets.leftUpperArm, bow)
+    : ahead(offsets.neck, bow) + ahead(offsets.head, bow) + ahead(proportions.eyes, bow);
+  return ahead(offsets.spine, tilt) + ahead(offsets.chest, (tilt + bow) / 2) + top - ahead(offsets.leftUpperLeg, tilt);
 }
 
 /** Posture needed to bring a shoulder within hand reach. */

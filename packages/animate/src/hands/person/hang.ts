@@ -10,7 +10,7 @@ import { ArmClear, checkArms, keepArmOut, NUDGED } from './trunk';
 import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 import { palmOf } from '../../species/humanoid/landmarks';
-import { shoulderAhead } from '../../legs/person/posture';
+import { bowAhead } from '../../legs/person/posture';
 
 // A free arm: it hangs from the shoulder, swings with the stride, turns back with the trunk's bow and is posed over that as asked.
 
@@ -42,7 +42,7 @@ const SWAY = { frequency: 1.5, damping: 0.7 };
  * side as the other hand works standing: `DRAPED`, `STOOP` */
 function drawnBack(proportions: Proportions, bow: number, held: number): number {
   const reach = proportions.armLength + palmOf(proportions, 'left').length();
-  const beside = Math.asin(clamp((1 - DRAPED) * shoulderAhead(proportions, bow) / reach, -1, 1));
+  const beside = Math.asin(clamp((1 - DRAPED) * bowAhead(proportions, 0, bow, 'shoulder') / reach, -1, 1));
   return beside * (1 - (1 - held) * smoothstep(STOOP.from, STOOP.to, Math.abs(bow)));
 }
 

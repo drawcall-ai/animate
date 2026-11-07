@@ -3,7 +3,7 @@ import type { Goal, Motion } from '../kernel/goal';
 import { limited } from '../kernel/limits';
 import type { Pose } from '../kernel/pose';
 import { TrackedPoint, TrackedRotation } from '../kernel/track';
-import { lowering, LOWER } from '../legs/person/posture';
+import { bowAhead, lowering, LOWER } from '../legs/person/posture';
 import { INDEX } from '../species/humanoid/bones';
 import type { PersonLegged } from '../legs/person/legged';
 import type { Frame, Step } from '../kernel/frame';
@@ -27,9 +27,11 @@ const PASSES = 8;
 const TURN = 1.0;
 const WAIT = 0.1;
 const SQUARED = 0.15;
-/** how far ahead of the centre of mass the eyes are standing upright (m, default body), and the share of a bow's sweep that takes them further ahead (the hips go back the rest) */
+/** how far ahead of the centre of mass the eyes are standing upright (m, default body), and the share of a bow's sweep (`bowAhead`) that
+ * takes them further ahead, the hips going back the rest: measured 0.58–0.60 bowing 0.84–1.05 rad, standing and let down 0.22–0.34 m
+ * (the sweep a rigid trunk would make, which a squat's tucked pelvis falls short of, gave 0.52 standing and 0.41 let down) */
 const EYES_AHEAD = 0.085;
-const BOW_AHEAD = 0.5;
+const BOW_AHEAD = 0.6;
 /** how quickly the way where the body stands moves is picked up (1/s) */
 const SPOT_RATE = 10;
 /** how fast the body walks round and over under a head (m/s, m/s²) */
@@ -96,7 +98,7 @@ function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => G
     // (standing where that bow puts the eyes, and how fast that moves: a head going off is stepped after as it goes. Estimated from the
     // eyes asked, not read off the pose: the bow reaches them from wherever the body stands and the head is held on them, so a spot
     // the pose's eyes measure moves with the body by however far its posture misses them, and is edged after for good)
-    const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * proportions.scale - BOW_AHEAD * (proportions.eyeHeight - proportions.hipHeight) * Math.sin(bow)).setY(0);
+    const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * proportions.scale - BOW_AHEAD * bowAhead(proportions, lower, bow, 'eyes')).setY(0);
     if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
     go.to.copy(spot);
     person.poise.add({ lower, bow });
