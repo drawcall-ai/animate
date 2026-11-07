@@ -169,14 +169,14 @@ describe('carry', () => {
 
   // (the trial that found it: a princess standing on a kneeling hero hung a medal at his neck, inside her own trunk; the carry said true
   // with the medal 36 cm off his neck)
-  it('ends false, saying why, when the thing is not in place: its own body in the way, or its arms short of the end', () => {
-    const outcome = (end: Vector3) => {
+  it('ends false, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', () => {
+    const outcome = (end: Vector3, until?: () => boolean) => {
       const body = person({ dev: true }), room = roomOf(body);
       const load = box(room, new Vector3(0, 1, 0.4), { mass: 1, solid: false });
       let carried: boolean | undefined;
       play(function* () {
         yield* grab(body, load, BOTH);
-        carried = yield* carry(body, load, end, { step: false });
+        carried = yield* carry(body, load, end, { step: false, until });
       }, [body], 10, () => carried !== undefined);
       return { carried, off: worldOf(load).distanceTo(end), held: body.holds(load), log: body.log.map(({ check, detail }) => ({ check, detail })) };
     };
@@ -193,6 +193,8 @@ describe('carry', () => {
     expect(far.carried).toBe(false);
     expect(far.off).toBeGreaterThan(0.01);
     expect(far.log).toEqual([{ check: expect.stringMatching(/^late carry: course end distance after/), detail: expect.stringContaining('beyond the arm’s reach') }]);
+    // (ended early on a condition that never comes, it still ends as late: else it held the thing short of its end for ever)
+    expect(outcome(new Vector3(0, 1.3, 0.76), () => false).carried).toBe(false);
   });
 
   it('throws when no hand holds what it is asked to carry', () => {
