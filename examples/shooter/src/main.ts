@@ -47,7 +47,7 @@ const play = element('play', HTMLButtonElement);
 const notice = element('notice', HTMLElement);
 const prompt = element('prompt', HTMLElement);
 const labels = {
-  view: element('view', HTMLElement),
+  view: element('view', HTMLElement), grenades: element('grenades', HTMLElement),
   motion: element('motion', HTMLElement), speed: element('speed', HTMLElement),
   ammo: element('ammo', HTMLElement), reload: element('reload', HTMLElement), feedback: element('feedback', HTMLElement), hit: element('hit', HTMLElement),
   health: element('health', HTMLElement), enemy: element('enemy', HTMLElement), damage: element('damage', HTMLElement),
@@ -126,7 +126,11 @@ async function start() {
   notice.textContent = 'Building navigation through the course…';
   const navigation = new Navigation(world);
   const enemy = new Enemy(opponent, player, navigation, world);
-  const playback = new Playback([avatar.group, opponent.avatar.group, player.remains, opponent.remains, rover.body, ...environment.moving], () => player.look(), world.fixedDelta);
+  if (player.grenades) {
+    player.grenades.targets = [player, opponent];
+    player.grenades.onExplode = (at) => { audio.play('blast', 0.9, 0, undefined, at); enemy.hear(at); };
+  }
+  const playback = new Playback([avatar.group, opponent.avatar.group, player.remains, opponent.remains, rover.body, ...environment.moving, ...(player.grenades ? [player.grenades.group] : [])], () => player.look(), world.fixedDelta);
   const input = new Input(canvas, (locked) => {
     if (!locked) void audio.pause().catch(showError);
     document.body.classList.toggle('playing', locked);
@@ -178,11 +182,12 @@ async function start() {
       if (input.pressed('KeyV')) watching = !watching;
       // E uses what the player is on or setting off for, else what it stands near: a mount, or a lift panel it faces, its button pressed
       // with the left hand's fingertip.
-      if (input.pressed('KeyE')) {
+      if (input.pressed('KeyE') && !avatar.throwing) {
         const mount = active() ?? player.mounts.find((each) => each.near), button = liftButton();
         if (mount) mount.use();
         else if (button) avatar.press(button.part, () => { environment.lift.press(button); audio.tick(); });
       }
+      if (input.pressed('KeyG')) player.throwGrenade();
       const mount = active();
       avatar.lower(!mount && environment.lift.at(movement.position, input.yaw));
       if (mount) ride(mount, dt);
@@ -229,6 +234,7 @@ async function start() {
     labels.speed.textContent = driver.posed ? `${Math.abs(handling.speed * 3.6).toFixed(0)} km/h` : `${movement.speed.toFixed(1)} m/s`;
     prompt.textContent = promptLabel();
     labels.ammo.textContent = String(combat.ammo);
+    labels.grenades.textContent = avatar.throwing ? avatar.grenadePhase : `G · Grenades ${player.grenades?.count ?? 0} / 3`;
     labels.reload.textContent = avatar.reloading ? 'Reloading…' : low ? 'R · Reload' : 'Practice rifle · unlimited magazines';
     labels.feedback.textContent = combat.feedback;
     labels.hit.style.opacity = combat.hit ? '1' : '0';
@@ -265,7 +271,7 @@ async function start() {
 
   /** The lift's button the player stands at and faces, on foot and its hands free to press it. */
   function liftButton() {
-    return active() || !player.alive || avatar.pressing ? null : environment.lift.within(movement.position, input.yaw);
+    return active() || !player.alive || avatar.pressing || avatar.throwing ? null : environment.lift.within(movement.position, input.yaw);
   }
 
   function promptLabel() {
@@ -286,7 +292,7 @@ async function start() {
     movement.input.yaw = input.yaw;
     player.aim = input.aim;
     // Firing (held or a quick click) ends a sprint, except during a reload; the shot goes as soon as the rifle is up.
-    movement.input.sprint = input.sprint && !(input.trigger && !avatar.reloading);
+    movement.input.sprint = input.sprint && !avatar.throwing && !(input.trigger && !avatar.reloading);
     movement.input.crouch = input.crouch;
     movement.input.jump = input.jump;
   }

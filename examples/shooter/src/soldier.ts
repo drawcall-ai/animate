@@ -15,6 +15,7 @@ import { Driver } from './rover/driver';
 import type { Handling } from './rover/handling';
 import type { Rover } from './rover/model';
 import { Terrain } from './terrain';
+import { Grenades } from './grenade';
 
 /** The most seconds a fresh body may take to have its rifle in its hands. */
 const READY = 3;
@@ -33,6 +34,7 @@ export class Soldier implements Combatant {
   readonly movement: Movement;
   readonly avatar: Avatar;
   readonly combat: Combat;
+  readonly grenades: Grenades | undefined;
   readonly meshes: Mesh[] = [];
   readonly view = { pitch: 0, aimPoint: new Vector3() };
   /** What it leaves in the world when it dies, its ragdoll and dropped rifle: display it through `Playback` as the avatar's group. */
@@ -62,10 +64,11 @@ export class Soldier implements Combatant {
     this.movement = new Movement(world, object);
     this.terrain = new Terrain(world);
     this.terrain.update(spawn);
+    this.grenades = firstPerson ? new Grenades(world, scene) : undefined;
     this.avatar = new Avatar(scene, model, this.terrain.floor, phase => {
       if (phase === 'out') sound('reload', 0.2, 0, 0.2);
       else sound('reload', 0.2, 0.318, 0.962);
-    }, species);
+    }, species, this.grenades);
     this.avatar.group.name = name;
     this.remains.name = `${name} remains`;
     scene.add(this.remains);
@@ -85,7 +88,7 @@ export class Soldier implements Combatant {
   get mounted() { return this.mounts.find((mount) => mount.posed); }
 
   /** Asks to aim; there is no aiming, and so no aiming pace, while a reload or a press is asked for or under way. */
-  set aim(wanted: boolean) { this.movement.input.aim = wanted && !this.avatar.reloading && !this.avatar.pressing; }
+  set aim(wanted: boolean) { this.movement.input.aim = wanted && !this.avatar.reloading && !this.avatar.pressing && !this.avatar.throwing; }
 
   reset(position = this.spawn, yaw = 0) {
     this.health = 100;
@@ -93,6 +96,7 @@ export class Soldier implements Combatant {
     this.ragdoll = undefined;
     for (const mount of this.mounts) mount.reset();
     this.combat.reset();
+    this.grenades?.reset();
     this.view.pitch = 0;
     this.place(position, yaw);
   }
@@ -127,6 +131,7 @@ export class Soldier implements Combatant {
 
   update(dt: number) {
     this.combat.update(dt);
+    this.grenades?.update(dt);
     if (this.ragdoll) { this.ragdoll.pose(dt); return; }
     // (every mount steps; one getting on, on or getting off poses the body itself)
     const posing = this.mounts.map((mount) => mount.update(dt)).some(Boolean);
@@ -181,6 +186,11 @@ export class Soldier implements Combatant {
     this.avatar.requestReload();
   }
 
+  throwGrenade() {
+    if (!this.alive || this.mounts.some((mount) => mount.state !== 'off')) return false;
+    return this.avatar.requestGrenade();
+  }
+
   shoot(eye = this.avatar.look().eye, muzzle = this.avatar.muzzle.getWorldPosition(new Vector3()), direction = this.avatar.muzzle.getWorldDirection(new Vector3())) {
     if (!this.alive || this.combat.ammo === 0 || !this.avatar.fire()) return false;
     this.combat.fire(eye, muzzle, direction);
@@ -192,6 +202,7 @@ export class Soldier implements Combatant {
     if (!this.alive) return;
     this.health = Math.max(0, this.health - damage);
     if (this.alive) { this.avatar.body.applyImpulse(direction.clone().multiplyScalar(8), point); return; }
+    this.avatar.dropGrenade();
     this.movement.stop();
     for (const mount of this.mounts) mount.reset();
     this.ragdoll = new Ragdoll(this.remains, this.avatar, this.trail, direction.clone().multiplyScalar(KILL), point);
@@ -202,6 +213,7 @@ export class Soldier implements Combatant {
     this.movement.dispose();
     this.movement.object.removeFromParent();
     this.avatar.dispose();
+    this.grenades?.dispose();
     this.combat.dispose();
     this.remains.removeFromParent();
   }

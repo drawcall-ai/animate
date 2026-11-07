@@ -2,12 +2,14 @@ import { Body, carry, grab, humanoid, lookAt, release, wait, type Floor, type Ro
 import { action, parallel, runTimeline } from '@pmndrs/timeline';
 import { BufferGeometry, Euler, Group, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { anglesOf, wrapAngle } from './angles';
+import { anglesOf, lookDirection, wrapAngle } from './angles';
 import type { Look } from './playback';
 import { SOLDIER } from './skeleton';
 import { empty, RIFLE, rifleOn } from './weapon';
 import { Litter } from './weapon/litter';
 import { WeaponMotion } from './weapon/motion';
+import type { Grenades } from './grenade';
+import { GrenadeMotion } from './grenade/motion';
 
 export interface AvatarState {
   position: Vector3;
@@ -92,9 +94,10 @@ export class Avatar {
     private readonly floor: Floor = () => 0,
     private readonly onReload?: (phase: 'out' | 'in') => void,
     private readonly species: Species<string, 'left' | 'right'> = humanoid(SOLDIER),
+    private readonly grenades?: Grenades,
   ) {
     this.litter = new Litter(scene);
-    this.animation = animate(this.species, model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload);
+    this.animation = animate(this.species, model && clone(model), new Vector3(), 0, floor, false, this.litter, onReload, grenades);
     this.group.add(this.animation.person.object);
     scene.add(this.group);
   }
@@ -129,6 +132,11 @@ export class Avatar {
     return { eye: look.eye.clone(), ...shown, intent: { yaw, pitch } };
   }
 
+  get throwing() { return this.animation.throwing(); }
+  get grenadePhase() { return this.animation.grenadePhase(); }
+  requestGrenade() { return this.animation.requestGrenade(); }
+  dropGrenade() { this.animation.dropGrenade(); }
+
   requestReload() { this.animation.requestReload(); }
   /** Asks the left hand to press `button` (a thing whose grip `press` is the index's pad on its face) with its fingertip, calling `pressed` as the pad comes onto it, then to take the rifle again; ignored while it reloads or presses. */
   press(button: Object3D, pressed: () => void) { this.animation.press(button, pressed); }
@@ -141,7 +149,7 @@ export class Avatar {
   /** Starts afresh standing at `position`, the rifle on its shoulder for the hands to take, the magazines it threw away cleared. */
   reset(position: Vector3, yaw = 0) {
     this.litter.clear();
-    this.show(animate(this.species, this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload));
+    this.show(animate(this.species, this.model && clone(this.model), position, yaw, this.floor, false, this.litter, this.onReload, this.grenades));
   }
 
   update(dt: number, input: AvatarState) {
@@ -152,7 +160,7 @@ export class Avatar {
   /** Starts readying a fresh body off screen, standing at `position` and snatching up the rifle, while this one is still shown. */
   prepare(position: Vector3, yaw: number) {
     this.next?.dispose();
-    this.next = animate(this.species, this.model && clone(this.model), position, yaw, this.floor, true, this.litter, this.onReload);
+    this.next = animate(this.species, this.model && clone(this.model), position, yaw, this.floor, true, this.litter, this.onReload, this.grenades);
   }
 
   /** Steps the fresh body; once its hands have the rifle it is shown in place of this one, and true is returned. */
@@ -193,7 +201,7 @@ export class Avatar {
   }
 }
 
-function animate(species: Species<string, 'left' | 'right'>, model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void) {
+function animate(species: Species<string, 'left' | 'right'>, model: Object3D | undefined, position: Vector3, yaw: number, floor: Floor, snatch: boolean, litter: Litter, onReload?: (phase: 'out' | 'in') => void, grenades?: Grenades) {
   const root: Root & { velocity: Vector3 } = { position: position.clone(), velocity: new Vector3(), yaw, support: position.clone() };
   let aiming = 0;
   const person = new Body(species, { model, at: position, floor, face: yaw, drive: () => root, life: { steady: () => smooth(aiming) }, dev: DEV });
@@ -210,6 +218,8 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const { rifle, pistol, blade, well, below, flash, muzzle, stock, magazineIn, dispose: disposeWeapon } = rifleOn(mount, arms);
   rifle.position.copy(stock.position).negate();
   const motion = new WeaponMotion();
+  const grenade = grenades && new GrenadeMotion(person, onBone(person, chest, 'grenade harness', new Vector3()), grenades);
+  let throwing = false, slung = 0;
   const pouches = POUCHES.map((at, i) => {
     const pouch = onBone(person, chest, `pouch ${i + 1}`, at.clone().multiply(new Vector3(arms, arms, proportions.scale)));
     empty(pouch, `over pouch ${i + 1}`, new Vector3(0, 0.1 * proportions.scale, 0));
@@ -241,7 +251,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     let pitch = kicked(), yaw = input.yaw;
     if (input.aimPoint) ({ yaw, pitch } = anglesOf(input.aimPoint.clone().sub(look.eye)));
     // Reload in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body.
-    const before = smooth(reloaded);
+    const before = Math.max(smooth(reloaded), smooth(slung));
     pitch *= 1 - before;
     yaw += wrapAngle(person.facing - yaw) * before;
     return new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ'));
@@ -251,6 +261,13 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   /** How the rifle rode the chest through a reload (its turn on the shoulder pocket), to ease back to the aim from. */
   let rode: Quaternion | undefined;
   const hold = (seconds: number) => {
+    if (slung > 0) {
+      // Hanging from its shoulder sling, muzzle down across the left side, clear of the grenade at the right chest.
+      const hanging = pocket.getWorldQuaternion(new Quaternion()).multiply(new Quaternion().setFromEuler(new Euler(1.25, 0, 0.4)));
+      const aimed = view();
+      person.orient(mount, aimed.slerp(hanging, smooth(slung)));
+      return;
+    }
     // Through the swap the rifle rides the chest as it sways and twists under a running body, its well where the hand last found it. As
     // the support hand goes back onto its front it is held as it rode, turned in toward that side (`RETURNING`): the body keeps it within
     // that arm's reach as it turns, and it eases out to the aim from there as the reload ends.
@@ -300,8 +317,9 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const frame = (seconds: number) => {
     time += seconds;
     const turning = Math.hypot(wrapAngle(input.yaw - look.yaw), input.pitch - look.pitch) / seconds;
-    if (!acquired || input.aim || swapping || root.velocity.length() > 0.05 || turning > 0.5 || time - lastShot < 1) stillSince = time;
-    aiming = ease(aiming, Number(input.aim), seconds);
+    if (!acquired || input.aim || swapping || throwing || root.velocity.length() > 0.05 || turning > 0.5 || time - lastShot < 1) stillSince = time;
+    slung = ease(slung, Number(throwing && grenade?.phase !== 'Returning to rifle'), seconds, 0.35);
+    aiming = ease(aiming, Number(input.aim && !throwing), seconds);
     sprinted = ease(sprinted, Number(sprinting()), seconds);
     reloaded = ease(reloaded, Number(swapping), seconds);
     returned = ease(returned, Number(swapping && !riding), seconds);
@@ -401,7 +419,16 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
       acquired = yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, snatch ? SNATCH : {});
       if (!acquired) throw new Error('The soldier could not acquire both rifle grips');
       for (;;) {
-        yield* wait(() => reloadWanted || pressWanted !== null);
+        yield* wait(() => reloadWanted || pressWanted !== null || throwing);
+        if (throwing && grenade) {
+          yield* wait(() => slung === 1);
+          release(person, rifle);
+          yield* grenade.throw(() => lookDirection(input.yaw, input.pitch), () => look.eye.clone(), () => input.velocity);
+          if (!(yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, QUICK))) throw new Error('Could not take rifle after grenade throw');
+          throwing = false;
+          grenade.phase = '';
+          continue;
+        }
         if (pressWanted) {
           yield* press(pressWanted.button, pressWanted.pressed);
           pressWanted = null;
@@ -424,17 +451,26 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     person, look, muzzle, eye, rifle,
     acquired: () => acquired,
     reloading,
+    throwing: () => throwing,
+    grenadePhase: () => grenade?.phase ?? '',
+    dropGrenade: () => grenade?.interrupt(look.eye),
+    requestGrenade: () => {
+      if (!grenade || !grenades?.count || !acquired || reloading() || pressWanted || throwing) return false;
+      throwing = true;
+      grenade.phase = 'Lowering rifle';
+      return true;
+    },
     aimWeight: () => smooth(aiming),
     reloads: () => reloads,
-    requestReload: () => { if (acquired && !swapping && !pressWanted) reloadWanted = true; },
-    press: (button: Object3D, pressed: () => void) => { if (acquired && !reloading() && !pressWanted) pressWanted = { button, pressed }; },
+    requestReload: () => { if (acquired && !swapping && !pressWanted && !throwing) reloadWanted = true; },
+    press: (button: Object3D, pressed: () => void) => { if (acquired && !reloading() && !pressWanted && !throwing) pressWanted = { button, pressed }; },
     pressing: () => pressWanted !== null,
     lower: (at: boolean) => { low = at; },
     fire: () => {
       // The rifle fires once it has come halfway up from the sprint carry, about 0.13 s after the sprint ends.
       // Held fire keeps its cadence on the shot clock, not the simulation steps the shots land on (1e-9: float steps).
       const next = lastShot + SHOT_INTERVAL;
-      if (!acquired || reloading() || pressWanted || sprinted > 0.5 || time < next - 1e-9) return false;
+      if (!acquired || reloading() || pressWanted || throwing || sprinted > 0.5 || time < next - 1e-9) return false;
       lastShot = time - next < SHOT_INTERVAL ? next : time;
       motion.fire();
       // 12 N·s keeps sustained 600 rpm fire to a torso sway of about 0.08 rad.
@@ -451,6 +487,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
       see();
     },
     dispose: () => {
+      grenade?.dispose();
       const geometries = new Set<BufferGeometry>();
       for (const object of [rifle, ...magazines]) object.traverse((node) => { if (node instanceof Mesh) geometries.add(node.geometry); });
       for (const geometry of geometries) geometry.dispose();
