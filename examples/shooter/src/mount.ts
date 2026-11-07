@@ -195,7 +195,7 @@ export abstract class Mount {
     }
     input.move.set(0, 0, 0);
     // (straight on from the walk, a foot still stepping comes down as it steps in)
-    if (!avatar.acquired || avatar.reloading) return;
+    if (!avatar.acquired || avatar.reloading || avatar.throwing || avatar.pressing) return;
     movement.stop();
     this.hold();
     this.current = 'mounting';

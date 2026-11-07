@@ -9,7 +9,7 @@ const FILES = {
   rung: 'rung.mp3', clank: 'clank.mp3', thud: 'thud.mp3', boot: 'boot.mp3', clunk: 'clunk.mp3', lever: 'lever.mp3', skid: 'skid.mp3',
 };
 
-export type Sound = keyof typeof FILES;
+export type Sound = keyof typeof FILES | 'blast';
 type Feet = Pick<Body, 'feet'>;
 type Motion = Pick<Movement, 'grounded' | 'actualVelocity'>;
 export type Play = (sound: Sound, gain: number, offset?: number, duration?: number) => void;
@@ -107,7 +107,19 @@ export class Audio {
         const buffer = await context.decodeAudioData(await response.arrayBuffer());
         return { name, buffer };
       }));
-      return new Audio(context, new Map(buffers.map(({ name, buffer }) => [name, buffer])));
+      const sounds = new Map(buffers.map(({ name, buffer }) => [name, buffer]));
+      // A short pressure crack followed by a low, decaying report; no new audio asset is needed.
+      const blast = context.createBuffer(1, Math.ceil(context.sampleRate * 0.85), context.sampleRate);
+      const data = blast.getChannelData(0);
+      let low = 0;
+      for (let i = 0; i < data.length; i++) {
+        const t = i / context.sampleRate, noise = Math.random() * 2 - 1;
+        low += (noise - low) * 0.12;
+        data[i] = noise * Math.exp(-t * 75) * 0.45 + low * Math.exp(-t * 6) * 1.6
+          + Math.sin(2 * Math.PI * (75 * t - 22 * t * t)) * Math.exp(-t * 9) * 0.45;
+      }
+      sounds.set('blast', blast);
+      return new Audio(context, sounds);
     } catch (error) {
       await context.close();
       throw error;
