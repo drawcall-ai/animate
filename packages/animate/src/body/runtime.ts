@@ -29,7 +29,7 @@ import { FLAT, type Floor } from '../legs/floor';
 import { FingerState } from '../fingers/state';
 import { Orient } from './orient';
 import { checkShear, massed, restPose } from './setup';
-import { Springs } from '../springs/springs';
+import { Springs } from '../springs';
 
 /** How a body is made. */
 export interface SelfOptions {

@@ -1,15 +1,23 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
-import type { AnySpecies, Vec3 } from '../species/define';
-import type { Binding } from '../body/model';
+import { Euler, Object3D, Quaternion, Vector3 } from 'three';
+import type { AnySpecies, Vec3 } from './species/define';
+import type { Binding } from './body/model';
+
+/** A spring's restoring strength when it gives none (s⁻²) */
+export const STIFFNESS = 40;
 
 /** Spring motion for the bone hierarchy below one root. Lengths and rest directions come from the rig. */
 export interface Spring {
-  /** Restoring strength per unit mass (s⁻²; default 40). Higher values hold the input pose more firmly. */
+  /** Restoring strength per unit mass (s⁻²; default `STIFFNESS`). Higher values hold the input pose more firmly. */
   readonly stiffness?: number;
   /** Damping ratio (default 0.7): 0 oscillates, 1 is critically damped, above 1 settles more slowly. */
   readonly damping?: number;
   /** World acceleration (m/s²; default [0, -9.81, 0]). [0, 0, 0] disables gravity. */
   readonly gravity?: Vec3;
+  /**
+   * The root's rotation at rest (XYZ Euler angles in radians, in its parent's frame), in place of the model's: hair skinned standing clear
+   * of the body hangs from here. The model's own rotation when absent.
+   */
+  readonly rest?: Vec3;
 }
 
 /** Body-owned spring state. Only rotations are written; the rig keeps every joint and segment length. */
@@ -28,8 +36,14 @@ export class Springs {
     binding.object.updateWorldMatrix(true, true);
     for (const [root, settings] of Object.entries(species.springs ?? {})) {
       if (!settings) continue;
-      if (!binding.bones[root]) throw new Error(`springs: no bone "${root}"`);
-      const stiffness = settings.stiffness ?? 40, damping = settings.damping ?? 0.7;
+      const node = binding.bones[root];
+      if (!node) throw new Error(`springs: no bone "${root}"`);
+      if (settings.rest) {
+        if (!settings.rest.every(Number.isFinite)) throw new Error(`springs.${root}.rest: give finite angles`);
+        node.quaternion.setFromEuler(new Euler(...settings.rest));
+        node.updateWorldMatrix(false, true);
+      }
+      const stiffness = settings.stiffness ?? STIFFNESS, damping = settings.damping ?? 0.7;
       for (const [name, value] of Object.entries({ stiffness, damping })) {
         if (!(value >= 0 && Number.isFinite(value))) throw new Error(`springs.${root}.${name}: give a finite nonnegative number`);
       }

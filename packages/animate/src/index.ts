@@ -23,7 +23,7 @@ export type { HandPart, HandPlacement } from './fingers/placement';
 
 export type { Gazer, LegRole, Range, Roles, Tuning, Vec3 } from './species/define';
 export type { Inertial } from './kernel/inertia';
-export type { Spring } from './springs/springs';
+export type { Spring } from './springs';
 export type { Carriage, Gait } from './species/gait';
 export type { JointCycle } from './species/cycle';
 export type { CarriedBones } from './species/carriage';

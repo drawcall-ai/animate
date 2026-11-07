@@ -10,7 +10,7 @@ import { Skeleton, type BoneDef, type Limit } from '../kernel/skeleton';
 import type { Proportions } from './humanoid/proportions';
 import type { Stride } from './humanoid/humanoid';
 import type { DigitBones } from '../fingers/bones';
-import type { Spring } from '../springs/springs';
+import type { Spring } from '../springs';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {

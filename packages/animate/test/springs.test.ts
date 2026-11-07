@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { expect, test } from 'vitest';
 import { Body, humanoid, species, type Spring } from '../src/index';
 import { Binding } from '../src/body/model';
-import { Springs } from '../src/springs/springs';
+import { Springs } from '../src/springs';
 import { PERSON } from '../skills/animate/references/person';
 
 const CHAIN = [
@@ -37,6 +37,12 @@ test('a hanging chain stays at rest, then lags a moving root and settles without
   }
   expect(swing).toBeGreaterThan(0.02);
   expect(position(bones.tip).x).toBeCloseTo(0.12, 5);
+});
+
+test('a rest turn replaces the root\'s rotation in the model', () => {
+  const { bones, step } = chain({ rest: [Math.PI, 0, 0], gravity: [0, 0, 0] });
+  for (let i = 0; i < 60; i++) step();
+  expect(position(bones.tip).distanceTo(new Vector3(0, 1.4, 0))).toBeLessThan(1e-6);
 });
 
 test('gravity bends a horizontal chain, and very stiff settings stay finite', () => {

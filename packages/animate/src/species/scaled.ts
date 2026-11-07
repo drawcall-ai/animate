@@ -4,7 +4,7 @@ import type { LegChain } from './leg';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton } from '../kernel/skeleton';
 import type { Species } from './define';
-import type { Spring } from '../springs/springs';
+import { STIFFNESS, type Spring } from '../springs';
 
 /**
  * `species` at `size` times its size: its bones, its feet and its eyes `size` times as far apart, each bone `size`³ as heavy, and its
@@ -39,7 +39,7 @@ function springsAt<Bone extends string>(springs: Species<Bone>['springs'], size:
   const result: Partial<Record<Bone, Spring>> = {};
   for (const root in springs) {
     const spring = springs[root];
-    if (spring) result[root] = { ...spring, stiffness: (spring.stiffness ?? 40) / size };
+    if (spring) result[root] = { ...spring, stiffness: (spring.stiffness ?? STIFFNESS) / size };
   }
   return result;
 }

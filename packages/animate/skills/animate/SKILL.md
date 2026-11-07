@@ -144,7 +144,7 @@ Bodies of one size that start together move in sync and read as copies: give eac
 
 ## Spring bones
 
-For hair, tails, antennae and other freely swinging bone chains, add `springs` to the species, keyed by an existing root bone:
+For hair, tails, antennae and other freely swinging bone chains, add `springs` to the species, keyed by an existing root bone; one setting covers the whole hierarchy below it:
 
 ```ts
 import { Body, humanoid, type HumanoidBone } from '@drawcall/animate';
@@ -156,17 +156,12 @@ declare const model: Object3D;
 
 const fighter = {
   ...humanoid(skeleton),
-  springs: { braid: { stiffness: 18, damping: 0.55 } },
+  springs: { braid: { stiffness: 18, damping: 0.55, rest: [-2.2, 0, 0] } },
 };
 const body = new Body(fighter, { model });
-// body.update(dt) advances the springs after the normal pose, at the body's fixed timestep.
 ```
 
-`{ braid: {} }` uses defaults: stiffness 40 s⁻², damping ratio 0.7, world gravity `[0, -9.81, 0]` m/s². Higher stiffness holds the input pose more firmly; damping 1 is critical, lower values swing longer. `gravity: [0, 0, 0]` removes gravity. Settings apply to the entire descendant hierarchy; custom `species()` also accepts the same record in its tuning argument. Each body owns its own simulation state.
-
-The rig supplies links, lengths and endpoints. A joint with multiple bone children keeps its input rotation; each child chain swings independently. A leaf is an endpoint and needs no setting. Overlapping spring roots and zero-length links are errors. The simulation changes rotations, preserving joint offsets and lengths; it does not simulate mesh cloth, collisions or self-collision. Keep spring motion on bones whose final rotations may yield to it.
-
-Rig hair clear of the body (an upright braid is useful for weight separation). After skinning, turn its root into the desired hanging rest pose on the model **before constructing the body**; keep the skin's inverse bind matrices unchanged. The shooter example's `assets/fighter.glts` and `src/fighter.ts` show this workflow.
+A joint with several bone children keeps its input rotation while each child chain swings on its own; a leaf is an endpoint. Springs turn bones but never collide, with the body or anything else, so put them only on bones no verb poses. Skin hair standing clear of the body, so its weights do not bleed into the head or torso, and give its root the hanging `rest` turn.
 
 ## Places and paths
 
