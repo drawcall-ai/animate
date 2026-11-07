@@ -34,7 +34,7 @@ describe('bodies together', () => {
     expect(taker.holds(load)).toBe(true);
     expect(worldOf(load).distanceTo(worldOf(shelf))).toBeLessThan(0.01);
     expect([...giver.log, ...taker.log]).toEqual([]);
-  }, 20000);
+  });
 
   it('says so when a hand is sent to a grip another body’s hand holds', () => {
     const giver = person({ dev: true }), taker = person({ dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
@@ -73,7 +73,7 @@ describe('bodies together', () => {
     expect(owner.holds(stick)).toBe(true);
     expect(labrador.holds(stick)).toBe(false);
     expect([...owner.log, ...labrador.log]).toEqual([]);
-  }, 20000);
+  });
 
   it('a horse walks after a person and looks at it, whichever of them updates first', () => {
     const run = (horseFirst: boolean) => {
@@ -95,7 +95,7 @@ describe('bodies together', () => {
     // (each reads the other as it was before this frame's updates: the order they update in changes nothing)
     expect(before.mare.equals(after.mare) && before.groom.equals(after.groom)).toBe(true);
     expect(after.mare.distanceTo(new Vector3(-2, 0, 0))).toBeGreaterThan(3);
-  }, 20000);
+  });
 
   it('a person looks another in the eyes, following them as the other walks past', () => {
     const watcher = person({ dev: true }), walker = person({ dev: true, at: new Vector3(-2, 0, 1.5), face: Math.PI / 2 });
@@ -116,7 +116,7 @@ describe('bodies together', () => {
     expect(most).toBeLessThan(0.02);
     expect([...watcher.log, ...walker.log]).toEqual([]);
     expect(() => lookAt(watcher, watcher)).toThrow('its own eyes');
-  }, 20000);
+  });
 });
 
 it('a dog reaches an object’s orientation as well as its position', () => {

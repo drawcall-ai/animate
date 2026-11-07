@@ -3,6 +3,8 @@ import type { Frame } from '../../kernel/frame';
 import { solveChain } from '../../kernel/chain';
 import type { Dev } from '../../kernel/dev';
 import { clampRotation } from '../../kernel/limits';
+import { REACH } from '../../kernel/tip';
+import { bisect } from '../../kernel/math';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
 import type { Proportions } from '../../species/humanoid/proportions';
@@ -28,8 +30,6 @@ const SECTOR = Math.PI / 3;
 /** Tuned: how far a nudge may move a braked joint in a sub-step, as a share of what its dev-checked acceleration moves it from rest
  * (half: a step that takes no more than half of that check) */
 const NUDGE = 0.5;
-/** the share of the arm's length a wrist goal is judged at, out of reach (as `ChainTip` lets a tip out) */
-const REACH = 0.98;
 /** the elbow's swivels tried about the shoulder–wrist line, each way (`SWIVEL.steps` of `SWIVEL.step` rad) */
 const SWIVEL = { steps: 4, step: Math.PI / 12 };
 
@@ -142,17 +142,8 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
       if (limit) clampRotation(q, limit);
       pose.setLocal(bone, q);
     });
-    let out = 0, inn = most;
-    toward(most);
-    if (armDepth(pose, proportions, side, upper, clear) <= clear) {
-      for (let k = 0; k < 10; k++) {
-        const mid = (out + inn) / 2;
-        toward(mid);
-        if (armDepth(pose, proportions, side, upper, clear) <= clear) inn = mid;
-        else out = mid;
-      }
-    }
-    toward(inn);
+    const clears = (share: number) => (toward(share), armDepth(pose, proportions, side, upper, clear) <= clear);
+    toward(clears(most) ? bisect(clears, most, 0, 10) : most);
   };
   const fits = (push: number) => {
     const goal = _goal.copy(tip.position).addScaledVector(forward, push);
@@ -178,6 +169,12 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
   return pushed;
 }
 
+/** whether arm `side`, as `pose` has it, keeps clear of the trunk as a solve keeps it */
+export function armClear(pose: ReadonlyPose, proportions: Proportions, side: Side): boolean {
+  const clear = -AIR * proportions.height, shoulder = pose.position(INDEX[`${side}UpperArm`]);
+  return armDepth(pose, proportions, side, Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth), clear) <= clear;
+}
+
 /** the least push from `least` that `fits` (left fitted): stepped out from `step`, doubling, then halved in on (`halvings`, to `within`); none past `most` */
 function leastPush(fits: (push: number) => boolean, least: number, step: number, most: number, halvings: number, within: number): number | null {
   let lo = least, hi = least;
@@ -185,11 +182,7 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
     if (hi > least + most) return null;
     [lo, hi] = [hi, hi + step];
   }
-  for (let k = 0; k < halvings && hi - lo > within; k++) {
-    const mid = (lo + hi) / 2;
-    if (fits(mid)) hi = mid;
-    else lo = mid;
-  }
+  hi = bisect(fits, hi, lo, halvings, within);
   fits(hi);
   return hi;
 }

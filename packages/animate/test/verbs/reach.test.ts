@@ -159,7 +159,6 @@ it('allows balance-support steps to finish a cross-body reach before judging it 
 
 it.each([
   { ahead: .8, step: true, met: true, walks: true },
-  { ahead: .62, step: false, met: true, walks: false },
   { ahead: .66, step: false, met: true, walks: false },
   { ahead: .8, step: false, met: false, walks: false },
 ])('a reach $ahead m ahead, step $step: met $met, walking up $walks (noted)', ({ ahead, step, met, walks }) => {

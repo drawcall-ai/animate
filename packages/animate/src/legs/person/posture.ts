@@ -117,10 +117,10 @@ export class Posture {
     this.inertia = inertia ? new Inertia(inertia) : null;
   }
 
-  /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist` and `lean`
-   * (rad, sideways: + its left side up) as balance has them */
-  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number; lean: number }, out: Trunk, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
-    const { lower, bow, twist, lean: bent } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
+  /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist`, `lean`
+   * (rad, sideways: + its left side up) and the pelvis's turn off the facing (`hips`) as balance has them */
+  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: Trunk, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
+    const { lower, bow, twist, lean: bent, hips = 0 } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;
     const fwd = forwardOf(upright.yaw, _f), left = leftOf(upright.yaw, _l);
@@ -172,7 +172,7 @@ export class Posture {
     const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
     // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
     const tilt = 0.5 * nod + pelvisTilt(proportions, lower, bow) + TILT * run;
-    quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade, tilt, roll, upright.pelvisRotation);
+    quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade + hips, tilt, roll, upright.pelvisRotation);
     pelvis.y = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),

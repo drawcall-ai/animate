@@ -1,6 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { arriving, carry, grab, release, wait, type Body } from '../../src/index';
+import { arriving, Body, carry, grab, humanoid, release, throwAt, wait } from '../../src/index';
+import { SOLDIER } from '../soldier';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -62,7 +63,7 @@ describe('carry', () => {
     expect(lastRise).toBeGreaterThan(0.01);
     expect(held.most).toBeLessThan(0.03);
     expect(body.log).toEqual([]);
-  }, 20000);
+  });
 
   it('lifts a heavy load slower than a light one, and dips with it as it takes its weight', () => {
     const lift = (mass: number) => {
@@ -139,7 +140,7 @@ describe('carry', () => {
     expect(worldOf(load).distanceTo(worldOf(table))).toBeLessThan(0.01);
     expect(held.most).toBeLessThan(0.03);
     expect(body.log).toEqual([]);
-  }, 20000);
+  });
 
   // (the trial that found it: a bearer who walks a medal to the princess; `arriving` said he was all but there while he lifted it, 1.9 m
   // off, and her grab went for a medal still on its way)
@@ -164,7 +165,7 @@ describe('carry', () => {
       // (arriving within 0.6 s, as the walk ends and the raise begins: the thing within about a stride of its place, not across the room)
       expect(far).toBeLessThan(0.8 * scale);
       expect(body.log).toEqual([]);
-    }, 20000);
+    });
 
   // (the trial that found it: a princess standing on a kneeling hero hung a medal at his neck, inside her own trunk; the carry said true
   // with the medal 36 cm off his neck)
@@ -191,8 +192,8 @@ describe('carry', () => {
     const far = outcome(new Vector3(0, 1.3, 0.76));
     expect(far.carried).toBe(false);
     expect(far.off).toBeGreaterThan(0.01);
-    expect(far.log).toEqual([{ check: 'late carry: course end distance after 2 s (m)', detail: expect.stringContaining('beyond the arm’s reach') }]);
-  }, 20000);
+    expect(far.log).toEqual([{ check: expect.stringMatching(/^late carry: course end distance after/), detail: expect.stringContaining('beyond the arm’s reach') }]);
+  });
 
   it('throws when no hand holds what it is asked to carry', () => {
     const body = person(), room = roomOf(body);
@@ -259,8 +260,8 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('says in development when a thing is let go in mid-air, put onto an empty far off it, or onto one already taken', () => {
-    const body = person({ dev: true }), room = roomOf(body);
+  it('says in development when a thing is put onto an empty far off it, or onto one already taken, and notes one let go in mid-air', () => {
+    const body = person({ dev: { notes: true } }), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 1, solid: false });
     const other = box(room, new Vector3(1, 0.9, 1), { name: 'other', mass: 1, solid: false });
     const far = empty(room, 'far', new Vector3(1, 0.9, 1));
@@ -282,6 +283,85 @@ describe('release', () => {
       release(body, loose);
       done = true;
     }, [body], 8, () => done);
-    expect(body.log.map(({ check }) => check).slice(2)).toEqual(['let go in mid-air: its lowest point above the ground (m)']);
+    expect(body.log.map(({ check }) => check).slice(2)).toEqual([]);
+    expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
+  });
+
+  for (const [driven, height, low, soldier] of [[false, 1.75, true, false], [true, 1.75, true, false], [true, 1.6, true, false], [false, 1.9, true, false], [false, 1.75, false, false], [true, 1.8, false, true]] as const) it(`throws overhand at a target (${soldier ? 'the short-armed soldier' : `${height} m`}${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
+    const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
+    const options = { dev: true, ...(driven && { drive: () => root }) };
+    const body: Body = soldier ? new Body(humanoid(SOLDIER), options) : person(options, height), room = roomOf(body);
+    // (taken up from low, before the belly, or from before the chest)
+    const ball = box(room, low ? new Vector3(-0.12, 0.55 * height, 0.28) : new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
+    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
+    const target = new Vector3(0, 0, 15);
+    let behind = 0, thrown: Vector3 | null = null, after = new Vector3(), thrownFrom = new Vector3(), ended = false, done = false;
+    let ahead = 0, upright = Infinity, raised = -Infinity, hand = new Vector3(), flip = 0, last: Quaternion | null = null;
+    play(function* () {
+      yield* grab(body, ball, { right: 'body' });
+      yield* throwAt(body, ball, target, { released: ({ velocity }) => { thrown = velocity; thrownFrom = worldOf(ball); } });
+      after = body.object.worldToLocal(body.bones.rightHand.getWorldPosition(new Vector3()));
+      ended = true;
+      yield* wait(1.5);
+      done = true;
+    }, [body], 8, () => {
+      // (how far behind the head, at its height, the hand cocks the ball)
+      const head = body.bones.head.getWorldPosition(new Vector3()), at = body.bones.rightHand.getWorldPosition(new Vector3());
+      if (body.holds(ball) && Math.abs(at.y - head.y) < 0.15) behind = Math.max(behind, head.z - at.z);
+      // (the upper arm's largest turn in a sub-step, in the chest's frame)
+      const arm = body.bones.chest.getWorldQuaternion(new Quaternion()).invert().multiply(body.bones.rightUpperArm.getWorldQuaternion(new Quaternion()));
+      if (last) flip = Math.max(flip, arm.angleTo(last));
+      last = arm;
+      if (ended) {
+        // (once the throw has ended: how far ahead of the feet the head runs on, and how high the free hand swings above its shoulder)
+        const local = body.object.worldToLocal(head.clone());
+        ahead = Math.max(ahead, local.z);
+        upright = local.z;
+        raised = Math.max(raised, at.y - body.bones.rightUpperArm.getWorldPosition(new Vector3()).y);
+        hand = body.object.worldToLocal(at.clone());
+      }
+      return done;
+    });
+    expect(behind).toBeGreaterThan(0.05);
+    expect(ball.parent).toBe(room);
+    // (aimed: on its arc from where it left the hand, it comes down at the target)
+    const v = thrown ?? new Vector3(), flight = (2 * v.y) / 9.81 + 0.3;
+    expect(Math.abs(thrownFrom.z + v.z * flight - target.z)).toBeLessThan(3);
+    expect(after.y).toBeLessThan(1.1);
+    // (the trunk checked rather than bowing on past the follow-through — bowing on, the head ran 0.5 m ahead of the feet — and upright again)
+    expect(ahead).toBeLessThan(0.36);
+    expect(upright).toBeLessThan(0.05);
+    // (the arm, free, let hang by the side: taken over at its whip's speed, it flew up past the shoulder)
+    expect(raised).toBeLessThan(-0.2);
+    // (no flip of the elbow over the shoulder: a short-armed body's upper arm, its elbow let loose after the release, turned 130–180° in a
+    // sub-step; a whip's own swing is under 60°)
+    expect(flip).toBeLessThan(Math.PI / 3);
+    expect(Math.abs(hand.x)).toBeLessThan(0.35 * height / 1.75);
+    expect(body.log).toEqual([]);
+  });
+
+  // (a target on the body given as an object or by a function: either way the carry ends with the thing there and turned, and keeps it so)
+  for (const kind of ['an object', 'a function'] as const) it(`turns what one hand holds as a turned empty on the body asks, given as ${kind}`, () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.2, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4 });
+    Object.assign(empty(ball, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [0, 0, -1], radius: 0.03 });
+    const place = empty(body.object, 'ready', new Vector3());
+    place.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), -2.2);
+    const ready = () => {
+      place.position.copy(body.object.worldToLocal(body.armPoint('right', new Vector3(0.18, 0.08, 0.98), 0.85)));
+      place.updateMatrixWorld();
+      return place;
+    };
+    const off = () => ball.getWorldQuaternion(new Quaternion()).angleTo(place.getWorldQuaternion(new Quaternion()));
+    const outcomes: boolean[] = [];
+    let ended = Infinity;
+    play(function* () {
+      outcomes.push(yield* grab(body, ball, { right: 'grip' }));
+      outcomes.push(yield* carry(body, ball, kind === 'an object' ? ready() : () => ready(), { step: false }));
+      ended = off();
+    }, [body], 6, () => void ready());
+    expect(outcomes).toEqual([true, true]);
+    expect(ended).toBeLessThan(0.06);
+    expect(off()).toBeLessThan(0.06);
   });
 });

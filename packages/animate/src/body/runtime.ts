@@ -17,16 +17,18 @@ import { Carrier } from '../kernel/carrier';
 import { yawOf } from '../kernel/math';
 import { Binding } from './model';
 import { PlatformFrame } from './platform';
-import { anchors, movers, oriented, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
+import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
-import type { Placement } from '../kernel/goal';
+import type { Goal, Placement } from '../kernel/goal';
 import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
 import { creature } from '../legs/creature';
 import { creatureHands, keeping } from '../hands/creature/hands';
 import type { Handling } from '../hands/handling';
 import { FLAT, type Floor } from '../legs/floor';
 import { FingerState } from '../fingers/state';
+import { Orient } from './orient';
+import { checkShear, massed, restPose } from './setup';
 
 /** How a body is made. */
 export interface SelfOptions {
@@ -109,8 +111,8 @@ export class Self implements Holder {
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
-  /** the nodes on it its app keeps turned in the world (`orient`), each written so as it updates */
-  private readonly turned = new Map<Object3D, Quaternion>();
+  /** the nodes on it its app keeps turned in the world (`orient`) */
+  readonly oriented = new Orient(this);
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
   lastMover = -Infinity;
@@ -178,6 +180,11 @@ export class Self implements Holder {
   }
 
   private handled: Handling | null = null;
+
+  /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now: a creature's, wherever it reaches */
+  holds(_f: Frame, _hand: string, _wrist: Goal): boolean {
+    return true;
+  }
 
   /** a creature's hands: one at a time, each the tip of its chain */
   protected handle(): Handling {
@@ -381,23 +388,18 @@ export class Self implements Holder {
     }
     this.updates++;
     this.binding.write(this.pose, this.floor);
-    for (const [node, rotation] of this.turned) {
-      node.parent?.updateWorldMatrix(true, false);
-      node.quaternion.copy(node.parent ? node.parent.getWorldQuaternion(_turn).invert().multiply(rotation) : rotation);
-    }
-    this.fingers?.update(seconds, this.time, this.frame.dt);
+    this.oriented.write();
+    this.fingers?.update(seconds);
   }
 
-  /** keeps `node` turned to `rotation` in the world, its position following its parent (none: lets it go) */
-  orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    if (!rotation) {
-      oriented.delete(node);
-      this.turned.delete(node);
-      return;
+  /** each hand's digits' contacts met this sub-step (`FingerState.meet`), the hand where its hold left it */
+  private meetContacts(fingers: FingerState, f: Frame): void {
+    for (const side of ['left', 'right'] as const) {
+      const hand = this.hands[side];
+      if (hand === undefined) continue;
+      const at = { position: f.current.position(hand).clone(), quaternion: f.current.rotation(hand).clone().multiply(this.restOf(hand)), scale: this.scaleOf(hand) };
+      fingers.meet(side, at, (object) => this.track(object).at(f.time).current);
     }
-    const turned = (this.turned.get(node) ?? new Quaternion()).copy(rotation);
-    oriented.set(node, turned);
-    this.turned.set(node, turned);
   }
 
   /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
@@ -444,6 +446,7 @@ export class Self implements Holder {
     if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
+    this.oriented.step(f);
     for (const request of [...this.requests]) {
       request.stage(f);
       if (!request.owned) continue;
@@ -472,6 +475,7 @@ export class Self implements Holder {
       if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);
       else if (this.holding[hand]) behaviours.keep?.(f, hand);
     }
+    if (this.fingers) this.meetContacts(this.fingers, f);
     behaviours.things?.(f);
     current.forward();
     // (keep the two update-start poses intact, including across multiple sub-steps)
@@ -490,57 +494,10 @@ export interface Behaviours {
   things?: Step;
 }
 
-/** the species' skeleton, its masses for a body of `mass` kg (a skin report's closed volume at 1000 kg/m³, kept within a sane range) */
-function massed(species: AnySpecies, mass: SelfOptions['mass'], dev?: Dev): Skeleton {
-  if (mass === undefined) return species.skeleton;
-  const total = typeof mass === 'number' ? mass : volumeMass(species, mass, dev);
-  if (!(total > 0 && Number.isFinite(total))) throw new Error(`a body of ${total} kg`);
-  if (total === species.mass) return species.skeleton;
-  const { skeleton } = species, share = total / species.mass;
-  const chains = Object.fromEntries(skeleton.chainNames().map((name) => [name, skeleton.chain(name).map((bone) => skeleton.bones[bone].name)]));
-  return new Skeleton(skeleton.bones.map((bone) => ({ ...bone, mass: bone.mass * share })), { limits: skeleton.limits.filter((limit) => limit !== undefined), chains });
-}
-
-/** a body's mass from a mesh's volume as `SelfOptions.mass` takes it */
-function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'volume'>, dev?: Dev): number {
-  if (!report.closed || report.volume === null) {
-    dev?.append(0, { check: "an open mesh's volume (its species' mass taken, kg)", value: species.mass, limit: 0, where: 'mass' });
-    return species.mass;
-  }
-  const mass = report.volume * 1000, held = Math.min(2 * species.mass, Math.max(species.mass / 2, mass));
-  if (held !== mass) dev?.append(0, { check: "a mesh's mass past half or twice its species' (kg)", value: mass, limit: held, where: 'mass' });
-  return held;
-}
-
-/** the skeleton's rest pose standing on `floor` at `at` (its x and z) facing `face` */
-function restPose(skeleton: Skeleton, floor: Floor, at?: Vector3, face = 0): Pose {
-  const pose = new Pose(skeleton), root = pose.position(0), x = at?.x ?? root.x, z = at?.z ?? root.z;
-  pose.setRoot(new Vector3(x, root.y + floor(x, z), z));
-  pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), face).multiply(pose.local(0)));
-  pose.facing = face;
-  pose.forward();
-  return pose;
-}
-
-/** development: a model's bones neither sheared nor scaled unevenly at rest, relative to the body (rig's own contract) */
-function checkShear(binding: Binding, dev: Dev): void {
-  binding.object.updateMatrixWorld(true);
-  const inverse = new Matrix4().copy(binding.object.matrixWorld).invert();
-  // (a pose turns and moves bones, so each must rest as a turn, a move and one scale: its matrix what those recompose to, as rig checks it)
-  const close = (a: number, b: number) => Math.abs(a - b) <= 1e-8 * Math.max(1, Math.abs(a), Math.abs(b));
-  for (const [name, node] of Object.entries(binding.bones)) {
-    const rest = new Matrix4().multiplyMatrices(inverse, node.matrixWorld), position = new Vector3(), turn = new Quaternion(), scale = new Vector3();
-    rest.decompose(position, turn, scale);
-    const recomposed = new Matrix4().compose(position, turn, scale).elements;
-    const even = close(Math.abs(scale.x), Math.abs(scale.y)) && close(Math.abs(scale.y), Math.abs(scale.z));
-    if (!even || !rest.elements.every((x, k) => close(x, recomposed[k]))) dev.append(0, { check: 'a bone sheared or scaled unevenly at rest', value: 1, limit: 0, where: name });
-  }
-}
-
 const IDENTITY = new Matrix4();
 /** the longest frame an update takes (s): a body does not run on through a stall */
 const MOST = 0.1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
-const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() }, _turn = new Quaternion();
+const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };
 const EMPTY: readonly LogEntry[] = Object.freeze([]);

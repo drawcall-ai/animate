@@ -9,7 +9,7 @@ import type { Vector3 } from 'three';
 export interface Posture {
   /** the trunk bowed forward at the hips and back (rad, + forward; − arches it back, the chest lifting) */
   bow?: number;
-  /** the chest turned off the hips (rad, + to its left) */
+  /** the chest turned off the hips (rad, + to its left: the right shoulder forward, the left back; − winds a right-handed throw up) */
   twist?: number;
   /** the trunk bent sideways (rad, + its left side up: leaning to its right) */
   lean?: number;
@@ -45,14 +45,14 @@ export interface ArmPosture {
 export type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
 
 /** What a body is asked to do with its stance this sub-step (see `Poise`), each field as it combines with the others asked. */
-export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'twist' | 'twistRate' | 'shift' | 'steady'>> & { posture?: TrunkPosture };
+export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'bowRate' | 'twist' | 'twistRate' | 'hips' | 'stagger' | 'shift' | 'steady'>> & { posture?: TrunkPosture };
 
 /**
  * How a body is asked to hold itself over its legs this sub-step — what each of its parts may ask at once and balance serves together:
  * let down or bowed for a reach, turned for an aim, shifted toward what a hand falls short of, held still, and posed as a story asks.
  * Each field combines one way: the deepest `lower` and `bow` (rising onto the toes only while none asks down), the least `bowLimit`, the
- * largest `twist`, `twistRate`, `shift` and `steady`; a `posture` is summed and added onto them all. Balance takes what was asked at the
- * start of its sub-step and clears it (so it acts on it a sub-step later).
+ * largest `twist`, `hips`, `twistRate`, `bowRate`, `shift` and `steady`, the last `stagger`; a `posture` is summed and added onto them
+ * all. Balance takes what was asked at the start of its sub-step and clears it (so it acts on it a sub-step later).
  */
 export class Poise {
   /** let the pelvis down by the knees (m; negative: up onto the toes) */
@@ -65,6 +65,12 @@ export class Poise {
   twist = 0;
   /** the most (rad/s) the twist is taken up at — 0: at balance's own pace, a squat's; an aim's quicker, tracking a turning look */
   twistRate = 0;
+  /** the most (rad/s) the bow is taken up at — 0: at balance's own pace, a squat's; a throw's quicker */
+  bowRate = 0;
+  /** turn the pelvis off the standing facing (rad), the legs reaching from it, at `twistRate` (a throw's hips leading its chest) */
+  hips = 0;
+  /** each foot's home put this far ahead of where it stands (m, by leg, left first): a foot off it steps there (a throw's stride) */
+  stagger: readonly number[] | null = null;
   /** standing, shift the weight this far (m, on the floor) within the feet: toward what a hand falls short of */
   shift: Vector3 | null = null;
   /** hold still (0 at ease … 1 aiming): its quiet life — breathing, sway, weight shifts — fades by it */
@@ -74,12 +80,15 @@ export class Poise {
 
   /** `asked` on top of what it holds, each field combined by its rule */
   add(asked: Asked): void {
-    const { lower, bow, bowLimit, twist, twistRate, shift, steady, posture } = asked;
+    const { lower, bow, bowLimit, bowRate, twist, twistRate, hips, stagger, shift, steady, posture } = asked;
     if (lower !== undefined) this.lower = deeper(this.lower, lower);
     if (bow !== undefined) this.bow = deeper(this.bow, bow);
     if (bowLimit !== undefined) this.bowLimit = Math.min(this.bowLimit, bowLimit);
     if (twist !== undefined && Math.abs(twist) > Math.abs(this.twist)) this.twist = twist;
     if (twistRate !== undefined) this.twistRate = Math.max(this.twistRate, twistRate);
+    if (bowRate !== undefined) this.bowRate = Math.max(this.bowRate, bowRate);
+    if (hips !== undefined && Math.abs(hips) > Math.abs(this.hips)) this.hips = hips;
+    if (stagger) this.stagger = stagger;
     if (shift && shift.length() > (this.shift?.length() ?? 0)) this.shift = shift;
     if (steady !== undefined) this.steady = Math.max(this.steady, steady);
     if (posture) for (const key of TRUNK) this.posture[key] += posture[key];
@@ -87,8 +96,9 @@ export class Poise {
 
   /** what it holds, copied into `into`, and itself cleared */
   pass(into: Poise): Poise {
-    [into.lower, into.bow, into.bowLimit, into.twist, into.twistRate, into.shift, into.steady] = [this.lower, this.bow, this.bowLimit, this.twist, this.twistRate, this.shift, this.steady];
-    [this.lower, this.bow, this.bowLimit, this.twist, this.twistRate, this.shift, this.steady] = [0, 0, Infinity, 0, 0, null, 0];
+    [into.lower, into.bow, into.bowLimit, into.bowRate, into.twist, into.twistRate, into.hips, into.stagger, into.shift, into.steady] =
+      [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady];
+    [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady] = [0, 0, Infinity, 0, 0, 0, 0, null, null, 0];
     for (const key of TRUNK) {
       into.posture[key] = this.posture[key];
       this.posture[key] = 0;

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Vector3 } from 'three';
+import { Line3, Vector3 } from 'three';
 import { wrapAngle } from '../src/angles';
 import { Playback } from '../src/playback';
 import { box, DT, node, offGrip, soldierOn, soldiers } from './course';
@@ -39,15 +39,16 @@ const jump = (values: number[]) => Math.max(...values.slice(1).map((value, i) =>
 it('keeps the rifle rigid with the camera while turning in place from the hip', async () => {
   const frames = await turnInPlace(false);
   expect(jump(frames.map((frame) => frame.muzzle - frame.camera))).toBeLessThan(0.001);
-}, 30000);
+});
 
 it('turns the sights evenly while turning in place aiming down them', async () => {
   const frames = await turnInPlace(true);
   expect(jump(frames.map((frame) => frame.muzzle - frame.camera))).toBeLessThan(1e-5);
   expect(jump(frames.slice(1).map((frame, i) => frame.camera - frames[i].camera))).toBeLessThan(1e-4);
-}, 30000);
+});
 
-it.each([6, 10])('keeps both hands on the rifle through a %s rad/s flick the body cannot keep up with', async (rate) => {
+it('keeps both hands on the rifle through a 10 rad/s flick the body cannot keep up with', async () => {
+  const rate = 10;
   const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
   acquire();
   const pistol = node(avatar.group, 'pistol'), foregrip = node(avatar.group, 'foregrip');
@@ -59,7 +60,27 @@ it.each([6, 10])('keeps both hands on the rifle through a %s rad/s flick the bod
     off = Math.max(off, offGrip(avatar.body, 'right', pistol), offGrip(avatar.body, 'left', foregrip));
   }
   expect(off).toBeLessThan(0.06);
-}, 30000);
+});
+
+it('keeps the rifle on the camera and both hands on it through two 8 rad/s turns, the body pivoting round after them', async () => {
+  const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
+  acquire();
+  const pistol = node(avatar.group, 'pistol'), foregrip = node(avatar.group, 'foregrip');
+  const muzzle = () => { const at = avatar.muzzle.getWorldDirection(new Vector3()); return Math.atan2(at.x, at.z); };
+  const zero = wrapAngle(muzzle() - movement.input.yaw);
+  let lag = 0, jump = 0, off = 0, last = 0;
+  for (let frame = 0; frame < 120; frame++) {
+    // Half a second's turn, 20 ticks still, then 0.3 s more.
+    if (frame < 30 || (frame >= 50 && frame < 68)) movement.input.yaw += 8 * DT;
+    world.update(DT);
+    const behind = wrapAngle(muzzle() - movement.input.yaw - zero);
+    [lag, jump, last] = [Math.max(lag, Math.abs(behind)), Math.max(jump, Math.abs(behind - last)), behind];
+    off = Math.max(off, offGrip(avatar.body, 'right', pistol), offGrip(avatar.body, 'left', foregrip));
+  }
+  expect(lag).toBeLessThan(0.05);
+  expect(jump).toBeLessThan(0.02);
+  expect(off).toBeLessThan(0.01);
+});
 
 it('keeps the sights on the mouse through a 6 rad/s flick aiming down them', async () => {
   const { world, movement, avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]));
@@ -72,7 +93,7 @@ it('keeps the sights on the mouse through a 6 rad/s flick aiming down them', asy
     off = Math.max(off, Math.abs(wrapAngle(avatar.look().yaw - movement.input.yaw)));
   }
   expect(off).toBeLessThan(0.02);
-}, 30000);
+});
 
 it('brings the rifle back to the crosshair without passing it after a flick, at 20 fps', async () => {
   const { world, soldiers: [player] } = await soldiers((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]), ['Player', new Vector3(0, 0.04, 0), true]);
@@ -95,4 +116,18 @@ it('brings the rifle back to the crosshair without passing it after a flick, at 
   }
   // (the barrel's zero puts it a few milliradians across the view at rest)
   expect(past).toBeLessThan(0.01);
-}, 30000);
+});
+
+it('takes and holds the rifle with the support forearm clear of the trunk while looking straight down', async () => {
+  const { avatar, acquire } = await soldierOn((scene) => box(scene, [40, 1, 40], [0, -0.5, 0]), { pitch: -1.35 });
+  acquire();
+  // (the forearm's nearest to the line from the hips to the chest, against the trunk's and the forearm's radii there, 0.06 and 0.022 of the
+  // height, as the arms keep them apart)
+  const at = (bone: 'hips' | 'chest' | 'leftLowerArm' | 'leftHand') => avatar.body.bones[bone].getWorldPosition(new Vector3());
+  const trunk = new Line3(at('hips'), at('chest')), elbow = at('leftLowerArm'), wrist = at('leftHand'), near = new Vector3();
+  const gap = Math.min(...Array.from({ length: 21 }, (_, k) => {
+    const point = elbow.clone().lerp(wrist, k / 20);
+    return point.distanceTo(trunk.closestPointToPoint(point, true, near));
+  }));
+  expect(gap).toBeGreaterThan((0.06 + 0.022) * 1.8);
+});

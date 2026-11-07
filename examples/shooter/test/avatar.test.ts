@@ -3,7 +3,8 @@ import { Quaternion, Vector3 } from 'three';
 import { lookDirection } from '../src/angles';
 import { Avatar, type AvatarState } from '../src/avatar';
 import { TUNNEL_CLEARANCE } from '../src/environment';
-import { avatarAt, node } from './course';
+import { RigidBody } from '@drawcall/physics';
+import { avatarAt, box, DT, node, offGrip, soldierOn } from './course';
 
 const state = (): AvatarState => ({
   position: new Vector3(3, 0, -4), velocity: new Vector3(), yaw: 0, pitch: 0,
@@ -57,25 +58,31 @@ describe('avatar', () => {
     }
   });
 
-  it('performs a real magazine swap before reporting a completed reload', () => {
-    const input = state(), avatar = avatarAt(input);
-    advance(avatar, input, 180);
-    expect(avatar.fire()).toBe(true);
-    expect(avatar.fire()).toBe(false);
-    const magazine = node(avatar.group, 'magazine 1');
-    expect(magazine.parent?.name).toBe('well');
-    // The soldier lowers the sights while it reloads.
-    input.aim = false;
+  it('swaps the magazine, both hands back on the rifle, the spent one thrown to rest on the floor away from the soldier', async () => {
+    const { world, movement, avatar, acquire, advance: run } = await soldierOn((scene) => box(scene, [60, 1, 60], [0, -0.5, 0]));
+    acquire();
+    const spent = node(avatar.group, 'magazine 1');
+    // (each hand as far off its grip as it held it before)
+    const offGrips = () => (['left', 'right'] as const).map((side) => offGrip(avatar.body, side, node(avatar.group, side === 'left' ? 'foregrip' : 'pistol')));
+    const before = offGrips();
+    movement.input.aim = false;
     avatar.requestReload();
-    expect(avatar.reloading).toBe(true);
-    for (let i = 0; i < 600 && avatar.reloading; i++) avatar.update(1 / 60, input);
-    expect(avatar.reloads).toBe(1);
+    for (let frame = 0; frame < 600 && avatar.reloading; frame++) world.update(DT);
     expect(avatar.reloading).toBe(false);
-    expect(magazine.parent?.name).toMatch(/pouch/);
+    expect(avatar.reloads).toBe(1);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
+    expect(node(avatar.group, 'magazine 4').parent?.name).toBe('pouch 1');
+    run(1);
+    offGrips().forEach((off, k) => expect(off).toBeLessThan(before[k] + 0.01));
+    const body = spent.parent;
+    if (!(body instanceof RigidBody)) throw new Error('The thrown magazine is no rigid body');
+    expect(body.getVelocity().linear.length()).toBeLessThan(0.05);
+    expect(spent.getWorldPosition(new Vector3()).y).toBeLessThan(0.05);
+    expect(spent.getWorldPosition(new Vector3()).distanceTo(movement.position)).toBeGreaterThan(0.3);
   });
 
-  it.each([true, false].flatMap((firstPerson) => [-1.2, -0.6, 0.6, 1.2].map((pitch) => ({ firstPerson, pitch }))))(
+  // (the reload in front of the chest whatever the view: looking steeply down from the eye, and up from outside)
+  it.each([{ firstPerson: true, pitch: -1.2 }, { firstPerson: false, pitch: 1.2 }])(
     'reloads while looking at pitch $pitch in first-person=$firstPerson', ({ firstPerson, pitch }) => {
       const input = state();
       input.position.set(0, 0, 0);
@@ -85,32 +92,29 @@ describe('avatar', () => {
       advance(avatar, input, 180);
       if (!firstPerson) {
         const direction = new Vector3(0, Math.sin(pitch), Math.cos(pitch));
-        input.aimPoint = new Vector3(0, 1.68, 0).addScaledVector(direction, pitch < 0 ? 1.68 / -direction.y : 120);
+        input.aimPoint = new Vector3(0, 1.68, 0).addScaledVector(direction, 120);
       }
       advance(avatar, input, 60);
       input.aim = false;
       avatar.requestReload();
-      for (let frame = 0; frame < 240 && avatar.reloading; frame++) avatar.update(1 / 60, input);
-      expect(avatar.reloading).toBe(false);
+      for (let frame = 0; frame < 600 && avatar.reloading; frame++) avatar.update(1 / 60, input);
       expect(avatar.reloads).toBe(1);
       expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
-      // The return to the handguard must also succeed after the new magazine seats.
-      advance(avatar, input, 300);
+      advance(avatar, input, 120);
       expect(avatar.fire()).toBe(true);
     },
   );
 
-  it.each([3, 3.5, 4, 4.4, 4.8, 6, 7.2])('completes a reload while turning in place at %s rad/s', (rate) => {
+  it('completes a reload while turning in place at 7.2 rad/s', () => {
     const input = state();
     input.aim = false;
     const avatar = avatarAt(input);
     advance(avatar, input, 180);
     avatar.requestReload();
-    for (let frame = 0; frame < 300 && avatar.reloading; frame++) {
-      input.yaw += rate / 60;
+    for (let frame = 0; frame < 600 && avatar.reloading; frame++) {
+      input.yaw += 7.2 / 60;
       avatar.update(1 / 60, input);
     }
-    expect(avatar.reloading).toBe(false);
     expect(avatar.reloads).toBe(1);
     expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
   });

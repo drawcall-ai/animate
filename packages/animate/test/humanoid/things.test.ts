@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Body, carry, grab, humanoid, release, wait, type Root } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
@@ -99,6 +99,46 @@ describe('what a body wears', () => {
   // (however fast its app spins it, a soldier turning on the spot takes a magazine from its chest and puts it into the well of the rifle
   // it holds, aimed the way the body faces — spun faster than its feet let it follow, its root led it by more than half a turn and it
   // turned back the other way, the well swinging off as the carry closed on it)
+  it('lets go of the rifle with a hand that takes something else, the rifle staying on its mount in the other hand', () => {
+    const { body, h, rifle, orient } = armed((body) => body.facing);
+    const magazine = new Object3D();
+    magazine.userData.mass = 0.5;
+    empty(body.bones.chest, 'pouch', new Vector3(0.1, -0.12, 0.14)).add(magazine);
+    empty(magazine, 'base', new Vector3(0, -0.05, 0));
+    const mount = rifle.parent;
+    let held: boolean | undefined;
+    play(function* () { held = yield* grab(body, magazine, { left: 'base' }, { speed: 1.8 }); }, [body], 4, () => (orient(), held !== undefined));
+    expect(held).toBe(true);
+    expect([h.holding.left?.thing.object, h.holding.right?.thing.object, rifle.parent]).toEqual([magazine, rifle, mount]);
+    expect(body.log).toEqual([]);
+  });
+
+  it('lets the rifle hang on its mount for both hands to work, and takes it back support hand first', () => {
+    const { body, h, rifle, aim } = armed((body) => body.facing);
+    const mount = rifle.parent;
+    if (!mount) throw new Error('no mount');
+    // (hanging: the muzzle down and across the body; the mount turned back halfway as the support hand comes to it)
+    const hang = (share: number) => aim().multiply(new Quaternion().setFromEuler(new Euler(1.1 * share, 0.5 * share, 0)));
+    let turned = 0;
+    const steps: unknown[] = [];
+    play(function* () {
+      release(body, rifle);
+      turned = 1;
+      yield* wait(0.5);
+      steps.push(h.holding.left === null && h.holding.right === null);
+      turned = 0.5;
+      steps.push(yield* grab(body, rifle, { left: 'foregrip' }));
+      turned = 0;
+      steps.push(yield* grab(body, rifle, { right: 'pistol' }));
+    }, [body], 8, () => {
+      body.orient(mount, hang(turned));
+      return steps.length === 3;
+    });
+    expect(steps).toEqual([true, true, true]);
+    expect(rifle.parent).toBe(mount);
+    expect(body.log).toEqual([]);
+  });
+
   it('takes what it wears and carries it into a slot on what it holds while its app spins it', () => {
     const { root, body, rifle, orient } = armed((body) => body.facing);
     const well = empty(rifle, 'well', new Vector3(0, -0.1, 0.3)), magazine = new Object3D();
@@ -139,6 +179,25 @@ describe('what a body wears', () => {
       return results.length === 2;
     });
     expect(results).toEqual([true, true]);
+    expect(body.log).toEqual([]);
+  });
+});
+
+describe('a part of a held thing', () => {
+  it('comes off it in the other hand: a pin pulled from a grenade', () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const grenade = box(room, new Vector3(-0.15, 1.0, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false, name: 'grenade' });
+    const pin = empty(grenade, 'pin', new Vector3(0.05, 0.05, 0));
+    pin.userData.mass = 0.01;
+    empty(pin, 'ring', new Vector3(0.02, 0, 0));
+    const results: boolean[] = [];
+    play(function* () {
+      results.push(yield* grab(body, grenade, { right: 'right' }));
+      results.push(yield* grab(body, pin, { left: 'ring' }));
+      results.push(yield* carry(body, pin, body.object.localToWorld(new Vector3(0.3, 1.1, 0.35))));
+    }, [body], 8, () => results.length === 3);
+    expect(results).toEqual([true, true, true]);
+    expect([pin.parent, grenade.parent]).toEqual([body.bones.leftHand, body.bones.rightHand]);
     expect(body.log).toEqual([]);
   });
 });
@@ -192,7 +251,7 @@ describe('a sword in a scabbard on the hips', () => {
     expect(sword.position.length()).toBe(0);
     expect(sword.quaternion.angleTo(new Quaternion())).toBe(0);
     expect(body.log).toEqual([]);
-  }, 20000);
+  });
 });
 
 describe('hands that cannot get there', () => {
@@ -261,5 +320,5 @@ describe('a thing in one hand by a grip that sets no turn', () => {
       // (turning with the hand kept on the bowing body: 0.7 rad/s at most for the default body, 3–5.7 for the 2.3 m one as the hand settles
       // from the take into its keep; not spun on a free wrist, 12 rad/s for the 2.3 m body when the medal kept its own turn)
       expect(fastest).toBeLessThan(8);
-    }, 20000);
+    });
 });

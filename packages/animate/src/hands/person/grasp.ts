@@ -7,9 +7,14 @@ import { inHand } from '../../things/hold';
 import { resolve, type Hold } from '../../things/resolve';
 import type { Thing } from '../../things/thing';
 import { palmOf } from '../../species/humanoid/landmarks';
-import type { Side } from '../../species/humanoid/bones';
-import { broughtTurn, strainAt, UNHELD } from './arms';
+import { INDEX, type Side } from '../../species/humanoid/bones';
+import { elbowPole } from './arms';
+import { holdsClear } from './trunk';
+import { solveChain } from '../../kernel/chain';
+import { coordinates, coordinatesOf } from '../../kernel/limits';
+import type { ReadonlyPose } from '../../kernel/pose';
 import type { Reacher } from './reacher';
+import { fixes } from './palm';
 
 /**
  * A thing in one hand hangs from the hand as the hand took it: the grasp fixes the hand on the thing, and the thing goes and turns with
@@ -17,8 +22,8 @@ import type { Reacher } from './reacher';
  * is to be turned, and the arm — shoulder, elbow, forearm and wrist — finds how to put it there. Nothing reads the hand's own turn back
  * into where it goes: the thing's turn is the carry's, the hand's follows from the grasp.
  *
- * A grip that sets no hand turn says only where the palm closes, so the grasp may change. From half a second before a carry's course
- * ends (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
+ * A grip that leaves the hand's turn free has its placement picked as the grab starts, for that moment, so the grasp may change. From
+ * half a second before a carry's course ends (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
  * keeps it: solved there, how far its joints are out of the middle of their ranges (`strainAt`). Comfortable enough (`STRAINED`), it is
  * kept, the arm working for it (a lance borne upright beside the hip); else the hand regrips onto the least turned of the grasps tried
  * there that the arm holds clearly more comfortably (strained by half `STRAINED` at most, and by `STRAINED` less) — the hand as the arm
@@ -93,14 +98,14 @@ function regripped(person: Reacher, side: Side, thing: Thing, regrip: Regrip, ti
 }
 
 /**
- * For a carry of `thing` in hand `side` alone by a grip that sets no hand turn, to `end` (world, turned): the grasp it has if the arm
- * holds it there comfortably enough (`strainAt`, `STRAINED`); else a regrip onto the least turned of the grasps tried that it holds
+ * For a carry of `thing` in hand `side` alone by a grip that leaves its turn free (`fixes`), to `end` (world, turned): the grasp it has if
+ * the arm holds it there comfortably enough (`strainAt`, `STRAINED`); else a regrip onto the least turned of the grasps tried that it holds
  * clearly more comfortably there — or, if none is and the arm cannot hold the one it has there at all (in the trunk, or far short of its
  * turn), onto the least strained of them; else still the one it has, the arm working for it (a lance borne upright beside the hip).
  * Whether it kept the grasp as comfortable enough there: weighed again as the end or the body moves on, it may yet be regripped.
  */
 export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>, settling = false): boolean {
-  if (hold.goal.quaternion || !inHand(person, thing)) return false;
+  if (fixes(hold.thing.grip(hold.grip)) || !inHand(person, thing)) return false;
   const f = person.frame, bone = person.hands[side], restOf = person.restOf(bone);
   const prior = regrips.get(hold);
   const from: InHand = { position: new Vector3(), quaternion: new Quaternion() };
@@ -115,7 +120,7 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   trial.copy(posed);
   const strain = (hand: Readonly<Quaternion>) => strainAt(person, posed, trial, side, at, hand);
   // (settling, the thing held turned off its end: the arm as it stands does not hold this grasp there, whatever an arm brought there
-  // afresh would — a bucket by its handle held 0.15 rad off, 8 cm off its place, for as long as the carry waited)
+  // afresh would, so waiting longer would not bring it there)
   const off = settling && resolve(person, thing.object, _placed).quaternion.angleTo(end.quaternion) > TURNED_OFF;
   const kept = Math.max(strain(_kept.copy(end.quaternion).multiply(turn)), off ? UNHELD : 0);
   if (kept <= STRAINED) return true;
@@ -139,9 +144,59 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   return false;
 }
 
+/**
+ * How the arm brings hand `side` to have its palm at `at` (world): the hand bone's turn (world, into `out`) with the arm posed onto it
+ * from `pose` on `scratch` — its elbow bent the way a reach there bends it, the forearm and the wrist unturned, as a hanging arm's are
+ */
+export function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
+  scratch.copy(pose);
+  const proportions = person.proportions, hand = INDEX[`${side}Hand`], palm = palmOf(proportions, side), wrist = _wrist;
+  // (the wrist a palm back from `at` along the hand as the last pass turned it: two more passes bring it within a millimetre)
+  for (let pass = 0; pass < 3; pass++) {
+    scratch.setLocal(hand, IDENTITY);
+    wrist.copy(palm).applyQuaternion(scratch.rotation(hand)).negate().add(at);
+    solveChain({ current: scratch }, `${side}Arm`, { tip: { position: wrist }, pole: elbowPole(scratch, proportions, side, wrist, _pole) });
+  }
+  return out.copy(scratch.rotation(hand));
+}
+
+/**
+ * How uncomfortably arm `side` holds its hand turned `turn` (world) with its palm at `at`: solved there on `scratch` (a pose as the body
+ * stands, the arm set off as `pose` has it), how far (rad, summed) its joints are out of the middle `COMFORTABLE` share of their ranges,
+ * and its hand short of the turn where a range stops it; `UNHELD` more if it cannot hold it so — no elbow keeps the arm out of the trunk,
+ * or the hand is short of the turn by more than `SHORT`. 0: comfortably.
+ */
+function strainAt(person: Reacher, pose: ReadonlyPose, scratch: Pose, side: Side, at: Readonly<Vector3>, turn: Readonly<Quaternion>): number {
+  const proportions = person.proportions, skeleton = scratch.skeleton, bones = skeleton.chain(`${side}Arm`), hand = bones[bones.length - 1];
+  for (const bone of bones) scratch.setLocal(bone, pose.local(bone));
+  const wrist = _held.copy(palmOf(proportions, side)).applyQuaternion(turn).negate().add(at), pole = elbowPole(scratch, proportions, side, wrist, _pole);
+  solveChain({ current: scratch }, `${side}Arm`, { tip: { position: wrist, quaternion: _turnAt.copy(turn) }, pole });
+  const short = scratch.rotation(hand).angleTo(turn);
+  let strain = short;
+  for (const bone of bones) {
+    const limit = skeleton.limits[bone];
+    if (!limit) continue;
+    const { value, range } = coordinatesOf(_turnAt.copy(scratch.local(bone)), limit, _coordinates);
+    value.forEach((x, k) => {
+      const [lo, hi] = range[k], margin = (1 - COMFORTABLE) / 2 * (hi - lo);
+      strain += Math.max(0, lo + margin - x, x - hi + margin);
+    });
+  }
+  return short <= SHORT && holdsClear(scratch, proportions, side, wrist, at, pole) ? strain : strain + UNHELD;
+}
+
+/** Tuned (the knight's lance borne upright, his belt round his hips, a gauntlet held open): the share of each joint's range, about its
+ * middle, it is comfortable in */
+const COMFORTABLE = 0.8;
+/** Tuned (a lance borne upright beside the hip held 0.25 rad short, a bucket set down turned half round): how far (rad) a hand may be
+ * left short of its turn and still hold its thing so: further, it is visibly held wrong */
+const SHORT = 0.5;
+/** what a hand its arm cannot hold so counts for against its joints' discomfort (rad): more than any */
+const UNHELD = 10;
+
 /** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
 const scratches = new WeakMap<Reacher, { brought: Pose; trial: Pose }>();
-function scratch(person: Reacher): { brought: Pose; trial: Pose } {
+export function scratch(person: Reacher): { brought: Pose; trial: Pose } {
   let poses = scratches.get(person);
   const skeleton = person.frame.prev.skeleton;
   if (!poses) scratches.set(person, (poses = { brought: new Pose(skeleton), trial: new Pose(skeleton) }));
@@ -159,3 +214,4 @@ const TURNS = (() => {
   return turns.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
 })();
 const _palm = new Vector3(), _at = new Vector3();
+const IDENTITY = new Quaternion(), _pole = new Vector3(), _wrist = new Vector3(), _held = new Vector3(), _turnAt = new Quaternion(), _coordinates = coordinates();

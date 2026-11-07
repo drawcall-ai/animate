@@ -46,9 +46,8 @@ it.each(['an across-body reach', 'an over-shoulder look'])('turns the trunk on t
   let most = 0;
   play(function* () {
     if (what === 'an over-shoulder look') yield* lookAt(body, new Vector3(-2, 1.4, -1), { until: 3 });
-    // (across to a point the right hand reaches twisted: one at x 0.45 stayed 5 cm short, beyond the arm, hidden by `until` before reaches
-    // failed as their hands stopped)
-    else yield* reach(body, { right: new Vector3(0.38, 1.2, 0.25) }, { until: 3 });
+    // (across to a point the right hand reaches twisted: one further across stops short, beyond the arm, and the reach fails)
+    else yield* reach(body, { right: new Vector3(0.3, 1.2, 0.25) }, { until: 3 });
   }, [body], 3.1, () => void (most = Math.max(most, twist())));
   expect(most).toBeGreaterThan(0.12);
   run(body, 3);
@@ -223,7 +222,7 @@ it.each([['the default person', 1.75], ['a 2.3 m skeleton', 0]])('holds still as
   expect(ease.sway).toBeGreaterThan(0.03);
   expect(attention.sway).toBeLessThan(0.01);
   expect([...ease.log, ...attention.log, ...half.log]).toEqual([]);
-}, 20000);
+});
 
 it('takes its steadiness as a function of its time, and says what it cannot take', () => {
   let asked = 0;

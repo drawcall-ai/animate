@@ -113,7 +113,10 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     else eyes.step(f.dt, worldDown, pitchAlong(_line.subVectors(aimed, origin), facing), resting, shift >= SETTLED);
     (aimed ??= new Vector3()).copy(point);
     const ways = (line: Vector3) => {
-      const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
+      // (eased off the line's heading toward the trunk's facing only as the head's own line nears the vertical, the eyes' share of the
+      // pitch taken off it: the head looking 60° down at what the eyes see 80° down keeps its heading, unrolled)
+      const down = Math.asin(Math.max(-1, Math.min(1, -line.y)));
+      const vertical = smoothstep(0.1, 0.35, down > 0 ? Math.cos(Math.max(0, down - eyes.value)) : Math.hypot(line.x, line.z));
       const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
       upright(line, facing + toward * vertical, _q);
       upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);

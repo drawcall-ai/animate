@@ -30,11 +30,8 @@ export class Binding<Name extends string = string> {
     const { skeleton } = species;
     this.turned = skeleton.bones.map(() => new Quaternion());
     if (model) this.object.add(model);
-    const found = model ? Object.fromEntries(species.bones.flatMap((bone) => {
-      const node = model.getObjectByName(bone.name);
-      return node ? [[bone.name, node]] : [];
-    })) : this.bare();
-    const byName: Readonly<Record<string, Object3D | undefined>> = found;
+    const bare = model ? null : this.bare(), found: Partial<Record<Name, Object3D>> = {}, byName: Record<string, Object3D | undefined> = {};
+    for (const bone of species.bones) byName[bone.name] = found[bone.name] = model ? model.getObjectByName(bone.name) : bare?.[bone.name];
     const missing = species.bones.filter((bone) => !byName[bone.name]).map((bone) => bone.name);
     if (!named(found, species.bones)) throw new Error(`the model has no bone named ${missing.join(', ')} (rig it with this skeleton: skin(model, skeleton))`);
     this.bones = found;
@@ -113,8 +110,8 @@ export class Binding<Name extends string = string> {
 }
 
 /** whether `bones` has every bone `written` names */
-function named<Name extends string>(bones: Record<string, Object3D>, written: readonly SkeletonBone<Name>[]): bones is Record<Name, Object3D> {
-  return written.every((bone) => bone.name in bones);
+function named<Name extends string>(bones: Partial<Record<Name, Object3D>>, written: readonly SkeletonBone<Name>[]): bones is Record<Name, Object3D> {
+  return written.every((bone) => bones[bone.name] !== undefined);
 }
 
 interface Moving {

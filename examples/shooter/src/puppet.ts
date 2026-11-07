@@ -1,5 +1,5 @@
-import { Quaternion, Vector3, type Object3D } from 'three';
-import type { Body } from '@drawcall/animate';
+import { MathUtils, Quaternion, Vector3, type Object3D } from 'three';
+import type { Body, HandPlacement } from '@drawcall/animate';
 import { frame } from './angles';
 import type { Hold } from './choreography';
 import { SOLDIER } from './skeleton';
@@ -16,6 +16,12 @@ export const BONES = [
 ] as const satisfies readonly Bone[];
 
 const Z = new Vector3(0, 0, 1);
+/**
+ * How far the wrist twists at the most (rad): the rest of the hand's turn about the forearm the forearm takes, as the radius rolls round
+ * the ulna (half the turn left in the wrist, a hand turned far at the landing still tore the cuff's skin there; taken by the wrist alone,
+ * the sleeve twisted through itself).
+ */
+const WRIST_TWIST = 0.2;
 const REST = new Map(SOLDIER.map((bone) => [bone.name, new Vector3(...bone.position)]));
 
 /** The direction from `from` to `to` in the skeleton as written, at rest. */
@@ -35,6 +41,8 @@ export class Puppet {
   private readonly rest = new Map<Bone, Quaternion>();
   /** the length of each limb's upper and lower segment (m) */
   private readonly lengths = new Map<Bone, number>();
+  /** each hand's placements on the grips it has held, by grip */
+  private readonly placements: Record<Side, WeakMap<Object3D, HandPlacement>> = { left: new WeakMap(), right: new WeakMap() };
 
   readonly bones: Readonly<Record<Bone, Object3D>>;
 
@@ -73,10 +81,20 @@ export class Puppet {
     node.updateMatrixWorld(true);
   }
 
-  /** How hand `side` holds `empty` as a handle (`userData.handle`, `palm`): where its wrist goes and how it is turned, as the body's own grasp has it. */
+  /** How hand `side` holds the grip `empty`, as `Body.gripOn` places it on `placement`: where its wrist goes and how it is turned. */
   hold(side: Side, empty: Object3D): Hold {
-    const { wrist, rotation } = this.body.gripOn(side, empty);
+    const { wrist, rotation } = this.body.gripOn(side, this.placement(side, empty));
     return { wrist, hand: rotation.multiply(this.restOf(`${side}Hand`).clone().invert()) };
+  }
+
+  /** The placement hand `side` takes the grip `empty` by (`Body.placement`): picked the first time it is asked for, and kept, so the hand
+   * holds a grip the same however the body has come to it. */
+  placement(side: Side, empty: Object3D): HandPlacement {
+    const known = this.placements[side].get(empty);
+    if (known) return known;
+    const placement = this.body.placement(side, empty);
+    this.placements[side].set(empty, placement);
+    return placement;
   }
 
   /** Moves the root bone to a world position. */
@@ -99,10 +117,17 @@ export class Puppet {
     this.turn(`${side}Toes`, foot);
   }
 
-  /** Bends an arm so its wrist reaches `wrist`, its elbow pointing along `elbow`, the hand then turned to `hand`. */
+  /** Bends an arm so its wrist reaches `wrist`, its elbow pointing along `elbow`, the hand then turned to `hand`; the forearm rolls with
+   * the hand about its length, all but `WRIST_TWIST` of the way (or half, turned less). */
   arm(side: Side, wrist: Readonly<Vector3>, elbow: Readonly<Vector3>, hand: Readonly<Quaternion>) {
+    const lower = `${side}LowerArm` as const;
     // An arm reaches out sideways at rest, palm down, its elbow behind (−Z).
-    this.limb(`${side}UpperArm`, `${side}LowerArm`, `${side}Hand`, wrist, elbow, Z.clone().negate());
+    this.limb(`${side}UpperArm`, lower, `${side}Hand`, wrist, elbow, Z.clone().negate());
+    // (the hand's turn off the forearm's, its twist about the forearm's rest axis: the roll a forearm's bones make)
+    const forearm = this.rotation(lower), off = forearm.clone().invert().multiply(hand), axis = restAxis(lower, `${side}Hand`);
+    const along = axis.dot(new Vector3(off.x, off.y, off.z)), angle = 2 * Math.atan2(along, off.w);
+    const turned = Math.atan2(Math.sin(angle), Math.cos(angle)), roll = turned - MathUtils.clamp(turned / 2, -WRIST_TWIST, WRIST_TWIST);
+    this.turn(lower, forearm.multiply(new Quaternion().setFromAxisAngle(axis, roll)));
     this.turn(`${side}Hand`, hand);
   }
 

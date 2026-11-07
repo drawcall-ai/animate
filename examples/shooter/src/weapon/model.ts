@@ -1,6 +1,13 @@
 import { DataTexture, MeshStandardMaterial, Object3D, RepeatWrapping, RGBAFormat, UnsignedByteType } from 'three';
 import { Parts, type Profile } from '../parts';
 
+/**
+ * Where the stock's butt end sits behind the receiver (m) for a soldier whose arms are `arms` of the default's: collapsed for a short arm,
+ * so its support hand holds the receiver's front ahead of the magazine well with its elbow bent (at 0.24 m a unit of arm, the arms 0.77 of
+ * the default's reached that only straight, at the end of their reach)
+ */
+export const stockBack = (arms: number) => -0.16 * arms;
+
 /** A compact carbine built in metres; geometry stays independent of its animation. */
 export class WeaponModel {
   private readonly grain = grain();
@@ -41,19 +48,22 @@ export class WeaponModel {
     p.box([0.028, 0.006, 0.55], [0, 0.098, 0.212], this.dark);
     for (let i = 0; i < 31; i++) p.box([0.033, 0.007, 0.009], [0, 0.104, -0.05 + i * 0.0175], this.metal);
 
-    // Grip, open trigger guard and curved trigger.
-    p.profile([[-0.028, 0.009], [0.023, 0.007], [0.018, -0.035], [-0.006, -0.137], [-0.048, -0.128], [-0.04, -0.051]], 0.039, [0, 0, 0], this.polymer);
+    // Grip and open trigger guard; the curved trigger is its own part, drawn back by a shot.
+    // (the grip a hand's width deep and 3 cm across, the guard 4 cm deep under the receiver, as a carbine's: a hand wrapping the grip
+    // high in its web has its middle finger just under the guard and its trigger finger level with the receiver above it; the trigger
+    // well back from the magazine well, room for the finger's end in front of it)
+    p.profile([[-0.028, 0.009], [0.023, 0.007], [0.018, -0.035], [-0.006, -0.137], [-0.048, -0.128], [-0.04, -0.051]], 0.031, [0, 0, 0], this.polymer);
     for (const side of [-1, 1]) for (let i = 0; i < 6; i++)
-      p.box([0.002, 0.0025, 0.031], [side * 0.021, -0.037 - i * 0.014, -0.008 - i * 0.003], this.rubber);
-    p.profile([[0.018, -0.005], [0.08, -0.005], [0.083, -0.047], [0.067, -0.067], [0.025, -0.057]], 0.014, [0, 0, 0], this.dark,
-      [[[0.028, -0.015], [0.069, -0.015], [0.071, -0.043], [0.062, -0.055], [0.032, -0.048]]]);
-    p.profile([[0.037, -0.009], [0.044, -0.01], [0.044, -0.031], [0.052, -0.044], [0.045, -0.045], [0.036, -0.03]], 0.006, [0, 0, 0], this.steel);
+      p.box([0.002, 0.0025, 0.031], [side * 0.017, -0.037 - i * 0.014, -0.008 - i * 0.003], this.rubber);
+    p.profile([[0.018, -0.005], [0.08, -0.005], [0.082, -0.031], [0.066, -0.045], [0.025, -0.041]], 0.014, [0, 0, 0], this.dark,
+      [[[0.025, -0.013], [0.069, -0.013], [0.071, -0.029], [0.062, -0.036], [0.032, -0.033]]]);
 
-    // Buffer tube and adjustable stock. Its length follows the soldier's reach.
-    const back = -0.24 * arms;
+    // Buffer tube and adjustable stock. Its length follows the soldier's reach (`stockBack`), its cut-out left out once it is collapsed too
+    // short for it.
+    const back = stockBack(arms);
     p.tube(0.018, 0.012, Math.abs(back + 0.075), [0, 0.064, (back - 0.075) / 2], this.dark);
     p.profile([[back - 0.04, 0.087], [-0.12, 0.087], [-0.12, 0.047], [back + 0.015, -0.049], [back - 0.04, -0.061]], 0.05, [0, 0, 0], this.polymer,
-      [[[back + 0.003, 0.033], [-0.15, 0.033], [back + 0.003, -0.025]]]);
+      back + 0.003 < -0.165 ? [[[back + 0.003, 0.033], [-0.15, 0.033], [back + 0.003, -0.025]]] : []);
     p.box([0.056, 0.154, 0.017], [0, 0.013, back - 0.044], this.rubber);
     for (let i = 0; i < 9; i++) p.box([0.058, 0.003, 0.003], [0, -0.05 + i * 0.016, back - 0.054], this.polymer);
     p.box([0.055, 0.009, 0.045], [0, 0.005, back + 0.055], this.dark);
@@ -74,6 +84,13 @@ export class WeaponModel {
     p.pin(0.007, 0.007, [0.022, 0.118, 0], this.steel);
     p.box([0.003, 0.025, 0.006], [0, 0.1075, 0.475], this.dark);
     for (const side of [-1, 1]) p.box([0.003, 0.033, 0.008], [side * 0.009, 0.111, 0.475], this.metal);
+    p.finish(parent);
+  }
+
+  /** The curved trigger, in the rifle's frame. */
+  trigger(parent: Object3D) {
+    const p = new Parts();
+    p.profile([[0.032, -0.009], [0.039, -0.01], [0.039, -0.022], [0.046, -0.031], [0.039, -0.032], [0.031, -0.021]], 0.006, [0, 0, 0], this.steel);
     p.finish(parent);
   }
 

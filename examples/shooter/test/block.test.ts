@@ -41,7 +41,7 @@ describe.each([0.45, 0.75])('a %s m block', (height) => {
     expect(movement.position.y).toBeCloseTo(height + 0.004, 3);
     expectSmooth(blocked);
     expectSmooth(jumping);
-  }, 20000);
+  });
 
   it('keeps the body supported when sprint-jumping onto it and walking off', async () => {
     const { world, movement, avatar, advance } = await soldierOn((scene) => {

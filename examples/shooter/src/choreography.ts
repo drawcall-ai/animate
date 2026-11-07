@@ -44,8 +44,9 @@ export interface Standing {
   /** which way each knee and elbow pointed */
   knees: Record<Side, Vector3>;
   elbows: Record<Side, Vector3>;
-  /** the right hand on the rifle, in the rifle's frame */
-  grip: Matrix4;
+  /** the rifle in the frame's frame, and each hand on it in the rifle's */
+  rifle: Matrix4;
+  grips: Record<Side, Matrix4>;
 }
 
 /** Takes the pose `puppet`'s body stands in, holding `rifle`, in `frame`'s frame. */
@@ -55,7 +56,7 @@ export function stand(puppet: Puppet, frame: Object3D, rifle: Object3D): Standin
   const pose = puppet.capture();
   for (const rotation of pose.values()) rotation.premultiply(back);
   const bend = (upper: Bone, middle: Bone, end: Bone) => local(middle).sub(local(upper).add(local(end)).multiplyScalar(0.5));
-  const hand = new Matrix4().compose(puppet.position('rightHand'), puppet.rotation('rightHand'), new Vector3(1, 1, 1));
+  const onRifle = (side: Side) => rifle.matrixWorld.clone().invert().multiply(new Matrix4().compose(puppet.position(`${side}Hand`), puppet.rotation(`${side}Hand`), new Vector3(1, 1, 1)));
   const ankles = { left: local('leftFoot'), right: local('rightFoot') }, floor = Math.min(ankles.left.y, ankles.right.y);
   // (each foot pitched as the lower one, from its heel to its toes, still pointing the way it did)
   const along = (side: Side) => local(`${side}Toes`).sub(local(`${side}Foot`)).normalize();
@@ -71,7 +72,7 @@ export function stand(puppet: Puppet, frame: Object3D, rifle: Object3D): Standin
     wrists: { left: local('leftHand'), right: local('rightHand') },
     knees: { left: bend('leftUpperLeg', 'leftLowerLeg', 'leftFoot'), right: bend('rightUpperLeg', 'rightLowerLeg', 'rightFoot') },
     elbows: { left: bend('leftUpperArm', 'leftLowerArm', 'leftHand'), right: bend('rightUpperArm', 'rightLowerArm', 'rightHand') },
-    grip: rifle.matrixWorld.clone().invert().multiply(hand),
+    rifle: frame.matrixWorld.clone().invert().multiply(rifle.matrixWorld), grips: { left: onRifle('left'), right: onRifle('right') },
   };
 }
 
@@ -86,11 +87,23 @@ export class Frame {
   was(bone: Bone) { return turnIn(this.standing.pose, bone); }
   /** a hand as it stood, in world terms */
   hand(side: Side): Hold { return { wrist: this.point(this.standing.wrists[side]), hand: this.turn(this.was(`${side}Hand`)) }; }
-  /** the right hand holding the rifle as it did standing, the rifle where `rifle` (a world matrix) puts it */
-  carrying(rifle: Matrix4): Hold {
+  /** hand `side` holding the rifle as it did standing, the rifle where `rifle` (a world matrix) puts it */
+  carrying(rifle: Matrix4, side: Side = 'right'): Hold {
     const wrist = new Vector3(), hand = new Quaternion();
-    rifle.clone().multiply(this.standing.grip).decompose(wrist, hand, new Vector3());
+    rifle.clone().multiply(this.standing.grips[side]).decompose(wrist, hand, new Vector3());
     return { wrist, hand };
+  }
+  /** where the rifle is (a world matrix), `t` of the way from held as it stood (0) to `stowed` (a world matrix) at `take`, as a soldier
+   * slings a weapon and takes it back: brought down turned halfway over `down`, held there while the support hand leaves it (or, taking it
+   * back, comes onto it), and turned on the rest of the way over `away` — from the full hang, or the support hand's grip taken late, the
+   * hand reaches for a rifle swinging past it */
+  rifle(stowed: Matrix4, t: number, { down, away }: { down: Beat; away: Beat }): Matrix4 {
+    const held = this.object.matrixWorld.clone().multiply(this.standing.rifle), [from, to] = [held, stowed].map(placed);
+    // (halfway its barrel turned the least way toward where it is stowed, not rolled: a rifle stowed top to the rear, turned halfway there
+    // whole, lay on its side, the support hand twisted round under it)
+    const swing = new Quaternion().setFromUnitVectors(BARREL.clone().applyQuaternion(from.q), BARREL.clone().applyQuaternion(to.q));
+    const halfway = new Matrix4().compose(from.p.clone().lerp(to.p, 0.5), new Quaternion().slerp(swing, 0.5).multiply(from.q), new Vector3(1, 1, 1));
+    return t <= down[1] ? mixed(held, halfway, phase(t, down)) : mixed(halfway, stowed, phase(t, away));
   }
 }
 
@@ -106,6 +119,22 @@ export function shoulders(puppet: Puppet, frame: Frame) {
     const shoulder = `${side}Shoulder` as const;
     puppet.turn(shoulder, puppet.rotation('chest').multiply(frame.was('chest').invert().multiply(frame.was(shoulder))));
   }
+}
+
+/** The rifle's barrel, out along its +Z. */
+const BARREL = new Vector3(0, 0, 1);
+
+/** `s` of the way from `a` to `b` (world matrices, unscaled): its place along the line between, its turn the least way round. */
+function mixed(a: Matrix4, b: Matrix4, s: number) {
+  const [at, to] = [a, b].map(placed);
+  return new Matrix4().compose(at.p.lerp(to.p, s), at.q.slerp(to.q, s), new Vector3(1, 1, 1));
+}
+
+/** Where `matrix` places and how it turns. */
+function placed(matrix: Matrix4) {
+  const p = new Vector3(), q = new Quaternion();
+  matrix.decompose(p, q, new Vector3());
+  return { p, q };
 }
 
 /** A copy of `bone`'s rotation in `pose`. */

@@ -4,6 +4,7 @@ import type { Carrier } from '../kernel/carrier';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import type { Thing } from './thing';
+import type { HandPlacement } from '../hands/person/place';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
@@ -24,16 +25,16 @@ export interface Resolving {
   readonly floor: (x: number, z: number) => number;
 }
 
-/** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame). */
+/** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame) — for a person's
+ * hand, the placement it took there, fixed on the thing while it holds it. */
 export interface Hold {
   thing: Thing;
   grip: string;
   goal: Goal;
-  /** a person's hand on a grip that sets no turn: its turn in the thing's frame as it holds it, which the hand keeps while the thing is
-   * held by more than its hand (worn, on another body, resting) — the palm stays on the empty as the thing turns */
+  placement?: HandPlacement;
+  /** a person's hand on a bare grip, which sets no turn: its turn in the thing's frame as it holds it, which the hand keeps while the
+   * thing is held by more than its hand (worn, on another body, resting) — the palm stays on the empty as the thing turns */
   turn?: () => Quaternion;
-  /** where a person's hand holds the grip, in its bone's frame: its palm's centre (none: a creature's tip, on the empty) */
-  palm?: Readonly<Vector3>;
   keep?: (f: Frame) => void;
 }
 

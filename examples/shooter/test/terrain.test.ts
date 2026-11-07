@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { Body, humanoid } from '@drawcall/animate';
+import { RigidBody, SphereCollider } from '@drawcall/physics';
 import { buildWorld } from '@drawcall/physics-rapier';
 import { Matrix4, Scene, Vector3 } from 'three';
 import { SOLDIER } from '../src/skeleton';
@@ -76,6 +77,17 @@ it('keeps overhead roofs and bridges out of the floor while underneath them', as
   terrain.update(new Vector3(-10, 2.4, 5.6));
   expect(terrain.floor(-10, 5.6)).toBeCloseTo(2.4, 6);
   expect(terrain.floor(24, 0)).toBeLessThan(-12);
+});
+
+it('is no floor where a ball lies, such as a dropped grenade', async () => {
+  const { scene, world, terrain } = await yard();
+  const ball = new RigidBody({ mass: 0.4 });
+  ball.position.set(1, 0.04, 1);
+  ball.add(new SphereCollider({ radius: 0.04 }));
+  scene.add(ball);
+  world.update(1 / 60);
+  terrain.update(new Vector3(1, 0, 1));
+  expect(terrain.floor(1, 1)).toBeCloseTo(0, 5);
 });
 
 it('refreshes moving support surfaces only from their completed poses', async () => {

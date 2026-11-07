@@ -6,23 +6,22 @@ import type { Frame } from '../kernel/frame';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
+import { letGo } from './release';
 import type { HandOptions } from '../hands/handling';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
  * origin): it walks up to stand in reach (borrowed legs; with `step: false` it stays where it stands), its eyes find the grips first
- * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. It
- * picks where to stand once, as it starts, from where its feet and the grips are then: a thing still moving, or feet still walking,
- * gives a stand for where they were; with no particular place to stand, leave the walking to it. A mover,
- * it ends holding. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else stays where it is, and the
- * hands follow it. It returns `false` if no stand reaches the grips (with `step: false`: if they are out of reach from where it stands) or
- * the hand position or turn remains unmet after the planned reach plus four seconds. A person holds a grip in its palm: the empty is
- * where the palm's centre goes (0.043 of the body's height past the wrist, along the hand), so put it where the hand closes on the prop
- * (on a handle's axis, half the hand's thickness out from a box's side), not where the wrist would be. Grips set position only by default:
- * the hand comes turned as the arm brings it, and the grasp then fixes it on the thing — held in one hand, the thing turns with the hand,
- * and a carry turns it by turning the arm; one whose end the arm cannot hold it at as taken regrips it in the fingers on the way (see
- * `carry`). `userData.handTurn = true` turns the hand as the empty is turned, as an `Object3D` target does (`Target`), never regripped; an
- * axis [x, y, z] allows roll about that line in its frame.
+ * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. It picks
+ * where to stand once, as it starts, from where its feet and the grips are then: a thing still moving, or feet still walking, gives a
+ * stand for where they were; with no particular place to stand, leave the walking to it. A mover, it ends holding, its fingers closed. A
+ * named hand that holds something else lets go of it as it sets off, as `release` would (what the body wears, a rifle on its mount, stays
+ * there, held by any other hand on it). A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else — a part
+ * of what the other hand holds, a pouch's magazine — stays where it is, and the hands follow it. It returns `false` if no stand reaches
+ * the grips (with `step: false`: if they are out of reach from where it stands) or a hand stops getting nearer its unmet position or turn
+ * once the planned reach is over (or is still off it four seconds on). What each empty asks of the hand (a palm, a handle, a fingertip's
+ * pad, a facing, what it leaves free) is `Thing.grip`'s: as it starts, the grab fixes each hand's placement within what its grip leaves free
+ * from where the body stands (`Body.placement`), and the hand keeps it on the thing while it holds it.
  */
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
@@ -31,6 +30,11 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
   if (options.speed === Infinity && !body.species.person) throw new Error('grab: `speed: Infinity` is a person’s');
   return verb(body, 'grab', (request) => function* () {
     const self = selfOf(body), held = Thing.of(thing), on = bodyOf(thing);
+    // (a named hand holding something else lets go of it first, as `release` would, without backing out)
+    for (const { hand } of named) {
+      const was = self.holding[hand]?.thing;
+      if (was && was !== held) letGo(self, was, [hand], undefined, false);
+    }
     if (on) self.meet(on);
     if (on && on !== self) checkShared(self.frame, on, held, named);
     for (const { grip } of named) checkScale(self.frame, held.grip(grip).node);

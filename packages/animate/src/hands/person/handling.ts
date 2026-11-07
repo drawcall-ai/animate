@@ -1,28 +1,29 @@
-import { Quaternion } from 'three';
+import { action } from '@pmndrs/timeline';
+import type { Frame } from '../../kernel/frame';
 import { paceAt, type Handling } from '../handling';
 import { CALM } from './arms';
-import { bodyOf, goalOn, type Palm } from '../../things/hold';
-import type { Grip, Thing } from '../../things/thing';
-import { sideOf, type Side } from '../../species/humanoid/bones';
-import { palmOf } from '../../species/humanoid/landmarks';
+import { bodyOf } from '../../things/hold';
+import { sideOf } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { grabbing, takingAtOnce } from './grab';
 import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
+import { takingOf } from './palm';
+
+/** the longest a grab waits, its hands on their grips, for their fingers to close (s) */
+const CLOSING = 0.2;
 
 /** Human hand staging; the right hand leads coordinated reaches. */
 export function personHands(person: Reacher): Handling {
   return {
     take: function* (request, thing, grips, options) {
       const loose = thing.massive && !bodyOf(thing.object);
-      const takes = grips.map(({ hand, grip }) => {
-        const side = sideOf(hand), at = thing.grip(grip), hold = palm(person, side, thing, at);
-        return { side, thing, grip, goal: goalOn(at, person.restOf(person.hands[hand]), hold), palm: hold };
-      });
-      // (each hand opens as it comes, until it holds its grip)
-      for (const { side } of takes) person.fingers?.toward(side, true);
+      // (each hand's placement picked as the grab starts, from where the body stands, and kept on the thing while it holds it)
+      const takes = grips.map(({ hand, grip }) => takingOf(person, sideOf(hand), thing, grip));
+      // (each hand shapes for its placement as it comes, until it holds it)
+      for (const { side, placement } of takes) person.fingers?.toward(side, placement);
       try {
         if (options.speed === Infinity) {
           yield* takingAtOnce(person, request, takes);
@@ -30,33 +31,20 @@ export function personHands(person: Reacher): Handling {
         }
         const motion = options.speed === undefined ? undefined : paceAt(options.speed, CALM);
         if (!(yield* grabbing(person, request, takes, options.step ?? true, motion))) return;
+        // (held once the fingers have closed on it: taken away as the hand arrives, a thing would leave before the grasp holds it)
+        const fingers = person.fingers, began = person.frame.time;
+        if (fingers) yield* action<Frame>({ until: (f) => f.time - began >= CLOSING || takes.every(({ side }) => fingers.closed(side)) });
         if (loose) yield* liftingClear(person, request, thing);
         request.met();
       } finally {
-        for (const { side } of takes) person.fingers?.toward(side, false);
+        for (const { side } of takes) person.fingers?.toward(side, null);
       }
     },
     bring: (request, thing, points, end, options) => carrying(person, request, thing, wayOf(person, thing, points, end), options),
     reach: (request, aims, options) => reachingTo(person, request, aims.map(({ hand, target }) => ({ side: sideOf(hand), target })), options),
-    backOut(hands) {
+    backOut(hands, away) {
       const sides = hands.map(sideOf);
-      person.own('release', '', (request) => () => backingOut(person, request, sides));
+      person.own('release', '', (request) => () => backingOut(person, request, sides.map((side) => ({ side, away: away[side] ?? null }))));
     },
   };
-}
-
-/**
- * `side`'s palm on `grip` of `thing`: its centre beyond the wrist — on a handle, for a hand with fingers, where the handle lies in its
- * grasp — and the hand's turn in the thing's frame as the body was last posed (mid-update, the hand's turn may be the free arm's hang's,
- * written before the hand's own step: a reach read so never met its grip)
- */
-function palm(person: Reacher, side: Side, thing: Thing, grip: Grip): Palm {
-  const bone = person.hands[side], turn = new Quaternion();
-  const turned = () => turn.copy(person.track(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(bone));
-  const fingers = person.fingers;
-  if (!grip.handle || !fingers) return { at: palmOf(person.proportions, side), turn: turned };
-  // (the hand's grasp, measured in its node's frame, in its bone's)
-  // (the handle's radius, the world's, in the hand's units)
-  const scale = person.scaleOf(bone), { at, axis, facing } = fingers.joints(side).handleLine(grip.handle.radius / scale), rest = person.restOf(bone);
-  return { at: at.applyQuaternion(rest).multiplyScalar(scale), turn: turned, line: { axis: axis.applyQuaternion(rest), facing: facing.applyQuaternion(rest) } };
 }

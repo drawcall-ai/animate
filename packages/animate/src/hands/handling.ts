@@ -1,4 +1,4 @@
-import type { Object3D } from 'three';
+import type { Object3D, Vector3 } from 'three';
 import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Motion } from '../kernel/goal';
@@ -13,7 +13,8 @@ export interface HandOptions {
    * mean speed along its way (default a calm 0.5; a transfer walked somewhere goes at the walk's pace). Faster than calm (a person's hand
    * 1.5, a carry 0.5, a creature's 1), the movement is the calm one sped up, its acceleration growing with the speed squared; slower, it
    * sets off and stops as briskly as a calm one. `grab` alone takes `Infinity`: the hands there at once, for a person that starts a story
-   * already holding the thing — only as it starts, the grips within its arms' reach from where it stands
+   * already holding the thing — only in the body's first update (the arms posed as if they had always held it, which a body already shown
+   * cannot be: later it throws), the grips within its arms' reach from where it stands
    */
   speed?: number;
   /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
@@ -48,6 +49,6 @@ export interface Handling {
   bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, options: HandOptions): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */
   reach(request: Request, aims: readonly { hand: string; target: (f: Frame) => Goal }[], options: HandOptions): Handwork;
-  /** `hands`, having let go, back out of what they held: a request of the body's own */
-  backOut(hands: readonly string[]): void;
+  /** `hands`, having let go, back out of what they held, first along `away` (world) where given: a request of the body's own */
+  backOut(hands: readonly string[], away: Readonly<Record<string, Vector3>>): void;
 }

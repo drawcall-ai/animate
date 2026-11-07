@@ -20,8 +20,10 @@ interface ChainGoal {
   /** whether a limb swivels for its first joint's limits alone, its tip's rotation fitted after (default false): a rotation outside the
    * last joint's range does not turn the bend off the pole's plane */
   poleFirst?: boolean;
-  /** whether a limb whose limits the pole's side does not fit keeps the fit it has now — its swivel, its middle bone's twist and its bend's
-   * way — leaving it only for one clearly better (`HELD`); default false: the best fit wherever it is */
+  /** whether a limb keeps the fit it has now — its swivel, its middle bone's twist and its bend's way — leaving it only for one clearly
+   * better (`HELD`), and moving on from it continuously, swivelled round the line to its tip no further a solve than `SWIVELLING`,
+   * wherever the best fit or the pole has gone: a limb carried on from one sub-step to the next; default false: the best fit wherever it
+   * is (a solve from nowhere in particular) */
   keep?: boolean;
 }
 
@@ -75,7 +77,7 @@ interface Solving {
 /** a limb: its middle joint as a hinge (bent to the distance), its first bone onto the goal and toward the pole, the middle joint aimed again */
 function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion: Quaternion | undefined, twist: number | undefined, swivels: boolean, poleFirst: boolean, keeps: boolean) {
   const { skeleton, bones, local, start } = c;
-  const o1 = skeleton.bones[bones[1]].offset;
+  const o1 = skeleton.bones[bones[1]].offset, was = _was.copy(c.base).multiply(local[0]);
   const o2 = skeleton.bones[bones[2]].offset;
   const hinge = hingeOf(skeleton.limits[bones[1]], local[1], o1, o2);
   const { axis: h, neutral } = hinge;
@@ -111,9 +113,10 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
   if (!swivels && twist === undefined) twist = twisted;
   const kept = keeps ? twisted : undefined;
 
-  /** how far the first bone is swivelled now about the line to the target from where `placed` (world) has it: its elbow round from there */
-  const swivelNow = (placed: Quaternion) => {
-    const from = _f.copy(o1).applyQuaternion(placed), to = _g.copy(o1).applyQuaternion(now);
+  /** how far the first bone is swivelled now about the line to the target from where `placed` (world) has it: its elbow round from there
+   * (read off `along`, the elbow; or the hinge's axis, which an arm all but straight still shows, its elbow on the line) */
+  const swivelNow = (placed: Quaternion, along = o1) => {
+    const from = _f.copy(along).applyQuaternion(placed), to = _g.copy(along).applyQuaternion(now);
     from.addScaledVector(T, -from.dot(T));
     to.addScaledVector(T, -to.dot(T));
     return from.lengthSq() > 1e-12 && to.lengthSq() > 1e-12 ? signedAngle(from, to, T) : 0;
@@ -166,6 +169,16 @@ function limb(c: Solving, target: Vector3, pole: Vector3 | undefined, quaternion
     _kept.copy(local[0]);
     if (place(other) < left - (keeps ? HELD : 0)) bend = other;
     else local[0].copy(_kept);
+  }
+  // (kept, round the line to the tip no further from where it was than `SWIVELLING` — read off the hinge's axis, which an arm all but
+  // straight still shows, its elbow on the line: two fits about as good, or the pole's side fitting again, leapt it round 1–2 rad in one
+  // sub-step — a throw's cocked arm, 3400 °/s)
+  if (keeps) {
+    const from = _f.copy(h).applyQuaternion(was), to = _g.copy(h).applyQuaternion(_q.copy(c.base).multiply(local[0]));
+    from.addScaledVector(T, -from.dot(T));
+    to.addScaledVector(T, -to.dot(T));
+    const moved = from.lengthSq() > 1e-12 && to.lengthSq() > 1e-12 ? signedAngle(to, from, T) : 0;
+    if (Math.abs(moved) > SWIVELLING) local[0].premultiply(_q.copy(c.base).invert().multiply(_q2.setFromAxisAngle(T, moved - Math.sign(moved) * SWIVELLING)).multiply(c.base));
   }
   limited(skeleton, bones[0], local[0]);
 
@@ -304,6 +317,9 @@ const SWIVEL = 0.05;
  * once it is clearly worse, as production IK keeps an elbow near its last swivel (a pole-vector solve seeded from the last frame). 0.02
  * held a magazine's arm through its carry with no leap of its swivel or forearm twist; at 0.005 it leapt by turns again */
 const HELD = 0.02;
+/** how far a kept limb swivels round the line to its tip in one solve at most (rad): a sub-step's worth of a fast reach's elbow (18 rad/s
+ * at 60 Hz) */
+const SWIVELLING = 0.3;
 
 function clampBend(x: number, { range: [lo, hi] }: Hinge) {
   const near = x + 2 * Math.PI * Math.round(((lo + hi) / 2 - x) / (2 * Math.PI));
@@ -372,7 +388,7 @@ const IDENTITY = new Quaternion(), _neutral = new Quaternion();
 const _local = Array.from({ length: LONGEST }, () => new Quaternion());
 const _joints = Array.from({ length: LONGEST }, () => new Vector3());
 const _rotations = Array.from({ length: LONGEST }, () => new Quaternion());
-const _coords = coordinates();
+const _coords = coordinates(), _was = new Quaternion();
 const _m = new Matrix4();
 const [_v, _a, _b, _c, _d, _e, _t, _p, _n, _h, _hl, _s, _start, _pole, _axis, _f, _g] = Array.from({ length: 17 }, () => new Vector3());
 const [_q, _q2, _r, _r0, _qw, _ql, _twisted, _tip, _bent, _upper, _kept, _fixed, _base] = Array.from({ length: 13 }, () => new Quaternion());

@@ -9,7 +9,7 @@ import type { Rover } from './model';
 import { BEATS, CUES, seat } from './seating';
 
 /** Seconds to get from standing at the doorway to seated with both hands on the wheel, and back out. */
-const SEATING = 1.6;
+const SEATING = 2;
 /** The fastest the rover may still be rolling (m/s) for the driver to get out. */
 const STOPPED = 0.6;
 /** How far the driver's head leads into a turn per radian of lock. */
@@ -65,7 +65,10 @@ export class Driver extends Mount {
   protected pose(puppet: Puppet, standing: Standing, dt: number) {
     const yaw = MathUtils.clamp(this.view.yaw + this.handling.lock * LEAD, -LOOK, LOOK);
     const { body, rifle } = this.soldier.avatar, onto = seat(puppet, standing, this.rover, rifle, this.progress, { yaw, pitch: this.view.pitch });
-    for (const side of ['left', 'right'] as const) body.fingers(side, onto[side], dt);
+    for (const side of ['left', 'right'] as const) {
+      const to = onto[side];
+      body.shapeHand(side, to && puppet.placement(side, to), dt);
+    }
   }
 
   protected cues() { return CUES; }

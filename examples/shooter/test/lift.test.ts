@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
-import { Matrix4, Vector3, type Scene } from 'three';
+import { Matrix4, MeshStandardMaterial, Vector3, type Scene } from 'three';
+import { Lift } from '../src/lift';
 import { SPEED } from '../src/movement';
-import { box, DT, soldierOn, soles } from './course';
+import { box, cleanup, DT, soldierOn, soles } from './course';
 import { expectSmooth, Motion } from './motion';
 
 const sides = ['left', 'right'] as const;
@@ -80,7 +81,7 @@ it.each(['walk', 'sprint', 'jump'] as const)('keeps %s animation attached to the
   expect(hovering, 'Planted soles must follow the completed platform pose').toBeLessThan(0.025);
   expect(penetration).toBeLessThan(0.01);
   expectSmooth(motion);
-}, 20000);
+});
 
 it.each([1, -1].flatMap((direction) => [false, true].map((stop) => ({ direction, stop }))))(
   'keeps each foot on its surface through lift/deck transfer direction=$direction stop=$stop', async ({ direction, stop }) => {
@@ -116,5 +117,38 @@ it.each([1, -1].flatMap((direction) => [false, true].map((stop) => ({ direction,
     expect(hover, 'Planted contacts must follow their own surface').toBeLessThan(0.025);
     expect(penetration).toBeLessThan(0.01);
     expect(hipChange).toBeLessThan(0.06);
-  }, 20000,
+  },
 );
+
+it('stays until its panel\'s button is pressed with the index fingertip, then rides up', async () => {
+  // (the soldier on the platform facing its panel, on the platform's +X edge, a little to its right, looking down at the button with its
+  // rifle held low, as the game has it there)
+  const { world, avatar, movement, acquire, advance, built: lift } = await soldierOn((scene) => {
+    box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');
+    const landing = { at: new Vector3(3, 0, 3), yaw: 0 };
+    return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial(), { down: landing, up: landing });
+  }, { spawn: new Vector3(1, 0.27, 0.45), yaw: Math.PI / 2, pitch: -0.7 });
+  cleanup(lift.bind(world));
+  avatar.lower(true);
+  acquire();
+  const foot = lift.body.position.y;
+  advance(2);
+  expect(lift.body.position.y).toBe(foot);
+  expect(lift.within(movement.position, -Math.PI / 2), 'Its back to the panel, it presses nothing').toBeNull();
+  const button = lift.within(movement.position, Math.PI / 2);
+  expect(button).toBe(lift.buttons.up);
+  if (!button) return;
+  const face = button.part.getObjectByName('press');
+  if (!face) throw new Error('The button has no face to press');
+  // (as the button is pressed, the hand where its index's pad is on the button's face)
+  let off = Infinity;
+  avatar.press(button.part, () => {
+    lift.press(button);
+    off = avatar.body.gripOn('left', avatar.body.placement('left', face)).wrist.distanceTo(avatar.body.bones.leftHand.getWorldPosition(new Vector3()));
+  });
+  advance(3);
+  expect(off).toBeLessThan(0.01);
+  advance(6);
+  expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
+  expect(avatar.pressing).toBe(false);
+});

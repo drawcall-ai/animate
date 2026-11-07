@@ -1,14 +1,17 @@
-import { Vector3, type Group, type Object3D, type Quaternion } from 'three';
+import { Quaternion, Vector3, type Group, type Object3D } from 'three';
+import { INDEX } from '../species/humanoid/bones';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
-import { Person } from './person';
+import { Person, personOf } from './person';
 import { Self, type SelfOptions } from './runtime';
 import { Binding } from './model';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Channel, Tier } from '../kernel/requests';
 import type { Fingers } from '../fingers/shape';
+import { frozen, takingOf } from '../hands/person/palm';
+import type { HandPlacement } from '../hands/person/place';
 
 /** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
  * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
@@ -87,29 +90,58 @@ export class Body<S extends AnySpecies = AnySpecies> {
   }
 
   /** Keeps `node` — something on the body, such as the mount of a rifle on its chest — turned to `rotation` in the world, its position
-   * following its parent: read so as its hands take hold of what hangs from it, each sub-step, after the trunk is posed; `null` lets it go.
-   * Set it before each `update`; the node's own rotation is written to match as the update ends. */
+   * following its parent, as far as the hands holding what hangs from it hold it there (turned faster than the body follows, it waits for
+   * the trunk rather than leaving the hands): read so as its hands take hold of what hangs from it, each sub-step, after the trunk is
+   * posed; `null` lets it go: it rides its parent (the chest) from the turn it was last given, and the hands on what hangs from it hold it
+   * there.
+   * Set it before each `update`; the node's own rotation is written to match as the update ends. With no hand on what hangs from it, it
+   * simply turns as asked. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    selfOf(this).orient(node, rotation);
+    selfOf(this).oriented.set(node, rotation);
   }
 
   /**
-   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet, its bones turned by
-   * hand; a body its update poses does this itself, and the two would fight): the empty the hand is on or on its way to — a grip, as a
-   * thing's are named, its thing the empty's parent — opening the hand as it comes and closing it round the thing's meshes once the wrist
-   * is where `gripOn` puts it; a shape (`Fingers`; `FIST`, `POINT`, …); or relaxed for `null`. Call it each frame after posing the hand.
+   * The placement hand `side` takes the grip `empty` by (its thing the empty's parent): what the grip leaves free fixed as a grab fixes it,
+   * from where the body stands now (`Thing.grip`). For a body its app poses itself, to hand to `gripOn` and `shapeHand`: pick it once as
+   * the hand sets off for the grip and keep it while it holds it — picked afresh as the body moves, a grip with freedoms may be taken
+   * otherwise.
    */
-  fingers(side: 'left' | 'right', to: Fingers | Object3D | null, seconds: number): void {
-    fingersOf(this).set(side, to, seconds);
+  placement(side: 'left' | 'right', empty: Object3D): HandPlacement {
+    const thing = empty.parent;
+    if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
+    return frozen(takingOf(personOf(selfOf(this)), side, Thing.of(thing), empty.name).placement);
   }
 
   /**
-   * Where hand `side`'s bone goes to hold `empty` — a grip, its thing the empty's parent — for a body its app poses itself: its wrist and
-   * its bone's rotation (world). A handle (`userData.handle`; `palm` and `radius` as a thing's grip takes them) lies across the palm as this
-   * hand's own grasp has it, turned to its `palm` or, without one, from the hand's turn now by the least turn that lays it so.
+   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet: its update stopped,
+   * the two would fight): the placement the hand is on or on its way to, opening as it comes and, once the wrist is where `gripOn` puts
+   * it, taking the shape the placement asks (closed round its thing's meshes as the placement has the hand there, or held); a shape
+   * (`Fingers`; `FIST`, `POINT`, …); or relaxed for `null`. Call it every frame after posing the hand. A skeleton without finger bones is
+   * a misuse.
    */
-  gripOn(side: 'left' | 'right', empty: Object3D): { wrist: Vector3; rotation: Quaternion } {
-    return fingersOf(this).gripOn(side, empty);
+  shapeHand(side: 'left' | 'right', to: HandPlacement | Fingers | null, seconds: number): void {
+    fingerStateOf(this).set(side, to, seconds);
+  }
+
+  /** Where hand `side` goes for `placement`, for a body its app poses itself: the wrist, and the world rotation to give the hand bone
+   * (`bones.leftHand`) — the placement's point of the hand on its target, turned as it asks. */
+  gripOn(side: 'left' | 'right', placement: HandPlacement): { wrist: Vector3; rotation: Quaternion } {
+    return fingerStateOf(this).gripOn(side, placement);
+  }
+
+  /**
+   * A point for a person's hand `side`, scaled to its body: out from its shoulder (the upper arm's joint) along `direction` (the body's
+   * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`): 0.5 a thing held up
+   * before the chest, the elbow tucked (a ready hold); 0.75 a comfortable reach; 0.9 all but straight, held out before the face. Past about 0.8, and behind the shoulder, the joints' ranges may hold the hand a
+   * little short (a carry there ends once it has stopped closing, within 1.5 cm of it). Read where the body stands now:
+   * as a hand verb's target, give it as a function so it moves with the body, `() => body.armPoint('right', ahead, 0.8)`. A point keeps a
+   * carried thing turned as the hand holds it; to turn it too, carry it to an empty turned so (parented to `object`, it moves with the body).
+   */
+  armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {
+    const person = this.species.person;
+    if (!person) throw new Error(`armPoint: a ${this.species.name ?? 'custom species'} has no arms`);
+    const pose = this.pose, turn = new Quaternion().setFromAxisAngle(UP, pose.facing);
+    return direction.clone().normalize().applyQuaternion(turn).multiplyScalar(share * person.armLength).add(pose.position(INDEX[`${side}UpperArm`]));
   }
 
   /** A world-space impulse (N·s) at a world-space point: a humanoid's supported torso reacts and recovers before its hands are solved.
@@ -197,9 +229,10 @@ export class Body<S extends AnySpecies = AnySpecies> {
 }
 
 const selves = new WeakMap<Body, Self>();
+const UP = new Vector3(0, 1, 0);
 
 /** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */
-function fingersOf(body: Body): NonNullable<Self['fingers']> {
+function fingerStateOf(body: Body): NonNullable<Self['fingers']> {
   const fingers = selfOf(body).fingers;
   if (!fingers) throw new Error(`fingers: a ${body.species.name ?? 'custom species'} skeleton has no finger bones`);
   return fingers;

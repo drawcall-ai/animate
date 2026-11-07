@@ -1,12 +1,13 @@
 import { Box3, Quaternion, Ray, Vector3 } from 'three';
-import { grasp, held as heldThings, holdOn, lift, onBody } from '../../things/hold';
+import { grasp, held as heldThings, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
 import { leftOf, smoothstep } from '../../kernel/math';
 import type { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
-import { clearArm, placeArm, reaching } from './arms';
+import { placeArm, reaching } from './arms';
+import { clearArm } from './hang';
 import type { Pace } from '../handling';
 import { INDEX } from '../../species/humanoid/bones';
 import { ARM_REACH } from './bend';
@@ -14,7 +15,8 @@ import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { emptyAt, gripAt, reachFor, type Taking } from './reach';
+import { reachFor } from './take';
+import { emptyAt, gripAt, holdOn, type Taking } from './palm';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
 
@@ -31,7 +33,9 @@ const CLOSE = 1.6;
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
 export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], step: boolean, motion?: Pace) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
-  const regripping = takes.map((take) => person.holding[take.side]?.thing === take.thing);
+  // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so a
+  // support hand going back onto a rifle the other holds to the shoulder bowed the trunk as far as it bows before it got there)
+  const holding = takes.map((take) => heldThings(person).includes(take.thing));
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
     // (stood to as if the wrist went on the empty: the hand still hangs, so the palm's way back from it is not yet the reach's)
     grips: takes.map((take) => ({ side: take.side, at: emptyAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
@@ -78,7 +82,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
       yield* action<Frame>({ until: () => stood || preparing() });
       yield* during(request, 'trunk', 'borrowed', (f) => {
         takes.forEach((take, k) => {
-          if (!regripping[k]) bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass, onBody(person, take.thing));
+          if (!holding[k]) bringShoulder(person, f, take.side, gripAt(person, take, f, _grip), share(f, k), take.thing.mass, onBody(person, take.thing));
         });
       });
     });
@@ -124,7 +128,7 @@ export function* takingAtOnce(person: Reacher, request: Request, takes: readonly
       placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
       person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
     }
-    grasp(person, take.side, holdOn(take.thing, take.grip, take.goal, take.palm));
+    grasp(person, take.side, holdOn(person, take));
     placed = true;
   }, () => placed)));
   for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !onBody(person, thing)) lift(person, thing);

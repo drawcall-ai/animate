@@ -141,10 +141,13 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
           // the sword belt: both ends off the table, round the hips, the tongue through the buckle, the eyes on it
           yield* grab(knight, gear.buckle, { left: 'end' });
           yield* grab(knight, gear.tongue, { right: 'end' });
-          yield* parallel('race', parallel('all', carry(knight, gear.buckle, [...places.buckleRound, places.buckled]), carry(knight, gear.tongue, [...places.tongueRound, places.tongued])),
-            lookAt(knight, places.belt, { until: Infinity }), lookAtNext(gear.scabbard));
-          release(knight, gear.buckle, places.buckled);
-          release(knight, gear.tongue, places.tongued);
+          // (each end let go of as it is in place, not held there waiting on the other)
+          const fasten = (end: Object3D, way: Object3D[], place: Object3D) => function* () {
+            yield* carry(knight, end, way);
+            release(knight, end, place);
+          };
+          yield* parallel('race', parallel('all', fasten(gear.buckle, [...places.buckleRound, places.buckled], places.buckled),
+            fasten(gear.tongue, [...places.tongueRound, places.tongued], places.tongued)), lookAt(knight, places.belt, { until: Infinity }), lookAtNext(gear.scabbard));
 
           // the sword, in its scabbard, hung at the left hip; its draw checked: the scabbard tilted, the sword drawn 30 cm and sheathed
           yield* grab(knight, gear.scabbard, { left: 'throat' });

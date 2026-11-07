@@ -1,26 +1,30 @@
-import type { Object3D } from 'three';
+import { MathUtils, Object3D } from 'three';
 import type { PhysicsWorld } from '@drawcall/physics';
 import { yawOf } from '../angles';
 import type { Standing } from '../choreography';
 import { Mount } from '../mount';
 import type { Puppet } from '../puppet';
 import type { Soldier } from '../soldier';
-import { BEATS, cues, gripping, hang, heights, ONTO, slung, type End } from './climbing';
+import { BEATS, cues, gripping, hang, heights, onto, rest, slung, type End } from './climbing';
 import type { Ladder } from './model';
 
 /** Seconds to get on the ladder (and off it), and how fast it is climbed (m/s). */
-const MOUNTING = 1.2;
-const CLIMBING = 0.65;
+const MOUNTING = 1.8;
+const CLIMBING = 0.58;
 
 /**
  * A soldier on a ladder. It walks to the ladder's foot, or to its top on the landing with its back to it; slinging its rifle it takes the
- * rungs (or the stiles above the landing) and steps on, one foot then the other, and climbs a rung at a time with its hands and feet on
- * the diagonal. Climbing past either end it steps off there, taking its rifle back.
+ * rungs (or the stiles above the landing) and steps on, one foot then the other, and climbs two rungs at a time with its hands and feet
+ * on the diagonal, the hands alternating. Climbing past either end it steps off there, taking its rifle back.
  */
 export class Climber extends Mount {
-  /** How far up the ladder its hips are (m), and which way it is asked to climb (1 up … −1 down). */
+  /**
+   * How far up the ladder its hips are (m), which way it is asked to climb (1 up … −1 down) and which way it last climbed: let go of, it
+   * climbs on that way until all four limbs hold.
+   */
   private height = 0;
   private ahead = 0;
+  private going = 1;
   /** whether each limb gripped its rung when last climbed */
   private gripped: boolean[] = [];
 
@@ -41,6 +45,7 @@ export class Climber extends Mount {
   override reset() {
     super.reset();
     this.ahead = 0;
+    this.going = 1;
     this.gripped = [];
   }
 
@@ -50,10 +55,13 @@ export class Climber extends Mount {
 
   protected pose(puppet: Puppet, standing: Standing, dt: number) {
     const { body, rifle } = this.soldier.avatar, onto = hang(puppet, standing, this.ladder, rifle, this.end(), this.progress, this.height, this.view);
-    for (const side of ['left', 'right'] as const) body.fingers(side, onto[side], dt);
+    for (const side of ['left', 'right'] as const) {
+      const to = onto[side];
+      body.shapeHand(side, to instanceof Object3D ? puppet.placement(side, to) : to, dt);
+    }
   }
 
-  protected cues() { return cues(this.end()); }
+  protected cues() { return cues(this.ladder, this.end()); }
 
   protected stowage(puppet: Puppet) {
     const chest = this.soldier.avatar.body.bones.chest;
@@ -63,10 +71,13 @@ export class Climber extends Mount {
 
   private ascend(dt: number) {
     const ends = heights(this.ladder), { foot, top } = this.ladder.marks;
-    this.height = Math.min(ends.top, Math.max(ends.foot, this.height + this.ahead * CLIMBING * dt));
+    if (this.ahead !== 0) this.going = Math.sign(this.ahead);
+    const goal = this.ahead > 0 ? ends.top : this.ahead < 0 ? ends.foot : rest(this.ladder, this.height, this.going);
+    const step = (this.ahead === 0 ? 1 : Math.abs(this.ahead)) * CLIMBING * dt;
+    this.height += MathUtils.clamp(goal - this.height, -step, step);
     // (each hand and foot heard as it comes onto its next rung)
     const limbs = gripping(this.ladder, this.height);
-    limbs.forEach(({ kind, grips }, i) => { if (grips && this.gripped[i] === false) this.soldier.sound(...ONTO[kind]); });
+    limbs.forEach(({ kind, rung, grips }, i) => { if (grips && this.gripped[i] === false) this.soldier.sound(...onto(kind, rung)); });
     this.gripped = limbs.map(({ grips }) => grips);
     const off = this.ahead < 0 && this.height === ends.foot ? foot : this.ahead > 0 && this.height === ends.top ? top : undefined;
     if (off && this.fits(off)) this.dismount(off);

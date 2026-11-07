@@ -35,7 +35,7 @@ describe('Driver', () => {
     // (straight on from the walk up, without waiting at the doorway, and in at once: each move heard as it ends)
     expect(until(() => smooth() && driver.state === 'mounting', 2)).toBeLessThan(1.4);
     heard.length = 0;
-    expect(until(() => smooth() && driver.state === 'on', 2)).toBeLessThan(1.7);
+    expect(until(() => smooth() && driver.state === 'on', 3)).toBeLessThan(2.1);
     expect(heard).toEqual(['clank', 'cloth', 'boot', 'thud', 'boot']);
     expect(smooth.jerk).toBeLessThan(0.02);
     expect(soldier.avatar.rifle.parent).toBe(rover.marks.rack);
@@ -53,6 +53,11 @@ describe('Driver', () => {
       }
     }
 
+    // (the two thumbs alike, each round the rim opposite its fingers: mirror images in their grips' frames, not one lying along the rim)
+    const thumb = (side: 'left' | 'right') => rover.marks.grips[side].worldToLocal(soldier.avatar.body.object.getObjectByName(`${side}ThumbDistal_end`)
+      ?.getWorldPosition(new Vector3()) ?? new Vector3(NaN)).multiply(new Vector3(side === 'left' ? -1 : 1, 1, 1));
+    expect(thumb('left').distanceTo(thumb('right'))).toBeLessThan(0.02);
+
     // (held back while still rolling forward, the pedal brakes)
     until(() => { handling.drive(-1, 0, false); return driver.canExit; }, 6);
     handling.park();
@@ -68,7 +73,7 @@ describe('Driver', () => {
     expect(until(() => {
       taken ||= rifle.parent === hand;
       return out() && driver.state === 'off';
-    }, 2)).toBeLessThan(1.7);
+    }, 3)).toBeLessThan(2.1);
     expect(heard).toEqual(['cloth', 'step-b', 'clank', 'step-a']);
     expect(taken).toBe(true);
     expect(out.jerk).toBeLessThan(0.02);

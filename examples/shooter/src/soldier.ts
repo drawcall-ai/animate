@@ -79,8 +79,8 @@ export class Soldier implements Combatant {
   /** What it is on, getting on or getting off, posed there. */
   get mounted() { return this.mounts.find((mount) => mount.posed); }
 
-  /** Asks to aim; there is no aiming, and so no aiming pace, while a reload is asked for or under way. */
-  set aim(wanted: boolean) { this.movement.input.aim = wanted && !this.avatar.reloading; }
+  /** Asks to aim; there is no aiming, and so no aiming pace, while a reload or a press is asked for or under way. */
+  set aim(wanted: boolean) { this.movement.input.aim = wanted && !this.avatar.reloading && !this.avatar.pressing; }
 
   reset(position = this.spawn, yaw = 0) {
     this.health = 100;

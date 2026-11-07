@@ -5,15 +5,16 @@ import { selfOf, type Body } from '../body/body';
 import { personOf } from '../body/person';
 import { heading } from '../look/head';
 import { HOLD, reaching } from '../hands/person/arms';
+import { REACH } from '../kernel/tip';
 import { INDEX, type Side } from '../species/humanoid/bones';
-import { finder, type Target } from './targets';
+import { finder, handTarget, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 
 /** how far a tracked hand may be off a target past `reach` × its arm's length (m, default body) — as far as a reach is let end — and for
  * how much of the last few seconds: its time short, each second of it counting less by e⁻¹ every `window` s, up to what `seconds` short at
  * a stretch comes to (so a target out of reach for a fifth or more of each stroke of a gesture is said, as one out of reach for half a
  * second is) */
-const OFF = { distance: 0.02, reach: 0.98, seconds: 0.5, window: 3 };
+const OFF = { distance: 0.02, reach: REACH, seconds: 0.5, window: 3 };
 const SHORT = OFF.window * (1 - Math.exp(-OFF.seconds / OFF.window));
 
 /** What a tracked person follows: its head (the eyes' middle, turned as the head is) and its hands (the wrists), each a target. */
@@ -29,6 +30,7 @@ export type Tracked = Partial<Record<'head' | Side, Target>>;
  * It asks for the eyes, the legs and the trunk with a head, and for each hand it is given.
  */
 export function track(body: Body, tracked: Tracked, options: { until?: Until } = {}): Verb {
+  for (const target of [tracked.left, tracked.right]) if (target) handTarget(target, 'track');
   return verb(body, 'track', (request) => function* () {
     const person = personOf(selfOf(body)), branches = [];
     if (tracked.head) {

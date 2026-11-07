@@ -9,7 +9,7 @@ import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, smoothst
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
 import {
-  AIMED, LOWEST, PASSING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
+  AIMED, LOWEST, PASSING, PIVOTED, PIVOTING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
   _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
   dropOf, mod, remaining, strayPast, Steps, SPUN, turnTo,
   physicsOf, type Body, type FootPose, type Leg, type Now, type Physics, type Reading, type Steering, type Timing,
@@ -21,11 +21,11 @@ import { placePelvis } from './pelvis';
 import { plantedPose } from './plant';
 import { drivenLeap, leap } from './leap';
 import { bindFeet, followFeet, transport } from './platform';
-import type { Floor } from '../floor';
+import { FLAT, LEVEL, levelUnder, type Floor } from '../floor';
 
 /**
  * Legs under a root the scene drives (`move`, read every sub-step): the pelvis exactly over it,
- * facing its yaw (within a set turn of a planted foot), bobbing with the steps and let down by
+ * facing its yaw (within a set turn of a planted foot, or of where a biped's foot standing alone began to pivot under it), bobbing with the steps and let down by
  * `crouch`; each foot stays where it stands until it falls too far from its home under its hip
  * (or is turned too far from it), then steps — after the leg before it in the gait, with a flight running — to
  * where its home will be as it lands: re-aimed through the first half of the swing, frozen after;
@@ -63,6 +63,7 @@ export class Stepper extends Steps {
       this.heights[1] += r.position.y - this.pelvis.y;
       this.heights[0] = this.heights[1];
     }
+    this.stagger = r.stagger;
     const root = this.read(f, r, physics);
     const timing = this.timing(root, stroke);
     const yaw = this.face(root);
@@ -161,12 +162,16 @@ export class Stepper extends Steps {
       if (Math.sign(spin) === Math.sign(lead)) this.way = Math.sign(spin);
     } else if (Math.abs(lead) < Math.PI / 2) this.way = 0;
     const wanted = yaws[1] + turnTo(yaws[1], r.yaw, this.way);
-    // (a gait's feet step for the turn the body would make, held back by them: else it waits on feet that wait on it)
-    const pressed = this.clocked && r.turning !== undefined ? clamp(r.turning, -SPIN, SPIN) : spin;
+    // (a gait's feet step for the turn the body would make, held back by them: else it waits on feet that wait on it; pivoting feet for the
+    // turn the pelvis makes, up to `PACED` — as quick as it turns, they pivot no further than they step round; for the root's, a flick's
+    // spike quickened a swing under way so much it slammed down)
+    const turned = clamp((yaws[1] - yaws[0]) / dt, -PACED, PACED);
+    const pressed = this.clocked && r.turning !== undefined ? clamp(r.turning, -SPIN, SPIN)
+      : this.pivoting && Math.abs(turned) > Math.abs(spin) ? turned : spin;
     this.rootYaw = r.yaw;
     return {
       ...physics, f, r, dt, v, run, accel, crouch: k, sitting, tiptoe, rise: jump.rise, vy: jump.vy,
-      airborne: air !== undefined, air: air ?? 0, wanted, spin, pressed, held: pressed !== spin,
+      airborne: air !== undefined, air: air ?? 0, wanted, spin, pressed, held: pressed !== spin, spinning: Math.abs(pressed) > SPIN,
     };
   }
 
@@ -210,17 +215,20 @@ export class Stepper extends Steps {
   }
 
   /** The pelvis' facing: the root's, within reach of the feet's (as they stand or will land). */
-  private face({ f, r, dt, wanted }: Reading): number {
+  private face({ f, r, dt, wanted, spin }: Reading): number {
     const { st, feet, legs, yaws, pair } = this, s = st.scale, toeOut = st.toeOut;
     let low = -Infinity, high = Infinity;
     for (const leg of legs) {
-      // (with a foreseen root, a swinging foot as it is turned now: its landing foresees the whole turn, the hips do not yet)
-      const turned = leg.swing && r.forecast ? leg.swing.turn.x : leg.yaw;
-      const body = yaws[1] + wrapAngle(turned - leg.sign * toeOut - yaws[1]);
-      [low, high] = [Math.max(low, body - this.pelvisTurn), Math.min(high, body + this.pelvisTurn)];
+      // (with a foreseen root, a swinging foot as it is turned now: its landing foresees the whole turn, the hips do not yet; a planted foot
+      // as far as it pivots, turned after the pelvis, `carry`)
+      const turned = leg.swing && r.forecast ? leg.swing.turn.x : leg.yaw, pivots = this.pivots(leg);
+      const body = pivots ? this.pivotFrom(leg, yaws[1]) : yaws[1] + wrapAngle(turned - leg.sign * toeOut - yaws[1]), most = pivots ? PIVOTING : this.pelvisTurn;
+      [low, high] = [Math.max(low, body - most), Math.min(high, body + most)];
     }
-    // A biped cannot turn its pelvis through the line between its feet while the trailing foot is still leaving the floor.
-    if (!this.clocked) for (const leg of legs) {
+    // A biped cannot turn its pelvis through the line between its feet while the trailing foot is still leaving the floor — but over a
+    // foot it pivots on as its root turns on, the other swinging round it (catching up once it stops, the pelvis swung the rifle past the
+    // sights)
+    if (!this.clocked && !(Math.abs(spin) >= SPIN && legs.some((leg) => this.pivots(leg)))) for (const leg of legs) {
       const other = legs[pair[leg.i]];
       if (leg.sign < 0 || other.sign > 0) continue;
       const span = new Vector3().subVectors(f.prev.position(feet.legs[leg.i].foot), f.prev.position(feet.legs[other.i].foot)).setY(0);
@@ -232,11 +240,9 @@ export class Stepper extends Steps {
       high = Math.min(high, Math.max(yaws[1], facing + room));
     }
     const goal = low <= high ? clamp(wanted, low, high) : (low + high) / 2;
-    const rate = Math.abs(goal - this.last) / dt < 2 * TURN.speed ? (goal - this.last) / dt : 0;
-    this.last = goal;
-    // (a gait's body faces as its root does: its planner turns it no faster than its feet keep up)
-    if (!this.clocked) this.turning.velocity = rate;
-    let yaw = this.clocked ? wanted : follow(yaws[0], yaws[1], goal, this.turning, dt);
+    // (a gait's body faces as its root does: its planner turns it no faster than its feet keep up; a person's closes on its goal as one
+    // still — braking into a goal that stops turning, never past it: tracked at the goal's rate, a pelvis spun at 8 rad/s ran 23° past it)
+    let yaw = this.clocked ? wanted : follow(yaws[0], yaws[1], goal, TURN, dt);
     yaw = this.foresee(r, dt, yaw, goal, low, high);
     [yaws[0], yaws[1]] = [yaws[1], yaw];
     return yaw;
@@ -269,23 +275,48 @@ export class Stepper extends Steps {
     return { holding, reaches };
   }
 
-  /** The feet carried on: the swings on their way, the planted feet standing (a gait's that pivots turning in place). */
+  /**
+   * The feet carried on: the swings on their way, the planted feet standing — a gait's that pivots turning in place, heading the body's
+   * way; a biped's standing alone pivoting as the pelvis turns over it (`pivots`), no further off it than `PIVOTED`.
+   */
   private carry(now: Now) {
     const { st, feet, legs } = this, { dt, yaw } = now;
     for (const leg of legs) {
       leg.landed = false;
-      if (leg.swing) swingOn(this, now, leg, leg.swing);
-      else {
+      if (leg.swing) {
+        leg.pivot = undefined;
+        swingOn(this, now, leg, leg.swing);
+      } else {
         leg.planted += dt;
-        // (a gait's planted foot that pivots turns in place about its contact as the body turns over it, heading the body's way)
-        if (this.clocked && feet.turnAbout) {
-          const to = yaw + leg.sign * st.toeOut;
-          feet.turnAbout(leg.i, leg.anchor, leg.yaw, to, leg.pitch);
-          leg.yaw = to;
+        const off = wrapAngle(yaw + leg.sign * st.toeOut - leg.yaw);
+        // (a pivot begun on a foot the pelvis had turned further from, standing on both, keeps its turn and closes on it no faster than
+        // `CLOSING`: snapped to it, the hip jerked round)
+        const most = Math.abs(this.yaws[1] - this.yaws[0]) + CLOSING * dt;
+        const turn = this.clocked ? off : this.pivots(leg) ? this.fitted(leg, clamp(off - clamp(off, -PIVOTED, PIVOTED), -most, most)) : 0;
+        if (feet.turnAbout && turn !== 0) {
+          if (!this.clocked) leg.pivot ??= leg.yaw;
+          feet.turnAbout(leg.i, leg.anchor, leg.yaw, leg.yaw + turn, leg.pitch);
+          leg.yaw += turn;
         }
       }
       leg.lifted += dt;
     }
+  }
+
+  /** as much of `turn` (rad) as pivots a biped's planted foot with its sole still on the level it stands on: spun over a tread's edge, it
+   * would stand off it */
+  private fitted(leg: Leg, turn: number): number {
+    const { feet, floor } = this, level = leg.anchor.y - feet.ankleHeight;
+    const fits = (t: number) => {
+      const anchor = _pivot.copy(leg.anchor);
+      feet.turnAbout?.(leg.i, anchor, leg.yaw, leg.yaw + t, leg.pitch);
+      const on = levelUnder(floor, feet.print(leg.i, anchor, leg.yaw + t));
+      return on !== null && Math.abs(on - level) <= LEVEL;
+    };
+    if (floor === FLAT || fits(turn)) return turn;
+    let [lo, hi] = [0, 1];
+    for (let k = 0; k < 8; k++) [lo, hi] = fits(turn * (lo + hi) / 2) ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
+    return turn * lo;
   }
 
   /**
@@ -450,6 +481,10 @@ const PAIRED = (0.5 - SETTLING) / (0.5 + SETTLING);
 const AWAIT = 0.1;
 /** Tuned: a sole this far (m) above the floor in a final pose has left it (planted, it stands within 0.1 mm of it) */
 const LIFTED = 0.005;
+/** Tuned: a pivoting foot turned further off the pelvis than `PIVOTED` closes on it this much faster than the pelvis turns (rad/s) */
+const CLOSING = 2;
+/** Tuned: a pivoting biped steps as quick as for a turn of `PACED` (rad/s) at most: quicker, a swing quickened late came down hard */
+const PACED = 8;
 /** Tuned: a landing foresees at most `SPIN` (rad/s) of the root's turn */
 const SPIN = 1.5;
 /** Tuned: turning steps as quick as walking `TURNING` m/s per rad/s turned or rad behind */

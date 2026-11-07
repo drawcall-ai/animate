@@ -15,10 +15,9 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from './runtime';
 import type { Binding } from './model';
 import { resolve, type Hold } from '../things/resolve';
-import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied, worn } from '../things/hold';
+import { bear, bodyOf, carryAlong, checkParents, inHand, move, steadied } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from '../species/humanoid/bones';
-import { palmOf } from '../species/humanoid/landmarks';
 import type { Proportions } from '../species/humanoid/proportions';
 import type { Stride } from '../species/humanoid/humanoid';
 import { footRotation } from '../legs/person/foot';
@@ -28,7 +27,9 @@ import { relaxedPose } from '../species/humanoid/relaxed';
 import { standingFeet } from '../species/humanoid/stance';
 import { driven } from '../legs/person/balance';
 import { stride } from '../legs/person/stride';
-import { hanging, handStep, HOLD } from '../hands/person/arms';
+import { handStep, HOLD, placeArm } from '../hands/person/arms';
+import { armClear } from '../hands/person/trunk';
+import { hanging } from '../hands/person/hang';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
 import type { ArmPosture } from '../kernel/poise';
@@ -47,6 +48,8 @@ export class Person extends Self {
   readonly stride: Stride;
   /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
   readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
+  /** a pose to try an arm on (`holds`) */
+  private readonly scratch = new Pose(this.skeleton);
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;
@@ -54,6 +57,13 @@ export class Person extends Self {
     super(species, options, binding, (skeleton, floor) => relaxed(proportions, new Pose(skeleton), floor, options.at ?? new Vector3(), options.face ?? 0));
     this.proportions = proportions;
     this.stride = species.stride ?? {};
+  }
+
+  /** a person's: if its arm, posed onto it afresh, keeps clear of its trunk */
+  holds(f: Frame, hand: string, wrist: Goal): boolean {
+    const side = sideOf(hand), frame = { current: this.scratch.copy(f.current) };
+    placeArm(this, frame, side, wrist);
+    return armClear(frame.current, this.proportions, side);
   }
 
   /** a person's hands: both at once, the right leading */
@@ -83,8 +93,8 @@ export class Person extends Self {
         // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
         // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
         if (inHand(this, thing)) return handStep(this, f, side, held[side](f), { ...HOLD, lead: false }, arms[side]);
-        // (what both hands hold before the body goes with the chest they hang from: with the hips, a saddle taken bowed stayed where they
-        // had it as the trunk straightened, and the palms came 5 cm off its grips)
+        // (what both hands hold before the body goes with the chest they hang from, not the hips: the arms hang from the chest, so it stays
+        // in the hands as the trunk bows or straightens)
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);
         handStep(this, f, side, steadied(hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
@@ -127,16 +137,15 @@ export function personOf(self: Self): Person {
  * hold step and fit have an additional 2 cm allowance: artistic calibration for apparent contact during acquisition, not measured anatomy.
  */
 const GRIP_TAKEN = REACHED.distance + 0.02;
-/** How far a palm may be from the grip it holds on what the body carries (m; tuned: a load carried at the body as it walks and turns
- * lags its turn, the hands up to ~4 cm off their grips) */
+/** How far a hand may be from the grip it holds on what is on the body (m; tuned: a load carried at the body as it walks and turns lags
+ * its turn, and a hand on a rifle snapped up to the eye lags it, up to ~4 cm off their grips) */
 const HELD = 0.05;
 
-/** how far hand `side`'s palm is from `hold`'s grip as the body is posed now (read afresh: a thing hanging from a hand moves with it after the hands) */
+/** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
+ * it after the hands): its goal on the grip (a palm short of the turn its placement asks is put where the turn would have it) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = resolve(person, hold.thing.object, _placed);
-  // (the palm as the hold has it: on a handle, where the handle lies in the hand's grasp)
-  const palm = f.current.point(person.hands[side], _palm.copy(hold.palm ?? palmOf(person.proportions, side)), _palm);
-  return palm.distanceTo(_grip.copy(hold.thing.grip(hold.grip).at.position).applyQuaternion(at.quaternion).add(at.position));
+  const at = resolve(person, hold.thing.object, _placed), goal = hold.goal.position;
+  return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
 }
 
 /** development: each grip a hand has just taken, its palm as near it as a grip taken is */
@@ -150,16 +159,16 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
   }
 }
 
-/** Check final grip distance after fitting. Report carried-load separation once per hold.
- * Worn grips have one rigid owner; unreachable carries draw the wrists together and off their grips. */
+/** Check final grip distance after fitting, once per hold (not of what hangs from its hand, which goes with it): unreachable carries draw
+ * the wrists together and off their grips, and a hand on what the body wears is held off it by its joints. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
-    if (!hold || !bodyOf(hold.thing.object)) continue;
-    const carried = !worn(hold.thing), value = gripGap(person, f, side, hold), limit = carried ? HELD : REACHED.distance;
-    if (value <= limit || (carried && noted.has(hold))) continue;
-    if (carried) noted.add(hold);
-    f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${hold.thing.object.name} ${side}` });
+    if (!hold || !bodyOf(hold.thing.object) || inHand(person, hold.thing) || noted.has(hold)) continue;
+    const value = gripGap(person, f, side, hold);
+    if (value <= HELD) continue;
+    noted.add(hold);
+    f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where: `${hold.thing.object.name} ${side}` });
   }
 }
 
@@ -187,4 +196,4 @@ function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3
   return pose;
 }
 
-const _palm = new Vector3(), _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };
+const _q = new Quaternion(), _grip = new Vector3(), _placed = { position: new Vector3(), quaternion: new Quaternion() };

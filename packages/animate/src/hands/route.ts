@@ -2,12 +2,15 @@ import type { Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import type { Thing } from '../things/thing';
-import { bodyOf, hangsFrom } from '../things/hold';
+import { bodyOf, boneOf } from '../things/hold';
 import type { Handed } from './handed';
 
-/** A carry's way: its points (placements in the world, a sub-step at a time), the last one's orientation the thing takes. */
+/** How a carried thing is kept clear of the body: of its trunk and head (true); of its head alone (`head`: on its way to a place on the
+ * body); of its trunk, and of its head by each of its parts' bounds (`parts`: on its way along the outside to a place on the body); or
+ * not at all. */
 export type Clearance = boolean | 'head' | 'parts';
 
+/** A carry's way: its points (placements in the world, a sub-step at a time), the last one's orientation the thing takes. */
 export type Way = ReturnType<typeof wayOf>;
 
 /** Exit the source approach from its nearest point, then traverse targets and the destination approach. */
@@ -30,7 +33,7 @@ export function wayOf(person: Handed, thing: Thing, targets: readonly ((f: Frame
   }
   /** the mean speed (m/s) of its last straight, an approach's own; none: the carry's */
   const last = speed !== undefined && coming.length > 0 && nearest < points.length - 1 ? speed : undefined;
-  const hasBodyApproach = (empty: Object3D | null) => empty !== null && hangsFrom(person, empty) >= 0 && approachOf(empty).length > 0;
+  const hasBodyApproach = (empty: Object3D | null) => empty !== null && boneOf(person, empty) >= 0 && approachOf(empty).length > 0;
   return {
     /** Destination follows this body, so walking cannot bring it nearer. */
     own: end !== null && bodyOf(end) === person,
@@ -41,7 +44,7 @@ export function wayOf(person: Handed, thing: Thing, targets: readonly ((f: Frame
     last,
     /** whether it is kept clear of the body (`clearBody`): not on a way out of or into an empty on one of the body's bones by that
      * empty's approach (a pouch, a scabbard, a helm's place on the head), which brings it out or in */
-    clear: hasBodyApproach(seat) || hasBodyApproach(end) ? false : end !== null && hangsFrom(person, end) >= 0 ? 'head' as const : true,
+    clear: hasBodyApproach(seat) || hasBodyApproach(end) ? false : end !== null && boneOf(person, end) >= 0 ? 'head' as const : true,
   };
 }
 

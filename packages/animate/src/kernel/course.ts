@@ -52,10 +52,12 @@ export function course(item: { readonly current: Placement }, waypoints: readonl
       }
       runs = runsOf(stops, waypoints.map(([seconds]) => seconds / pace));
     }
+    // (a run that takes no time — a waypoint of 0 s, the thing put at once where it turns back — is gone as it begins: timed as a share
+    // of its 0 s, it was nowhere, 0 / 0, while the course waited out its delay)
     let t = Math.max(0, f.time - start - delay);
     let i = 0;
-    while (i < runs.length - 1 && t > runs[i].seconds) t -= runs[i++].seconds;
-    const { position, quaternion } = runs[i].at(minimumJerk(t / runs[i].seconds), _at);
+    while (i < runs.length - 1 && t >= runs[i].seconds) t -= runs[i++].seconds;
+    const { position, quaternion } = runs[i].at(runs[i].seconds > 0 ? minimumJerk(t / runs[i].seconds) : 1, _at);
     return { position: position.clone(), quaternion: quaternion.clone(), carriedBy };
   };
   return { to, over: (f: Frame) => !Number.isNaN(start) && f.time - start >= delay + total };

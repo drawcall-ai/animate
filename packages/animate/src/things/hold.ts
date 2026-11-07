@@ -4,9 +4,8 @@ import type { Pose } from '../kernel/pose';
 import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
 import { anchors, movers, resolve, written, type Hold, type Holder, type Resolving } from './resolve';
-import { Thing, type Grip } from './thing';
+import { Thing } from './thing';
 import type { Goal, Placement } from '../kernel/goal';
-import { turnOnto } from '../kernel/math';
 
 /** the nearest anchor among `object` and its ancestors: a body's object (bone −1) or moving bone */
 function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined {
@@ -17,7 +16,7 @@ function anchorOf(object: Object3D): { body: Holder; bone: number } | undefined 
 }
 
 /** the moving bone of `self` that `object` hangs from (its nearest ancestor that is one; −1: its object; NaN: none) */
-export function hangsFrom(self: Holder, object: Object3D): number {
+export function boneOf(self: Holder, object: Object3D): number {
   const anchor = anchorOf(object);
   return anchor?.body === self ? anchor.bone : NaN;
 }
@@ -30,48 +29,6 @@ export function bodyOf(object: Object3D): Holder | null {
 /** whether `thing` is on `self`: attached under it, or in its hands */
 export function onBody(self: Holder, thing: Thing): boolean {
   return bodyOf(thing.object) === self || held(self).includes(thing);
-}
-
-/** A person's palm, as a grip takes it: its centre in the hand bone's frame — on a handle, where the handle's axis lies in the hand's
- * grasp — and the hand bone's turn in the thing's frame as the body was last posed; for a hand with fingers on a handle, the line the
- * handle lies along in the hand (toward the thumb) and the way the palm faces onto it (the hand bone's frame). */
-export interface Palm {
-  at: Readonly<Vector3>;
-  turn: () => Quaternion;
-  line?: { axis: Vector3; facing: Vector3 };
-}
-
-/**
- * Where a hand bone goes on `grip` (the thing's frame): turned as the empty is, its `rest` undone; or rolling about its free line; or turned
- * as the hand comes. A person's hand holds a grip in its `palm`: the bone, at the wrist, goes as far back from the empty as the palm's
- * centre is from the wrist, along the hand as it was last turned — read afresh, so the goal moves on the thing as the hand turns or rolls,
- * and a hand short of its asked turn (its wrist at the end of its range, or still turning) still has its palm on the empty, not the
- * wrist on the place the turn would have put it (a pistol grip turned 0.4 rad past the wrist's range: the palm 3 cm off it). A
- * creature's tip, with no palm, goes on the empty.
- */
-export function goalOn(grip: Grip, rest: Readonly<Quaternion>, palm?: Palm): Goal {
-  const onHandle = grip.handle && palm?.line && handleTurn(palm.line, grip.handle);
-  const quaternion = onHandle ? onHandle.quaternion : grip.turn === null ? undefined : grip.at.quaternion.clone().multiply(_back.copy(rest).invert());
-  const axis = onHandle ? onHandle.axis : grip.turn instanceof Vector3 ? grip.turn.clone().applyQuaternion(grip.at.quaternion) : undefined;
-  const turns = { ...(quaternion && { quaternion }), ...(axis && { axis }) };
-  if (!palm) return { position: grip.at.position.clone(), ...turns };
-  // (the wrist, the palm on the empty, the hand turned `turn` in the thing's frame)
-  const empty = grip.at.position, wrist = new Vector3();
-  return { get position() { return wrist.copy(palm.at).applyQuaternion(palm.turn()).negate().add(empty); }, ...turns };
-}
-
-/**
- * the hand's turn (the thing's frame) with `hand`'s grasp line along `handle`'s axis, its thumb toward the axis's end and its palm facing
- * as the handle's `palm` asks; a handle without one takes the hand turned as the arm brings it, its palm on the handle's line
- */
-function handleTurn(hand: NonNullable<Palm['line']>, handle: NonNullable<Grip['handle']>): { quaternion: Quaternion; axis?: Vector3 } | null {
-  return handle.palm ? { quaternion: turnOnto(hand.axis, hand.facing, handle.axis, handle.palm) } : null;
-}
-
-/** the hold a hand takes on `grip` of `thing`, its goal `goal` (`goalOn`); a person's `palm` holds it */
-export function holdOn(thing: Thing, grip: string, goal: Goal, palm?: Palm): Hold {
-  if (!palm) return { thing, grip, goal };
-  return { thing, grip, goal, palm: palm.at, ...(!goal.quaternion && { turn: palm.turn }) };
 }
 
 /** where a hand holding `hold` goes on its thing: its goal, turned as the hand holds it (`Hold.turn`) when the grip sets no turn */
@@ -117,7 +74,7 @@ export function carriedBy(self: Holder, thing: Thing): boolean {
 
 /** whether `thing` hangs from a hand of `self` that holds it (a thing held in one hand is attached under that hand's bone) */
 export function inHand(self: Holder, thing: Thing): boolean {
-  const bone = hangsFrom(self, thing.object);
+  const bone = boneOf(self, thing.object);
   return handsOn(self, thing).some((hand) => self.hands[hand] === bone);
 }
 
@@ -154,7 +111,7 @@ function placeUnder(reader: Resolving, object: Object3D, parent: Object3D, posit
 /** `thing` lifted into `self`'s hands (`take`), where it was taken from kept unless it was lifted already */
 export function lift(self: Holder, thing: Thing): void {
   const parent = thing.object.parent;
-  if (parent && !thing.lifted) [thing.home, thing.taken] = [parent, self.track(thing.object).current.position.clone()];
+  if (parent && !thing.lifted) thing.taken = self.track(thing.object).current.position.clone();
   thing.lifted = true;
   take(self, thing);
 }
