@@ -17,7 +17,8 @@ import { ARM_REACH, PROTRACTION } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { footing, walking, type WalkUp } from './stand';
 import { guidesFor, CARRYING, type Guides } from './guide';
-import { grasping, holding, travel, type Grasping } from './travel';
+import { holdAlong, travel } from './travel';
+import { grasping, type Grasping } from './grasp';
 
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
 const PREPARED = 2;
@@ -62,7 +63,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position), along(person, request, thing, way, guides, resting, grasp, options.speed));
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   request.met();
-  yield* holding(person, request, thing, guides(), end, undefined, way.own);
+  yield* holdAlong(person, request, thing, guides(), end, undefined, way.own);
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
@@ -97,7 +98,7 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
     }, function* () {
       yield* travel(person, request, thing, [[LIFT, atBody]], guides, resting, { eta: onward, walks: true });
       lifted = true;
-      yield* holding(person, request, thing, guides(), walked, near);
+      yield* holdAlong(person, request, thing, guides(), walked, near);
       yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), guides, false, { grasp, walks: true });
       // (come to rest on it once the body has come there, not merely passing within reach of it, or it is let go of past it — or stalled
       // short of it, or late: a carry ends what it cannot finish)

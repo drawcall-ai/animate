@@ -5,7 +5,7 @@ import { CALM } from './arms';
 import { bodyOf } from '../../things/hold';
 import { sideOf } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
-import { grabbing, takingAtOnce } from './grab';
+import { grabbing, grabAtOnce } from './grab';
 import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
@@ -29,7 +29,7 @@ export function personHands(person: Reacher): Handling {
       }
       try {
         if (options.speed === Infinity) {
-          yield* takingAtOnce(person, request, takes);
+          yield* grabAtOnce(person, request, takes);
           return request.met();
         }
         const motion = options.speed === undefined ? undefined : paceAt(options.speed, CALM);

@@ -14,8 +14,8 @@ import { sideOf } from '../../species/humanoid/bones';
 import { bringShoulder } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { following, LEADING, limitOf } from './reach';
-import { grasped, planGrasp, seat } from './grasp';
-import { resolve, type Hold } from '../../things/resolve';
+import { grasped, seat, type Grasping } from './grasp';
+import type { Hold } from '../../things/resolve';
 import type { Guide, Guides } from './guide';
 
 // A carried thing along its course: the hands holding it on its guide, until it has come to rest at the course's end — or is late there,
@@ -35,46 +35,6 @@ const TURNED = 0.05;
 const PLANNED = 0.5;
 /** Tuned: how long (s) a carry's course may be over, its thing not yet at rest at its end, before its hand plans its grasp again */
 const SETTLING = 0.5;
-
-/**
- * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
- * the thing is now): as it nears its end (`nearing`) — weighed each sub-step until its course is over, the end and the body as they
- * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a socket on
- * something the other hand holds up as the head turns to it) is weighed where it has gone, not only where it was half a second before
- * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s after its course is over
- * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
- */
-export interface Grasping {
-  /** weighed as the course nears its end, the last time as it is `over` */
-  nearing: (f: Frame, over: boolean) => void;
-  settling: (f: Frame) => void;
-}
-
-export function grasping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Grasping {
-  const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
-  const plan = (f: Frame, settling = false) => {
-    if (!hold) return false;
-    const at = end(f);
-    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion }, settling);
-  };
-  let kept = true;
-  return {
-    nearing: (f, over) => {
-      if (kept) kept = plan(f) && !over;
-    },
-    settling: once((f) => plan(f, true)),
-  };
-}
-
-/** `act`, done the first time only */
-function once(act: (f: Frame) => void): (f: Frame) => void {
-  let done = false;
-  return (f) => {
-    if (done) return;
-    done = true;
-    act(f);
-  };
-}
 
 /**
  * Follow a course with load compliance only on support take-up, until the thing rests within `near` of its course's end; report a late
@@ -179,7 +139,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     return false;
   };
   request.eta = eta(left(person.frame));
-  yield* holding(person, request, thing, guide, (f) => {
+  yield* holdAlong(person, request, thing, guide, (f) => {
     request.eta = eta(left(f));
     return to(f);
   }, there);
@@ -207,7 +167,7 @@ function tipOf(hold: Hold, hand: string): ChainTip {
 }
 
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
-export function holding(person: Reacher, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
+export function holdAlong(person: Reacher, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
     ? [{ side: sideOf(hand), hold, tip: tipOf(hold, hand) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
@@ -256,5 +216,5 @@ function restingAt(near: number): (f: Frame, carrier: Carrier, at: Readonly<Vect
     return { rests: thing.position.distanceTo(end.prev.position) < near && off.length() < END.speed && !spins, spins };
   };
 }
-const _placed = { position: new Vector3(), quaternion: new Quaternion() }, _v = new Vector3(), _g = new Vector3(), _off = new Vector3();
+const _v = new Vector3(), _g = new Vector3(), _off = new Vector3();
 const _t = new Quaternion(), _u = new Quaternion(), IDENTITY = new Quaternion();

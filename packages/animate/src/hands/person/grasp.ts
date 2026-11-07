@@ -2,11 +2,11 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Goal, Placement } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
-import { inHand } from '../../things/hold';
+import { handsOn, inHand } from '../../things/hold';
 import { resolve, type Hold } from '../../things/resolve';
 import type { Thing } from '../../things/thing';
 import { palmOf } from '../../species/humanoid/landmarks';
-import type { Side } from '../../species/humanoid/bones';
+import { sideOf, type Side } from '../../species/humanoid/bones';
 import { broughtTurn, elbowPole, scratch } from './arms';
 import { holdsClear } from './trunk';
 import { solveChain } from '../../kernel/chain';
@@ -22,7 +22,7 @@ import { fixes } from './take';
  * into where it goes: the thing's turn is the carry's, the hand's follows from the grasp.
  *
  * A grip that leaves the hand's turn free has its placement picked as the grab starts, for that moment, so the grasp may change. From
- * half a second before a carry's course ends (`PLANNED`, carry.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
+ * half a second before a carry's course ends (`PLANNED`, travel.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
  * keeps it: solved there, how far its joints are out of the middle of their ranges (`strainAt`). Comfortable enough (`STRAINED`), it is
  * kept, the arm working for it (a lance borne upright beside the hip); else the hand regrips onto the least turned of the grasps tried
  * there that the arm holds clearly more comfortably (strained by half `STRAINED` at most, and by `STRAINED` less) — the hand as the arm
@@ -142,6 +142,46 @@ export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold,
   const to = chosen.premultiply(_back.copy(end.quaternion).invert()).multiply(restOf);
   regrips.set(hold, { from: from.quaternion, to, palm: inThing.clone(), onto: inThing.clone(), start: f.time, seconds: REGRIP });
   return false;
+}
+
+/**
+ * For a carry of `thing` to `end` in one hand, its grasp planned for its end (`planGrasp`, the end turned as the carry asks or else as
+ * the thing is now): as it nears its end (`nearing`, from `PLANNED` s before it, travel.ts) — weighed each sub-step until its course is over, the end and the body as they
+ * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a socket on
+ * something the other hand holds up as the head turns to it) is weighed where it has gone, not only where it was half a second before
+ * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s (travel.ts) after its course is over
+ * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
+ */
+export interface Grasping {
+  /** weighed as the course nears its end, the last time as it is `over` */
+  nearing: (f: Frame, over: boolean) => void;
+  settling: (f: Frame) => void;
+}
+
+export function grasping(person: Reacher, thing: Thing, end: (f: Frame) => Goal): Grasping {
+  const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
+  const plan = (f: Frame, settling = false) => {
+    if (!hold) return false;
+    const at = end(f);
+    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion }, settling);
+  };
+  let kept = true;
+  return {
+    nearing: (f, over) => {
+      if (kept) kept = plan(f) && !over;
+    },
+    settling: once((f) => plan(f, true)),
+  };
+}
+
+/** `act`, done the first time only */
+function once(act: (f: Frame) => void): (f: Frame) => void {
+  let done = false;
+  return (f) => {
+    if (done) return;
+    done = true;
+    act(f);
+  };
 }
 
 /**

@@ -108,7 +108,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
  * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
  * the arm's reach from where the body stands fails it, said in development.
  */
-export function* takingAtOnce(person: Reacher, request: Request, takes: readonly Taking[]) {
+export function* grabAtOnce(person: Reacher, request: Request, takes: readonly Taking[]) {
   if (person.updates > 0) throw new Error('grab: `speed: Infinity` takes hold at once only as a body starts (in its first update): a body already shown reaches for it');
   const f = person.frame, reach = ARM_REACH * person.proportions.armLength;
   for (const take of takes) {
