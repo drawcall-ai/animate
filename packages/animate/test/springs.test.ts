@@ -128,6 +128,7 @@ test('a person\'s braid keeps out of its body when it stops hard, behind it and 
     life: { seed: 7 },
     drive: time => ({ position: new Vector3(0.3 * Math.sin(3 * time), 0, at(time)), velocity: new Vector3(0.9 * Math.cos(3 * time), 0, speed(time)), yaw: 0.6 * Math.sin(3 * time), support: new Vector3() }),
   });
+  if (!kind.person) throw new Error('a humanoid is a person');
   const radius = 0.06 * kind.person.height, bones = body.bones;
   let deepest = -Infinity, ahead = -Infinity;
   for (let i = 0; i < 180; i++) {
