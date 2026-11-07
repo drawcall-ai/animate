@@ -224,7 +224,8 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   rifle.position.copy(stock.position).negate();
   const motion = new WeaponMotion();
   const grenade = grenades && new GrenadeMotion(person, onBone(person, chest, 'grenade harness', new Vector3()), grenades);
-  let throwing = false, slung = 0;
+  // (throwing: from the key press until the rifle is held again; returning: once the grenade has left the hands, taking the rifle back)
+  let throwing = false, returning = false, slung = 0;
   const pouches = POUCHES.map((at, i) => {
     const pouch = onBone(person, chest, `pouch ${i + 1}`, at.clone().multiply(new Vector3(arms, arms, proportions.scale)));
     empty(pouch, `over pouch ${i + 1}`, new Vector3(0, 0.1 * proportions.scale, 0));
@@ -323,7 +324,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     time += seconds;
     const turning = Math.hypot(wrapAngle(input.yaw - look.yaw), input.pitch - look.pitch) / seconds;
     if (!acquired || input.aim || swapping || throwing || root.velocity.length() > 0.05 || turning > 0.5 || time - lastShot < 1) stillSince = time;
-    slung = ease(slung, Number(throwing && grenade?.phase !== 'Returning to rifle'), seconds, 0.35);
+    slung = ease(slung, Number(throwing && !returning), seconds, 0.35);
     aiming = ease(aiming, Number(input.aim && !throwing), seconds);
     sprinted = ease(sprinted, Number(sprinting()), seconds);
     reloaded = ease(reloaded, Number(swapping), seconds);
@@ -426,9 +427,9 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
           yield* wait(() => slung === 1);
           release(person, rifle);
           yield* grenade.throw(() => lookDirection(input.yaw, input.pitch), () => look.eye.clone(), () => input.velocity);
+          returning = true;
           if (!(yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, QUICK))) throw new Error('Could not take rifle after grenade throw');
-          throwing = false;
-          grenade.phase = '';
+          throwing = returning = false;
           continue;
         }
         if (pressWanted) {
@@ -454,12 +455,11 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     acquired: () => acquired,
     reloading,
     throwing: () => throwing,
-    grenadePhase: () => grenade?.phase ?? '',
+    grenadePhase: () => !throwing ? '' : returning ? 'Returning to rifle' : grenade?.phase ?? 'Lowering rifle',
     dropGrenade: () => grenade?.interrupt(look.eye),
     requestGrenade: () => {
       if (!grenade || !grenades?.count || !acquired || reloading() || pressWanted || throwing) return false;
       throwing = true;
-      grenade.phase = 'Lowering rifle';
       return true;
     },
     aimWeight: () => smooth(aiming),

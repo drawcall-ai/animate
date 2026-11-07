@@ -12,10 +12,12 @@ const READY = new Vector3(0.3, 0, 1);
 const SPEED = 18, LOFT = new Vector3(0, 2.5, 0);
 
 type Item = { model: GrenadeModel; slot: Object3D };
+/** what the hands are doing with the grenade, as the player is told it; null while they are not on it */
+export type Phase = 'Taking grenade' | 'Pulling pin' | 'Throwing';
 
 /** Prop contact and the throw are animate verbs; there are no hand or bone keyframes here. */
 export class GrenadeMotion {
-  phase = '';
+  phase: Phase | null = null;
   private readonly rack: Item[] = [];
   private readonly straps: Mesh[] = [];
   private readonly webbing = new MeshStandardMaterial({ color: '#474a31', roughness: 0.95 });
@@ -45,7 +47,7 @@ export class GrenadeMotion {
   /**
    * Bring it up while the other hand finds the ring, pull clear, cock, throw along `aim` (read as it leaves the hand, the thrower's
    * `velocity` added) and follow through; whether it was thrown. A hand that cannot take the grenade or its ring (the dev log says why)
-   * puts the grenade back on its clip.
+   * puts the grenade back on its clip, or drops it, pin in, if it cannot.
    */
   *throw(aim: () => Vector3, eye: () => Vector3, velocity: () => Vector3) {
     const item = this.rack[0];
@@ -53,17 +55,17 @@ export class GrenadeMotion {
     const person = this.person, { object, pin } = item.model;
     this.current = item.model;
     this.phase = 'Taking grenade';
-    if (!(yield* grab(person, object, { right: 'body' }, QUICK))) return yield* this.putBack(item);
+    if (!(yield* grab(person, object, { right: 'body' }, QUICK))) return yield* this.putBack(item, eye);
     this.grenades.count--;
     this.phase = 'Pulling pin';
     const ready = () => {
       this.ready.position.copy(person.object.worldToLocal(person.armPoint('right', READY, 0.65)));
       return this.ready;
     };
-    if (!(yield* parallel('all', carry(person, object, ready, QUICK), grab(person, pin, { left: 'ring' }, QUICK)))) return yield* this.putBack(item);
+    if (!(yield* parallel('all', carry(person, object, ready, QUICK), grab(person, pin, { left: 'ring' }, QUICK)))) return yield* this.putBack(item, eye);
     const clear = () => pin.getWorldPosition(new Vector3()).distanceTo(object.getWorldPosition(new Vector3())) > 0.10;
     yield* carry(person, pin, () => person.armPoint('left', new Vector3(1, -0.25, 0.8), 0.8), { ...QUICK, until: clear });
-    if (!clear()) return yield* this.putBack(item);
+    if (!clear()) return yield* this.putBack(item, eye);
     this.armed = true;
     this.grenades.drop(pin, release(person, pin));
     this.phase = 'Throwing';
@@ -78,7 +80,7 @@ export class GrenadeMotion {
       },
     });
     if (!thrown) this.interrupt(eye());
-    this.phase = 'Returning to rifle';
+    this.phase = null;
     return thrown;
   }
 
@@ -103,20 +105,21 @@ export class GrenadeMotion {
     this.ready.removeFromParent();
   }
 
-  /** the grenade back on its clip, its pin still in */
-  private *putBack({ model: { object, pin }, slot }: Item) {
+  /** the grenade back on its clip, its pin still in; dropped where it is if the hand cannot bring it there */
+  private *putBack({ model: { object, pin }, slot }: Item, eye: () => Vector3) {
     const person = this.person;
     if (person.holds(pin)) {
       release(person, pin);
       object.attach(pin);
     }
     if (person.holds(object)) {
-      yield* carry(person, object, slot, QUICK);
-      release(person, object, slot);
-      this.grenades.count++;
+      if (yield* carry(person, object, slot, QUICK)) {
+        release(person, object, slot);
+        this.grenades.count++;
+      } else this.interrupt(eye());
     }
     this.current = undefined;
-    this.phase = 'Returning to rifle';
+    this.phase = null;
     return false;
   }
 }
