@@ -373,15 +373,12 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     magazines.splice(magazines.indexOf(spent), 1);
     litter.drop(spent, velocity, spin);
     if (!(yield* grab(person, full, { left: 'base' }, BRISK))) return false;
-    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in: let go
-    // onto its place under the well and taken again at once where the hand is, then pushed up the line, the hand going with it)
+    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in: put onto
+    // its place under the well, the hand keeping hold, then pushed up the line, the hand going with it)
     if (!(yield* carry(person, full, below, BRISK))) return false;
-    release(person, full, below);
-    if (full.parent !== below) throw new Error(`"${full.name}" was not let go onto "${below.name}"`);
-    // (pushed as the hand takes it again: waiting for the grasp to settle held it under the well 0.2 s)
-    let taken = true;
-    yield* parallel('all', function* () { taken = yield* grab(person, full, { left: 'base' }, QUICK); }, slide(full, RIFLE.wellLine, PUSH, (share) => 1 - (1 - share) ** 2));
-    if (!taken) return false;
+    release(person, full, below, { left: true });
+    if (full.parent !== below) throw new Error(`"${full.name}" was not put onto "${below.name}"`);
+    yield* slide(full, RIFLE.wellLine, PUSH, (share) => 1 - (1 - share) ** 2);
     release(person, full, well);
     onReload?.('in');
     return true;

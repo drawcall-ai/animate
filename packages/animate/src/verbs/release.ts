@@ -27,17 +27,21 @@ export interface Released {
  * lifted it, left in the world where it is (under the scene's root; take it into your physics from there), else where it is. The hands
  * that let go back out of it, carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb
  * for it waits until it has. Returns how the thing (the first named) was moving as it left the hand: to throw it, let go while a carry
- * still moves it and give that motion to your physics. Development says when a thing is put onto an empty more than 5 mm off or onto one
- * another thing already sits in, and notes (`dev: { notes: true }`) one let go in mid-air.
+ * still moves it and give that motion to your physics. Hands named in `keep` (`{ left: true }`) keep hold of a thing put onto `onto`: it
+ * rests there, moved with its place, and they follow it (a magazine let onto its place under the well, then pushed home by its parent).
+ * Development says when a thing is put onto an empty more than 5 mm off or onto one another thing already sits in, and notes
+ * (`dev: { notes: true }`) one let go in mid-air.
  */
-export function release(body: Body, thing: Object3D, onto?: Object3D): Released;
+export function release<S extends AnySpecies>(body: Body<S>, thing: Object3D, onto?: Object3D, keep?: ByHand<S, true>): Released;
 export function release<S extends AnySpecies>(body: Body<S>, hands: ByHand<S, Object3D>): Released;
-export function release(body: Body, which: Object3D | Partial<Record<string, Object3D>>, onto?: Object3D): Released {
+export function release(body: Body, which: Object3D | Partial<Record<string, Object3D>>, onto?: Object3D, keep: Partial<Record<string, true>> = {}): Released {
   const self = selfOf(body);
   if (which instanceof Object3D) {
-    const held = Thing.of(which), hands = handsOn(self, held);
+    const held = Thing.of(which), hands = handsOn(self, held), kept = Object.keys(keep);
     if (!hands.length) throw new Error(`release: no hand of the body holds "${which.name}"`);
-    return letGo(self, held, hands, onto);
+    if (kept.length && !onto) throw new Error('release: hands keep hold of a thing only as it is put onto an empty');
+    for (const hand of kept) if (!hands.includes(hand)) throw new Error(`release: the ${hand} hand does not hold "${which.name}" to keep`);
+    return letGo(self, held, hands.filter((hand) => !kept.includes(hand)), onto);
   }
   const named = Object.entries(which).flatMap(([hand, thing]) => thing ? [{ hand, thing: Thing.of(thing) }] : []);
   if (!named.length) throw new Error('release: name a hand and what it holds');
@@ -65,14 +69,16 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
   if (backOut) self.handling.backOut(hands, away);
-  // (a hand of its own still on it: that hand carries it alone — what the body wears, a rifle on its mount, stays where it is worn)
-  if (handsOn(self, thing).length) {
-    if (!wearing) take(self, thing);
-    return released;
-  }
   const holder = [...thing.holders].find((other): other is Self => other !== self);
-  if (onto) put(self, thing, onto, placed.position);
-  else if (holder) take(holder, thing);
+  if (onto) {
+    put(self, thing, onto, placed.position);
+    // (a hand kept on it holds it where it rests now, no longer as the carry that brought it keeps it in the hand)
+    for (const hand of handsOn(self, thing)) delete self.holding[hand]?.keep;
+  }
+  // (a hand of its own still on it: that hand carries it alone — what the body wears, a rifle on its mount, stays where it is worn)
+  else if (handsOn(self, thing).length) {
+    if (!wearing) take(self, thing);
+  } else if (holder) take(holder, thing);
   else {
     // (a thing lifted is left in the world where it is, under the scene's root; one never lifted — a button, a part still in its place —
     // stays where it is)

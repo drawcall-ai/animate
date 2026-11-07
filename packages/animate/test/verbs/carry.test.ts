@@ -205,6 +205,28 @@ describe('carry', () => {
 });
 
 describe('release', () => {
+  it('puts what one hand carries onto an empty, the hand keeping hold of it there and going with it as its place moves', () => {
+    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.2, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4 });
+    Object.assign(empty(ball, 'grip', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
+    const place = empty(room, 'place', new Vector3(-0.25, 1.2, 0.4));
+    let put = false;
+    play(function* () {
+      yield* grab(body, ball, { right: 'grip' });
+      yield* carry(body, ball, place, { step: false });
+      release(body, ball, place, { right: true });
+      put = true;
+    }, [body], 4, () => put);
+    expect(ball.parent).toBe(place);
+    expect(body.holds(ball)).toBe(true);
+    const palm = () => palmAt(h, 'right').distanceTo(worldOf(ball));
+    const held = palm();
+    play(function* () { yield* wait(1); }, [body], 1, () => void (place.position.y += 0.05 / 60));
+    expect(ball.parent).toBe(place);
+    expect(Math.abs(palm() - held)).toBeLessThan(0.01);
+    expect(body.log).toEqual([]);
+  });
+
   it('follows through: a hand let go of something moving carries on its way, then off it', () => {
     const body = person(), h = insides(body), room = roomOf(body);
     const load = box(room, new Vector3(0, 1.0, 0.4), { mass: 1, solid: false });
