@@ -237,9 +237,11 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     feet.legs.forEach((leg, i) => {
       const offset = proportions.offsets[`${SIDES[i]}UpperLeg`];
       const hip = offset.clone().setX(0).applyQuaternion(tilt).applyAxisAngle(UP, -stepper.turn);
-      leg.hip = (offset.x + hip.x) * leg.sign;
+      // (a pelvis turned off the facing carries its hips round with it: reached for from square, a throw's planted foot slid)
+      const across = _v.set(offset.x, 0, 0).applyAxisAngle(UP, hipsTurn);
+      leg.hip = (across.x + hip.x) * leg.sign;
+      leg.ahead = hip.z + across.z;
       leg.up = hip.y + _v.copy(offset).applyQuaternion(shift).y - offset.y;
-      leg.ahead = hip.z;
     });
     // (the stepper given the feet's middle — a centre of mass's `behind` it, the hips that far ahead of it again; let down as asked or
     // as the root crouches it, the feet staying put; balance read off the body as it last stood, as the checks read it)

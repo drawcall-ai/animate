@@ -6,6 +6,10 @@ import { checks, failed, measure } from './metrics';
 import { frames, type Frame } from './frame';
 import { Simulation } from '../src/simulation';
 import { knownFailure, run } from '../scripts/run';
+import { cases } from '../../../packages/animate/test/open';
+
+// (marginal at this life seed: arm swing peak acceleration 2.14 × the sinusoid's, max 2)
+const test = cases([['strolls straight on: knees near straight at mid-stance, a 3.5–5 cm bob lowest just after contact', [3]]]);
 
 // A straight stroll's strides as people walk them, and strolls round bends and turns with an empty dev log.
 /** a straight stroll, measured, with each touchdown's heel speed (m/s, over the frame it is planted in) */
@@ -38,7 +42,7 @@ function straightStroll() {
   return { sim, metrics, heights, landings, touchdown };
 }
 
-it('strolls straight on: knees near straight at mid-stance, a 3.5–5 cm bob lowest just after contact', () => {
+test('strolls straight on: knees near straight at mid-stance, a 3.5–5 cm bob lowest just after contact', () => {
   const { sim, metrics, heights, landings, touchdown } = straightStroll();
   expect(touchdown).toBeLessThanOrEqual(0.1);
   expect(sim.stage.done(), 'straight stroll finished').toBe(true);

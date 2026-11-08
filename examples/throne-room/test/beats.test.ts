@@ -1,14 +1,7 @@
 import { expect, it } from 'vitest';
 import { BEATS } from '../src/beats';
-import { runBeat } from './run';
+import { playsThrough } from './play-through';
 
-// Every registered beat plays to its end state within its duration, and no body's dev checks complain.
-for (const beat of BEATS) {
-  it(`${beat.id} plays to its end`, async () => {
-    const playing = await runBeat(beat);
-    expect(playing.finished(), `${beat.id} finished within ${beat.duration} s`).toBe(true);
-    expect(playing.done(), `${beat.id} reached its end state`).toBe(true);
-    expect(playing.bodies.flatMap((body) => body.log)).toEqual([]);
-  });
-}
-it('lists beats', () => expect(Array.isArray(BEATS)).toBe(true));
+// Every registered beat but the film, which is as long as all of these together: its file gets a worker of its own beside them.
+for (const beat of BEATS.filter((each) => each.id !== 'film')) playsThrough(beat);
+it('lists beats', () => expect(BEATS.some((each) => each.id === 'film')).toBe(true));

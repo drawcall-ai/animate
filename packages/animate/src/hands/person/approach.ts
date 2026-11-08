@@ -20,6 +20,8 @@ import { following, lateWatch, LEADING, reachTime } from './reach';
 // The hands' last reach onto the grips they take: each round what is in its way to the face nearest its grip (or, for a fingertip, in
 // along its button's face), timed together, the leading hand first, then all closing on their grips at once.
 
+/** Tuned: how far off its grip a fingertip fixed by its facing may close unsaid (m, default body): a fingertip's breadth */
+const FIXED_OFF = 0.01;
 /** An outside staging point beyond the arm’s reach is followed this long after its planned arrival before closing on the exact grip. */
 const STAGING = 0.4;
 
@@ -28,11 +30,15 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
   // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
   yield* action<Frame>({ until: (f) => takes.every((take) => f.time >= person.drawingBack[take.side]) });
   const began = person.frame.time;
-  // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, unsaid)
+  // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, said in the dev log)
   const exact = ({ thing, grip }: Taking) => thing.grip(grip).point !== 'palm' && !fixes(thing.grip(grip));
   // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
   const there = (f: Frame) => takes.every((take) => touching(person, take, f) || (!exact(take) && reached(f, person.hands[take.side], take.goal, person.track(take.thing.object))));
-  const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(person, take)));
+  const close = () => takes.forEach((take) => {
+    const f = person.frame, off = take.thing.grip(take.grip).point !== 'palm' ? padOff(person, take, f) : 0;
+    if (off > FIXED_OFF * person.scale) f.dev?.append(f.time, { check: 'a fingertip closed off its grip (m)', value: off, limit: FIXED_OFF * person.scale, where: `${take.thing.object.name} ${take.side} ${take.grip}` });
+    grasp(person, take.side, holdOn(person, take));
+  });
   if (there(person.frame)) return close();
   let ends = Infinity;
   const late = lateWatch(person, request, takes.map((take) => ({

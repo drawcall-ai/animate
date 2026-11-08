@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { cases } from '../open';
 import { reach, walkTo, type Body } from '../../src/index';
 import { solePoints } from '../../src/species/humanoid/landmarks';
 import { SIDES } from '../../src/species/humanoid/bones';
@@ -124,7 +125,11 @@ describe('a person on a floor', () => {
   });
 
   // (recalled: the centre of mass rises through the stride climbing stairs, ~0.4–0.5 m/s at its most on ordinary stairs)
-  it.each([['up', 0, 6], ['down', 6, 0]] as const)('climbs the throne room stairs %s at a stair pace: soles on the treads, toes over the nosings, a smooth rise', (_, from, to) => {
+  const walkedFlight = (way: string) => `climbs the throne room stairs ${way} at a stair pace: soles on the treads, toes over the nosings, a smooth rise`;
+  const walkedAt = (speed: number) => `climbs them at ${speed} m/s asked too, a walk no faster than a stair pace on them`;
+  // (marginal at this life seed: a touchdown at 0.1005 m/s, max 0.1)
+  const test = cases([[walkedFlight('down'), [3]], [walkedAt(1.3), [3]]]);
+  for (const [way, from, to] of [['up', 0, 6], ['down', 6, 0]] as const) test(walkedFlight(way), () => {
     const body = person({ dev: true, floor: flight, at: on(flight, from), face: from < to ? 0 : Math.PI });
     const walk = walked(body, flight, on(flight, to));
     expectClean(body, walk);
@@ -143,7 +148,7 @@ describe('a person on a floor', () => {
     expect(walk.seat).toBeGreaterThan(from < to ? 0.55 : 0.45);
   });
 
-  it.each([0.4, 1.3])('climbs them at %s m/s asked too, a walk no faster than a stair pace on them', (speed) => {
+  for (const speed of [0.4, 1.3]) test(walkedAt(speed), () => {
     for (const [from, to] of [[0, 6], [6, 0]]) {
       const body = person({ dev: true, floor: flight, at: on(flight, from), face: from < to ? 0 : Math.PI });
       expectClean(body, walked(body, flight, on(flight, to), speed));

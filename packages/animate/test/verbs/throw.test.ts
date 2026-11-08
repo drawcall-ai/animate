@@ -2,10 +2,30 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Body, carry, grab, humanoid, throwAt, wait } from '../../src/index';
 import { SOLDIER } from '../skeletons/soldier';
+import { PERSON } from '../../skills/animate/references/person';
 import { person, play } from '../bodies';
 import { box, empty, roomOf, worldOf } from '../things';
 
 describe('throwAt', () => {
+  it('keeps its planted feet on hips set below its pelvis as the pelvis turns into the throw', () => {
+    const skeleton = PERSON.map((bone) => {
+      const position: [number, number, number] = [...bone.position];
+      if (bone.name.endsWith('UpperLeg')) position[1] -= 0.1;
+      return { ...bone, position };
+    });
+    const body = new Body(humanoid(skeleton), { dev: true, life: { seed: 1 } }), room = roomOf(body);
+    const ball = box(room, new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.15, solid: false });
+    Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
+    let thrown = false;
+    play(function* () {
+      yield* grab(body, ball, { right: 'body' }, { step: false });
+      thrown = yield* throwAt(body, ball, new Vector3(0, 1.2, 6));
+      yield* wait(1);
+    }, [body], 8);
+    expect(thrown).toBe(true);
+    expect(body.log).toEqual([]);
+  });
+
   for (const [driven, height, low, soldier] of [[false, 1.75, true, false], [true, 1.8, false, true]] as const) it(`throws overhand at a target (${soldier ? 'the short-armed soldier' : `${height} m`}${driven ? ', its root driven' : ''}, taken from ${low ? 'low' : 'before the chest'}): cocked behind the head, whipped through, let go ahead of it aimed at the target, following through, and comes back up, the arm let hang`, () => {
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };
     const options = { dev: true, ...(driven && { drive: () => root }) };

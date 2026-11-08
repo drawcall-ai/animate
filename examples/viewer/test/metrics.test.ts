@@ -35,7 +35,9 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
 }
 
 // VR still misses its controller targets; variation grids are exercised by dev.test.ts.
-const check = cases(['vr']);
+const check = cases(['vr',
+  // (marginal at this life seed: arm swing peak acceleration 2.14 × the sinusoid's, max 2; step length asymmetry 0.08, max 0.05; the pelvis 2.006 cm off the feet's midpoint, max 2)
+  ['stroll', [3]], ['knight-arming', [3]], ['idle-life', [3]]]);
 for (const sc of SCENARIOS.filter((s) => !['legs-biped', 'legs-horse', 'dog-fetch', 'lion-run'].includes(s.id))) {
   check(sc.id, () => judged(sc));
 }

@@ -118,6 +118,18 @@ describe('a hand on what a grip declares', () => {
     expect(body.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: expect.stringContaining('a fingertip still off its grip') })]));
   });
 
+  it('says so when a facing fixes its pad off its grip', () => {
+    const { body, room, rod, grip, gap } = rodBefore('thumb', 0.01);
+    delete rod.userData.mass;
+    grip.userData.facing = [0, 0, -1];
+    room.updateMatrixWorld(true);
+    let took: boolean | null = null;
+    play(function* () { took = yield* grab(body, rod, { left: 'grip' }, { step: false }); }, [body], 14, () => took !== null);
+    expect(took).toBe(true);
+    expect(gap()).toBeGreaterThan(0.01);
+    expect(body.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: 'a fingertip closed off its grip (m)' })]));
+  });
+
   it('regrips a plain grip about the point it took, turning the thing with that point still on its grip until it is seated', () => {
     const { body, rod, gap } = rodBefore('palm', 0.013), target = above();
     const from = new Quaternion();

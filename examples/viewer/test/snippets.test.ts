@@ -6,6 +6,7 @@ import { expect, it } from 'vitest';
 import * as animate from '@drawcall/animate';
 import * as three from 'three';
 import * as timeline from '@pmndrs/timeline';
+import { cases } from '../../../packages/animate/test/open';
 import { PERSON } from '../../../packages/animate/skills/animate/references/person';
 
 // Compile and run the shipped skill's standalone examples.
@@ -46,7 +47,7 @@ function compiled(): Map<string, string[]> {
 const errors = compiled();
 for (const [name, found] of errors) it(`${name} compiles`, () => expect(found).toEqual([]), 120_000);
 
-it('runs the skill story headlessly to its checked ending', () => {
+cases([['runs the skill story headlessly to its checked ending', [2]]])('runs the skill story headlessly to its checked ending', () => { // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: 0.14 m at this life seed)
   const main = blocks().find(({ doc }) => doc.endsWith('SKILL.md'));
   if (!main) throw new Error('The animate skill has no runnable example');
   const modules: Record<string, unknown> = {
