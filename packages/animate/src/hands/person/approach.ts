@@ -1,14 +1,14 @@
 import { Box3, Matrix4, Ray, Quaternion, Vector3 } from 'three';
 import { parallel, action } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { REACHED, type Goal } from '../../kernel/goal';
+import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { pointSegmentDistance } from '../../kernel/math';
 import { seedOf } from '../../kernel/random';
 import { reached } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, held, onBody, worn } from '../../things/hold';
-import { gripAt, holdOn, type Taking } from './take';
-import { pressingIn, runOf, touching } from './press';
+import { fixes, gripAt, holdOn, type Taking } from './take';
+import { padOff, pressingIn, runOf, TOUCH, touching } from './press';
 import { reaching } from './arms';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
@@ -28,8 +28,10 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
   // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
   yield* action<Frame>({ until: (f) => takes.every((take) => f.time >= person.drawingBack[take.side]) });
   const began = person.frame.time;
+  // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, unsaid)
+  const exact = ({ thing, grip }: Taking) => thing.grip(grip).point !== 'palm' && !fixes(thing.grip(grip));
   // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
-  const there = (f: Frame) => takes.every((take) => touching(person, take, f) || reached(f, person.hands[take.side], take.goal, person.track(take.thing.object)));
+  const there = (f: Frame) => takes.every((take) => touching(person, take, f) || (!exact(take) && reached(f, person.hands[take.side], take.goal, person.track(take.thing.object))));
   const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(person, take)));
   if (there(person.frame)) return close();
   let ends = Infinity;
@@ -40,6 +42,12 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
     request.eta = Math.max(0, ends - f.time);
     if (ready(f)) return true;
     late(f, ends);
+    // (a wrist on its goal, its pad still off the grip: nothing `late` judges)
+    const off = f.time > ends + REACHING ? takes.find((take) => exact(take) && !touching(person, take, f)) : undefined;
+    if (off) {
+      f.dev?.append(f.time, { check: 'late reach: a fingertip still off its grip (m)', value: padOff(person, off, f), limit: TOUCH * person.scale, where: `${off.thing.object.name} ${off.side} ${off.grip}` });
+      request.fail();
+    }
     return false;
   };
   const plan = takes.map((take) => {

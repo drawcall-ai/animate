@@ -9,7 +9,7 @@ import { worn } from '../../things/hold';
 import { INDEX } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
 import { HOLD, reaching } from './arms';
-import { emptyAt, type Taking } from './take';
+import type { Taking } from './take';
 
 /*
  * A fingertip's press (a grip with `userData.point`): the hand turned to point into the face, pointed before its way's last run in along
@@ -23,7 +23,7 @@ const RUN = 0.045;
  * in, so the pad goes along the run as the wrist does (a finger straightening over the run would swing its pad off the line) */
 const POINTS = { from: 0.22, to: 0.12 };
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
-const TOUCH = 0.012;
+export const TOUCH = 0.001;
 /** how far off the face's normal a fingertip draws back along the line from the eyes at most (rad) */
 const SIGHTED = 0.9;
 /** how far a fingertip draws back off its button as it lets go (m, default body) and in how long (s) */
@@ -56,11 +56,16 @@ export function pressingIn(person: Reacher, hand: Taking & { from: Vector3; poin
   return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
 }
 
-/** whether `take`'s grip is a fingertip's, and its pad, where the hand last stood, is on its empty (`TOUCH`): a press ends there */
+/** whether `take`'s grip is a fingertip's, and its pad is on its empty (`TOUCH`): a press ends there */
 export function touching(person: Reacher, take: Taking, f: Frame): boolean {
-  if (take.thing.grip(take.grip).point === 'palm') return false;
+  return take.thing.grip(take.grip).point !== 'palm' && padOff(person, take, f) < TOUCH * person.scale;
+}
+
+/** how far (m) `take`'s pad is off its empty, each as it last stood */
+export function padOff(person: Reacher, take: Taking, f: Frame): number {
   const bone = person.hands[take.side], pad = _pad.copy(take.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
-  return pad.distanceTo(emptyAt(person, take, f, _empty)) < TOUCH * person.scale;
+  const { position, quaternion } = person.track(take.thing.object).at(f.time).prev;
+  return pad.distanceTo(_empty.copy(take.thing.grip(take.grip).at.position).applyQuaternion(quaternion).add(position));
 }
 
 /**

@@ -231,6 +231,11 @@ export class Self implements Holder {
     return yawOf(this.pose.local(0));
   }
 
+  /** its bones in the scene as its last finished pose has them: an update's later sub-steps stand ahead of what its last update wrote */
+  showPrev(): void {
+    this.binding.write(this.frame.prev, this.floor);
+  }
+
   /** Self reads the pose being written (the last final pose between sub-steps); a body ahead of another reader exposes its update-start pose. */
   poseFor(reader: Resolving): ReadonlyPose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
@@ -397,7 +402,8 @@ export class Self implements Holder {
     } finally {
       this.stepping = false;
     }
-    this.updates++;
+    // (one too short for a sub-step finished nothing: readers and what was kept for this pose stay as they are)
+    if (steps > 0) this.updates++;
     this.binding.write(this.pose, this.floor);
     this.orient.write();
     this.fingers?.update(seconds);

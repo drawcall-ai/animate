@@ -1,7 +1,7 @@
 import { Box3, Matrix4, Object3D, Vector3 } from 'three';
 import { selfOf, type Body, type ByHand } from '../body/body';
 import type { AnySpecies } from '../species/define';
-import { attach, bodyOf, grasp, handsOn, take, worn } from '../things/hold';
+import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
 import { backOff } from '../hands/person/press';
 import { END } from '../hands/person/travel';
 import { STEP } from '../kernel/frame';
@@ -25,8 +25,8 @@ export interface Released {
 
 /**
  * Lets go, at once (no `yield*`). Given a thing, every hand of the body holding it lets go of it; given hands by name (`{ right: rope }`),
- * those hands let go of what each names and the body's others keep holding (one hand left on a thing carries it alone; one left on what
- * the body wears, a rifle on its mount, keeps hold of it there). A thing no hand of the body holds any more is attached onto the empty
+ * those hands let go of what each names and the body's others keep holding (one hand left on a thing it carried carries it alone; one left on what
+ * stayed where it is, a rifle on its mount, a fixed rail, keeps hold of it there). A thing no hand of the body holds any more is attached onto the empty
  * `onto` (set there exactly if it is within 5 mm), else to another body still holding it (that body carries it now), else, if a hand
  * lifted it, left in the world where it is (under the scene's root; take it into your physics from there), else where it is. The hands
  * that let go back out of it, carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb
@@ -69,7 +69,7 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
     const hold = self.holding[hand], way = hold && self.species.person ? backOff(personOf(self), hold.thing.grip(hold.grip), placed) : null;
     return way ? [[hand, way]] : [];
   }));
-  const wearing = worn(thing);
+  const carried = carriedBy(self, thing);
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
   if (backOut) self.handling.backOut(hands, away);
@@ -79,9 +79,9 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
     // (a hand kept on it holds it where it rests now, no longer as the carry that brought it keeps it in the hand)
     for (const hand of handsOn(self, thing)) delete self.holding[hand]?.keep;
   }
-  // (a hand of its own still on it: that hand carries it alone — what the body wears, a rifle on its mount, stays where it is worn)
+  // (a hand of its own still on it: that hand carries it alone, if it was carried — what stayed where it is as the hands held it, a rifle worn on its mount, a fixed rail, stays there)
   else if (handsOn(self, thing).length) {
-    if (!wearing) take(self, thing);
+    if (carried) take(self, thing);
   } else if (holder) take(holder, thing);
   else {
     // (a thing lifted is left in the world where it is, under the scene's root; one never lifted — a button, a part still in its place —

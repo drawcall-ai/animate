@@ -14,7 +14,7 @@ import { sideOf } from '../../species/humanoid/bones';
 import { bringShoulder } from './bend';
 import { ChainTip } from '../../kernel/tip';
 import { following, LEADING, limitOf } from './reach';
-import { grasped, seat, type Regripping } from './grasp';
+import { grasped, seat, shifts, type Regripping } from './grasp';
 import type { Hold } from '../../things/resolve';
 import type { Guide, Guides } from './guide';
 
@@ -79,10 +79,17 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
   // (the hand a thing hangs from alone, carried to a place: the fingers seat it there)
   const seating = (f: Frame) => {
     const [hand, ...others] = handsOn(person, thing);
-    return end && turns(f) && hand !== undefined && !others.length && inHand(person, thing) ? sideOf(hand) : null;
+    const hold = hand === undefined ? null : person.holding[hand];
+    return end && turns(f) && hold && !others.length && shifts(hold) && inHand(person, thing) ? sideOf(hand) : null;
   };
   const there = (f: Frame) => {
-    if (!Number.isNaN(seated)) return f.time >= seated;
+    if (!Number.isNaN(seated)) {
+      if (f.time < seated) return false;
+      guide.read(f, to);
+      if (carrier.current.position.distanceTo(guide.goal.position) <= near) return true;
+      // (its place moved on while it was seated, or the arm took it off: seated again)
+      seated = NaN;
+    }
     if (!path.over(f) || ready?.() === false) return false;
     if (Number.isNaN(since)) since = f.time;
     if (grasp && f.time - since > SETTLING) grasp.settling(f);

@@ -1,6 +1,7 @@
-import { Group, Object3D, Quaternion, Vector3 } from 'three';
+import { BoxGeometry, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { arriving, Body, carry, grab, release, wait } from '../../src/index';
+import { arriving, Body, carry, grab, humanoid, release, wait } from '../../src/index';
+import { NATIVE } from '../skeletons/native';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 
@@ -229,6 +230,39 @@ describe('carry', () => {
 });
 
 describe('release', () => {
+  it('leaves a fixed rail where it is as one of the hands on it lets go', () => {
+    const body = person({ dev: true }), room = roomOf(body), rail = new Group();
+    rail.position.set(0, 1, 0.35);
+    room.add(rail);
+    for (const [name, x] of [['left', 0.2], ['right', -0.2]] as const) Object.assign(empty(rail, name, new Vector3(x, 0, 0)).userData, { handle: [1, 0, 0], radius: 0.02 });
+    room.updateMatrixWorld(true);
+    play(function* () {
+      yield* grab(body, rail, BOTH, { step: false, speed: Infinity });
+      yield* wait(0.5);
+      release(body, { left: rail });
+    }, [body], 1);
+    expect(rail.parent).toBe(room);
+    expect(body.holds(rail)).toBe(true);
+  });
+
+  it('seats what a carry brought so that a release onto its target at once has nothing to say', () => {
+    const body = new Body(humanoid(NATIVE), { at: new Vector3(0.98, 0, -1.5), face: Math.atan2(-0.98, -0.15), dev: true, life: { seed: 1, steady: 1 } }), room = roomOf(body);
+    const home = empty(room, 'home', new Vector3(0.62, 0.79, -1.31)), load = new Mesh(new BoxGeometry(0.04, 0.02, 0.04).translate(0, 0.01, 0));
+    load.userData.mass = 0.2;
+    home.add(load);
+    empty(load, 'top', new Vector3(0, 0.0292, 0));
+    const place = empty(room, 'place', new Vector3(0.54, 0.79, -1.45));
+    room.updateMatrixWorld(true);
+    let carried = false;
+    play(function* () {
+      yield* grab(body, load, { left: 'top' }, { step: false });
+      carried = yield* carry(body, load, place, { step: false });
+      release(body, load, place);
+    }, [body], 20, () => carried);
+    expect(carried).toBe(true);
+    expect(body.log).toEqual([]);
+  });
+
   it('puts what one hand carries onto an empty, the hand keeping hold of it there and going with it as its place moves', () => {
     const body = person({ dev: true }), h = insides(body), room = roomOf(body);
     const ball = box(room, new Vector3(-0.2, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4 });

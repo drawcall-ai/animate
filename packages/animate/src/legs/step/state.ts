@@ -90,7 +90,7 @@ export interface Stepping {
 export interface Feet {
   /**
    * each leg's side (+1 left), its foot (and toes) and top bones; the leg across from it on its girdle (`partner`; default the one
-   * before it in the gait); how far its top stands ahead of the root and out from it (m; default 0 and the hip's half width) and its home
+   * before it in the gait); how far its top stands ahead of the root (a person's: only as far as its bow carries it) and out from it (m; default 0 and the hip's half width) and its home
    * ahead of it (m; default as its top), how far its top joint is above the root standing (m; default 0) and the leg's length (m; default `length`)
    */
   legs: readonly {

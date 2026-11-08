@@ -116,6 +116,8 @@ export function take(self: Holder, thing: Thing): void {
   const hands = handsOn(self, thing);
   if (!hands.length) throw new Error(`"${thing.object.name}" is in none of the body's hands`);
   if (carriedBy(self, thing)) return;
+  // (taken from the hand where the body has got to: under a long update its bones in the scene still lag by the sub-steps since)
+  self.showPrev();
   attach(thing, self.boneNode(hands.length === 1 ? self.hands[hands[0]] : 0), self);
   if (hands.length === 1) return;
   const at = resolve(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });

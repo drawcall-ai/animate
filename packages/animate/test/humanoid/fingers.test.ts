@@ -1,37 +1,60 @@
-import { BoxGeometry, CylinderGeometry, Line3, Mesh, Quaternion, SphereGeometry, TorusGeometry, Vector3 } from 'three';
+import { Bone, BoxGeometry, CylinderGeometry, Float32BufferAttribute, InstancedMesh, Line3, Matrix4, Mesh, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, TorusGeometry, Uint16BufferAttribute, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import type { SkeletonBone } from '@drawcall/rig';
 import { Body, carry, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
 import { selfOf } from '../../src/body/body';
 import { PERSON } from '../../skills/animate/references/person';
+import { FINGERED } from '../skeletons/fingered';
 import { LIFTED } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
 import { person, play } from '../bodies';
 import { empty, roomOf } from '../things';
 
-/** the reference person with VRM finger bones, laid out in its T-pose: palms down, thumbs forward, each finger straight out */
-const FINGERED: SkeletonBone[] = [...PERSON, ...(['left', 'right'] as const).flatMap((side) => {
-  const hand = PERSON.find((bone) => bone.name === `${side}Hand`);
-  if (!hand) throw new Error('no hand');
-  const out = side === 'left' ? 1 : -1, [x, y, z] = hand.position;
-  const digit = (name: string, joints: readonly string[], across: number, step: Vector3, from: Vector3) => joints.map((joint, k) => ({
-    name: `${side}${name}${joint}`, parent: k === 0 ? `${side}Hand` : `${side}${name}${joints[k - 1]}`,
-    position: from.clone().addScaledVector(step, k).add(new Vector3(x, y, z + across)).toArray(),
-  }));
-  const finger = ['Proximal', 'Intermediate', 'Distal'];
-  return [
-    ...digit('Thumb', ['Metacarpal', 'Proximal', 'Distal'], 0.02, new Vector3(out * 0.025, -0.01, 0.025), new Vector3(out * 0.025, -0.01, 0)),
-    ...digit('Index', finger, 0.025, new Vector3(out * 0.028, 0, 0), new Vector3(out * 0.09, 0, 0)),
-    ...digit('Middle', finger, 0.005, new Vector3(out * 0.03, 0, 0), new Vector3(out * 0.093, 0, 0)),
-    ...digit('Ring', finger, -0.015, new Vector3(out * 0.028, 0, 0), new Vector3(out * 0.088, 0, 0)),
-    ...digit('Little', finger, -0.033, new Vector3(out * 0.022, 0, 0), new Vector3(out * 0.08, 0, 0)),
-  ];
-})];
-
 /** how far bone `name` of `body` is bent off its rest (rad) */
 const bent = (body: Body, name: string) => 2 * Math.acos(Math.min(1, Math.abs(body.bones[name].quaternion.w)));
 
+/** the right hand's digits, closed for a while with the hand set on a grip on the 3 cm rod `mesh` */
+function closedOn(mesh: Mesh): Quaternion[] {
+  const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+  mesh.position.set(-0.25, 0.95, 0.35);
+  mesh.rotation.x = Math.PI / 2;
+  const grip = empty(mesh, 'grip', new Vector3());
+  Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.015 });
+  room.add(mesh);
+  room.updateMatrixWorld(true);
+  const placement = body.placement('right', grip), hand = body.bones.rightHand, arm = hand.parent;
+  if (!arm) throw new Error('no forearm');
+  const { wrist, rotation } = body.gripOn('right', placement);
+  hand.position.copy(arm.worldToLocal(wrist));
+  hand.quaternion.copy(arm.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
+  hand.updateMatrixWorld(true);
+  for (let k = 0; k < 40; k++) body.shapeHand('right', placement, 0.05);
+  return Object.entries(body.bones).filter(([name]) => /^right(Thumb|Index|Middle|Ring|Little)/.test(name)).map(([, bone]) => bone.quaternion.clone());
+}
+
+/** a 3 cm rod whose geometry lies a metre off where it is shown, as `kind` shows it */
+function shownOff(kind: 'skinned' | 'instanced'): Mesh {
+  const geometry = new CylinderGeometry(0.015, 0.015, 0.3, 16).translate(1, 0, 0);
+  if (kind === 'instanced') {
+    const mesh = new InstancedMesh(geometry, undefined, 1);
+    mesh.setMatrixAt(0, new Matrix4().makeTranslation(-1, 0, 0));
+    return mesh;
+  }
+  const count = geometry.getAttribute('position').count;
+  geometry.setAttribute('skinIndex', new Uint16BufferAttribute(new Uint16Array(count * 4), 4));
+  geometry.setAttribute('skinWeight', new Float32BufferAttribute(new Float32Array(count * 4).map((_, k) => k % 4 === 0 ? 1 : 0), 4));
+  const mesh = new SkinnedMesh(geometry), bone = new Bone();
+  mesh.add(bone);
+  mesh.bind(new Skeleton([bone]));
+  bone.position.x = -1;
+  return mesh;
+}
+
 describe('fingers', () => {
+  it.each(['skinned', 'instanced'] as const)('close on a rod %s, where it is shown and not where its geometry lies', (kind) => {
+    const plain = closedOn(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16))), shown = closedOn(shownOff(kind));
+    expect(Math.max(...shown.map((turn, k) => turn.angleTo(plain[k])))).toBeLessThan(0.01);
+  });
+
   it('close round a handle a hand grabs, none through it, the thumb round its far side, and open as the hand lets go', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     // (a 3 cm rod held across the palm, in front of the right hip)

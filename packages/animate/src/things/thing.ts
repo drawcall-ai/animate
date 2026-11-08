@@ -1,5 +1,5 @@
 import { Box3, Matrix4, Mesh, Object3D, Quaternion, Ray, Vector3 } from 'three';
-import { Triangles } from '../kernel/triangles';
+import { surfaceOf, Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import type { Holder } from './resolve';
 import { digitOf } from '../fingers/shape';
@@ -72,9 +72,18 @@ export class Thing {
     if (point !== undefined && (handle !== undefined || radius !== undefined)) throw new Error(`"${name}" has both userData.point and userData.${handle !== undefined ? 'handle' : 'radius'}: a pad goes on one point`);
     if (length !== undefined && handle === undefined) throw new Error(`"${name}" has userData.length without userData.handle: a hand slides along a handle`);
     const axis = handle === undefined ? null : inThing(handle, 'handle');
-    const scale = () => (object.updateWorldMatrix(true, false), new Vector3().setFromMatrixScale(object.matrixWorld).x);
+    // (up its ancestors' own matrices, as an app-owned one ends the chain: read mid-update, refreshing the world's would change what the rest of the update reads)
+    const scale = () => {
+      let scaled = 1;
+      for (let node: Object3D | null = object; node; node = node.parent) {
+        if (node.matrixAutoUpdate) node.updateMatrix();
+        if (!node.matrixWorldAutoUpdate) return scaled * _size.setFromMatrixScale(node.matrixWorld).x;
+        scaled *= _size.setFromMatrixScale(node.matrix).x;
+      }
+      return scaled;
+    };
     return {
-      node, at,
+      node, at: { position: at.position.clone().multiplyScalar(scale()), quaternion: at.quaternion },
       facing: facing === undefined ? null : inThing(facing, 'facing'),
       point: point === undefined ? 'palm' as const : digitOf(point, `"${name}" userData.point`),
       ball: axis === null && typeof radius === 'number' ? { get radius(): number { return radius * scale(); } } : null,
@@ -95,10 +104,10 @@ export class Thing {
   }
 }
 
-/** A grip on a thing, as `Thing.grip` reads it: its empty, where it is in the thing's frame, and what its keys ask (in the thing's frame). */
+/** A grip on a thing, as `Thing.grip` reads it: its empty, where it is in the thing's frame (m, the world's), and what its keys ask (in the thing's frame). */
 export type Grip = ReturnType<Thing['grip']>;
 
-const things = new WeakMap<Object3D, Thing>();
+const things = new WeakMap<Object3D, Thing>(), _size = new Vector3();
 
 /** `object`'s own meshes a hand can touch: the shown ones, not those of things attached to it (their own `userData.mass`) */
 export function meshesOf(object: Object3D): Mesh[] {
@@ -147,7 +156,7 @@ function trianglesNear(object: Object3D, node: Object3D, at: Vector3): Triangles
   if (known) return known;
   object.updateWorldMatrix(true, true);
   const back = new Matrix4().copy(object.matrixWorld).invert();
-  const near = new Triangles(meshesOf(object).map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), at, 0.2);
+  const near = new Triangles(meshesOf(object).flatMap((mesh) => surfaceOf(mesh, back)), at, 0.2);
   about.set(node, near);
   return near;
 }

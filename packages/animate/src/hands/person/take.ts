@@ -130,7 +130,7 @@ function stepped(person: Reacher, side: Side, empty: Vector3): ((hand: Placement
  * keeping on them as the box turns through what the wrists allow)
  */
 export function holdOn(person: Reacher, take: Taking): Hold {
-  const held = { thing: take.thing, grip: take.grip, placement: take.placement };
+  const held = { thing: take.thing, grip: take.grip, placement: take.placement, point: take.point };
   if (!fixes(take.thing.grip(take.grip))) return { ...held, goal: take.goal };
   const { position, quaternion } = handOn(take.point, take.placement), began = person.frame.time, from = turnIn(person, take.side, take.thing, new Quaternion());
   const turn = new Quaternion();

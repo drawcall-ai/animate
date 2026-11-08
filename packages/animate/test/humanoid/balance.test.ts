@@ -1,13 +1,27 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { runTimeline } from '@pmndrs/timeline';
-import { walkTo } from '../../src/index';
+import { Body, humanoid, walkTo } from '../../src/index';
+import { PERSON } from '../../skills/animate/references/person';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { heelOf } from '../../src/legs/person/foot';
 import { wrapAngle, yawOf } from '../../src/kernel/math';
 import { claim, dt, insides, person, play, run, feetOf } from '../bodies';
 
 describe('balance', () => {
+  it('stands facing as it started on hips set ahead of its root, no lean to step under', () => {
+    const skeleton = PERSON.map((bone) => {
+      const position: [number, number, number] = [...bone.position];
+      if (bone.name.endsWith('UpperLeg')) position[2] += 0.02;
+      if (bone.name.endsWith('LowerLeg')) position[2] += 0.01;
+      return { ...bone, position };
+    });
+    const body = new Body(humanoid(skeleton), { dev: true, life: { seed: 1 } });
+    let most = 0;
+    run(body, 30, () => { most = Math.max(most, Math.abs(wrapAngle(body.facing))); });
+    expect(most).toBeLessThan(0.2);
+  });
+
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
     const asked: number[] = [];
     const body = person(), h = insides(body);

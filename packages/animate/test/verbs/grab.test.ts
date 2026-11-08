@@ -1,13 +1,14 @@
 import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { runTimeline } from '@pmndrs/timeline';
 import { Body, dog, grab, humanoid, reach, release, wait } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
 import { run } from '../bodies';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
-import { insides, palmAt, person, play, feetOf, gazeOff } from '../bodies';
-import { box, roomOf, worldOf, named } from '../things';
+import { dt, insides, palmAt, person, play, feetOf, gazeOff } from '../bodies';
+import { box, empty, roomOf, worldOf, named } from '../things';
 import { handSpeeds } from '../hands';
 
 const BOTH = { left: 'left', right: 'right' } as const;
@@ -264,6 +265,22 @@ describe('grab at once (speed: Infinity)', () => {
     expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.02 * scale);
     expect(palmAt(insides(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
     expect(body.log).toEqual([]);
+  });
+
+  it.each([1 / 72, 1 / 120, 0])('counts an update of %f s, too short for a sub-step, as not having shown the body', (first) => {
+    const body = person({ dev: true }), room = roomOf(body), thing = new Object3D();
+    thing.position.set(-0.4, 1.1, 0.3);
+    empty(thing, 'right', new Vector3());
+    room.add(thing);
+    room.updateMatrixWorld(true);
+    let took: boolean | null = null;
+    const step = runTimeline(function* () { took = yield* grab(body, thing, { right: 'right' }, { speed: Infinity }); });
+    for (let k = 0; k < 12; k++) {
+      const seconds = k === 0 ? first : dt;
+      step(undefined, seconds);
+      body.update(seconds);
+    }
+    expect(took).toBe(true);
   });
 
   it('fails, saying so, for a grip out of reach of where the body stands; throws once the body has been shown, or for a creature', () => {

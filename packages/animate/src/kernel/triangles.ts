@@ -1,9 +1,23 @@
-import { Matrix4, Ray, Triangle, Vector3, type BufferGeometry } from 'three';
+import { InstancedMesh, Matrix4, Ray, SkinnedMesh, Triangle, Vector3, type BufferGeometry, type Mesh } from 'three';
 
 /** A geometry and the matrix that takes its positions into the frame its triangles are gathered in. */
 export interface PlacedGeometry {
   geometry: BufferGeometry;
   matrix: Matrix4;
+  /** a vertex as it stands now (posed, morphed), where not the geometry's own */
+  vertex?: (k: number, out: Vector3) => Vector3;
+}
+
+/** `mesh`'s surface as it is shown: posed, morphed, each instance its own, `back` taking the world into the frame gathered in */
+export function surfaceOf(mesh: Mesh, back: Matrix4): PlacedGeometry[] {
+  if (mesh instanceof SkinnedMesh) mesh.skeleton.update();
+  const placed = back.clone().multiply(mesh.matrixWorld), vertex = (k: number, out: Vector3) => mesh.getVertexPosition(k, out);
+  if (!(mesh instanceof InstancedMesh)) return [{ geometry: mesh.geometry, matrix: placed, vertex }];
+  return Array.from({ length: mesh.count }, (_, k) => {
+    const instance = new Matrix4();
+    mesh.getMatrixAt(k, instance);
+    return { geometry: mesh.geometry, matrix: placed.clone().multiply(instance), vertex };
+  });
 }
 
 /**
@@ -24,9 +38,10 @@ export class Triangles {
 
   constructor(meshes: readonly PlacedGeometry[], centre: Readonly<Vector3>, radius: number) {
     const kept: number[] = [], a = new Vector3(), b = new Vector3(), c = new Vector3(), triangle = new Triangle(), nearest = new Vector3();
-    for (const { geometry, matrix } of meshes) {
+    for (const { geometry, matrix, vertex } of meshes) {
       const position = geometry.getAttribute('position'), index = geometry.index, count = index ? index.count : position.count;
-      const at = (k: number, out: Vector3) => out.fromBufferAttribute(position, index ? index.getX(k) : k).applyMatrix4(matrix);
+      const read = vertex ?? ((k: number, out: Vector3) => out.fromBufferAttribute(position, k));
+      const at = (k: number, out: Vector3) => read(index ? index.getX(k) : k, out).applyMatrix4(matrix);
       for (let k = 0; k < count; k += 3) {
         at(k, a); at(k + 1, b); at(k + 2, c);
         // (by its nearest point, not its corners: a stile's long side has its corners metres away)

@@ -4,7 +4,7 @@ import type { Carrier } from '../kernel/carrier';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import type { Thing } from './thing';
-import type { HandPlacement } from '../fingers/placement';
+import type { HandPlacement, HandPoint } from '../fingers/placement';
 
 /**
  * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
@@ -26,12 +26,13 @@ export interface Resolving {
 }
 
 /** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame) — for a person's
- * hand, the placement it took there, fixed on the thing while it holds it. */
+ * hand, the placement it took there, fixed on the thing while it holds it, and the point of the hand that took it. */
 export interface Hold {
   thing: Thing;
   grip: string;
   goal: Goal;
   placement?: HandPlacement;
+  point?: HandPoint;
   keep?: (f: Frame) => void;
 }
 
@@ -47,6 +48,7 @@ export interface Holder extends Resolving {
   track(node: Object3D): Carrier;
   carry(node: Object3D, carrier: Carrier): void;
   leave(node: Object3D): void;
+  showPrev(): void;
 }
 
 /** each body's object (bone −1) and moving bones, by node */

@@ -1,7 +1,7 @@
 import { Matrix4, Mesh, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
 import type { Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
-import { Triangles } from '../kernel/triangles';
+import { surfaceOf, Triangles } from '../kernel/triangles';
 import { FLAT, type Joints } from './joints';
 import { DIGITS, SPLAYED, type DigitName, type Shape } from './shape';
 
@@ -218,12 +218,12 @@ function padsOn(at: Closing, shape: Shape): Vector3 {
  * `thing`'s triangles within `radius` of `centre`, in the frame `frame` places (the world's; `centre` in it), as its meshes' world matrices
  * stand (it updates none: refreshing them mid-update would change what the rest of the update reads): every mesh shown under it,
  * what hangs from it too (a magazine in a rifle's well) — a hand touches whatever is there — but the body's own skin (`skins`: an empty
- * in a scene holds every mesh under it, the body's too); skinned meshes as they stand at rest
+ * in a scene holds every mesh under it, the body's too); posed, morphed and instanced as they are shown
  */
 export function trianglesAbout(thing: Object3D, skins: readonly SkinnedMesh[], frame: Placement, centre: Readonly<Vector3>, radius: number): Triangles {
   const back = new Matrix4().compose(frame.position, frame.quaternion, _one).invert(), meshes: Mesh[] = [];
   thing.traverseVisible((node) => { if (node instanceof Mesh && !skins.some((skin) => skin === node)) meshes.push(node); });
-  return new Triangles(meshes.map((mesh) => ({ geometry: mesh.geometry, matrix: back.clone().multiply(mesh.matrixWorld) })), centre, radius);
+  return new Triangles(meshes.flatMap((mesh) => surfaceOf(mesh, back)), centre, radius);
 }
 
 /**
