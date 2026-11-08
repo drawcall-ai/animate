@@ -4,16 +4,34 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
+  # (each its own runner, the checks side by side: `pnpm check` runs the same ones one after another)
   check:
+    name: ${{ matrix.name }}
     # Seeded motion expectations use the release platform.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       LIFE_SEED_OFFSET: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: build
+            run: pnpm typecheck && pnpm -F viewer build && pnpm -F shooter build && pnpm -F @drawcall/animate exec npm pack --dry-run
+          - name: test package
+            run: pnpm -F @drawcall/animate test
+          - name: test viewer
+            run: pnpm -F viewer test
+          - name: test shooter
+            run: pnpm -F shooter test
+          - name: test throne-room
+            run: pnpm -F throne-room test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -22,4 +40,5 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm build
+      - run: ${{ matrix.run }}

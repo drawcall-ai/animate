@@ -20,6 +20,8 @@ export class Ground {
   private readonly distances: number[] = [];
   private distance = 0;
   private previous: readonly [number, number] | undefined;
+  /** the last average read where the floor is level all along the way: the same height over as many samples averages the same */
+  private level = { height: NaN, samples: 0, average: NaN };
   /** how fast it rose over the last sub-step (m/s) */
   rising = 0;
   private last = NaN;
@@ -79,6 +81,9 @@ export class Ground {
       times.push(t);
       distances.push(this.distance + speed * t);
     }
+    // (a level way, as most of a body's sub-steps are: the erosion below, every sample against every other, finds nothing lower)
+    const flat = heights.every((height) => height === here);
+    if (flat && this.level.height === here && this.level.samples === times.length) return this.level.average;
     let sum = 0, weights = 0;
     for (let i = 0; i < times.length; i++) {
       const t = times[i];
@@ -96,6 +101,7 @@ export class Ground {
       const w = Math.cos(Math.PI * t / SPAN) ** 2;
       [sum, weights] = [sum + w * lowest, weights + w];
     }
+    if (flat) this.level = { height: here, samples: times.length, average: sum / weights };
     return sum / weights;
   }
 }
