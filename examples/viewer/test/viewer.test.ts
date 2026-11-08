@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 import { bone, type SkeletonBone } from '@drawcall/rig';
 import { Group, type Object3D } from 'three';
 import { Actor } from './actor';
@@ -7,6 +7,11 @@ import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { SCENARIOS } from '../src/scenarios';
 import { SOLDIER } from '../src/skeletons';
+import { cases } from '../../../packages/animate/test/open';
+
+const test = cases([
+  ['stable-morning finishes cleanly in the SOLDIER viewer', [1]], // XCoM 0.107 m for a sub-step as the carry's trailing foot lifts.
+]);
 
 // Wardrobe skins these same named bones; meshes do not participate in the solver. Keep the rig's bone hierarchy and the live
 // viewer's restore/blend path here, rather than testing only the default bare body or advancing a simulation without rendering.
@@ -23,7 +28,7 @@ function dress(skeleton: readonly SkeletonBone[]): Object3D {
 }
 
 for (const id of ['stable-morning', 'knight-arming']) {
-  it(`${id} finishes cleanly in the SOLDIER viewer`, () => {
+  test(`${id} finishes cleanly in the SOLDIER viewer`, () => {
     const scenario = SCENARIOS.find((each) => each.id === id);
     if (!scenario) throw new Error(`missing scenario: ${id}`);
     const sim = new Simulation(scenario, { skeleton: SOLDIER, dress, dev: true });

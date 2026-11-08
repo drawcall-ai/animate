@@ -11,6 +11,7 @@ const test = cases([
   'vr: final-pose dev checks', // Hands ~14 cm short of the floor controllers in the crouch (tracked hand short of a target out of reach).
   'vr on the soldier: final-pose dev checks', // The same; at life seed 1 also a tracking joint-rate violation.
   'reach on the soldier: final-pose dev checks', // Reach diagnostics.
+  ['stable-morning on the soldier: final-pose dev checks', [1]], // XCoM 0.107 m for a sub-step as the carry's trailing foot lifts.
   'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
   ['reach: faster final-pose dev checks', [2]], // XCoM ~0.11 m: the trailing leg lifts late as the body rises out of the reach's crouch (the owner's accepted open breach "reach hand faster").
 ]);

@@ -90,8 +90,9 @@ export interface Stepping {
 export interface Feet {
   /**
    * each leg's side (+1 left), its foot (and toes) and top bones; the leg across from it on its girdle (`partner`; default the one
-   * before it in the gait); how far its top stands ahead of the root (a person's: only as far as its bow carries it) and out from it (m; default 0 and the hip's half width) and its home
-   * ahead of it (m; default as its top), how far its top joint is above the root standing (m; default 0) and the leg's length (m; default `length`)
+   * before it in the gait); how far its top stands ahead of the root and out from it (m; default 0 and the hip's half width) and its home
+   * ahead of it (m; default under it, not under its top: a walker's root settles over where its feet land, so a home off it, a hip set ahead or
+   * carried off it by a bow, walks the body away a step at a time), how far its top joint is above the root standing (m; default 0) and the leg's length (m; default `length`)
    */
   legs: readonly {
     sign: 1 | -1; foot: number; toes?: number; top: number; partner?: number;

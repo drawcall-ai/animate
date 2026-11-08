@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { runTimeline } from '@pmndrs/timeline';
-import { Body, humanoid, walkTo } from '../../src/index';
+import { parallel, runTimeline } from '@pmndrs/timeline';
+import { Body, humanoid, pose, wait, walkTo } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { heelOf } from '../../src/legs/person/foot';
@@ -20,6 +20,33 @@ describe('balance', () => {
     let most = 0;
     run(body, 30, () => { most = Math.max(most, Math.abs(wrapAngle(body.facing))); });
     expect(most).toBeLessThan(0.2);
+  });
+
+  it('stands its soles flat on hips set ahead of its root, their reach measured from where they are', () => {
+    const skeleton = PERSON.map((bone) => {
+      const position: [number, number, number] = [...bone.position];
+      if (bone.name.endsWith('UpperLeg')) position[2] += 0.04;
+      return { ...bone, position };
+    });
+    const body = new Body(humanoid(skeleton), { dev: true, life: { seed: 1 } }), h = insides(body);
+    let most = 0;
+    run(body, 5, () => { most = Math.max(most, ...(h.stepper?.legs ?? []).map((leg) => Math.abs(leg.pitch))); });
+    expect(most).toBe(0);
+  });
+
+  it('keeps its feet through a bow on hips set below its pelvis', () => {
+    const skeleton = PERSON.map((bone) => {
+      const position: [number, number, number] = [...bone.position];
+      if (bone.name.endsWith('UpperLeg')) position[1] -= 0.1;
+      return { ...bone, position };
+    });
+    const body = new Body(humanoid(skeleton), { dev: true, life: { seed: 3, steady: 1 } });
+    play(function* () {
+      yield* wait(1);
+      yield* parallel('race', pose(body, { bow: 0.7 }), wait(2));
+      yield* wait(2);
+    }, [body], 15);
+    expect(body.feet.map((foot) => foot.position.z)).toEqual([0, 0]);
   });
 
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {

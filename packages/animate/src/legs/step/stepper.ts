@@ -1,6 +1,6 @@
 // A reactive stepper: the scene moves the root, the legs step to keep up.
 // Recalled: the procedural stepping of games (e.g. Rain World, Overgrowth, Unreal "Control Rig"
-// foot placement): each foot has a home under its hip; it steps when it falls too far from it,
+// foot placement): each foot has a home off the root; it steps when it falls too far from it,
 // landing where the home will be.
 import { Matrix4, Vector3 } from 'three';
 import { STEP as SUB_STEP, type Frame } from '../../kernel/frame';
@@ -26,7 +26,7 @@ import { FLAT, LEVEL, levelUnder, type Floor } from '../floor';
 /**
  * Legs under a root the scene drives (`move`, read every sub-step): the pelvis exactly over it,
  * facing its yaw (within a set turn of a planted foot, or of where a biped's foot standing alone began to pivot under it), bobbing with the steps and let down by
- * `crouch`; each foot stays where it stands until it falls too far from its home under its hip
+ * `crouch`; each foot stays where it stands until it falls too far from its home
  * (or is turned too far from it), then steps — after the leg before it in the gait, with a flight running — to
  * where its home will be as it lands: re-aimed through the first half of the swing, frozen after;
  * heel first, rolling flat. Asked to `jump`, the legs dip, push off, follow the body's ballistic arc
