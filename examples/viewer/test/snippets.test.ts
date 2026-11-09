@@ -22,7 +22,7 @@ function blocks(): { name: string; code: string; doc: string }[] {
 function compiled(): Map<string, string[]> {
   const config = ts.readConfigFile(resolve(root, 'tsconfig.base.json'), ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'examples/viewer'));
-  const options = { ...parsed.options, noUnusedLocals: false, allowImportingTsExtensions: true, noEmit: true, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 };
+  const options = { ...parsed.options, noUnusedLocals: false, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 };
   const files = new Map(blocks().map(({ name, code, doc }, i) => [resolve(root, dirname(doc), `__snippet${i + 1}.ts`),
     { name, text: code }]));
   const host = ts.createCompilerHost(options);
@@ -51,7 +51,7 @@ cases([['runs the skill story headlessly to its checked ending', /XCoM/, [2]]])(
   const main = blocks().find(({ code }) => code.includes('play(['));
   if (!main) throw new Error('The animate skill has no runnable example');
   const modules: Record<string, unknown> = {
-    three, '@pmndrs/timeline': timeline, '@drawcall/animate': animate, './references/person.ts': { PERSON },
+    three, '@pmndrs/timeline': timeline, '@drawcall/animate': animate, './references/person': { PERSON },
   };
   const require = (name: string) => {
     if (!(name in modules)) throw new Error(`Snippet imports unsupported module ${name}`);

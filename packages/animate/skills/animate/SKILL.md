@@ -31,7 +31,7 @@ This headless hand-over uses the shipped [person skeleton](references/person.ts)
 import { Group, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { arriving, Body, carry, grab, grip, humanoid, play, release, wait } from '@drawcall/animate';
-import { PERSON } from './references/person.ts';
+import { PERSON } from './references/person';
 
 const giver = new Body(humanoid(PERSON), { dev: true });
 const receiver = new Body(humanoid(PERSON), { dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
