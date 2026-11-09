@@ -1,10 +1,11 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { parallel, runTimeline } from '@pmndrs/timeline';
-import { Body, humanoid, pose, wait, walkTo, poseOf } from '../../src/index';
+import { Body, grab, humanoid, pose, release, wait, walkTo, poseOf } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { INDEX, dt, readings, person, play, run, feetOf } from '../kit/bodies';
 import { wrapAngle, yawOf } from '../kit/angles';
+import { empty, roomOf } from '../kit/things';
 
 /** where bone `name` of a body is in the scene, as its last update wrote it */
 const atBone = (body: Body, name: keyof Body['bones']) => {
@@ -39,6 +40,34 @@ describe('balance', () => {
       yield* parallel('race', pose(body, { bow: 0.7 }), wait(2));
       yield* wait(2);
     }, [body], 15);
+    expect(body.feet.map((foot) => foot.position.z)).toEqual([0, 0]);
+  });
+
+
+  it('keeps its feet through bowed grabs on hips set below its pelvis, and each grab takes hold', () => {
+    const skeleton = PERSON.map((bone) => {
+      const position: [number, number, number] = [...bone.position];
+      if (bone.name.endsWith('UpperLeg')) position[1] -= 0.1;
+      return { ...bone, position };
+    });
+    const body = new Body(humanoid(skeleton), { dev: true, life: { seed: 3, steady: 1 } }), room = roomOf(body);
+    const surface = empty(room, 'surface', new Vector3(0.15, 0.75, 0.8)), ring = empty(surface, 'ring', new Vector3(-0.03, 0, -0.3));
+    room.updateMatrixWorld(true);
+    const took: unknown[] = [];
+    play(function* () {
+      yield* wait(1);
+      for (let k = 0; k < 3; k++) {
+        took.push(yield* parallel('race', pose(body, { bow: 0.7 }), function* () {
+          yield* wait(0.9);
+          const held = yield* grab(body, surface, { right: ring.name }, { step: false });
+          yield* wait(0.3);
+          release(body, { right: surface });
+          return held;
+        }));
+        yield* wait(2);
+      }
+    }, [body], 30, () => took.length === 3);
+    expect(took).toEqual([true, true, true]);
     expect(body.feet.map((foot) => foot.position.z)).toEqual([0, 0]);
   });
 
