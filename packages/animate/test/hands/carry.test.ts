@@ -260,6 +260,47 @@ it('walks on with what the arm cannot hold at its carrying place, and ends', () 
 });
 
 describe('a thing in both hands', () => {
+  // (a bail in the right hand, a side in the left, as a story might come to hold them: it is the same hold however it got there)
+  it.each<[string, readonly ('right' | 'left' | 'both')[]]>([
+    ['both at once', ['both']],
+    ['right, then left', ['right', 'left']],
+    ['left, then right', ['left', 'right']],
+    ['right, then both', ['right', 'both']],
+  ])('is turned as its target is, taken %s', (_name, order) => {
+    const body = person(), room = roomOf(body), bucket = empty(room, 'bucket', new Vector3(0, 0.7, 0.4));
+    bucket.userData.mass = 8;
+    grip(bucket, 'bail', new Vector3(0, 0.25, 0), { handle: [1, 0, 0], radius: 0.015 });
+    grip(bucket, 'side', new Vector3(0.14, 0.05, 0), { facing: [-1, 0, 0] });
+    const pour = empty(room, 'pour', new Vector3(0, 0.92, 0.32));
+    pour.rotation.x = 0.85;
+    let carried: boolean | null = null, off = Infinity;
+    const grips = { right: { right: 'bail' }, left: { left: 'side' }, both: { left: 'side', right: 'bail' } } as const;
+    play(function* () {
+      for (const each of order) yield* grab(body, bucket, grips[each], { step: false });
+      carried = yield* carry(body, bucket, pour, { step: false });
+      off = bucket.getWorldQuaternion(new Quaternion()).angleTo(pour.getWorldQuaternion(new Quaternion()));
+    }, [body], 12);
+    expect(carried).toBe(true);
+    expect(off).toBeLessThan(0.06);
+  });
+
+  it('takes a second hand on what a carry keeps in the first, the carry going on', () => {
+    const body = person(), room = roomOf(body), bucket = empty(room, 'bucket', new Vector3(0, 0.7, 0.4));
+    bucket.userData.mass = 8;
+    grip(bucket, 'bail', new Vector3(0, 0.25, 0), { handle: [1, 0, 0], radius: 0.015 });
+    grip(bucket, 'side', new Vector3(0.14, 0.05, 0), { facing: [-1, 0, 0] });
+    const ready = empty(room, 'ready', new Vector3(0, 0.95, 0.33));
+    let held = false;
+    play(function* () {
+      yield* grab(body, bucket, { right: 'bail' }, { step: false });
+      yield* carry(body, bucket, ready, { step: false });
+      yield* parallel('race', carry(body, bucket, ready, { until: Infinity, step: false }), grab(body, bucket, { left: 'side' }, { step: false }));
+      yield* wait(0.5);
+      held = body.holds(bucket);
+    }, [body], 12);
+    expect(held).toBe(true);
+  });
+
   // (a hand-over's taker holds it by grips the other way round from the body's own axes)
   it('walked to a point keeps each hand on its own side, keeping its turn from the body', () => {
     const body = person({ dev: true }), room = roomOf(body);

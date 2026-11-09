@@ -18,7 +18,7 @@ import type { Request } from '../kernel/requests';
  * where to stand once, as it starts, from where its feet and the grips are then: a thing still moving, or feet still walking, gives a
  * stand for where they were; with no particular place to stand, leave the walking to it. A mover, it ends holding, its fingers closed. A
  * named hand that holds something else lets go of it as it sets off, as `release` would (what the body wears, a rifle on its mount, stays
- * there, held by any other hand on it). A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else — a part
+ * there, held by any other hand on it); a hand already on the grip named for it stays on it, and a second hand joins the first as if the two had taken it together. A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else — a part
  * of what the other hand holds, a pouch's magazine — stays where it is, and the hands follow it. If no stand reaches the grips (with
  * `step: false`: they are out of reach from where it stands), the hands go as far as they can for as long as a reach there takes, the eyes on
  * them, and it throws `Missed`; as it does if a hand stops getting nearer its unmet position or turn
@@ -53,7 +53,11 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
     return verb(body, 'grab', () => function* () {}, { until: options.until, first: (request) => holdingAtOnce(person, request, starting(request), named) });
   }
   return verb(body, 'grab', (request) => function* () {
-    yield* self.handStaging.take(request, starting(request), named, options);
+    const held = starting(request);
+    // (a hand already on its grip stays on it: only the others go; what it holds hangs from it, and it cannot chase that)
+    const going = named.filter(({ hand, grip }) => self.holding[hand]?.thing !== held || self.holding[hand]?.grip !== grip);
+    if (going.length) yield* self.handStaging.take(request, held, going, options);
+    else request.met();
   }, { until: options.until });
 }
 

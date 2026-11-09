@@ -166,7 +166,8 @@ export interface Regripping {
 export function regripping(person: Person, thing: Thing, end: (f: Frame) => Goal): Regripping {
   const [hand, ...others] = handsOn(person, thing), hold = hand === undefined || others.length ? null : person.holding[hand];
   const plan = (f: Frame, settling = false) => {
-    if (!hold) return false;
+    // (no more once a second hand has joined it)
+    if (!hold || !inHand(person, thing)) return false;
     const at = end(f);
     return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? placedFor(person, thing.object, _placed).quaternion }, settling);
   };

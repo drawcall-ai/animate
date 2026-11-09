@@ -2,7 +2,7 @@ import { action } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { paceAt, type HandStaging } from '../../body/hand-staging';
 import { CALM } from './arms';
-import { bodyOf } from '../../things/hold';
+import { bodyOf, inHand, take } from '../../things/hold';
 import { sideOf } from '../anatomy/bones';
 import { grabbing } from './grab';
 import { carrying, liftingClear } from './carry';
@@ -35,6 +35,8 @@ export function personHands(person: Person): HandStaging {
         const fingers = person.fingers, began = person.frame.time;
         if (fingers) yield* action<Frame>({ until: (f) => f.time - began >= CLOSING || takes.every(({ side }) => fingers.closed(side)) });
         yield* settling(person, request, takes, began);
+        // (the second hand on what hung from the first: in both hands now, as if taken so)
+        if (inHand(person, thing)) take(person, thing);
         if (loose) yield* liftingClear(person, request, thing);
         request.met();
       } finally {
