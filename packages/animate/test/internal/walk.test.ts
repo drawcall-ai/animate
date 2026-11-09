@@ -47,3 +47,18 @@ it('a person asked 3 m/s runs there, in flight between its stances, and asked pa
   expect(past.said).toHaveLength(1);
 });
 
+// (walking up at its pace to a goal asked to face a little off its way, it faces the way it goes, turning no further than ~0.3 rad off it
+// till its last step or so: it walks it out rather than keep the facing and crab its last steps, its feet staggered abeam its way)
+it('walking up at its pace to a goal a few steps off, asked to face a little off its way, walks on and turns over its last step', () => {
+  const body = person({ dev: true, at: new Vector3(0, 0, -6), face: 0 }), h = insides(body);
+  let arrived: boolean | undefined, off = 0;
+  play(function* () { arrived = yield* walkTo(body, new Vector3(), { face: 0.6 }); }, [body], 15, () => {
+    const v = h.locomotion.velocity;
+    if (body.position.length() > 0.9 && v.length() > 0.5) off = Math.max(off, Math.abs(h.locomotion.facing - Math.atan2(v.x, v.z)));
+    return arrived !== undefined;
+  });
+  expect(arrived).toBe(true);
+  expect(off).toBeLessThan(0.3);
+  expect(Math.abs(h.locomotion.facing - 0.6)).toBeLessThan(0.05);
+  expect(body.log).toEqual([]);
+});

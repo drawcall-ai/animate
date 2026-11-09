@@ -3,7 +3,7 @@ import { MathUtils, Quaternion, Vector3 } from 'three';
 import { SUBSTEP, type Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
-import { clamp, lerp, wrapAngle, yawOf } from '../kernel/math';
+import { clamp, forwardOf, lerp, wrapAngle, yawOf } from '../kernel/math';
 import { strideAt, type Gait } from '../species/gait';
 import type { Steering } from './types';
 
@@ -23,6 +23,8 @@ export class Planner {
   readonly root: Steering;
   private readonly state: RootState;
   private goalVelocity: Vector3 | null = null;
+  /** whether a short move to a still goal keeps its facing (`keepable`), as decided when it came to be one; none: it is not one */
+  private keeps: boolean | null = null;
 
   /** `radius`: the hips' furthest reach from the root (m), how wide it turns about itself */
   constructor(at: Vector3, yaw: number, private readonly gait: Gait, private readonly radius: number) {
@@ -39,9 +41,16 @@ export class Planner {
     (this.goalVelocity ??= new Vector3()).copy(velocity);
     const facing = goal.yaw === undefined ? undefined : new Quaternion().setFromAxisAngle(UP, goal.yaw);
     const targets = [goal.position.clone()];
+    // (a short move to a still goal, asked to face about as it faces now — a step or three back or aside — keeps its facing all the way,
+    // backing or side-stepping, slower: decided as it comes to be one, and kept to however fast it goes. A body already walking on at its
+    // slowest pace or faster walks it out and turns over its last step: kept, it would turn to the facing at once and crab its last steps,
+    // its footfalls staggered along its way)
+    const state = this.state, forward = state.velocity.dot(forwardOf(state.yaw, _direction));
+    this.keeps = goal.backs && speed < STILL && keepable(goal.position, facing, motion, this.gait, state) ? this.keeps ?? forward < this.gait.slowest : null;
+    const keeps = this.keeps ?? false;
     // (at rest on a still goal, facing as asked, it stays as it is however far ahead it is read, at any share: a standing body's plan)
     const still = resting(goal.position, velocity, acceleration, goalTurn, this.state, facing) ? keptAt(this.state) : null;
-    const planned = (share: number) => still ?? rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance, targets, !!goal.backs);
+    const planned = (share: number) => still ?? rootPlan(f, goal.position, velocity, motion, this.gait, this.radius, this.state, acceleration, facing, share, goalTurn, stance, targets, keeps);
     let accepted: ReturnType<typeof planned> | undefined;
     const kept = (plan: ReturnType<typeof planned>) => {
       const fits = holds((ahead) => plan(f.time + ahead));
@@ -84,19 +93,13 @@ export class Planner {
  */
 function rootPlan(
   f: Frame, goal: Readonly<Vector3>, velocity: Vector3, motion: Motion, gait: Gait, radius: number, previous: RootState, acceleration: number,
-  facing: Quaternion | undefined, share: number, goalTurn: number, stanceYaw: number, targets: Vector3[], backs: boolean,
+  facing: Quaternion | undefined, share: number, goalTurn: number, stanceYaw: number, targets: Vector3[], keeps: boolean,
 ): (time: number) => RootState {
   const accel = motion.accel;
   const speed = share === 0 ? 0 : (motion.speed ?? Infinity) * share;
-  const cruise = Math.max(gait.slowest, Number.isFinite(motion.speed ?? Infinity) ? motion.speed ?? Infinity : previous.velocity.length());
+  const { cruise, stride, midstance } = paceOf(motion, gait, previous);
   const braking = cruise ** 2 / (2 * motion.accel);
-  const stride = strideAt(gait, cruise, 0);
-  const midstance = cruise * stride.duty / (2 * stride.frequency);
   const states: RootState[] = [], goalSpeed = velocity.length(), facingYaw = facing ? yawOf(facing) : 0;
-  // (a short move to a still goal, asked to face about as it faces now — a step or three back or aside — keeps its facing all the way,
-  // backing or side-stepping, slower)
-  const keeps = backs && !!facing && goalSpeed < STILL && Math.abs(wrapAngle(facingYaw - previous.yaw)) <= KEPT.turn
-    && Math.hypot(goal.x - previous.position.x, goal.z - previous.position.z) <= KEPT.far * midstance;
   const advance = (from: RootState, ahead: number): RootState => {
     const yaw = from.yaw;
     const accelerating = acceleration === 0 ? ahead : Math.min(ahead, Math.max(0,
@@ -171,6 +174,20 @@ function rootPlan(
   };
 }
 
+/** whether a move from `previous` to a still `goal`, asked to face `facing`, is short enough to keep its facing (`KEPT`) */
+function keepable(goal: Readonly<Vector3>, facing: Quaternion | undefined, motion: Motion, gait: Gait, previous: RootState): boolean {
+  return !!facing && Math.abs(wrapAngle(yawOf(facing) - previous.yaw)) <= KEPT.turn
+    && Math.hypot(goal.x - previous.position.x, goal.z - previous.position.z) <= KEPT.far * paceOf(motion, gait, previous).midstance;
+}
+
+/** the pace a root from `previous` walks at (m/s: its asked speed, else as fast as it goes, at least its slowest), its stride, and how
+ * far it travels over half a stance (m) */
+function paceOf(motion: Motion, gait: Gait, previous: RootState) {
+  const cruise = Math.max(gait.slowest, Number.isFinite(motion.speed ?? Infinity) ? motion.speed ?? Infinity : previous.velocity.length());
+  const stride = strideAt(gait, cruise, 0);
+  return { cruise, stride, midstance: cruise * stride.duty / (2 * stride.frequency) };
+}
+
 /** the plan of a root resting as `previous` is (`resting`): where it is, still, at any time */
 function keptAt(previous: RootState): (time: number) => RootState {
   const kept: RootState = { position: previous.position.clone(), yaw: yawOf(_turn.setFromAxisAngle(UP, previous.yaw)), velocity: new Vector3(), angular: 0 };
@@ -207,7 +224,7 @@ const PRECISION = 1 / 64;
 const ARRIVING = 0.2, ARRIVAL_TURN = [1, 2.5] as const, SIDELONG = 0.3;
 /**
  * A move to a still goal no further than `far` × mid-stance travel (~1.45 m at a stroll's 1.3 m/s: a few steps), asked to face within `turn` (rad)
- * of how it faces, keeps its facing, backing or side-stepping at `back`/`aside` of its pace. Recalled: people back or side-step a few
+ * of how it faces, by a body not already walking on, keeps its facing, backing or side-stepping at `back`/`aside` of its pace. Recalled: people back or side-step a few
  * steps rather than turn round (the turn costs more than it saves); backward walking's self-selected speed is ~60–70% of forward, on
  * shorter steps at a like cadence (Thorstensson 1986, Acta Physiol Scand; Laufer 2005, Gait Posture 22:96); side-stepping's ~75% tuned.
  */
