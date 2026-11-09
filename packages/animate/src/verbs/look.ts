@@ -1,10 +1,11 @@
-import { Vector3, type Object3D } from 'three';
+import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { during } from '../kernel/requests';
 import { Body, selfOf } from '../body';
 import type { Self } from '../body/self';
 import type { Frame } from '../kernel/frame';
 import { aiming, looking } from '../look/gaze';
+import { boneOf } from '../things/hold';
 import { finder, type Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
@@ -35,7 +36,8 @@ type Seen = Target | Body | ((time: number) => Vector3 | Object3D | Body);
  * down; a creature's posture turning its head), eased in and back out, a new focus taken as a gaze shift. An aimer, it keeps on until
  * `until`. It asks for the eyes (and the trunk's posture, given a `trunk` share: a newer `pose` of the trunk takes the trunk from it until the
  * pose ends, and a look begun after the pose takes it back). A body to look at needs eyes (a gaze), and is not the
- * body looking.
+ * body looking; nor is an object on its own neck or head, which a look would turn on as the head turned to it: one on its chest, or in
+ * its hand, is looked at.
  */
 export function lookAt(body: Body, target: Seen, options: LookOptions = {}): Verb {
   const { head, trunk = 0 } = options;
@@ -53,6 +55,7 @@ export function lookAt(body: Body, target: Seen, options: LookOptions = {}): Ver
 function located(self: Self, target: Seen): (f: Frame) => Vector3 {
   if (target instanceof Body) return eyesOf(self, target);
   if (typeof target !== 'function') {
+    if (target instanceof Object3D) offTheHead(self, target);
     const find = finder(self, target);
     return (f) => find(f).position;
   }
@@ -62,6 +65,7 @@ function located(self: Self, target: Seen): (f: Frame) => Vector3 {
   return (f) => {
     const at = target(f.time);
     if (!(at instanceof Body)) {
+      if (at !== seen && at instanceof Object3D) offTheHead(self, at);
       seen = at;
       return find(f).position;
     }
@@ -69,6 +73,17 @@ function located(self: Self, target: Seen): (f: Frame) => Vector3 {
     if (!of) eyes.set(at, of = eyesOf(self, at));
     return of(f);
   };
+}
+
+/** throws for `object` on `self`'s own neck or head (a bone of its neck's chain, or one under it): a look at it turns what carries it,
+ * chasing it round at the head's pace for ever */
+function offTheHead(self: Self, object: Object3D): void {
+  const neck = self.gazer?.neck;
+  if (neck === undefined) return;
+  const chain = self.skeleton.chain(neck), bones = self.skeleton.bones;
+  for (let bone = boneOf(self, object); bone >= 0; bone = bones[bone].parent) {
+    if (chain.includes(bone)) throw new Error(`lookAt: "${object.name}" rides the body's own ${bones[bone].name}, which a look at it turns, chasing it round for ever: look at something off its neck and head`);
+  }
 }
 
 /** where `seen`'s eyes are each sub-step, as `self` reads its pose: the midpoint between them, as its gaze has them */

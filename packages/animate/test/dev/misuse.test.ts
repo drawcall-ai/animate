@@ -106,6 +106,22 @@ describe('a misuse throws, saying what is wrong', () => {
     expect(body.owners.hands).toEqual({});
   });
 
+  it('a look at what rides the body\'s own neck or head: it would turn on as the head turned to it', () => {
+    const body = person({ dev: true });
+    roomOf(body);
+    const brow = empty(body.bones.head, 'brow', new Vector3(0, 0.1, 0.1)), collar = empty(body.bones.neck, 'collar', new Vector3(0, 0, 0.08));
+    expect(() => lookAt(body, brow)).toThrow('"brow" rides the body\'s own head');
+    expect(() => lookAt(body, collar)).toThrow('"collar" rides the body\'s own neck');
+    // (one a function gives, as the look finds it)
+    const other = person({ dev: true }), tip = empty(other.bones.head, 'tip', new Vector3(0, 0.1, 0.1));
+    roomOf(other);
+    expect(playing(other, function* () { yield* lookAt(other, () => tip, { until: 0.2 }); })).toThrow('"tip" rides the body\'s own head');
+    // (what rides the chest or hangs from a hand is looked at: a look does not move it)
+    const badge = empty(body.bones.chest, 'badge', new Vector3(0, 0, 0.15)), ring = empty(body.bones.rightHand, 'ring', new Vector3(0, -0.05, 0));
+    play(function* () { yield* lookAt(body, badge, { until: 1 }); yield* lookAt(body, ring, { until: 1 }); }, [body], 2.5);
+    expect(body.log).toEqual([]);
+  });
+
   it('a value of another copy of three is said at the first target, naming the fix', () => {
     class Other { isVector3 = true; x = 0; y = 0; z = 1; }
     const body = person();
