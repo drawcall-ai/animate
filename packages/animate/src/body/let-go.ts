@@ -20,7 +20,7 @@ export interface Released {
 /** `self`'s `hands` letting go of `thing` (see `release`), and backing out of it unless they go on to something else (`backOut`
  * false): how it was moving as they did, and how far off an empty `onto` it was left */
 export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?: Object3D, backOut = true): { motion: Released; miss: Miss | null } {
-  const f = self.frame, object = thing.object, trail = self.track(object).at(f.time);
+  const f = self.frame, object = thing.object, trail = self.movingFrameOf(object).at(f.time);
   const motion = { velocity: new Vector3().subVectors(trail.current.position, trail.prev.position).divideScalar(f.dt), spin: spinOf(trail.prev.quaternion, trail.current.quaternion, f.dt, new Vector3()) };
   const placed = trail.current;
   if (onto && onto.children.some((child) => child !== object && child.userData.mass !== undefined)) throw new Error(`release: "${onto.name}" holds another thing already, so "${object.name}" cannot go onto it`);
@@ -31,7 +31,7 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
   }));
   const carried = carriedBy(self, thing);
   for (const hand of hands) grasp(self, hand, null);
-  self.leave(object);
+  self.stopMoving(object);
   if (backOut) self.handStaging.backOut(hands, away);
   const holder = [...thing.holders].find((other): other is Self => other !== self);
   if (onto) {
@@ -57,7 +57,7 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
  * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there within 5 mm, else where it is, a miss
  */
 function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Vector3>): Miss | null {
-  const off = at.distanceTo(self.track(onto).at(self.frame.time).current.position);
+  const off = at.distanceTo(self.movingFrameOf(onto).at(self.frame.time).current.position);
   attach(thing, onto);
   if (!bodyOf(thing.object)) thing.lifted = false;
   if (off > ONTO) return { where: `${thing.object.name} onto ${onto.name}`, off, limit: ONTO, why: `it was ${(100 * off).toFixed(1)} cm off the empty as it was let go, and stays so: \`carry\` it there first` };

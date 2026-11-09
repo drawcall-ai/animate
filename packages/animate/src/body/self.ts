@@ -24,7 +24,7 @@ import { heldMass, wornOf, type Bearing, type Hold } from '../things/hold';
 import type { HandStaging } from './hand-staging';
 import { FLAT, type Floor } from '../step/floor';
 import { FingerState } from '../fingers/state';
-import { TurnedNodes } from './turned-nodes';
+import { OrientedNodes } from './oriented-nodes';
 import { checkShear, massed, restPose, type SelfOptions } from './setup';
 import { Springs, type TrunkCapsules } from './springs';
 
@@ -69,15 +69,15 @@ export abstract class Self {
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, MovingFrame>();
   /** the nodes on it its app keeps turned in the world (`Body.orient`) */
-  readonly turnedNodes = new TurnedNodes(this);
+  readonly orientedNodes = new OrientedNodes(this);
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
   lastMover = -Infinity;
   /** what it wears (things on its bones its hands do not hold), as of its update's start */
   worn: Thing[] = [];
   readonly claims = new Claims();
-  /** what it tracks of the scene, a sub-step's placement each */
-  private readonly tracked = new WeakMap<Object3D, MovingFrame>();
+  /** what it reads of the scene, a sub-step's placement each */
+  private readonly movingFrames = new WeakMap<Object3D, MovingFrame>();
   private readonly snaps = new SnapChecks();
   private readonly platform: PlatformFrame;
   private pending = 0;
@@ -141,7 +141,7 @@ export abstract class Self {
   private staged: HandStaging | null = null;
 
   /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now */
-  abstract holds(f: Frame, hand: string, wrist: Goal): boolean;
+  abstract canHold(f: Frame, hand: string, wrist: Goal): boolean;
 
   /** what its hands do for the verbs */
   protected abstract stageHands(): HandStaging;
@@ -207,33 +207,33 @@ export abstract class Self {
   private readonly movedBefore = new Map<Object3D, Placement>();
 
   /** moves `node` itself from now on (a thing in both its hands), from where `carrier` has it */
-  carry(node: Object3D, movingFrame: MovingFrame): void {
-    movers.get(node)?.leave(node);
+  startMoving(node: Object3D, movingFrame: MovingFrame): void {
+    movers.get(node)?.stopMoving(node);
     this.carried.set(node, movingFrame);
     movers.set(node, this);
   }
 
   /** stops moving `node` itself: it reads it on from there, its history (velocity, spin) carried over */
-  leave(node: Object3D): void {
+  stopMoving(node: Object3D): void {
     const movingFrame = this.carried.get(node);
     if (!movingFrame) return;
     this.carried.delete(node);
     this.movedBefore.delete(node);
     if (movers.get(node) === this) movers.delete(node);
-    this.tracked.set(node, movingFrame);
+    this.movingFrames.set(node, movingFrame);
   }
 
-  /** where `node` is this sub-step, tracked over the sub-steps (velocity, spin, the frame a hand follows on it) */
-  track(node: Object3D): MovingFrame {
+  /** where `node` is this sub-step, on its frame's history over the sub-steps (velocity, spin, the frame a hand follows on it) */
+  movingFrameOf(node: Object3D): MovingFrame {
     const f = this.frame, own = this.carried.get(node);
     if (own) {
       own.due(f.time);
       return own;
     }
-    let movingFrame = this.tracked.get(node);
+    let movingFrame = this.movingFrames.get(node);
     if (!movingFrame) {
       const at = placedFor(this, node, { position: new Vector3(), quaternion: new Quaternion() });
-      this.tracked.set(node, (movingFrame = new MovingFrame(at.position, at.quaternion)));
+      this.movingFrames.set(node, (movingFrame = new MovingFrame(at.position, at.quaternion)));
       movingFrame.place(f.time, at.position, at.quaternion);
       return movingFrame;
     }
@@ -302,7 +302,7 @@ export abstract class Self {
         if (this.springs) {
           this.springs.restore();
           this.binding.write(this.pose, this.floor);
-          this.turnedNodes.write();
+          this.orientedNodes.write();
           this.springs.step(SUBSTEP);
         }
       }
@@ -312,7 +312,7 @@ export abstract class Self {
     // (one too short for a sub-step finished nothing: readers and what was kept for this pose stay as they are)
     if (steps > 0) this.updates++;
     this.binding.write(this.pose, this.floor);
-    this.turnedNodes.write();
+    this.orientedNodes.write();
     this.fingers?.update(seconds);
     this.springs?.write();
   }
@@ -323,7 +323,7 @@ export abstract class Self {
       const hand = this.hands[side];
       if (hand === undefined) continue;
       const at = { position: f.current.position(hand).clone(), quaternion: f.current.rotation(hand).clone().multiply(this.restOf(hand)), scale: this.scaleOf(hand) };
-      fingers.meet(side, at, (object) => this.track(object).at(f.time).current);
+      fingers.meet(side, at, (object) => this.movingFrameOf(object).at(f.time).current);
     }
   }
 
@@ -384,7 +384,7 @@ export abstract class Self {
     if (this.life.steady !== undefined) this.asks.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
-    this.turnedNodes.step(f);
+    this.orientedNodes.step(f);
     for (const request of [...this.requests]) {
       request.stage(f);
       // (one of the body's own: no story renews it; it ends with its staging)

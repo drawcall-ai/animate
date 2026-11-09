@@ -118,7 +118,7 @@ export class WalkPose {
 
   /** the pelvis's goal into `state.pelvis` / `state.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist`, `lean`
    * (rad, sideways: + its left side up) and the pelvis's turn off the facing (`hips`) as balance has them */
-  carry(f: Pick<Frame, 'prev' | 'dt'>, state: WalkPoseState, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: TrunkPose, life: Pick<QuietStance, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
+  place(f: Pick<Frame, 'prev' | 'dt'>, state: WalkPoseState, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: TrunkPose, life: Pick<QuietStance, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
     const { lower, bow, twist, lean: bent, hips = 0 } = asks, { onto } = life, { p: proportions, walk, run } = state, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;

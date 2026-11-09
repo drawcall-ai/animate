@@ -19,7 +19,7 @@ export class Creature extends Self {
   }
 
   /** a creature's, wherever it reaches */
-  holds(_f: Frame, _hand: string, _wrist: Goal): boolean {
+  canHold(_f: Frame, _hand: string, _wrist: Goal): boolean {
     return true;
   }
 

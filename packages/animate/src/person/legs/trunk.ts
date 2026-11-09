@@ -56,7 +56,7 @@ const PELVIS = { accel: 30 }, TURN = { accel: 60 };
 const AIMING = { accel: 300 };
 
 /**
- * The body carried over a root, as `WalkPose` has it, in two parts around the stepper's move: `carry` before it reads what is asked and
+ * The body carried over a root, as `WalkPose` has it, in two parts around the stepper's move: `steer` before it reads what is asked and
  * says where the hips stand, `pose` after it turns the pelvis and spine over where the feet took the facing.
  */
 export class Trunk {
@@ -95,7 +95,7 @@ export class Trunk {
   }
 
   /** The body carried off `root` for this sub-step, its hips told to the feet: returns what the stepper moves on. */
-  carry(f: Frame, root: Steering, go: LegGoal | null, asks: Asks, seat: Seat | null): Steering {
+  steer(f: Frame, root: Steering, go: LegGoal | null, asks: Asks, seat: Seat | null): Steering {
     const { person, stepper, state, walkPose, life, posedTrunk, depth } = this, { proportions } = person, dt = f.dt, s = proportions.scale;
     // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
     if (!this.offsets) {
@@ -131,7 +131,7 @@ export class Trunk {
     const stoop = stepper.foreseen ? 0 : CROUCH_LEAN * stepper.crouch * (1 - (seat?.share ?? 0));
     const cycle = { phase: this.phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle };
     const bow = this.bow = requested.bow + stoop;
-    walkPose.carry(f, state, { ...requested, bow }, posedTrunk, life, cycle);
+    walkPose.place(f, state, { ...requested, bow }, posedTrunk, life, cycle);
     const carried = state.pelvis.clone().sub(state.root).setY(0);
     if (seat) carried.lerp(_v.copy(seat.seating.hips).sub(state.root).setY(0), seat.share);
     const offset = this.hips.follow(offsets[0], offsets[1], carried, PELVIS, dt, new Vector3());

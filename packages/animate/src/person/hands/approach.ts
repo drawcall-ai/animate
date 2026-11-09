@@ -31,12 +31,12 @@ export function* approach(person: Person, request: Request, takes: readonly Hand
   // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, judged once its turn is made up: `settling`)
   const exact = ({ thing, grip }: HandPlan) => thing.grip(grip).point !== 'palm' && !fixes(thing.grip(grip));
   // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
-  const there = (f: Frame) => takes.every((take) => touching(person, take, f) || (!exact(take) && reached(f, person.hands[take.side], take.goal, person.track(take.thing.object))));
+  const there = (f: Frame) => takes.every((take) => touching(person, take, f) || (!exact(take) && reached(f, person.hands[take.side], take.goal, person.movingFrameOf(take.thing.object))));
   const close = () => takes.forEach((take) => grasp(person, take.side, { ...holdOn(person, take), by: request }));
   if (there(person.frame)) return close();
   let ends = Infinity;
   const late = lateWatch(person, request, takes.map((take) => ({
-    side: take.side, goal: () => take.goal, on: () => person.track(take.thing.object), where: `${take.thing.object.name} ${take.side} ${take.grip}`,
+    side: take.side, goal: () => take.goal, on: () => person.movingFrameOf(take.thing.object), where: `${take.thing.object.name} ${take.side} ${take.grip}`,
   })));
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
     request.eta = Math.max(0, ends - f.time);
@@ -52,7 +52,7 @@ export function* approach(person: Person, request: Request, takes: readonly Hand
     return false;
   };
   const plan = takes.map((take) => {
-    const frame = person.track(take.thing.object).current, seed = frame.position;
+    const frame = person.movingFrameOf(take.thing.object).current, seed = frame.position;
     const local = (point: Vector3) => point.clone().sub(frame.position).applyQuaternion(frame.quaternion.clone().invert());
     const from = local(person.pose.position(person.hands[take.side]));
     // (what the body wears or holds moves with it, held clear of it: the hand goes to its grip directly; and a corner behind the hips as
@@ -100,16 +100,16 @@ export function* approach(person: Person, request: Request, takes: readonly Hand
       const goal = hand.route.length ? { ...hand.goal, position } : hand.goal;
       const ready = hand.route.length
         ? until((f) => i < hand.points.length - 1 ? f.time >= began + seconds + after
-          : reached(f, person.hands[hand.side], { position }, person.track(hand.thing.object)) || f.time >= began + seconds + after + STAGING)
+          : reached(f, person.hands[hand.side], { position }, person.movingFrameOf(hand.thing.object)) || f.time >= began + seconds + after + STAGING)
         : until(there);
-      const on = person.track(hand.thing.object);
+      const on = person.movingFrameOf(hand.thing.object);
       const pace = motion ? { accel: motion.accel, speed: motion.speed } : { seconds, after, straight: hand.route.length > 0 };
       yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, goal, { on, thing: hand.thing, bodyFollows: !worn(hand.thing), ...pace }), ready);
     }
     staged++;
     // (staged first, it is held there for the other: let go, it would fall toward its hang and set off for its grip from that fall)
     if (hand.route.length) yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, { ...hand.goal, position: hand.points[hand.points.length - 1] },
-      { on: person.track(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing) }), () => staged === plan.length);
+      { on: person.movingFrameOf(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing) }), () => staged === plan.length);
   }));
   // (both hands reach the outside staging points before closing on the actual grips: the closing judged late from as long after it sets
   // off as a reach that far takes — a hand held up short of its staging point, by as long as it may wait there, `STAGING`, found the end
@@ -121,7 +121,7 @@ export function* approach(person: Person, request: Request, takes: readonly Hand
       ends = Math.max(ends, f.time + reachTime(distance / person.scale, seedOf(hand.grip, Math.round(distance * 1000))) / person.tempo);
     }
     yield* parallel<Frame>('all', ...plan.map((hand) => during(request, `hand.${hand.side}`, 'asked',
-      reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing) }), until(there))));
+      reaching(person, hand.side, hand.goal, { on: person.movingFrameOf(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing) }), until(there))));
   }
   close();
 }
@@ -133,7 +133,7 @@ function aroundHeld(person: Person, side: Side, from: Vector3, target: Vector3):
   const direction = end.clone().sub(start), length = direction.length(), ray = new Ray(start, direction.normalize());
   for (const thing of held(person)) {
     if (person.holding[side]?.thing === thing) continue;
-    const frame = person.track(thing.object).current;
+    const frame = person.movingFrameOf(thing.object).current;
     const position = frame.position.clone().sub(root).applyQuaternion(back), rotation = back.clone().multiply(frame.quaternion);
     const box = thing.bounds.clone().applyMatrix4(new Matrix4().compose(position, rotation, new Vector3(1, 1, 1)))
       .expandByScalar(LOAD_RESERVE * person.scale + (ARM.length + ARM.hand) * person.proportions.height);

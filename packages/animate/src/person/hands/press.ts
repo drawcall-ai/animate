@@ -53,7 +53,7 @@ export function pressingIn(person: Person, hand: HandPlan & { from: Vector3; poi
     person.fingers?.pointAt(hand.side, Math.min(1, Math.max(0, (POINTS.from - left) / (POINTS.from - POINTS.to))));
     return { ...hand.goal, position: path.to(f).position };
   };
-  return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
+  return reaching(person, hand.side, goal, { on: person.movingFrameOf(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
 }
 
 /** whether `take`'s grip is a fingertip's, and its pad is on its empty (`TOUCH`): a press ends there */
@@ -64,7 +64,7 @@ export function touching(person: Person, take: HandPlan, f: Frame): boolean {
 /** how far (m) `take`'s pad is off its empty, each as it last stood */
 export function padOff(person: Person, take: Pick<HandPlan, 'side' | 'thing' | 'grip' | 'point'>, f: Frame): number {
   const bone = person.hands[take.side], pad = _pad.copy(take.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
-  const { position, quaternion } = person.track(take.thing.object).at(f.time).prev;
+  const { position, quaternion } = person.movingFrameOf(take.thing.object).at(f.time).prev;
   return pad.distanceTo(_empty.copy(take.thing.grip(take.grip).at.position).applyQuaternion(quaternion).add(position));
 }
 

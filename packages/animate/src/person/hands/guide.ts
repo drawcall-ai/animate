@@ -39,7 +39,7 @@ export class Guide {
 
 
   constructor(private readonly person: Person, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance) {
-    const own = person.track(thing.object);
+    const own = person.movingFrameOf(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its path has it, the hand with it)
     if (grips.length > 1) for (const grip of grips) this.pivot.addScaledVector(grip, 1 / grips.length);
@@ -54,7 +54,7 @@ export class Guide {
     this.time = f.time;
     const { nominal, goal, person, thing, motion } = this;
     // (its track read where it stands as the sub-step begins, before the hands move it: what tells when it has come to rest)
-    person.track(thing.object);
+    person.movingFrameOf(thing.object);
     // (kept clear as it is turned on its way, not as its hand has it: a hand short of its turn would feed back into the guide, pushing it
     // on ahead, the arm stretching after it and the turn falling shorter still)
     const current = nominal.current;

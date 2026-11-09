@@ -8,7 +8,7 @@ export const anchors = new WeakMap<Object3D, { body: Self; bone: number }>();
 export const movers = new WeakMap<Object3D, Self>();
 
 /** the body that keeps each node turned to a world rotation (`Body.orient`), its position following its parent: the rotation, by node */
-export const turners = new WeakMap<Object3D, { readonly turned: ReadonlyMap<Object3D, Quaternion> }>();
+export const orienters = new WeakMap<Object3D, { readonly oriented: ReadonlyMap<Object3D, Quaternion> }>();
 
 /** a node's matrix from one update to the next, the update it was last read in, and its parent frame (null for world) */
 export interface Interpolated {

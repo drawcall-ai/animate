@@ -160,7 +160,7 @@ export interface Regripping {
  * the thing is now): as it nears its end (`nearing`, from `PLANNED` s before it, travel.ts) — weighed each sub-step until its course is over, the end and the body as they
  * then stand, for as long as the grasp it has is kept as comfortable there: an end that moves on the body (a socket on
  * something the other hand holds up as the head turns to it) is weighed where it has gone, not only where it was half a second before
- * — and once more, from the body as it then stands, if it has not come to rest there `SETTLING` s (travel.ts) after its course is over
+ * — and once more, from the body as it then stands, if it has not come to rest there `REFIT_AFTER` s (travel.ts) after its course is over
  * (`settling`): then a thing held turned off its end counts as not held by the grasp it has.
  */
 export function regripping(person: Person, thing: Thing, end: (f: Frame) => Goal): Regripping {

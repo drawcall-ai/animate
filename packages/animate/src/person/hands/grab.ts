@@ -39,7 +39,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
   const plan = takes.every((take) => onBody(person, take.thing)) ? 'there' : footing(person, {
     // (stood to as if the wrist went on the empty: the hand still hangs, so the palm's way back from it is not yet the reach's)
     grips: takes.map((take) => ({ side: take.side, at: emptyAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
-    things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.track(thing.object).current })),
+    things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.movingFrameOf(thing.object).current })),
   }, step);
   if (plan !== 'there' && 'nowhere' in plan) {
     request.fail({ ...plan.nowhere, where: takes.map(({ thing, side, grip }) => `${thing.object.name} ${side} ${grip}`).join(', ') });
@@ -121,7 +121,7 @@ export function* grabAtOnce(person: Person, request: Request, takes: readonly Ha
   if (request.outcome === 'failed') return;
   let placed = false;
   yield* parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked', (f) => {
-    const frame = person.track(take.thing.object).at(f.time).current;
+    const frame = person.movingFrameOf(take.thing.object).at(f.time).current;
     // (posed again until the wrist stays put: on a grip that sets no turn the wrist is a palm back from it along the hand as last posed)
     const wrist = new Vector3(Infinity, 0, 0);
     for (let pass = 0; pass < 8 && wrist.distanceTo(gripAt(person, take, f)) > 1e-4; pass++) {
@@ -140,7 +140,7 @@ export function* grabAtOnce(person: Person, request: Request, takes: readonly Ha
  * it — in place
  */
 function shortOf(person: Person, take: HandPlan, shoulder: Vector3, at: Vector3): void {
-  const frame = person.track(take.thing.object).current, back = _back.copy(frame.quaternion).invert();
+  const frame = person.movingFrameOf(take.thing.object).current, back = _back.copy(frame.quaternion).invert();
   const box = _box.copy(take.thing.bounds).expandByScalar(ARM.hand * person.proportions.height + LOAD_RESERVE * person.scale);
   if (box.isEmpty()) return;
   const from = _from.copy(shoulder).sub(frame.position).applyQuaternion(back), to = _to.copy(at).sub(frame.position).applyQuaternion(back);

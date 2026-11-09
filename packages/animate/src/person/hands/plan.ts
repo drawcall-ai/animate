@@ -43,7 +43,7 @@ export function handPlanOf(person: Person, side: Side, thing: Thing, grip: strin
  * if it had stepped up to it, as it will walk up; never from where the hand is on its way
  */
 function picked(person: Person, side: Side, thing: Thing, on: GripOn): HandPlacement {
-  const placed = person.track(thing.object).current, rest = person.restOf(person.hands[side]);
+  const placed = person.movingFrameOf(thing.object).current, rest = person.restOf(person.hands[side]);
   const up = new Vector3(0, 1, 0).applyQuaternion(placed.quaternion.clone().invert());
   const empty = on.at.position.clone().applyQuaternion(placed.quaternion).add(placed.position);
   const sunk = person.fingers?.sunk(side, thing.object), stood = stepped(person, side, empty);
@@ -56,7 +56,7 @@ function picked(person: Person, side: Side, thing: Thing, on: GripOn): HandPlace
 
 /** how `side`'s hand bone is turned in `thing`'s frame as the body was last posed (into `out`) */
 function turnIn(person: Person, side: Side, thing: Thing, out: Quaternion): Quaternion {
-  return out.copy(person.track(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(person.hands[side]));
+  return out.copy(person.movingFrameOf(thing.object).at(person.frame.time).prev.quaternion).invert().multiply(person.frame.prev.rotation(person.hands[side]));
 }
 
 /**
@@ -128,7 +128,7 @@ function stepped(person: Person, side: Side, empty: Vector3): ((hand: Placement)
 /**
  * the hold `person`'s hand takes by `take`: on a grip that fixes the hand (a handle with a facing, a pad with a facing), the arm bringing
  * the hand to its placement exactly, turned as it asks — the turn its reach left it short of (only preferred on its way, as far as the
- * wrist turned it so) made up over `SETTLING` s, not at the wrist's top speed in a few sub-steps; on one that left the library some of
+ * wrist turned it so) made up over `TURN_MADE_UP` s, not at the wrist's top speed in a few sub-steps; on one that left the library some of
  * the turn to pick, its point kept on its target and its turn only preferred, as on its way (a box carried by its sides, the palms
  * keeping on them as the box turns through what the wrists allow)
  */
@@ -137,13 +137,13 @@ export function holdOn(person: Person, take: HandPlan): Hold {
   if (!fixes(take.thing.grip(take.grip))) return { ...held, goal: take.goal };
   const { position, quaternion } = handOn(take.point, take.placement), began = person.frame.time, from = turnIn(person, take.side, take.thing, new Quaternion());
   const turn = new Quaternion();
-  const goal = { position, get quaternion() { return turn.slerpQuaternions(from, quaternion, MathUtils.smoothstep(person.frame.time - began, 0, SETTLING)); } };
+  const goal = { position, get quaternion() { return turn.slerpQuaternions(from, quaternion, MathUtils.smoothstep(person.frame.time - began, 0, TURN_MADE_UP)); } };
   return { ...held, goal };
 }
 
 /**
  * The pads a facing fixes (a fingertip on a button) of `takes`, just closed, waited on until each is turned as its grip asks and on it or its
- * turn has been made up (`SETTLING`), then judged: a pad closes as it touches, while the hand's turn still has its way to go, and that turn
+ * turn has been made up (`TURN_MADE_UP`), then judged: a pad closes as it touches, while the hand's turn still has its way to go, and that turn
  * can carry it off. A pad further than `PAD_OFF` off its grip by then misses.
  */
 export function* settling(person: Person, request: Request, takes: readonly HandPlan[], began: number) {
@@ -152,7 +152,7 @@ export function* settling(person: Person, request: Request, takes: readonly Hand
   const limit = PAD_OFF * person.scale;
   const off = (take: HandPlan, f: Frame) => padOff(person, take, f);
   const settled = (take: HandPlan, f: Frame) => off(take, f) <= limit && turnIn(person, take.side, take.thing, _q).angleTo(handOn(take.point, take.placement).quaternion) <= REACHED.angle;
-  yield* action<Frame>({ until: (f) => f.time - began >= SETTLING || pads.every((take) => settled(take, f)) });
+  yield* action<Frame>({ until: (f) => f.time - began >= TURN_MADE_UP || pads.every((take) => settled(take, f)) });
   for (const take of pads) {
     const value = off(take, person.frame);
     if (value > limit) request.fail({ where: `${take.thing.object.name} ${take.side} ${take.grip}`, off: value, limit, why: `a fingertip's pad is ${(100 * value).toFixed(1)} cm off its grip once its hand has turned as the grip's facing asks: the wrist cannot turn so from where the body stands, so change the facing or where it stands` });
@@ -169,17 +169,17 @@ export function steadied(person: Person, side: Side, hold: Hold): Goal {
 }
 
 /** how long a hand that has taken hold makes up the turn its reach left it short of (s) */
-const SETTLING = 0.4;
+const TURN_MADE_UP = 0.4;
 
 /** where the hand bone goes on a grip in the world this sub-step (its goal), as the person tracks its thing */
 export function gripAt(person: Person, take: Pick<HandPlan, 'thing' | 'goal'>, f: Frame, out = new Vector3()): Vector3 {
-  const frame = person.track(take.thing.object).at(f.time).current;
+  const frame = person.movingFrameOf(take.thing.object).at(f.time).current;
   return out.copy(take.goal.position).applyQuaternion(frame.quaternion).add(frame.position);
 }
 
 /** where a grip's empty is in the world this sub-step, as the person tracks its thing */
 export function emptyAt(person: Person, take: Pick<HandPlan, 'thing' | 'grip'>, f: Frame): Vector3 {
-  const frame = person.track(take.thing.object).at(f.time).current;
+  const frame = person.movingFrameOf(take.thing.object).at(f.time).current;
   return take.thing.grip(take.grip).at.position.clone().applyQuaternion(frame.quaternion).add(frame.position);
 }
 

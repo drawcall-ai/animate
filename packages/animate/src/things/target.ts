@@ -60,7 +60,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     }
     const on = bodyOf(at);
     if (on) self.meet(on);
-    const frame = typeof target === 'function' ? fresh(at, f.time) : self.track(at);
+    const frame = typeof target === 'function' ? fresh(at, f.time) : self.movingFrameOf(at);
     found.position.copy(frame.current.position);
     found.quaternion = turn.copy(frame.current.quaternion);
     found.velocity = frame.velocity(velocity);

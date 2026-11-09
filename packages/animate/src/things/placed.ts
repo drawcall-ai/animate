@@ -1,7 +1,7 @@
 import { Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import type { Placement } from '../kernel/goal';
-import { anchors, movers, turners } from './anchors';
+import { anchors, movers, orienters } from './anchors';
 import type { Self } from '../body/self';
 
 /**
@@ -20,7 +20,7 @@ export function placedFor(reader: Self, node: Object3D, out: Placement, fresh = 
 function chainOf(reader: Self, node: Object3D, fresh: boolean, chain: Matrix4): Matrix4 {
   chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
-    const turned = turners.get(at)?.turned.get(at);
+    const turned = orienters.get(at)?.oriented.get(at);
     if (turned) {
       // (turned in the world as its app keeps it, where its parent, as found now, carries its position)
       const parent = at.parent ? chainOf(reader, at.parent, fresh, new Matrix4()) : new Matrix4();

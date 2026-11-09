@@ -23,7 +23,7 @@ export function reachable(stepper: Stepper, forecast: Forecast): boolean {
   if (Number.isNaN(stepper.low)) return true;
   // (a person's run, as it will be going by the time its stride is set, is no walk: nothing below holds it. Each stance is cut to its travel,
   // each foot aimed by its forecast, and a flight has no feet to be within: what a player's root runs on, foreseeing nothing)
-  if (!clock && runs(st, forecast(PACING + SUBSTEP).position.distanceTo(forecast(PACING).position) / SUBSTEP)) return true;
+  if (!clock && runs(st, forecast(RUN_AHEAD + SUBSTEP).position.distanceTo(forecast(RUN_AHEAD).position) / SUBSTEP)) return true;
   const hipAt = (leg: Leg, at: { position: Vector3; yaw: number }) => {
     const build = feet.legs[leg.i];
     return _w.copy(at.position).add(stepper.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))
@@ -117,5 +117,5 @@ function aim(stepper: Stepper, forecast: Forecast): Vector3[] {
 /** Tuned: a planted foot already strayed from its hip goes on no further past it than it is, up to `STRAYED` of its stray */
 const STRAYED = 0.25;
 /** Tuned: how far ahead (s) a person's pace is read for whether it runs */
-const PACING = 0.4;
+const RUN_AHEAD = 0.4;
 const [_w, _a, _b, _c, _x, _n, _l, _f, _m, _o, _pivot] = Array.from({ length: 11 }, () => new Vector3());

@@ -121,7 +121,7 @@ export function supported(thing: Thing): boolean {
 export function attach(thing: Thing, parent: Object3D, reader?: Self): void {
   const object = thing.object, mover = movers.get(object);
   const world = reader && writtenFor(reader, object, _world);
-  mover?.leave(object);
+  mover?.stopMoving(object);
   parent.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, false);
   parent.attach(object);
@@ -140,7 +140,7 @@ function placeUnder(reader: Self, object: Object3D, parent: Object3D, position: 
 /** `thing` lifted into `self`'s hands (`take`) */
 export function lift(self: Self, thing: Thing): void {
   // (its motion tracked from where it stood, before it hangs from the hand)
-  if (thing.object.parent && !thing.lifted) self.track(thing.object);
+  if (thing.object.parent && !thing.lifted) self.movingFrameOf(thing.object);
   thing.lifted = true;
   take(self, thing);
 }
@@ -158,7 +158,7 @@ export function take(self: Self, thing: Thing): void {
   const movingFrame = new MovingFrame(at.position, at.quaternion);
   // (standing there as of the sub-step before: `move` moves it on in this one)
   movingFrame.place(self.frame.time - self.frame.dt, at.position, at.quaternion);
-  self.carry(thing.object, movingFrame);
+  self.startMoving(thing.object, movingFrame);
 }
 
 /**
@@ -262,7 +262,7 @@ function bearers(self: Self, thing: Thing): number[] {
 function load(self: Self, pose: BonePose, borne: ReadonlyMap<Thing, Bearing>): void {
   const mass = new Map<number, number>(), moment = new Map<number, Vector3>();
   for (const [thing, bearing] of borne) {
-    const placed = self.track(thing.object).at(self.frame.time).current;
+    const placed = self.movingFrameOf(thing.object).at(self.frame.time).current;
     const centre = _c.copy(thing.centre).applyQuaternion(placed.quaternion).add(placed.position);
     for (const bone of bearing.bones) {
       mass.set(bone, (mass.get(bone) ?? 0) + bearing.kg / bearing.bones.length);

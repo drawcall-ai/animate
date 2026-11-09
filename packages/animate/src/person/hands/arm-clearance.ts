@@ -203,7 +203,7 @@ function holds(pose: ReadonlyBonePose, proportions: Proportions, side: Side, wri
   });
 }
 
-/** whether arm `side` can hold its wrist at `wrist`, the hand on toward `palm` (world), clear of the trunk as `pose` stands it (`holds`) */
+/** whether arm `side` can hold its wrist at `wrist`, the hand on toward `palm` (world), clear of the trunk as `pose` stands it (`canHold`) */
 export function holdsClear(pose: ReadonlyBonePose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, palm: Readonly<Vector3>, near: Readonly<Vector3>): boolean {
   return holds(pose, proportions, side, wrist, near, _along.subVectors(palm, wrist).normalize());
 }

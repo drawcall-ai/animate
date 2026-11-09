@@ -15,11 +15,11 @@ export type CarryPath = ReturnType<typeof carryPathOf>;
 
 /** Exit the source approach from its nearest point, then traverse targets and the destination approach. */
 export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: Frame) => Goal)[], end: Object3D | null) {
-  const f = person.frame, at = person.track(thing.object).current.position.clone();
+  const f = person.frame, at = person.movingFrameOf(thing.object).current.position.clone();
   const turn = (f: Frame) => targets[targets.length - 1](f).quaternion;
   const seat = thing.object.parent;
-  const leaving = seat ? approachOf(seat).reverse().map((empty) => (frame: Frame) => ({ position: person.track(empty).at(frame.time).current.position })) : [];
-  const coming = end ? approachOf(end).map((empty) => (frame: Frame) => ({ position: person.track(empty).at(frame.time).current.position, quaternion: turn(frame) })) : [];
+  const leaving = seat ? approachOf(seat).reverse().map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position })) : [];
+  const coming = end ? approachOf(end).map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position, quaternion: turn(frame) })) : [];
   const points: ((f: Frame) => Goal)[] = [...leaving, ...targets.slice(0, -1), ...coming, targets[targets.length - 1]];
   // (a draw from part way out of a scabbard does not push back in to the mouth first)
   let nearest = 0, best = Infinity;

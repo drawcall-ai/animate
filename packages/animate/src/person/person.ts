@@ -72,7 +72,7 @@ export class Person extends Self {
   /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
   readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
   readonly drawingBack: Record<Side, number> = { left: -Infinity, right: -Infinity };
-  /** a pose to try an arm on (`holds`) */
+  /** a pose to try an arm on (`canHold`) */
   private readonly scratch = new BonePose(this.skeleton);
   /** poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
   readonly trials = { brought: new BonePose(this.skeleton), trial: new BonePose(this.skeleton) };
@@ -88,7 +88,7 @@ export class Person extends Self {
   }
 
   /** a person's: if its arm, posed onto it afresh, keeps clear of its trunk */
-  holds(f: Frame, hand: string, wrist: Goal): boolean {
+  canHold(f: Frame, hand: string, wrist: Goal): boolean {
     const side = sideOf(hand), frame = { current: this.scratch.copy(f.current) };
     placeArm(this, frame, side, wrist);
     return armClear(frame.current, this.proportions, side);
@@ -124,7 +124,7 @@ export class Person extends Self {
         // (what both hands hold before the body goes with the chest they hang from, not the hips: the arms hang from the chest, so it stays
         // in the hands as the trunk bows or straightens)
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);
-        handStep(this, f, side, steadied(this, side, hold), { on: this.track(thing.object), thing, ...HOLD, bodyFollows: bodyOf(thing.object) !== this }, arms[side]);
+        handStep(this, f, side, steadied(this, side, hold), { on: this.movingFrameOf(thing.object), thing, ...HOLD, bodyFollows: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
         checkParents(this);

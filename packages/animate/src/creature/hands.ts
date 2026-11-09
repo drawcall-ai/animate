@@ -184,7 +184,7 @@ export function creatureHands(self: Self): HandStaging {
     take: function* (request, thing, grips, options) {
       const motion = paceAt(options.speed, DIP);
       const { hand, grip } = only('grab', grips);
-      const goal = { position: thing.grip(grip).at.position.clone() }, frame = self.track(thing.object);
+      const goal = { position: thing.grip(grip).at.position.clone() }, frame = self.movingFrameOf(thing.object);
       const point = (f: Frame) => frame.toWorld({ position: goal.position }, _world, f.time).position.clone();
       if (!(yield* walkingToReach(self, request, hand, point, thing.object.name, motion, options.step ?? true))) return;
       yield* tipping(self, request, hand, () => goal, motion, frame);
@@ -201,10 +201,10 @@ export function creatureHands(self: Self): HandStaging {
       const to = way.points[0];
       lift(self, thing);
       yield* holdingOn(self, request, handsOn(self, thing)[0], thing.object.name, (f) => to(f).position, (bone) => {
-        const placed = self.track(thing.object).current, pose = self.poseFor(self), inverse = pose.rotation(bone).clone().invert();
+        const placed = self.movingFrameOf(thing.object).current, pose = self.poseFor(self), inverse = pose.rotation(bone).clone().invert();
         const inHand = { position: placed.position.clone().sub(pose.position(bone)).applyQuaternion(inverse), quaternion: inverse.multiply(placed.quaternion) };
         return (f) => {
-          const at = to(f), turn = at.quaternion ?? self.track(thing.object).at(f.time).current.quaternion;
+          const at = to(f), turn = at.quaternion ?? self.movingFrameOf(thing.object).at(f.time).current.quaternion;
           const quaternion = turn.clone().multiply(_iq.copy(inHand.quaternion).invert());
           const position = inHand.position.clone().negate().applyQuaternion(quaternion).add(at.position);
           return at.quaternion ? { position, quaternion } : { position };

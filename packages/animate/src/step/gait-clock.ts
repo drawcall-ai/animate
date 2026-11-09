@@ -93,7 +93,7 @@ export class GaitClock {
     const { r, v } = root;
     if (!this.foreseen) return v;
     const goes = r.wanted?.velocity.length() ?? 0, hurried = goes > STROLL.speed + 1e-6 && !this.walking;
-    return Math.max(v, hurried ? goes : velocityAhead(root, PACING, _ahead).length());
+    return Math.max(v, hurried ? goes : velocityAhead(root, CADENCE_AHEAD, _ahead).length());
   }
 
   stride({ v, pressed, dt }: Reading, pacing: number, most: number): StrideTime {
@@ -181,7 +181,7 @@ export class GaitClock {
   holdsDown(leg: Leg, input: Pick<Timing, 'Tsw' | 'C'> & { airborne: boolean; dt: number }): boolean {
     const { legs } = this, { airborne, dt, C } = input;
     // (it lifts no foot it has only just put down: a step lands and bears weight before the next)
-    if (leg.planted < SETTLING * C) return true;
+    if (leg.planted < STANDS_FIRST * C) return true;
     if (airborne) return false;
     // (a body never leaves fewer than `STANDING` feet on the floor — nor than its gait has down as this one lifts: a trot quicker than half
     // its cycle in stance has a moment in the air — one out of reach waits, the others land first; one of a pair lifting this sub-step
@@ -240,7 +240,7 @@ export class GaitClock {
 }
 
 /** how long a gait's foot bears weight once down before it lifts again (share of a cycle) */
-export const SETTLING = 0.1;
+export const STANDS_FIRST = 0.1;
 /** the fewest feet a gait's body leaves on the floor */
 export const STANDING = 2;
 /** Derived: a gait's feet whose footfalls are within `TOGETHER` of a cycle leave the floor together (a trot's diagonals, 0.02 apart in
@@ -260,10 +260,10 @@ const SHIFT = 0.5;
  */
 const LEAST_SWING = 0.4;
 /** Tuned: how far ahead (s) a gait's cadence takes the speed it will be going */
-const PACING = 0.4;
+const CADENCE_AHEAD = 0.4;
 /** Derived: a walk's swing quickened by a turn is at most this share of its stance — its feet half a cycle apart on a girdle never in the
- * air together (Hildebrand's walk: more than half a cycle on the floor), the one landing `SETTLING` of a cycle before the other lifts */
-const PAIRED = (0.5 - SETTLING) / (0.5 + SETTLING);
+ * air together (Hildebrand's walk: more than half a cycle on the floor), the one landing `STANDS_FIRST` of a cycle before the other lifts */
+const PAIRED = (0.5 - STANDS_FIRST) / (0.5 + STANDS_FIRST);
 /** Tuned: walking, a planted foot is kept within reach toward its own turn this share of a cycle at most: the planner holds the root for
  * it rather than the foot stepping out of turn, and not so long the walk holds back a cycle for a foot that is nearly due */
 export const AWAIT = 0.1;

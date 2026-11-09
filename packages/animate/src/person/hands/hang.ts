@@ -131,7 +131,7 @@ export function clearArm(person: Person, f: Frame, side: Side, at: Vector3, yaw 
   let out = sign * local.x;
   for (const thing of obstacles) {
     if (f.current.skeleton.chain(`${side}Arm`).includes(boneOf(person, thing.object))) continue;
-    const placed = person.track(thing.object).at(f.time).current;
+    const placed = person.movingFrameOf(thing.object).at(f.time).current;
     const position = _d.subVectors(placed.position, hips).applyQuaternion(inverse);
     const rotation = _q.copy(inverse).multiply(placed.quaternion);
     const box = _box.copy(thing.bounds).applyMatrix4(_matrix.compose(position, rotation, ONE));

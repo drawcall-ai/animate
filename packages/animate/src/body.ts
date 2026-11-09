@@ -96,7 +96,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * Set it before each `update`; the node's own rotation is written to match as the update ends. With no hand on what hangs from it, it
    * simply turns as asked. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    selfOf(this).turnedNodes.set(node, rotation);
+    selfOf(this).orientedNodes.set(node, rotation);
   }
 
   /**

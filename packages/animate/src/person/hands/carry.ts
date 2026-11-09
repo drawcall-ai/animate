@@ -48,7 +48,7 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   });
   // (stood back far enough that the thing, as it will be placed, keeps clear of the trunk)
   const placed = way.points[way.points.length - 1](person.frame);
-  const things = [{ bounds: thing.bounds, position: placed.position.clone(), quaternion: (placed.quaternion ?? person.track(thing.object).current.quaternion).clone() }];
+  const things = [{ bounds: thing.bounds, position: placed.position.clone(), quaternion: (placed.quaternion ?? person.movingFrameOf(thing.object).current.quaternion).clone() }];
   const plan = way.own ? 'there' : footing(person, { place: way.points[way.points.length - 1], held, things }, options.step ?? true);
   if (plan !== 'there' && 'nowhere' in plan) return request.fail({ ...plan.nowhere, where: thing.object.name });
   const end = way.points[way.points.length - 1];
@@ -67,7 +67,7 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   // (at the end of a story's `until`: on the place it was asked to, not where a guide kept it clear of the body)
   request.there = () => {
     const goal = end(person.frame);
-    return closeOn(person.track(thing.object).current, goal.position, goal.quaternion ?? kept.goal.quaternion);
+    return closeOn(person.movingFrameOf(thing.object).current, goal.position, goal.quaternion ?? kept.goal.quaternion);
   };
   yield* holdAlong(person, request, thing, kept, end, undefined, way.own);
 }
@@ -75,7 +75,7 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
 function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: ReachWalk, guides: Guides, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
-  const movingFrame = person.track(thing.object);
+  const movingFrame = person.movingFrameOf(thing.object);
   const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
   // (in both hands, squared to the body; in one, turned with the body as it was taken: a bucket by its handle, squared, would turn the
   // hand half round)
@@ -133,7 +133,7 @@ function* along(person: Person, request: Request, thing: Thing, way: CarryPath, 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `least` s */
 function timed(person: Person, thing: Thing, points: readonly ((f: Frame) => Goal)[], speed: number, least: number): Waypoint[] {
   const f = person.frame;
-  let from = person.track(thing.object).current.position.clone();
+  let from = person.movingFrameOf(thing.object).current.position.clone();
   const lengths = points.map((point) => {
     const to = point(f).position, length = from.distanceTo(to);
     from = to.clone();
@@ -160,7 +160,7 @@ function* lifting(person: Person, request: Request, thing: Thing) {
 export function* liftingClear(person: Person, request: Request, thing: Thing) {
   const resting = supported(thing);
   yield* lifting(person, request, thing);
-  const movingFrame = person.track(thing.object);
+  const movingFrame = person.movingFrameOf(thing.object);
   // (first up off what it rests on, then drawn in toward the hips to within `CLEAR.out` of them: held at arm's length, the arms would
   // fall short of it once the reach no longer bows the body for them)
   const quaternion = movingFrame.current.quaternion.clone(), up = movingFrame.current.position.clone(), root = person.pose.position(0);

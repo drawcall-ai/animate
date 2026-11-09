@@ -56,7 +56,7 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
     const seat = person.seat?.step(f.dt, asks.legGoal) ?? null;
     const go = seat ? null : asks.legGoal, root = rootOf(f, go, asks, stepper);
     if (seat) [asks.lower, asks.posture.lower, asks.bow] = [lerp(asks.lower, seat.seating.lower, seat.share), asks.posture.lower * (1 - seat.share), Math.max(asks.bow, seat.bow)];
-    stepper.move(f, trunk.carry(f, root, go, asks, seat));
+    stepper.move(f, trunk.steer(f, root, go, asks, seat));
     const { yaw, legs } = stepper;
     trunk.pose(f, asks, yaw);
     // the legs down to the feet

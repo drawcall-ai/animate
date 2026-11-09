@@ -2,7 +2,7 @@
 import { MathUtils, Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, wrapAngle } from '../kernel/math';
 import { bears, hullOf, outside } from './support';
-import { SETTLING, type GaitClock } from './gait-clock';
+import { STANDS_FIRST, type GaitClock } from './gait-clock';
 import { runs, SHUFFLING, THRESHOLDS, strayed } from './thresholds';
 import type { Stepper } from './stepper';
 import { aheadOf, hipOf, nominal, offHome, legReach, xcomAhead } from './leg-reach';
@@ -97,7 +97,7 @@ function lifts(stepper: Stepper, prompts: Prompts, leg: Leg, other: Leg): boolea
   const { C, Ts } = stepper.input;
   // (nor, unless it must, a walker's foot just put down: it bears weight before it is wanted again — one landed ahead of its hip on the
   // tread below stepped again the next sub-step, the pelvis bouncing up 14 cm)
-  if (leg.landed || (stepper.foreseen && leg.planted < SETTLING * C) || !wants(stepper, prompts, leg)) return false;
+  if (leg.landed || (stepper.foreseen && leg.planted < STANDS_FIRST * C) || !wants(stepper, prompts, leg)) return false;
   // alternate: lift once the other foot has stood (walking) or before it lands (running, a flight)
   const otherLands = other.swing ? remaining(other.swing) : -other.planted;
   const alternates = !!stepper.clock || otherLands + Ts - C * stepper.apart[leg.i] <= 1e-9;
@@ -118,7 +118,7 @@ function isUrgent(stepper: Stepper, prompts: Prompts, leg: Leg, other: Leg): boo
   if (other.swing && ((stepper.foreseen && !flies) || recovering || pivoting) && !stepper.clock) return false;
   // A lower leading foot takes the weight as the pelvis descends. A foot already home cannot improve its reach by stepping in place.
   const ahead = aheadOf(stepper, leg) < 0;
-  const down = ahead && (stepper.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (stepper.foreseen && leg.planted < SETTLING * input.C));
+  const down = ahead && (stepper.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (stepper.foreseen && leg.planted < STANDS_FIRST * input.C));
   if (!down && legReach(stepper, leg) < nominal(stepper) + Math.max(0, vy) * RISING - THRESHOLDS.short * s
     && offHome(stepper, leg, input.landAhead) > THRESHOLDS.still * s) return true;
   if (leg.landed) return false;

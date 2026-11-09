@@ -36,7 +36,7 @@ const TURNED = 0.05;
  * the body will stand and how it will bow by then, with time for a regrip (`REGRIP`) before it comes there */
 const PLANNED = 0.5;
 /** Tuned: how long (s) a carry's path may be over, its thing not yet at rest at its end, before its hand plans its grasp again */
-const SETTLING = 0.5;
+const REFIT_AFTER = 0.5;
 
 /**
  * Follow a path with load compliance only on support take-up, until the thing rests within `near` of its path's end; report a late
@@ -47,7 +47,7 @@ const SETTLING = 0.5;
  */
 export function* travel(person: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
   { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Regripping } = {}) {
-  const movingFrame = person.track(thing.object);
+  const movingFrame = person.movingFrameOf(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
   // (a hand carrying alone while the leading hand carries something of its own goes a moment after it; one beside a leading hand that
   // holds what the body wears — a rifle on its sling — goes at once)
@@ -94,7 +94,7 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
     }
     if (!path.over(f) || ready?.() === false) return false;
     if (Number.isNaN(since)) since = f.time;
-    if (grasp && f.time - since > SETTLING) grasp.settling(f);
+    if (grasp && f.time - since > REFIT_AFTER) grasp.settling(f);
     // (its lateness timed from its path's end; on a leg the carry walks, from when the body stands, not while it still walks there)
     if (Number.isNaN(stood) && (!walks || !person.locomotion.moving)) stood = f.time;
     const guided = guide.read(f, to).current, goal = guide.goal.position;
