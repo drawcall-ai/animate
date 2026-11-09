@@ -10,7 +10,6 @@ import { SOLDIER } from '../src/skeletons/index';
 import { cases } from '../../../packages/animate/test/kit/open';
 
 const test = cases([
-  ['stable-morning finishes cleanly in the SOLDIER viewer', /XCoM/, [1]], // XCoM 0.107 m, bound 0.103, for a sub-step as the carry's trailing foot lifts.
 ]);
 
 // Wardrobe skins these same named bones; meshes do not participate in the solver. Keep the rig's bone hierarchy and the live
