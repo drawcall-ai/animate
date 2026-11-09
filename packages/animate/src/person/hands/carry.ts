@@ -35,7 +35,7 @@ const ALONG = { speed: 0.5, least: 0.4 };
  * at most (× the arm's length; tuned: in reach with the back bowed no more than holding asks), and how near it comes to rest (m: clear) */
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
-/** Carry the route, retaining a fresh guide at each travel/hold boundary. */
+/** Carry the route, one guide (`guidesFor`) from its first leg through the hold at its end. */
 export function* carrying(person: Person, request: Request, thing: Thing, path: CarryPath, options: HandOptions) {
   // (each place on its way, as near as the thing came as it went there: one the arms cannot take it to is passed short, and that way may be
   // what kept it out of something)

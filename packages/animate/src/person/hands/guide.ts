@@ -15,8 +15,11 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 
 export type Guides = (factor?: number, clearance?: Clearance, armTurn?: number) => Guide;
 
+/** A carry's one guide, each leg setting its pace: a new one would set out from where the thing was read as the sub-step began, before the arm
+ * is solved, and the hand jump back to that as it took over. */
 export function guidesFor(person: Person, thing: Thing, motion: Motion, clear: Clearance): Guides {
-  return (factor = 1, clearance = clear, armTurn) => new Guide(person, thing, { ...motion, accel: motion.accel / factor }, clearance, armTurn);
+  let guide: Guide | undefined;
+  return (factor = 1, clearance = clear, armTurn) => (guide ??= new Guide(person, thing)).paced({ ...motion, accel: motion.accel / factor }, clearance, armTurn);
 }
 
 /** One load path: clear its path before following it, and judge the same endpoint. */
@@ -36,17 +39,26 @@ export class Guide {
 
   /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
   private readonly pivot = new Vector3();
+  private motion: Motion = CARRYING;
+  clear: Clearance = false;
+  armTurn?: number;
 
-
-  constructor(private readonly person: Person, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance, readonly armTurn?: number) {
+  constructor(private readonly person: Person, private readonly thing: Thing) {
     const own = person.movingFrameOf(thing.object);
-    const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
-    // (held in both hands; one hand's thing goes where its path has it, the hand with it)
-    if (grips.length > 1) for (const grip of grips) this.pivot.addScaledVector(grip, 1 / grips.length);
     this.nominal = new MovingFrame(own.current.position, own.current.quaternion);
     this.carrier = new MovingFrame(own.current.position, own.current.quaternion);
     this.nominal.prev.position.copy(own.prev.position);
     this.nominal.prev.quaternion.copy(own.prev.quaternion);
+  }
+
+  /** this leg's pace and clearance, about the grips that hold it now */
+  paced(motion: Motion, clear: Clearance, armTurn?: number): this {
+    [this.motion, this.clear, this.armTurn] = [motion, clear, armTurn];
+    const { person, thing, pivot } = this, grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
+    pivot.set(0, 0, 0);
+    // (held in both hands; one hand's thing goes where its path has it, the hand with it)
+    if (grips.length > 1) for (const grip of grips) pivot.addScaledVector(grip, 1 / grips.length);
+    return this;
   }
 
   read(f: Frame, to: Live<Goal>): MovingFrame {
