@@ -16,7 +16,8 @@ import { bringShoulder } from './shoulder';
 import { LimbMover } from '../../kernel/limb';
 import { following, LEADING, limitOf } from './reach';
 import { grasped, seat, shifts, type Regripping } from './grasp';
-import type { Guide, Guides } from './guide';
+import type { Clearance } from '../../things/carry-path';
+import type { Guide } from './guide';
 import type { Person } from '../person';
 
 // A carried thing along its path: the hands holding it on its guide, until it has come to rest at the path's end — or is late there,
@@ -45,8 +46,8 @@ const REFIT_AFTER = 0.5;
  * from when the body stands. Its request's eta is `eta` of the path's time left (s; default that time): what the carry does besides the
  * path counted in.
  */
-export function* travel(person: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
-  { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Regripping } = {}) {
+export function* travel(person: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], carrier: Guide, resting: boolean,
+  { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp, clear, armTurn }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Regripping; clear?: Clearance; armTurn?: number } = {}) {
   // (a second hand that has joined since the last leg: from this leg on, in both)
   if (handsOn(person, thing).length > 1) take(person, thing);
   const movingFrame = person.movingFrameOf(thing.object);
@@ -56,7 +57,7 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
   const leading = person.holding[LEADING]?.thing;
   const lag = grips[LEADING] === undefined && leading && !worn(leading) ? following(movingFrame.current.position, grips) : { delay: 0, slower: 0 };
   const factor = loadFactor(thing.mass);
-  const guide = guides(factor);
+  const guide = carrier.paced(factor, clear, armTurn);
   const from = movingFrame.current.position.y;
   // (take-up and compliance belong to lifting off a support, not every carried waypoint; mass slows the lift's acceleration and path)
   const load = resting ? factor - 1 : 0;

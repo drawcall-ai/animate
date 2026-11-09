@@ -16,7 +16,7 @@ import { SIDES, sideOf } from '../anatomy/bones';
 import { ARM_REACH, PROTRACTION } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { footing, walkingToReach, type ReachWalk } from './standing-spot';
-import { guidesFor, CARRYING, type Guides } from './guide';
+import { CARRYING, Guide } from './guide';
 import { closeOn, holdAlong, travel } from './travel';
 import { regripping, type Regripping } from './grasp';
 import type { Person } from '../person';
@@ -35,7 +35,7 @@ const ALONG = { speed: 0.5, least: 0.4 };
  * at most (× the arm's length; tuned: in reach with the back bowed no more than holding asks), and how near it comes to rest (m: clear) */
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
-/** Carry the route, one guide (`guidesFor`) from its first leg through the hold at its end. */
+/** Carry the route, one `Guide` from its first leg through the hold at its end. */
 export function* carrying(person: Person, request: Request, thing: Thing, path: CarryPath, options: HandOptions) {
   // (each place on its way, as near as the thing came as it went there: one the arms cannot take it to is passed short, and that way may be
   // what kept it out of something)
@@ -65,17 +65,17 @@ export function* carrying(person: Person, request: Request, thing: Thing, path: 
   const grasp = regripping(person, thing, end);
   // (the hands as brisk as the way is quick, in turning it as in moving it: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
   const brisk = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel / CARRYING.accel;
-  const guides = guidesFor(person, thing, { ...CARRYING, accel: CARRYING.accel * brisk, turnAccel: CARRYING.turnAccel * brisk, turnSpeed: CARRYING.turnSpeed * Math.sqrt(brisk) }, way.clear);
-  const moving = () => along(person, request, thing, way, guides, resting, grasp, options.speed);
+  const guide = new Guide(person, thing, { ...CARRYING, accel: CARRYING.accel * brisk, turnAccel: CARRYING.turnAccel * brisk, turnSpeed: CARRYING.turnSpeed * Math.sqrt(brisk) }, way.clear);
+  const moving = () => along(person, request, thing, way, guide, resting, grasp, options.speed);
   // (a spot before the chest stood behind the eyes of a body bowed over what it lifts, the head turned back over its shoulder for it: `noticing`'s `own`)
   if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position, { own: way.own }), moving());
-  else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
+  else yield* transferring(person, request, thing, way, plan, guide, resting, grasp);
   passed.forEach((nearest, k) => {
     if (nearest > PASSED * person.scale) person.warn(`passed ${thing.object.name} ${way.names[k]}`, `a carry of "${thing.object.name}" came no nearer its ${way.names[k]} than ${(100 * nearest).toFixed(0)} cm, as far as the arms took it, and went on: if it must go that way, stand nearer first`);
   });
   request.met();
   noteCrossed(person, thing);
-  const kept = guides();
+  const kept = guide.paced();
   // (at the end of a story's `until`: on the place it was asked to, not where a guide kept it clear of the body)
   request.there = () => {
     const goal = end(person.frame);
@@ -99,7 +99,7 @@ function noteCrossed(person: Person, thing: Thing): void {
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
-function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: ReachWalk, guides: Guides, resting: boolean, grasp: Regripping) {
+function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: ReachWalk, guide: Guide, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
   const movingFrame = person.movingFrameOf(thing.object);
   const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
@@ -134,31 +134,31 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
     }, function* () {
       // (its turn for the walk is the guide's, at a calm pace; the arm's joints no quicker: a turn past what the wrist holds has the arm change its
       // fit, every joint swinging at once, and at a held hand's pace their turns add up, what hangs from the hand flung at 2000°/s)
-      yield* travel(person, request, thing, [[LIFT, atBody]], (factor) => guides(factor, undefined, CARRYING.turnSpeed), resting, { eta: onward, walks: true });
+      yield* travel(person, request, thing, [[LIFT, atBody]], guide, resting, { eta: onward, walks: true, armTurn: CARRYING.turnSpeed });
       lifted = true;
-      yield* holdAlong(person, request, thing, guides(1, undefined, CARRYING.turnSpeed), walked, near);
-      yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), guides, false, { grasp, walks: true });
+      yield* holdAlong(person, request, thing, guide.paced(1, undefined, CARRYING.turnSpeed), walked, near);
+      yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), guide, false, { grasp, walks: true });
       // (come to rest on it once the body has come there, not merely passing within reach of it, or it is let go of past it — or stalled
       // short of it, or late: a carry ends what it cannot finish)
-      yield* travel(person, request, thing, [[0, end]], guides, false, { walks: true, end: true, ready: () => approached });
+      yield* travel(person, request, thing, [[0, end]], guide, false, { walks: true, end: true, ready: () => approached });
     });
   });
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(person: Person, request: Request, thing: Thing, way: CarryPath, guides: Guides, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
+function* along(person: Person, request: Request, thing: Thing, way: CarryPath, guide: Guide, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
   const least = ALONG.least;
   let points = way.points;
   if (way.outside > 0) {
     yield* travel(person, request, thing, timed(person, thing, points.slice(0, way.outside), speed, least),
-      (factor) => guides(factor, 'parts'), resting);
+      guide, resting, { clear: 'parts' });
     points = points.slice(way.outside);
     resting = false;
   }
   const straight = (way.last !== undefined || way.outside > 0) && points.length > 1;
   const first = straight ? points.slice(0, -1) : points;
-  yield* travel(person, request, thing, timed(person, thing, first, speed, least), guides, resting, { end: !straight, grasp: straight ? undefined : grasp });
-  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed, least), guides, false, { on: points[points.length - 2], end: true, grasp });
+  yield* travel(person, request, thing, timed(person, thing, first, speed, least), guide, resting, { end: !straight, grasp: straight ? undefined : grasp });
+  if (straight) yield* travel(person, request, thing, timed(person, thing, points.slice(-1), way.last ?? speed, least), guide, false, { on: points[points.length - 2], end: true, grasp });
 }
 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `least` s */
@@ -203,7 +203,7 @@ export function* liftingClear(person: Person, request: Request, thing: Thing) {
   if (out > most) way.push([(out - most) / ALONG.speed / person.tempo, { position: clear, quaternion }]);
   // (in one hand, its grasp planned for where it comes clear)
   const grasp = regripping(person, thing, () => ({ position: clear, quaternion }));
-  yield* travel(person, request, thing, way, guidesFor(person, thing, CARRYING, true), resting, { near: CLEAR.near * person.scale, grasp });
+  yield* travel(person, request, thing, way, new Guide(person, thing, CARRYING, true), resting, { near: CLEAR.near * person.scale, grasp });
 }
 
 /** A comfortable carry in front of the hips, following the body: where a transfer carries its load, turned `turn` from the body's facing. */

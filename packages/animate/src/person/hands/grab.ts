@@ -19,7 +19,7 @@ import { loadLean } from '../legs/walk-pose';
 import { handsGoing, withinArm } from './reach';
 import { emptyAt, gripAt, handPlanOf, holdOn, type HandPlan } from './plan';
 import { handsHolding } from './travel';
-import { CARRYING, guidesFor } from './guide';
+import { CARRYING, Guide } from './guide';
 import { sideOf } from '../anatomy/bones';
 import type { Thing } from '../../things/thing';
 import { ARM } from './arm-clearance';
@@ -155,7 +155,7 @@ export function holdingAtOnce(person: Person, request: Request, thing: Thing, na
   person.startAs([INDEX.spine, INDEX.chest]);
   posed();
   person.startAs(takes.map((take) => person.hands[take.side]));
-  const guide = guidesFor(person, thing, CARRYING, false)();
+  const guide = new Guide(person, thing, CARRYING, false).paced();
   for (const { hold, move } of handsHolding(person, thing, guide, place)) hold.idle = (at) => {
     move(at);
     if (at.time >= SETTLING || person.claims.owner('legs')) hold.idle = undefined;

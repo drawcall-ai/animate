@@ -13,16 +13,9 @@ import type { Person } from '../person';
 /** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
 export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
 
-export type Guides = (factor?: number, clearance?: Clearance, armTurn?: number) => Guide;
-
-/** A carry's one guide, each leg setting its pace: a new one would set out from where the thing was read as the sub-step began, before the arm
- * is solved, and the hand jump back to that as it took over. */
-export function guidesFor(person: Person, thing: Thing, motion: Motion, clear: Clearance): Guides {
-  let guide: Guide | undefined;
-  return (factor = 1, clearance = clear, armTurn) => (guide ??= new Guide(person, thing)).paced({ ...motion, accel: motion.accel / factor }, clearance, armTurn);
-}
-
-/** One load path: clear its path before following it, and judge the same endpoint. */
+/** A carry's one load path, from its first leg through the hold at its end, each leg setting its pace (`paced`): clear its path before
+ * following it, and judge the same endpoint. A new one each leg would set out from where the thing was read as the sub-step began, before
+ * the arm is solved, and the hand jump back to that as it took over. */
 export class Guide {
   readonly goal = { position: new Vector3(), quaternion: new Quaternion() };
   private readonly carrier: MovingFrame;
@@ -39,11 +32,13 @@ export class Guide {
 
   /** the middle of the grips both its hands hold it by, where the palms close on it (its frame; held in one, its origin) */
   private readonly pivot = new Vector3();
-  private motion: Motion = CARRYING;
-  clear: Clearance = false;
+  private motion: Motion;
+  clear: Clearance;
   armTurn?: number;
 
-  constructor(private readonly person: Person, private readonly thing: Thing) {
+  /** carried at `pace` (as calm as `CARRYING`, or brisker) kept `clearance` clear of the body, unless a leg says otherwise */
+  constructor(private readonly person: Person, private readonly thing: Thing, private readonly pace: Motion, private readonly clearance: Clearance) {
+    [this.motion, this.clear] = [pace, clearance];
     const own = person.movingFrameOf(thing.object);
     this.nominal = new MovingFrame(own.current.position, own.current.quaternion);
     this.carrier = new MovingFrame(own.current.position, own.current.quaternion);
@@ -51,9 +46,9 @@ export class Guide {
     this.nominal.prev.quaternion.copy(own.prev.quaternion);
   }
 
-  /** this leg's pace and clearance, about the grips that hold it now */
-  paced(motion: Motion, clear: Clearance, armTurn?: number): this {
-    [this.motion, this.clear, this.armTurn] = [motion, clear, armTurn];
+  /** this leg's pace — its acceleration `factor` times slower, for a load — and clearance, about the grips that hold it now */
+  paced(factor = 1, clear = this.clearance, armTurn?: number): this {
+    [this.motion, this.clear, this.armTurn] = [{ ...this.pace, accel: this.pace.accel / factor }, clear, armTurn];
     const { person, thing, pivot } = this, grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     pivot.set(0, 0, 0);
     // (held in both hands; one hand's thing goes where its path has it, the hand with it)
