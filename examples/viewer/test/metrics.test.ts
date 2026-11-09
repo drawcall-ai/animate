@@ -42,7 +42,6 @@ const check = cases([
   ['vr', /head lag/],
   // (marginal at this life seed: each past a bound it expects kept, by what it says)
   ['stroll', /arm swing peak acceleration/, [3]], // 2.14 × the sinusoid's, max 2
-  ['knight-arming', /step length asymmetry/, [3]], // 0.08, max 0.05
   ['idle-life', /pelvis off the feet/, [3]], // 2.006 cm off their midpoint, max 2
 ]);
 for (const sc of SCENARIOS.filter((s) => !['legs-biped', 'legs-horse', 'dog-fetch', 'lion-run'].includes(s.id))) {
