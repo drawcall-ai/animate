@@ -104,9 +104,11 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
   const end = way.points[way.points.length - 1];
   const movingFrame = person.movingFrameOf(thing.object);
   const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
-  // (upright, keeping the turn from the body's facing that it has now: a box taken by grips the other way round — a hand-over's — has its arms as they are)
+  // (keeping the turn from the body's facing that it has now: a box taken by grips the other way round — a hand-over's — has its arms as they
+  // are. Levelled if its +Y stands near up, a tray or cup a little tilted; a thing held otherwise is held so — a sword point down, a plank
+  // lying — turning it upright for the walk would swing it through the arm's reach of it)
   const turn = movingFrame.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing));
-  const atBody = carried(person, turn.set(0, turn.y, 0, turn.w).normalize());
+  const atBody = carried(person, _v.copy(UP).applyQuaternion(turn).y >= LEVELS ? turn.set(0, turn.y, 0, turn.w).normalize() : turn);
   const rise = atBody(person.frame).position.y - from;
   let lifted = rise <= 0, approached = false;
   // (raised onto its place as the body comes there turned as it stands: begun before it has turned, the load would turn to its place's
@@ -131,9 +133,11 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
       if (stall) request.fail(stall);
       approached = true;
     }, function* () {
-      yield* travel(person, request, thing, [[LIFT, atBody]], guides, resting, { eta: onward, walks: true });
+      // (its turn for the walk is the guide's, at a calm pace; the arm's joints no quicker: a turn past what the wrist holds has the arm change its
+      // fit, every joint swinging at once, and at a held hand's pace their turns add up, what hangs from the hand flung at 2000°/s)
+      yield* travel(person, request, thing, [[LIFT, atBody]], (factor) => guides(factor, undefined, CARRYING.turnSpeed), resting, { eta: onward, walks: true });
       lifted = true;
-      yield* holdAlong(person, request, thing, guides(), walked, near);
+      yield* holdAlong(person, request, thing, guides(1, undefined, CARRYING.turnSpeed), walked, near);
       yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), guides, false, { grasp, walks: true });
       // (come to rest on it once the body has come there, not merely passing within reach of it, or it is let go of past it — or stalled
       // short of it, or late: a carry ends what it cannot finish)
@@ -243,4 +247,6 @@ function inReach(person: Person, thing: Thing, wideOnly = false): number {
 /** Tuned carry staging (m at default stature): how far ahead of the hips a load is carried, clear of the thighs with room for two hands,
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
+/** Tuned: a walk levels what it carries if the cosine of the angle between the thing's own +Y and up is at least this (45°) */
+const LEVELS = Math.SQRT1_2;
 const UP = new Vector3(0, 1, 0), _v = new Vector3();

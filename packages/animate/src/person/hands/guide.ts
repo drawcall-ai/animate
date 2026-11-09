@@ -13,10 +13,10 @@ import type { Person } from '../person';
 /** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
 export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
 
-export type Guides = (factor?: number, clearance?: Clearance) => Guide;
+export type Guides = (factor?: number, clearance?: Clearance, armTurn?: number) => Guide;
 
 export function guidesFor(person: Person, thing: Thing, motion: Motion, clear: Clearance): Guides {
-  return (factor = 1, clearance = clear) => new Guide(person, thing, { ...motion, accel: motion.accel / factor }, clearance);
+  return (factor = 1, clearance = clear, armTurn) => new Guide(person, thing, { ...motion, accel: motion.accel / factor }, clearance, armTurn);
 }
 
 /** One load path: clear its path before following it, and judge the same endpoint. */
@@ -38,7 +38,7 @@ export class Guide {
   private readonly pivot = new Vector3();
 
 
-  constructor(private readonly person: Person, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance) {
+  constructor(private readonly person: Person, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance, readonly armTurn?: number) {
     const own = person.movingFrameOf(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its path has it, the hand with it)

@@ -274,7 +274,7 @@ it('walks on with what the arm cannot hold at its carrying place, and ends', () 
 
 describe('set down low', () => {
   // (from a stand with its knees let down as far as they need to, its bow capped by what it holds; a grab of the same place had always reached it)
-  it.each<[number, number, number]>([[2, 0.3, 0.45], [2, 0.2, 0.45], [2, 0.05, 0.45], [8, 0.3, 1.5], [8, 0.05, 1.5], [5, 0.3, 3], [12, 0.3, 0.6], [25, 0.5, 3]])('%f kg in both hands to %f m up, %f m ahead', (mass, y, z) => {
+  it.each<[number, number, number]>([[2, 0.3, 0.45], [2, 0.2, 0.45], [2, 0.05, 0.45], [8, 0.3, 1.5], [8, 0.05, 1.5]])('%f kg in both hands to %f m up, %f m ahead', (mass, y, z) => {
     const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { mass, solid: false }), spot = empty(room, 'spot', new Vector3(0, y, z));
     let carried: boolean | null = null;
     play(function* () {
@@ -284,15 +284,72 @@ describe('set down low', () => {
     expect(carried).toBe(true);
   });
 
-  // (its hips as low as what it holds has them come level with its top: it stands clear of them, not as near as a shallow bow would have it)
-  it.each<[number, number]>([[15, 3], [12, 0.7], [20, 3], [20, 0.7]])('a box as high as the crouched hips, %f kg to 0.15 m up, %f m ahead', (mass, z) => {
+  // (its knees closing what the arm is short of however far the bow has got; and its hips as low as what it holds has them come level with
+  // its top: it stands clear of them, not as near as a shallow bow would have it)
+  it.each<[number, number, number]>([[5, 0.3, 3], [12, 0.3, 0.6], [25, 0.5, 3], [15, 0.15, 3], [12, 0.15, 0.7], [20, 0.15, 3], [20, 0.15, 0.7]])('a box as high as the crouched hips, %f kg to %f m up, %f m ahead', (mass, y, z) => {
     const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.42), { mass, size: new Vector3(0.3, 0.2, 0.25) });
     let carried: boolean | null = null;
     play(function* () {
       yield* grab(body, load, BOTH);
-      carried = yield* carry(body, load, new Vector3(0, 0.15, z));
+      carried = yield* carry(body, load, new Vector3(0, y, z));
     }, [body], 20);
     expect(carried).toBe(true);
+  });
+});
+
+describe('what a walk carries', () => {
+  const FAR = new Vector3(0, 1.1, 3.2);
+  const rod = (room: Group, at: Vector3, x: number, z: number, mass: number) => {
+    const made = new Mesh(new BoxGeometry(0.04, 1, 0.04));
+    made.userData.mass = mass;
+    made.position.copy(at);
+    made.rotation.set(x, 0, z);
+    room.add(made);
+    room.updateMatrixWorld(true);
+    return made;
+  };
+  /** how far off up its +Y ends after a grab and a carry far off (°), whether the carry was met, the most it spun carried (rad/s) */
+  const walked = (body: ReturnType<typeof person>, thing: Mesh | ReturnType<typeof box>, grips: { left?: string; right?: string }) => {
+    const up = (at: typeof thing) => new Vector3(0, 1, 0).applyQuaternion(at.getWorldQuaternion(new Quaternion())).angleTo(new Vector3(0, 1, 0)) * 180 / Math.PI;
+    let carried: boolean | null = null, going = false, spin = 0, was: Quaternion | null = null;
+    play(function* () {
+      yield* grab(body, thing, grips);
+      going = true;
+      carried = yield* carry(body, thing, FAR);
+    }, [body], 20, () => {
+      const now = thing.getWorldQuaternion(new Quaternion());
+      if (going && was) spin = Math.max(spin, now.angleTo(was) * 60);
+      was = now;
+      return carried !== null;
+    });
+    return { carried, spin, up: up(thing) };
+  };
+
+  it('keeps a sword point down, unwhipped', () => {
+    const body = person(), sword = rod(roomOf(body), new Vector3(-0.25, 0.7, 0.4), Math.PI, 0, 1.2);
+    grip(sword, 'hilt', new Vector3(0, -0.4, 0), { handle: [0, 1, 0], radius: 0.015 });
+    const { carried, spin, up } = walked(body, sword, { right: 'hilt' });
+    expect(carried).toBe(true);
+    expect(up).toBeGreaterThan(170);
+    expect(spin).toBeLessThan(12);
+  });
+
+  it('keeps a plank lying flat', () => {
+    const body = person(), plank = rod(roomOf(body), new Vector3(0, 0.95, 0.45), 0, Math.PI / 2, 4);
+    empty(plank, 'left', new Vector3(0, -0.3, 0));
+    empty(plank, 'right', new Vector3(0, 0.3, 0));
+    const { carried, up } = walked(body, plank, BOTH);
+    expect(carried).toBe(true);
+    expect(up).toBeGreaterThan(85);
+  });
+
+  it('brings a tray tilted 25° level', () => {
+    const body = person(), room = roomOf(body), tray = box(room, new Vector3(0, 1, 0.45), { size: new Vector3(0.5, 0.03, 0.3), mass: 2 });
+    tray.rotation.x = 0.44;
+    room.updateMatrixWorld(true);
+    const { carried, up } = walked(body, tray, BOTH);
+    expect(carried).toBe(true);
+    expect(up).toBeLessThan(3);
   });
 });
 

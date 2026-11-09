@@ -189,7 +189,7 @@ export function handsHolding(person: Person, thing: Thing, guide: Guide, to: Liv
     if (single) {
       const goal = single(f);
       bringShoulder(person, f, side, _g.copy(goal.position).applyQuaternion(movingFrame.current.quaternion).add(movingFrame.current.position), 1, 0, carried);
-      handStep(person, f, side, goal, { on: movingFrame, ...HOLD, bodyFollows: true }, tip);
+      handStep(person, f, side, goal, { on: movingFrame, ...HOLD, turnSpeed: guide.armTurn ?? HOLD.turnSpeed, bodyFollows: true }, tip);
       return;
     }
     bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(movingFrame.current.quaternion).add(guide.goal.position), 1, 0, carried);

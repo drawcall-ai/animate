@@ -16,8 +16,9 @@ import type { HandOptions } from '../body/hand-staging';
  * thing), and in to the last target the way that target's approach comes (`userData.approach`: the names of empties beside it, under its
  * parent, outermost first; slowing to its `userData.speed`); an
  * `Object3D` target (or a function returning one) turns it as the target is turned, reached by the start of the last straight; a point keeps
- * it turned as it is, in the world where the body stands, and where it must walk there brought upright and turned with the body (it keeps the
- * turn from the body's facing it set out with, in one hand as in two). A target whose turn has a thing in both hands end with
+ * it turned as it is, in the world where the body stands, and where it must walk there turned with the body (it keeps the turn from the
+ * body's facing it set out with, in one hand as in two), brought level as well if its own +Y is within 45° of up: a tray or a cup comes level,
+ * a sword held point down or a plank lying stays so, its +Y being what says which way up it is, so build a thing with +Y up. A target whose turn has a thing in both hands end with
  * the arms crossed says so in the dev log. In one
  * hand by a grip that sets no turn it goes as the hand holds it, the arm turning it: if the arm cannot hold it so at the end — in the
  * trunk, past a joint's range, or strained — the hand regrips it in its fingers as it comes there, onto a grasp the arm holds there
