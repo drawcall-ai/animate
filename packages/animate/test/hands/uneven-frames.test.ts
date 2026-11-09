@@ -95,11 +95,14 @@ describe('what a carry brings to an empty, however uneven the frames', () => {
     }
   });
 
-  it('calls a carry there only once the thing rests on its place, not as it swings through an empty the app shakes faster than a hand follows', () => {
+  it.each([
+    ['shaken until it rests', 2.5],
+    ['shaken all along', Infinity],
+  ] as const)('calls a carry there only once the thing rests on its place, not as it swings through an empty the app shakes faster than a hand follows: %s', (_, shaken) => {
     for (let run = 1; run <= 25; run++) {
       // (a frame a sub-step: what the carry calls there is where the story lets go of it)
       const { body, thing, spot, steps } = scene(run, 0.3, new Vector3(-0.2, 0.9, 0.42), new Vector3(-0.3, 1.05, 0.45), (it) => void empty(it, 'top', new Vector3(0, 0.05, 0)), () => 1 / 60);
-      let done = false;
+      let done = false, missed: Missed | null = null;
       steps(runTimeline(function* () {
         yield* wait(0.3);
         yield* grab(body, thing, { right: 'top' }, { step: false });
@@ -108,12 +111,24 @@ describe('what a carry brings to an empty, however uneven the frames', () => {
           yield* carry(body, thing, spot, { step: false });
         } catch (miss) {
           if (!(miss instanceof Missed)) throw miss;
+          missed = miss;
           done = true;
           return;
         }
+        // (called there, it rests on it: let go there, it is set on it, no miss)
         release(body, thing, spot);
         done = true;
-      }), () => done, (time) => void (spot.position.x = -0.3 + 0.02 * Math.sin(6 * Math.PI * time)));
+      }), () => done, (time) => void (spot.position.x = -0.3 + (time < shaken ? 0.02 * Math.sin(6 * Math.PI * time) : 0)));
+      if (shaken === Infinity) {
+        // (shaken past the carry's time: it never comes to rest there, and the carry says its place kept moving, not that a joint held it off)
+        expect(missed, `run ${run}`).not.toBeNull();
+        expect(missed!.message).toMatch(/its place kept moving/);
+      } else {
+        // (shaken over the carry's way there and still at last: it waits for the thing to rest on it and sets it there)
+        expect(missed, `run ${run}`).toBeNull();
+        expect(thing.parent).toBe(spot);
+        expect(body.log).toEqual([]);
+      }
     }
   });
 
