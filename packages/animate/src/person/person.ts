@@ -2,6 +2,7 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { BonePose, type ReadonlyBonePose } from '../kernel/bone-pose';
 import { gazeAsks } from './hands/shoulder';
+import { limitOf } from './hands/reach';
 import { personHands } from './hands/staging';
 import type { HandStaging } from '../body/hand-staging';
 import { looking } from '../look/gaze';
@@ -169,8 +170,13 @@ const LEFT_BEHIND = 0.15;
 /** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
  * it after the hands): its goal on the grip (a palm short of the turn its placement asks is put where the turn would have it) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = placedFor(person, hold.thing.object, _placed), goal = hold.goal.position;
-  return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
+  return f.current.position(person.hands[side]).distanceTo(gripWorld(person, hold));
+}
+
+/** where `hold` puts its hand's wrist on its thing as the body is posed now (world) */
+function gripWorld(person: Person, hold: Hold): Vector3 {
+  const at = placedFor(person, hold.thing.object, _placed);
+  return _grip.copy(hold.goal.position).applyQuaternion(at.quaternion).add(at.position);
 }
 
 /** each grip a hand has just taken, its palm as near it as a grip taken is: else what took it misses */
@@ -197,7 +203,7 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
     if (value <= limit) continue;
     noted.add(hold);
     const name = hold.thing.object.name, off = (100 * value).toFixed(1), mover = person.claims.owner(`hand.${side}`)?.request;
-    if (mover?.kind === 'mover') mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip: its other hand or its joints hold it off` });
+    if (mover?.kind === 'mover') mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip, ${limitOf(person, side)(gripWorld(person, hold))}: ask for a place nearer the body, or less turned` });
     else if (worn) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${name} ${side}` });
     else person.warn(`held ${name} ${side} ${f.time}`, `the ${side} hand holding "${name}" has fallen ${off} cm off its grip, and it keeps its hold: walk the body with what moves it, or release it`);
   }

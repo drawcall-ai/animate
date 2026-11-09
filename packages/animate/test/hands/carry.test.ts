@@ -330,3 +330,14 @@ describe('what a carry calls there, a release onto it accepts', () => {
     expect(ball.parent).toBe(spot);
   });
 });
+
+it('a waypoint a walking carry cannot keep in its hands misses, saying what held the hand off', () => {
+  const body = person(), room = roomOf(body), tray = box(room, new Vector3(0, 1.05, 0.4), { size: new Vector3(0.36, 0.04, 0.3), mass: 3 });
+  const table = empty(room, 'table', new Vector3(0, 0.75, 5));
+  let miss: Missed | null = null;
+  play(function* () {
+    yield* grab(body, tray, BOTH);
+    miss = yield* attempt(carry(body, tray, [new Vector3(1, 1.05, 2.5), table]));
+  }, [body], 15, () => miss !== null);
+  expect(miss!.why).toMatch(/^the hand was drawn [\d.]+ cm off its grip, (beyond the arm|trunk clearance|within reach)/);
+});

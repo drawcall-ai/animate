@@ -9,7 +9,9 @@ import { verb, type Verb } from './story';
 import type { HandOptions } from '../body/hand-staging';
 
 /**
- * Carries `thing`, which the body holds, to `target` — or through each of a list of targets, one smooth way: off whatever it is in first
+ * Carries `thing`, which the body holds, to `target` — or through each of a list of targets, one smooth way, as far as the arms take it (a
+ * list routes the thing, not the feet: where it must walk, the feet go straight to stand for the last, and it passes the others only as it
+ * is raised at the walk's end; to route the walk, `walkTo` beside a raced carry to an empty on the body): off whatever it is in first
  * (its hip, a pouch, a well; a heavy one after a knee dip), out the way its empty's approach comes in (from the point of it nearest the
  * thing), and in to the last target the way that target's approach comes (`userData.approach`: the names of empties beside it, under its
  * parent, outermost first; slowing to its `userData.speed`); an

@@ -140,7 +140,9 @@ To throw what one hand holds, turn the body toward the target first, `throwAt` i
 
 A hold does not bring the feet: a thing your story moves (a door on its hinge) leaves a body standing still behind, its hand off the grip and `holds` still `true`, said once on the console. Walk the body with it, keeping its facing: a 0.4 rad/s swing with `walkTo(body, beside, { speed: 0.4, face })` beside it stays on; or `release`.
 
-A carry's or reach's hold ends with the verb: after it the thing rides the hand and drifts a few centimetres as the arm eases. To keep it exactly there, race it with `until: Infinity`.
+A carry's or reach's hold ends with the verb: after it the thing rides the hand and drifts a few centimetres as the arm eases, so `release` onto the target as the carry ends. To keep it exactly there, race it with `until: Infinity`.
+
+What is held rides the hands through a walk, swinging with them: a tray sinks and bobs some 10 cm and tips by several degrees. To keep a thing level or steady as the body walks, or to route it, walk beside a raced carry to an empty on `body.object` where it should ride: `parallel('race', carry(body, tray, ride, { until: Infinity, step: false }), walkTo(body, mark))`, with one walk after another for a way round something, since a list of targets given to `carry` routes the thing within the arms' reach and not the feet.
 
 ### Bringing something to the face
 
