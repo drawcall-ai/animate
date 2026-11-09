@@ -1,6 +1,6 @@
 import { Object3D, Vector3 } from 'three';
 import { SUBSTEP } from '../kernel/frame';
-import { REACHED } from '../kernel/goal';
+import { REACHED, type Placement } from '../kernel/goal';
 import type { Miss } from '../kernel/requests';
 import { spinOf } from '../kernel/rotation';
 import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
@@ -8,9 +8,9 @@ import type { Thing } from '../things/thing';
 import { END } from './hand-staging';
 import type { Self } from './self';
 
-/** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — what a carry there calls there (`REACHED.close`),
- * a sub-step on at the speed it has come to rest within (`END`) */
-const ONTO = REACHED.close + END.speed * SUBSTEP;
+/** how near an empty, and how near its turn, a thing put onto it must be (m, rad): nearer, it is set exactly there — what a carry there calls
+ * there (`REACHED`), a sub-step on at the speed and spin it has come to rest within (`END`) */
+const ONTO = { distance: REACHED.close + END.speed * SUBSTEP, turn: REACHED.closeTurn + END.spin * SUBSTEP };
 
 /** How a thing was moving as it was let go (world): its velocity (m/s) and its spin (rad/s about the world's axes). */
 export interface Released {
@@ -36,7 +36,7 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
   if (backOut) self.handStaging.backOut(hands, away);
   const holder = [...thing.holders].find((other): other is Self => other !== self);
   if (onto) {
-    const miss = put(self, thing, onto, placed.position);
+    const miss = put(self, thing, onto, placed);
     // (a hand kept on it holds it where it rests now, no longer as the carry that brought it keeps it in the hand)
     for (const hand of handsOn(self, thing)) delete self.holding[hand]?.idle;
     return { motion, miss };
@@ -57,11 +57,14 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
 /**
  * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there as near as a carry there leaves it, else where it is, a miss
  */
-function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Vector3>): Miss | null {
-  const off = at.distanceTo(self.movingFrameOf(onto).at(self.frame.time).current.position);
+function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Placement>): Miss | null {
+  const empty = self.movingFrameOf(onto).at(self.frame.time).current, off = at.position.distanceTo(empty.position), turned = at.quaternion.angleTo(empty.quaternion);
   attach(thing, onto);
   if (!bodyOf(thing.object)) thing.lifted = false;
-  if (off > ONTO) return { where: `${thing.object.name} onto ${onto.name}`, off, limit: ONTO, why: `it was ${(100 * off).toFixed(1)} cm off the empty as it was let go, and stays so: \`carry\` it there and let go as that carry ends, for after it the thing rides the hand` };
+  const fix = 'and stays so: `carry` it there and let go as that carry ends, for after it the thing rides the hand';
+  const where = `${thing.object.name} onto ${onto.name}`;
+  if (off > ONTO.distance) return { where, off, limit: ONTO.distance, why: `it was ${(100 * off).toFixed(1)} cm off the empty as it was let go, ${fix}` };
+  if (turned > ONTO.turn) return { where, off: turned, limit: ONTO.turn, why: `it was turned ${(turned * 180 / Math.PI).toFixed(0)}° off the empty as it was let go (off and limit in rad), ${fix}` };
   thing.object.position.set(0, 0, 0);
   thing.object.quaternion.identity();
   return null;

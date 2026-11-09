@@ -1,4 +1,4 @@
-import { Object3D, Vector3 } from 'three';
+import { Object3D, Quaternion, Vector3 } from 'three';
 import { parallel, runTimeline } from '@pmndrs/timeline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attempt, Body, carry, grab, grip, humanoid, lookAt, Missed, play, pose, reach, release, wait, walkTo } from '../../src/index';
@@ -132,6 +132,27 @@ describe('Missed', () => {
       }));
     }, { limit: 15 });
     expect(result?.why).toMatch(/let go during the carry/);
+  });
+
+  // (the turn as well as the place: on the place alone, an empty turned any way took the thing in one frame, popped round, and said nothing)
+  it.each([1, 1.57, 3])('a release onto an empty on its place but turned %f rad off it misses, the thing staying as it was', (angle) => {
+    const body = person(), room = roomOf(body), thing = box(room, new Vector3(0, 1.05, 0.4), { solid: false }), shelf = new Object3D();
+    room.add(shelf);
+    const turned = new Quaternion();
+    let before = new Quaternion();
+    const { result } = play(body, function* () {
+      yield* grab(body, thing, { left: 'left', right: 'right' }, { already: true });
+      yield* wait(0.1);
+      // (the empty right on the thing, turned off it)
+      thing.getWorldPosition(shelf.position);
+      before = thing.getWorldQuaternion(new Quaternion());
+      shelf.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), angle).multiply(before);
+      room.updateMatrixWorld(true);
+      try { release(body, thing, shelf); } catch (miss) { thing.getWorldQuaternion(turned); return miss; }
+    });
+    expect(result).toBeInstanceOf(Missed);
+    expect((result as Missed).why).toMatch(/turned \d+° off the empty/);
+    expect(turned.angleTo(before)).toBeLessThan(1e-3);
   });
 
   it('a release onto an empty too far off throws at the call: a `try`, not `attempt`', () => {

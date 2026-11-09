@@ -10,13 +10,13 @@ import { Missed, siteOf } from './story';
  * Lets go, at once (no `yield*`). Given a thing, every hand of the body holding it lets go of it; given hands by name (`{ right: rope }`),
  * those hands let go of what each names and the body's others keep holding (one hand left on a thing it carried carries it alone; one left on what
  * stayed where it is, a rifle on its mount, a fixed rail, keeps hold of it there). A thing no hand of the body holds any more is attached onto the empty
- * `onto` (set there exactly, turned as it is, if a carry there would call it there: within 1.5 cm), else to another body still holding it (that body carries it now), else, if a hand
+ * `onto` (set there exactly, turned as it is, if a carry there would call it there: within 1.5 cm and 9° of it), else to another body still holding it (that body carries it now), else, if a hand
  * lifted it, left in the world where it is (under the scene's root; take it into your physics from there), else where it is. The hands
  * that let go back out of it, carrying on the way they were going; a fingertip draws back off its button the way it came, and a hand verb
  * for it waits until it has. Returns how the thing (the first named) was moving as it left the hand: to throw it, let go while a carry
  * still moves it and give that motion to your physics. Hands named in `keep` (`{ left: true }`) keep hold of a thing put onto `onto`: it
  * rests there, moved with its place, and they follow it (a magazine let onto its place under the well, then pushed home by its parent).
- * Put onto an empty further off, it throws `Missed` with the thing let go where it is there, under the empty; onto an empty another
+ * Put onto an empty further off, or turned further off it, it throws `Missed` with the thing let go where it is there, under the empty; onto an empty another
  * thing sits in, it throws at once: nothing lets go. It is no verb: its `Missed` is thrown at the call, so `attempt` cannot take it; use `try`.
  */
 export function release<S extends AnySpecies>(body: Body<S>, thing: Object3D, onto?: Object3D, keep?: ByHand<S, true>): Released;
