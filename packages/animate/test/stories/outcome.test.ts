@@ -3,7 +3,6 @@ import { parallel, runTimeline } from '@pmndrs/timeline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attempt, Body, carry, dog, grab, grip, humanoid, lookAt, Missed, play, pose, reach, release, wait, walkTo } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { selfOf } from '../../src/body';
 import { DOG } from '../../skills/animate/references/dog';
 import { person } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
@@ -228,7 +227,7 @@ describe('misuse', () => {
       try { step(undefined, dt); body.update(dt); } catch { thrown++; }
     }
     expect({ caught, cleaned, thrown }).toEqual({ caught: 1, cleaned: 1, thrown: 0 });
-    expect(selfOf(body).requests.filter(({ verb }) => verb === 'carry')).toEqual([]);
+    expect(body.owners.hands).toEqual({});
   });
 
   it('a value of another copy of three is said at the first target, naming the fix', () => {

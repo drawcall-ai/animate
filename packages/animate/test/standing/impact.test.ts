@@ -1,7 +1,6 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { INDEX } from '../../src/person/anatomy/bones';
-import { dt, person, run } from '../kit/bodies';
+import { INDEX, dt, person, run } from '../kit/bodies';
 import { poseOf } from '../../src/index';
 
 function supported(mass = 75) {

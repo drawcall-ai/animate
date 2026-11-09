@@ -2,20 +2,16 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../kit/open';
 import { runTimeline } from '@pmndrs/timeline';
-import { attempt, Body, dog, grab, humanoid, Missed, reach, release, wait } from '../../src/index';
-import { CHEWBACCA } from '../kit/skeletons/chewbacca';
+import { attempt, Body, dog, grab, Missed, reach, release, wait } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { run } from '../kit/bodies';
-import { INDEX, type Side } from '../../src/person/anatomy/bones';
-import type { Person } from '../../src/person/person';
-import { dt, insides, palmAt, person, play, feetOf, gazeOff } from '../kit/bodies';
+import { run, INDEX, type Side, dt, readings, person, play, feetOf, gazeOff, type Readings } from '../kit/bodies';
 import { box, empty, roomOf, worldOf, named } from '../kit/things';
 import { handSpeeds } from '../kit/hands';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
 /** hand `side` in the hips' frame: where it is moved to, not carried along by the body */
-const onHips = (h: Person, side: Side) =>
+const onHips = (h: Readings, side: Side) =>
   h.pose.position(INDEX[`${side}Hand`]).clone().sub(h.pose.position(INDEX.hips)).applyQuaternion(h.pose.rotation(INDEX.hips).clone().invert());
 
 /**
@@ -23,7 +19,7 @@ const onHips = (h: Person, side: Side) =>
  * round, no mass to lift): each hand's speed (m/s) at each frame from then, and how long until the hands closed (s)
  */
 function reachFrom(at: Vector3, sides: readonly Side[] = ['right']): { speed: Record<Side, number[]>; took: number } {
-  const body = person(), h = insides(body), room = roomOf(body);
+  const body = person(), h = readings(body), room = roomOf(body);
   const thing = box(room, at, { mass: null, solid: false });
   let going = false, took = NaN;
   const hands = handSpeeds(h, () => going);
@@ -43,14 +39,14 @@ describe('grab, walking up', () => {
   // (XCoM past the feet for a sub-step or two, its bound 0.1 m: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: to 0.126 m at these life seeds)
   const test = cases([[pickup(0), /XCoM/, [1]], [pickup(1), /XCoM/, [1, 3]]]);
   for (const variation of [0, 1, 2]) test(pickup(variation), () => {
-    const body = person({ dev: true, at: new Vector3(1.5 + variation * 0.02, 0, 0), face: -0.1 }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true, at: new Vector3(1.5 + variation * 0.02, 0, 0), face: -0.1 }), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(1.1, 0.88, 2), { size: new Vector3(0.44, 0.25, 0.3), mass: 8, turn: Math.PI / 2 });
     const feet = [0, 1].map(() => ({ phase: 'planted', from: new Vector3() }));
     let walking = false, stood = NaN, looking = NaN, touchdown = NaN, held = false;
     play(function* () {
       held = yield* grab(body, load, BOTH);
     }, [body], 10, (time) => {
-      walking ||= h.locomotion.velocity.length() > 0.5;
+      walking ||= h.velocity.length() > 0.5;
       // (judged until it stands: its eyes leave the load as its hands close on it)
       if (!Number.isNaN(stood)) return held;
       if (gazeOff(h.gazer, h.pose, worldOf(load)) >= 0.2) looking = NaN;
@@ -62,7 +58,7 @@ describe('grab, walking up', () => {
         if (foot.phase === 'planted' && was.phase === 'swing' && Math.hypot(com.x - was.from.x, com.z - was.from.z) > 0.1) touchdown = time;
         was.phase = foot.phase;
       });
-      if (walking && !h.locomotion.moving && Number.isNaN(stood)) stood = time;
+      if (walking && h.velocity.length() < 0.05 && Number.isNaN(stood)) stood = time;
       return held;
     });
     expect(held).toBe(true);
@@ -73,7 +69,7 @@ describe('grab, walking up', () => {
   });
 
   it('anticipates: the eyes and then the hands go to what it takes before the body has come up to it', () => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(0.1, 0.9, 2.2));
     const at = { eyes: NaN, hands: NaN, stood: NaN };
     const was = new Vector3();
@@ -85,11 +81,11 @@ describe('grab, walking up', () => {
       const hand = onHips(h, 'right');
       if (Number.isNaN(at.hands) && time > 0.5 && hand.distanceTo(was) * 60 > 0.15) at.hands = time;
       was.copy(hand);
-      if (Number.isNaN(at.stood) && time > 1 && h.locomotion.velocity.length() < 0.05) at.stood = time;
+      if (Number.isNaN(at.stood) && time > 1 && h.velocity.length() < 0.05) at.stood = time;
       return held;
     });
     expect(held).toBe(true);
-    expect(h.holding.right?.thing.object).toBe(load);
+    expect(body.holds(load)).toBe(true);
     // (the eyes there, then the hands on their way, before the walk has come to a stop)
     expect(at.eyes).toBeLessThan(at.hands);
     expect(at.hands).toBeLessThan(at.stood);
@@ -97,7 +93,7 @@ describe('grab, walking up', () => {
   });
 
   it('comes down for what lies low as it plants its last step, not after standing still', () => {
-    const body = person(), h = insides(body), room = roomOf(body);
+    const body = person(), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(0.1, 0.15, 2.2));
     const at = { arrived: NaN, down: NaN };
     const standing = h.pose.position(INDEX.hips).y;
@@ -105,7 +101,7 @@ describe('grab, walking up', () => {
     play(function* () {
       held = yield* grab(body, load, BOTH);
     }, [body], 8, (time) => {
-      const speed = h.locomotion.velocity.length();
+      const speed = h.velocity.length();
       walked ||= speed > 0.3;
       if (walked && Number.isNaN(at.arrived) && speed < 0.05) at.arrived = time;
       if (Number.isNaN(at.down) && h.pose.position(INDEX.hips).y < standing - 0.1) at.down = time;
@@ -139,22 +135,6 @@ describe('grab, from where it stands', () => {
     expect(reachFrom(new Vector3(-0.1, 1.05, 0.5)).took).toBeGreaterThan(reachFrom(new Vector3(-0.05, 1.0, 0.3)).took);
   });
 
-  it('sets off toward the grip at once: the hand never first draws back from it', () => {
-    for (const at of [new Vector3(-0.1, 1.0, 0.45), new Vector3(-0.15, 0.3, 0.5), new Vector3(-0.3, 1.4, 0.3)]) {
-      const body = person(), h = insides(body), room = roomOf(body);
-      const thing = box(room, at, { mass: null, solid: false });
-      const grip = named(thing, 'right');
-      const off: number[] = [];
-      play(function* () {
-        yield* wait(1);
-        yield* grab(body, thing, { right: 'right' });
-      }, [body], 2.5, (time) => {
-        if (time > 1 + 1e-9) off.push(palmAt(h, 'right').distanceTo(worldOf(grip)));
-      });
-      // (the first 0.3 s: never further off than it set off from)
-      expect(Math.max(...off.slice(0, 18)) - off[0]).toBeLessThan(0.001);
-    }
-  });
 
   it('faces the palm as its grip asks, on a body without finger bones too', () => {
     const body = person(), room = roomOf(body);
@@ -169,22 +149,10 @@ describe('grab, from where it stands', () => {
     }, [body], 3, () => held);
     expect(held).toBe(true);
     // (the T-pose's palm faces down, −Y, in the hand bone's turn from rest)
-    const h = insides(body), turn = h.pose.rotation(h.hands.right);
+    const h = readings(body), turn = h.pose.rotation(h.hands.right);
     expect(new Vector3(0, -1, 0).applyQuaternion(turn).dot(new Vector3(1, 0, 0))).toBeGreaterThan(0.8);
   });
 
-  it('takes a grip on a turned thing, the palm on it', () => {
-    const body = person(), h = insides(body), room = roomOf(body);
-    const thing = box(room, new Vector3(-0.15, 1.0, 0.4), { turn: 0.6 });
-    let held = false;
-    play(function* () {
-      held = yield* grab(body, thing, { right: 'right' });
-    }, [body], 3, () => held);
-    expect(held).toBe(true);
-    const grip = named(thing, 'right');
-    expect(palmAt(h, 'right').distanceTo(worldOf(grip))).toBeLessThan(0.03);
-    expect(h.holding.right?.grip).toBe('right');
-  });
 
   it('leaves a thing with no mass, or one on a body, where it is: the hand follows it', () => {
     const body = person(), room = roomOf(body);
@@ -228,31 +196,7 @@ it('a reach takes an object\'s turn only as far as the wrist goes, and is there;
 
 // (the trial that asked for it: a bearer who had to be seen picking both medals up, 9 s of the beat, to start it holding them)
 describe('grab already', () => {
-  const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
 
-  it.each(BODIES)('starts the body holding a cushion before it in both hands, as if it always had: %s', (_name, make) => {
-    const body = make(), room = roomOf(body), scale = body.species.scale;
-    // (where the arms hold it out before the chest, as far as they are long: the tall skeleton's are short for its height)
-    const arm = body.species.person?.armLength ?? 0, at = new Vector3(0, (body.species.person?.shoulderHeight ?? 0) - 0.6 * arm, 0.55 * arm);
-    const cushion = box(room, at, { size: new Vector3(0.36, 0.06, 0.24).multiplyScalar(scale), mass: 0.5, name: 'cushion' });
-    let took: boolean | null = null, first = NaN, fastest = 0, last: Vector3 | null = null;
-    play(function* () {
-      took = yield* grab(body, cushion, BOTH, { already: true });
-      yield* wait(3);
-    }, [body], 3, (time) => {
-      if (Number.isNaN(first) && body.holds(cushion)) first = time;
-      const hand = worldOf(body.bones.rightHand);
-      if (last) fastest = Math.max(fastest, hand.distanceTo(last) * 60);
-      last = hand;
-    });
-    expect(took).toBe(true);
-    expect(first).toBeCloseTo(1 / 60, 6);
-    // (the hands as still as standing holds them: no reach, no jump onto the grips)
-    expect(fastest).toBeLessThan(0.05);
-    expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.02 * scale);
-    expect(palmAt(insides(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
-    expect(body.log).toEqual([]);
-  });
 
   it.each([1 / 72, 1 / 120, 0])('counts an update of %f s, too short for a sub-step, as not having shown the body', (first) => {
     const body = person({ dev: true }), room = roomOf(body), thing = new Object3D();

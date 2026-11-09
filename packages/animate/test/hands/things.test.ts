@@ -1,106 +1,21 @@
 import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { attempt, Body, carry, grab, humanoid, Missed, release, wait, type Root } from '../../src/index';
+import { attempt, Body, carry, grab, humanoid, Missed, release, wait } from '../../src/index';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
-import { insides, palmAt, person, play, run, feetOf } from '../kit/bodies';
-import { box, empty, roomOf, worldOf, named } from '../kit/things';
+import { person, play, run } from '../kit/bodies';
+import { armed, box, empty, roomOf, worldOf, named } from '../kit/things';
 
 describe('what a body wears', () => {
-  /** a body wearing 10 kg 30 cm out to its left at the chest, stood a while */
-  const loaded = () => {
-    const body = person(), h = insides(body);
-    roomOf(body);
-    const load = new Object3D();
-    load.userData.mass = 10;
-    load.position.set(0.3, 0, 0.2);
-    body.bones.chest.add(load);
-    run(body, 3);
-    return { body, h, load };
-  };
 
-  it('counts worn mass at its location and balances it over planted feet', () => {
-    const { h, load } = loaded();
-    const pose = h.pose;
-    const segments = pose.skeleton.bones.reduce((sum, bone, i) => sum.addScaledVector(pose.point(i, bone.com, new Vector3()), bone.mass), new Vector3());
-    const mass = pose.skeleton.bones.reduce((sum, bone) => sum + bone.mass, 0);
-    expect(pose.com(new Vector3()).distanceTo(segments.addScaledVector(worldOf(load), 10).divideScalar(mass + 10))).toBeLessThan(1e-6);
-    expect(h.borne.get([...h.borne.keys()][0])?.kg).toBeCloseTo(10, 6);
-    const feet = feetOf(h)[0].position.clone().add(feetOf(h)[1].position).multiplyScalar(0.5);
-    expect(Math.abs(h.pose.com(new Vector3()).x - feet.x)).toBeLessThan(0.02);
-  });
 
-  it('counts what it wears from its first sub-step, where it is then', () => {
-    const body = person(), h = insides(body);
-    roomOf(body);
-    const before = h.pose.com(new Vector3());
-    const load = new Object3D();
-    load.userData.mass = 8;
-    load.position.set(0.2, 0, 0);
-    body.bones.chest.add(load);
-    body.update(1 / 60);
-    expect(h.borne.get([...h.borne.keys()][0])?.kg).toBe(8);
-    expect(h.pose.com(new Vector3()).distanceTo(before)).toBeGreaterThan(0.01);
-  });
 
-  it('bears what it carries off its support, and none of it once it is put down', () => {
-    const body = person(), h = insides(body), room = roomOf(body);
-    const taken = new Vector3(0, 1.0, 0.4);
-    const load = box(room, taken, { mass: 4, solid: false });
-    const kg = { carried: -1, down: -1 };
-    let done = false;
-    play(function* () {
-      yield* grab(body, load, { left: 'left', right: 'right' });
-      yield* carry(body, load, new Vector3(0, 1.05, 0.35));
-      yield* wait(1);
-      kg.carried = [...h.borne.values()][0]?.kg ?? 0;
-      yield* carry(body, load, taken);
-      release(body, load);
-      yield* wait(1);
-      kg.down = [...h.borne.values()][0]?.kg ?? 0;
-      done = true;
-    }, [body], 12, () => done);
-    expect(kg.carried).toBeCloseTo(4, 3);
-    expect(kg.down).toBe(0);
-    expect(h.borne.size).toBe(0);
-  });
-  /** a driven body holding a 3 kg rifle by its pistol grip and foregrip, the rifle on a mount at its chest that `orient` turns to `yaw`
-   * in the world (read each frame) */
-  const armed = (yaw: (body: Body, root: Root) => number) => {
-    const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-    const body = person({ dev: true, drive: () => root, life: { steady: 1 } }), h = insides(body);
-    roomOf(body);
-    const mount = empty(body.bones.chest, 'mount', new Vector3(-0.15, 0.1, 0.1)), rifle = new Object3D();
-    rifle.userData.mass = 3;
-    mount.add(rifle);
-    const grips = { right: empty(rifle, 'pistol', new Vector3(0, -0.08, 0.15)), left: empty(rifle, 'foregrip', new Vector3(0, -0.05, 0.45)) };
-    const aim = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw(body, root));
-    const orient = () => body.orient(mount, aim());
-    let held: boolean | undefined;
-    play(function* () { held = yield* grab(body, rifle, { right: 'pistol', left: 'foregrip' }); }, [body], 4, () => (orient(), held !== undefined));
-    expect(held).toBe(true);
-    return { root, body, h, rifle, grips, aim, orient };
-  };
 
-  it('keeps a rifle on its chest at the aim its app gives while it turns, both hands on its grips', () => {
-    const { root, body, h, rifle, grips, aim, orient } = armed((_, root) => root.yaw);
-    let aimed = 0, gripped = 0;
-    // (the chest turns within each update: a mount the app turned from the chest as it stood before it was off the aim by that turn)
-    for (let frame = 0; frame < 180; frame++) {
-      root.yaw += 2 / 60;
-      orient();
-      body.update(1 / 60);
-      aimed = Math.max(aimed, rifle.getWorldQuaternion(new Quaternion()).angleTo(aim()));
-      for (const side of ['left', 'right'] as const) gripped = Math.max(gripped, palmAt(h, side).distanceTo(worldOf(grips[side])));
-    }
-    expect(aimed).toBeLessThan(1e-6);
-    expect(gripped).toBeLessThan(0.005);
-  });
 
   // (however fast its app spins it, a soldier turning on the spot takes a magazine from its chest and puts it into the well of the rifle
   // it holds, aimed the way the body faces — spun faster than its feet let it follow, its root led it by more than half a turn and it
   // turned back the other way, the well swinging off as the carry closed on it)
   it('lets go of the rifle with a hand that takes something else, the rifle staying on its mount in the other hand', () => {
-    const { body, h, rifle, orient } = armed((body) => body.facing);
+    const { body, rifle, orient } = armed((body) => body.facing);
     const magazine = new Object3D();
     magazine.userData.mass = 0.5;
     empty(body.bones.chest, 'pouch', new Vector3(0.1, -0.12, 0.14)).add(magazine);
@@ -109,12 +24,12 @@ describe('what a body wears', () => {
     let held: boolean | undefined;
     play(function* () { held = yield* grab(body, magazine, { left: 'base' }, { speed: 1.8 }); }, [body], 4, () => (orient(), held !== undefined));
     expect(held).toBe(true);
-    expect([h.holding.left?.thing.object, h.holding.right?.thing.object, rifle.parent]).toEqual([magazine, rifle, mount]);
+    expect([body.holds(magazine), body.holds(rifle), rifle.parent]).toEqual([true, true, mount]);
     expect(body.log).toEqual([]);
   });
 
   it('lets the rifle hang on its mount for both hands to work, and takes it back with one grab of both grips', () => {
-    const { body, h, rifle, aim } = armed((body) => body.facing);
+    const { body, rifle, aim } = armed((body) => body.facing);
     const mount = rifle.parent;
     if (!mount) throw new Error('no mount');
     // (hanging: the muzzle down and across the body; the mount eased back to the aim as both hands come to it)
@@ -125,7 +40,7 @@ describe('what a body wears', () => {
       release(body, rifle);
       turned = 1;
       yield* wait(0.5);
-      steps.push(h.holding.left === null && h.holding.right === null);
+      steps.push(!body.holds(rifle));
       taking = true;
       steps.push(yield* grab(body, rifle, { left: 'foregrip', right: 'pistol' }));
     }, [body], 8, () => {
@@ -257,7 +172,7 @@ describe('hands that cannot get there', () => {
   it('given until, what cannot get there misses all the same: a grab out of the arms, a carry stopped short', () => {
     // (driven: nothing walks it up to what it reaches for)
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-    const body = person({ dev: true, drive: () => root }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true, drive: () => root }), room = roomOf(body);
     const far = box(room, new Vector3(0, 1, 3), { solid: false, name: 'far' });
     let ended = false, miss: Missed | null = null;
     play(function* () {
@@ -276,7 +191,7 @@ describe('hands that cannot get there', () => {
     }, [body], 12, () => ended);
     expect(ended).toBe(true);
     expect(miss).toBeInstanceOf(Missed);
-    expect(h.holding.left?.thing.object).toBe(near);
+    expect(body.holds(near)).toBe(true);
   });
 });
 

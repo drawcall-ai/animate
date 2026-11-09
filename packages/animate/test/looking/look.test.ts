@@ -1,18 +1,16 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, dog, humanoid, lookAt } from '../../src/index';
-import { INDEX } from '../../src/person/anatomy/bones';
-import { gazeOff, insides, person, play } from '../kit/bodies';
+import { Body, dog, humanoid, lookAt, poseOf } from '../../src/index';
+import { INDEX, gazeOff, readings, person, play } from '../kit/bodies';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
-import { poseOf } from '../../src/index';
 
 const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
 
 /** a person looking `bearing` (rad, + to its left) aside at eye height 3 m off, held 3 s with `head`: the head's turn off the facing at the
  * end (rad), how far its eyes are off the point, and its log */
 function looked(make: () => Body, bearing: number, head?: number) {
-  const body = make(), h = insides(body), eyes = body.species.person?.eyeHeight ?? 0;
+  const body = make(), h = readings(body), eyes = body.species.person?.eyeHeight ?? 0;
   const point = new Vector3(3 * Math.sin(bearing), eyes, 3 * Math.cos(bearing));
   play(function* () { yield* lookAt(body, point, { head }); }, [body], 3);
   const turn = new Euler().setFromQuaternion(new Quaternion().copy(h.pose.rotation(INDEX.head)), 'YXZ').y - body.facing;

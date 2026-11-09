@@ -1,5 +1,7 @@
-import { BoxGeometry, Group, Mesh, Object3D, Vector3 } from 'three';
-import type { Body } from '../../src/index';
+import { BoxGeometry, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
+import { expect } from 'vitest';
+import { grab, type Body, type Root } from '../../src/index';
+import { person, play } from './bodies';
 
 /** an empty named `name` at `at` under `parent` */
 export function empty(parent: Object3D, name: string, at: Vector3): Object3D {
@@ -45,3 +47,21 @@ export function named(object: Object3D, name: string): Object3D {
   if (!found) throw new Error(`"${object.name}" has nothing named "${name}"`);
   return found;
 }
+
+/** a driven body holding a 3 kg rifle by its pistol grip and foregrip, the rifle on a mount at its chest that `orient` turns to `yaw`
+ * in the world (read each frame) */
+export const armed = (yaw: (body: Body, root: Root) => number) => {
+  const root: Root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
+  const body = person({ dev: true, drive: () => root, life: { steady: 1 } });
+  roomOf(body);
+  const mount = empty(body.bones.chest, 'mount', new Vector3(-0.15, 0.1, 0.1)), rifle = new Object3D();
+  rifle.userData.mass = 3;
+  mount.add(rifle);
+  const grips = { right: empty(rifle, 'pistol', new Vector3(0, -0.08, 0.15)), left: empty(rifle, 'foregrip', new Vector3(0, -0.05, 0.45)) };
+  const aim = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw(body, root));
+  const orient = () => body.orient(mount, aim());
+  let held: boolean | undefined;
+  play(function* () { held = yield* grab(body, rifle, { right: 'pistol', left: 'foregrip' }); }, [body], 4, () => (orient(), held !== undefined));
+  expect(held).toBe(true);
+  return { root, body, rifle, grips, aim, orient };
+};

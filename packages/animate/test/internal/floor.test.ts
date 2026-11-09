@@ -1,17 +1,16 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../kit/open';
-import { Body, dog, horse, reach, walkTo, type BodyOptions } from '../../src/index';
+import { Body, dog, horse, reach, walkTo, type BodyOptions, poseOf } from '../../src/index';
 import { selfOf } from '../../src/body';
 import { HORSE } from '../../skills/animate/references/horse';
 import { DOG } from '../../skills/animate/references/dog';
 import { solePoints } from '../../src/person/anatomy/landmarks';
-import { SIDES } from '../../src/person/anatomy/bones';
+import { SIDES, person, play, run } from '../kit/bodies';
 import { xcomOfPoses, hullOf, outside } from '../../src/step/support';
 import { footprint } from '../../src/person/legs/foot';
 import type { Person } from '../../src/person/person';
-import { insides, person, play, run } from '../kit/bodies';
-import { poseOf } from '../../src/index';
+import { insides } from './insides';
 
 /** a flight of `count` steps up along +z from `start`, each `rise` high and `tread` deep, flat on top (the throne room's: 5 × 0.2 on 0.45) */
 const stairs = (start: number, count: number, rise: number, tread: number) => (_x: number, z: number) =>

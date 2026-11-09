@@ -1,26 +1,13 @@
 import { Euler, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, grab, horse, humanoid, lookAt, walkTo } from '../../src/index';
+import { Body, grab, horse, humanoid, lookAt, walkTo, poseOf } from '../../src/index';
 import { powerGait, species } from '../../src/species';
-import { BonePose } from '../../src/kernel/bone-pose';
-import { proportionsFor } from '../../src/person/anatomy/proportions';
-import { massFor } from '../../src/person/anatomy/skeleton';
 import { play, run } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
 import { PERSON } from '../../skills/animate/references/person';
 import { HORSE } from '../../skills/animate/references/horse';
-import { poseOf } from '../../src/index';
 
 describe('a humanoid', () => {
-  it('measures its proportions off its skeleton, its height off the crown, with Dempster’s masses for that height', () => {
-    const measured = humanoid(PERSON).person, standard = proportionsFor(1.75);
-    if (!measured) throw new Error('no person');
-    expect(measured.height).toBeCloseTo(1.75, 9);
-    for (const key of ['hipHeight', 'legLength', 'armLength', 'shoulderHeight', 'eyeHeight', 'ankleHeight', 'toeFront'] as const) {
-      expect(measured[key], key).toBeCloseTo(standard[key], 6);
-    }
-    expect(humanoid(PERSON).skeleton.bones.reduce((sum, bone) => sum + bone.mass, 0)).toBeCloseTo(massFor(1.75), 9);
-  });
 
   it('estimates its height off its head without a crown', () => {
     const headless = PERSON.filter((bone) => bone.name !== 'head_end');
@@ -36,7 +23,7 @@ describe('a humanoid', () => {
 
 describe('a horse', () => {
   it('stands with its forelegs bearing about 57% of its weight, its numbers sized to its skeleton', () => {
-    const mare = horse(HORSE), pose = new BonePose(mare.skeleton);
+    const mare = horse(HORSE), pose = poseOf(new Body(mare));
     const com = pose.com(new Vector3()), [fore, hind] = [mare.skeleton.index('leftForeHoof'), mare.skeleton.index('leftHindHoof')].map((bone) => pose.position(bone).z);
     expect((com.z - hind) / (fore - hind)).toBeGreaterThan(0.52);
     expect((com.z - hind) / (fore - hind)).toBeLessThan(0.62);

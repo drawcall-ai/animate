@@ -1,27 +1,17 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { track } from '../../src/index';
-import { pastLimit } from '../../src/kernel/limits';
-import { INDEX } from '../../src/person/anatomy/bones';
-import type { Person } from '../../src/person/person';
-import { insides, person, play } from '../kit/bodies';
-import { poseOf } from '../../src/index';
+import { track, type Body, poseOf } from '../../src/index';
+import { INDEX, type Readings, readings, person, play } from '../kit/bodies';
 
-const eyes = (h: Person) => h.pose.point(INDEX.head, h.proportions.eyes, new Vector3());
+const eyes = (h: Readings) => h.pose.point(INDEX.head, h.proportions.eyes, new Vector3());
 const turned = (yaw: number, pitch = 0) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pitch));
 
-/** every joint of the spine within its range */
-function withinRanges(h: Person) {
-  for (const bone of [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head]) {
-    const limit = h.skeleton.limits[bone];
-    if (!limit) throw new Error('no limit');
-    expect(pastLimit(h.pose.local(bone), limit)).toBeLessThan(1e-6);
-  }
-}
+/** every joint of the spine within its range, as a body's own check finds it */
+const withinRanges = (body: Body) => expect(body.log.filter((entry) => entry.check.startsWith('joint range'))).toEqual([]);
 
 describe('track', () => {
   it('puts the eyes and turns the head as a headset is, through the spine, the body standing and lowering a little for a look round and down', () => {
-    const body = person(), h = insides(body), p = h.proportions;
+    const body = person({ dev: true }), h = readings(body), p = h.proportions;
     // (a headset turned round and down about the skull's centre, as a head turns)
     const headset = new Object3D();
     headset.quaternion.copy(turned(0.9, 0.3));
@@ -34,21 +24,21 @@ describe('track', () => {
     expect(h.pose.rotation(INDEX.head).angleTo(headset.quaternion)).toBeLessThan((2 * Math.PI) / 180);
     expect(p.hipHeight - h.pose.position(0).y).toBeLessThan(0.05);
     expect(Math.abs(body.facing)).toBeLessThan(0.01);
-    withinRanges(h);
+    withinRanges(body);
   });
 
   it('brings the body down under eyes lower than it stands', () => {
-    const body = person(), h = insides(body), p = h.proportions;
+    const body = person({ dev: true }), h = readings(body), p = h.proportions;
     const target = new Vector3(0, p.eyeHeight - 0.4, 0.15);
     play(function* () { yield* track(body, { head: target }); }, [body], 4);
     expect(eyes(h).distanceTo(target)).toBeLessThan(0.03);
     expect(h.pose.position(0).y).toBeLessThan(p.hipHeight - 0.1);
-    withinRanges(h);
+    withinRanges(body);
   });
 
   it('puts each hand where its controller is, turned as it is', () => {
     const tracked = (turn?: Quaternion) => {
-      const body = person({ dev: true }), h = insides(body);
+      const body = person({ dev: true }), h = readings(body);
       const left = new Object3D(), right = new Object3D();
       left.position.set(0.3, 1.2, 0.35);
       right.position.set(-0.25, 1.35, 0.4);

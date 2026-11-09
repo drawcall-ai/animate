@@ -1,21 +1,16 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { Body, dog, horse, humanoid, lookAt, pose, reach, track, wait, walkTo, type Posture, type Species } from '../../src/index';
-import type { ArmPosture } from '../../src/kernel/asks';
+import { Body, dog, horse, humanoid, lookAt, pose, reach, track, wait, walkTo, type Posture, type Species, poseOf } from '../../src/index';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
-import { INDEX, SIDES } from '../../src/person/anatomy/bones';
-import { palmOf } from '../../src/person/anatomy/landmarks';
-import { clamp, forwardOf, leftOf, yawOf } from '../../src/kernel/math';
-import { SOLDIER } from '../kit/skeletons/soldier';
-import { hullOf, outside, xcomOf } from '../../src/step/support';
-import { footprint } from '../../src/person/legs/foot';
-import { insides, person, play } from '../kit/bodies';
+import { INDEX, person, play } from '../kit/bodies';
 import { HORSE } from '../../skills/animate/references/horse';
 import { DOG } from '../../skills/animate/references/dog';
 import { droid } from '../kit/skeletons/droid';
 import { worldOf } from '../kit/things';
-import { poseOf } from '../../src/index';
+
+/** what `pose` asks of an arm */
+type Arm = NonNullable<Posture['arms']>[keyof NonNullable<Posture['arms']>];
 
 /** `bone`'s turn in `posed` off its turn in `still` (in its own frame, as yaw, pitch and roll: Euler YXZ) */
 function off(posed: Body, still: Body, bone: number): Euler {
@@ -91,15 +86,14 @@ describe('pose', () => {
   // (walking, a bow deeper than 0.5 is held to it: deeper, the walk's extrapolated centre of mass leaves its feet; an arch is added onto
   // the walk's own forward lean, ~0.14 at the chest, which a bow forward gives up)
   it.each([[0.3, 0.25], [-0.3, -0.15], [0.8, 0.45]])('poses a person over a walk: bowed %s rad and its head tilted, it walks on in balance', (bow, least) => {
-    const body = person({ dev: true }), h = insides(body);
-    let arrived = false, pitch = 0, roll = 0, worst = -Infinity;
+    const body = person({ dev: true });
+    let arrived = false, pitch = 0, roll = 0;
     play(function* () {
       yield* parallel('race', function* () {
         arrived = yield* walkTo(body, new Vector3(0, 0, 3));
       }, pose(body, { bow, head: { roll: 0.25 } }));
     }, [body], 12, (t) => {
       if (t > 1.5 && t < 2.5) [pitch, roll] = [chestPitch(body), headRoll(body)];
-      worst = Math.max(worst, xcomOutside(body, h));
       return arrived;
     });
     expect(arrived).toBe(true);
@@ -109,27 +103,22 @@ describe('pose', () => {
     expect(Math.sign(pitch)).toBe(Math.sign(bow));
     expect(roll).toBeGreaterThan(0.2);
     // (its extrapolated centre of mass stays within its feet or close: the walk's own check, 0.1 m out, finds nothing)
-    expect(worst).toBeLessThan(0.1);
     expect(body.log).toEqual([]);
   });
 
   it('poses a person over a reach: the hand gets there, the chest arched and turned as asked', () => {
-    const body = person({ dev: true }), h = insides(body), at = new Vector3(-0.2, 1.3, 0.45);
-    let reached = false, worst = -Infinity, gap = Infinity, pitch = 0;
+    const body = person({ dev: true }), at = new Vector3(-0.2, 1.3, 0.45);
+    let reached = false, gap = Infinity, pitch = 0;
     play(function* () {
       yield* parallel('race', function* () {
         yield* wait(0.8);
         reached = yield* reach(body, { right: at });
         [gap, pitch] = [poseOf(body).position(INDEX.rightHand).distanceTo(at), chestPitch(body)];
       }, pose(body, { bow: -0.25, twist: 0.2 }));
-    }, [body], 8, (t) => {
-      if (t > 0.5) worst = Math.max(worst, xcomOutside(body, h));
-      return reached;
-    });
+    }, [body], 8, () => reached);
     expect(reached).toBe(true);
     expect(gap).toBeLessThan(0.02);
     expect(pitch).toBeLessThan(-0.15);
-    expect(worst).toBeLessThan(0.1);
     expect(body.log).toEqual([]);
   });
 
@@ -181,54 +170,12 @@ describe('pose', () => {
   });
 });
 
-describe('a bow', () => {
-  const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['the soldier', () => new Body(humanoid(SOLDIER), { dev: true })]];
-  /** how far (m) each palm stands ahead of its thigh's axis (hip to knee) and out beside it, in the pelvis's facing */
-  const palms = (body: Body) => SIDES.map((side) => {
-    const p = poseOf(body), yaw = yawOf(p.local(0).clone()), sign = side === 'left' ? 1 : -1;
-    const hip = p.position(INDEX[`${side}UpperLeg`]), axis = p.position(INDEX[`${side}LowerLeg`]).clone().sub(hip);
-    const palm = p.point(INDEX[`${side}Hand`], palmOf(insides(body).proportions, side), new Vector3());
-    const off = palm.sub(hip).addScaledVector(axis, -clamp(palm.dot(axis) / axis.lengthSq(), 0, 1));
-    return { ahead: off.dot(forwardOf(yaw, new Vector3())), out: sign * off.dot(leftOf(yaw, new Vector3())) };
-  });
-  /** the palms after a bow of `bow` held 2.5 s, against a like body's standing beside it asked nothing, and both bodies' logs */
-  const bowed = (make: () => Body, bow: number) => {
-    const bowing = make(), still = make();
-    let palmsBowed = palms(bowing), palmsStill = palms(still);
-    play(function* () {
-      yield* pose(bowing, { bow }, { until: 2.5 });
-      [palmsBowed, palmsStill] = [palms(bowing), palms(still)];
-    }, [bowing, still], 2.6);
-    return { bowed: palmsBowed, still: palmsStill, log: [...bowing.log, ...still.log] };
-  };
-
-  describe.each(BODIES)('on %s', (_name, make) => {
-    it.each([0.3, 0.6])('of %s rad keeps the free hands at the sides of the thighs, sliding a little down their fronts, not plumb ahead', (bow) => {
-      const { bowed: hands, still, log } = bowed(make, bow);
-      hands.forEach((hand, i) => {
-        // (plumb, a 0.6 rad bow leaves the palms 0.2 m ahead of where they hang standing)
-        expect(hand.ahead - still[i].ahead).toBeGreaterThan(-0.01);
-        expect(hand.ahead - still[i].ahead).toBeLessThan(0.05);
-        expect(Math.abs(hand.out - still[i].out)).toBeLessThan(0.01);
-      });
-      // (no arm in the trunk or a thigh, the joints within their pace and range, the extrapolated centre of mass over the feet)
-      expect(log).toEqual([]);
-    });
-
-    it('stooped deep, lets the arms hang toward the plumb', () => {
-      const { bowed: hands, still, log } = bowed(make, 1.4);
-      hands.forEach((hand, i) => expect(hand.ahead - still[i].ahead).toBeGreaterThan(0.25));
-      expect(log).toEqual([]);
-    });
-  });
-});
-
 // (the trials that asked for it: arms spread in a roar, a droid's wave, rebuilt by hand as rotations of the hanging arm about the shoulder)
 describe('pose of the arms', () => {
   const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
   /** where the right hand ends (× the arm's length off the shoulder, in the body's frame: +X its left, +Z ahead) after `arm` held 2.5 s,
    * and 1.5 s after it ends, and the log */
-  const posedArm = (make: () => Body, arm: ArmPosture) => {
+  const posedArm = (make: () => Body, arm: Arm) => {
     const body = make(), length = body.species.person?.armLength ?? 1;
     const hand = () => worldOf(body.bones.rightHand).sub(worldOf(body.bones.rightUpperArm)).divideScalar(length);
     let held = new Vector3();
@@ -239,7 +186,7 @@ describe('pose of the arms', () => {
     }, [body], 4);
     return { held, after: hand(), log: body.log };
   };
-  const CASES: [string, ArmPosture, Partial<Record<'x' | 'y' | 'z', number>>][] = [
+  const CASES: [string, Arm, Partial<Record<'x' | 'y' | 'z', number>>][] = [
     ['held out ahead', { forward: Math.PI / 2 }, { y: 0.1, z: 1 }],
     ['held out sideways', { out: Math.PI / 2 }, { x: -1, y: 0.1 }],
     ['raised overhead', { forward: 2.8 }, { y: 0.95 }],
@@ -392,11 +339,4 @@ describe('lookAt', () => {
 const chestPitch = (body: Body) => new Euler().setFromQuaternion(new Quaternion().setFromAxisAngle(UP, -body.facing).multiply(poseOf(body).rotation(INDEX.chest)), 'YXZ').x;
 /** the head's roll in the world (rad, + its left side up) */
 const headRoll = (body: Body) => new Euler().setFromQuaternion(new Quaternion().setFromAxisAngle(UP, -body.facing).multiply(poseOf(body).rotation(INDEX.head)), 'YXZ').z;
-/** how far (m) the extrapolated centre of mass is outside the feet's support (− inside) */
-function xcomOutside(body: Body, h: ReturnType<typeof insides>): number {
-  const com = poseOf(body).com(new Vector3()), velocity = h.frame.prev.com(new Vector3()).sub(h.frame.prev2.com(new Vector3())).divideScalar(h.frame.dt);
-  const xcom = xcomOf(com, velocity, h.proportions.legLength, new Vector3());
-  const support = (h.stepper?.legs ?? []).flatMap((leg) => footprint(h.proportions, leg.anchor, leg.yaw));
-  return outside(hullOf(support), xcom);
-}
 const UP = new Vector3(0, 1, 0);

@@ -1,10 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { lookAt } from '../../src/index';
 import { selfOf } from '../../src/body';
 import { BonePose } from '../../src/kernel/bone-pose';
-import { INDEX } from '../../src/person/anatomy/bones';
-import { claim, dt, insides, person, play, run } from '../kit/bodies';
+import { INDEX, dt, person, run } from '../kit/bodies';
+import { insides, claim } from './insides';
 import { poseOf } from '../../src/index';
 
 it('checks a planted foot in the final pose after a later writer moved it, naming the requests running', () => {
@@ -58,11 +57,4 @@ it('clears the development beat once nothing runs', () => {
   expect(selfOf(body).frame.dev?.beat).toBeUndefined();
 });
 
-it('says when a request goes unrenewed for a second: its story stopped stepping', () => {
-  const body = person({ dev: true });
-  const step = play(function* () { yield* lookAt(body, new Vector3(1, 1.5, 2), { until: Infinity }); }, [body], dt);
-  expect(step).toBeCloseTo(dt, 9);
-  run(body, 1.5);
-  expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/not renewed/), where: expect.stringMatching(/^lookAt/) }));
-});
 

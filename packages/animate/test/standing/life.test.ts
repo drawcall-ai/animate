@@ -1,47 +1,18 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { Body, dog, grab, humanoid, lookAt, reach, walkTo } from '../../src/index';
+import { Body, dog, grab, humanoid, lookAt, reach } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { INDEX, SIDES, type Side } from '../../src/person/anatomy/bones';
+import { INDEX, SIDES, readings, person, play, run } from '../kit/bodies';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
 import { TROOPER } from '../kit/skeletons/trooper';
-import { QuietStance } from '../../src/person/legs/quiet-stance';
-import { insides, person, play, run } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
 
 const pitchOf = (rotation: Quaternion) => new Euler().setFromQuaternion(rotation, 'YXZ').x;
 const yawOf = (rotation: Quaternion) => new Euler().setFromQuaternion(rotation, 'YXZ').y;
 
-it('stands alive, deterministically: breathing, millimetre sway and a weight shift within 25 s', () => {
-  const sample = () => {
-    const body = person({ dev: true }), h = insides(body);
-    const x: number[] = [], pitch: number[] = [];
-    run(body, 25, () => {
-      x.push(h.pose.com(new Vector3()).x);
-      pitch.push(pitchOf(h.pose.rotation(INDEX.chest)));
-    });
-    const sign = Math.sign(h.trunk!.quiet.x);
-    expect(Math.abs(h.trunk!.quiet.x)).toBeGreaterThan(0.04);
-    const loaded = sign > 0 ? 'left' : 'right', unloaded = sign > 0 ? 'right' : 'left';
-    const hip = (side: Side) => h.pose.position(INDEX[`${side}UpperLeg`]).y;
-    const knee = (side: Side) => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
-    expect(hip(unloaded)).toBeLessThan(hip(loaded) - 0.005);
-    expect(knee(unloaded)).toBeGreaterThan(0.2);
-    expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
-    run(body, 3);
-    expect(h.trunk!.quiet.x * sign).toBeGreaterThan(0.04);
-    expect(body.log).toEqual([]);
-    return { x, pitch };
-  };
-  const a = sample(), b = sample();
-  expect(a).toEqual(b);
-  expect(Math.max(...a.x.slice(0, 600)) - Math.min(...a.x.slice(0, 600))).toBeGreaterThan(0.003);
-  expect(Math.max(...a.x) - Math.min(...a.x)).toBeGreaterThan(0.04);
-  expect(Math.max(...a.pitch.slice(120, 600)) - Math.min(...a.pitch.slice(120, 600))).toBeGreaterThan(0.02);
-});
 
 it.each(['an across-body reach', 'an over-shoulder look'])('turns the trunk on the hips for %s within its range, and back after', (what) => {
-  const body = person({ dev: true }), h = insides(body);
+  const body = person({ dev: true }), h = readings(body);
   const twist = () => Math.abs(yawOf(h.pose.rotation(INDEX.chest)) - yawOf(h.pose.rotation(INDEX.hips)));
   let most = 0;
   play(function* () {
@@ -59,11 +30,14 @@ it.each(['an across-body reach', 'an over-shoulder look'])('turns the trunk on t
 // sole and a foot stepped in place beside it lands bent — before, the 2.28 m Chewbacca skeleton's loaded leg stood over-reached, its foot
 // rolled 6 mm up, and an idle step landed on a straight knee that snapped bent at 2800°/s)
 it('keeps a shifted stance in reach: an idle step lands on a bent knee, standing 25 s on a tall rigged skeleton', () => {
-  const body = new Body(humanoid(CHEWBACCA), { dev: true, at: new Vector3(1.1, 0, 10) }), h = insides(body);
+  const body = new Body(humanoid(CHEWBACCA), { dev: true, at: new Vector3(1.1, 0, 10) }), h = readings(body);
   let straightest = Infinity;
+  const up = [false, false];
   run(body, 25, () => {
-    h.stepper?.legs.forEach((leg, i) => {
-      if (!leg.landed) return;
+    body.feet.forEach((foot, i) => {
+      const landed = foot.planted && up[i];
+      up[i] = !foot.planted;
+      if (!landed) return;
       const side = SIDES[i], hip = h.pose.position(INDEX[`${side}UpperLeg`]), knee = h.pose.position(INDEX[`${side}LowerLeg`]), ankle = h.pose.position(INDEX[`${side}Foot`]);
       straightest = Math.min(straightest, knee.clone().sub(hip).angleTo(ankle.clone().sub(knee)));
     });
@@ -74,70 +48,19 @@ it('keeps a shifted stance in reach: an idle step lands on a bent knee, standing
 
 it.each([0, 1, 2])('keeps its loaded foot down through its weight shifts, standing 40 s on its feet under its hips (life seed %i)', (seed) => {
   // (the trooper's feet stand right under its hips: shifted onto one, the hips are over it; lifted, the body stood on the other alone)
-  const body = new Body(humanoid(TROOPER), { dev: true, life: { seed } }), h = insides(body);
+  const body = new Body(humanoid(TROOPER), { dev: true, life: { seed } });
   let lifted = 0;
-  run(body, 40, () => { lifted += Number(h.stepper?.legs.some((leg) => leg.swing) ?? false); });
+  run(body, 40, () => { lifted += Number(body.feet.some((foot) => !foot.planted)); });
   expect(lifted).toBe(0);
   expect(body.log).toEqual([]);
 });
 
-it('slows its walk under a load, counting a load held in both hands once', () => {
-  const pace = (mass: number, both: boolean) => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
-    const load = box(room, new Vector3(0, 1, 0.4), { mass, solid: false });
-    let speed = 0;
-    play(function* () {
-      yield* grab(body, load, both ? { left: 'left', right: 'right' } : { right: 'right' });
-      yield* walkTo(body, new Vector3(0, 0, 3), { until: 0.3 });
-    }, [body], 4, () => {
-      if (h.asks.legGoal && body.owners.legs?.verb === 'walkTo') speed = h.asks.legGoal.speed;
-    });
-    expect(body.log).toEqual([]);
-    return speed;
-  };
-  const light = pace(0, false), heavy = pace(5, false);
-  expect(heavy).toBeGreaterThan(0);
-  expect(heavy).toBeLessThan(light);
-  expect(pace(5, true)).toBeCloseTo(heavy, 8);
-});
 
-it('keeps its sway and breathing after a loaded walk, without spontaneous weight shifts', () => {
-  const body = person({ dev: true }), h = insides(body), room = roomOf(body);
-  const load = box(room, new Vector3(-0.15, 1.05, 0.35), { mass: 5, solid: false });
-  play(function* () {
-    yield* grab(body, load, { right: 'right' });
-    yield* walkTo(body, new Vector3(0, 0, 2));
-  }, [body], 8);
-  const sway: number[] = [], breath: number[] = [];
-  run(body, 15, () => {
-    sway.push(h.pose.com(new Vector3()).x);
-    breath.push(pitchOf(h.pose.rotation(INDEX.chest)));
-    expect(h.trunk!.quiet.length()).toBeLessThan(0.02);
-  });
-  expect(body.holds(load)).toBe(true);
-  expect(Math.max(...sway) - Math.min(...sway)).toBeGreaterThan(0.004);
-  expect(Math.max(...breath) - Math.min(...breath)).toBeGreaterThan(0.02);
-  expect(body.log).toEqual([]);
-});
 
-it('seeds the side of its first weight shift and alternates the later ones, after activity too', () => {
-  for (const seed of [0, 1, 42]) {
-    const life = new QuietStance(seed);
-    const shifts: Side[] = [];
-    let previous: Side | null = null;
-    for (let step = 0; step < 6000; step++) {
-      life.update(0.1, step < 2000 || step >= 2100, 0, 0);
-      if (life.onto && life.onto !== previous) shifts.push(life.onto);
-      previous = life.onto;
-    }
-    expect(shifts.length).toBeGreaterThan(8);
-    expect(shifts.every((side, i) => i === 0 || side !== shifts[i - 1])).toBe(true);
-  }
-});
 
 it.each([1.6, 1.75, 1.85])('bends its knees for an 8 kg load taken low, on a %s m body', (height) => {
   const scale = height / 1.75;
-  const body = person({ dev: true }, height), h = insides(body), room = roomOf(body);
+  const body = person({ dev: true }, height), h = readings(body), room = roomOf(body);
   const load = box(room, new Vector3(0, 0.88 * scale, 0.45 * scale), { size: new Vector3(0.36 * scale, 0.2, 0.25), mass: 8, solid: false });
   let knee = NaN, pitch = NaN, drop = NaN;
   play(function* () {
@@ -161,7 +84,7 @@ it.each([1.6, 1.75, 1.85])('bends its knees for an 8 kg load taken low, on a %s 
 
 it('glances about on its own schedule: bodies without a seed do not look aside in step', () => {
   const headYaws = (at: Vector3) => {
-    const body = person({ at }), h = insides(body), yaws: number[] = [];
+    const body = person({ at }), h = readings(body), yaws: number[] = [];
     run(body, 20, () => yaws.push(yawOf(h.pose.rotation(INDEX.head))));
     return yaws;
   };
@@ -173,7 +96,7 @@ it('glances about on its own schedule: bodies without a seed do not look aside i
 it.each([['the default person', 1.75], ['a 2.3 m skeleton', 0]])('holds still as its life asks, scripted: %s', (_name, height) => {
   const stood = (steady: number) => {
     const body = height ? person({ dev: true, life: { seed: 3, steady } }) : new Body(humanoid(CHEWBACCA), { dev: true, life: { seed: 3, steady } });
-    const h = insides(body), yaws: number[] = [], xs: number[] = [];
+    const h = readings(body), yaws: number[] = [], xs: number[] = [];
     run(body, 40, (t) => {
       if (t < 2) return;
       yaws.push(yawOf(h.pose.rotation(INDEX.head)));

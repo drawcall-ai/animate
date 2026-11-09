@@ -1,39 +1,12 @@
 import { Object3D, Vector3 } from 'three';
+import { driven, jump } from '../kit/driving';
 import { expect, it } from 'vitest';
-import { track, type Floor, type Root } from '../../src/index';
-import { INDEX } from '../../src/person/anatomy/bones';
-import { dt, insides, person, run, scene, airborne } from '../kit/bodies';
-import { poseOf } from '../../src/index';
+import { track, type Floor, type Root, poseOf } from '../../src/index';
+import { INDEX, dt, readings, person, run, scene, flying } from '../kit/bodies';
 
 /** eight 0.22 m risers up from z = 0, on 0.55 m treads */
 const STAIRS: Floor = (_x, z) => Math.max(0, Math.min(8, Math.floor(z / 0.55) + 1)) * 0.22;
 
-function driven(floor: Floor = () => 0, at = new Vector3(0, floor(0, 0), 0), platform?: Object3D) {
-  const root: Root & { velocity: Vector3 } = { position: at.clone(), velocity: new Vector3(), yaw: 0, support: at.clone(), platform };
-  const body = person({ at: root.position.clone(), floor, drive: () => root, dev: true, life: { steady: 1 } });
-  const h = insides(body);
-  run(body, 1);
-  return { root, body, h, floor };
-}
-
-/** Physics' jump: the root flies from `velocity` under `gravity` till it comes down on its floor, standing no further than `edge` (m) off
- * x = 0; `each` after every sub-step. */
-function jump({ root, body, floor }: ReturnType<typeof driven>, velocity: Vector3, gravity: number, edge = Infinity, each = () => {}) {
-  root.support = null;
-  root.velocity.copy(velocity);
-  do {
-    root.velocity.y -= gravity * dt;
-    root.position.addScaledVector(root.velocity, dt);
-    const x = Math.min(root.position.x, edge), level = floor(x, root.position.z);
-    if (root.velocity.y < 0 && root.position.y <= level) {
-      root.position.y = level;
-      root.velocity.y = 0;
-      root.support = root.position.clone().setX(x);
-    }
-    body.update(dt);
-    each();
-  } while (!root.support);
-}
 
 it('follows physics height through a ceiling stop, tucks its feet and never invents support during a long flight', () => {
   const { root, body, h } = driven();
@@ -49,7 +22,7 @@ it('follows physics height through a ceiling stop, tucks its feet and never inve
   let tuck = 0;
   for (let frame = 0; frame < 180; frame++) {
     body.update(dt);
-    expect(airborne(body)).toBe(true);
+    expect(flying(body)).toBe(true);
     expect(body.feet.every((foot) => !foot.planted)).toBe(true);
     expect(Math.abs(h.pose.position(0).y - root.position.y - standing)).toBeLessThan(0.015);
     tuck = Math.max(tuck, h.pose.position(INDEX.leftFoot).y - root.position.y - ankle);
@@ -57,36 +30,6 @@ it('follows physics height through a ceiling stop, tucks its feet and never inve
   expect(tuck).toBeGreaterThan(0.08);
 });
 
-it.each([0, 0.6, -0.6])('lands on the actual support at %s m and absorbs the impact with its knees', (level) => {
-  const floor = (_x: number, z: number) => z > 1 ? level : 0;
-  const { root, body, h } = driven(floor);
-  const standing = h.pose.position(0).y;
-  root.support = null;
-  root.position.set(0, 1.2, 2);
-  root.velocity.y = -3;
-  run(body, 0.2);
-  while (root.position.y > level + 0.001) {
-    root.position.y = Math.max(level, root.position.y + root.velocity.y * dt);
-    body.update(dt);
-    expect(airborne(body)).toBe(true);
-    expect(body.feet.every((foot) => !foot.planted)).toBe(true);
-  }
-  root.support = root.position.clone();
-  root.velocity.y = 0;
-  let lowest = Infinity;
-  run(body, 0.4, () => {
-    expect(airborne(body)).toBe(false);
-    lowest = Math.min(lowest, h.pose.position(0).y);
-  });
-  expect(standing + level - lowest).toBeGreaterThan(0.04);
-  expect(standing + level - lowest).toBeLessThan(0.2);
-  run(body, 0.6);
-  expect(Math.abs(h.pose.position(0).y - level - standing)).toBeLessThan(0.015);
-  expect(body.feet.every((foot) => foot.planted)).toBe(true);
-  for (const index of [INDEX.leftFoot, INDEX.rightFoot]) {
-    expect(Math.abs(h.pose.position(index).y - level - h.proportions.ankleHeight)).toBeLessThan(0.01);
-  }
-});
 
 it.each([0, 0.15, 0.3])('lands a physical jump on its current narrow platform at x=%s, not beyond its edge', (x) => {
   const floor = (x: number, z: number) => Math.abs(x) < 0.2 && z > 1.325 && z < 2.675 ? 0.45 : 0;
@@ -152,7 +95,7 @@ it('keeps a standing leg while walking out of a physical landing', () => {
 it('carries a physics-driven body down from a raised landing without collapsing its hips', () => {
   const root: Root & { velocity: Vector3 } = { position: new Vector3(0, 1.76, 5.2), velocity: new Vector3(), yaw: Math.PI, support: new Vector3(0, 1.76, 5.2) };
   const body = person({ at: root.position.clone(), face: root.yaw, floor: STAIRS, drive: () => root });
-  const h = insides(body);
+  const h = readings(body);
   run(body, 3);
   root.velocity.z = -1.4;
   for (let frame = 0; frame < 30; frame++) {

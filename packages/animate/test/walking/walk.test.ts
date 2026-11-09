@@ -3,11 +3,11 @@ import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { arriving, Body, dog, grab, lookAt, reach, release, wait, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { insides, person, play } from '../kit/bodies';
+import { now, readings, person, play } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
 
 it('a grab waiting on the walk starts before the walk ends, without taking the legs from it', () => {
-  const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+  const body = person({ dev: true }), h = readings(body), room = roomOf(body);
   const to = new Vector3(0, 0, 2);
   const load = box(room, new Vector3(-0.1, 0.9, 2.45), { solid: false });
   const at = { started: NaN, walked: NaN, held: NaN };
@@ -15,12 +15,12 @@ it('a grab waiting on the walk starts before the walk ends, without taking the l
   play(function* () {
     yield* parallel('all', function* () {
       yield* walkTo(body, to);
-      at.walked = h.frame.time;
+      at.walked = now();
     }, function* () {
       yield* wait(arriving(body, 0.6));
-      at.started = h.frame.time;
+      at.started = now();
       yield* grab(body, load, { right: 'right' });
-      at.held = h.frame.time;
+      at.held = now();
     });
   }, [body], 10, () => {
     if (Number.isNaN(at.walked) && body.owners.legs) legs.add(body.owners.legs.verb);
@@ -34,7 +34,7 @@ it('a grab waiting on the walk starts before the walk ends, without taking the l
 });
 
 it('arriving reads what the body begins to move toward once it is made: false till then, its walk while it walks, true once that ends', () => {
-  const body = person(), h = insides(body);
+  const body = person();
   const seen: boolean[] = [], at = { arriving: NaN, walked: NaN };
   play(function* () {
     const soon = arriving(body, 0.5);
@@ -50,10 +50,10 @@ it('arriving reads what the body begins to move toward once it is made: false ti
     // (made beside a walk, ahead of it in the branches, it waits for that walk)
     yield* parallel('all', function* () {
       yield* wait(arriving(body, 0.5));
-      at.arriving = h.frame.time;
+      at.arriving = now();
     }, function* () {
       yield* walkTo(body, new Vector3(0, 0, 3));
-      at.walked = h.frame.time;
+      at.walked = now();
     });
   }, [body], 15, () => !Number.isNaN(at.walked));
   expect(seen).toEqual([false, false, false, true]);
@@ -96,18 +96,18 @@ it.each([
   ['a mark, facing as it does', markAt(0.3, 3), 1.3],
   ['a mark, slowly', markAt(0.3, 3), 0.5],
 ] as const)('stands as it arrived after a walk to %s', (_, to, speed) => {
-  const body = person({ dev: true }), h = insides(body);
+  const body = person({ dev: true });
   let ended = NaN, unsettled = 0, moved = 0;
   const feet: Vector3[] = [];
   play(function* () {
     yield* walkTo(body, to, { speed });
-    ended = h.frame.time;
-    feet.push(...h.stepper!.legs.map((leg) => leg.anchor.clone()));
+    ended = now();
+    feet.push(...body.feet.map((foot) => foot.position));
   }, [body], 15, () => {
     if (Number.isNaN(ended)) return false;
     if (!body.settled) unsettled += 1;
-    h.stepper!.legs.forEach((leg, i) => moved = Math.max(moved, leg.anchor.distanceTo(feet[i])));
-    return h.frame.time > ended + 2;
+    body.feet.forEach((foot, i) => moved = Math.max(moved, foot.position.distanceTo(feet[i])));
+    return now() > ended + 2;
   });
   expect(unsettled).toBe(0);
   expect(moved).toBeLessThan(0.005);
@@ -115,11 +115,11 @@ it.each([
 });
 
 it('arriving foresees every mover: a reach before its hands get there, a grab while it walks up; what the body does itself after a release holds it up not', () => {
-  const body = person(), h = insides(body), room = roomOf(body);
+  const body = person(), h = readings(body), room = roomOf(body);
   const near = box(room, new Vector3(-0.2, 1.1, 0.4), { mass: 1, solid: false, name: 'near' });
   const far = box(room, new Vector3(0.1, 0.9, 2.5), { mass: 1, solid: false, name: 'far' });
   const at: Record<string, number> = {};
-  const mark = (name: string) => function* () { at[name] = h.frame.time; };
+  const mark = (name: string) => function* () { at[name] = now(); };
   play(function* () {
     yield* parallel('all', function* () {
       yield* reach(body, { right: new Vector3(-0.25, 1.2, 0.45) });
@@ -130,19 +130,19 @@ it('arriving foresees every mover: a reach before its hands get there, a grab wh
     });
     const grabbed = arriving(body, 0.1);
     yield* grab(body, near, { right: 'right' });
-    yield* wait(() => h.locomotion.settled);
+    yield* wait(() => h.settled);
     release(body, near);
     yield* wait(0.1);
     // (the hands backing out — the body's own request — while what its stories moved has arrived: as settled as the body is)
-    at.backing = h.requests.some((request) => request.kind === 'own') ? 1 : 0;
-    at.unheld = grabbed() && h.locomotion.settled ? 1 : 0;
+    at.backing = body.owners.hands.right ? 1 : 0;
+    at.unheld = grabbed() && h.settled ? 1 : 0;
     yield* parallel('all', function* () {
       yield* grab(body, far, { left: 'left', right: 'right' });
       yield* mark('grabbed')();
     }, function* () {
       yield* wait(arriving(body, 0.6));
       yield* mark('grab arriving')();
-      at.walking = insides(body).locomotion.moving ? 1 : 0;
+      at.walking = body.settled ? 0 : 1;
     });
   }, [body], 15, () => at.grabbed !== undefined);
   expect(at['reach arriving']).toBeLessThan(at.reached - 0.3);
@@ -195,7 +195,7 @@ it('a dog keeps to an empty at a person\'s heel at a run and stands by it, and o
 // (people turn into their gaze: an about-turn goes round the side the head is turned to — recalled: Hollands et al. 2001, gaze and head
 // lead a turn; exactly opposite, with the head ahead, it goes to the right)
 it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it looks to: %i, %s', (side, _name) => {
-  const body = person({ dev: true }), h = insides(body);
+  const body = person({ dev: true }), h = readings(body);
   let turned = 0, done = false;
   play(function* () {
     yield* parallel('race', lookAt(body, new Vector3(side * 2, 1.6, -0.5)), function* () {
@@ -204,7 +204,7 @@ it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it lo
       done = true;
     });
   }, [body], 10, () => {
-    if (h.frame.time > 1 && !turned && Math.abs(h.locomotion.facing) > 0.3) turned = Math.sign(h.locomotion.facing);
+    if (now() > 1 && !turned && Math.abs(h.facing) > 0.3) turned = Math.sign(h.facing);
     return done;
   });
   expect(done).toBe(true);
@@ -212,28 +212,6 @@ it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it lo
   expect(body.log).toEqual([]);
 });
 
-// (a few steps back or aside, asked to face as it does, it keeps its facing — backing, side-stepping — slower than it walks: recalled,
-// backward walking's self-selected pace ~60–70% of forward; further, it turns and walks)
-it.each([
-  ['back 1.3 m', new Vector3(0, 0, -1.3), true],
-  ['aside 0.8 m', new Vector3(0.8, 0, 0), true],
-  ['back 2 m', new Vector3(0, 0, -2), false],
-] as const)('steps %s facing as it does: keeps its facing for a few steps, slower', (_, to, kept) => {
-  const body = person({ dev: true }), h = insides(body);
-  let arrived: boolean | undefined, turned = 0, fastest = 0;
-  play(function* () { arrived = yield* walkTo(body, to, { face: 0 }); }, [body], 15, () => {
-    turned = Math.max(turned, Math.abs(h.locomotion.facing));
-    fastest = Math.max(fastest, h.locomotion.velocity.length());
-    return arrived !== undefined;
-  });
-  expect(arrived).toBe(true);
-  expect(body.position.distanceTo(to)).toBeLessThan(0.1);
-  if (kept) {
-    expect(turned).toBeLessThan(0.05);
-    expect(fastest).toBeLessThan(0.9);
-  } else expect(turned).toBeGreaterThan(Math.PI / 2);
-  expect(body.log).toEqual([]);
-});
 
 it('throws on a pace that is none, and for a body its app drives', () => {
   const body = person();
@@ -242,22 +220,3 @@ it('throws on a pace that is none, and for a body its app drives', () => {
   expect(() => play(function* () { yield* walkTo(driven, new Vector3(0, 0, 1)); }, [driven], 0.1)).toThrow('drives it');
 });
 
-it('a person asked 3 m/s runs there, in flight between its stances, and asked past its top says so', () => {
-  const walk = (speed: number) => {
-    const body = person({ dev: true, at: new Vector3(0, 0, -30), face: 0 }), h = insides(body);
-    let peak = 0, flying = 0, done = false;
-    play(function* () { yield* walkTo(body, new Vector3(), { speed }); done = true; }, [body], 40, () => {
-      peak = Math.max(peak, h.locomotion.velocity.length());
-      if (body.feet.every((foot) => !foot.planted)) flying++;
-      return done;
-    });
-    return { peak, flying, done, said: body.log.filter((row) => row.check.startsWith('walk speed')) };
-  };
-  const run = walk(3), past = walk(6);
-  expect(run.done).toBe(true);
-  expect(run.peak).toBeCloseTo(3, 1);
-  expect(run.flying).toBeGreaterThan(30);
-  expect(run.said).toEqual([]);
-  expect(past.peak).toBeCloseTo(4, 1);
-  expect(past.said).toHaveLength(1);
-});

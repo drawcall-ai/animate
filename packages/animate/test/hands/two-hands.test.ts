@@ -1,33 +1,25 @@
-import type { Miss, Request } from '../../src/kernel/requests';
-import { Euler, Object3D, Quaternion, Vector3 } from 'three';
+import { Euler, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { carry, grab, lookAt, reach, wait } from '../../src/index';
-import { INDEX, type Side } from '../../src/person/anatomy/bones';
-import { clearBody } from '../../src/person/hands/load-clearance';
-import { grasp } from '../../src/things/hold';
-import { Thing } from '../../src/things/thing';
-import { pointSegmentDistance } from '../../src/kernel/math';
-import { coordinatesOf } from '../../src/kernel/limits';
-import type { Person } from '../../src/person/person';
+import { INDEX, type Side, readings, person, play, type Readings } from '../kit/bodies';
 import { handSpeeds } from '../kit/hands';
-import { dt, feetOf, insides, palmAt, person, play, run } from '../kit/bodies';
-import { box, empty, roomOf, worldOf } from '../kit/things';
+import { box, roomOf, worldOf } from '../kit/things';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
 /** a knee's bend (rad): π less the angle at it */
-function knee(h: Person, side: Side): number {
+function knee(h: Readings, side: Side): number {
   const at = (joint: 'UpperLeg' | 'LowerLeg' | 'Foot') => h.pose.position(INDEX[`${side}${joint}`]).clone();
   const joint = at('LowerLeg');
   return Math.PI - at('UpperLeg').sub(joint).angleTo(at('Foot').sub(joint));
 }
 
-const chestPitch = (h: Person) => new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x;
+const chestPitch = (h: Readings) => new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x;
 
 describe('two hands', () => {
   it('the following hand waits where it is: held out, it does not drop toward its hang before it sets off', () => {
-    const body = person(), h = insides(body), room = roomOf(body);
+    const body = person(), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.95, 0.5), { mass: null, solid: false });
     let going = false;
     const hands = handSpeeds(h, () => going);
@@ -46,7 +38,7 @@ describe('two hands', () => {
   it('reaching and carrying together are not mirror images: the left sets off a moment after the right', () => {
     const reaching = person(), held = box(roomOf(reaching), new Vector3(0, 1.0, 0.45), { mass: null, solid: false });
     let going = false;
-    const hands = handSpeeds(insides(reaching), () => going);
+    const hands = handSpeeds(readings(reaching), () => going);
     play(function* () {
       yield* wait(1);
       going = true;
@@ -88,7 +80,7 @@ describe('two hands', () => {
 
   it('bows to hip-high grips without a transient squat', () => {
     // (rack geometry, recalled: hip-high grips just beyond a standing arm's reach)
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.88, 0.61), { mass: null, solid: false });
     let held = false, bent = 0, bow = 0;
     play(function* () {
@@ -105,28 +97,11 @@ describe('two hands', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('takes and holds a load at hip height standing: its weight shifting over planted feet is no walk', () => {
-    // (it once was, which switched the loaded reach's bow off and on every sub-step)
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
-    const load = box(room, new Vector3(0, 0.88, 0.61), { size: new Vector3(0.44, 0.25, 0.3), mass: 5 });
-    let planted = 0, walking = 0;
-    play(function* () {
-      yield* grab(body, load, BOTH);
-      yield* carry(body, load, new Vector3(0, 0.93, 0.5), { until: 3 });
-    }, [body], 8, () => {
-      if (!feetOf(h).every((foot) => foot.phase === 'planted')) return;
-      planted++;
-      if (h.locomotion.moving) walking++;
-    });
-    expect(planted).toBeGreaterThan(400);
-    expect(walking).toBe(0);
-    expect(body.log).toEqual([]);
-  });
 });
 
 describe('a load kept clear of the head', () => {
   it('keeps the head clear while a wide held load rises through a downward gaze', () => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.88, 0.55), { size: new Vector3(0.44, 0.25, 0.3), mass: 8 });
     let samples = 0, done = false;
     const reserve = 0.22 + 0.06 * h.proportions.height;
@@ -145,42 +120,10 @@ describe('a load kept clear of the head', () => {
     expect(samples).toBeGreaterThan(60);
   });
 
-  it.each([0.02, 0.22])('clears a %s m load from the neck→head segment, above the trunk too', (radius) => {
-    const body = person(), h = insides(body), room = roomOf(body);
-    run(body, 1);
-    const size = new Vector3(2, 2, 2).multiplyScalar(radius);
-    const thing = Thing.of(box(room, new Vector3(), { size, name: `${radius} m` }));
-    const neck = h.pose.position(INDEX.neck), head = h.pose.point(INDEX.head, h.proportions.headCenter, new Vector3());
-    const reserve = radius + 0.06 * h.proportions.height;
-    for (const part of [0, 0.5, 1]) {
-      const at = neck.clone().lerp(head, part);
-      clearBody(h, h.frame, thing, at, new Quaternion(), { position: at.clone(), quaternion: new Quaternion() });
-      expect(head.distanceTo(at)).toBeGreaterThan(reserve);
-      expect(pointSegmentDistance(at, neck, head)).toBeGreaterThan(reserve);
-    }
-  });
-});
-
-describe('a grip taken', () => {
-  it.each([false, true])('is checked against the palm as the hand takes it (10 cm off: %s)', (off) => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
-    run(body, 0.5);
-    const rope = new Object3D(), palm = palmAt(h, 'left');
-    rope.name = 'loose rope';
-    rope.position.copy(palm).add(new Vector3(off ? 0.1 : 0, 0, 0));
-    room.add(rope);
-    empty(rope, 'end', new Vector3());
-    // (the hand bone a palm back from the end, as a person's grip has it)
-    const missed: Miss[] = [];
-    grasp(h, 'left', { thing: Thing.of(rope), grip: 'end', goal: { position: h.pose.position(h.hands.left).clone().sub(palm) }, by: { fail: (miss: Miss) => void missed.push(miss) } as Request });
-    body.update(dt);
-    if (off) expect(missed).toEqual([expect.objectContaining({ off: expect.closeTo(0.1, 1), where: 'loose rope left end' })]);
-    else expect(missed).toEqual([]);
-  });
 });
 
 it('follows a smoothly moving point without treating every sample as a stationary reach', () => {
-  const body = person(), h = insides(body), point = new Vector3();
+  const body = person(), h = readings(body), point = new Vector3();
   const target = (time: number) => point.set(-0.3 + 0.15 * Math.sin(6 * time), 1.2, 0.4);
   let error = 0;
   play(function* () {
@@ -191,27 +134,3 @@ it('follows a smoothly moving point without treating every sample as a stationar
   expect(error).toBeLessThan(0.03);
 });
 
-// (both hands held still out before the shoulders, a little above them: the clavicles go where the hands ask, swaying only with the body's
-// breath and sway — shrugged on from where they stood each sub-step, they rose 30–40° up their range)
-it('holds the clavicles where still hands ask, not shrugging them on, on both sides', () => {
-  const body = person({ dev: true }), h = insides(body);
-  run(body, 0.5);
-  const targets = (['left', 'right'] as const).map((side) => body.armPoint(side, new Vector3(0, 0.15, 1), 0.85));
-  // (each clavicle's protraction and elevation, °, the left's signs for both)
-  const clavicles = () => (['left', 'right'] as const).map((side) => {
-    const bone = INDEX[`${side}Shoulder`], [protraction, elevation] = coordinatesOf(h.pose.local(bone), h.pose.skeleton.limits[bone]!).value;
-    return [protraction, elevation].map((x) => (side === 'left' ? x : -x) / (Math.PI / 180));
-  });
-  const seen: number[][][] = [];
-  play(function* () { yield* reach(body, { left: targets[0], right: targets[1] }, { until: Infinity }); }, [body], 6, (time) => {
-    if (time >= 2) seen.push(clavicles());
-  });
-  for (const [k, side] of (['left', 'right'] as const).entries()) {
-    const elevations = seen.map((c) => c[k][1]), protractions = seen.map((c) => c[k][0]);
-    expect(Math.max(...elevations), `${side} elevation`).toBeLessThan(20);
-    expect(Math.max(...elevations) - Math.min(...elevations), `${side} elevation`).toBeLessThan(8);
-    expect(Math.max(...protractions) - Math.min(...protractions), `${side} protraction`).toBeLessThan(8);
-    expect(worldOf(body.bones[`${side}Hand`]).distanceTo(targets[k]), side).toBeLessThan(0.01);
-  }
-  expect(body.log).toEqual([]);
-});

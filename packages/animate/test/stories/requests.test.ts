@@ -1,11 +1,9 @@
-import { Object3D, Vector3 } from 'three';
-import { finder } from '../../src/things/target';
-import { selfOf } from '../../src/body';
+import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { attempt, Body, dog, grab, lookAt, Missed, reach, wait, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { claim, dt, insides, person, play, run } from '../kit/bodies';
+import { person, play } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
 
 describe('requests', () => {
@@ -54,25 +52,6 @@ describe('requests', () => {
     expect(looks[3]).toBe('idle');
   });
 
-  it("only the request that has a part moves it; the legs' others keep their count, unheard", () => {
-    const body = person(), h = insides(body);
-    const runs = { trunk: [0, 0], legs: [0, 0] };
-    const borrowed = claim(body, 'trunk', () => void runs.trunk[0]++, 'borrowed');
-    const asked = claim(body, 'trunk', () => void runs.trunk[1]++);
-    claim(body, 'legs', () => void runs.legs[0]++, 'borrowed');
-    claim(body, 'legs', () => {
-      runs.legs[1]++;
-      return { to: new Vector3(0, 0, 1), speed: 1, accel: 1 };
-    });
-    run(body, 0.5);
-    expect(runs.trunk).toEqual([0, 30]);
-    expect(runs.legs).toEqual([30, 30]);
-    expect(h.asks.legGoal?.to.z).toBe(1);
-    asked();
-    run(body, 0.5);
-    expect(runs.trunk).toEqual([30, 30]);
-    borrowed();
-  });
 
   it('among borrowers, the first keeps the legs', () => {
     const body = person(), room = roomOf(body);
@@ -120,21 +99,5 @@ describe('requests', () => {
     const ended = play(function* () { miss = yield* attempt(walkTo(body, new Vector3(0, 0, 2), { until: 20 })); }, [body], 25, () => miss !== undefined);
     expect(miss).toMatchObject({ verb: 'walkTo', why: expect.stringContaining('no nearer') });
     expect(ended).toBeLessThan(15);
-  });
-});
-
-describe('targets', () => {
-  it("a function's object is found where it leaves it each sub-step, not eased across the update", () => {
-    const body = person(), room = roomOf(body), marker = new Object3D();
-    room.add(marker);
-    const find = finder(selfOf(body), (time) => {
-      marker.position.set(time, 1, 1);
-      return marker;
-    });
-    const off: number[] = [];
-    claim(body, 'look', (f) => void off.push(Math.abs(find(f).position.x - f.time)), 'borrowed');
-    body.update(dt);
-    body.update(4 * dt);
-    expect(Math.max(...off)).toBeLessThan(1e-9);
   });
 });

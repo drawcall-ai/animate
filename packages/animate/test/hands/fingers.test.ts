@@ -1,12 +1,9 @@
 import { Bone, BoxGeometry, CylinderGeometry, Float32BufferAttribute, InstancedMesh, Line3, Matrix4, Mesh, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, TorusGeometry, Uint16BufferAttribute, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { attempt, Body, carry, grab, humanoid, Missed, pose, release, wait } from '../../src/index';
-import { selfOf } from '../../src/body';
 import { PERSON } from '../../skills/animate/references/person';
 import { FINGERED } from '../kit/skeletons/fingered';
-import { LIFTED } from '../../src/fingers/shape';
-import { Thing } from '../../src/things/thing';
-import { person, play } from '../kit/bodies';
+import { now, person, play } from '../kit/bodies';
 import { empty, roomOf } from '../kit/things';
 import { gripOn, placement, shapeHand } from '../../src/puppet';
 
@@ -203,6 +200,8 @@ describe('fingers', () => {
     expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.8);
   });
 
+  /** how far a finger lifts past straight, as `pose` takes it */
+  const LIFTED = -0.15;
   it('lie along the palm with no curl where the skin rests them curled in at the knuckles, and lift a little past it below 0', () => {
     // (the right middle finger rigged bent 30° down toward the palm at its knuckle, its outer joints straight on from there)
     const knuckle = FINGERED.find((bone) => bone.name === 'rightMiddleProximal');
@@ -251,9 +250,9 @@ describe('fingers', () => {
     play(function* () {
       yield* grab(body, grenade, { right: 'body' });
       yield* carry(body, grenade, new Vector3(-0.08, 1.12, 0.32), { step: false });
-      began = selfOf(body).time;
+      began = now();
       hooked = yield* attempt(grab(body, pin, { left: 'ring' }));
-      ended = selfOf(body).time;
+      ended = now();
     }, [body], 10, () => hooked !== undefined);
     expect(hooked).toMatchObject({ verb: 'grab', where: expect.stringContaining('ring') });
     expect(ended - began).toBeLessThan(3);
@@ -266,8 +265,9 @@ describe('fingers', () => {
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());
     Object.assign(both.userData, { handle: [0, 1, 0], point: 'index' });
-    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/both userData.point and userData.handle/);
+    const taker = person(), grabbing = () => play(function* () { yield* grab(taker, both.parent!, { right: 'grip' }); }, [taker], 0.1);
+    expect(grabbing).toThrow(/both userData.point and userData.handle/);
     Object.assign(both.userData, { handle: undefined, point: 'pinky' });
-    expect(() => Thing.of(both.parent ?? both).grip('grip')).toThrow(/a hand has a thumb/);
+    expect(grabbing).toThrow(/a hand has a thumb/);
   });
 });

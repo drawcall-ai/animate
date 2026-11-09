@@ -6,11 +6,11 @@ import { pastLimit, clampRotation } from '../../src/kernel/limits';
 import { CHAINS } from '../../src/person/anatomy/skeleton';
 import { relaxedPose } from '../../src/person/anatomy/relaxed';
 import { INDEX } from '../../src/person/anatomy/bones';
-import { humanoid } from '../../src/index';
+import { humanoid, poseOf } from '../../src/index';
 import { rng, turnUpTo } from '../kit/random';
-import { claim, dt, insides, person } from '../kit/bodies';
+import { dt, person } from '../kit/bodies';
+import { claim, insides } from './insides';
 import { PERSON } from '../../skills/animate/references/person';
-import { poseOf } from '../../src/index';
 
 /** where bone `name` of a body is in the scene, as its last update wrote it */
 const at = (body: ReturnType<typeof person>, name: keyof typeof body.bones) => {

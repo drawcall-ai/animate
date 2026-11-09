@@ -2,14 +2,14 @@
 import { CylinderGeometry, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { attempt, Body, grab, humanoid, Missed, play, reach } from '../../src/index';
-import { insides, person } from '../kit/bodies';
+import { readings, person } from '../kit/bodies';
 import { FINGERED } from '../kit/skeletons/fingered';
 import { empty, roomOf } from '../kit/things';
 import { gripOn } from '../../src/puppet';
-import { POINT } from '../../src/fingers/shape';
+import { POINTING } from '../kit/hands';
 
 const driven = () => person({ dev: true, life: { steady: 1, seed: 1 }, drive: () => ({ position: new Vector3(), velocity: new Vector3(), yaw: 0 }) });
-const handOff = (body: Body, at: Vector3) => insides(body).pose.position(insides(body).hands.right).distanceTo(at);
+const handOff = (body: Body, at: Vector3) => readings(body).pose.position(readings(body).hands.right).distanceTo(at);
 const out = (z: number) => new Vector3(-0.3, 1.3, z);
 
 describe('a reach to the end of the arm (driven: it cannot step)', () => {
@@ -50,7 +50,7 @@ function rodAt(z: number, point: 'thumb' | 'palm') {
   const g = empty(rod, 'grip', new Vector3(-0.01, 0, 0));
   if (point !== 'palm') g.userData.point = point;
   room.updateMatrixWorld(true);
-  const { wrist, rotation } = gripOn(body, 'left', { on: new Object3D(), point, position: new Vector3(), quaternion: new Quaternion(), fingers: POINT });
+  const { wrist, rotation } = gripOn(body, 'left', { on: new Object3D(), point, position: new Vector3(), quaternion: new Quaternion(), fingers: POINTING });
   const onHand = wrist.negate().applyQuaternion(rotation.invert());
   const gap = () => body.bones.leftHand.localToWorld(onHand.clone()).distanceTo(g.getWorldPosition(new Vector3()));
   const fingers = () => { let sum = 0; body.object.traverse((o) => { if (/left.*(index|middle|ring|little|pinky)/i.test(o.name)) sum += o.quaternion.angleTo(new Quaternion()); }); return sum; };

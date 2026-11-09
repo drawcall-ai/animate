@@ -1,16 +1,16 @@
 import { Quaternion, Vector3 } from 'three';
 import { MovingFrame } from '../../src/kernel/moving-frame';
 import { describe, expect, it } from 'vitest';
-import { Body } from '../../src/index';
+import { Body, poseOf } from '../../src/index';
 import { species } from '../../src/species';
 import { selfOf } from '../../src/body';
 import { RotationFollower } from '../../src/kernel/follow';
 import { looking } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';
 import { LimbMover, reached } from '../../src/kernel/limb';
-import { claim, dt } from '../kit/bodies';
+import { dt } from '../kit/bodies';
+import { claim } from './insides';
 import { turn } from './rigs';
-import { poseOf } from '../../src/index';
 
 /** a free root at (0, 1, 0) with a leg hanging down −y: a ball-jointed thigh, a knee bending back (+x), a foot */
 const LEG = [

@@ -4,9 +4,12 @@ import { parallel } from '@pmndrs/timeline';
 import { attempt, Body, dog, grab, humanoid, lookAt, Missed, play, pose, reach, sit, stand, wait, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { PERSON } from '../../skills/animate/references/person';
-import { person, insides } from '../kit/bodies';
+import { person, run } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
 
+/** how high the hips are (m): at 0.54 on a seat of 0.45, 0.96 standing */
+const hipsAt = (body: Body) => body.bones.hips.getWorldPosition(new Vector3()).y;
+const SEATED = 0.6, STOOD = 0.85;
 const seatAt = (height: number, x = 0) => { const seat = new Object3D(); seat.position.set(x, height, 0); seat.updateMatrixWorld(true); return seat; };
 
 describe('sit', () => {
@@ -24,7 +27,7 @@ describe('sit', () => {
     expect(Math.hypot(hips.x, hips.z)).toBeLessThan(0.01);
     expect(hips.y - 0.45).toBeCloseTo(0.09, 2);
     expect(up).toBeGreaterThan(0.58);
-    expect(insides(body).seat).toBeNull();
+    expect(hipsAt(body)).toBeGreaterThan(STOOD);
     expect(body.log).toEqual([]);
   });
 
@@ -58,7 +61,7 @@ describe('sit', () => {
       yield* sit(body, seatAt(0.45));
       yield* reach(body, { right: at });
     });
-    expect(insides(body).seat).toBeNull();
+    expect(hipsAt(body)).toBeGreaterThan(STOOD);
     expect(body.bones.rightHand.getWorldPosition(new Vector3()).distanceTo(at)).toBeLessThan(0.03);
     expect(body.log).toEqual([]);
   });
@@ -72,22 +75,23 @@ describe('sit', () => {
   it('cut short by its `until`, it ends false and is left standing; seated by then, true', () => {
     const body = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } });
     expect(play(body, sit(body, seatAt(0.45), { until: 1 })).result).toBe(false);
-    expect(insides(body).seat).toBeNull();
+    expect(hipsAt(body)).toBeGreaterThan(STOOD);
     const sat = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } });
     expect(play(sat, sit(sat, seatAt(0.45), { until: 8 })).result).toBe(true);
-    expect(insides(sat).seat?.seated).toBe(true);
+    expect(hipsAt(sat)).toBeLessThan(SEATED);
   });
 
   it('asked of its legs as it sits, it misses saying so and stands', () => {
     const body = person({ at: new Vector3(0, 0, 0.6), life: { seed: 1 } });
     const { result } = play(body, () => attempt(parallel('all', sit(body, seatAt(0.45)), function* () {
-      yield* wait(() => insides(body).seat !== null);
+      yield* wait(() => hipsAt(body) < STOOD);
       yield* wait(0.3);
       yield* stand(body);
     })));
     expect(result).toBeInstanceOf(Missed);
     expect(result?.why).toMatch(/legs were asked elsewhere/);
-    expect(insides(body).seat?.rising).toBe(true);
+    run(body, 2);
+    expect(hipsAt(body)).toBeGreaterThan(STOOD);
   });
 
   it.each([1.5, 2.2])('a body %d m tall sits and stands clean, its seat as high for it', (height) => {
@@ -144,10 +148,10 @@ describe('sit', () => {
     play(body, function* () {
       yield* sit(body, seatAt(0.45));
       yield* reach(body, { right: new Vector3(-0.3, 0.85, 0.45) });
-      expect(insides(body).seat?.seated).toBe(true);
+      expect(hipsAt(body)).toBeLessThan(SEATED);
       yield* grab(body, thing, { left: 'left' });
     }, { limit: 30 });
-    expect(insides(body).seat?.seated).toBe(true);
+    expect(hipsAt(body)).toBeLessThan(SEATED);
     expect(body.holds(thing)).toBe(true);
     expect(body.bones.hips.getWorldPosition(new Vector3()).y).toBeCloseTo(0.54, 2);
   });

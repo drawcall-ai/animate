@@ -6,7 +6,7 @@ import { play } from '../kit/bodies';
 import { FINGERED } from '../kit/skeletons/fingered';
 import { empty, roomOf } from '../kit/things';
 import { gripOn } from '../../src/puppet';
-import { POINT } from '../../src/fingers/shape';
+import { POINTING } from '../kit/hands';
 
 /** a body with fingers and a rod of `radius` before its left hip, grip `point` on the rod's side `up` above its middle, and how far that point of the left hand lies off it */
 function rodBefore(point: 'thumb' | 'palm', radius: number, { scale = 1, up = 0, owned = false } = {}) {
@@ -23,7 +23,7 @@ function rodBefore(point: 'thumb' | 'palm', radius: number, { scale = 1, up = 0,
   room.add(rod);
   const grip = empty(rod, 'grip', new Vector3(-radius, up, 0));
   if (point !== 'palm') grip.userData.point = point;
-  const { wrist, rotation } = gripOn(body, 'left', { on: new Object3D(), point, position: new Vector3(), quaternion: new Quaternion(), fingers: POINT });
+  const { wrist, rotation } = gripOn(body, 'left', { on: new Object3D(), point, position: new Vector3(), quaternion: new Quaternion(), fingers: POINTING });
   const onHand = wrist.negate().applyQuaternion(rotation.invert());
   const gap = () => body.bones.leftHand.localToWorld(onHand.clone()).distanceTo(grip.getWorldPosition(new Vector3()));
   return { body, room, rod, grip, gap };

@@ -1,17 +1,16 @@
 import { expect, it } from 'vitest';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { ReusableTimeline } from '@pmndrs/timeline';
-import { Body, horse, walkTo, wait, type Verb } from '../../src/index';
+import { Body, horse, walkTo, wait, type Verb, poseOf } from '../../src/index';
 import type { Temperament } from '../../src/species/define';
 import { selfOf } from '../../src/body';
 import type { Frame } from '../../src/kernel/frame';
 import { strideAt } from '../../src/species/gait';
 import { quintic } from '../../src/kernel/math';
 import { BonePose } from '../../src/kernel/bone-pose';
-import { INDEX } from '../../src/person/anatomy/bones';
-import { claim, person, scene } from '../kit/bodies';
+import { INDEX, person, scene } from '../kit/bodies';
+import { claim } from './insides';
 import { HORSE } from '../../skills/animate/references/horse';
-import { poseOf } from '../../src/index';
 
 const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);
 const WALK = gaitOf(MARE);

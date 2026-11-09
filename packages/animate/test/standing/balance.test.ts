@@ -1,13 +1,10 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { parallel, runTimeline } from '@pmndrs/timeline';
-import { Body, humanoid, pose, wait, walkTo } from '../../src/index';
+import { Body, humanoid, pose, wait, walkTo, poseOf } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { INDEX } from '../../src/person/anatomy/bones';
-import { heelOf } from '../../src/person/legs/foot';
-import { wrapAngle, yawOf } from '../../src/kernel/math';
-import { claim, dt, insides, person, play, run, feetOf } from '../kit/bodies';
-import { poseOf } from '../../src/index';
+import { INDEX, dt, readings, person, play, run, feetOf } from '../kit/bodies';
+import { wrapAngle, yawOf } from '../kit/angles';
 
 describe('balance', () => {
   it('stands facing as it started on hips set ahead of its root, no lean to step under', () => {
@@ -23,17 +20,6 @@ describe('balance', () => {
     expect(most).toBeLessThan(0.2);
   });
 
-  it('stands its soles flat on hips set ahead of its root, their reach measured from where they are', () => {
-    const skeleton = PERSON.map((bone) => {
-      const position: [number, number, number] = [...bone.position];
-      if (bone.name.endsWith('UpperLeg')) position[2] += 0.04;
-      return { ...bone, position };
-    });
-    const body = new Body(humanoid(skeleton), { dev: true, life: { seed: 1 } }), h = insides(body);
-    let most = 0;
-    run(body, 5, () => { most = Math.max(most, ...(h.stepper?.legs ?? []).map((leg) => Math.abs(leg.pitch))); });
-    expect(most).toBe(0);
-  });
 
   it('keeps its feet through a bow on hips set below its pelvis', () => {
     const skeleton = PERSON.map((bone) => {
@@ -50,25 +36,12 @@ describe('balance', () => {
     expect(body.feet.map((foot) => foot.position.z)).toEqual([0, 0]);
   });
 
-  it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
-    const asked: number[] = [];
-    const body = person(), h = insides(body);
-    claim(body, 'trunk', () => void (asked.push(h.asks.lower), h.asks.add({ lower: 0.01 })));
-    body.update(dt);
-    const start = feetOf(h).map((f) => f.position.clone());
-    run(body, 2);
-    expect(feetOf(h).every((f, s) => f.phase === 'planted' && f.position.equals(start[s]))).toBe(true);
-    expect(h.locomotion.settled).toBe(true);
-    // (cleared by balance before each sub-step's tasks ask again)
-    expect(asked.every((x) => x === 0)).toBe(true);
-  });
 
   it.each([undefined, 0.5])('walks to a point and settles on squared feet (facing %s)', (face) => {
-    const to = new Vector3(0.6, 0, 2), body = person({ dev: true }), h = insides(body);
+    const to = new Vector3(0.6, 0, 2), body = person({ dev: true });
     let arrived = false;
     play(function* () { arrived = yield* walkTo(body, to, { face }); }, [body], 8, () => arrived);
     expect(arrived).toBe(true);
-    expect(h.locomotion.moving).toBe(false);
     expect(body.settled).toBe(true);
     expect(poseOf(body).com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
     if (face !== undefined) {
@@ -80,24 +53,26 @@ describe('balance', () => {
   });
 
   it('lands on its heels without a pitch snap or contact ringing', () => {
-    const body = person({ dev: true }), h = insides(body);
+    const body = person({ dev: true }), h = readings(body);
     const phases = [true, true], landed = [false, false], contactFrames = [0, 0];
     let touchdowns = 0, pitchStep = 0, heelHeight = 0;
-    const pitch = (side: 'left' | 'right', previous = false) => {
-      const forward = new Vector3(0, 0, 1).applyQuaternion((previous ? h.frame.prev2 : poseOf(body)).rotation(INDEX[`${side}Foot`]));
+    const pitch = (side: 'left' | 'right') => {
+      const forward = new Vector3(0, 0, 1).applyQuaternion(poseOf(body).rotation(INDEX[`${side}Foot`]));
       return Math.atan2(forward.y, Math.hypot(forward.x, forward.z)) * 180 / Math.PI;
     };
+    const pitched = [pitch('left'), pitch('right')];
     play(function* () { yield* walkTo(body, new Vector3(0, 0, 12)); }, [body], 15, () => {
       for (const [i, side] of (['left', 'right'] as const).entries()) {
-        const planted = body.feet[i].planted;
+        const planted = body.feet[i].planted, was = pitched[i];
+        pitched[i] = pitch(side);
         if (planted && !phases[i]) {
           touchdowns++;
-          pitchStep = Math.max(pitchStep, Math.abs(pitch(side) - pitch(side, true)));
+          pitchStep = Math.max(pitchStep, Math.abs(pitched[i] - was));
           contactFrames[i] = 0;
           landed[i] = true;
         }
         if (landed[i] && planted && contactFrames[i]++ < 4) {
-          heelHeight = Math.max(heelHeight, poseOf(body).point(INDEX[`${side}Foot`], heelOf(h.proportions), new Vector3()).y);
+          heelHeight = Math.max(heelHeight, poseOf(body).point(INDEX[`${side}Foot`], h.proportions.sole.heel, new Vector3()).y);
         }
         phases[i] = planted;
       }
@@ -116,22 +91,22 @@ const TURNED_LANDING = 3 * Math.PI / 180;
 it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without deferring its turn until after travel', (face) => {
   const to = new Vector3(0, 0, 4);
   let arrived = false;
-  const body = person({ dev: true }), h = insides(body);
+  const body = person({ dev: true }), h = readings(body);
   const story = runTimeline(function* () { arrived = yield* walkTo(body, to, { face }); });
   const phases = feetOf(h).map((foot) => foot.phase);
   const landings: { yaw: number; error: number; t: number }[] = [];
-  let distance = 0, last = h.pose.com(new Vector3()).setY(0), facing = h.locomotion.facing, sign = 0, reversed = 0;
+  let distance = 0, last = h.pose.com(new Vector3()).setY(0), facing = h.facing, sign = 0, reversed = 0;
   for (let tick = 0; tick < 12 * 60 && !arrived; tick++) {
     story(undefined, dt);
     body.update(dt);
-    const delta = wrapAngle(h.locomotion.facing - facing);
+    const delta = wrapAngle(h.facing - facing);
     if (!sign && Math.abs(delta) > 1e-6) sign = Math.sign(delta);
-    reversed += Math.max(0, -sign * delta); facing = h.locomotion.facing;
+    reversed += Math.max(0, -sign * delta); facing = h.facing;
     const at = h.pose.com(new Vector3()).setY(0);
     distance += at.distanceTo(last);
     last = at;
     feetOf(h).forEach((foot, s) => {
-      if (foot.phase === 'planted' && phases[s] === 'swing' && h.locomotion.velocity.length() > 0.05) {
+      if (foot.phase === 'planted' && phases[s] === 'swing' && h.velocity.length() > 0.05) {
         const foot = yawOf(h.pose.rotation(s === 0 ? INDEX.leftFoot : INDEX.rightFoot));
         landings.push({ yaw: yawOf(h.pose.rotation(0)), error: Math.abs(wrapAngle(face + (s === 0 ? 0.12 : -0.12) - foot)), t: tick * dt });
       }

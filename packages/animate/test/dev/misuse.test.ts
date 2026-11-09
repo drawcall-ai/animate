@@ -1,6 +1,6 @@
 import { Object3D, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { carry, grab, reach, release, track, walkTo, Body, dog, type Root } from '../../src/index';
+import { carry, grab, lookAt, reach, release, track, walkTo, Body, dog, type Root } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { dt, person, play, run } from '../kit/bodies';
 import { box, empty, roomOf } from '../kit/things';
@@ -179,3 +179,11 @@ describe('a height off the floor is said, once, and ignored', () => {
     expect(warned()).toEqual([expect.stringContaining('a root driven')]);
   });
 });
+it('says when a request goes unrenewed for a second: its story stopped stepping', () => {
+  const body = person({ dev: true });
+  const step = play(function* () { yield* lookAt(body, new Vector3(1, 1.5, 2), { until: Infinity }); }, [body], dt);
+  expect(step).toBeCloseTo(dt, 9);
+  run(body, 1.5);
+  expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/not renewed/), where: expect.stringMatching(/^lookAt/) }));
+});
+
