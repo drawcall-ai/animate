@@ -354,7 +354,7 @@ describe('what a walk carries', () => {
 });
 
 describe('a thing in both hands', () => {
-  // (a bail in the right hand, a side in the left, as a story might come to hold them: it is the same hold however it got there)
+  // (a bail in the right hand, a side in the left, as a story might come to hold them: it is the same hold however it got there.)
   it.each<[string, readonly ('right' | 'left' | 'both')[]]>([
     ['both at once', ['both']],
     ['right, then left', ['right', 'left']],
@@ -393,6 +393,28 @@ describe('a thing in both hands', () => {
       held = body.holds(bucket);
     }, [body], 12);
     expect(held).toBe(true);
+  });
+
+  // (moved off the hand as the second came, it stopped going where the carry took the hand: that hand drawn off its grip, the carry missed)
+  it.each([0.6, 1.2, 2])('takes a second hand %f s into a carry that walks, and ends in both, the thing unjolted', (after) => {
+    const body = person({ dev: true }), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.42), { size: new Vector3(0.3, 0.2, 0.25), mass: 3 });
+    let carried: boolean | null = null, joined: boolean | null = null, fastest = 0, was: Vector3 | null = null;
+    play(function* () {
+      yield* grab(body, load, { right: 'right' });
+      yield* parallel('all', function* () { carried = yield* carry(body, load, new Vector3(0, 1.15, 2.5)); }, function* () {
+        yield* wait(after);
+        joined = yield* grab(body, load, { left: 'left' }, { step: false });
+      });
+      yield* wait(0.5);
+    }, [body], 14, () => {
+      const now = worldOf(load);
+      if (was) fastest = Math.max(fastest, now.distanceTo(was) * 60);
+      was = now;
+    });
+    expect([carried, joined]).toEqual([true, true]);
+    expect(fastest).toBeLessThan(2.2);
+    expect(load.parent).toBe(body.bones.hips);
+    expect(body.log).toEqual([]);
   });
 
   // (a hand-over's taker holds it by grips the other way round from the body's own axes)

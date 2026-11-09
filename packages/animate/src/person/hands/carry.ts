@@ -7,7 +7,7 @@ import { loadFactor } from '../../kernel/load';
 import { type Waypoint } from '../../kernel/timed-path';
 import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
-import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
+import { carriedBy, handsOn, heldMass, lift, supported, take } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { paceAt, type HandOptions } from '../../body/hand-staging';
 import type { CarryPath } from '../../things/carry-path';
@@ -177,7 +177,8 @@ function timed(person: Person, thing: Thing, points: readonly ((f: Frame) => Goa
 
 /** Support take-up precedes lifting; heavy supported loads get an anticipatory knee dip. */
 function* lifting(person: Person, request: Request, thing: Thing) {
-  if (carriedBy(person, thing)) return;
+  // (what hangs from one of the two hands on it goes into both as a carry starts: only that carry's guide then moves it)
+  if (carriedBy(person, thing)) return take(person, thing);
   // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
   const hips = floorUnder(person) + person.proportions.hipHeight;
   if (supported(thing) && thing.mass > PREPARED && (thing.object.getWorldPosition(_v).y >= hips || hips - person.pose.position(0).y < 0.005 * person.scale)) {

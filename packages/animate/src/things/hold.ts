@@ -155,7 +155,6 @@ export function take(self: Self, thing: Thing): void {
   self.showPrev();
   attach(thing, self.boneNode(hands.length === 1 ? self.hands[hands[0]] : 0), self);
   if (hands.length === 1) return;
-  for (const hand of hands) delete self.holding[hand]?.regrip;
   const at = placedFor(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
   const movingFrame = new MovingFrame(at.position, at.quaternion);
   // (standing there as of the sub-step before: `move` moves it on in this one)

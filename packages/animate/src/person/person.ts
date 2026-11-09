@@ -16,7 +16,7 @@ import { seedOf } from '../kernel/random';
 import { Self, type Behaviours } from '../body/self';
 import type { Binding } from '../body/binding';
 import { placedFor } from '../things/placed';
-import { bear, bodyOf, carryAlong, checkParents, inHand, move, type Hold } from '../things/hold';
+import { bear, bodyOf, boneOf, carryAlong, checkParents, handsOn, inHand, move, take, type Hold } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from './anatomy/bones';
 import type { Proportions } from './anatomy/proportions';
@@ -117,11 +117,17 @@ export class Person extends Self {
       idleHold: (f, hand) => {
         const side = sideOf(hand), hold = this.holding[side];
         if (!hold) return;
+        const thing = hold.thing, hands = handsOn(this, thing);
+        // (a second hand joined what hangs from the first: in both hands once no mover has either. Moved off that hand while a carry has it, the
+        // thing would stop going where the carry takes the hand, and the hand be drawn off its grip)
+        if (hands.length > 1 && inHand(this, thing) && !hands.some((on) => this.claims.owner(`hand.${on}`))) {
+          take(this, thing);
+          for (const on of hands) delete this.holding[on]?.idle;
+        }
         if (hold.idle) return hold.idle(f);
-        const thing = hold.thing;
-        // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
-        // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
-        if (inHand(this, thing)) return handStep(this, f, side, held[side](f), { ...HOLD, bodyFollows: false }, arms[side]);
+        // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands, or hangs from the
+        // other, the hands follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
+        if (boneOf(this, thing.object) === this.hands[side]) return handStep(this, f, side, held[side](f), { ...HOLD, bodyFollows: false }, arms[side]);
         // (what both hands hold before the body goes with the chest they hang from, not the hips: the arms hang from the chest, so it stays
         // in the hands as the trunk bows or straightens)
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);

@@ -8,7 +8,7 @@ import { REACHED, type Live, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
 import { timedPath, type Waypoint } from '../../kernel/timed-path';
 import { during, type Request } from '../../kernel/requests';
-import { handsOn, inHand, worn } from '../../things/hold';
+import { handsOn, inHand, take, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { handStep, HOLD } from './arms';
 import { sideOf } from '../anatomy/bones';
@@ -47,6 +47,8 @@ const REFIT_AFTER = 0.5;
  */
 export function* travel(person: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
   { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Regripping } = {}) {
+  // (a second hand that has joined since the last leg: from this leg on, in both)
+  if (handsOn(person, thing).length > 1) take(person, thing);
   const movingFrame = person.movingFrameOf(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
   // (a hand carrying alone while the leading hand carries something of its own goes a moment after it; one beside a leading hand that
