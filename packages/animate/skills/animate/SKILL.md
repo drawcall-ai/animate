@@ -138,7 +138,7 @@ A `grab` or `reach` that no stand brings there goes as far as the arm can for it
 
 To throw what one hand holds, turn the body toward the target first, `throwAt` it, and give its `released` motion to your physics. It goes either way; a target beyond its speed misses after the follow-through.
 
-A hold does not bring the feet: a thing your story moves (a door on its hinge) leaves a body standing still behind, its hand off the grip and `holds` still `true`, said once on the console. Walk the body with it, keeping its facing: a 0.4 rad/s swing with `walkTo(body, beside, { speed: 0.4, face })` beside it stays on; or `release`.
+A hold does not bring the feet: a thing your story moves (a door on its hinge) leaves a body standing still behind, its hand off the grip and `holds` still `true`, a `held grip distance` row in `body.log` from 8 cm off and said once on the console from 15. Walk the body with it, keeping its facing, at a pace the swing keeps to (0.4 rad/s beside a walk of `speed: 0.4` stays on); to keep them in step whatever the walk does, set the door's angle each frame from how far the body has come; or `release`.
 
 A carry's or reach's hold ends with the verb: after it the thing rides the hand and drifts a few centimetres as the arm eases, so `release` onto the target as the carry ends. To keep it exactly there, race it with `until: Infinity`.
 

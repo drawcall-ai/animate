@@ -166,6 +166,8 @@ const GRIP_TAKEN = REACHED.distance + 0.02;
 const HELD = 0.05;
 /** Tuned: how far (m) a hand may lag a thing off the body the app moves before it has been left behind (a door walked with lags 5 cm) */
 const LEFT_BEHIND = 0.15;
+/** Measured over the suites: a hand on what the app moves keeps within 1.1 cm of it, 5.2 cm walked with a swinging door: past this (m) the dev log says so */
+const HELD_OFF = 0.08;
 
 /** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
  * it after the hands): its goal on the grip (a palm short of the turn its placement asks is put where the turn would have it) */
@@ -197,15 +199,15 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
-    if (!hold || inHand(person, hold.thing) || noted.has(hold)) continue;
-    const value = gripGap(person, f, side, hold);
+    if (!hold || inHand(person, hold.thing)) continue;
+    const value = gripGap(person, f, side, hold), name = hold.thing.object.name;
     const worn = bodyOf(hold.thing.object) !== null, limit = worn ? HELD : LEFT_BEHIND;
-    if (value <= limit) continue;
+    if (value > (worn ? HELD : HELD_OFF)) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: worn ? HELD : HELD_OFF, where: `${name} ${side}` });
+    if (noted.has(hold) || value <= limit) continue;
     noted.add(hold);
-    const name = hold.thing.object.name, off = (100 * value).toFixed(1), mover = person.claims.owner(`hand.${side}`)?.request;
+    const off = (100 * value).toFixed(1), mover = person.claims.owner(`hand.${side}`)?.request;
     if (mover?.kind === 'mover') mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip, ${limitOf(person, side)(gripWorld(person, hold))}: ask for a place nearer the body, or less turned` });
-    else if (worn) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${name} ${side}` });
-    else person.warn(`held ${name} ${side} ${f.time}`, `the ${side} hand holding "${name}" has fallen ${off} cm off its grip, and it keeps its hold: walk the body with what moves it, or release it`);
+    else if (!worn) person.warn(`held ${name} ${side} ${f.time}`, `the ${side} hand holding "${name}" has fallen ${off} cm off its grip, and it keeps its hold: walk the body with what moves it, or release it`);
   }
 }
 

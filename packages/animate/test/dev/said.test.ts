@@ -75,6 +75,24 @@ describe('a door swung with the body standing still', () => {
     warn.mockRestore();
     expect(said).toEqual([]);
   });
+
+  it('shows in the dev log from 8 cm off, its worst value, well before it is said; walked with, not at all', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rows = (walked: boolean) => {
+      const body = person({ dev: true, life: { seed: 1 } }), { leaf, swing } = door(body);
+      play(body, function* () {
+        yield* grab(body, leaf, { right: 'handle' }, { step: false });
+        if (walked) yield* parallel('all', swing(0.4), walkTo(body, new Vector3(-0.6, 0, 0.75), { speed: 0.4, face: 0 }));
+        else yield* swing(0.4);
+      });
+      return body.log.filter((row) => row.check === 'held grip distance (m)');
+    };
+    const fallen = rows(false), kept = rows(true);
+    warn.mockRestore();
+    expect(fallen).toEqual([expect.objectContaining({ where: 'door right', limit: 0.08 })]);
+    expect(fallen[0].worst).toBeGreaterThan(0.1);
+    expect(kept).toEqual([]);
+  });
 });
 
 describe('a verb never yielded', () => {
