@@ -4,7 +4,7 @@ import { OFF_FLOOR } from '../kernel/dev';
 import type { Self } from '../body/self';
 import type { Steering } from './types';
 
-/** What a body's root does when the app drives it (a player's): its position, velocity, facing and stance. */
+/** What a body's root does when the app drives it (a player's): its position, velocity, facing and crouch. */
 export interface Root {
   /** its point at the feet (m). Without support, y is ignored and the body stands on its floor at x/z. */
   position: Vector3;

@@ -28,7 +28,7 @@ export interface Owner {
   tier: Tier;
 }
 
-/** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
+/** What each of a body's parts is doing, by part: the legs (`legs`), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
  * the eyes (`head`) and each hand. */
 export interface Owners {
   legs?: Owner;

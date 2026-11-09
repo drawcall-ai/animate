@@ -69,7 +69,7 @@ export const entrain = (phase: number, goal: number, rate: number, dt: number) =
 /** The trunk's posture for a sub-step: the chest's world rotation, the pelvis's and the thorax's turn with the stride. */
 export interface TrunkPose { chest: Quaternion; pelvisYaw: number; thoraxYaw: number }
 
-/** The body upright over its legs: the root and the posture state the legs and `Posture` share. */
+/** The body upright over its legs: the root and the posture state the legs and `WalkPose` share. */
 export interface WalkPoseState {
   p: Proportions; root: Vector3;
   /** how it strides: its `width` sways and lists the pelvis further, its `bob` bobs it further */
