@@ -2,7 +2,7 @@
 import { follow } from '../kernel/follow';
 import { MathUtils, Vector3 } from 'three';
 import { lerp, minimumJerk, softMin } from '../kernel/math';
-import { LOWEST, _v, type StepInput, type Steps } from './steps';
+import { LOWEST, type StepInput, type Steps } from './steps';
 import { foldOf, hipOf, lengthOf, nominal, legReach, travelOf } from './leg-reach';
 import { swingPose } from './swing';
 import { RISE, stepping } from './swing-path';
@@ -83,3 +83,4 @@ export function placePelvis(steps: Steps, input: StepInput) {
 const LIFT = { accel: 20 };
 
 const _landing = new Vector3(), _travel = new Vector3();
+const _v = new Vector3();

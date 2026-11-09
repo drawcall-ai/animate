@@ -3,7 +3,7 @@ import { MathUtils, Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, softplus, wrapAngle, yawOf } from '../kernel/math';
 import { hullOf, outside } from './support';
 import { runs } from './steps';
-import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, THRESHOLDS, TURN, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, overbend, remaining, type FootPose, type Leg, type StepInput, type Steps, type Swing } from './steps';
+import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, THRESHOLDS, TURN, strayRoom, turnTo, overbend, remaining, type FootPose, type Leg, type StepInput, type Steps, type Swing } from './steps';
 import { foldLength, hipOf, home, homeOf, lengthOf, velocityAhead, shankLean, staysOn, travelOf, widthAt, xcomAhead } from './leg-reach';
 import { FLAT, foothold, LEVEL } from './floor';
 import { arcOf, stepping, swingOver, RISE } from './swing-path';
@@ -13,7 +13,7 @@ export function landing(steps: Steps, input: StepInput, leg: Leg, remaining: num
   const { st, feet, legs, pair, yaws } = steps, toeOut = st.toeOut, { r, v, landAhead, wanted, spin, Ts, sitting } = input;
   // (where the root will be and face as it lands, foreseen: as it says, or running on as it turns)
   // (a gait's foot lands as the root goes now, not as its forecast hopes: the legs of a long body hold it back more than a person's)
-  const forecast = steps.clocked ? undefined : r.forecast, then = forecast?.(remaining + landAhead);
+  const forecast = steps.clock ? undefined : r.forecast, then = forecast?.(remaining + landAhead);
   const ahead = then ? wanted + wrapAngle(then.yaw - wanted) : wanted + spin * (remaining + landAhead);
   // turned toward the root's facing, as far past the other foot as the pelvis turns from it: as it stands, or as it will stand by then,
   // pivoting after the pelvis (`Steps.pivots`) — aimed from where it stood, a quick turn's landing fell behind and the foot stepped again
@@ -22,8 +22,8 @@ export function landing(steps: Steps, input: StepInput, leg: Leg, remaining: num
   // behind the root swings out with the turn, from one side of where it stands to the other)
   // (the foot itself heading the body's way as it lands: it pivots on the floor as the body comes round over it)
   const reached = body + clamp(turnTo(body, ahead, steps.way), -steps.pelvisTurn, steps.pelvisTurn);
-  const turned = steps.clocked ? yaws[1] + spin * (remaining + Ts / 2) : other.swing ? ahead : reached;
-  const heading = steps.clocked ? yaws[1] + spin * remaining : turned;
+  const turned = steps.clock ? yaws[1] + spin * (remaining + Ts / 2) : other.swing ? ahead : reached;
+  const heading = steps.clock ? yaws[1] + spin * remaining : turned;
   const side = leftOf(turned, new Vector3());
   // (as wide as the speed it will land at: a stopping step lands in the standing stance)
   const landed = velocityAhead(input, remaining, _w), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
@@ -183,7 +183,7 @@ export function settle(steps: Steps, input: StepInput, leg: Leg, w: Swing, aimin
     // (where the root is now only for a body all but standing: one on its way is where it goes)
     const still = here.distanceTo(through) < SETTLED_ROOT * s;
     const turning = (k: number) => from(then, through, k) && (!still || (from(yaw, here, k) && from(then, here, k)));
-    const holds = (k: number) => from(yaw, through, k) && (!steps.clocked || turning(k));
+    const holds = (k: number) => from(yaw, through, k) && (!steps.clock || turning(k));
     if (!holds(1)) {
       let [lo, hi] = [0, 1];
       for (let n = 0; n < 12; n++) [lo, hi] = holds((lo + hi) / 2) ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
@@ -299,7 +299,7 @@ export function liftLeg(steps: Steps, input: StepInput, leg: Leg, { capture, unl
   if (input.contact && !airborne && input.v === 0 && next.anchor.distanceTo(leg.anchor) < THRESHOLDS.still * s
     && Math.abs(wrapAngle(next.yaw - leg.yaw)) < THRESHOLDS.squared) return;
   [leg.anchor, leg.yaw, leg.swing, leg.leapt] = [next.anchor, next.yaw, swing, false];
-  steps.owed[leg.i] = false;
+  if (steps.clock) steps.clock.owed[leg.i] = false;
   steps.phase = 2 * Math.PI * st.offsets[leg.i];
   leg.lifted = 0;
 }
@@ -422,3 +422,4 @@ const BEND_SPAN = 0.1;
  * and in under the body no further than `room` of how far it may before it strays */
 const WIDE = { stances: 1.1, within: 0.03, room: 0.5 };
 const IDENTITY = new Quaternion(), _q = new Quaternion(), _toes = new Quaternion(), _ahead = new Vector3(), _way = new Vector3();
+const [_v, _w, _a, _b, _c, _x, _n, _hipAt, _l, _f, _m, _o, _hipThen] = Array.from({ length: 13 }, () => new Vector3());

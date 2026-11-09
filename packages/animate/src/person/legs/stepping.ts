@@ -2,7 +2,7 @@
 import type { Proportions } from '../anatomy/proportions';
 import type { Gait } from '../../species/gait';
 import { powerGait, stanceOf } from '../../species/schedule';
-import type { Stepping } from '../../step/steps';
+import type { CadencedStepping } from '../../step/steps';
 import { squatOf, STANDING_REACH } from './walk-pose';
 import { lerp } from '../../kernel/math';
 import { defaultStance } from '../anatomy/stance';
@@ -34,9 +34,9 @@ export const personGait = (proportions: Proportions): Gait => powerGait({
  * 1991), its bob 3.5 cm, its knees a little softer, its side-steps at the walking cadence and no push-off: tuned to keep such a root's
  * steps clean; its `crouch` a player's crouch key's (0.37 m, the feet 4 cm wider), not a squat.
  */
-export const personStepping = (proportions: Proportions, foreseen = true, style: Stride = {}, variation: Variation = UNVARIED): Stepping => {
+export const personStepping = (proportions: Proportions, foreseen = true, style: Stride = {}, variation: Variation = UNVARIED): CadencedStepping => {
   const { cadence = 1, width = 1, bob = 1, toeOut = 1 } = style;
-  const walker: Stepping = {
+  const walker: CadencedStepping = {
     scale: proportions.legs, offsets: [0, 0.5], toeOut: defaultStance(proportions).toeOut * toeOut, duty: { walk: 0.6, side: 0.5, run: 0.32 }, run: [2, 3],
     cadence: (speed, sideways, time) => cadence * variation.cadenceAt(time) * cadenceOf(speed, foreseen ? sideways : 0, proportions.legs),
     travel: { forward: 0.85, run: 0.75, back: 0.6, side: 0.3 }, landAhead: { share: 0.4, side: 0.5, most: 0.3, run: 0.22 },

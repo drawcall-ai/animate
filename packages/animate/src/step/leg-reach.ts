@@ -3,7 +3,7 @@ import { MathUtils, Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, minimumJerk } from '../kernel/math';
 import { xcomOf } from './support';
 import { FLAT, foothold, LEVEL } from './floor';
-import { ROLL, _a, _b, _f, _l, _m, _o, _v, _x, dropOf, rollOf, type StepBody, type Leg, type StepInput, type Reading, type Steps, type Timing } from './steps';
+import { ROLL, dropOf, rollOf, type StepBody, type Leg, type StepInput, type Reading, type Steps, type Timing } from './steps';
 
 /** the place of a leg's hip, the pelvis turned with the stride */
 export function hipOf(steps: Steps, input: StepInput, leg: Leg): Vector3 {
@@ -179,3 +179,4 @@ const STAIRS = { bob: 0.6, slope: 0.3, slow: 0.3 };
 const PIVOT = 0.03;
 /** Tuned: standing, a planted foot rolls only with the hip this far (m, default body) off it: past a quiet stance's sway over the feet */
 const STANDING_PIVOT = 0.08;
+const [_v, _a, _b, _x, _l, _f, _m, _o] = Array.from({ length: 8 }, () => new Vector3());

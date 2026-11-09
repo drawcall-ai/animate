@@ -3,6 +3,7 @@ import { Quaternion, Vector3, type Object3D } from 'three';
 import { type Frame } from '../kernel/frame';
 import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { lerp, minimumJerk, wrapAngle } from '../kernel/math';
+import { Cadence, GaitClock } from './gait-clock';
 import { hullOf, past, type Spot } from './support';
 import { type Gait } from '../species/gait';
 import { foothold, type Floor } from './floor';
@@ -57,17 +58,15 @@ export interface Steering {
 
 /**
  * A species' stepping, in metres of its default body (× `scale`) and seconds: each leg's place in the cycle (`offsets`, 0 … 1: a leg
- * follows the one just before it); the feet's `toeOut` (rad, × side); the `cadence` (cycles a second at a pace, m/s, a share of it
- * sideways, 0 … 1, and the body's time, s); `duty` walking, side-stepping, running (`run`: between these speeds); the most `travel` of a stance; the landing's
+ * follows the one just before it); the feet's `toeOut` (rad, × side); the speeds it runs between (`run`); the most `travel` of a stance; the landing's
  * `landAhead`; half the feet's spread (`width.stand` already scaled; `width.sway`: how far toward a walker's landing foot, past the midline, its
  * extrapolated centre of mass is carried — a wider stride's, its pelvis swaying over it); the pelvis' `bob` and `drop`; the swing's
  * `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the
  * most a planted foot rolls (`pitch`, rad) and the ankle bends (`dorsiflexion`); the `crouch`; the leg's `reach` (× length, a swinging
  * leg's easing off from `swingReach`); the sole's `clearance`.
  */
-export interface Stepping {
-  scale: number; offsets: readonly number[]; toeOut: number; cadence: (speed: number, sideways: number, time: number) => number;
-  duty: { walk: number; side: number; run: number }; run: readonly [number, number]; travel: { forward: number; run: number; back: number; side: number };
+interface SteppingOf {
+  scale: number; offsets: readonly number[]; toeOut: number; run: readonly [number, number]; travel: { forward: number; run: number; back: number; side: number };
   landAhead: { share: number; side: number; most: number; run: number }; width: { stand: number; walk: number; run: number; narrowest: number; sway?: number };
   bob: number; drop: { walk: number; side: number; run: number }; lift: { walk: number; run: number; jump: number }; arc: number;
   strike: { walk: number; run: number; ahead: number }; pitch: { heel: number; ball: number }; dorsiflexion: number;
@@ -78,11 +77,21 @@ export interface Stepping {
   push?: number;
   /** the most the ankle points away from its shank (rad); none: no pointing limit */
   plantarflexion?: number;
-  /** a gait whose cadence and duty the steps keep (a four-legged one's), in place of `cadence` and `duty` */
-  gait?: Gait;
   /** the most the body turns from a planted foot (rad; default a person's): a leg that hardly twists steps sooner turning */
   twist?: number;
 }
+
+/** A person's stepping: the `cadence` (cycles a second at a pace, m/s, a share of it sideways, 0 … 1, and the body's time, s) and `duty` walking, side-stepping, running. */
+export interface CadencedStepping extends SteppingOf {
+  cadence: (speed: number, sideways: number, time: number) => number;
+  duty: { walk: number; side: number; run: number };
+  gait?: undefined;
+}
+
+/** A four-legged stepping: a `gait` whose cycle and duty the steps keep, on its clock. */
+export interface GaitStepping extends SteppingOf { gait: Gait }
+
+export type Stepping = CadencedStepping | GaitStepping;
 
 /**
  * A species' feet: each leg's side (+1 left) and bones, its hip's half width and the leg's lengths (m), the knee's most bend; where the
@@ -200,14 +209,6 @@ export function turnTo(from: number, to: number, way: number): number {
 /** Tuned: a root turning slower than this (rad/s) sets no way round to follow it (`Steps.way`) */
 export const SPUN = 0.5;
 
-/** the fewest feet a gait's body leaves on the floor */
-export const STANDING = 2;
-/** Derived: a gait's feet whose footfalls are within `TOGETHER` of a cycle leave the floor together (a trot's diagonals, 0.02 apart in
- * Clayton-Hobbs' offsets), the others at least that far apart (a walk's neighbours are 0.25 apart: half of that and more is clear of both) */
-export const TOGETHER = 0.1;
-/** Tuned: a quickened walk lets go of the turn it quickened for no faster than this (rad/s²): held back and let go by the planner sub-step
- * by sub-step, its cadence would flicker, a swing quickened mid-air slamming down */
-export const SWEEPING = 4;
 /**
  * Tuned: a foot steps once it is due (its gait share of a cycle after the leg before it lifted; standing, after `square` s) and is
  * `distance` (m; standing still and upright: `still`, the stance squared up evenly) off its home, or turned `turn` (rad; still: `squared`)
@@ -278,11 +279,8 @@ export const mod = (x: number) => ((x % 1) + 1) % 1;
 export const overbend = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
 /** a planted foot's roll off its strike (rad): flat after `ROLL` */
 export const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
-export const [_v, _w, _a, _b, _c, _x, _n, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot, _centre, _over] = Array.from({ length: 18 }, () => new Vector3());
 /** Tuned: a strike rolls flat in `ROLL` s */
 export const ROLL = 0.1;
-/** how long a gait's foot bears weight once down before it lifts again (share of a cycle) */
-export const SETTLING = 0.1;
 
 export interface Swing {
   capture: boolean; u: number; age: number; rest: number; T: number;
@@ -305,7 +303,7 @@ export interface Swing {
   borne?: boolean;
 }
 
-/** What a stepper keeps from one sub-step to the next: its legs, its gait's clock and the pelvis it carries. */
+/** What a stepper keeps from one sub-step to the next: its legs, its stride's time and the pelvis it carries. */
 export class Steps {
   readonly legs: Leg[];
   /** the pelvis' facing (rad), how far it walks and runs (0 … 1), the gait's phase (rad), the stance's and cycle's durations (s); still
@@ -351,28 +349,10 @@ export class Steps {
   readonly jumping: Leap = { phase: 'ground', since: 0, speed: 0, land: 0, bottom: 0, rise: 0, vy: 0, a: 0 };
   low = NaN; most = Infinity; sense = 0; paused = 0;
   readonly hips = new Vector3();
-  /** a gait's clock (cycles, 0 … 1): with a `gait`, each foot lifts in its turn as it passes the foot's offset */
-  clock = 0;
-  /** how many of the other feet the gait has down as each lifts */
-  scheduled: number[] = [];
-  /** where in the gait's cycle each foot lifts */
-  lifts: number[] = [];
-  /** each foot's footfall in the gait's cycle (0 … 1), as it shifts toward the gait's at its pace */
-  footfalls: number[];
-  /** whether each gait's foot let its turn pass held down, and steps as soon as it may */
-  owed: boolean[] = [];
-  /** whether a gait's cycle is under way */
-  going = false;
-  /** how far a gait's clock has run since it set off from standing (cycles): a foot is in its turn only for a turn that has come round
-   * since, and overdue only for a stance it has stood since — standing, every foot has stood long, and the one before the first in the
-   * gait is still in its turn as the clock starts */
-  since = 0;
-  /** the turn (rad/s) a walk's stride is quickened for: let go of no faster than `SWEEPING` (rad/s²) */
-  sweeping = 0;
-  /** which soles were off the floor in the last final pose `check` read */
-  aloft: boolean[] | null = null;
-  /** how fast (1/m … per rad) a gait's turn uses up its feet's stray: the hips' furthest from the root over the feet's narrowest sweep */
-  readonly sweep: number;
+  /** the clock its feet keep, with a `gait`: each lifts in its turn */
+  readonly clock: GaitClock | null;
+  /** how long a stride takes: a gait's clock, or a person's cadence */
+  readonly pace: GaitClock | Cadence;
   /** where the pelvis stands this sub-step, and a hip's place worked out from it: kept for `pose`, which plants feet after `move` */
   readonly pelvis = new Vector3();
   readonly hipScratch = new Vector3();
@@ -400,11 +380,8 @@ export class Steps {
     this.apart = st.offsets.map((o, i) => mod(o - st.offsets[this.pair[i]]));
     this.yaw = this.rootYaw = yaw;
     this.yaws = [yaw, yaw];
-    this.footfalls = [...st.offsets];
-    const strays = feet.legs.map((leg) => leg.stray);
-    const furthest = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
-    const sweeps = st.gait && strays.every((stray) => stray !== undefined && stray > 0);
-    this.sweep = sweeps ? furthest / (2 * Math.min(...strays.map((stray) => stray ?? Infinity))) : Infinity;
+    if (st.gait) this.pace = this.clock = new GaitClock(st.gait, st.offsets, feet, this.legs);
+    else [this.pace, this.clock] = [new Cadence(st), null];
   }
 
   /** how far the lowest of a sole's `points` is above the floor under it (m; − in it) */
@@ -414,14 +391,11 @@ export class Steps {
     return least;
   }
 
-  /** whether the feet keep a gait's clock (a four-legged one's) */
-  get clocked() { return !!this.st.gait; }
-
   /** the most the pelvis turns from a planted foot (rad) */
   get pelvisTurn() { return this.st.twist ?? PELVIS_TURN; }
 
   /** whether its feet pivot: a biped's that spin on the floor (`Feet.turnAbout`), each standing alone (`pivots`) */
-  get pivoting() { return !this.clocked && !!this.feet.turnAbout; }
+  get pivoting() { return !this.clock && !!this.feet.turnAbout; }
 
   /** whether foot `leg` pivots: planted, the other in the air — the pelvis turns over it as far as `PIVOTING` past the way it headed as it
    * began (`Leg.pivot`), the foot turned after it (both pivoting, the legs would twist round each other) */
