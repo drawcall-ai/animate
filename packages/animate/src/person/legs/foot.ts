@@ -1,7 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
-import type { Side } from '../anatomy/bones';
+import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { quatYXZ } from '../../kernel/math';
+import type { Feet } from '../../step/steps';
 import type { Proportions } from '../anatomy/proportions';
+import { KNEE_FLEXION } from '../anatomy/ranges';
+import { shankTilt } from './leg';
 
 /** half a foot's width at the toes (m, default body): how far past the ankle's line a foot holds the body sideways */
 const FOOT_HALF_WIDTH = 0.04;
@@ -39,3 +42,46 @@ export function footprint(proportions: Proportions, ankle: Readonly<Vector3>, ya
 }
 
 const _pivot = new Vector3(), _world = new Vector3(), _q = new Quaternion();
+
+/** A person's feet, as the stepper reads them. */
+export function personFeet(proportions: Proportions): Feet {
+  const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
+    .map((tip) => tip.clone().setX(tip.x * (i === 0 ? 1 : -1)).add(ballOf(proportions, side)))]);
+  return {
+    hip: proportions.hipHalfWidth, length: proportions.legLength, thigh: proportions.thigh, shin: proportions.shin,
+    fold: KNEE_FLEXION * Math.PI / 180, ankleHeight: proportions.ankleHeight, rotation: footRotation,
+    legs: SIDES.map((side, i) => ({
+      sign: i === 0 ? 1 : -1, foot: INDEX[`${side}Foot`], toes: INDEX[`${side}Toes`], top: INDEX[`${side}UpperLeg`], up: proportions.offsets[`${side}UpperLeg`].y,
+    })),
+    ankle: (i, anchor, yaw, pitch, out) => ankleFor(proportions, SIDES[i], anchor, yaw, pitch, out),
+    lean: (i, pose, yaw) => shankTilt(pose, SIDES[i], yaw),
+    print: (i, anchor, yaw) => soles[i].map((point): [number, number] => {
+      const at = point.clone().applyQuaternion(footRotation(yaw, 0)).add(anchor);
+      return [at.x, at.z];
+    }),
+    soles: (i, ankle, foot, toes) => {
+      const ball = ballOf(proportions, SIDES[i], _b).applyQuaternion(foot).add(ankle);
+      const sign = i === 0 ? 1 : -1;
+      const heel = heelOf(proportions).applyQuaternion(foot).add(ankle);
+      return [heel, ...[proportions.sole.bigToe, proportions.sole.smallToe].map((tip) => tip.clone().setX(tip.x * sign).applyQuaternion(toes).add(ball))];
+    },
+  };
+}
+
+/**
+ * A followed root's feet pivot, turning faster than they step — spun on the end that swings the other away from the other foot: turning
+ * in toward it on its ball, the heel swinging out; turning out from it on its heel, the toes swinging out: spun on its ball, the foot
+ * inside a quick turn swung its heel in under the other foot's landing. A walker's planner turns it no faster than its feet step.
+ */
+export function pivotingFeet(proportions: Proportions, feet: Feet): Feet {
+  return {
+    ...feet,
+    turnAbout: (i, anchor, from, to) => {
+      const end = (to - from) * feet.legs[i].sign < 0 ? ballOf(proportions, SIDES[i], _b) : heelOf(proportions, _b);
+      end.setY(0);
+      anchor.add(_v.copy(end).applyQuaternion(footRotation(from, 0))).sub(end.applyQuaternion(footRotation(to, 0)));
+    },
+  };
+}
+
+const _b = new Vector3(), _v = new Vector3();
