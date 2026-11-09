@@ -41,14 +41,14 @@ export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3
     const w = MathUtils.smoothstep(locomotion.walk, 0.1, 0.6);
     const distance = lerp(AHEAD.stand.distance, AHEAD.walk.distance, w);
     const height = lerp(AHEAD.stand.height, AHEAD.walk.height, w) * proportions.height + glance * up * distance;
-    const yaw = (locomotion.facingAhead ?? locomotion.facing) + HEAD_SHARE * locomotion.thoraxYaw + glance * aside;
+    const yaw = locomotion.facing + HEAD_SHARE * locomotion.thoraxYaw + glance * aside;
     return onFloor(person, target.copy(f.prev.com(_com)).addScaledVector(forwardOf(yaw, _v), distance), height);
   };
 }
 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
 export function pathAhead(person: Walking, pose: ReadonlyBonePose, out: Vector3): Vector3 {
-  out.copy(pose.com(_com)).addScaledVector(forwardOf(person.locomotion.facingAhead ?? person.locomotion.facing, _v), AHEAD.walk.distance);
+  out.copy(pose.com(_com)).addScaledVector(forwardOf(person.locomotion.facing, _v), AHEAD.walk.distance);
   return onFloor(person, out, AHEAD.walk.height * person.proportions.height);
 }
 

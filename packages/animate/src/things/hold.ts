@@ -104,10 +104,10 @@ function placeUnder(reader: Holder, object: Object3D, parent: Object3D, position
   object.quaternion.copy(back).multiply(quaternion);
 }
 
-/** `thing` lifted into `self`'s hands (`take`), where it was taken from kept unless it was lifted already */
+/** `thing` lifted into `self`'s hands (`take`) */
 export function lift(self: Holder, thing: Thing): void {
-  const parent = thing.object.parent;
-  if (parent && !thing.lifted) thing.taken = self.track(thing.object).current.position.clone();
+  // (its motion tracked from where it stood, before it hangs from the hand)
+  if (thing.object.parent && !thing.lifted) self.track(thing.object);
   thing.lifted = true;
   take(self, thing);
 }

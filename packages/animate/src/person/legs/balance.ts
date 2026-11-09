@@ -57,7 +57,7 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
     person.asks.pass(asks);
     // (seated, the legs asked elsewhere stand it first; the seat's own height and bow over what the parts ask)
     const seat = person.seat?.step(f.dt, asks.legGoal) ?? null;
-    const dt = f.dt, go = seat ? null : asks.legGoal, root = rootOf(f, go, asks, stepper);
+    const go = seat ? null : asks.legGoal, root = rootOf(f, go, asks, stepper);
     if (seat) [asks.lower, asks.posture.lower, asks.bow] = [lerp(asks.lower, seat.seating.lower, seat.share), asks.posture.lower * (1 - seat.share), Math.max(asks.bow, seat.bow)];
     if (first && !root.forecast) stepper = stepperFor(false);
     first = false;
@@ -73,11 +73,9 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
     locomotion.walk = moving;
     locomotion.run = run;
     locomotion.facing = wrapAngle(yaw);
-    locomotion.facingAhead = wrapAngle(yaw);
     // (a walker's walk under way, as its planner says — its weight shifting over planted feet is none; a player's root moving)
     locomotion.moving = (root.underway ?? Math.hypot(root.velocity.x, root.velocity.z) > 0.05) || stepping;
     locomotion.velocity.copy(root.velocity).setY(0);
-    locomotion.planted = locomotion.moving ? 0 : locomotion.planted + dt;
     locomotion.settled = stepper.settled && (!seat || seat.seated);
   };
 }

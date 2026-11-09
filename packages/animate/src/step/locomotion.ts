@@ -8,8 +8,6 @@ export interface Locomotion {
   walk: number; run: number;
   /** the facing it walks with (rad, about +Y) and its ground velocity (m/s) */
   facing: number;
-  /** the heading it will walk with half a second ahead (rad), for the eyes to lead */
-  facingAhead?: number;
   velocity: Vector3;
   /** a walk is under way */
   moving: boolean;
@@ -17,9 +15,7 @@ export interface Locomotion {
   settled: boolean;
   /** the legs hold the walk's still goal reached, as near as they take the body to it (a creature stops just short of or past it rather than
    * edging about); a walk ends there as it does within its own reach of the goal */
-  there: boolean;
-  /** seconds standing on planted feet since the current walk started; the base resets it on a new walk */
-  planted: number;
+  atGoal: boolean;
   /** the pelvis's and the thorax's turn with the stride (rad, + to the left) */
   pelvisYaw: number; thoraxYaw: number;
   /** how far the trunk bows forward as the legs carry it (rad, + forward; − arched back): a story's, a reach's, a look's and a crouch's */
@@ -31,6 +27,6 @@ export interface Locomotion {
 }
 
 export const createLocomotion = (facing: number): Locomotion => ({
-  phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0,
+  phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, atGoal: false,
   pelvisYaw: 0, thoraxYaw: 0, bow: 0, quiet: new Vector3(), arms: 1,
 });

@@ -7,8 +7,6 @@ export const STROLL = { speed: 1.3, accel: 1.2 };
 export interface Stance {
   /** half the distance between the ankles, sideways (m) */
   width: number;
-  /** the left foot forward (+) or back (−) of the right (m) */
-  stagger: number;
   /** how far the pelvis is let down, the knees bent (m): a ready stance */
   crouch: number;
   /** the pelvis and feet turned off the facing (rad): a bladed stance */
@@ -26,8 +24,6 @@ export interface LegGoal {
   velocity?: Vector3;
   speed: number;
   accel: number;
-  /** arriving, the feet are squared into the stance (default true; false: they stay as they land) */
-  plant?: boolean;
   /** the walk ends on arriving there (default true); false: it follows its goal, which may move off again any moment — not arrived at, a
    * closing step keeping the margin of a foot further on */
   settles?: boolean;

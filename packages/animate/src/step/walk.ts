@@ -45,8 +45,6 @@ interface Route {
   /** an explicit pace; otherwise a stroll, slowed by the weight held, quickened by the body's tempo */
   speed?: number;
   stance?: Partial<Stance>;
-  /** arriving, square the feet into the stance (default true) */
-  plant?: boolean;
   /** points to pass on the way first */
   via?: readonly ((f: Frame) => Readonly<Vector3>)[];
   /** a few steps back or aside, asked to face as the body faces, it keeps its facing (`LegGoal.backs`) */
@@ -55,14 +53,14 @@ interface Route {
 
 /**
  * A walk to `way`, a sub-step at a time (`step`): it asks balance to go there (and face so), and says when it will stand there facing so
- * (`there`, as the body turns; `eta`, a little sooner: what the hands time their reach to), when it will end (`ends`: its feet squared
+ * (`arrival`, as the body turns; `eta`, a little sooner: what the hands time their reach to), when it will end (`ends`: its feet squared
  * and settled too) and whether it has (`arrived`: there, turned and settled on its squared feet). Within reach (`within`), it stops
  * short with the point that far ahead, facing it. It says if it stalls (`stall`: no nearer its goal; one followed, no nearer it standing
  * still), and goes on.
  */
 export class Walk {
   eta = Infinity;
-  there = Infinity;
+  arrival = Infinity;
   ends = Infinity;
   /** how far (rad) the body is still to turn to the facing it arrives with */
   unturned = Infinity;
@@ -85,7 +83,6 @@ export class Walk {
   private goalPace = 0;
 
   constructor(private readonly self: Self, private readonly way: Route, private readonly arrives = true) {
-    this.go.plant = way.plant;
     this.go.settles = arrives;
   }
 
@@ -108,10 +105,10 @@ export class Walk {
     this.goalPace += ((go.velocity?.length() ?? 0) - this.goalPace) * f.dt;
     if (f.dev && this.goalPace > KEEPING * go.speed && Math.hypot(go.to.x - body.x, go.to.z - body.z) > BEHIND * self.scale) f.dev.append(f.time, { check: 'walk cannot keep up with its target (m/s)', value: this.goalPace, limit: go.speed, where: 'root' });
     this.farthest = Math.max(this.farthest, Math.hypot(go.to.x - body.x, go.to.z - body.z));
-    this.there = etaOf(self, body, go, yaw, TURNING) + onward;
+    this.arrival = etaOf(self, body, go, yaw, TURNING) + onward;
     this.eta = etaOf(self, body, go, yaw, LEADING_TURN) + onward;
-    this.stood = this.there > 0 ? null : this.stood ?? f.time;
-    this.ends = this.there + closing(self, this.stood === null ? null : f.time - this.stood);
+    this.stood = this.arrival > 0 ? null : this.stood ?? f.time;
+    this.ends = this.arrival + closing(self, this.stood === null ? null : f.time - this.stood);
     go.face = yaw === null ? undefined : { yaw };
     // (to the facing it arrives with, whichever leg of its way it is on)
     const arriving = way.face?.(f) ?? null;
@@ -133,7 +130,7 @@ export class Walk {
     if (this.leg < (this.way.via?.length ?? 0)) return false;
     const body = placeOf(this.self, f), locomotion = this.self.locomotion;
     const off = Math.hypot(body.x - this.go.to.x, body.z - this.go.to.z) / this.self.scale;
-    const near = off < ARRIVED.distance || (locomotion.there && off < ARRIVED.stopped);
+    const near = off < ARRIVED.distance || (locomotion.atGoal && off < ARRIVED.stopped);
     return near && (yaw === null || Math.abs(wrapAngle(yaw - locomotion.facing)) < ARRIVED.yaw);
   }
 
@@ -181,7 +178,7 @@ export class Walk {
     const { self, go } = this, body = placeOf(self, f), facing = yaw ?? headingOf(go.to.x - body.x, go.to.z - body.z), s = self.scale;
     const off = Math.hypot(body.x - go.to.x, body.z - go.to.z);
     // (a walk that follows, there, has nothing to get nearer: it keeps at its goal until its `until`)
-    if (!this.arrives && (off < ARRIVED.distance * s || (self.locomotion.there && off < ARRIVED.stopped * s))) {
+    if (!this.arrives && (off < ARRIVED.distance * s || (self.locomotion.atGoal && off < ARRIVED.stopped * s))) {
       this.since = f.time;
       return;
     }

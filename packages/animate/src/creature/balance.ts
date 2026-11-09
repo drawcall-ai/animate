@@ -121,7 +121,7 @@ export function creature(body: Self): Behaviour {
     });
     locomotion.velocity.copy(r.velocity).setY(0);
     [locomotion.facing, locomotion.moving, locomotion.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
-    locomotion.there = !!go && !go.velocity?.lengthSq() && !going;
+    locomotion.atGoal = !!go && !go.velocity?.lengthSq() && !going;
   };
 }
 

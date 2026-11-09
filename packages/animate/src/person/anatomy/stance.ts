@@ -4,7 +4,7 @@ import type { Proportions } from './proportions';
 import type { Stance } from '../../step/leg-goal';
 
 /** feet about hip-width apart, turned out a little (heels 0.10–0.15 of the height apart, 0–12°) */
-export const defaultStance = (proportions: Proportions): Stance => ({ width: 0.065 * proportions.height, stagger: 0, crouch: 0, blade: 0, toeOut: 0.12 });
+export const defaultStance = (proportions: Proportions): Stance => ({ width: 0.065 * proportions.height, crouch: 0, blade: 0, toeOut: 0.12 });
 
 /** where the centre of mass stands at rest: this far ahead of the ankles (m, default body), over the feet's rear half */
 export const OVER_ANKLES = 0.03;

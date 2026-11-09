@@ -15,8 +15,6 @@ export class Thing {
   readonly parts: readonly Box3[];
   /** lifted by a body since it last rested in the room */
   lifted = false;
-  /** where it was as it was lifted (world): let go there, it was put back, not dropped */
-  taken: Vector3 | null = null;
   /** the parent the library last gave it: another (a stray `scene.add`, a physics sync) under a holding hand is a problem */
   parent: Object3D | null = null;
   readonly holders = new Set<Holder>();
