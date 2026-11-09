@@ -11,6 +11,7 @@ import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { HORSE, PERSON } from '../src/skeletons';
 import { legsHorse, scripted, type Route } from '../src/scenarios/legs';
+import { poseOf } from '@drawcall/animate/puppet';
 
 // The legs on scripted roots: a person and two horses (walk, trot) carried along a straight, a bend and a stop by the scene.
 
@@ -58,14 +59,14 @@ for (const [name, make] of [['a person walking', () => person(3)], ['a person st
   ['a horse walking a 3 m turn', () => horseOn('walk', { pace: 1.6, radius: 3 })]] as const) {
   test(`${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`, () => {
     const body = make(), chains = body.species.legs?.chains, proportions = body.species.person;
-    const sole = (leg: number) => proportions ? solePoints(proportions, body.pose, leg ? 'right' : 'left')
-      : [chains![leg].heel, chains![leg].toe].map((at) => body.pose.point(chains![leg].joints[chains![leg].joints.length - 1].bone, at, new Vector3()));
+    const sole = (leg: number) => proportions ? solePoints(proportions, poseOf(body), leg ? 'right' : 'left')
+      : [chains![leg].heel, chains![leg].toe].map((at) => poseOf(body).point(chains![leg].joints[chains![leg].joints.length - 1].bone, at, new Vector3()));
     const bones = (leg: number) => proportions ? (['UpperLeg', 'LowerLeg', 'Foot'] as const).map((part) => INDEX[`${leg ? 'right' : 'left'}${part}`]) : chains![leg].joints.map((joint) => joint.bone);
     let ground = 0, pivot = 0, outOfRange = 0, drift = 0;
-    const landings: number[] = [], speeds: number[] = [], was = body.pose.skeleton.bones.map(() => new Quaternion());
+    const landings: number[] = [], speeds: number[] = [], was = poseOf(body).skeleton.bones.map(() => new Quaternion());
     const before: { sole: Vector3[]; swing: boolean; anchor: Vector3 }[] = [];
     for (let tick = 0; tick < 16 * 60; tick++) {
-      body.pose.skeleton.bones.forEach((_, bone) => was[bone].copy(body.pose.local(bone)));
+      poseOf(body).skeleton.bones.forEach((_, bone) => was[bone].copy(poseOf(body).local(bone)));
       body.update(1 / 60);
       legsOf(body).forEach((leg, i) => {
         const points = sole(i), last = before[i];
@@ -74,9 +75,9 @@ for (const [name, make] of [['a person walking', () => person(3)], ['a person st
         if (last?.swing && leg.swing && leg.swing.u > 0.55) drift = Math.max(drift, leg.anchor.distanceTo(last.anchor));
         if (last?.swing && !leg.swing) landings.push(i);
         for (const bone of bones(i)) {
-          const limit = body.pose.skeleton.limits[bone], turn = new Quaternion().copy(body.pose.local(bone)), kept = turn.clone();
+          const limit = poseOf(body).skeleton.limits[bone], turn = new Quaternion().copy(poseOf(body).local(bone)), kept = turn.clone();
           if (limit) { clampRotation(kept, limit); outOfRange = Math.max(outOfRange, turn.angleTo(kept)); }
-          if (tick > 0) speeds.push(was[bone].angleTo(body.pose.local(bone)) * 60 * 180 / Math.PI);
+          if (tick > 0) speeds.push(was[bone].angleTo(poseOf(body).local(bone)) * 60 * 180 / Math.PI);
         }
         before[i] = { sole: points, swing: !!leg.swing, anchor: leg.anchor.clone() };
       });
@@ -116,7 +117,7 @@ it('a horse walks a 2 m circle at 1.6 m/s after a carrot, its legs keeping up, i
     last = angle;
     return swept > 2 * Math.PI;
   };
-  play(function* () { circled = yield* walkTo(mare, carrot, { speed: 1.6, accel: 1.2, until: once }); }, [mare], 40, () => {
+  play(function* () { yield* walkTo(mare, carrot, { speed: 1.6, accel: 1.2, until: once }); circled = true; }, [mare], 40, () => {
     lag = Math.max(lag, Math.abs(mare.position.distanceTo(centre) - radius));
     return circled;
   });

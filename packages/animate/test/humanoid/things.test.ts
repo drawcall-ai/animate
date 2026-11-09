@@ -1,6 +1,6 @@
 import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, carry, grab, humanoid, release, wait, type Root } from '../../src/index';
+import { attempt, Body, carry, grab, humanoid, Missed, release, wait, type Root } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { insides, palmAt, person, play, run, feetOf } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
@@ -254,28 +254,28 @@ describe('a sword in a scabbard on the hips', () => {
 });
 
 describe('hands that cannot get there', () => {
-  it('fail visibly, never by throwing: a reach out of the arms is late in the log and keeps going, as does a carry', () => {
+  it('given until: a reach out of the arms ends false as it comes; a carry stopped short misses', () => {
     // (driven: nothing walks it up to what it reaches for)
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
     const body = person({ dev: true, drive: () => root }), h = insides(body), room = roomOf(body);
     const far = box(room, new Vector3(0, 1, 3), { solid: false, name: 'far' });
-    let ended = false;
+    let ended = false, cut: boolean | undefined, miss: Missed | null = null;
     play(function* () {
-      yield* grab(body, far, { left: 'left', right: 'right' }, { until: 6 });
+      cut = yield* grab(body, far, { left: 'left', right: 'right' }, { until: 6 });
       ended = true;
     }, [body], 7, () => ended);
     expect(ended).toBe(true);
-    expect(body.log.filter(({ check }) => check.startsWith('late reach')).map(({ where }) => where)).toEqual(['far left left', 'far right right']);
+    expect(cut).toBe(false);
     expect(body.holds(far)).toBe(false);
     const near = box(room, new Vector3(0, 1.1, 0.35), { solid: false, name: 'near' });
     ended = false;
     play(function* () {
       yield* grab(body, near, { left: 'left', right: 'right' });
-      yield* carry(body, near, new Vector3(0, 1.1, 1.3), { until: 6 });
+      miss = yield* attempt(carry(body, near, new Vector3(0, 1.1, 1.3), { until: 6 }));
       ended = true;
     }, [body], 12, () => ended);
     expect(ended).toBe(true);
-    expect(body.log.filter(({ check }) => check.startsWith('late carry')).map(({ where }) => where)).toEqual(['near']);
+    expect(miss).toBeInstanceOf(Missed);
     expect(h.holding.left?.thing.object).toBe(near);
   });
 });

@@ -1,6 +1,7 @@
 import { Matrix4, Vector3, type Object3D } from 'three';
 import type { HumanoidBone } from '@drawcall/animate';
 import type { Person } from './scenario';
+import { poseOf } from '@drawcall/animate/puppet';
 
 /** the points on a person that are not bones: on its head and its feet */
 export type Landmark = 'nose' | 'headTop' | 'leftEye' | 'rightEye' | 'leftEar' | 'rightEar' | 'leftHeel' | 'rightHeel' | 'leftBigToe' | 'rightBigToe' | 'leftSmallToe' | 'rightSmallToe';
@@ -43,7 +44,7 @@ export class Joints {
       // (a skeleton without toes: the tips ride on the foot)
       const node = bones[bone] ?? bones[bone.replace('Toes', 'Foot')];
       if (index < 0 || !node) throw new Error(`the person has no ${bone}`);
-      const world = body.pose.point(index, at, new Vector3());
+      const world = poseOf(body).point(index, at, new Vector3());
       this.fixed.set(name, { node, local: world.applyMatrix4(new Matrix4().copy(node.matrixWorld).invert()) });
     }
   }

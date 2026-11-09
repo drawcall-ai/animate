@@ -20,6 +20,16 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./species": {
+      "source": "./src/species.ts",
+      "types": "./dist/species.d.ts",
+      "default": "./dist/species.js"
+    },
+    "./puppet": {
+      "source": "./src/puppet.ts",
+      "types": "./dist/puppet.d.ts",
+      "default": "./dist/puppet.js"
     }
   },
   "files": [

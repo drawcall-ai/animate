@@ -106,28 +106,25 @@ function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Fra
   // (let down for a point below the base, never for one above it: it stoops only to reach down)
   const below = base.y - at.y, drop = below > 0 ? Math.max(0, below - lowered) : below;
   if (drop > out || below < -out) {
-    self.frame.dev?.append(self.frame.time, { check: 'out of reach: from the hand\'s base, up or down (m)', value: Math.abs(below), limit: out + lowered, where: `${where} ${chain}` });
-    request.fail();
+    request.fail({ where: `${where} ${chain}`, off: Math.abs(below), limit: out + lowered, why: `out of reach: ${Math.abs(below).toFixed(2)} m from the hand's base, up or down` });
     return null;
   }
   const beyond = Math.hypot(base.x - at.x, drop, base.z - at.z) - out;
   if (beyond <= 0) return { chain, bones, stoop };
   if (!step) {
-    self.frame.dev?.append(self.frame.time, { check: 'out of reach with the feet planted (m short)', value: beyond, limit: 0, where: `${where} ${chain}` });
-    request.fail();
+    request.fail({ where: `${where} ${chain}`, off: beyond, limit: 0, why: `out of reach with the feet planted, ${beyond.toFixed(2)} m short: let it step, or start nearer` });
     return null;
   }
-  self.frame.dev?.note(self.frame.time, { check: 'walks up to stand in reach, staying there (m short; `step: false` keeps the feet)', value: beyond, limit: 0, where: `${where} ${chain}` });
   const off = _v.subVectors(base, self.pose.position(0)).dot(forwardOf(self.yaw)) + AHEAD * Math.sqrt(out ** 2 - drop ** 2);
   const after = dipping(out, pace), walk = new Walk(self, { to: point, within: off });
   const legs = during(request, 'go', 'borrowed', (f) => {
     const go = walk.step(f);
     request.eta = walk.eta + after;
     return go;
-  }, (f, _, time) => time > 0 && (walk.stalled || walk.arrived(f)));
+  }, (f, _, time) => time > 0 && (walk.stall !== null || walk.arrived(f)));
   yield* self.gazer ? parallel<Frame>('race', legs, noticing(self, request, point)) : legs;
-  if (!walk.stalled) return { chain, bones, stoop };
-  request.fail();
+  if (!walk.stall) return { chain, bones, stoop };
+  request.fail(walk.stall);
   return null;
 }
 
@@ -151,7 +148,8 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
     if (!self.locomotion.settled) progress.reset();
     if (!late && f.time > ends && (progress.stopped(f, unmet(f, bone, target, on)) || f.time > ends + REACHING)) {
       late = true;
-      if (lateReach(f, bone, target, chain, on)) request.fail();
+      const miss = lateReach(f, bone, target, chain, on);
+      if (miss) request.fail(miss);
     }
     return false;
   });
@@ -161,7 +159,8 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
 function* holdingOn(self: Handed, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Pace, step: boolean) {
   const reach = yield* walkingUp(self, request, hand, point, where, pace, step);
   if (!reach) return;
-  const goal = aim(reach.bones[reach.bones.length - 1]);
+  const bone = reach.bones[reach.bones.length - 1], goal = aim(bone);
+  request.there = () => reached(self.frame, bone, goal(self.frame), undefined, Infinity);
   yield* tipping(self, request, hand, goal, pace);
   request.met();
   const tip = new ChainTip(reach.chain);

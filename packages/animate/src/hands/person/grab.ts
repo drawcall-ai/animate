@@ -41,8 +41,8 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     grips: takes.map((take) => ({ side: take.side, at: emptyAt(person, take, person.frame) })), mass: Math.max(...takes.map((take) => take.thing.mass)),
     things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.track(thing.object).current })),
   }, step);
-  if (plan === 'nowhere') {
-    request.fail();
+  if (plan !== 'there' && 'nowhere' in plan) {
+    request.fail({ ...plan.nowhere, where: takes.map(({ thing, side, grip }) => `${thing.object.name} ${side} ${grip}`).join(', ') });
     return false;
   }
   let stood = plan === 'there';
@@ -92,7 +92,8 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
     if (plan === 'there') return;
     // (the hands on the grips, it stands: a walk it has not yet ended — the legs another's — is not walked on, away from what they hold)
     yield* parallel<Frame>('race', action<Frame>({ until: () => held }), function* () {
-      if (!(yield* walking(request, plan, REACHED_AFTER))) request.fail();
+      const stall = yield* walking(request, plan, REACHED_AFTER);
+      if (stall) request.fail(stall);
     });
     stood = true;
   }, function* () {
@@ -106,7 +107,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
 /**
  * The hands on their grips at once, as the body starts (`grab`'s `speed: Infinity`): each arm posed onto its grip as if it had always
  * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
- * the arm's reach from where the body stands fails it, said in development.
+ * the arm's reach from where the body stands fails it.
  */
 export function* grabAtOnce(person: Reacher, request: Request, takes: readonly Taking[]) {
   if (person.updates > 0) throw new Error('grab: `speed: Infinity` takes hold at once only as a body starts (in its first update): a body already shown reaches for it');
@@ -114,9 +115,8 @@ export function* grabAtOnce(person: Reacher, request: Request, takes: readonly T
   for (const take of takes) {
     const short = person.pose.position(INDEX[`${take.side}UpperArm`]).distanceTo(gripAt(person, take, f)) - reach;
     if (short <= 0) continue;
-    f.dev?.append(f.time, { check: 'grab at once: a grip beyond the arm’s reach from where the body stands (m short)', value: short, limit: 0,
-      where: `${take.thing.object.name} ${take.side} ${take.grip}`, detail: `the arm ${person.proportions.armLength.toFixed(2)} m (species.person.armLength)` });
-    request.fail();
+    request.fail({ where: `${take.thing.object.name} ${take.side} ${take.grip}`, off: short, limit: 0,
+      why: `at once, the grip is ${short.toFixed(2)} m beyond the arm's reach from where the body stands (the arm ${person.proportions.armLength.toFixed(2)} m: species.person.armLength): start it nearer` });
   }
   if (request.outcome === 'failed') return;
   let placed = false;
@@ -128,7 +128,7 @@ export function* grabAtOnce(person: Reacher, request: Request, takes: readonly T
       placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
       person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
     }
-    grasp(person, take.side, holdOn(person, take));
+    grasp(person, take.side, { ...holdOn(person, take), by: request });
     placed = true;
   }, () => placed)));
   for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !onBody(person, thing)) lift(person, thing);

@@ -32,7 +32,7 @@ import { Springs } from '../springs';
 
 /** How a body is made. */
 export interface SelfOptions {
-  /** where it stands (default the origin): x and z — it stands on its floor there; a y off that floor is ignored (a dev log says so) */
+  /** where it stands (default the origin): x and z — it stands on its floor there; a y off that floor is ignored, with a warning */
   at?: Vector3;
   /**
    * the floor's height under a world point (x, z) (m; default 0 everywhere): what it stands and steps on — a raised stage, a dais, a
@@ -58,13 +58,13 @@ export interface SelfOptions {
   tempo?: number;
   /**
    * what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³, within half and twice its
-   * species' mass: development says when it is held so, or the mesh is open and the species' mass is taken); default its species'
+   * species' mass: it warns when it is held so, or the mesh is open and the species' mass is taken); default its species'
    */
   mass?: number | SkinVolume;
   /** the container its mesh was rigged in with @drawcall/rig (`skin(model, skeleton)`): the body poses its bones; without it, the body is bare */
   model?: Object3D;
-  /** checks final poses and records problems in `log`; `{ notes: true }` also records what is only reported (a player-driven body's balance) */
-  dev?: boolean | { notes?: boolean };
+  /** checks its motion each sub-step and records what went wrong in `Body.log`; off in a build, it costs nothing */
+  dev?: boolean;
 }
 
 /** Body state and arbitration. Each 1/60 s sub-step applies balance, request staging, part claims, then carried things.
@@ -77,7 +77,6 @@ export class Self implements Holder {
   readonly tempo: number;
   readonly frame: Frame;
   readonly log: readonly LogEntry[];
-  readonly notes: readonly LogEntry[];
   /** the last final pose and the one before, as they were when its last update began: what others read while it is ahead of them */
   private readonly before: [ReadonlyPose, ReadonlyPose];
   private readonly poses: Pose[];
@@ -108,7 +107,7 @@ export class Self implements Holder {
   /** what it stands on: the floor's height under a world point */
   readonly floor: Floor;
   readonly life: Temperament;
-  /** the bodies it keeps clear of: those it has dealt with (`meet`), either way, and those it was told to avoid */
+  /** the bodies it keeps clear of: those it has dealt with (`meet`), either way */
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, Carrier>();
@@ -133,10 +132,9 @@ export class Self implements Holder {
   private readonly springs: Springs | null;
 
   constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose) {
-    const dev = options.dev ? new Dev(typeof options.dev === 'object' && !!options.dev.notes) : undefined;
+    const dev = options.dev ? new Dev() : undefined;
     this.log = dev?.log ?? EMPTY;
-    this.notes = dev?.notes ?? EMPTY;
-    this.skeleton = massed(species, options.mass, dev);
+    this.skeleton = massed(species, options.mass, (check, message) => this.warn(check, message));
     this.scale = species.scale;
     this.object = binding.object;
     this.restOf = binding.restOf.bind(binding);
@@ -151,7 +149,7 @@ export class Self implements Holder {
     if (this.life.steady !== undefined && !species.person) throw new Error(`life.steady: a person's; a ${species.name ?? 'custom species'} has no such setting`);
     // (a body stands on its floor wherever it is asked to start)
     const at = options.at, height = at ? Math.abs(at.y - this.floor(at.x, at.z)) : 0;
-    if (height > OFF_FLOOR) dev?.append(0, { check: 'start off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'at' });
+    if (height > OFF_FLOOR && !options.drive) this.warn('at', `it stands on its floor: its start's height is ignored, ${height.toFixed(3)} m off it`);
     const pose = start?.(this.skeleton, this.floor) ?? restPose(this.skeleton, this.floor, options.at, options.face);
     this.locomotion = createLocomotion(pose.facing);
     this.hands = Object.fromEntries([...species.hands ?? []].map(([hand, chain]) => [hand, this.skeleton.chain(chain).slice(-1)[0]]));
@@ -167,10 +165,10 @@ export class Self implements Holder {
       const node: Object3D | undefined = this.binding.bones[bone.name];
       if (node) anchors.set(node, { body: this, bone: i });
     });
-    if (this.frame.dev && options.model) checkShear(this.binding, this.frame.dev);
+    if (options.model) checkShear(this.binding);
     this.binding.write(this.pose, this.floor);
     this.springs = species.springs ? new Springs(species, binding) : null;
-    this.fingers = species.fingers ? new FingerState(species.fingers, binding.bones, this.holding, binding.object) : null;
+    this.fingers = species.fingers ? new FingerState(species.fingers, binding.bones, this.holding, binding.object, (check, message) => this.warn(check, message)) : null;
     /** Construct creature behaviours now so infeasible legs fail before the first update. */
     if (!species.person) this.behaviours = this.behave();
   }
@@ -201,7 +199,7 @@ export class Self implements Holder {
       balance: this.species.legs ? creature(this) : undefined,
       keep: keeping(this),
       things: (f) => {
-        checkParents(this, f);
+        checkParents(this);
         bear(this, f, this.worn, this.borne);
       },
     };
@@ -316,7 +314,7 @@ export class Self implements Holder {
   }
 
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
-  file(verb: string, site: string, staging: Staging, aimer = false, owned = false): Request {
+  file(verb: string, site: string | (() => string), staging: Staging, aimer = false, owned = false): Request {
     const request = new Request(this, verb, site, staging, aimer);
     request.owned = owned;
     if (!aimer && !owned) this.lastMover = this.time;
@@ -385,7 +383,8 @@ export class Self implements Holder {
       this.movedBefore.set(node, before);
     }
     this.worn = wornOf(this);
-    if (this.frame.dev) this.checkPlacement(this.frame.dev);
+    this.checkPlacement();
+    this.checkYielded();
     try {
       this.stepping = true;
       for (let i = 0; i < steps; i++) {
@@ -419,25 +418,38 @@ export class Self implements Holder {
     }
   }
 
-  /** the parent its object was first seen under, and whether development has said it moved or is not the world's frame */
+  /** the parent its object was first seen under */
   private parent: Object3D | null | undefined = undefined;
-  private placed = false;
 
-  /** development: its object stays where it was added (it is not mounted on anything), under a parent that is the world's frame */
-  private checkPlacement(dev: Dev): void {
+  /** its object stays where it was added (it is not mounted on anything), under a parent that is the world's frame */
+  private checkPlacement(): void {
     const object = this.binding.object, parent = object.parent;
-    if (this.placed) return;
     this.parent ??= parent;
-    if (parent !== this.parent) {
-      this.placed = true;
-      dev.append(this.frame.time, { check: "the body's object was re-parented: add it once, where it stays", value: 1, limit: 0, where: parent?.name ?? 'nothing' });
-      return;
-    }
+    if (parent !== this.parent) throw new Error(`its object was re-parented${parent ? ` to "${parent.name}"` : ''}: add it once, where it stays (a body on something moving takes its \`platform\`)`);
     if (!parent) return;
     parent.updateWorldMatrix(true, false);
-    if (parent.matrixWorld.equals(IDENTITY)) return;
-    this.placed = true;
-    dev.append(this.frame.time, { check: "the body's object is under a moved, turned or scaled parent: add it to the world's frame", value: 1, limit: 0, where: parent.name });
+    if (!parent.matrixWorld.equals(IDENTITY)) throw new Error(`its object is under "${parent.name}", moved, turned or scaled: add it to the world's frame`);
+  }
+
+  /** verbs called and not yet stepped by a story: a verb a story forgot to `yield*`, said once it has lain a second */
+  readonly unyielded = new Set<{ readonly verb: string; readonly site: string; readonly time: number }>();
+
+  private checkYielded(): void {
+    for (const call of this.unyielded) {
+      if (this.time - call.time < UNYIELDED) continue;
+      this.unyielded.delete(call);
+      this.warn(`unyielded ${call.verb} ${call.site}`, `${call.verb}${call.site ? ` (${call.site})` : ''} was called but never run: a verb does nothing until \`yield*\`ed`);
+    }
+  }
+
+  /** what it has warned of */
+  private readonly warned = new Set<string>();
+
+  /** says `message` on the console, the first time this body comes to `check`: a fallback it took, which must be seen with development off too */
+  warn(check: string, message: string): void {
+    if (this.warned.has(check)) return;
+    this.warned.add(check);
+    console.warn(`animate: ${this.species.name ?? 'custom species'}${this.binding.object.name ? ` "${this.binding.object.name}"` : ''}: ${message}`);
   }
 
   beat(): string {
@@ -514,6 +526,8 @@ export interface Behaviours {
 const IDENTITY = new Matrix4();
 /** the longest frame an update takes (s): a body does not run on through a stall */
 const MOST = 0.1;
+/** how long a verb called may lie unstepped before it is said (s) */
+const UNYIELDED = 1;
 /** how long a request may go unrenewed before development says its story stopped stepping (s) */
 const STALE = 1;
 const _local: Placement = { position: new Vector3(), quaternion: new Quaternion() };

@@ -1,5 +1,5 @@
 // A complete custom species: the lion skeleton given its roles and tuning. `new Body(LION_SPECIES)` walks, trots, looks and takes things in its jaw.
-import { carriages, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate';
+import { carriages, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate/species';
 import { LION } from './lion';
 
 type LionBone = (typeof LION)[number]['name'];

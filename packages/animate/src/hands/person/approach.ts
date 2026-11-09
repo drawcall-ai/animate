@@ -28,11 +28,11 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
   // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
   yield* action<Frame>({ until: (f) => takes.every((take) => f.time >= person.drawingBack[take.side]) });
   const began = person.frame.time;
-  // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, said in the dev log if the hand holds on till its turn is made up: a press let go sooner goes unread)
+  // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, judged once its turn is made up: `settling`)
   const exact = ({ thing, grip }: Taking) => thing.grip(grip).point !== 'palm' && !fixes(thing.grip(grip));
   // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
   const there = (f: Frame) => takes.every((take) => touching(person, take, f) || (!exact(take) && reached(f, person.hands[take.side], take.goal, person.track(take.thing.object))));
-  const close = () => takes.forEach((take) => grasp(person, take.side, holdOn(person, take)));
+  const close = () => takes.forEach((take) => grasp(person, take.side, { ...holdOn(person, take), by: request }));
   if (there(person.frame)) return close();
   let ends = Infinity;
   const late = lateWatch(person, request, takes.map((take) => ({
@@ -45,8 +45,8 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
     // (a wrist on its goal, its pad still off the grip: nothing `late` judges)
     const off = f.time > ends + REACHING ? takes.find((take) => exact(take) && !touching(person, take, f)) : undefined;
     if (off) {
-      f.dev?.append(f.time, { check: 'late reach: a fingertip still off its grip (m)', value: padOff(person, off, f), limit: TOUCH * person.scale, where: `${off.thing.object.name} ${off.side} ${off.grip}` });
-      request.fail();
+      const limit = TOUCH * person.scale, value = padOff(person, off, f);
+      request.fail({ where: `${off.thing.object.name} ${off.side} ${off.grip}`, off: value, limit, why: `a fingertip stopped ${(100 * value).toFixed(1)} cm off its grip: its hand is held off it, so bring the grip nearer or give it a facing` });
     }
     return false;
   };

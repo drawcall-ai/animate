@@ -3,6 +3,7 @@ import type { Body } from '@drawcall/animate';
 import { frame } from './angles';
 import type { Hold } from './choreography';
 import { SOLDIER } from './skeleton';
+import { gripOn, placement } from '@drawcall/animate/puppet';
 
 export type Bone = (typeof SOLDIER)[number]['name'];
 export type Side = 'left' | 'right';
@@ -81,7 +82,7 @@ export class Puppet {
 
   /** How hand `side` holds the grip `empty`, as `Body.gripOn` places it on `placement`: where its wrist goes and how it is turned. */
   hold(side: Side, empty: Object3D): Hold {
-    const { wrist, rotation } = this.body.gripOn(side, this.body.placement(side, empty));
+    const { wrist, rotation } = gripOn(this.body, side, placement(this.body, side, empty));
     return { wrist, hand: rotation.multiply(this.restOf(`${side}Hand`).clone().invert()) };
   }
 

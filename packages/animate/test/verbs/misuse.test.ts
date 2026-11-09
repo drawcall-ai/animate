@@ -1,5 +1,5 @@
 import { Object3D, Vector3 } from 'three';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { carry, grab, reach, release, walkTo, Body, dog, type Root } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { dt, person, play, run } from '../bodies';
@@ -33,7 +33,7 @@ describe('a misuse throws, saying what is wrong', () => {
     // (as a script without types would name it)
     const body: Body = person(), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.9, 0.5));
-    expect(playing(body, function* () { yield* grab(body, load, { tail: 'left' }); })).toThrow('hands are left and right, not "tail"');
+    expect(playing(body, function* () { yield* grab(body, load, { tail: 'left' }); })).toThrow('has no hand "tail", only left, right');
     expect(() => release(body, { tail: load })).toThrow('the body has no hand "tail"');
   });
 
@@ -142,30 +142,36 @@ it('lifts an attached item when a creature starts carrying it', () => {
   expect(load.parent).toBe(body.bones.jaw);
 });
 
-// (a body stands on its floor: a height asked of where it stands that is off the floor there is ignored, and the dev log says so, once)
+// (a body stands on its floor: a height asked of where it stands that is off the floor there is ignored, and it warns, once)
 describe('a height off the floor is said, once, and ignored', () => {
+  afterEach(() => void vi.restoreAllMocks());
+  /** reads what the library warned since */
+  const warnings = () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    return () => warn.mock.calls.map(([message]) => String(message));
+  };
   const raised = () => 0.5;
   it.each([
     ['a person', 0, 1, () => person({ dev: true, at: new Vector3(0, 1, 0) })],
     ['a creature', 0, 1, () => new Body(dog(DOG), { dev: true, at: new Vector3(0, 1, 0) })],
     ['a person on a raised floor', 0.5, 0.5, () => person({ dev: true, floor: raised, at: new Vector3(0, 0, 0) })],
   ])('%s made to stand off it', (_, floor, off, make) => {
-    const body = make();
+    const warned = warnings(), body = make();
     run(body, 0.5);
-    expect(body.log).toEqual([expect.objectContaining({ check: 'start off the floor, its height ignored (m)', value: off, where: 'at' })]);
+    expect(warned()).toEqual([expect.stringContaining(`${off.toFixed(3)} m off it`)]);
     expect(body.feet.every((foot) => foot.planted)).toBe(true);
     expect(body.position.y).toBe(floor);
   });
 
   it.each(['a point', 'an empty'])('a walk to %s above it', (what) => {
-    const body = person({ dev: true }), mark = empty(roomOf(body), 'mark', new Vector3(0, 0.5, 1));
+    const warned = warnings(), body = person(), mark = empty(roomOf(body), 'mark', new Vector3(0, 0.5, 1));
     play(function* () { yield* walkTo(body, what === 'a point' ? mark.position.clone() : mark); }, [body], 6);
-    expect(body.log).toEqual([expect.objectContaining({ check: 'walk target off the floor, its height ignored (m)', value: 0.5 })]);
+    expect(warned()).toEqual([expect.stringContaining('0.50 m off the floor')]);
   });
 
   it('a driven root above it', () => {
-    const body = person({ dev: true, drive: (time) => ({ position: new Vector3(0, 0.3, time * 0.1), yaw: 0 }) });
+    const warned = warnings(), body = person({ drive: (time) => ({ position: new Vector3(0, 0.3, time * 0.1), yaw: 0 }) });
     run(body, 1);
-    expect(body.log.filter((entry) => entry.check === 'driven root off the floor, its height ignored (m)')).toEqual([expect.objectContaining({ value: expect.closeTo(0.3, 6) })]);
+    expect(warned()).toEqual([expect.stringContaining('a root driven')]);
   });
 });

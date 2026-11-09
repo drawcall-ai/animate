@@ -1,6 +1,7 @@
 import type { Body } from '@drawcall/animate';
 import { Quaternion, Vector3 } from 'three';
 import { expect } from 'vitest';
+import { poseOf } from '@drawcall/animate/puppet';
 
 interface Peak { joint: string; frame: number; value: number }
 
@@ -35,7 +36,7 @@ export class Motion {
   }
 
   private read() {
-    const pose = this.body.pose;
+    const pose = poseOf(this.body);
     return pose.skeleton.bones.map((bone, index) => ({
       name: bone.name, position: pose.position(index).clone(), rotation: pose.local(index).clone(),
     }));

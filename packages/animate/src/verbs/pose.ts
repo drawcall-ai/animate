@@ -1,5 +1,5 @@
 import { action, parallel } from '@pmndrs/timeline';
-import { during } from '../kernel/requests';
+import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
 import type { ArmPosture, Posture } from '../kernel/poise';
@@ -16,9 +16,11 @@ import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';
 
 /** How a pose goes. */
-interface PoseOptions {
-  /** ends on this; without it, it holds the posture until its story moves on */
+export interface PoseOptions {
+  /** ends on this, `true`; with neither this nor `hold`, it holds the posture until its story moves on */
   until?: Until;
+  /** ends this many seconds after the posture has come, by its parts' paces: how a pose says it has finished */
+  hold?: number;
 }
 
 /**
@@ -29,8 +31,8 @@ interface PoseOptions {
  * part's own pace: a person's trunk at up to 1.2 rad/s (6 rad/s²; `lower` 0.6 m/s), its head and arms at up to 2.5 rad/s, so a 0.3 rad
  * nod is down in about a quarter second and back in as long; a creature's trunk closes about half the way in 0.3 s and 85% in 0.6 s, at
  * most 0.25 rad of bow and 0.15 of twist or lean (combined, they can still ask more than a big creature's legs follow). A pose that ends
- * before it has come two thirds of the way to an angle comes out that much smaller: hold it longer, or ask more within the joints;
- * `dev: { notes: true }` notes it. A walking person bows at most 0.5 rad. An aimer, it keeps on until `until`. It asks for the trunk's
+ * before it has come two thirds of the way to an angle comes out that much smaller, so give `hold` to end it once it has come. A walking
+ * person bows at most 0.5 rad. An aimer, it keeps on until `until` or `hold`. It asks for the trunk's
  * posture with a trunk field (taking the trunk from a `lookAt` given a `trunk` share, or giving it up to a newer one), for the head's
  * turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
  * (a skeleton with finger bones) take each hand's shape as asked rather than adding onto anything, easing in within about a quarter
@@ -47,19 +49,21 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   if (arms && !body.species.person) throw new Error(`pose: arms are a person's; a ${body.species.name ?? 'custom species'} has none to pose`);
   const shapes = fingers ? shapesOf(self, body, fingers) : [];
   const asked = { bow: trunk.bow ?? 0, twist: trunk.twist ?? 0, lean: trunk.lean ?? 0, lower: trunk.lower ?? 0 };
-  const posed = Object.keys(trunk).length > 0;
+  const posed = Object.keys(trunk).length > 0, { until, hold } = options;
+  if (until !== undefined && hold !== undefined) throw new Error('pose: give `until` or `hold`, not both');
+  if (hold !== undefined && !(hold >= 0 && hold < Infinity)) throw new Error(`pose: a hold of ${hold} s`);
   return verb(body, 'pose', (request) => function* () {
     const posedArms = SIDES.flatMap((side) => {
       const arm = arms?.[side];
       return arm ? [{ side, arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];
     });
     yield* parallel('all',
-      self.frame.dev !== undefined && pacing(self, posture),
+      pacing(self, request, posture, hold),
       posed && during(request, 'trunk', 'asked', () => self.poise.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
       ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))),
       ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));
-  }, options.until, true);
+  }, until, true, false, hold !== undefined);
 }
 
 /** each hand's shape `fingers` asks of `self`, with the fingers it is written to; a skeleton without finger bones has none to pose */
@@ -79,44 +83,35 @@ function add(to: Required<ArmPosture>, arm: Required<ArmPosture>): void {
 
 const ARM = ['shrug', 'forward', 'out', 'twist', 'elbow'] as const satisfies readonly (keyof ArmPosture)[];
 
-/** how far of the way to an angle a pose must come before it ends for development to leave it unsaid, and the least angle worth saying
- * (rad; m for `lower`) */
-const SHORT = 2 / 3, NOTED = { angle: 0.05, lower: 0.02 };
+/** how near an angle a pose has come (rad; m for `lower`), and how long fingers take to, as far as `hold` is concerned (s) */
+const COME = { angle: 0.02, lower: 0.01, fingers: 0.25 };
 
 /**
- * development: how far each angle of `posture` has come, at its part's pace from where the last pose left off (the pose just before, if
- * it flowed into this one; else nothing), noted as the pose ends if it ended short of `SHORT` of the way — its part's pace foreseen, not
- * measured: what else the body does is left out
+ * How far each angle of `posture` has come, at its part's pace from where the last pose left off (the pose just before, if it flowed into
+ * this one; else nothing) — its part's pace foreseen, not measured: what else the body does is left out. Met once it has come, `hold` s on.
  */
-function pacing(self: Self, posture: Posture) {
-  const creature = !self.species.person, each: { name: string; asked: number; least: number; pace: string; ease: Easing }[] = [];
+function pacing(self: Self, request: Request, posture: Posture, hold: number | undefined) {
+  const creature = !self.species.person, each: { name: string; asked: number; near: number; ease: Easing }[] = [];
   const left = flowed.get(self), from = (name: string) => left && self.time - left.time <= 2 * self.frame.dt ? left.values.get(name) ?? 0 : 0;
-  const field = (name: string, asked: number, least: number, pace: string, easing: (from: number) => Easing) => each.push({ name, asked, least, pace, ease: easing(from(name)) });
+  const field = (name: string, asked: number, near: number, easing: (from: number) => Easing) => each.push({ name, asked, near, ease: easing(from(name)) });
   for (const key of ['bow', 'twist', 'lean', 'lower'] as const) {
     const asked = posture[key];
     if (asked === undefined) continue;
-    const least = key === 'lower' ? NOTED.lower : NOTED.angle;
-    if (creature) field(key, asked, least, `a creature's trunk closes about half the way in 0.3 s${key === 'lower' ? '' : `, at most ${POSED[key]} rad`}`, damped(key === 'lower' ? Infinity : POSED[key]));
-    else field(key, asked, least, key === 'lower' ? `a person lowers at up to ${LOWER.speed} m/s` : `a person's trunk turns at up to ${BOW.speed} rad/s`, paced(key === 'lower' ? LOWER : BOW));
+    const near = key === 'lower' ? COME.lower : COME.angle;
+    if (creature) field(key, key === 'lower' ? asked : Math.max(-POSED[key], Math.min(POSED[key], asked)), near, damped(key === 'lower' ? Infinity : POSED[key]));
+    else field(key, asked, near, paced(key === 'lower' ? LOWER : BOW));
   }
-  for (const [key, asked] of Object.entries(posture.head ?? {})) field(`head ${key}`, asked, NOTED.angle, `a head turns at up to ${NOD.speed} rad/s`, paced(NOD));
-  for (const side of SIDES) for (const [key, asked] of Object.entries(posture.arms?.[side] ?? {})) field(`${side} arm ${key}`, asked, NOTED.angle, `an arm turns at up to ${SWING.speed} rad/s`, paced(SWING));
-  let began = NaN;
+  for (const [key, asked] of Object.entries(posture.head ?? {})) field(`head ${key}`, asked, COME.angle, paced(NOD));
+  for (const side of SIDES) for (const [key, asked] of Object.entries(posture.arms?.[side] ?? {})) field(`${side} arm ${key}`, asked, COME.angle, paced(SWING));
+  let elapsed = 0, come = NaN;
   return action<Frame>({
-    init: () => () => {
-      const values = new Map<string, number>();
-      for (const { name, asked, least, pace, ease } of each) {
-        values.set(name, ease.value);
-        const share = ease.value / asked;
-        if (Math.abs(asked) < least || share >= SHORT) continue;
-        self.frame.dev?.note(self.time, { check: 'pose ended short of an angle (share of it come)', value: share, limit: SHORT, where: name,
-          detail: `${ease.value.toFixed(3)} of ${asked} after ${(self.time - began).toFixed(2)} s: ${pace}; hold it longer or ask more` });
-      }
-      flowed.set(self, { time: self.time, values });
-    },
+    init: () => () => flowed.set(self, { time: self.time, values: new Map(each.map(({ name, ease }) => [name, ease.value])) }),
     update: (f) => {
-      if (Number.isNaN(began)) began = f.time - f.dt;
+      elapsed += f.dt;
       for (const { asked, ease } of each) ease.step(asked, f.dt);
+      if (hold === undefined) return;
+      if (Number.isNaN(come) && each.every(({ asked, near, ease }) => Math.abs(ease.value - asked) <= near) && (!posture.fingers || elapsed >= COME.fingers)) come = elapsed;
+      if (elapsed >= come + hold - 1e-9) request.met();
     },
   });
 }

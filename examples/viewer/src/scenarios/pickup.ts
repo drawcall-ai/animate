@@ -1,8 +1,8 @@
 import { Group, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { carry, grab, lookAt, release, wait } from '@drawcall/animate';
+import { carry, grab, lookAt, release, wait, grip } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-import { box, empty } from '../things';
+import { box } from '../things';
 
 /** the box's width, height and depth (m) */
 const BOX = new Vector3(0.34, 0.26, 0.26);
@@ -39,13 +39,13 @@ export function pickupShelf({ nearer = 0, taller = 0, around = 0, lower = 0, lif
       parcel.rotation.y = 0.35 + around;
       parcel.userData.mass = 2;
       // (taken as the hands come: the box's sides have no one way to hold them)
-      empty(parcel, 'left', new Vector3(size.x / 2 + 0.015, 0, 0));
-      empty(parcel, 'right', new Vector3(-size.x / 2 - 0.015, 0, 0));
+      grip(parcel, 'left', new Vector3(size.x / 2 + 0.015, 0, 0));
+      grip(parcel, 'right', new Vector3(-size.x / 2 - 0.015, 0, 0));
       const top = shelf(scene, SHELF.boards[3] - lower);
       // (its place on the top board, set there from in front over the board's front edge; +Z the way the body faces putting it there)
       const front = -SHELF.depth / 2;
-      const shelved = empty(top, 'shelved', new Vector3(0, size.y / 2 + 0.005, front + size.z / 2 + 0.01));
-      empty(top, 'over the edge', new Vector3(0, size.y / 2 + 0.03, front - 0.02));
+      const shelved = grip(top, 'shelved', new Vector3(0, size.y / 2 + 0.005, front + size.z / 2 + 0.01));
+      grip(top, 'over the edge', new Vector3(0, size.y / 2 + 0.03, front - 0.02));
       shelved.userData.approach = ['over the edge'];
       return {
         scene,

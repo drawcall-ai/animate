@@ -10,6 +10,7 @@ import { humanoid } from '../../src/index';
 import { rng, turnUpTo } from '../random';
 import { claim, dt, insides, person } from '../bodies';
 import { PERSON } from '../../skills/animate/references/person';
+import { poseOf } from '../../src/puppet';
 
 /** where bone `name` of a body is in the scene, as its last update wrote it */
 const at = (body: ReturnType<typeof person>, name: keyof typeof body.bones) => {
@@ -28,7 +29,7 @@ describe('a person', () => {
     expect(at(body, 'hips').distanceTo(new Vector3(1, p.hips.y, 2))).toBeLessThan(0.04);
     // the arms hang
     for (const side of ['left', 'right'] as const) expect(at(body, `${side}UpperArm`).y - at(body, `${side}Hand`).y).toBeGreaterThan(0.95 * p.armLength);
-    expect(body.pose.position(INDEX.head).distanceTo(at(body, 'head'))).toBeLessThan(1e-6);
+    expect(poseOf(body).position(INDEX.head).distanceTo(at(body, 'head'))).toBeLessThan(1e-6);
   });
 
   it('solves its named chains within its ranges of motion: a wrist onto a point in reach', () => {
@@ -37,9 +38,9 @@ describe('a person', () => {
     body.update(dt);
     expect(at(body, 'rightHand').distanceTo(target)).toBeLessThan(1e-6);
     for (const bone of [INDEX.rightUpperArm, INDEX.rightLowerArm]) {
-      const limit = body.pose.skeleton.limits[bone];
+      const limit = poseOf(body).skeleton.limits[bone];
       if (!limit) throw new Error('no limit');
-      expect(beyond(body.pose.local(bone), limit)).toBeLessThan(1e-9);
+      expect(beyond(poseOf(body).local(bone), limit)).toBeLessThan(1e-9);
     }
   });
 

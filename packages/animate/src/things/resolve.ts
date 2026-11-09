@@ -2,6 +2,7 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Carrier } from '../kernel/carrier';
 import type { Frame } from '../kernel/frame';
+import type { Request } from '../kernel/requests';
 import type { Goal, Placement } from '../kernel/goal';
 import type { Thing } from './thing';
 import type { HandPlacement, HandPoint } from '../fingers/placement';
@@ -33,9 +34,9 @@ export interface Hold {
   goal: Goal;
   placement?: HandPlacement;
   point?: HandPoint;
-  /** when a pad a facing fixes has had its turn made up, and whether it came onto its grip is yet to be read (s) */
-  settles?: number;
   keep?: (f: Frame) => void;
+  /** the request that took hold: what misses if the hand closes off its grip */
+  by?: Request;
 }
 
 /** A body as the things it holds see it: its object and moving bones' nodes, its hands' tip bones and holds, what it moves and tracks. */

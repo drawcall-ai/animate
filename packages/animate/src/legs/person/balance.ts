@@ -62,7 +62,7 @@ const LOWERED = 0.02;
  * (with its toe-out); tuned: eased in over this share of the swing
  */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
-/** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), logged-only XCoM (m), a
+/** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), a walker's XCoM (m), a
  * planted sole's sink into its floor and its lowest point's rise off it (m: rolling over its heel or ball, a rigged sole's points stand
  * up to ~1.1 cm off a flat floor). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1, sunk: 0.01, raised: 0.02 };
@@ -77,7 +77,7 @@ const AIMING = { accel: 300 };
 /**
  * Legs under a root the app drives (`drive`, read every sub-step; see `Stepper`) — its hips over the floor, as a game's character
  * capsule carries them: a leap it asks is taken as soon as the feet can, and `airborne` says when it is in the air; the body over it is
- * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; the XCoM is only noted.
+ * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; not its XCoM, which follows its input, not its balance.
  */
 export function driven(person: PersonLegged, seed?: number): Step {
   return drivenBy(person, drivenRoot(person), { individual: individualOf(seedFor(person, seed)), seed });
@@ -400,13 +400,6 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
     pointSegmentDistance(new Vector3().lerpVectors(right[0], right[1], k), left[0], left[1]),
   ]));
   if (gap < LIMIT.across * proportions.scale) dev.append(time, { check: 'legs crossed (m)', value: LIMIT.across * proportions.scale - gap, limit: 0, where: 'legs' });
-  // (noted only, and for a driven body only: it follows its input, not its balance; a walker's balance is checked, `checkSupport`)
-  if (!person.drive) return;
-  const support = legs.flatMap((leg, i) => leg.swing ? [] : solePoints(person.proportions, f.prev, SIDES[i]).map((at): [number, number] => [at.x, at.z]));
-  if (!support.length) return;
-  const xcom = xcomOfPoses(f.prev, f.prev2, f.dt, proportions.legLength, new Vector3());
-  const value = outside(hullOf(support), xcom);
-  if (value > LIMIT.xcom) dev.note(time, { check: 'driven XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
 }
 
 /**

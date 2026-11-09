@@ -1,4 +1,4 @@
-/** A development problem: what was checked, what was seen and what is allowed (in the check's units), and where. */
+/** A motion check gone wrong in a sub-step, or a misuse noted: what was checked, what was seen and what is allowed (in the check's units), and where. */
 export interface Problem {
   check: string;
   value: number;
@@ -9,39 +9,41 @@ export interface Problem {
   detail?: string;
 }
 
-/** A problem in a body's log: when it was seen (the body's time, s), and the requests running then. */
-export interface LogEntry extends Problem {
+/** One row of a body's log: one check while one set of verbs ran, however many sub-steps it went wrong in. */
+export interface LogEntry {
+  check: string;
+  /** where it was worst (a bone, a foot) */
+  where: string;
+  /** its worst value, in the check's units */
+  worst: number;
+  limit: number;
+  /** how many sub-steps it went wrong in */
+  count: number;
+  /** when it first went wrong (the body's time, s) */
   time: number;
+  /** the verbs running then, each with where the story asked for it */
   beat?: string;
+  detail?: string;
 }
 
 /** One body's development log. Absent entirely when dev is off. */
 export class Dev {
   readonly log: LogEntry[] = [];
-  /** Bounds a body only reports (a driven body's balance): measured, never failures; recorded only when asked for. */
-  readonly notes: LogEntry[] = [];
   /** the requests running, as the log names them */
   beat?: string;
+  private readonly rows = new Map<string, LogEntry>();
 
-  /** the checks said `once` so far */
-  private readonly said = new Set<string>();
-
-  constructor(private readonly noting = false) {}
-
-  /** a problem said the first time its check is seen, not again: one that stays as it was asked (a height the floor ignores) */
-  once(time: number, problem: Problem): void {
-    if (this.said.has(problem.check)) return;
-    this.said.add(problem.check);
-    this.append(time, problem);
-  }
-
-  append(time: number, problem: Problem): void {
-    this.log.push({ ...problem, time, ...(this.beat === undefined ? {} : { beat: this.beat }) });
-  }
-
-  note(time: number, problem: Problem): void {
-    if (!this.noting) return;
-    this.notes.push({ ...problem, time, ...(this.beat === undefined ? {} : { beat: this.beat }) });
+  append(time: number, { check, value, limit, where, detail }: Problem): void {
+    const key = `${check}\n${this.beat ?? ''}`, row = this.rows.get(key);
+    if (!row) {
+      const made: LogEntry = { check, where, worst: value, limit, count: 1, time, ...(this.beat === undefined ? {} : { beat: this.beat }), ...(detail === undefined ? {} : { detail }) };
+      this.rows.set(key, made);
+      this.log.push(made);
+      return;
+    }
+    row.count++;
+    if (Math.abs(value - limit) <= Math.abs(row.worst - row.limit)) return;
+    Object.assign(row, { worst: value, where, limit, detail });
   }
 }
 

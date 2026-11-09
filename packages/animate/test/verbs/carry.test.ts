@@ -1,7 +1,7 @@
 import { BoxGeometry, Euler, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
-import { arriving, Body, carry, grab, humanoid, release, wait } from '../../src/index';
+import { arriving, attempt, Body, carry, grab, humanoid, Missed, release, wait } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { NATIVE } from '../skeletons/native';
 import { insides, palmAt, person, play } from '../bodies';
@@ -184,32 +184,30 @@ describe('carry', () => {
   // (the trial that found it: a princess standing on a kneeling hero hung a medal at his neck, inside her own trunk; the carry said true
   // with the medal 36 cm off his neck)
   // (at this life seed the body stands near enough that the arms do come to the far end)
-  cases([['ends false, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', [1]]])('ends false, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', () => {
+  cases([['misses, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', [1]]])('misses, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', () => {
     const outcome = (end: Vector3, until?: () => boolean) => {
       const body = person({ dev: true }), room = roomOf(body);
       const load = box(room, new Vector3(0, 1, 0.4), { mass: 1, solid: false });
-      let carried: boolean | undefined;
+      let miss: Missed | null | undefined;
       play(function* () {
         yield* grab(body, load, BOTH);
-        carried = yield* carry(body, load, end, { step: false, until });
-      }, [body], 10, () => carried !== undefined);
-      return { carried, off: worldOf(load).distanceTo(end), held: body.holds(load), log: body.log.map(({ check, detail }) => ({ check, detail })) };
+        miss = yield* attempt(carry(body, load, end, { step: false, until }));
+      }, [body], 10, () => miss !== undefined);
+      return { miss, off: worldOf(load).distanceTo(end), held: body.holds(load) };
     };
     // (before the face: held clear in front of it, at rest there)
     const inside = outcome(new Vector3(0, 1.45, 0.05));
-    expect(inside.carried).toBe(false);
+    expect(inside.miss).toMatchObject({ verb: 'carry', why: expect.stringContaining('stands too near it') });
     expect(inside.off).toBeGreaterThan(0.1);
     expect(inside.held).toBe(true);
-    expect(inside.log).toEqual([{ check: 'carry: held clear of its own body, off its end (m)', detail: expect.stringContaining('stands too near it') }]);
     // (out ahead at the chin, past where the planted feet let the arms come: within the planning's reach, not quite the arms'. Held in
     // the palms, the box's middle goes a palm further than the wrists: at the chest's height the arms now place it wherever the
     // planning lets them try)
     const far = outcome(new Vector3(0, 1.3, 0.76));
-    expect(far.carried).toBe(false);
+    expect(far.miss).toMatchObject({ why: expect.stringContaining('beyond the arm’s reach') });
     expect(far.off).toBeGreaterThan(0.01);
-    expect(far.log).toEqual([{ check: expect.stringMatching(/^late carry: course end distance after/), detail: expect.stringContaining('beyond the arm’s reach') }]);
-    // (ended early on a condition that never comes, it still ends as late: else it held the thing short of its end for ever)
-    expect(outcome(new Vector3(0, 1.3, 0.76), () => false).carried).toBe(false);
+    // (given a condition that never comes, it still misses: else it held the thing short of its end for ever)
+    expect(outcome(new Vector3(0, 1.3, 0.76), () => false).miss).toBeInstanceOf(Missed);
   });
 
   it('throws when no hand holds what it is asked to carry', () => {
@@ -357,20 +355,24 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('says in development when a thing is put onto an empty far off it, or onto one already taken, and notes one let go in mid-air', () => {
-    const body = person({ dev: { notes: true } }), room = roomOf(body);
+  it('throws when a thing is put onto an empty already taken, misses one far off it, and lets one go in mid-air without a word', () => {
+    const body = person(), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 1, solid: false });
     const other = box(room, new Vector3(1, 0.9, 1), { name: 'other', mass: 1, solid: false });
-    const far = empty(room, 'far', new Vector3(1, 0.9, 1));
+    const far = empty(room, 'far', new Vector3(1, 0.9, 1)), farther = empty(room, 'farther', new Vector3(-1, 0.9, 1));
     far.attach(other);
     let done = false;
     play(function* () {
       yield* grab(body, load, BOTH);
       yield* carry(body, load, new Vector3(0, 1.1, 0.4));
-      release(body, load, far);
+      expect(() => release(body, load, far)).toThrow('"far" holds another thing already');
+      // (the release stands: only its saying so is a throw)
+      expect(body.holds(load)).toBe(true);
+      expect(() => release(body, load, farther)).toThrow(Missed);
+      expect(body.holds(load)).toBe(false);
       done = true;
     }, [body], 8, () => done);
-    expect(body.log.map(({ check }) => check)).toEqual(['put onto an empty another thing sits in', 'put onto an empty this far off it (m)']);
+    expect(load.parent).toBe(farther);
     // (carried up off where it was taken and let go there: nothing under it)
     const loose = box(room, new Vector3(0.2, 0.9, 0.45), { name: 'loose', mass: 1, solid: false });
     done = false;
@@ -380,7 +382,6 @@ describe('release', () => {
       release(body, loose);
       done = true;
     }, [body], 8, () => done);
-    expect(body.log.map(({ check }) => check).slice(2)).toEqual([]);
-    expect(body.notes.map(({ check }) => check)).toContain('let go in mid-air: its lowest point above the ground (m)');
+    expect(body.log).toEqual([]);
   });
 });

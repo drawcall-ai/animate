@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { Carrier } from '../../src/kernel/carrier';
 import { describe, expect, it } from 'vitest';
-import { Body, species } from '../../src/index';
+import { Body } from '../../src/index';
+import { species } from '../../src/species';
 import { selfOf } from '../../src/body/body';
 import { TrackedRotation } from '../../src/kernel/track';
 import { looking } from '../../src/look/gaze';
@@ -9,6 +10,7 @@ import { spinOf } from '../../src/kernel/rotation';
 import { ChainTip, reached } from '../../src/kernel/tip';
 import { claim, dt } from '../bodies';
 import { turn } from './rigs';
+import { poseOf } from '../../src/puppet';
 
 /** a free root at (0, 1, 0) with a leg hanging down −y: a ball-jointed thigh, a knee bending back (+x), a foot */
 const LEG = [
@@ -23,7 +25,7 @@ const NECK = [
 ] as const;
 const GAZE = { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, 0.05, 0.08] }, range: { down: 0.5, up: 0.35, side: 0.35 } } as const;
 const gazing = () => new Body(species(NECK, { gaze: GAZE }, { masses: { chest: 1, neck: 1, head: 1 } }));
-const eyesOf = (body: Body) => body.pose.point(2, new Vector3(0, 0.05, 0.08), new Vector3());
+const eyesOf = (body: Body) => poseOf(body).point(2, new Vector3(0, 0.05, 0.08), new Vector3());
 
 describe('chainTo', () => {
   it("moves a chain's tip on to its target, its joints braked to `turnAccel`, and gets there", () => {
@@ -36,10 +38,10 @@ describe('chainTo', () => {
     const knee: Quaternion[] = [];
     for (let k = 0; k < 240 && ended < 0; k++) {
       body.update(dt);
-      knee.push(body.pose.local(2).clone());
+      knee.push(poseOf(body).local(2).clone());
     }
     expect(ended).toBeGreaterThan(0);
-    expect(body.pose.position(3).distanceTo(goal)).toBeLessThan(0.01);
+    expect(poseOf(body).position(3).distanceTo(goal)).toBeLessThan(0.01);
     const spins = knee.slice(1).map((q, k) => spinOf(knee[k], q, dt, new Vector3()));
     expect(Math.max(...spins.slice(1).map((w, k) => w.distanceTo(spins[k]) / dt))).toBeLessThan(40 + 1e-6);
   });
@@ -56,7 +58,7 @@ describe('chainTo', () => {
       tip.to(f, { position: new Vector3(0.1, 0.1 + 0.6 * ease(u), 0.5), velocity: new Vector3(0, 18 * u * u * (1 - u) ** 2, 0) }, { accel: 8, speed: 2 });
     });
     for (let k = 0; k < 90; k++) body.update(dt);
-    expect(body.pose.position(3).distanceTo(new Vector3(0.1, 0.4, 0.5))).toBeLessThan(0.01);
+    expect(poseOf(body).position(3).distanceTo(new Vector3(0.1, 0.4, 0.5))).toBeLessThan(0.01);
   });
 });
 
@@ -67,14 +69,14 @@ describe('TrackedRotation', () => {
     const body = leg();
     claim(body, 'hand.leg', (f) => void f.current.setLocal(2, joint.follow(f.prev2.local(2), f.prev.local(2), goal(f.time), { accel: 30, speed: 8 }, f.dt, new Quaternion())));
     for (let k = 0; k < 120; k++) body.update(dt);
-    expect(body.pose.local(2).angleTo(goal(selfOf(body).frame.time))).toBeLessThan(1e-3);
+    expect(poseOf(body).local(2).angleTo(goal(selfOf(body).frame.time))).toBeLessThan(1e-3);
     goal = () => turn(1, 0, 0, 2);
     const turns: number[] = [];
-    let last = body.pose.local(2).clone();
+    let last = poseOf(body).local(2).clone();
     for (let k = 0; k < 30; k++) {
       body.update(dt);
-      turns.push(body.pose.local(2).angleTo(last) / dt);
-      last = body.pose.local(2).clone();
+      turns.push(poseOf(body).local(2).angleTo(last) / dt);
+      last = poseOf(body).local(2).clone();
     }
     expect(Math.max(...turns.slice(1).map((w, k) => Math.abs(w - turns[k]) / dt))).toBeLessThan(30 + 1);
   });
@@ -85,7 +87,7 @@ describe('looking', () => {
     const point = new Vector3(2, 1.2, 1), body = gazing();
     claim(body, 'look', looking(selfOf(body), () => point));
     for (let k = 0; k < 120; k++) body.update(dt);
-    const head = body.pose.rotation(2);
+    const head = poseOf(body).rotation(2);
     const forward = new Vector3(0, 0, 1).applyQuaternion(head);
     const eyes = eyesOf(body);
     // (the eyes take a quarter of the turn, at most 0.3 of their range to the side or up: 0.105 rad)
@@ -100,7 +102,7 @@ describe('looking', () => {
     claim(body, 'look', looking(selfOf(body), () => point));
     for (let k = 0; k < 120; k++) body.update(dt);
     // (still facing the way the chest does, not turned half round)
-    expect(new Vector3(1, 0, 0).applyQuaternion(body.pose.rotation(2)).x).toBeGreaterThan(0.9);
+    expect(new Vector3(1, 0, 0).applyQuaternion(poseOf(body).rotation(2)).x).toBeGreaterThan(0.9);
   });
 
   it('keeps one way of looking at a point nearly straight below, the chest bowed and swaying under it', () => {
@@ -114,9 +116,9 @@ describe('looking', () => {
     let missed = 0;
     for (let k = 0; k < 120; k++) {
       body.update(dt);
-      heads.push(body.pose.rotation(2).clone());
+      heads.push(poseOf(body).rotation(2).clone());
       const eyes = eyesOf(body);
-      if (k >= 60) missed = Math.max(missed, new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(2)).angleTo(point.clone().sub(eyes)));
+      if (k >= 60) missed = Math.max(missed, new Vector3(0, 0, 1).applyQuaternion(poseOf(body).rotation(2)).angleTo(point.clone().sub(eyes)));
     }
     // (on it but for the eyes' share — down, and the little aside an unrolled head leaves them this steeply down: ~0.02 rad — the head
     // turning no faster than the chest sways under it: ~0.75 rad/s, 0.013 rad a step)
@@ -134,8 +136,8 @@ describe('looking', () => {
       let last = new Quaternion();
       for (let k = 0; k < 180; k++) {
         body.update(dt);
-        speeds.push(body.pose.rotation(2).angleTo(last) / dt);
-        last = body.pose.rotation(2).clone();
+        speeds.push(poseOf(body).rotation(2).angleTo(last) / dt);
+        last = poseOf(body).rotation(2).clone();
       }
       return { speeds: speeds.slice(1), turned: last.angleTo(new Quaternion()) };
     };

@@ -2,7 +2,8 @@ import { Object3D, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { track, type Floor, type Root } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
-import { dt, insides, person, run, scene } from '../bodies';
+import { dt, insides, person, run, scene, airborne } from '../bodies';
+import { poseOf } from '../../src/puppet';
 
 /** eight 0.22 m risers up from z = 0, on 0.55 m treads */
 const STAIRS: Floor = (_x, z) => Math.max(0, Math.min(8, Math.floor(z / 0.55) + 1)) * 0.22;
@@ -48,7 +49,7 @@ it('follows physics height through a ceiling stop, tucks its feet and never inve
   let tuck = 0;
   for (let frame = 0; frame < 180; frame++) {
     body.update(dt);
-    expect(body.airborne).toBe(true);
+    expect(airborne(body)).toBe(true);
     expect(body.feet.every((foot) => !foot.planted)).toBe(true);
     expect(Math.abs(h.pose.position(0).y - root.position.y - standing)).toBeLessThan(0.015);
     tuck = Math.max(tuck, h.pose.position(INDEX.leftFoot).y - root.position.y - ankle);
@@ -67,14 +68,14 @@ it.each([0, 0.6, -0.6])('lands on the actual support at %s m and absorbs the imp
   while (root.position.y > level + 0.001) {
     root.position.y = Math.max(level, root.position.y + root.velocity.y * dt);
     body.update(dt);
-    expect(body.airborne).toBe(true);
+    expect(airborne(body)).toBe(true);
     expect(body.feet.every((foot) => !foot.planted)).toBe(true);
   }
   root.support = root.position.clone();
   root.velocity.y = 0;
   let lowest = Infinity;
   run(body, 0.4, () => {
-    expect(body.airborne).toBe(false);
+    expect(airborne(body)).toBe(false);
     lowest = Math.min(lowest, h.pose.position(0).y);
   });
   expect(standing + level - lowest).toBeGreaterThan(0.04);
@@ -90,10 +91,10 @@ it.each([0, 0.6, -0.6])('lands on the actual support at %s m and absorbs the imp
 it.each([0, 0.15, 0.3])('lands a physical jump on its current narrow platform at x=%s, not beyond its edge', (x) => {
   const floor = (x: number, z: number) => Math.abs(x) < 0.2 && z > 1.325 && z < 2.675 ? 0.45 : 0;
   const d = driven(floor, new Vector3(x, 0, 0.5)), { root, body, h } = d, bones = [INDEX.leftFoot, INDEX.rightFoot];
-  let previous = bones.map((bone) => body.pose.position(bone).clone()), moved = 0;
+  let previous = bones.map((bone) => poseOf(body).position(bone).clone()), moved = 0;
   const landed = bones.map(() => false);
   const watch = () => {
-    const current = bones.map((bone) => body.pose.position(bone).clone());
+    const current = bones.map((bone) => poseOf(body).position(bone).clone());
     if (root.support) {
       moved = Math.max(moved, ...current.map((at, i) => at.distanceTo(previous[i])));
       body.feet.forEach((foot, i) => { landed[i] ||= foot.planted; });
@@ -281,7 +282,7 @@ it.each([0, 1.4, 3.5])('keeps the whole gait relative to a moving platform at %s
     riding.root.support = riding.root.position.clone();
     standing.update(dt);
     carried.update(dt);
-    const a = standing.pose, b = carried.pose;
+    const a = poseOf(standing), b = poseOf(carried);
     a.skeleton.bones.forEach((_, bone) => {
       // Gaze tracks a world target; the gait, trunk and free hands are carried with the floor.
       if (bone === INDEX.neck || bone === INDEX.head) return;
@@ -332,7 +333,7 @@ it.each([false, true])('keeps an external hand target in its world frame (moving
   const { root, body } = driven(() => platform.position.y, undefined, platform);
   run(body, 1);
   target.position.set(-0.25, 1.1, 0.3);
-  target.quaternion.copy(body.pose.rotation(INDEX.rightHand));
+  target.quaternion.copy(poseOf(body).rotation(INDEX.rightHand));
   const tick = scene([body], () => track(body, { right: target }));
   for (let frame = 0; frame < 120; frame++) tick();
   let error = 0;
@@ -342,7 +343,7 @@ it.each([false, true])('keeps an external hand target in its world frame (moving
     root.support = root.position.clone();
     target.position.y = 1.1 + (moving ? level : 0);
     tick();
-    error = Math.max(error, body.pose.position(INDEX.rightHand).distanceTo(target.position));
+    error = Math.max(error, poseOf(body).position(INDEX.rightHand).distanceTo(target.position));
   }
   expect(error).toBeLessThan(0.02);
 });

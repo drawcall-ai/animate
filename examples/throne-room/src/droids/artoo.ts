@@ -1,6 +1,7 @@
 import { Vector3, type Object3D } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, powerGait, species, type Range } from '@drawcall/animate';
+import { Body } from '@drawcall/animate';
+import { powerGait, species, type Range } from '@drawcall/animate/species';
 import type { Dress } from '../cast';
 import { floorAt } from '../hall';
 

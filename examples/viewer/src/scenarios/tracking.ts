@@ -4,6 +4,7 @@ import { lookAt, reach, track, wait, walkTo } from '@drawcall/animate';
 import { destination, route, scalar, type Way } from '../keys';
 import type { Person, Scenario } from '../scenario';
 import { ball, box } from '../things';
+import { poseOf } from '@drawcall/animate/puppet';
 
 // Keyframed trackers, as a VR headset and controllers record them: a hand, the head, or the head and both hands. The body
 // follows them; the reaching scene also leads its walk by the next recorded waypoint.
@@ -71,7 +72,7 @@ function controller(person: Person, variation: Variation, marker: Object3D, keys
 function underHeadset(person: Person, device: Object3D, facing: number): boolean {
   const gaze = person.species.gaze;
   if (!gaze) throw new Error('tracking: the person needs eyes');
-  const eyes = gaze.eyes(person.pose, new Vector3());
+  const eyes = gaze.eyes(poseOf(person), new Vector3());
   return eyes.distanceTo(device.position) < 0.03 && person.settled && Math.abs(Math.atan2(Math.sin(person.facing - facing), Math.cos(person.facing - facing))) < 0.3;
 }
 

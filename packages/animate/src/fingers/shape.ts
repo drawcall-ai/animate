@@ -51,7 +51,7 @@ export const RELAXED = {
   thumb: { curl: 0.25, oppose: 0.15, spread: 0.3 }, index: digit(0.3, 0.08, 0.08), middle: digit(0.36, 0.1), ring: digit(0.42, 0.11, 0.08), little: digit(0.48, 0.12, 0.12),
 } as const satisfies Shape;
 /** Every finger folded into the palm, the thumb across them. */
-export const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
+const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
 /**
  * The index pointing, as a hand presses a button: nearly straight, each joint given a little as a relaxed finger's is (straight as a rod,
  * it reads as a stick); the other fingers curled into the palm, each a little more than the one before; the thumb resting along the
@@ -63,12 +63,22 @@ export const POINT = {
 
 /** The thumb's and the index's pads brought together in front of the palm, as a hand pinches a small thing; the other fingers curled
  * out of their way. */
-export const PINCH = {
+const PINCH = {
   thumb: { curl: 0.35, oppose: 0.6, spread: 0.5 }, index: digit(0.45, 0.25), middle: digit(0.6, 0.2), ring: digit(0.7, 0.2), little: digit(0.8, 0.2),
 } as const satisfies Shape;
 
-/** `fingers` over `RELAXED`: each value given replaces `RELAXED`'s (see `valuesOf`) */
-export function shapeOf(fingers: Fingers): Shape {
+/** A hand's shape: each digit as asked (`Fingers`), or by name: `fist` (every finger folded into the palm, the thumb across them), `point`
+ * (the index nearly straight, the others curled), `pinch` (the thumb's and the index's pads together). */
+export type HandShape = Fingers | keyof typeof NAMED;
+
+const NAMED = { fist: FIST, point: POINT, pinch: PINCH } as const;
+
+/** `fingers`, by name or over `RELAXED`: each value given replaces `RELAXED`'s (see `valuesOf`) */
+export function shapeOf(fingers: HandShape): Shape {
+  if (typeof fingers === 'string') {
+    if (!(fingers in NAMED)) throw new Error(`fingers: "${String(fingers)}" is none of ${Object.keys(NAMED).join(', ')}`);
+    return structuredClone(NAMED[fingers]);
+  }
   for (const [name, values] of Object.entries(fingers)) valuesOf(digitOf(name, 'fingers'), values);
   return {
     thumb: { ...RELAXED.thumb, ...fingers.thumb },

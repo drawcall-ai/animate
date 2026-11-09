@@ -3,19 +3,15 @@ import { INDEX } from '../species/humanoid/bones';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
 import type { AnySpecies, Species } from '../species/define';
-import { Person, personOf } from './person';
+import { Person } from './person';
 import { Self, type SelfOptions } from './runtime';
 import { Binding } from './model';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Channel, Tier } from '../kernel/requests';
-import type { Fingers } from '../fingers/shape';
-import { takingOf } from '../hands/person/take';
-import type { HandPlacement } from '../fingers/placement';
 
-/** How a body is made: as its runtime takes it, and the bodies it keeps clear of besides those it deals with (bystanders; one shared
- * set works for a crowd). It keeps clear of bodies only, never of props: the scene's places say where it stands. */
-export type BodyOptions = SelfOptions & { avoid?: Iterable<Body> };
+/** How a body is made. It keeps clear of the bodies it deals with, never of things: the scene's places say where it stands. */
+export type BodyOptions = SelfOptions;
 
 /** the names of a species' bones */
 type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone : never;
@@ -23,7 +19,7 @@ type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone
 export type ByHand<S extends AnySpecies, T> = S extends Species<string, infer Hand> ? [Hand] extends [never] ? never : Partial<Record<Hand, T>> : never;
 
 /** What holds one of a body's parts: the verb, where the story asked for it and how firmly (borrowed: needed, not asked). */
-interface Owner {
+export interface Owner {
   verb: string;
   site: string;
   tier: Tier;
@@ -31,7 +27,7 @@ interface Owner {
 
 /** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
  * the eyes (`head`) and each hand. */
-interface Owners {
+export interface Owners {
   go?: Owner;
   look?: Owner;
   trunk?: Owner;
@@ -41,7 +37,7 @@ interface Owners {
 
 /** A foot as it stands or, swinging, where it lands. A planted foot turning on the spot pivots about its sole's middle, between heel and
  * toe, so its ankle shifts a little. */
-interface Foot {
+export interface Foot {
   /** its ankle, standing flat on the floor there */
   position: Vector3;
   /** which way it points (rad about +Y) */
@@ -64,10 +60,8 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** Rejects creature legs that cannot step within their joint ranges with the sole on the floor. */
   constructor(readonly species: S, options: BodyOptions = {}) {
-    const { avoid, ...rest } = options, binding = new Binding(species, rest.model);
-    const self = species.person ? new Person(species, rest, binding) : new Self(species, rest, binding);
-    selves.set(this, self);
-    for (const body of avoid ?? []) self.near.add(selfOf(body));
+    const binding = new Binding(species, options.model);
+    selves.set(this, species.person ? new Person(species, options, binding) : new Self(species, options, binding));
     this.object = binding.object;
     this.bones = binding.bones;
   }
@@ -101,42 +95,6 @@ export class Body<S extends AnySpecies = AnySpecies> {
   }
 
   /**
-   * The placement hand `side` takes the grip `empty` by (its thing the empty's parent): what the grip leaves free fixed as a grab fixes it,
-   * from where the body stood at its last update (`Thing.grip`). For a body its app poses itself, to hand to `gripOn` and `shapeHand`:
-   * asked again before the body's next update, it is the same placement, so a hand holds a grip the same however the app has posed the
-   * body since; after an update it is picked afresh.
-   */
-  placement(side: 'left' | 'right', empty: Object3D): HandPlacement {
-    const thing = empty.parent;
-    if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
-    const self = personOf(selfOf(this)), kept = this.picked[side].get(empty);
-    if (kept?.updates === self.updates) return kept.placement;
-    const placement = takingOf(self, side, Thing.of(thing), empty.name).placement;
-    this.picked[side].set(empty, { updates: self.updates, placement });
-    return placement;
-  }
-
-  /** each hand's placements `placement` picked, by grip, and at how many updates */
-  private readonly picked = { left: new WeakMap<Object3D, { updates: number; placement: HandPlacement }>(), right: new WeakMap<Object3D, { updates: number; placement: HandPlacement }>() };
-
-  /**
-   * Eases hand `side`'s fingers `seconds` on toward `to` and writes them, for a body its app poses itself (a puppet: its update stopped,
-   * the two would fight): the placement the hand is on or on its way to, opening as it comes and, once the wrist is where `gripOn` puts
-   * it, taking the shape the placement asks (closed round its thing's meshes as the placement has the hand there, or held); a shape
-   * (`Fingers`; `FIST`, `POINT`, …); or relaxed for `null`. Call it every frame after posing the hand. A skeleton without finger bones is
-   * a misuse.
-   */
-  shapeHand(side: 'left' | 'right', to: HandPlacement | Fingers | null, seconds: number): void {
-    fingerStateOf(this).set(side, to, seconds);
-  }
-
-  /** Where hand `side` goes for `placement`, for a body its app poses itself: the wrist, and the world rotation to give the hand bone
-   * (`bones.leftHand`) — the placement's point of the hand on its target, turned as it asks. */
-  gripOn(side: 'left' | 'right', placement: HandPlacement): { wrist: Vector3; rotation: Quaternion } {
-    return fingerStateOf(this).gripOn(side, placement);
-  }
-
-  /**
    * A point for a person's hand `side`, scaled to its body: out from its shoulder (the upper arm's joint) along `direction` (the body's
    * frame as it stands: +X its left, +Y up, +Z ahead) `share` of its arm's length (`species.person.armLength`): 0.5 a thing held up
    * before the chest, the elbow tucked (a ready hold); 0.75 a comfortable reach; 0.9 all but straight, held out before the face. Past
@@ -150,7 +108,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
   armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {
     const person = this.species.person;
     if (!person) throw new Error(`armPoint: a ${this.species.name ?? 'custom species'} has no arms`);
-    const pose = this.pose, turn = new Quaternion().setFromAxisAngle(UP, pose.facing);
+    const pose = poseOf(this), turn = new Quaternion().setFromAxisAngle(UP, pose.facing);
     return direction.clone().normalize().applyQuaternion(turn).multiplyScalar(share * person.armLength).add(pose.position(INDEX[`${side}UpperArm`]));
   }
 
@@ -165,7 +123,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
   /** its root's point on the floor (m; its y the floor's height there): a person's hips, which sway several centimetres over planted feet,
    * so judge where a body stands by its `feet` */
   get position(): Vector3 {
-    const root = this.pose.position(0);
+    const root = poseOf(this).position(0);
     return new Vector3(root.x, selfOf(this).floor(root.x, root.z), root.z);
   }
 
@@ -177,23 +135,12 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** the way it faces (rad about +Y; 0 faces +Z) */
   get facing(): number {
-    return this.pose.facing;
+    return poseOf(this).facing;
   }
 
   /** come to rest: no walk under way, its feet planted a while and none wanting to step */
   get settled(): boolean {
     return selfOf(this).locomotion.settled;
-  }
-
-  /** off the floor: a leap's flight */
-  get airborne(): boolean {
-    return selfOf(this).stepper?.airborne ?? false;
-  }
-
-  /** its stride: its phase (rad), how far it walks (0 standing … 1 walking) and runs (0 … 1) */
-  get gait(): { readonly phase: number; readonly walk: number; readonly run: number } {
-    const { phase, walk, run } = selfOf(this).locomotion;
-    return { phase, walk, run };
   }
 
   /** its feet, as they stand or, swinging, where they land (none before its first `update`) */
@@ -220,32 +167,19 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), head: owner('head'), hands: Object.fromEntries(hands) };
   }
 
-  /** its last final pose: bone rotations and positions by index, its centre of mass, what its bones carry
-   * As the body updating now reads it. */
-  get pose(): ReadonlyPose {
-    const self = selfOf(this);
-    return reader && reader !== self ? self.poseFor(reader) : self.pose;
-  }
-
-  /** development problems (empty with dev off): each check that failed, by when and while which verbs ran */
+  /** what `dev: true` found (empty with it off), one row per check and call site: sub-step motion checks and misuse noted, not failures, which throw (`Missed`) */
   get log(): readonly LogEntry[] {
     return selfOf(this).log;
-  }
-
-  /** what development only reports (`dev: { notes: true }`) */
-  get notes(): readonly LogEntry[] {
-    return selfOf(this).notes;
   }
 }
 
 const selves = new WeakMap<Body, Self>();
 const UP = new Vector3(0, 1, 0);
 
-/** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */
-function fingerStateOf(body: Body): NonNullable<Self['fingers']> {
-  const fingers = selfOf(body).fingers;
-  if (!fingers) throw new Error(`fingers: a ${body.species.name ?? 'custom species'} skeleton has no finger bones`);
-  return fingers;
+/** `body`'s last final pose: bone rotations and positions by index, its centre of mass, what its bones carry, as the body updating now reads it */
+export function poseOf(body: Body): ReadonlyPose {
+  const self = selfOf(body);
+  return reader && reader !== self ? self.poseFor(reader) : self.pose;
 }
 
 /** the runtime of `body` */

@@ -1,6 +1,7 @@
 import { Euler, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, grab, horse, humanoid, lookAt, powerGait, species, walkTo } from '../src/index';
+import { Body, grab, horse, humanoid, lookAt, walkTo } from '../src/index';
+import { powerGait, species } from '../src/species';
 import { Pose } from '../src/kernel/pose';
 import { proportionsFor } from '../src/species/humanoid/proportions';
 import { massFor } from '../src/species/humanoid/skeleton';
@@ -8,6 +9,7 @@ import { play, run } from './bodies';
 import { box, roomOf } from './things';
 import { PERSON } from '../skills/animate/references/person';
 import { HORSE } from '../skills/animate/references/horse';
+import { poseOf } from '../src/puppet';
 
 describe('a humanoid', () => {
   it('measures its proportions off its skeleton, its height off the crown, with Dempster’s masses for that height', () => {
@@ -120,7 +122,7 @@ describe('a species’ gaze', () => {
     const body = new Body(kind, { dev: true });
     play(function* () { yield* lookAt(body, new Vector3(-3, 0.42, 0.3)); }, [body], 3);
     expect(body.log).toEqual([]);
-    return new Euler().setFromQuaternion(body.pose.rotation(kind.skeleton.index(eyes)), 'YXZ').y;
+    return new Euler().setFromQuaternion(poseOf(body).rotation(kind.skeleton.index(eyes)), 'YXZ').y;
   };
   const free = turned(['neck', 'beak']);
 

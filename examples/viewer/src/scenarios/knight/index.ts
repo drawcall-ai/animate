@@ -1,9 +1,9 @@
 import { Euler, Group, Matrix4, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { arriving, carry, grab, lookAt, release, wait, walkTo, type Target } from '@drawcall/animate';
+import { arriving, carry, grab, lookAt, release, wait, walkTo, type Target, grip } from '@drawcall/animate';
 import type { Scenario } from '../../scenario';
 import { PERSON, scaled } from '../../skeletons';
-import { ball, box, cylinder, empty } from '../../things';
+import { ball, box, cylinder } from '../../things';
 import { beltEnd, gauntlet, harness, helm, lance, scabbard, shield, solidsOf, strap, sword } from './gear';
 
 /**
@@ -91,7 +91,7 @@ export function knightArming({ shift = { x: 0, z: 0 }, mirror = false, rise = 0,
 
       // where things go about him (m, the default body's, scaled to his height): before him (turned as he faces) and on his bones (worn)
       const scaledPlace = (parent: Object3D, name: string, x: number, y: number, z: number, turn?: Euler) => {
-        const place = empty(parent, name, new Vector3(x, y, z).multiplyScalar(scale));
+        const place = grip(parent, name, new Vector3(x, y, z).multiplyScalar(scale));
         if (turn) place.quaternion.setFromEuler(turn);
         return place;
       };
@@ -237,8 +237,8 @@ function lay(parent: Object3D, thing: Object3D, position: Vector3, yaw = 0): Obj
 
 /** a place things sit in under `furniture` at `position`, taken out (and put back) by way of `out` above or beside it */
 function seat(furniture: Object3D, name: string, position: Vector3, out: Vector3): Object3D {
-  const place = empty(furniture, name, position);
-  empty(furniture, `${name}: out`, position.clone().add(out));
+  const place = grip(furniture, name, position);
+  grip(furniture, `${name}: out`, position.clone().add(out));
   place.userData.approach = [`${name}: out`];
   return place;
 }

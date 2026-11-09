@@ -21,9 +21,10 @@ import type { Guide, Guides } from './guide';
 // A carried thing along its course: the hands holding it on its guide, until it has come to rest at the course's end — or is late there,
 // stalled short of it, or held off it by the body's own trunk and head — its one-handed grasp weighed for the end as it nears it.
 
-/** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s); how long it stands still
- * (within `moved`, m) short of it to be as near as the arms take it, and how near it then is there (`close`, m) */
-const RESTING = 2, STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: 0.015, turn: 0.15 };
+/** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s) */
+const RESTING = 2;
+/** how long a carried thing stands still (within `moved`, m) short of its end to be as near as the arms take it, and how near it then is there (`close`, m) */
+export const STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: 0.015, turn: 0.15 };
 /** how far off its place (m) the fingers seat a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
  * push or draw what they hold without the hand moving */
 const SEATS = 0.03;
@@ -120,8 +121,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
       // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
       if (!blocked) {
         blocked = true;
-        f.dev?.append(f.time, { check: 'carry: held clear of its own body, off its end (m)', value: guide.off, limit: near, where: thing.object.name, detail: inTheWay(guide) });
-        request.fail();
+        request.fail({ where: thing.object.name, off: guide.off, limit: near, why: inTheWay(guide) });
       }
       return false;
     }
@@ -134,14 +134,13 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
       was.copy(offset);
       wasTurned.copy(carrier.current.quaternion);
     }
-    const stalled = f.time - still > STALL.seconds;
-    if (stalled && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= near)) return true;
-    if (!late && (f.time - stood > RESTING || (stalled && !close))) {
+    const stalled = f.time - still > STALL.seconds, overdue = f.time - stood > RESTING;
+    // (within `STALL.close`, swaying with a body that carries its end, it will never stand still: long enough there is there too)
+    if ((stalled || overdue) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= near)) return true;
+    if (!late && (overdue || (stalled && !close))) {
       late = true;
       const turned = turnedOff > TURNED ? `, turned ${(turnedOff * 180 / Math.PI).toFixed(0)}° off its turn` : '';
-      f.dev?.append(f.time, { check: `late carry: course end distance after ${(f.time - since).toFixed(1)} s (m)`, value: short, limit: near, where: thing.object.name,
-        detail: `stopped ${cm(short)} cm off it${turned}: ${guide.off > near ? inTheWay(guide) : limits(person, thing, guide)}` });
-      if (end) request.fail();
+      if (end) request.fail({ where: thing.object.name, off: short, limit: near, why: `stopped ${cm(short)} cm off it${turned}: ${guide.off > near ? inTheWay(guide) : limits(person, thing, guide)}` });
     }
     return false;
   };
@@ -160,7 +159,7 @@ function limits(person: Reacher, thing: Thing, guide: Guide): string {
 }
 
 /** why a carried thing its own body holds off its end is not there */
-const inTheWay = (guide: Guide) => `its own trunk and head hold it ${cm(guide.off)} cm off its end: the body stands too near it`;
+const inTheWay = (guide: Guide) => `its own trunk and head hold it ${cm(guide.off)} cm off its end: the body stands too near it, so stand back or choose a target clear of it`;
 
 const cm = (m: number) => (100 * m).toFixed(1);
 

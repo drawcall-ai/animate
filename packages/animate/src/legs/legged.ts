@@ -37,6 +37,7 @@ export interface Root {
  */
 export interface Legged {
   readonly species: AnySpecies;
+  warn(check: string, message: string): void;
   readonly pose: ReadonlyPose;
   /** its root's turn about +Y (0 faces +Z) */
   readonly yaw: number;
@@ -63,7 +64,7 @@ export interface Legged {
  * A body's root as its app drives it (`drive`), a sub-step at a time: where it is, its velocity (read off its moves when not given),
  * facing and crouch; a leap it asks is passed to the legs.
  */
-export function drivenRoot(self: Pick<Legged, 'drive' | 'driven' | 'stepper' | 'poise' | 'floor'>): (f: Frame) => Steering {
+export function drivenRoot(self: Pick<Legged, 'drive' | 'driven' | 'stepper' | 'poise' | 'floor' | 'warn'>): (f: Frame) => Steering {
   if (!self.drive) throw new Error('drivenRoot: the body is not driven');
   let last: Vector3 | null = null;
   return (f) => {
@@ -74,7 +75,7 @@ export function drivenRoot(self: Pick<Legged, 'drive' | 'driven' | 'stepper' | '
     if (root.platform && !physical) throw new Error('drive: a platform requires physics support');
     if (physical && !root.velocity) throw new Error('drive: physics support requires velocity relative to its platform');
     const height = Math.abs(root.position.y - self.floor(root.position.x, root.position.z));
-    if (!physical && height > OFF_FLOOR) f.dev?.once(f.time, { check: 'driven root off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'root' });
+    if (!physical && height > OFF_FLOOR) self.warn('driven root', `a root driven ${height.toFixed(2)} m off its floor stands on it: its height is ignored (give \`support\` if your physics holds it there)`);
     const position = root.position.clone();
     if (!physical) position.y = 0;
     const velocity = root.velocity?.clone() ?? (last ? position.clone().sub(last).divideScalar(f.dt) : new Vector3());

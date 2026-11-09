@@ -18,9 +18,10 @@ export interface HandOptions {
    */
   speed?: number;
   /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
-   * rising on its toes for the target as far as its arms and trunk allow, and ends `false` if that is not far enough */
+   * rising on its toes for the target as far as its arms and trunk allow, and misses if that is not far enough */
   step?: boolean;
-  /** ends on this instead of arriving (`grab`: instead of holding); a target that moves is followed until then */
+  /** ends on this instead of arriving (`grab`: instead of holding), `true` if there as it ends, else `false`; a target that moves is
+   * followed until then */
   until?: Until;
 }
 

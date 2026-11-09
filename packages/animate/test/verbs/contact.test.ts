@@ -1,10 +1,12 @@
 import { CylinderGeometry, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { runTimeline } from '@pmndrs/timeline';
-import { Body, carry, grab, humanoid, POINT, wait } from '../../src/index';
+import { attempt, Body, carry, grab, humanoid, Missed, wait } from '../../src/index';
 import { play } from '../bodies';
 import { FINGERED } from '../skeletons/fingered';
 import { empty, roomOf } from '../things';
+import { gripOn } from '../../src/puppet';
+import { POINT } from '../../src/fingers/shape';
 
 /** a body with fingers and a rod of `radius` before its left hip, grip `point` on the rod's side `up` above its middle, and how far that point of the left hand lies off it */
 function rodBefore(point: 'thumb' | 'palm', radius: number, { scale = 1, up = 0, owned = false } = {}) {
@@ -21,7 +23,7 @@ function rodBefore(point: 'thumb' | 'palm', radius: number, { scale = 1, up = 0,
   room.add(rod);
   const grip = empty(rod, 'grip', new Vector3(-radius, up, 0));
   if (point !== 'palm') grip.userData.point = point;
-  const { wrist, rotation } = body.gripOn('left', { on: new Object3D(), point, position: new Vector3(), quaternion: new Quaternion(), fingers: POINT });
+  const { wrist, rotation } = gripOn(body, 'left', { on: new Object3D(), point, position: new Vector3(), quaternion: new Quaternion(), fingers: POINT });
   const onHand = wrist.negate().applyQuaternion(rotation.invert());
   const gap = () => body.bones.leftHand.localToWorld(onHand.clone()).distanceTo(grip.getWorldPosition(new Vector3()));
   return { body, room, rod, grip, gap };
@@ -72,7 +74,8 @@ describe('a hand on what a grip declares', () => {
       if (later) digit();
       from.copy(turnIn());
       carrying = true;
-      yield* carry(body, rod, above(), { step: false });
+      // (it may end a little short of its point, its joints' say: what counts here is the hand on its grip all the way)
+      yield* attempt(carry(body, rod, above(), { step: false }));
       yield* wait(1);
     }, [body], 7, () => {
       if (!carrying) return;
@@ -85,15 +88,14 @@ describe('a hand on what a grip declares', () => {
   });
 
   it.each([
-    ['ends, not hanging, on a button with a facing its wrist will not fully turn to', 60, 0, [0, 0, 1]],
-    ['presses a button that moves', 60, 0.15, undefined],
-    ['presses a button that moves, at a low rate', 12, 0.15, undefined],
-  ] as const)('%s', (_name, hz, speed, facing) => {
+    ['presses a button that moves', 60, 0.15],
+    ['presses a button that moves, at a low rate', 12, 0.15],
+  ] as const)('%s', (_name, hz, speed) => {
     const body = new Body(humanoid(FINGERED), { dev: true, life: { seed: 3, steady: 1 } }), room = roomOf(body);
     const button = new Object3D();
     button.position.set(0.28, 1.02, 0.3);
     room.add(button);
-    Object.assign(empty(button, 'cap', new Vector3()).userData, { point: 'index', ...(facing && { facing }) });
+    Object.assign(empty(button, 'cap', new Vector3()).userData, { point: 'index' });
     room.updateMatrixWorld(true);
     let took: boolean | null = null;
     const step = runTimeline(function* () { took = yield* grab(body, button, { left: 'cap' }, { step: false }); });
@@ -106,21 +108,32 @@ describe('a hand on what a grip declares', () => {
     expect(took).toBe(true);
   });
 
-  it('fails, saying so, a pad its wrist stays near but cannot bring on', () => {
+  it('misses, not hanging, on a button with a facing its wrist will not fully turn to', () => {
+    const body = new Body(humanoid(FINGERED), { dev: true, life: { seed: 3, steady: 1 } }), room = roomOf(body);
+    const button = new Object3D();
+    button.position.set(0.28, 1.02, 0.3);
+    room.add(button);
+    Object.assign(empty(button, 'cap', new Vector3()).userData, { point: 'index', facing: [0, 0, 1] });
+    room.updateMatrixWorld(true);
+    let miss: Missed | null | undefined;
+    play(function* () { miss = yield* attempt(grab(body, button, { left: 'cap' }, { step: false })); }, [body], 8, () => miss !== undefined);
+    expect(miss).toMatchObject({ verb: 'grab', why: expect.stringContaining('wrist cannot turn') });
+  });
+
+  it('misses, saying so, a pad its wrist stays near but cannot bring on', () => {
     const { body, room, rod, grip } = rodBefore('thumb', 0.01);
     delete rod.userData.mass;
     rod.position.set(-0.25, 0.6, 0.1);
     grip.position.set(0, 0, 0);
     room.updateMatrixWorld(true);
-    let took: boolean | null = null;
-    play(function* () { took = yield* grab(body, rod, { left: 'grip' }, { step: false }); }, [body], 14, () => took !== null);
-    expect(took).toBe(false);
-    expect(body.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: expect.stringContaining('a fingertip still off its grip') })]));
+    let miss: Missed | null | undefined;
+    play(function* () { miss = yield* attempt(grab(body, rod, { left: 'grip' }, { step: false })); }, [body], 14, () => miss !== undefined);
+    expect(miss).toMatchObject({ verb: 'grab', why: expect.stringContaining('a fingertip stopped') });
   });
 
   it.each([
-    ['says so when its facing leaves it off', [0.28, 1.02, 0.3], [0, 0, -1], true],
-    ['says nothing when its turn brings it on', [0.2, 1.1, 0.35], [0, -1, 0], false],
+    ['misses when its facing leaves it off', [0.28, 1.02, 0.3], [0, 0, -1], true],
+    ['takes hold when its turn brings it on', [0.2, 1.1, 0.35], [0, -1, 0], false],
   ] as const)('a pad a facing fixes %s', (_, at, facing, off) => {
     const { body, room, rod, grip, gap } = rodBefore('thumb', 0.01);
     delete rod.userData.mass;
@@ -128,11 +141,10 @@ describe('a hand on what a grip declares', () => {
     grip.position.set(-0.01, 0, 0);
     grip.userData.facing = [...facing];
     room.updateMatrixWorld(true);
-    let took = false;
-    play(function* () { took = yield* grab(body, rod, { left: 'grip' }, { step: false }); yield* wait(1); }, [body], 14);
-    expect(took).toBe(true);
+    let miss: Missed | null | undefined;
+    play(function* () { miss = yield* attempt(grab(body, rod, { left: 'grip' }, { step: false })); yield* wait(1); }, [body], 14);
+    expect(miss !== null).toBe(off);
     expect(gap() > 0.01).toBe(off);
-    expect(body.log.some(({ check }) => check === 'a fingertip closed off its grip (m)')).toBe(off);
   });
 
   it('regrips a plain grip about the point it took, turning the thing with that point still on its grip until it is seated', () => {

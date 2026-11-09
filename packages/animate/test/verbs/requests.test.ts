@@ -3,7 +3,7 @@ import { finder } from '../../src/verbs/targets';
 import { selfOf } from '../../src/body/body';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { Body, dog, grab, lookAt, reach, wait, walkTo } from '../../src/index';
+import { attempt, Body, dog, grab, lookAt, Missed, reach, wait, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { claim, dt, insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
@@ -101,26 +101,25 @@ describe('requests', () => {
     expect(legs).toBe(false);
   });
 
-  it('a verb ends true once met, false once it cannot be; until ends it true whatever its goal', () => {
+  it('a verb ends true once met, misses once it cannot be; until cut short ends it false', () => {
     const body = person(), room = roomOf(body);
     const high = box(room, new Vector3(0, 4, 0.5));
-    const outcomes: boolean[] = [];
+    const outcomes: (boolean | Missed | null)[] = [];
     play(function* () {
       outcomes.push(yield* walkTo(body, new Vector3(0, 0, 1)));
-      outcomes.push(yield* grab(body, high, { right: 'right' }));
+      outcomes.push(yield* attempt(grab(body, high, { right: 'right' })));
       outcomes.push(yield* walkTo(body, new Vector3(0, 0, 9), { until: 0.5 }));
     }, [body], 10, () => outcomes.length === 3);
-    expect(outcomes).toEqual([true, false, true]);
+    expect(outcomes).toEqual([true, expect.any(Missed), false]);
   });
 
-  it('a walk given until ends false once it stalls short of a goal standing still, saying so', () => {
+  it('a walk given until misses once it stalls short of a goal standing still', () => {
     // (a dog before a wall 1.5 m high: it can get no nearer the point beyond)
     const body = new Body(dog(DOG), { dev: true, floor: (_x, z) => (z > 1 ? 1.5 : 0) });
-    let walked: boolean | undefined;
-    const ended = play(function* () { walked = yield* walkTo(body, new Vector3(0, 0, 2), { until: 20 }); }, [body], 25, () => walked !== undefined);
-    expect(walked).toBe(false);
+    let miss: Missed | null | undefined;
+    const ended = play(function* () { miss = yield* attempt(walkTo(body, new Vector3(0, 0, 2), { until: 20 })); }, [body], 25, () => miss !== undefined);
+    expect(miss).toMatchObject({ verb: 'walkTo', why: expect.stringContaining('no nearer') });
     expect(ended).toBeLessThan(15);
-    expect(body.log.filter((entry) => entry.check.startsWith('stalled walk'))).toHaveLength(1);
   });
 });
 

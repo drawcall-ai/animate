@@ -50,6 +50,8 @@ interface Closing {
   joints: Joints;
   near: Triangles;
   world: Matrix4;
+  /** says no shape of the thumb keeps it out of the thing, once */
+  warn: () => void;
 }
 
 /**
@@ -61,11 +63,11 @@ interface Closing {
  * The thumb then opposes them across the grasp (`opposite`; `line`: the grasp's line through the thing, the world's). It touches what
  * `trianglesAbout` gathers.
  */
-export function closedOn(joints: Joints, object: Object3D, line: Line, skins: readonly SkinnedMesh[], world: Matrix4 = joints.hand.matrixWorld): Shape {
+export function closedOn(joints: Joints, object: Object3D, line: Line, skins: readonly SkinnedMesh[], warn: (check: string, message: string) => void, world: Matrix4 = joints.hand.matrixWorld): Shape {
   joints.hand.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, true);
   const near = trianglesAbout(object, skins, WORLD, _centre.setFromMatrixPosition(world), joints.span * _scale.setFromMatrixScale(world).x + SLACK);
-  const shape = structuredClone(WRAP), at: Closing = { joints, near, world };
+  const shape = structuredClone(WRAP), at: Closing = { joints, near, world, warn: () => warn(`thumb on ${object.name}`, `no way of laying the thumb keeps it out of "${object.name}": it goes through it. Give the grip a facing, or a thumb in \`digits\``) };
   for (const digit of DIGITS) {
     const finger = shape[digit];
     const curl = (value: number) => (finger.curl = value), hook = (value: number) => (finger.hook = value);
@@ -184,7 +186,9 @@ function reached(hand: Closing, shape: Shape, face: { way: Vector3; end: Vector3
     if ((best && score >= best.score) || sinks(hand, tried)) continue;
     best = { thumb: { ...tried.thumb }, score };
   }
-  return best?.thumb ?? { ...wrap };
+  if (best) return best.thumb;
+  hand.warn();
+  return { ...wrap };
 }
 
 /**

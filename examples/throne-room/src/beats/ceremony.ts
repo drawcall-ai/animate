@@ -63,7 +63,7 @@ export function* handOver(bearer: Body, leia: Body, medal: Object3D) {
   yield* parallel('race', carry(bearer, medal, offer, { until: Infinity, step: false }), function* () {
     // (her grab starts once the offer is at rest: begun while it moves, it goes for where it was)
     yield* wait(arriving(bearer, 0));
-    if (!(yield* grab(leia, medal, { left: 'outer right', right: 'outer left' }))) throw new Error(`Leia could not take ${medal.name}`);
+    yield* grab(leia, medal, { left: 'outer right', right: 'outer left' });
     if (!leia.holds(medal)) throw new Error(`Leia has no hold of ${medal.name}`);
   });
   release(bearer, medal);
@@ -94,7 +94,7 @@ export const beat: Beat & { order: number } = {
     function* decorate(hero: Body, medal: Object3D, place: Object3D) {
       // the bearer takes the medal up while Leia comes back to her place beside him (from the hero she decorated before)
       yield* parallel('all', walkTo(leia, marks.leia), function* () {
-        if (!(yield* grab(bearer, medal, { left: 'inner left', right: 'inner right' }))) throw new Error(`the bearer could not take ${medal.name}`);
+        yield* grab(bearer, medal, { left: 'inner left', right: 'inner right' });
       });
       yield* handOver(bearer, leia, medal);
       // she hangs it on him; he bows his head to the ribbon as it comes and looks up at her once it is on

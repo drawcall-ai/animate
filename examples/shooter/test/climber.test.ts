@@ -3,6 +3,7 @@ import { Scene, Vector3 } from 'three';
 import { gripping, heights } from '../src/ladder/climbing';
 import { STILE, createLadder } from '../src/ladder/model';
 import { box, DT, jerkless, mountable } from './course';
+import { gripOn, placement } from '@drawcall/animate/puppet';
 
 /** A ladder climbing toward +Z up to a landing 2.4 m up, and a soldier a step from its `end` who can climb it. */
 async function yard(end: 'foot' | 'top' = 'foot') {
@@ -47,7 +48,7 @@ describe('Climber', () => {
       const foot = ladder.body.worldToLocal(bones[`${side}Foot`].getWorldPosition(new Vector3()));
       const wrist = bones[`${side}Hand`].getWorldPosition(new Vector3());
       const holds = ladder.body.children.filter((child) => child.name.startsWith(`${side} hand on rung`));
-      const nearest = Math.min(...holds.map((hold) => soldier.avatar.body.gripOn(side, soldier.avatar.body.placement(side, hold)).wrist.distanceTo(wrist)));
+      const nearest = Math.min(...holds.map((hold) => gripOn(soldier.avatar.body, side, placement(soldier.avatar.body, side, hold)).wrist.distanceTo(wrist)));
       return nearest < 0.01 && offRung(foot, ladder.spacing) < 0.12;
     });
     expect(holding()).toBe(true);

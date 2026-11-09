@@ -6,6 +6,7 @@ import { INDEX } from '../../src/species/humanoid/bones';
 import { leftOf } from '../../src/kernel/math';
 import { dt, insides, person } from '../bodies';
 import { PERSON } from '../../skills/animate/references/person';
+import { poseOf } from '../../src/puppet';
 
 const DEG = Math.PI / 180;
 /** half a step walking at 1.3 m/s (sub-steps: ~0.47 s a step, ~2.1 steps/s) */
@@ -65,7 +66,7 @@ function setOff() {
     root.velocity.z += Math.max(-10 * dt, Math.min(10 * dt, (t > 1 && t < 3.5 ? 1.4 : 0) - root.velocity.z));
     root.position.addScaledVector(root.velocity, dt);
     h.update(dt);
-    const trunk = h.pose.position(INDEX.neck).clone().sub(h.pose.position(INDEX.hips));
+    const trunk = poseOf(h).position(INDEX.neck).clone().sub(poseOf(h).position(INDEX.hips));
     pitch.push(Math.atan2(trunk.z, trunk.y));
   }
   return { pitch, log: h.log };
@@ -95,7 +96,7 @@ function bend(leaning: boolean) {
     root.velocity.set(Math.sin(turning), 0, Math.cos(turning)).multiplyScalar(speed);
     root.position.addScaledVector(root.velocity, dt);
     body.update(dt);
-    const trunk = body.pose.position(INDEX.neck).clone().sub(body.pose.position(INDEX.hips));
+    const trunk = poseOf(body).position(INDEX.neck).clone().sub(poseOf(body).position(INDEX.hips));
     lean.push(Math.atan2(trunk.dot(leftOf(turning)), trunk.y));
   }
   return lean;

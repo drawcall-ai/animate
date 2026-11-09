@@ -1,10 +1,11 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { track } from '../../src/index';
 import { beyond } from '../../src/kernel/limits';
 import { INDEX } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
 import { insides, person, play } from '../bodies';
+import { poseOf } from '../../src/puppet';
 
 const eyes = (h: Person) => h.pose.point(INDEX.head, h.proportions.eyes, new Vector3());
 const turned = (yaw: number, pitch = 0) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pitch));
@@ -24,7 +25,7 @@ describe('track', () => {
     // (a headset turned round and down about the skull's centre, as a head turns)
     const headset = new Object3D();
     headset.quaternion.copy(turned(0.9, 0.3));
-    const centre = body.pose.point(INDEX.head, p.headCenter, new Vector3());
+    const centre = poseOf(body).point(INDEX.head, p.headCenter, new Vector3());
     headset.position.subVectors(p.eyes, p.headCenter).applyQuaternion(headset.quaternion).add(centre);
     play(function* () { yield* track(body, { head: headset }); }, [body], 2);
     // (pitched about the skull's centre, the head's base would rise past what the straight spine reaches: all but that, the body
@@ -64,27 +65,29 @@ describe('track', () => {
   });
 
   it('says so when a hand stays short of a target out of its reach, once, and not for one it keeps up with', () => {
-    const logged = (right: Vector3) => {
-      const body = person({ dev: true });
+    const warned = (right: Vector3) => {
+      const body = person(), warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       play(function* () { yield* track(body, { right }); }, [body], 3);
-      return body.log;
+      const said = warn.mock.calls.map(([message]) => String(message));
+      warn.mockRestore();
+      return said;
     };
     // (a wrist held up and out past the arm's length: it comes to rest about 10 cm short, said as it stops coming nearer)
-    const short = logged(new Vector3(-0.2, 1.9, 0.6));
-    expect(short).toEqual([expect.objectContaining({ check: 'tracked hand short of a target out of reach (m)', where: 'right', limit: 0.02 })]);
-    expect(short[0].value).toBeGreaterThan(0.05);
-    expect(logged(new Vector3(-0.25, 1.35, 0.4))).toEqual([]);
+    expect(warned(new Vector3(-0.2, 1.9, 0.6))).toEqual([expect.stringContaining('a tracked right hand falls short')]);
+    expect(warned(new Vector3(-0.25, 1.35, 0.4))).toEqual([]);
   });
 
   // (the trial that found it: a fist pump whose top went 0.2 m past the arm each stroke, never for half a second at a stretch, unsaid)
   it('says so too of a gesture out of reach only part of each stroke, and not of one within reach throughout', () => {
     const pumped = (top: number) => {
-      const body = person({ dev: true });
+      const body = person(), warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const right = (time: number) => new Vector3(-0.25, 1.35 + top * Math.max(0, Math.sin(2 * Math.PI * time)), 0.3);
       play(function* () { yield* track(body, { right }); }, [body], 4);
-      return body.log;
+      const said = warn.mock.calls.map(([message]) => String(message));
+      warn.mockRestore();
+      return said;
     };
-    expect(pumped(0.75)).toEqual([expect.objectContaining({ check: 'tracked hand short of a target out of reach (m)', where: 'right' })]);
+    expect(pumped(0.75)).toEqual([expect.stringContaining('a tracked right hand falls short')]);
     expect(pumped(0.25)).toEqual([]);
   });
 });

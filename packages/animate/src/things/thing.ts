@@ -42,25 +42,8 @@ export class Thing {
     return this.object.userData.mass !== undefined;
   }
 
-  /**
-   * The named empty, a grip: where a person's hand (a creature's tip) goes, each key below in the empty's frame. A grip declares what of
-   * the hand's placement is fixed and what is free; the hand verb taking it picks the rest as it starts, from where the body stands
-   * (`Body.placement`), and keeps it on the thing while it holds it. What the grip fixes the arm holds exactly; what was picked within
-   * its freedoms is only preferred — the hand keeps its point on the empty and turns off the picked turn where its wrist cannot hold it.
-   * - Alone (no key below), the empty is where the palm's middle goes, the hand turned as the arm brings it, and kept turned as it took
-   *   hold.
-   * - `userData.facing`: the way the touching point (the palm, or the pad) faces into the thing; it rolls freely about it.
-   * - `userData.handle`: an axis, pointing out of the fist at the thumb's end: a handle running through the empty, the palm against it and
-   *   the fingers round it, rolling freely about it (with `facing`, its palm fixed so: the grip fully fixed). `userData.radius` (m) is how
-   *   far the palm lies off the axis, else measured off the thing's meshes about the empty; `userData.length` (m) lets the hand slide along
-   *   the axis that far, centred on the empty (a rail, a rope, a long rung).
-   * - `userData.radius` without a handle: a ball about the empty, the palm anywhere on it facing its middle (with `facing`, there).
-   * - `userData.point`: the digit whose pad goes on the empty instead of the palm's middle — a fingertip on a button: the hand comes as a
-   *   loose fist, points before its last run in along `facing`, holds where the pad meets the face and draws back the way it came.
-   * - `userData.digits` lays digits over the hand closed on the thing: a digit's values (`Finger`, `Thumb`), or the name of an empty on
-   *   the thing its pad presses on (read every update; that empty's own `facing` lays the pad flat on its face).
-   * A creature's tip takes the empty's position alone. Attached things' subtrees (their own `userData.mass`) are not searched.
-   */
+  /** The named empty, a grip (`Grip` says what each key asks), each key read in the empty's frame into the thing's. Attached things' subtrees
+   * (their own `userData.mass`) are not searched. */
   grip(name: string) {
     const node = find(this.object, name);
     if (!node) throw new Error(`"${this.object.name}" has no empty named "${name}"`);
@@ -104,7 +87,7 @@ export class Thing {
 }
 
 /** A grip on a thing, as `Thing.grip` reads it: its empty, where it is in the thing's frame (m, the world's), and what its keys ask (in the thing's frame). */
-export type Grip = ReturnType<Thing['grip']>;
+export type GripOn = ReturnType<Thing['grip']>;
 
 const things = new WeakMap<Object3D, Thing>(), _size = new Vector3();
 

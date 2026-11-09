@@ -1,4 +1,4 @@
-import { carry, grab, release, wait, type Body } from '@drawcall/animate';
+import { attempt, carry, grab, release, wait, type Body } from '@drawcall/animate';
 import { action } from '@pmndrs/timeline';
 import { Object3D, Vector3 } from 'three';
 import { onBone } from './bones';
@@ -70,12 +70,11 @@ export class Reload {
     // (the rifle turning up to the chest with the hand still on its front, the hand leaving it half way)
     yield* wait(raised);
     this.riding = true;
-    if (!(yield* this.swap(spent, full))) throw new Error('The soldier could not swap magazines');
+    yield* this.swap(spent, full);
     this.riding = false;
     this.count++;
     // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it)
-    if (!(yield* grab(this.person, this.rifle.rifle, { left: 'foregrip' }, QUICK)))
-      throw new Error('The support hand could not return to the rifle after reloading');
+    yield* grab(this.person, this.rifle.rifle, { left: 'foregrip' }, QUICK);
     this.issue(pouch);
     this.swapping = false;
   }
@@ -86,26 +85,26 @@ export class Reload {
 
   private *swap(spent: Object3D, full: Object3D) {
     const { person, rifle: { well, below }, magazines } = this;
-    if (!(yield* grab(person, spent, { left: 'base' }, QUICK))) return false;
+    yield* grab(person, spent, { left: 'base' }, QUICK);
     this.onReload?.('out');
     // (pulled straight down out of the well along its line, gathering speed — carried out, it would leave the line still in the well —
     // then flung on out and down, let go of on the way)
     yield* slide(spent, -RIFLE.wellLine, PULL, (share) => share * share);
     const from = spent.getWorldPosition(new Vector3()), to = person.object.localToWorld(FLING.to.clone());
-    yield* carry(person, spent, to, { speed: FLING.speed, until: () => spent.getWorldPosition(new Vector3()).distanceTo(from) > FLING.after });
+    // (flung wherever the hand got: if its way out is barred, it lets go there)
+    yield* attempt(carry(person, spent, to, { speed: FLING.speed, until: () => spent.getWorldPosition(new Vector3()).distanceTo(from) > FLING.after }));
     const { velocity, spin } = release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
     this.litter.drop(spent, velocity, spin);
-    if (!(yield* grab(person, full, { left: 'base' }, BRISK))) return false;
+    yield* grab(person, full, { left: 'base' }, BRISK);
     // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in: put onto
     // its place under the well, the hand keeping hold, then pushed up the line, the hand going with it)
-    if (!(yield* carry(person, full, below, BRISK))) return false;
+    yield* carry(person, full, below, BRISK);
     release(person, full, below, { left: true });
     if (full.parent !== below) throw new Error(`"${full.name}" was not put onto "${below.name}"`);
     yield* slide(full, RIFLE.wellLine, PUSH, (share) => 1 - (1 - share) ** 2);
     release(person, full, well);
     this.onReload?.('in');
-    return true;
   }
 }
 

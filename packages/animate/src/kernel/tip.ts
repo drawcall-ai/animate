@@ -1,3 +1,4 @@
+import type { Miss } from './requests';
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './frame';
 import type { Carrier } from './carrier';
@@ -161,9 +162,9 @@ export class ChainTip {
 
 type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
 
-/** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative speed;
- * a turn only preferred, within REACHED angle or no longer turning (`TURNING`). */
-export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier): boolean {
+/** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative `speed`
+ * (a verb cut short by `until`, on its goal as that comes, needs none: `Infinity`); a turn only preferred, within REACHED angle or no longer turning (`TURNING`). */
+export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier, speed = REACHED.speed): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);
   const then = _then, velocity = _velocity, moved = target.velocity ?? ZERO;
@@ -179,7 +180,7 @@ export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: nu
   }
   const at = prev.position(tip);
   const moving = _v.subVectors(at, prev2.position(tip)).divideScalar(dt).sub(velocity);
-  if (at.distanceTo(then) > REACHED.distance || moving.length() > REACHED.speed) return false;
+  if (at.distanceTo(then) > REACHED.distance || moving.length() > speed) return false;
   const angle = angleOff(f, tip, target, on);
   return angle <= REACHED.angle || (target.preferred === true && turning(f, tip, placed) <= TURNING);
 }
@@ -237,24 +238,19 @@ export class Progress {
 const STOPPED = { closer: 0.003, turned: 0.02, seconds: 0.5 };
 
 /**
- * A late reach reports each unmet constraint, never a zero distance for a blocked turn, saying in `detail` where the tip stopped in the
- * body's frame and, if `cause` says, what held it there. Returns whether position or turn is unmet.
+ * A late reach's miss, if position or turn is unmet (position first, never a zero distance for a blocked turn): where the tip stopped in the
+ * body's frame and, if `cause` says, what held it there.
  */
-export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier, cause?: (at: Vector3) => string | undefined): boolean {
+export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier, cause?: (at: Vector3) => string | undefined): Miss | null {
   const { distance, angle, at } = unmet(f, tip, target, on);
   const why = cause?.(at), held = why ? `: ${why}` : '';
   const off = _off.subVectors(f.prev.position(tip), at), facing = f.prev.facing;
   const ahead = off.dot(forwardOf(facing, _axis)), left = off.dot(leftOf(facing, _axis)), cm = (m: number) => (100 * Math.abs(m)).toFixed(1);
   const offset = `${cm(ahead)} cm ${ahead >= 0 ? 'ahead of' : 'behind'}, ${cm(left)} cm ${left >= 0 ? 'left of' : 'right of'}, ` +
     `${cm(off.y)} cm ${off.y >= 0 ? 'above' : 'below'} it in the body's frame`;
-  const details = {
-    distance: `stopped ${cm(distance)} cm off it (${offset})${held}`,
-    angle: `stopped turned ${(angle * 180 / Math.PI).toFixed(1)}° off it${held}`,
-  };
-  for (const [name, value, limit] of [['distance', distance, REACHED.distance], ['angle', angle, REACHED.angle]] as const) {
-    if (value > limit) f.dev?.append(f.time, { check: `late reach: ${name} (${name === 'distance' ? 'm' : 'rad'})`, value, limit, where, detail: details[name] });
-  }
-  return distance > REACHED.distance || angle > REACHED.angle;
+  if (distance > REACHED.distance) return { where, off: distance, limit: REACHED.distance, why: `stopped ${cm(distance)} cm off it (${offset})${held}` };
+  if (angle > REACHED.angle) return { where, off: angle, limit: REACHED.angle, why: `stopped turned ${(angle * 180 / Math.PI).toFixed(1)}° off it, in rad${held}: change the grip's roll or the target's turn` };
+  return null;
 }
 
 /** a world rotation in the frame a target is given in: on a carrier, its (as placed `current`) */

@@ -17,7 +17,7 @@ import { ARM_REACH, PROTRACTION } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { footing, walking, type WalkUp } from './stand';
 import { guidesFor, CARRYING, type Guides } from './guide';
-import { holdAlong, travel } from './travel';
+import { holdAlong, STALL, travel } from './travel';
 import { regripping, type Regripping } from './grasp';
 
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
@@ -50,10 +50,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   const placed = way.points[way.points.length - 1](person.frame);
   const things = [{ bounds: thing.bounds, position: placed.position.clone(), quaternion: (placed.quaternion ?? person.track(thing.object).current.quaternion).clone() }];
   const plan = way.own ? 'there' : footing(person, { place: way.points[way.points.length - 1], held, things }, options.step ?? true);
-  if (plan === 'nowhere') {
-    request.fail();
-    return;
-  }
+  if (plan !== 'there' && 'nowhere' in plan) return request.fail({ ...plan.nowhere, where: thing.object.name });
   const end = way.points[way.points.length - 1];
   // (in one hand, its grasp planned for its end as it comes there)
   const grasp = regripping(person, thing, end);
@@ -66,7 +63,13 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   if (plan === 'there') yield* way.own ? moving() : parallel<Frame>('race', noticing(person, request, (f) => end(f).position), moving());
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   request.met();
-  yield* holdAlong(person, request, thing, guides(), end, undefined, way.own);
+  const kept = guides();
+  // (at the end of a story's `until`: on its place — or as near it as its body holds it, which only a guide says — as a carry ends true)
+  request.there = () => {
+    const { position, quaternion } = person.track(thing.object).current;
+    return position.distanceTo(kept.goal.position) <= STALL.close && quaternion.angleTo(kept.goal.quaternion) <= STALL.turn;
+  };
+  yield* holdAlong(person, request, thing, kept, end, undefined, way.own);
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
@@ -96,7 +99,8 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
       yield* action<Frame>({ until: () => lifted || carrier.current.position.y >= from + rise * APPROACH_RISE });
       // (setting off, the eyes leave where it was for where it goes: held on the empty spot, they would swing across behind the body)
       lifted = true;
-      if (!(yield* walking(request, plan))) request.fail();
+      const stall = yield* walking(request, plan);
+      if (stall) request.fail(stall);
       approached = true;
     }, function* () {
       yield* travel(person, request, thing, [[LIFT, atBody]], guides, resting, { eta: onward, walks: true });
@@ -142,8 +146,6 @@ function timed(person: Reacher, thing: Thing, points: readonly ((f: Frame) => Go
 /** Support take-up precedes lifting; heavy supported loads get an anticipatory knee dip. */
 function* lifting(person: Reacher, request: Request, thing: Thing) {
   if (carriedBy(person, thing)) return;
-  const f = person.frame;
-  if (!thing.massive) f.dev?.append(f.time, { check: 'lifted a thing without userData.mass (kg)', value: 0, limit: 0, where: thing.object.name });
   // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
   const hips = floorUnder(person) + person.proportions.hipHeight;
   if (supported(thing) && thing.mass > PREPARED && (thing.object.getWorldPosition(_v).y >= hips || hips - person.pose.position(0).y < 0.005 * person.scale)) {

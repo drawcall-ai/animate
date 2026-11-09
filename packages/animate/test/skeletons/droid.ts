@@ -1,5 +1,5 @@
 import type { SkeletonBone } from '@drawcall/rig';
-import { powerGait, species } from '../../src/index';
+import { powerGait, species } from '../../src/species';
 
 // A two-strut droid with no carriage (an astromech's barrel on its axle, a dome that turns on it): a creature of the library's custom
 // species without the four-legged carriage's idle life. Each strut has a hidden knee bent forward at rest, for the spare reach a leg needs.

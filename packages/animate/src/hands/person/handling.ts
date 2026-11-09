@@ -10,7 +10,7 @@ import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
-import { takingOf } from './take';
+import { settling, takingOf } from './take';
 
 /** the longest a grab waits, its hands on their grips, for their fingers to close (s) */
 const CLOSING = 0.2;
@@ -37,6 +37,7 @@ export function personHands(person: Reacher): Handling {
         // (held once the fingers have closed on it: taken away as the hand arrives, a thing would leave before the grasp holds it)
         const fingers = person.fingers, began = person.frame.time;
         if (fingers) yield* action<Frame>({ until: (f) => f.time - began >= CLOSING || takes.every(({ side }) => fingers.closed(side)) });
+        yield* settling(person, request, takes, began);
         if (loose) yield* liftingClear(person, request, thing);
         request.met();
       } finally {

@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, carry, grab, humanoid, throwAt, wait } from '../../src/index';
+import { attempt, Body, carry, grab, humanoid, Missed, throwAt, wait } from '../../src/index';
 import { SOLDIER } from '../skeletons/soldier';
 import { PERSON } from '../../skills/animate/references/person';
 import { person, play } from '../bodies';
@@ -107,16 +107,17 @@ describe('throwAt', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('says in development when a target is out of reach at the speed asked, still throwing as far as it goes', () => {
+  it('misses a target out of reach at the speed asked, after throwing as far as it goes', () => {
     const body = person({ dev: true }), room = roomOf(body);
     const ball = box(room, new Vector3(-0.25, 1.1, 0.35), { size: new Vector3(0.06, 0.1, 0.06), mass: 0.4, solid: false });
     Object.assign(empty(ball, 'body', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const thrown: Vector3[] = [];
+    let miss: Missed | null | undefined;
     play(function* () {
       yield* grab(body, ball, { right: 'body' });
-      yield* throwAt(body, ball, new Vector3(0, 0, 40), { speed: 5, released: ({ velocity }) => void thrown.push(velocity.clone()) });
-    }, [body], 4, () => thrown.length > 0);
+      miss = yield* attempt(throwAt(body, ball, new Vector3(0, 0, 40), { speed: 5, released: ({ velocity }) => void thrown.push(velocity.clone()) }));
+    }, [body], 8, () => miss !== undefined);
     expect(thrown[0].length()).toBeCloseTo(5, 6);
-    expect(body.log.map(({ check }) => check)).toContain('throw: a target out of reach at its speed (m/s)');
+    expect(miss).toMatchObject({ verb: 'throwAt', where: 'box' });
   });
 });

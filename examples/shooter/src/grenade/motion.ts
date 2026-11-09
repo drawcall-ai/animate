@@ -1,4 +1,4 @@
-import { carry, grab, release, throwAt, type Body } from '@drawcall/animate';
+import { attempt, carry, grab, release, throwAt, type Body } from '@drawcall/animate';
 import { parallel } from '@pmndrs/timeline';
 import { BoxGeometry, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
 import type { Grenades } from '.';
@@ -55,22 +55,22 @@ export class GrenadeMotion {
     const person = this.person, { object, pin } = item.model;
     this.current = item.model;
     this.phase = 'Taking grenade';
-    if (!(yield* grab(person, object, { right: 'body' }, QUICK))) return yield* this.putBack(item, eye);
+    if (yield* attempt(grab(person, object, { right: 'body' }, QUICK))) return yield* this.putBack(item, eye);
     this.grenades.count--;
     this.phase = 'Pulling pin';
     const ready = () => {
       this.ready.position.copy(person.object.worldToLocal(person.armPoint('right', READY, 0.65)));
       return this.ready;
     };
-    if (!(yield* parallel('all', carry(person, object, ready, QUICK), grab(person, pin, { left: 'ring' }, QUICK)))) return yield* this.putBack(item, eye);
+    if (yield* attempt(parallel('all', carry(person, object, ready, QUICK), grab(person, pin, { left: 'ring' }, QUICK)))) return yield* this.putBack(item, eye);
     const clear = () => pin.getWorldPosition(new Vector3()).distanceTo(object.getWorldPosition(new Vector3())) > 0.10;
-    yield* carry(person, pin, () => person.armPoint('left', new Vector3(1, -0.25, 0.8), 0.8), { ...QUICK, until: clear });
+    yield* attempt(carry(person, pin, () => person.armPoint('left', new Vector3(1, -0.25, 0.8), 0.8), { ...QUICK, until: clear }));
     if (!clear()) return yield* this.putBack(item, eye);
     this.armed = true;
     this.grenades.drop(pin, release(person, pin));
     this.phase = 'Throwing';
     // (the camera stays free until the grenade leaves the hand: its view then, not at the key press; animate times the release)
-    const thrown = yield* throwAt(person, object, undefined, {
+    yield* throwAt(person, object, undefined, {
       released: (motion) => {
         motion.velocity.copy(aim()).multiplyScalar(SPEED).add(LOFT).add(velocity());
         this.grenades.launch(item.model, motion, eye());
@@ -79,9 +79,7 @@ export class GrenadeMotion {
         this.armed = false;
       },
     });
-    if (!thrown) this.interrupt(eye());
     this.phase = null;
-    return thrown;
   }
 
   /** If killed after pulling the pin, let the live grenade fall at the hand; its fuse still runs. */
@@ -113,13 +111,13 @@ export class GrenadeMotion {
       object.attach(pin);
     }
     if (person.holds(object)) {
-      if (yield* carry(person, object, slot, QUICK)) {
+      if (yield* attempt(carry(person, object, slot, QUICK))) this.interrupt(eye());
+      else {
         release(person, object, slot);
         this.grenades.count++;
-      } else this.interrupt(eye());
+      }
     }
     this.current = undefined;
     this.phase = null;
-    return false;
   }
 }

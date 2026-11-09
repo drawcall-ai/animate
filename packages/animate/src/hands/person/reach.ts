@@ -59,6 +59,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
   });
   const middle = (f: Frame) => targets.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(targets.length);
   const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
+  request.there = () => targets.every(({ side, target }) => reached(person.frame, person.hands[side], target(person.frame), undefined, Infinity));
   const going = targets.map(({ side, target }) => {
     const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
     const { speed } = pace, { accel } = motion;
@@ -84,21 +85,22 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
       const inReach = targets.every(({ side }, i) => armReaches(person, planned[i], side, true));
       const held = targets.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
       const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
-      let stalled = plan === 'nowhere', arrived = false;
+      const walkUp = plan !== 'there' && 'walk' in plan ? plan : null;
+      let stalled = plan !== 'there' && 'nowhere' in plan ? plan.nowhere : null, arrived = false;
       const setsOff = (f: Frame) => {
-        if (Number.isNaN(setOff) && (plan === 'there' || (plan !== 'nowhere' && plan.walk.eta <= NEAR))) setOff = f.time;
+        if (Number.isNaN(setOff) && (plan === 'there' || (walkUp && walkUp.walk.eta <= NEAR))) setOff = f.time;
         return !Number.isNaN(setOff);
       };
-      if (plan !== 'nowhere') yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
+      if (!stalled) yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
         yield* parallel<Frame>('all', action<Frame>({ until: setsOff }), function* () {
-          if (plan === 'there') return;
+          if (!walkUp) return;
           yield* parallel<Frame>('race', function* () {
-            stalled = !(yield* walking(request, plan, Math.max(0, lasts - NEAR)));
+            stalled = yield* walking(request, walkUp, Math.max(0, lasts - NEAR));
           }, action<Frame>({ until: moved }));
         });
         if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = there(f)) });
       });
-      if (stalled) request.fail();
+      if (stalled) request.fail(stalled);
       if (arrived) request.met();
       if (stalled || arrived) yield* action<Frame>({ until: moved });
     }
@@ -110,7 +112,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
 
 /**
  * A reach's lateness, watched each sub-step against when it was planned to end (`ends`, s): past it, a hand off its goal that has
- * stopped closing on it makes the reach late at once, one still moving `REACHING` s on — said in development, the reach failed if a hand
+ * stopped closing on it makes the reach late at once, one still moving `REACHING` s on — the reach missed if a hand
  * is off its goal. While the legs are still stepping or settling under the hands, each is watched afresh: the body carrying a hand past
  * its goal and back is not the hand's own lack of progress.
  */
@@ -126,7 +128,10 @@ export function lateWatch(person: Reacher, request: Request, hands: readonly { s
     });
     if (!stopped && f.time <= ends + REACHING) return;
     late = true;
-    for (const { side, goal, on, where } of hands) if (lateReach(f, person.hands[side], goal(f), where, on?.(), limitOf(person, side))) request.fail();
+    for (const { side, goal, on, where } of hands) {
+      const miss = lateReach(f, person.hands[side], goal(f), where, on?.(), limitOf(person, side));
+      if (miss) request.fail(miss);
+    }
   };
 }
 

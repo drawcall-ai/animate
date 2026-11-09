@@ -7,6 +7,7 @@ import type { Puppet } from '../puppet';
 import type { Soldier } from '../soldier';
 import { BEATS, cues, gripping, hang, heights, onto, rest, slung, type End } from './climbing';
 import type { Ladder } from './model';
+import { placement, shapeHand } from '@drawcall/animate/puppet';
 
 /** Seconds to get on the ladder (and off it), and how fast it is climbed (m/s). */
 const MOUNTING = 1.8;
@@ -57,7 +58,7 @@ export class Climber extends Mount {
     const { body, rifle } = this.soldier.avatar, onto = hang(puppet, standing, this.ladder, rifle, this.end(), this.progress, this.height, this.view);
     for (const side of ['left', 'right'] as const) {
       const to = onto[side];
-      body.shapeHand(side, to instanceof Object3D ? body.placement(side, to) : to, dt);
+      shapeHand(body, side, to instanceof Object3D ? placement(body, side, to) : to, dt);
     }
   }
 

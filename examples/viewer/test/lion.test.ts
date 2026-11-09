@@ -3,22 +3,23 @@ import { expect, it } from 'vitest';
 import { selfOf } from '../../../packages/animate/src/body/body';
 import { lionRun } from '../src/scenarios/lion';
 import { Simulation } from '../src/simulation';
+import { poseOf } from '@drawcall/animate/puppet';
 
 const DEG = Math.PI / 180;
 
 it('walks, trots and gallops after its prey — a rotary gallop, two flights a stride, its spine flexing and its head held level — then stops', () => {
   const sim = new Simulation(lionRun(), { dev: true });
   const [lion] = sim.stage.bodies;
-  const bone = (name: string) => lion.pose.skeleton.index(name);
+  const bone = (name: string) => poseOf(lion).skeleton.index(name);
   const spine = bone('spine'), pelvis = bone('pelvis'), head = bone('head'), tail = bone('tail'), withersAt = bone('leftFore0');
-  const paws = lion.species.legs!.chains.map((leg) => leg.joints[3].bone), standing = lion.pose.position(paws[0]).y;
-  const down = (paw: number) => lion.pose.position(paw).y < standing + 5e-4;
+  const paws = lion.species.legs!.chains.map((leg) => leg.joints[3].bone), standing = poseOf(lion).position(paws[0]).y;
+  const down = (paw: number) => poseOf(lion).position(paw).y < standing + 5e-4;
   // (the pace its legs run it at: its walk's, not its centre of mass's, which rides on its strides)
   const paceOf = () => selfOf(lion).locomotion.velocity.length();
   let was = paws.map(down), fastest = 0, lastSpeed = 0;
   const landed: [time: number, speed: number][][] = paws.map(() => []);
   const gallop: { time: number; down: boolean[]; flex: number; pelvis: number; tail: number; head: number; withers: number }[] = [];
-  const pitch = (index: number) => new Euler().setFromQuaternion(lion.pose.rotation(index), 'YXZ').x / DEG;
+  const pitch = (index: number) => new Euler().setFromQuaternion(poseOf(lion).rotation(index), 'YXZ').x / DEG;
   // (its centre of mass's height, its trunk's pitch, whether its legs stand as they step)
   const riding: Record<'trot' | 'gallop', { time: number; com: number; pitch: number; head: number; up: boolean; lands: boolean }[]> = { trot: [], gallop: [] };
   const speedingUp: number[] = [];
@@ -29,11 +30,11 @@ it('walks, trots and gallops after its prey — a rotary gallop, two flights a s
     fastest = Math.max(fastest, speed);
     now.forEach((isDown, leg) => { if (isDown && !was[leg]) landed[leg].push([time, speed]); });
     was = now;
-    if (speed > 13.5) gallop.push({ time, down: now, flex: new Euler().setFromQuaternion(lion.pose.local(spine), 'YXZ').x / DEG,
-      pelvis: pitch(pelvis), tail: pitch(tail), head: lion.pose.position(head).y, withers: lion.pose.position(withersAt).y });
+    if (speed > 13.5) gallop.push({ time, down: now, flex: new Euler().setFromQuaternion(poseOf(lion).local(spine), 'YXZ').x / DEG,
+      pelvis: pitch(pelvis), tail: pitch(tail), head: poseOf(lion).position(head).y, withers: poseOf(lion).position(withersAt).y });
     const stands = lion.feet.map((foot) => foot.planted);
     const band = speed > 3.3 && speed < 3.6 ? 'trot' : speed > 13.5 && time > (gallop[0]?.time ?? Infinity) + 0.5 ? 'gallop' : null;
-    if (band) riding[band].push({ time, com: lion.pose.com(new Vector3()).y, pitch: pitch(0), head: pitch(head), up: stands.every((planted) => !planted), lands: stands[1] && !stood[1] });
+    if (band) riding[band].push({ time, com: poseOf(lion).com(new Vector3()).y, pitch: pitch(0), head: pitch(head), up: stands.every((planted) => !planted), lands: stands[1] && !stood[1] });
     stood = stands;
     if (speed > 4 && speed < 13 && speed - lastSpeed > 1e-3) speedingUp.push(pitch(0));
     lastSpeed = speed;

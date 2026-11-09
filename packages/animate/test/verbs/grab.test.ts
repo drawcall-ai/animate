@@ -2,7 +2,7 @@ import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
 import { runTimeline } from '@pmndrs/timeline';
-import { Body, dog, grab, humanoid, reach, release, wait } from '../../src/index';
+import { attempt, Body, dog, grab, humanoid, Missed, reach, release, wait } from '../../src/index';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
 import { run } from '../bodies';
@@ -120,16 +120,17 @@ describe('grab, walking up', () => {
     const body = person({ dev: true }), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.9, 0.45));
     const high = box(room, new Vector3(0, 4, 0.45), { name: 'high' });
-    const outcomes: boolean[] = [];
+    let miss: Missed | null = null, took: boolean | undefined;
     play(function* () {
-      outcomes.push(yield* grab(body, high, BOTH));
-      outcomes.push(yield* grab(body, load, BOTH));
-    }, [body], 6, () => outcomes.length === 2);
-    expect(outcomes).toEqual([false, true]);
+      miss = yield* attempt(grab(body, high, BOTH));
+      took = yield* grab(body, load, BOTH);
+    }, [body], 6, () => took !== undefined);
+    expect(miss).toMatchObject({ verb: 'grab', why: expect.stringContaining('above the shoulders on tiptoe') });
+    expect(took).toBe(true);
     expect(worldOf(load).y).toBeGreaterThan(0.9 + 0.02);
     expect(load.parent).not.toBe(room);
     expect(body.holds(load)).toBe(true);
-    expect(body.log.map(({ check }) => check)).toEqual(['approach: grip above the shoulders on tiptoe (m)']);
+    expect(body.log).toEqual([]);
   });
 });
 
@@ -216,16 +217,15 @@ it('reach fails an unreachable hand turn and reports its angular error', () => {
     const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
     const grip = named(handle, 'right');
     grip.rotation.z = Math.PI;
-    let result: boolean | undefined;
+    let miss: Missed | null | undefined;
     play(function* () {
-      result = yield* reach(body, { right: grip });
-    }, [body], 12, () => result !== undefined);
-    expect(result).toBe(false);
+      miss = yield* attempt(reach(body, { right: grip }));
+    }, [body], 12, () => miss !== undefined);
     expect(body.holds(handle)).toBe(false);
-    const angles = body.log.filter(({ check }) => check.startsWith('late reach: angle'));
-    expect(angles).toHaveLength(dev ? 1 : 0);
-    if (dev) expect(angles[0].value).toBeGreaterThan(angles[0].limit);
-    expect(body.log.filter(({ check }) => check.startsWith('late reach: distance'))).toEqual([]);
+    // (the same with development on or off)
+    expect(miss).toBeInstanceOf(Missed);
+    expect(miss?.off).toBeGreaterThan(miss?.limit ?? Infinity);
+    expect(miss?.why).toContain('turned');
   }
 });
 
@@ -273,13 +273,12 @@ describe('grab at once (speed: Infinity)', () => {
     expect(took).toBe(true);
   });
 
-  it('fails, saying so, for a grip out of reach of where the body stands; throws once the body has been shown, or for a creature', () => {
+  it('misses for a grip out of reach of where the body stands; throws once the body has been shown, or for a creature', () => {
     const far = person({ dev: true }), room = roomOf(far);
     const thing = box(room, new Vector3(0, 1, 1.5), { mass: 0.5 });
-    let took: boolean | null = null;
-    play(function* () { took = yield* grab(far, thing, BOTH, { speed: Infinity }); }, [far], 0.5);
-    expect(took).toBe(false);
-    expect(far.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: 'grab at once: a grip beyond the arm’s reach from where the body stands (m short)' })]));
+    let miss: Missed | null = null;
+    play(function* () { miss = yield* attempt(grab(far, thing, BOTH, { speed: Infinity })); }, [far], 0.5);
+    expect(miss).toMatchObject({ verb: 'grab', why: expect.stringContaining('beyond the arm\'s reach') });
     const shown = person(), near = box(roomOf(shown), new Vector3(0, 1, 0.35), { mass: 0.5 });
     run(shown, 0.1);
     expect(() => play(function* () { yield* grab(shown, near, BOTH, { speed: Infinity }); }, [shown], 0.1)).toThrow('only as a body starts');

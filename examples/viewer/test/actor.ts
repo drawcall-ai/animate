@@ -4,6 +4,7 @@ import type { HumanoidBone } from '@drawcall/animate';
 import { selfOf } from '../../../packages/animate/src/body/body';
 import { personOf, type Person as Insides } from '../../../packages/animate/src/body/person';
 import type { Person } from '../src/scenario';
+import { poseOf } from '@drawcall/animate/puppet';
 
 type Proportions = NonNullable<Person['species']['person']>;
 type BoneName = HumanoidBone | 'leftToes' | 'rightToes';
@@ -66,7 +67,7 @@ export class Actor {
 
   /** where a bone (by its humanoid name) or a landmark (`leftEye`, `leftHeel`, `leftBigToe`, `nose`, …) is (world) */
   joint(name: string, out = new Vector3()): Vector3 {
-    const pose = this.body.pose;
+    const pose = poseOf(this.body);
     const index = pose.skeleton.bones.findIndex((bone) => bone.name === name);
     if (index >= 0) return out.copy(pose.position(index));
     const point = this.points[name];
@@ -76,12 +77,12 @@ export class Actor {
 
   /** a bone's turn (world; identity standing in the T-pose facing +Z) */
   turn(name: BoneName, out = new Quaternion()): Quaternion {
-    return out.copy(this.body.pose.rotation(this.body.pose.skeleton.index(name)));
+    return out.copy(poseOf(this.body).rotation(poseOf(this.body).skeleton.index(name)));
   }
 
   /** a point fixed in a bone's frame, where it is now (world) */
   point(name: BoneName, local: Vector3, out = new Vector3()): Vector3 {
-    return this.body.pose.point(this.body.pose.skeleton.index(name), local, out);
+    return poseOf(this.body).point(poseOf(this.body).skeleton.index(name), local, out);
   }
 }
 

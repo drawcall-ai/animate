@@ -11,6 +11,7 @@ import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, person, scene } from '../bodies';
 import { HORSE } from '../../skills/animate/references/horse';
+import { poseOf } from '../../src/puppet';
 
 const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);
 const WALK = gaitOf(MARE);
@@ -110,7 +111,7 @@ it('follows a moving goal with supported contacts and a root that turns toward i
   claim(body, 'trunk', (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); });
   const step = scene([body], function* () { yield* walkTo(body, (time) => new Vector3(0.05, 0, 2 + 0.75 * time), { speed: 0.95, accel: 0.65, until: Infinity }); });
   for (let tick = 0; tick < 8 * 60; tick++) step();
-  expect(body.pose.position(0).z).toBeGreaterThan(4);
+  expect(poseOf(body).position(0).z).toBeGreaterThan(4);
   expect(turned).toBeGreaterThan(0.01);
   expect(turned).toBeLessThan(0.2);
   expect(body.log).toEqual([]);
@@ -151,29 +152,29 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
     step();
     LEGS.forEach((leg, i) => {
       if (down(i) && !planted[i]) {
-        const velocity = body.pose.position(leg.hoof).clone().sub(selfOf(body).frame.prev2.position(leg.hoof)).multiplyScalar(60);
+        const velocity = poseOf(body).position(leg.hoof).clone().sub(selfOf(body).frame.prev2.position(leg.hoof)).multiplyScalar(60);
         contact[i < 2 ? 0 : 1] = Math.max(contact[i < 2 ? 0 : 1], Math.abs(velocity.y));
         horizontal[i < 2 ? 0 : 1] = Math.max(horizontal[i < 2 ? 0 : 1], velocity.setY(0).length());
       }
       planted[i] = down(i);
     });
     if (tick < 180) continue;
-    const q = body.pose.local(LEGS[0].cannon);
+    const q = poseOf(body).local(LEGS[0].cannon);
     const angle = Math.abs(2 * Math.atan2(q.x, q.w)) * 180 / Math.PI;
     if (down(0) && phase(0) > 0.15 && phase(0) < 0.45) support.push(angle);
     if (!down(0)) swing.push(angle);
-    poll.push(body.pose.position(HEAD).y);
+    poll.push(poseOf(body).position(HEAD).y);
     LEGS.forEach((leg, i) => {
       if (!down(i)) {
-        const forward = new Vector3(0, 0, 1).applyQuaternion(body.pose.rotation(leg.hoof));
+        const forward = new Vector3(0, 0, 1).applyQuaternion(poseOf(body).rotation(leg.hoof));
         hoofPitch.push(Math.asin(forward.y) * 180 / Math.PI);
       }
       if (i < 2 && down(i) && phase(i) > 0.26 && phase(i) < 0.3) {
-        const delta = body.pose.position(leg.pastern).clone().sub(body.pose.position(leg.cannon));
+        const delta = poseOf(body).position(leg.pastern).clone().sub(poseOf(body).position(leg.cannon));
         column.push(Math.abs(Math.atan2(delta.z, -delta.y)) * 180 / Math.PI);
       }
       if (i >= 2 && down(i) && phase(i) > 0.2 && phase(i) < 0.45) {
-        const hock = body.pose.local(leg.cannon);
+        const hock = poseOf(body).local(leg.cannon);
         hindHock.push(Math.abs(2 * Math.atan2(hock.x, hock.w)) * 180 / Math.PI);
       }
     });
@@ -196,14 +197,14 @@ it.each([[0.4, 0], [0, -2], [1, 2]])('supports ordinary goals (%s, %s), then fol
   let goal = new Vector3(x, 0, z);
   const body: Body = new Body(MARE, { dev: true });
   const step = scene([body], function* () { yield* walkTo(body, () => goal, { speed: 0.95, accel: 0.65, until: Infinity }); });
-  const start = body.pose.position(0).clone();
+  const start = poseOf(body).position(0).clone();
   for (let tick = 0; tick < 120; tick++) step();
   // (a goal behind it turned to on the spot, the root staying put; one beside it within reach stepped toward)
-  if (z < 0) expect(body.pose.position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
+  if (z < 0) expect(poseOf(body).position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
   goal = new Vector3(0, 0, 3);
   // (the next one ahead it then walks on to: after a turn on the forehand back round — 4–5 hind steps, ~2 s — and 3 m)
   for (let tick = 0; tick < (z < 0 ? 5.5 : 4) * 60; tick++) step();
-  expect(body.pose.position(0).z).toBeGreaterThan(1);
+  expect(poseOf(body).position(0).z).toBeGreaterThan(1);
   expect(body.log).toEqual([]);
 });
 
@@ -213,8 +214,8 @@ it('brakes for a moving goal that crosses behind a travelling root', () => {
     yield* walkTo(body, (time) => time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(time), 0, -2), { speed: 0.95, accel: 0.65, until: Infinity });
   });
   for (let tick = 0; tick < 480; tick++) step();
-  expect(body.pose.position(0).z).toBeGreaterThan(0.5);
-  expect(body.pose.position(0).z).toBeLessThan(3);
+  expect(poseOf(body).position(0).z).toBeGreaterThan(0.5);
+  expect(poseOf(body).position(0).z).toBeLessThan(3);
   expect(body.log).toEqual([]);
 });
 
@@ -263,7 +264,7 @@ it('follows a walking person 2.3 m beside it, its forefeet and hind feet never i
     for (const z of [2, 4, 6, 8]) { yield* walkTo(walker, new Vector3(0, 0, z)); yield* wait(2.5); }
   };
   const beside = new Vector3(2.3, 0, -0.6);
-  expect(walked(after(() => walker.pose.position(0).clone().setY(0).add(beside)), 16.5, { body: walker, story }).log).toEqual([]);
+  expect(walked(after(() => poseOf(walker).position(0).clone().setY(0).add(beside)), 16.5, { body: walker, story }).log).toEqual([]);
 });
 
 it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up together, in the final pose, only with dev enabled', () => {
@@ -273,12 +274,10 @@ it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up 
     for (let k = 0; k < 40; k++) step();
     return body.log.filter((entry) => entry.check.startsWith('gait lift-off together') || entry.check.startsWith('walk pair in the air'));
   };
-  const checks = run(true).map((entry) => `${entry.check} ${entry.where}`);
-  expect(checks).toContain('gait lift-off together (cycle apart) leftForeHoof with rightForeHoof');
-  expect(checks).toContain('walk pair in the air together (cycle apart) leftForeHoof with rightForeHoof');
-  expect(checks).toContain('walk pair in the air together (cycle apart) leftHindHoof with rightHindHoof');
+  const checks = run(true);
+  expect(checks.map(({ check }) => check).sort()).toEqual(['gait lift-off together (cycle apart)', 'walk pair in the air together (cycle apart)']);
   // (a walk's hooves a quarter of a cycle apart may be up together: a diagonal or lateral pair is no girdle's)
-  expect(checks.filter((c) => c.startsWith('walk pair') && /Fore\w* with \w*Hind/.test(c))).toEqual([]);
+  expect(checks.find(({ check }) => check.startsWith('walk pair'))?.where).toMatch(/(Fore\w* with \w*Fore)|(Hind\w* with \w*Hind)/);
   expect(run(false)).toEqual([]);
 });
 
@@ -314,7 +313,7 @@ it.each([['walk', 1.6], ['trot', 3.7]] as const)('walk and trot excursions stay 
   for (let tick = 0; tick < 960; tick++) {
     step();
     if (tick < 600) continue;
-    const p = body.pose;
+    const p = poseOf(body);
     poll.push(p.position(HEAD).y); withers.push(p.position(LEGS[0].scapula ?? 0).y); croup.push(p.point(PELVIS, CROUP, new Vector3()).y);
     trunk.push(pitchOf(p.rotation(0))); head.push(pitchOf(p.rotation(HEAD))); back.push(pitchOf(p.local(SPINE)));
     roll.push(new Euler().setFromQuaternion(p.rotation(PELVIS), 'YXZ').z);
@@ -370,7 +369,7 @@ it('standing life is seeded, irregular, tied, balanced and rests a hind hoof on 
     let rested = 0, toe = 0, heel = 0, tied = 0, aside = 0, ahead = -Infinity, behind = Infinity, standing = NaN;
     for (let tick = 0; tick < seconds * 60; tick++) {
       step();
-      const p = body.pose;
+      const p = poseOf(body);
       if (Number.isNaN(standing)) standing = p.position(LEGS[2].upper).y;
       EARS.forEach((ear, i) => ears[i].push(p.local(ear).angleTo(new Quaternion())));
       tail.push(p.local(TAIL).angleTo(new Quaternion())); head.push(p.rotation(HEAD).angleTo(new Quaternion()));
@@ -423,21 +422,21 @@ it('ears lead the head toward an approaching person; both saddling reactions beg
   let startle: Vector3 | undefined;
   const { body, step } = movingHorse('walk', 0, { startle: () => startle }, 42, () => person);
   for (let i = 0; i < 60; i++) step();
-  const ear = body.pose.local(EARS[0]).clone(), neck = body.pose.local(NECK).clone();
+  const ear = poseOf(body).local(EARS[0]).clone(), neck = poseOf(body).local(NECK).clone();
   person = new Vector3(2, 1.5, 3);
   for (let i = 0; i < 6; i++) step();
-  expect(ear.angleTo(body.pose.local(EARS[0]))).toBeGreaterThan(neck.angleTo(body.pose.local(NECK)));
+  expect(ear.angleTo(poseOf(body).local(EARS[0]))).toBeGreaterThan(neck.angleTo(poseOf(body).local(NECK)));
   for (let i = 0; i < 54; i++) step();
-  expect(new Euler().setFromQuaternion(body.pose.local(NECK), 'YXZ').y).toBeGreaterThan(0.1);
+  expect(new Euler().setFromQuaternion(poseOf(body).local(NECK), 'YXZ').y).toBeGreaterThan(0.1);
   const point = new Vector3(2, 1, -1);
   for (let event = 0; event < 2; event++) {
-    const before = body.pose.local(HEAD).clone();
+    const before = poseOf(body).local(HEAD).clone();
     startle = point.clone();
     for (let i = 0; i < 60; i++) step();
-    expect(before.angleTo(body.pose.local(HEAD))).toBeGreaterThan(0.15);
-    expect(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y).toBeGreaterThan(0.15);
+    expect(before.angleTo(poseOf(body).local(HEAD))).toBeGreaterThan(0.15);
+    expect(new Euler().setFromQuaternion(poseOf(body).local(HEAD), 'YXZ').y).toBeGreaterThan(0.15);
     for (let i = 0; i < 240; i++) step();
-    expect(Math.abs(new Euler().setFromQuaternion(body.pose.local(HEAD), 'YXZ').y)).toBeLessThan(0.01);
+    expect(Math.abs(new Euler().setFromQuaternion(poseOf(body).local(HEAD), 'YXZ').y)).toBeLessThan(0.01);
   }
   expect(body.log).toEqual([]);
 });
@@ -450,7 +449,7 @@ it.each([['walk', 1.6], ['trot', 3.7]] as const)('%s: solved hooves peak near mi
   for (let tick = 0; tick < 960; tick++) {
     step();
     LEGS.forEach((leg, i) => {
-      const p = body.pose;
+      const p = poseOf(body);
       const velocity = p.position(leg.hoof).clone().sub(selfOf(body).frame.prev2.position(leg.hoof)).multiplyScalar(60);
       if (!planted(i)) {
         flights[i].push({ speed: velocity.clone().setY(0).length(), height: Math.min(p.point(leg.hoof, leg.heel, new Vector3()).y, p.point(leg.hoof, leg.toe, new Vector3()).y), forward: velocity.z });
@@ -488,7 +487,7 @@ it('plants its feet from its own pelvis, whatever another stepper did since', ()
     const stepper = selfOf(a.body).stepper, other = selfOf(b.body).stepper;
     if (!stepper || !other) throw new Error('no legs');
     const legs = stepper.legs.flatMap((leg, k) => leg.swing ? [] : [k]);
-    const tops = legs.map((k) => a.body.pose.position(k ? INDEX.rightUpperLeg : INDEX.leftUpperLeg).clone());
+    const tops = legs.map((k) => poseOf(a.body).position(k ? INDEX.rightUpperLeg : INDEX.leftUpperLeg).clone());
     const before = legs.map((k, j) => stepper.pose(k, tops[j]).ankle.clone());
     other.move(selfOf(b.body).frame, b.root);
     legs.forEach((k, j) => { most = Math.max(most, stepper.pose(k, tops[j]).ankle.distanceTo(before[j])); });

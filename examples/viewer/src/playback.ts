@@ -1,6 +1,7 @@
 import { Box3, Quaternion, Vector3, type Object3D } from 'three';
 import type { Body } from '@drawcall/animate';
 import { isPerson, type Simulation } from './simulation';
+import { poseOf } from '@drawcall/animate/puppet';
 
 /** the height the camera looks at over a person's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
 const FOCUS_HEIGHT = 0.54;
@@ -128,7 +129,7 @@ export class Playback {
   /** where every body's joints are, with a margin for what lies beyond them */
   get bounds(): Box3 {
     const bounds = new Box3();
-    for (const body of this.sim.stage.bodies) for (let i = 0; i < body.pose.skeleton.bones.length; i++) bounds.expandByPoint(body.pose.position(i));
+    for (const body of this.sim.stage.bodies) for (let i = 0; i < poseOf(body).skeleton.bones.length; i++) bounds.expandByPoint(poseOf(body).position(i));
     // Tuned 20 cm silhouette allowance beyond joints (head, barrel, hands and feet).
     return bounds.expandByScalar(0.2);
   }

@@ -7,6 +7,7 @@ import type { Soldier } from '../soldier';
 import type { Handling } from './handling';
 import type { Rover } from './model';
 import { BEATS, CUES, seat } from './seating';
+import { placement, shapeHand } from '@drawcall/animate/puppet';
 
 /** Seconds to get from standing at the doorway to seated with both hands on the wheel, and back out. */
 const SEATING = 2;
@@ -67,7 +68,7 @@ export class Driver extends Mount {
     const { body, rifle } = this.soldier.avatar, onto = seat(puppet, standing, this.rover, rifle, this.progress, { yaw, pitch: this.view.pitch });
     for (const side of ['left', 'right'] as const) {
       const to = onto[side];
-      body.shapeHand(side, to && body.placement(side, to), dt);
+      shapeHand(body, side, to && placement(body, side, to), dt);
     }
   }
 

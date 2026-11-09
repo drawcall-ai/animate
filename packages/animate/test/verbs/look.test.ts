@@ -5,6 +5,7 @@ import { INDEX } from '../../src/species/humanoid/bones';
 import { gazeOff, insides, person, play } from '../bodies';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
+import { poseOf } from '../../src/puppet';
 
 const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
 
@@ -43,7 +44,7 @@ describe('lookAt with a head share', () => {
 });
 
 /** the yaw (rad, + to its left) of `bone` off the body's facing */
-const yawOff = (body: Body, bone: number) => new Euler().setFromQuaternion(new Quaternion().copy(body.pose.rotation(bone)), 'YXZ').y - body.facing;
+const yawOff = (body: Body, bone: number) => new Euler().setFromQuaternion(new Quaternion().copy(poseOf(body).rotation(bone)), 'YXZ').y - body.facing;
 
 describe('lookAt with a trunk share', () => {
   it('turns the chest that share of the bearing, and leaves it be without one', () => {

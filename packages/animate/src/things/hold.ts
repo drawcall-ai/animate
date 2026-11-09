@@ -245,16 +245,13 @@ function load(self: Holder, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): voi
 }
 
 /**
- * development: a thing whose parent changed under a holding hand of `self` but not by the library (a stray `scene.add`, a physics
- * sync) is a problem, once; the hand follows it where it is now, and `self` no longer moves it
+ * A held thing's parent changed under a holding hand of `self`, not by the library (a stray `scene.add`, a physics sync): a misuse. To
+ * take a thing from a hand, `release` it first.
  */
-export function checkParents(self: Holder, f: Frame): void {
+export function checkParents(self: Holder): void {
   for (const thing of held(self)) {
     const now = thing.object.parent;
-    if (!thing.parent || now === thing.parent) continue;
-    f.dev?.append(f.time, { check: 'the parent of a held thing changed under the hand: something else moved it', value: 1, limit: 0, where: `${thing.object.name} under ${now?.name ?? 'nothing'}` });
-    thing.parent = now;
-    self.leave(thing.object);
+    if (thing.parent && now !== thing.parent) throw new Error(`"${thing.object.name}" was re-parented to ${now ? `"${now.name}"` : 'nothing'} while a hand holds it: \`release\` it first`);
   }
 }
 

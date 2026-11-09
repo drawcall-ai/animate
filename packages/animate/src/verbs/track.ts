@@ -41,22 +41,18 @@ export function track(body: Body, tracked: Tracked, options: { until?: Until } =
       const target = tracked[side];
       if (!target) continue;
       const find = finder(person, target), keep = reaching(person, side, find, { ...HOLD, lead: false });
-      // (development: a hand `OFF.distance` off where its target was a sub-step before, the target past the arm held out straight from
-      // the shoulder, for long enough of the last few seconds (`OFF`), is said once, as a reach that falls short is; a hand lagging a
-      // target in reach is not)
-      let short = 0, said = false;
+      // (a hand `OFF.distance` off where its target was a sub-step before, the target past the arm held out straight from the shoulder, for
+      // long enough of the last few seconds (`OFF`), is said once on the console: an aimer has no end to miss at; a hand lagging a target in
+      // reach is not said)
+      let short = 0;
       const shoulder = INDEX[`${side}UpperArm`];
       let last: Vector3 | null = null;
       branches.push(during(request, `hand.${side}`, 'asked', (f) => {
-        if (f.dev && !said && last) {
+        if (last) {
           const gap = f.prev.position(person.hands[side]).distanceTo(last);
           const from = f.prev.position(shoulder).distanceTo(last), beyond = from > OFF.reach * person.proportions.armLength;
           short = short * Math.exp(-f.dt / OFF.window) + (beyond && gap > OFF.distance * person.scale ? f.dt : 0);
-          if (short >= SHORT) {
-            said = true;
-            f.dev.append(f.time, { check: 'tracked hand short of a target out of reach (m)', value: gap, limit: OFF.distance * person.scale, where: side,
-              detail: `the shoulder ${from.toFixed(2)} m from it, the arm ${person.proportions.armLength.toFixed(2)} m (species.person.armLength)` });
-          }
+          if (short >= SHORT) person.warn(`tracked ${side}`, `a tracked ${side} hand falls short of a target out of reach: the shoulder ${from.toFixed(2)} m from it, the arm ${person.proportions.armLength.toFixed(2)} m (species.person.armLength)`);
         }
         keep(f);
         (last ??= new Vector3()).copy(find(f).position);

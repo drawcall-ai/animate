@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { selfOf } from '../../../packages/animate/src/body/body';
 import { jointOf } from './actor';
 import { FIXED_DT } from '../src/scenario';
 import { comOf } from './com';
@@ -113,7 +114,7 @@ export class FreeArms {
         elbow: 180 - shoulder.clone().sub(elbow).angleTo(hand.clone().sub(elbow)) * DEG,
       };
     });
-    this.samples.push({ t, phase: h.body.gait.phase, walking: into === 'walking', sides });
+    this.samples.push({ t, phase: selfOf(h.body).locomotion.phase, walking: into === 'walking', sides });
   }
 }
 

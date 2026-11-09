@@ -44,7 +44,7 @@ type Stand =
 interface Placed { bounds: Box3; position: Vector3; quaternion: Quaternion }
 
 /** A walk to where a person stands, and when it has arrived there. */
-export type WalkUp = Exclude<ReturnType<typeof footing>, string>;
+export type WalkUp = Extract<ReturnType<typeof footing>, { walk: Walk }>;
 
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
@@ -77,8 +77,8 @@ function shoulderOf(person: Reacher, side?: Side): Vector3 {
 }
 
 /**
- * Find a comfortable stand clear of bodies and support: there already, nowhere it could, or a walk there (noted in development). Without
- * `step`, the feet stay where they stand: there if the hands reach from it (`planted`), else nowhere.
+ * Find a comfortable stand clear of bodies and support: there already, nowhere it could (and why), or a walk there. Without `step`, the
+ * feet stay where they stand: there if the hands reach from it (`planted`), else nowhere.
  */
 export function footing(person: Reacher, to: Stand, step = true) {
   const f0 = person.frame, point = 'place' in to;
@@ -116,17 +116,14 @@ export function footing(person: Reacher, to: Stand, step = true) {
   const clearOf = point && !to.things ? 0 : backOf(to.things ?? [], middle, forwardOf(face), floor + proportions.hipHeight);
   const trunk = clearOf > -Infinity ? clearOf + BODY_RADIUS * proportions.height + LOAD_RESERVE * proportions.scale : 0;
   let ahead = Math.max(trunk, Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both));
-  const nowhere = (check: string, value: number, limit = reach) => {
-    f0.dev?.append(f0.time, { check, value, limit, where: `${grips.length} grips` });
-    return 'nowhere' as const;
-  };
-  if (point && Math.abs(height - shoulders) > reach) return nowhere(`approach: placing point from the shoulders' middle, lowered and bowed (m)`, Math.abs(height - shoulders));
+  const nowhere = (why: string, off: number, limit = reach) => ({ nowhere: { where: `${grips.length} grips`, off, limit, why } });
+  if (point && Math.abs(height - shoulders) > reach) return nowhere(`the placing point is ${Math.abs(height - shoulders).toFixed(2)} m from the shoulders, lowered and bowed: no stand reaches it`, Math.abs(height - shoulders));
   const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - floor - (standing + TIPTOE * proportions.scale);
-  if (above > reach) return nowhere('approach: grip above the shoulders on tiptoe (m)', above);
+  if (above > reach) return nowhere(`the grip is ${above.toFixed(2)} m above the shoulders on tiptoe: no stand reaches it`, above);
   if (person.drive) return 'there' as const;
   if (!step) {
     const short = Math.max(...grips.map((grip) => planted(person, grip)));
-    return short > 0 ? nowhere('approach: beyond reach with the feet planted (m short)', short, 0) : 'there' as const;
+    return short > 0 ? nowhere(`beyond reach with the feet planted, ${short.toFixed(2)} m short: let it step, or start nearer`, short, 0) : 'there' as const;
   }
   const at = middle.clone(), there = new Vector3();
   // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
@@ -154,7 +151,7 @@ export function footing(person: Reacher, to: Stand, step = true) {
     }
     if (clearYaw !== undefined) break;
   }
-  if (clearYaw === undefined) return nowhere('approach: no stand clear of nearby low segments', 1, 0);
+  if (clearYaw === undefined) return nowhere('no stand clear of the bodies beside it', 1, 0);
   face = clearYaw;
   const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
   const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
@@ -195,7 +192,6 @@ export function footing(person: Reacher, to: Stand, step = true) {
     via.push((f) => moved(beside, f));
   }
   const walk = new Walk(person, { to: destination, face: facing, within: ahead, via });
-  f0.dev?.note(f0.time, { check: 'approach: walks up to stand in reach, staying there (m to walk; `step: false` keeps the feet)', value: flat(body, there), limit: 0, where: `${grips.length} grips` });
   return {
     walk,
     arrived: (f: Frame) => {
@@ -205,15 +201,15 @@ export function footing(person: Reacher, to: Stand, step = true) {
   };
 }
 
-/** a person's walk to where it stands (borrowed legs) until it has arrived, `true`, or stalled, `false`; what it moves arriving `after` s later */
+/** a person's walk to where it stands (borrowed legs) until it has arrived, or stalled: its stall, if so; what it moves arriving `after` s later */
 export function* walking(request: Request, plan: WalkUp, after?: number) {
   const { walk, arrived } = plan;
   yield* during(request, 'go', 'borrowed', (f) => {
     const go = walk.step(f);
     if (after !== undefined) request.eta = walk.eta + after;
     return go;
-  }, (f, _, time) => time > 0 && (walk.stalled || arrived(f)));
-  return !walk.stalled;
+  }, (f, _, time) => time > 0 && (walk.stall !== null || arrived(f)));
+  return walk.stall;
 }
 
 /**

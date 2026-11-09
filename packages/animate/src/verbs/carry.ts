@@ -20,14 +20,16 @@ import type { HandOptions } from '../hands/handling';
  * comfortably (people choose a grasp for the posture it ends in), the thing still ending turned as asked. When it must walk there (and `step`
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
  * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, turned as its target
- * is (within 3°), and keeps it there; a thing in one hand carried to an `Object3D` is seated on it in the fingers once the arm has
+ * is (within 3°). Its hold ends with the verb: after it the thing rides the hand, drifting a few centimetres as the arm eases, so
+ * `until: Infinity` (raced) holds it on. A thing in one hand carried to an `Object3D` is seated on it in the fingers once the arm has
  * brought it within 3 cm, so a `release` onto that object puts it there exactly. A grip that declares its contact (`userData.point`, a
  * digit on an empty) keeps it, neither regripped nor seated: the arm alone puts the thing there. It
- * returns `false` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried
+ * throws `Missed` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried
  * straight there, if the thing does not come to rest in place: stopped getting nearer more than 1.5 cm short of it, held off by the arms
- * (`late carry`; within that, it ends `true` there), or its own trunk and
- * head holding it off a target too near them (a target on its own head, a cup put to the mouth, is held in front of it by design); the
- * dev log's entry says which, and by how much. It holds the thing where it got to either way.
+ * (within that, it ends `true` there), or its own trunk and head holding it off a target too near them (a target on its own head, a cup put
+ * to the mouth, is held in front of it by design). The hands hold the thing where it got to either way. Given `until`, it returns `true`
+ * if the thing has come to rest there and is still within 1.5 cm of it as that ends, else `false`. It places the thing's origin at the
+ * target: to bring one point of it there, offset the target by that point.
  */
 export function carry(body: Body, thing: Object3D, target: Target | readonly Target[], options: HandOptions = {}): Verb {
   const targets = Array.isArray(target) ? target : [target];

@@ -1,3 +1,4 @@
+import { grip } from '@drawcall/animate';
 import { BoxCollider, RigidBody } from '@drawcall/physics';
 import { Group, MeshStandardMaterial, Object3D } from 'three';
 import { Parts, type Point } from '../parts';
@@ -58,15 +59,8 @@ export function createLadder(height: number): Ladder {
   collider([2 * STILE + 0.02, height, 0.06], [0, height / 2, 0]);
   for (const side of [-1, 1]) collider([0.02, RAIL, 0.07], [side * STILE, height + RAIL / 2, 0]);
 
-  const mark = (name: string, at: Point) => {
-    const empty = new Object3D();
-    empty.name = name;
-    empty.position.set(...at);
-    body.add(empty);
-    return empty;
-  };
   return {
     body, height, rungs, spacing,
-    marks: { foot: mark('ladder foot', [0, 0, -1.1]), top: mark('ladder top', [0, height, STANDOFF + 0.45]) },
+    marks: { foot: grip(body, 'ladder foot', [0, 0, -1.1]), top: grip(body, 'ladder top', [0, height, STANDOFF + 0.45]) },
   };
 }

@@ -1,7 +1,7 @@
 import { Group, Vector3 } from 'three';
-import { carry, grab, reach, wait, walkTo } from '@drawcall/animate';
+import { carry, grab, reach, wait, walkTo, grip } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-import { ball, box, empty } from '../things';
+import { ball, box } from '../things';
 
 export const idleLife: Scenario = {
   id: 'idle-life',
@@ -47,10 +47,10 @@ export const liftHeavy: Scenario = {
     const size = new Vector3(0.34, 0.26, 0.26);
     const load = box(scene, 'box', size, new Vector3(0, size.y / 2, 0.5));
     load.userData.mass = 5;
-    empty(load, 'left', new Vector3(0.18, 0, 0));
-    empty(load, 'right', new Vector3(-0.18, 0, 0));
+    grip(load, 'left', new Vector3(0.18, 0, 0));
+    grip(load, 'right', new Vector3(-0.18, 0, 0));
     // (before its chest, wherever it goes)
-    const chest = empty(person.object, 'before the chest', new Vector3(0, 1.1, 0.35));
+    const chest = grip(person.object, 'before the chest', new Vector3(0, 1.1, 0.35));
     let carried = false;
     return {
       scene,

@@ -4,8 +4,10 @@
 import { describe, expect, test } from 'vitest';
 import { Vector3 } from 'three';
 import type { SkeletonBone } from '@drawcall/rig';
-import { Body, powerGait, reach, species, swing, walkTo, type Range } from '@drawcall/animate';
+import { Body, reach, walkTo } from '@drawcall/animate';
+import { powerGait, species, swing, type Range } from '@drawcall/animate/species';
 import { play } from '../../../packages/animate/test/bodies';
+import { poseOf } from '@drawcall/animate/puppet';
 
 const LEGS = ['leftFore', 'rightFore', 'leftHind', 'rightHind'] as const;
 const JOINTS = [0, 1, 2, 3] as const;
@@ -52,10 +54,10 @@ function quadruped(k: number) {
 /** the cat at the origin facing +Z touches a bowl with its jaw, up to 30 s: whether it got there, and how near its jaw came */
 function bowl(k: number) {
   const target = new Vector3(0.8, 0.04, 1.5);
-  const cat = new Body(quadruped(k), { dev: true }), jaw = cat.pose.skeleton.index('jaw');
+  const cat = new Body(quadruped(k), { dev: true }), jaw = poseOf(cat).skeleton.index('jaw');
   let closest = Infinity, touched = false;
   play(function* () { touched = yield* reach(cat, { jaw: target }); }, [cat], 30, () => {
-    closest = Math.min(closest, cat.pose.position(jaw).distanceTo(target));
+    closest = Math.min(closest, poseOf(cat).position(jaw).distanceTo(target));
     return touched;
   });
   return { cat, touched, closest };

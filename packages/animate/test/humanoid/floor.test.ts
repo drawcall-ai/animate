@@ -11,6 +11,7 @@ import { xcomOfPoses, hullOf, outside } from '../../src/legs/support';
 import { footprint } from '../../src/legs/person/foot';
 import type { Person } from '../../src/body/person';
 import { insides, person, play, run } from '../bodies';
+import { poseOf } from '../../src/puppet';
 
 /** a flight of `count` steps up along +z from `start`, each `rise` high and `tread` deep, flat on top (the throne room's: 5 × 0.2 on 0.45) */
 const stairs = (start: number, count: number, rise: number, tread: number) => (_x: number, z: number) =>
@@ -29,9 +30,9 @@ const KINDS: [name: string, make: (options: BodyOptions) => Body, speed: number 
 
 /** each sole's points of foot `i` of `body` as it stands: a person's measured sole, a creature's heel and toe */
 function solesOf(body: Body, i: number): Vector3[] {
-  if (body.species.person) return solePoints(insides(body).proportions, body.pose, SIDES[i]);
+  if (body.species.person) return solePoints(insides(body).proportions, poseOf(body), SIDES[i]);
   const chain = (body.species.legs?.chains ?? [])[i], bone = chain.joints[chain.joints.length - 1].bone;
-  return [chain.heel, chain.toe].map((p) => body.pose.point(bone, p, new Vector3()));
+  return [chain.heel, chain.toe].map((p) => poseOf(body).point(bone, p, new Vector3()));
 }
 
 /** What a walk over a floor did to the feet and the body, read off every final pose. */
@@ -86,8 +87,8 @@ function walked(body: Body, floor: (x: number, z: number) => number, to: Vector3
       }
       last[i] = leg.swing ? soles : null;
     });
-    coms.push(body.pose.com(new Vector3()).y);
-    hips.push(body.pose.position(0).y);
+    coms.push(poseOf(body).com(new Vector3()).y);
+    hips.push(poseOf(body).position(0).y);
     if (!h) return arrived && body.settled;
     const levels = (h.stepper?.legs ?? []).flatMap((leg) => leg.swing ? [] : [leg.anchor.y - h.proportions.ankleHeight]);
     if (levels.length) out.seat = Math.min(out.seat, h.pose.position(0).y - Math.max(...levels));
@@ -128,7 +129,7 @@ describe('a person on a floor', () => {
     expect(body.position.y).toBe(1);
     expect(flat.position.y).toBe(0);
     expect(body.object.position.y).toBe(1);
-    body.pose.skeleton.bones.forEach((_, b) => expect(body.pose.position(b).clone().setY(body.pose.position(b).y - 1).distanceTo(flat.pose.position(b))).toBeLessThan(1e-6));
+    poseOf(body).skeleton.bones.forEach((_, b) => expect(poseOf(body).position(b).clone().setY(poseOf(body).position(b).y - 1).distanceTo(poseOf(flat).position(b))).toBeLessThan(1e-6));
     expect(body.log).toEqual([]);
   });
 

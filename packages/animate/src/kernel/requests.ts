@@ -27,12 +27,26 @@ interface Filed {
   unclaim(claim: Claim): void;
 }
 
+/** What a verb fell short of: where, how far off against what limit (in the check's units), and a reader's account of why, naming the fix where one is known. */
+export interface Miss {
+  where: string;
+  off: number;
+  limit: number;
+  why: string;
+}
+
 /** A story-owned request stages after balance and before part motion; cancellation releases its claims. Arbitration lives in `rank`. */
 export class Request {
   private static made = 0;
   /** newer requests have larger numbers */
   readonly order = ++Request.made;
   outcome: 'running' | 'met' | 'failed' = 'running';
+  /** what it failed of, once it has */
+  miss: Miss | null = null;
+  /** its goal's measure now, as a story's `until` ends it: whether what it moves is there, within the verb's tolerance */
+  there: (() => boolean) | null = null;
+  /** an aimer no `until` ends: it never ends of itself */
+  endless = false;
   /** seconds until what it moves arrives (∞: it moves nothing, or does not know) */
   eta = Infinity;
   /** the body's time when it was filed (s) */
@@ -49,8 +63,14 @@ export class Request {
 
   /** `aimer`: it keeps on at its goal (a look, a tracked pose) rather than moving something somewhere: no arrival to foresee, it ends only
    * when its story says */
-  constructor(readonly body: Filed, readonly verb: string, readonly site: string, private readonly staging: Staging, readonly aimer = false) {
+  constructor(readonly body: Filed, readonly verb: string, private called: string | (() => string), private readonly staging: Staging, readonly aimer = false) {
     this.filed = this.renewed = body.time;
+  }
+
+  /** where its story asked for it (`file:line`), read off the call's stack the first time it is asked for */
+  get site(): string {
+    if (typeof this.called === 'function') this.called = this.called();
+    return this.called;
   }
 
   get finished(): boolean {
@@ -85,8 +105,10 @@ export class Request {
     if (this.outcome === 'running') this.outcome = 'met';
   }
 
-  fail(): void {
-    if (this.outcome === 'running') this.outcome = 'failed';
+  /** it cannot meet its goal: what it says first stands, and a check closing the sub-step it was met in overrules that */
+  fail(miss: Miss): void {
+    this.outcome = 'failed';
+    this.miss ??= miss;
   }
 
   /** its staging stopped (its cleanups run: its claims let go) */

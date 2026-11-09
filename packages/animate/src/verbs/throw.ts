@@ -3,7 +3,7 @@ import { parallel } from '@pmndrs/timeline';
 import { selfOf, type Body } from '../body/body';
 import { personOf, type Person } from '../body/person';
 import type { Frame } from '../kernel/frame';
-import { during, type Request } from '../kernel/requests';
+import { during, type Miss, type Request } from '../kernel/requests';
 import { course, still } from '../kernel/course';
 import { ChainTip } from '../kernel/tip';
 import { handsOn } from '../things/hold';
@@ -20,7 +20,7 @@ import { lerp } from '../kernel/math';
 /** How a throw goes. */
 export interface ThrowOptions {
   /** the speed it leaves the hand at (m/s; default the least that carries it to the target on a 40° arc, at most 25): what `released`
-   * reports, aimed at the target — out of reach at that speed, at 45°, as far as it goes, which development says */
+   * reports, aimed at the target — out of reach at that speed, at 45°, as far as it goes, and the throw misses */
   speed?: number;
   /** the gravity your physics flies it under (m/s², down; default 9.81): what the aim at the target is worked out for */
   gravity?: number;
@@ -43,7 +43,9 @@ export interface ThrowOptions {
  * throws over its own gait, the hips left to it. It asks for the throwing hand, the
  * free arm (when its hand holds nothing) and the trunk, which it takes from a `lookAt` given `trunk` (a look without one keeps the eyes
  * beside it). A mover, it ends `true` once the follow-through is done (about 1 s after it starts): the throwing arm is free for the next
- * hand verb (taking a weapon back), and the trunk and the stride come back on their own meanwhile.
+ * hand verb (taking a weapon back), and the trunk and the stride come back on their own meanwhile. A target out of reach at its speed
+ * throws `Missed` after the follow-through, the thing already gone as `released` was told. It says only whether the aim reaches the target:
+ * the flight is your physics'.
  */
 export function throwAt(body: Body, thing: Object3D, target?: Target, options: ThrowOptions = {}): Verb {
   const self = selfOf(body), held = Thing.of(thing), hands = handsOn(self, held);
@@ -129,6 +131,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
       ...(strides && { lower: ask.lower * scale, shift: new Vector3(0, 0, ask.shift * scale).applyQuaternion(facing()) }), ...(strides && since(f) >= STRIDE.from && { stagger: stride }),
     };
   };
+  const aiming: { short: Miss | null } = { short: null };
   yield* parallel<Frame>('race',
     during(request, 'trunk', 'asked', (f) => person.poise.add(trunk(f))),
     free && during(request, `arm.${off}`, 'asked', (f) => {
@@ -152,7 +155,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
         const at = typeof target === 'function' ? target(f.time) : target;
         const aim = aimed(thing.object.getWorldPosition(new Vector3()), at instanceof Object3D ? at.getWorldPosition(new Vector3()) : at, options.speed, options.gravity ?? G);
         motion.velocity.copy(aim.velocity);
-        if (aim.short) f.dev?.append(f.time, { ...aim.short, where: thing.object.name });
+        if (aim.short) aiming.short = { ...aim.short, where: thing.object.name };
       }
       options.released?.(motion);
     }, (f) => whip !== null && whip.over(f)));
@@ -161,7 +164,8 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   yield* parallel<Frame>('race',
     during(request, 'trunk', 'asked', (f) => person.poise.add(trunk(f))),
     during(request, `hand.${side}`, 'asked', (f) => handStep(person, f, side, { ...through(), quaternion: f.prev.rotation(forearm) }, { ...QUICK, lead: false }, arm), (f) => since(f) >= TIMES.windup + TIMES.cocked + TIMES.whip + TIMES.held));
-  request.met();
+  if (aiming.short) request.fail(aiming.short);
+  else request.met();
 }
 
 /**
@@ -169,10 +173,10 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
  * most `MOST`); and, where it cannot, what falls short — out of reach at that speed it goes at 45°, as far as it goes; straight above or
  * below with no speed it is dropped
  */
-function aimed(from: Vector3, to: Vector3, speed: number | undefined, g: number): { velocity: Vector3; short: { check: string; value: number; limit: number } | null } {
+function aimed(from: Vector3, to: Vector3, speed: number | undefined, g: number): { velocity: Vector3; short: Omit<Miss, 'where'> | null } {
   const flat = new Vector3(to.x - from.x, 0, to.z - from.z), d = flat.length(), h = to.y - from.y;
   if (d < 1e-6) {
-    const short = speed === undefined ? { check: 'throw: a target straight above or below, and no speed to throw it at (m)', value: Math.abs(h), limit: 0 } : null;
+    const short = speed === undefined ? { off: Math.abs(h), limit: 0, why: 'the target is straight above or below, and there is no speed to throw it at: give `speed`' } : null;
     return { velocity: new Vector3(0, speed ?? 0, 0), short };
   }
   flat.divideScalar(d);
@@ -185,7 +189,7 @@ function aimed(from: Vector3, to: Vector3, speed: number | undefined, g: number)
   if (root < 0) {
     // (the least speed that reaches it: v² = g (h + √(h² + d²)))
     const least = Math.sqrt(g * (h + Math.hypot(h, d)));
-    return { velocity: flat.multiplyScalar(v * Math.SQRT1_2).setY(v * Math.SQRT1_2), short: { check: 'throw: a target out of reach at its speed (m/s)', value: v, limit: least } };
+    return { velocity: flat.multiplyScalar(v * Math.SQRT1_2).setY(v * Math.SQRT1_2), short: { off: v, limit: least, why: `the target is out of reach at ${v.toFixed(1)} m/s, in m/s: it takes at least ${least.toFixed(1)}` } };
   }
   const angle = Math.atan((v * v - Math.sqrt(root)) / (g * d));
   return { velocity: flat.multiplyScalar(v * Math.cos(angle)).setY(v * Math.sin(angle)), short: null };

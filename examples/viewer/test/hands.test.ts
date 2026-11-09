@@ -1,14 +1,14 @@
 import { Group, Vector3, type Object3D } from 'three';
 import { expect, test } from 'vitest';
-import { carry, grab, release, wait, type Body, type Root } from '@drawcall/animate';
+import { carry, grab, release, wait, type Body, type Root, grip } from '@drawcall/animate';
 import { Simulation } from '../src/simulation';
 import type { Person, Scenario, Stage } from '../src/scenario';
-import { box, empty } from '../src/things';
+import { box } from '../src/things';
 import { Actor } from './actor';
 
 // What hands do with small things on and about the body: put one down and take another, carry one into a pouch on the walk.
 
-const logged = (log: Body['log']) => log.slice(0, 4).map((entry) => `${entry.check} ${entry.where} ${entry.value.toFixed(3)} (limit ${entry.limit}) @${entry.time.toFixed(2)}`);
+const logged = (log: Body['log']) => log.slice(0, 4).map((entry) => `${entry.check} ${entry.where} ${entry.worst.toFixed(3)} (limit ${entry.limit}) @${entry.time.toFixed(2)}`);
 
 /** one person playing `story` (made once it stands) for `duration` s, development checks on; `each` reads it after every frame */
 function play(duration: number, story: (person: Person) => Stage['story'], drive?: (time: number) => Root, each?: (time: number, actor: Actor) => void) {
@@ -32,7 +32,7 @@ function play(duration: number, story: (person: Person) => Stage['story'], drive
 function bar(parent: Object3D, name: string, at: Vector3): Object3D {
   const thing = box(parent, name, new Vector3(0.03, 0.12, 0.03), at);
   thing.userData.mass = 0.5;
-  empty(thing, 'grip', new Vector3());
+  grip(thing, 'grip', new Vector3());
   return thing;
 }
 
@@ -48,7 +48,7 @@ function onChest(person: Person, name: string, offset: Vector3): Object3D {
 test('a hand that puts one thing down and takes another keeps to the grip it takes', () => {
   let worst = 0;
   const person = play(3, (person) => {
-    const tray = empty(person.object, 'tray', new Vector3(0.25, 1.0, 0.35));
+    const tray = grip(person.object, 'tray', new Vector3(0.25, 1.0, 0.35));
     const cup = bar(tray, 'cup', new Vector3()), rod = bar(person.object, 'rod', new Vector3(0.2, 1.05, 0.45));
     return function* () {
       yield* grab(person, cup, { left: 'grip' });
@@ -76,7 +76,7 @@ test('a carry into a pouch on the chest comes to rest there while the body walks
   const person = play(5, (person) => {
     const pouch = (name: string, aside: number) => {
       const place = onChest(person, name, new Vector3(aside, -0.17, 0.2));
-      empty(place, `over ${name}`, new Vector3(0, 0.1, 0));
+      grip(place, `over ${name}`, new Vector3(0, 0.1, 0));
       place.userData.approach = [`over ${name}`];
       return place;
     };

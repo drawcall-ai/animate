@@ -4,7 +4,7 @@ import type { Goal } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
 import { course } from '../../kernel/course';
 import { SHAPING } from '../../fingers/shape';
-import type { Grip } from '../../things/thing';
+import type { GripOn } from '../../things/thing';
 import { worn } from '../../things/hold';
 import { INDEX } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
@@ -72,7 +72,7 @@ export function padOff(person: Reacher, take: Pick<Taking, 'side' | 'thing' | 'g
  * the way (world, unit) a fingertip on `grip` of a thing placed so draws back off its button as it lets go: back along the line from
  * the button to the eyes that watch it, as far as `SIGHTED` off the face's normal; none: no fingertip's grip
  */
-export function backOff(person: Reacher, grip: Grip, placed: { position: Vector3; quaternion: Quaternion }): Vector3 | null {
+export function backOff(person: Reacher, grip: GripOn, placed: { position: Vector3; quaternion: Quaternion }): Vector3 | null {
   if (grip.point === 'palm' || !grip.facing) return null;
   const empty = grip.at.position.clone().applyQuaternion(placed.quaternion).add(placed.position);
   const out = grip.facing.clone().applyQuaternion(placed.quaternion).negate(), way = person.pose.position(INDEX.head).clone().sub(empty).normalize();

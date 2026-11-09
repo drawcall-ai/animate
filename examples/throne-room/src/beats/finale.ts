@@ -41,7 +41,7 @@ export const beat: Beat & { order: number } = {
       const turn = function* () {
         yield* wait(0.35);
         // turning on the spot: a walk to where it stands, arriving faced the other way
-        if (!(yield* walkTo(body, mark.clone(), { face: TOWARD_DOORS, speed: 0.4 }))) return false;
+        yield* walkTo(body, mark.clone(), { face: TOWARD_DOORS, speed: 0.4 });
         yield* wait(() => body.settled);
         turned.add(hero);
         return yield* wait(FACING_THE_HALL);

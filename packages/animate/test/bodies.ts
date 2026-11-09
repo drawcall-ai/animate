@@ -31,6 +31,9 @@ export const insides = (body: Body): Person => personOf(selfOf(body));
 /** where `side`'s palm is (world) as `h` is posed: where its hand holds a grip */
 export const palmAt = (h: Person, side: Side) => h.pose.point(h.hands[side], palmOf(h.proportions, side), new Vector3());
 
+/** whether `body` is off the floor: a leap's flight */
+export const airborne = (body: Body) => selfOf(body).stepper?.airborne ?? false;
+
 /** `body` updated `seconds` in sub-steps, `each` after every one */
 export function run(body: Body, seconds: number, each?: (time: number) => void): void {
   for (let t = dt; t <= seconds + 1e-9; t += dt) {

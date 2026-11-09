@@ -314,7 +314,6 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const step = runTimeline(() => parallel('all',
     function* () {
       acquired = yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, snatch ? SNATCH : {});
-      if (!acquired) throw new Error('The soldier could not acquire both rifle grips');
       for (;;) {
         yield* wait(() => reload.wanted || press.wanted !== null || throwing);
         if (throwing && grenade) {
@@ -322,7 +321,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
           release(person, rifle);
           yield* grenade.throw(() => lookDirection(input.yaw, input.pitch), () => look.eye.clone(), () => input.velocity);
           returning = true;
-          if (!(yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, QUICK))) throw new Error('Could not take rifle after grenade throw');
+          yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, QUICK);
           throwing = returning = false;
           continue;
         }

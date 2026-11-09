@@ -1,3 +1,4 @@
+import type { Miss, Request } from '../../src/kernel/requests';
 import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
@@ -170,11 +171,11 @@ describe('a grip taken', () => {
     room.add(rope);
     empty(rope, 'end', new Vector3());
     // (the hand bone a palm back from the end, as a person's grip has it)
-    grasp(h, 'left', { thing: Thing.of(rope), grip: 'end', goal: { position: h.pose.position(h.hands.left).clone().sub(palm) } });
+    const missed: Miss[] = [];
+    grasp(h, 'left', { thing: Thing.of(rope), grip: 'end', goal: { position: h.pose.position(h.hands.left).clone().sub(palm) }, by: { fail: (miss: Miss) => void missed.push(miss) } as Request });
     body.update(dt);
-    const problems = body.log.filter((entry) => entry.check === 'grip activation distance (m)');
-    if (off) expect(problems).toEqual([expect.objectContaining({ value: expect.closeTo(0.1, 1), where: 'loose rope left end' })]);
-    else expect(problems).toEqual([]);
+    if (off) expect(missed).toEqual([expect.objectContaining({ off: expect.closeTo(0.1, 1), where: 'loose rope left end' })]);
+    else expect(missed).toEqual([]);
   });
 });
 

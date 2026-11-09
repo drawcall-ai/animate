@@ -13,8 +13,6 @@ import { clearBody } from './clearance';
 
 /** how fast a held thing is carried where it is to go (m/s², m/s, rad/s², rad/s): calmly */
 export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satisfies Motion;
-/** Tuned: a held goal moved further than this (m, × the body's scale) to clear the neck and head is noted */
-const CLEARED = 0.02;
 
 export type Guides = (factor?: number, clearance?: Clearance) => Guide;
 
@@ -32,8 +30,6 @@ export class Guide {
   private readonly at = new Vector3();
   private readonly turned = new Quaternion();
   private time = NaN;
-  /** whether a goal moved clear of the head has been noted */
-  private cleared = false;
   /** how far (m) the body's own trunk and head held the last goal read off where it was asked to go: none for a goal on its own head
    * (a cup put to the mouth stops in front of it by design), else the body stands in the way of its end */
   off = 0;
@@ -74,13 +70,9 @@ export class Guide {
     const own = target.carriedBy === person;
     const turned = this.rotation.follow(nominal.prev.quaternion, nominal.current.quaternion, goal.quaternion,
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned, own ? Infinity : undefined);
-    // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front: noted once, so it is no silent change)
-    const moved = this.clear ? clearBody(person, f, thing, goal.position, turned, current, this.clear !== 'head', this.clear === 'parts') : 0;
+    // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front)
+    if (this.clear) clearBody(person, f, thing, goal.position, turned, current, this.clear !== 'head', this.clear === 'parts');
     this.off = this.clear === 'head' ? 0 : goal.position.distanceTo(target.position);
-    if (moved > CLEARED * person.scale && !this.cleared && f.dev) {
-      this.cleared = true;
-      f.dev.note(f.time, { check: 'held goal moved clear of the head (m)', value: moved, limit: CLEARED * person.scale, where: thing.object.name });
-    }
     // (followed about the middle of its grips, where the hands are: turning, a thing held off its middle lags about them, not about its
     // own origin, and does not swing off them)
     const pivot = this.pivot, held = (at: Placement, turn: Quaternion, out: Vector3) => out.copy(pivot).applyQuaternion(turn).add(at.position);

@@ -7,6 +7,7 @@ import { INDEX } from '../../src/species/humanoid/bones';
 import { heelOf } from '../../src/legs/person/foot';
 import { wrapAngle, yawOf } from '../../src/kernel/math';
 import { claim, dt, insides, person, play, run, feetOf } from '../bodies';
+import { poseOf } from '../../src/puppet';
 
 describe('balance', () => {
   it('stands facing as it started on hips set ahead of its root, no lean to step under', () => {
@@ -69,7 +70,7 @@ describe('balance', () => {
     expect(arrived).toBe(true);
     expect(h.locomotion.moving).toBe(false);
     expect(body.settled).toBe(true);
-    expect(body.pose.com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
+    expect(poseOf(body).com(new Vector3()).setY(0).distanceTo(to)).toBeLessThan(0.15);
     if (face !== undefined) {
       expect(Math.abs(body.facing - face)).toBeLessThan(0.15);
       for (const [side, foot] of body.feet.entries()) expect(Math.abs(foot.yaw - face - (side === 0 ? 0.12 : -0.12))).toBeLessThan(0.1);
@@ -83,7 +84,7 @@ describe('balance', () => {
     const phases = [true, true], landed = [false, false], contactFrames = [0, 0];
     let touchdowns = 0, pitchStep = 0, heelHeight = 0;
     const pitch = (side: 'left' | 'right', previous = false) => {
-      const forward = new Vector3(0, 0, 1).applyQuaternion((previous ? h.frame.prev2 : body.pose).rotation(INDEX[`${side}Foot`]));
+      const forward = new Vector3(0, 0, 1).applyQuaternion((previous ? h.frame.prev2 : poseOf(body)).rotation(INDEX[`${side}Foot`]));
       return Math.atan2(forward.y, Math.hypot(forward.x, forward.z)) * 180 / Math.PI;
     };
     play(function* () { yield* walkTo(body, new Vector3(0, 0, 12)); }, [body], 15, () => {
@@ -96,7 +97,7 @@ describe('balance', () => {
           landed[i] = true;
         }
         if (landed[i] && planted && contactFrames[i]++ < 4) {
-          heelHeight = Math.max(heelHeight, body.pose.point(INDEX[`${side}Foot`], heelOf(h.proportions), new Vector3()).y);
+          heelHeight = Math.max(heelHeight, poseOf(body).point(INDEX[`${side}Foot`], heelOf(h.proportions), new Vector3()).y);
         }
         phases[i] = planted;
       }
@@ -148,6 +149,6 @@ it.each([Math.PI / 2, 2 * Math.PI / 3, Math.PI])('arrives facing %s without defe
   expect(lastTwo[1].error).toBeLessThan(Math.max(lastTwo[0].error, TURNED_LANDING));
   body.update(dt);
   // Open: the 120° arrival exceeds the 10 cm XCoM bound by up to 1 cm.
-  const open = face === 2 * Math.PI / 3 ? body.log.filter((entry) => entry.check === 'XCoM outside support (m)' && entry.value < 0.11) : [];
+  const open = face === 2 * Math.PI / 3 ? body.log.filter((entry) => entry.check === 'XCoM outside support (m)' && entry.worst < 0.11) : [];
   expect(body.log.filter((entry) => !open.includes(entry))).toEqual([]);
 });

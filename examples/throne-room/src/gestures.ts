@@ -2,6 +2,7 @@ import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { floorAt } from './hall';
 import { arriving, lookAt, pose, reach, walkTo, type Body, type Verb } from '@drawcall/animate';
+import { poseOf } from '@drawcall/animate/puppet';
 
 // The small, character-defining gestures of the medal moment, each a story function on one body (and whom it is for).
 // Each is a gaze (`lookAt`: where the eyes go, its `roll` and `pitch` tipping the head as it looks) beside a `pose`: trunk and head angles
@@ -17,7 +18,7 @@ export function besides(body: Body, x: number, y: number, z: number, out = new V
 export function eyesOf(body: Body, out = new Vector3()): Vector3 {
   const gaze = body.species.gaze;
   if (!gaze) throw new Error(`${body.species.name ?? 'body'} has no eyes to look at`);
-  return gaze.eyes(body.pose, out);
+  return gaze.eyes(poseOf(body), out);
 }
 
 /**

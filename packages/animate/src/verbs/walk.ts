@@ -1,5 +1,5 @@
 import { during } from '../kernel/requests';
-import { selfOf, type Body } from '../body/body';
+import { Body, selfOf } from '../body/body';
 import type { Frame } from '../kernel/frame';
 import { OFF_FLOOR } from '../kernel/dev';
 import { bodyOf } from '../things/hold';
@@ -24,21 +24,22 @@ export interface WalkOptions {
   speed?: number;
   /** how quickly it speeds up (m/s²; default 1.2) */
   accel?: number;
-  /** ends on this instead of arriving (`true`, arrived or not): a target that moves is followed until then; still `false` if the walk stalls
-   * short of a target standing still */
+  /** ends on this instead of arriving (`true` if it stands there as it ends, turned; else `false`): a target that moves is followed until
+   * then; it still throws if the walk stalls short of a target standing still */
   until?: Until;
 }
 
 /**
  * Walks to `target` (exactly there, on the floor under it: to stand within reach of something, `grab` or `reach` it), turning to
- * arrive facing as asked: a mover, it ends once there, turned and settled — its feet squared, a second or two after the body is there; end
- * it on `until: arriving(body, 0.5)` to start what follows sooner. Given `until`, it returns `true` once that holds, arrived or not —
- * still walking after a target that moves, it stops where it is. It returns `false` if it stalls, `until` or not: no nearer a target
- * standing still for 6 s (said once in the dev log, with whether the body stood there and its feet never settled). It asks for the legs.
- * A point or an empty off the floor under it is said once in the dev log.
+ * arrive facing as asked: a mover, it ends once there (within 15 cm × its scale, or a creature as near as its legs bring it), turned and
+ * settled — its feet squared, a second or two after the body is there; end it on `until: arriving(body, 0.5)` to start what follows sooner.
+ * It throws `Missed` if it stalls, `until` or not: no nearer a target standing still for 6 s (saying whether the body stood there and its
+ * feet never settled). A body is no target: give one of its bones, or a point. It asks for the legs. A point or an empty off the floor
+ * under it warns once on the console.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
   const { face, speed, accel, until } = options;
+  if (target instanceof Body) throw new Error('walkTo: a body is no target: give a point beside it (`other.position`), or one of its bones');
   for (const [name, value] of [['speed', speed], ['accel', accel]] as const) {
     if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new Error(`walkTo: ${name} ${value} is no pace`);
   }
@@ -61,21 +62,20 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
     const to = (f: Frame) => {
       const found = find(f), at = found.position, height = Math.abs(at.y - self.floor(at.x, at.z));
       const mark = !found.object || (found.object.type === 'Object3D' && !bodyOf(found.object));
-      if (mark && height > OFF_FLOOR) {
-        f.dev?.once(f.time, { check: 'walk target off the floor, its height ignored (m)', value: height, limit: OFF_FLOOR, where: 'target' });
-      }
+      if (mark && height > OFF_FLOOR) self.warn('walk target', `a walk target is ${height.toFixed(2)} m off the floor under it: its height is ignored`);
       return found.position;
     };
     const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, accel, backs: true }, until === undefined);
+    request.there = () => walk.stands(self.frame);
     const step = (f: Frame) => {
       const go = walk.step(f);
       request.eta = walk.ends;
       return go;
     };
     // (given `until`, it follows its target, however it moves, until then — or it stalls short of one standing still)
-    if (until !== undefined) yield* during(request, 'go', 'asked', step, () => walk.stalled);
-    else yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stalled));
-    if (walk.stalled) request.fail();
+    if (until !== undefined) yield* during(request, 'go', 'asked', step, () => walk.stall !== null);
+    else yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stall !== null));
+    if (walk.stall) request.fail(walk.stall);
     else request.met();
     // (there, the legs are its, standing, till its story moves on)
     yield* during(request, 'go', 'asked', () => {});

@@ -61,7 +61,7 @@ export const beat: Beat & { order: number } = {
       yield* wait(lane.after);
       yield* walkTo(body, ahead, { speed: AISLE_PACE * 1.1, until: () => body.position.z > FOOT_OF_STEPS - 1.2 + lane.ahead });
       // the climb: shorter strides, each hero onto its own mark, arriving turned toward the dais (the mark's +Z)
-      if (!(yield* walkTo(body, mark(hero), { speed: STEPS_PACE, accel: 0.8 }))) return false;
+      yield* walkTo(body, mark(hero), { speed: STEPS_PACE, accel: 0.8 });
       // a walk ends with the last step still dying away; standing still (`settled`) comes a moment later
       return yield* wait(() => body.settled);
     }

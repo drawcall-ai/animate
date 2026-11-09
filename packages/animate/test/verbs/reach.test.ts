@@ -1,7 +1,8 @@
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, species, wait } from '../../src/index';
+import { attempt, Body, carry, dog, grab, horse, humanoid, lookAt, Missed, reach, release, wait } from '../../src/index';
+import { species } from '../../src/species';
 import { HORSE } from '../../skills/animate/references/horse';
 import { person, play } from '../bodies';
 import { empty, roomOf, worldOf } from '../things';
@@ -21,25 +22,22 @@ it.each([
   { target: new Vector3(0, 1.35, 1.8), met: true },
   { target: new Vector3(0, 1.35, 3), met: false },
   { target: new Vector3(0, 3, .75), met: false },
-])('a stationary chain reaches without borrowing legs, or ends false: $target', ({ target, met }) => {
+])('a stationary chain reaches without borrowing legs, or misses: $target', ({ target, met }) => {
   const body = new Body(NECK, { dev: true });
-  let result: boolean | undefined, distance = Infinity, walked = false;
+  let miss: Missed | null | undefined, distance = Infinity, walked = false;
   play(function* () {
-    result = yield* reach(body, { jaw: target });
+    miss = yield* attempt(reach(body, { jaw: target }));
     distance = worldOf(body.bones.jaw).distanceTo(target);
   }, [body], 10, () => {
     walked ||= body.owners.go !== undefined;
-    return result !== undefined;
+    return miss !== undefined;
   });
-  expect(result).toBe(met);
+  expect(miss === null).toBe(met);
   expect(walked).toBe(false);
   if (met) {
     expect(distance).toBeLessThan(.01);
     expect(body.log).toEqual([]);
-  } else {
-    expect(distance).toBeGreaterThan(.01);
-    expect(body.log.some(entry => entry.check.startsWith('late reach: distance'))).toBe(true);
-  }
+  } else expect(distance).toBeGreaterThan(.01);
 });
 
 it('the reference horse lowers its jaw to the ground in front of its hooves', () => {
@@ -115,34 +113,32 @@ it('sets a low load down on its place', () => {
 
 it('does not borrow a driven creature’s legs for an unreachable point', () => {
   const pet = new Body(dog(DOG), { dev: true, drive: () => ({ position: new Vector3(), yaw: 0 }) });
-  let result: boolean | undefined, walked = false;
-  play(function* () { result = yield* reach(pet, { jaw: new Vector3(0, .5, 2) }); }, [pet], 10, () => {
+  let miss: Missed | null | undefined, walked = false;
+  play(function* () { miss = yield* attempt(reach(pet, { jaw: new Vector3(0, .5, 2) })); }, [pet], 10, () => {
     walked ||= pet.owners.go !== undefined;
-    return result !== undefined;
+    return miss !== undefined;
   });
-  expect(result).toBe(false);
+  expect(miss).toBeInstanceOf(Missed);
   expect(walked).toBe(false);
-  expect(pet.log.some(entry => entry.check.startsWith('late reach: distance'))).toBe(true);
 });
 
-// (a body its app drives cannot walk up: its hand stops at arm's length, and the reach ends false as soon as it comes no nearer)
+// (a body its app drives cannot walk up: its hand stops at arm's length, and the reach misses as soon as it comes no nearer)
 it('fails a reach whose hand has stopped short at once, saying where it stopped and what held it', () => {
   const body = person({ dev: true, drive: () => ({ position: new Vector3(), yaw: 0 }) });
-  let result: boolean | undefined, ended = NaN, time = 0;
+  let miss: Missed | null | undefined, ended = NaN, time = 0;
   play(function* () {
-    result = yield* reach(body, { right: new Vector3(-0.2, 1.3, 1.6) });
+    miss = yield* attempt(reach(body, { right: new Vector3(-0.2, 1.3, 1.6) }));
     ended = time;
   }, [body], 8, (t) => {
     time = t;
-    return result !== undefined;
+    return miss !== undefined;
   });
-  expect(result).toBe(false);
   // (a calm reach that far takes about a second; failed 4 s past that before)
   expect(ended).toBeLessThan(2.5);
-  expect(body.log).toEqual([expect.objectContaining({
-    check: 'late reach: distance (m)', where: 'right',
-    detail: expect.stringMatching(/^stopped \d+\.\d cm off it \(\d+\.\d cm behind, .* in the body's frame\): beyond the arm’s reach: the shoulder 1\.\d\d m from it, the arm 0\.\d\d m$/),
-  })]);
+  expect(miss).toMatchObject({
+    verb: 'reach', where: 'right',
+    why: expect.stringMatching(/^stopped \d+\.\d cm off it \(\d+\.\d cm behind, .* in the body's frame\): beyond the arm’s reach: the shoulder 1\.\d\d m from it, the arm 0\.\d\d m$/),
+  });
 });
 
 it('allows balance-support steps to finish a cross-body reach before judging it late', () => {
@@ -160,48 +156,52 @@ it('allows balance-support steps to finish a cross-body reach before judging it 
 });
 
 it.each([
-  { ahead: .8, step: true, met: true, walks: true },
-  { ahead: .66, step: false, met: true, walks: false },
-  { ahead: .8, step: false, met: false, walks: false },
-])('a reach $ahead m ahead, step $step: met $met, walking up $walks (noted)', ({ ahead, step, met, walks }) => {
-  const body = person({ dev: { notes: true } }), target = new Vector3(-.2, 1.15, ahead), start = body.position;
-  let result: boolean | undefined, moved = 0, logged = NaN;
+  { ahead: .8, step: true, walks: true },
+  { ahead: .66, step: false, walks: false },
+])('a reach $ahead m ahead, step $step: there, walking up $walks', ({ ahead, step, walks }) => {
+  const body = person({ dev: true }), target = new Vector3(-.2, 1.15, ahead), start = body.position;
+  let result: boolean | undefined, moved = 0;
   play(function* () {
     result = yield* reach(body, { right: target }, { step });
-    logged = body.log.length;
   }, [body], 10, () => {
     moved = Math.max(moved, body.position.distanceTo(start));
     return result !== undefined;
   });
-  expect(result).toBe(met);
+  expect(result).toBe(true);
   // (planted, the weight shifts toward the hand within the feet, a few centimetres; walking up, it stands ~0.2 m nearer and stays)
   expect(moved > .1).toBe(walks);
-  expect(body.notes.some(note => note.check.startsWith('approach: walks up'))).toBe(walks);
-  if (met) {
-    expect(worldOf(body.bones.rightHand).distanceTo(target)).toBeLessThan(.011);
-    expect(body.log).toEqual([]);
-  } else {
-    // (at once, from where it stands)
-    expect(logged).toBe(1);
-    expect(body.log[0].check).toBe('approach: beyond reach with the feet planted (m short)');
-  }
+  expect(worldOf(body.bones.rightHand).distanceTo(target)).toBeLessThan(.011);
+  expect(body.log).toEqual([]);
 });
 
-it('grab and a creature reach keep the feet planted with step false, ending false out of reach', () => {
+it('a reach out of it with its feet kept misses at once', () => {
+  const body = person();
+  let miss: Missed | null = null, took = NaN;
+  play(function* () { miss = yield* attempt(reach(body, { right: new Vector3(-.2, 1.15, .8) }, { step: false })); }, [body], 10, (time) => {
+    if (miss) took = time;
+    return miss !== null;
+  });
+  expect(miss).toBeInstanceOf(Missed);
+  expect(miss).toMatchObject({ verb: 'reach', why: expect.stringContaining('beyond reach with the feet planted') });
+  expect(took).toBeLessThan(0.1);
+});
+
+it('grab and a creature reach keep the feet planted with step false, missing out of reach', () => {
   const farmer = person({ dev: true }), pet = new Body(dog(DOG), { dev: true, at: new Vector3(3, 0, 0) });
   const room = roomOf(farmer, pet);
   const bucket = empty(room, 'bucket', new Vector3(0, 0, 1.5));
   empty(bucket, 'handle', new Vector3(0, .55, 0));
-  const results: boolean[] = [];
+  const misses: (Missed | null)[] = [];
   play(function* () {
-    results.push(yield* grab(farmer, bucket, { right: 'handle' }, { step: false }));
-    results.push(yield* reach(pet, { jaw: new Vector3(3, .5, 2) }, { step: false }));
-  }, [farmer, pet], 5, () => results.length === 2);
-  expect(results).toEqual([false, false]);
+    misses.push(yield* attempt(grab(farmer, bucket, { right: 'handle' }, { step: false })));
+    misses.push(yield* attempt(reach(pet, { jaw: new Vector3(3, .5, 2) }, { step: false })));
+  }, [farmer, pet], 5, () => misses.length === 2);
   expect(farmer.position.length()).toBeLessThan(.05);
   expect(pet.position.distanceTo(new Vector3(3, 0, 0))).toBeLessThan(.05);
-  expect(farmer.log.map(entry => entry.check)).toEqual(['approach: beyond reach with the feet planted (m short)']);
-  expect(pet.log.map(entry => entry.check)).toEqual(['out of reach with the feet planted (m short)']);
+  expect(misses).toEqual([
+    expect.objectContaining({ verb: 'grab', why: expect.stringContaining('beyond reach with the feet planted') }),
+    expect.objectContaining({ verb: 'reach', why: expect.stringContaining('out of reach with the feet planted') }),
+  ]);
 });
 
 it('an empty parented to a body on a raised floor is read where the scene has it', () => {

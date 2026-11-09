@@ -288,7 +288,9 @@ async function start() {
     handling.park();
     // Ask for the reload first, so this frame's aim already gives way to it.
     if (input.pressed('KeyR') || combat.ammo === 0) player.reload();
-    movement.input.move.copy(input.move);
+    // (a hand on its way to a button stands the soldier still: he stands where it reaches from)
+    if (avatar.pressing) movement.input.move.set(0, 0, 0);
+    else movement.input.move.copy(input.move);
     movement.input.yaw = input.yaw;
     player.aim = input.aim;
     // Firing (held or a quick click) ends a sprint, except during a reload; the shot goes as soon as the rifle is up.

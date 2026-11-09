@@ -9,6 +9,7 @@ import { resolve } from '../src/things/resolve';
 import { PERSON } from '../skills/animate/references/person';
 import { HORSE } from '../skills/animate/references/horse';
 import { DOG } from '../skills/animate/references/dog';
+import { poseOf } from '../src/puppet';
 
 describe('a body', () => {
   it('steps in fixed sub-steps whatever its frames: jittered frames give what fixed ones do', () => {
@@ -23,7 +24,7 @@ describe('a body', () => {
       time += frame;
     }
     run(fixed, 2);
-    for (let bone = 0; bone < fixed.pose.skeleton.bones.length; bone++) expect(jittered.pose.local(bone).angleTo(fixed.pose.local(bone))).toBeLessThan(1e-6);
+    for (let bone = 0; bone < poseOf(fixed).skeleton.bones.length; bone++) expect(poseOf(jittered).local(bone).angleTo(poseOf(fixed).local(bone))).toBeLessThan(1e-6);
   });
 
   it('reads an app-owned world matrix under a moving bone, interpolating it across sub-steps', () => {
@@ -44,21 +45,21 @@ describe('a body', () => {
     const body = person(), walked = person();
     body.update(5);
     run(walked, 0.1);
-    expect(body.pose.position(0).distanceTo(walked.pose.position(0))).toBeLessThan(1e-9);
+    expect(poseOf(body).position(0).distanceTo(poseOf(walked).position(0))).toBeLessThan(1e-9);
   });
 
   it('places its object on the floor under its root, turned by its facing alone, and writes its bones from its pose', () => {
     const body = person({ at: new Vector3(2, 0, -1), face: 1 });
     run(body, 0.5);
-    const root = body.pose.position(0);
+    const root = poseOf(body).position(0);
     expect(body.object.position.toArray()).toEqual([root.x, 0, root.z]);
     expect(body.object.quaternion.angleTo(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), body.facing))).toBeLessThan(1e-9);
     body.object.updateMatrixWorld(true);
     for (const name of BONES) {
       const node = body.bones[name], index = INDEX[name];
-      expect(node.getWorldPosition(new Vector3()).distanceTo(body.pose.position(index)), name).toBeLessThan(1e-6);
+      expect(node.getWorldPosition(new Vector3()).distanceTo(poseOf(body).position(index)), name).toBeLessThan(1e-6);
       // (a bare body's bones stand at rest as rig builds them: unturned, its T-pose's limbs straight)
-      expect(node.getWorldQuaternion(new Quaternion()).angleTo(body.pose.rotation(index)), name).toBeLessThan(1e-6);
+      expect(node.getWorldQuaternion(new Quaternion()).angleTo(poseOf(body).rotation(index)), name).toBeLessThan(1e-6);
     }
   });
 
@@ -87,10 +88,10 @@ describe('a body', () => {
     for (const [name, index] of Object.entries(INDEX)) {
       const node = nodes.get(name);
       if (!node) continue;
-      expect(node.getWorldPosition(new Vector3()).distanceTo(body.pose.position(index)), name).toBeLessThan(1e-6);
+      expect(node.getWorldPosition(new Vector3()).distanceTo(poseOf(body).position(index)), name).toBeLessThan(1e-6);
     }
     // (an A-pose measures as the T-pose it is: the same person, moving the same way)
-    expect(body.pose.position(INDEX.leftHand).distanceTo(bare.pose.position(INDEX.leftHand))).toBeLessThan(1e-6);
+    expect(poseOf(body).position(INDEX.leftHand).distanceTo(poseOf(bare).position(INDEX.leftHand))).toBeLessThan(1e-6);
     // (an end bone follows its parent at rest)
     const tip = nodes.get('leftHand_end')?.getWorldPosition(new Vector3()), hand = nodes.get('leftHand');
     if (!tip || !hand) throw new Error('no hand');
@@ -146,7 +147,7 @@ describe('a body', () => {
 
   it('weighs what it is told, or a closed mesh at 1000 kg/m³, kept within half and twice its species', () => {
     const told = person({ mass: 90 }), meshed = person({ mass: { closed: true, volume: 0.07 } }), open = person({ mass: { closed: false, volume: null } });
-    const total = (body: Body) => body.pose.skeleton.bones.reduce((sum, b) => sum + b.mass, 0);
+    const total = (body: Body) => poseOf(body).skeleton.bones.reduce((sum, b) => sum + b.mass, 0);
     expect(total(told)).toBeCloseTo(90, 6);
     expect(total(meshed)).toBeCloseTo(70, 6);
     expect(total(open)).toBeCloseTo(humanoid(PERSON).mass, 6);

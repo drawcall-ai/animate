@@ -9,7 +9,7 @@ import { meet, type Contact } from './contact';
 import { Guard, nearHand } from './guard';
 import { digitsOf, handOn, type HandPart, type HandPlacement, type HandPoint } from './placement';
 import { Joints, FLAT } from './joints';
-import { blendShape, digitOf, DIGITS, POINT, RELAXED, shapeOf, withValues, type Digit, type Fingers, type Shape } from './shape';
+import { blendShape, digitOf, DIGITS, POINT, RELAXED, shapeOf, withValues, type Digit, type HandShape, type Shape } from './shape';
 import { vectorOf } from '../things/thing';
 
 /** A placement as a hand takes it: the shape its fingers close to there and the thing's triangles about it (the thing's frame), worked
@@ -79,7 +79,7 @@ const INTO = 0.02;
 export class FingerState {
   private readonly hands: Record<'left' | 'right', Hand>;
 
-  constructor(bones: { left: DigitBones; right: DigitBones }, nodes: Readonly<Record<string, Object3D>>, private readonly holding: Readonly<Record<string, Hold | null>>, model: Object3D) {
+  constructor(bones: { left: DigitBones; right: DigitBones }, nodes: Readonly<Record<string, Object3D>>, private readonly holding: Readonly<Record<string, Hold | null>>, model: Object3D, private readonly warn: (check: string, message: string) => void) {
     const hand = (side: 'left' | 'right'): Hand => {
       const node = nodes[`${side}Hand`];
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
@@ -166,9 +166,9 @@ export class FingerState {
 
   /** `side`'s fingers eased `seconds` on toward `to`, for a hand its app poses: a placement as they come to it and take it (`onto`), its
    * digits' contacts met from where the hand is; a shape; or relaxed */
-  set(side: 'left' | 'right', to: HandPlacement | Fingers | null, seconds: number): void {
+  set(side: 'left' | 'right', to: HandPlacement | HandShape | null, seconds: number): void {
     const hand = this.hands[side];
-    if (to === null || !('on' in to)) return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds, null);
+    if (to === null || typeof to === 'string' || !('on' in to)) return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds, null);
     const taken = this.take(hand, to), thing = to.on, goal = this.onto(hand, to), contacts = contactsOf(to, to.digits);
     if (!this.arrived(hand, taken)) return this.ease(hand, goal, seconds, thing);
     // (there, it holds it, as `update` has a hand holding: closed round it, kept out of it by its shape, not by where its digits came in)
@@ -177,7 +177,7 @@ export class FingerState {
     this.ease(hand, this.solved(hand, taken, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts), seconds, false, contacts.map((c) => c.part));
   }
 
-  /** where hand `side`'s bone goes for `placement`: its wrist and its node's rotation (world) — see `Body.gripOn` */
+  /** where hand `side`'s bone goes for `placement`: its wrist and its node's rotation (world) — see `gripOn` */
   gripOn(side: 'left' | 'right', placement: HandPlacement): { wrist: Vector3; rotation: Quaternion } {
     const at = toWorld(this.nodeOf(this.hands[side], placement), worldOf(placement.on));
     return { wrist: at.position, rotation: at.quaternion };
@@ -219,7 +219,7 @@ export class FingerState {
     let shape = held ?? RELAXED;
     if (!held) {
       const world = toWorld(node, frame), matrix = new Matrix4().compose(world.position, world.quaternion, _scale.setScalar(scale));
-      shape = closedOn(joints, thing, lineOf(placement, frame), skins, matrix);
+      shape = closedOn(joints, thing, lineOf(placement, frame), skins, this.warn, matrix);
     }
     const taken = { placement, shape, near, digits: placement.digits };
     if (!at) hand.taken.set(placement, taken);

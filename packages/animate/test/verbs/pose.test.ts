@@ -15,16 +15,17 @@ import { HORSE } from '../../skills/animate/references/horse';
 import { DOG } from '../../skills/animate/references/dog';
 import { droid } from '../skeletons/droid';
 import { worldOf } from '../things';
+import { poseOf } from '../../src/puppet';
 
 /** `bone`'s turn in `posed` off its turn in `still` (in its own frame, as yaw, pitch and roll: Euler YXZ) */
 function off(posed: Body, still: Body, bone: number): Euler {
-  return new Euler().setFromQuaternion(still.pose.rotation(bone).clone().invert().multiply(posed.pose.rotation(bone)), 'YXZ');
+  return new Euler().setFromQuaternion(poseOf(still).rotation(bone).clone().invert().multiply(poseOf(posed).rotation(bone)), 'YXZ');
 }
 
 /** `bone`'s turn and the root's height in `posed` off `still`'s: pitch (x), yaw (y), roll (z) (rad) and the drop (m, + down) */
 const measure = (posed: Body, still: Body, bone: number) => {
   const { x, y, z } = off(posed, still, bone);
-  return { pitch: x, yaw: y, roll: z, drop: still.pose.position(0).y - posed.pose.position(0).y };
+  return { pitch: x, yaw: y, roll: z, drop: poseOf(still).position(0).y - poseOf(posed).position(0).y };
 };
 
 /**
@@ -103,7 +104,7 @@ describe('pose', () => {
     });
     expect(arrived).toBe(true);
     // (bowed, its hips stand back of its centre of mass: that is what arrives)
-    expect(body.pose.com(new Vector3()).z).toBeCloseTo(3, 1);
+    expect(poseOf(body).com(new Vector3()).z).toBeCloseTo(3, 1);
     expect(Math.abs(pitch)).toBeGreaterThan(Math.abs(least));
     expect(Math.sign(pitch)).toBe(Math.sign(bow));
     expect(roll).toBeGreaterThan(0.2);
@@ -119,7 +120,7 @@ describe('pose', () => {
       yield* parallel('race', function* () {
         yield* wait(0.8);
         reached = yield* reach(body, { right: at });
-        [gap, pitch] = [body.pose.position(INDEX.rightHand).distanceTo(at), chestPitch(body)];
+        [gap, pitch] = [poseOf(body).position(INDEX.rightHand).distanceTo(at), chestPitch(body)];
       }, pose(body, { bow: -0.25, twist: 0.2 }));
     }, [body], 8, (t) => {
       if (t > 0.5) worst = Math.max(worst, xcomOutside(body, h));
@@ -171,7 +172,7 @@ describe('pose', () => {
     const kind = droid(), leaning = new Body(kind, { dev: true, drive }), upright = new Body({ ...kind, inertia: undefined }, { dev: true, drive });
     const most = [0, 0];
     play(function* () {}, [leaning, upright], 3, () => [leaning, upright].forEach((body, i) => {
-      most[i] = Math.max(most[i], new Euler().setFromQuaternion(body.pose.rotation(0), 'YXZ').x);
+      most[i] = Math.max(most[i], new Euler().setFromQuaternion(poseOf(body).rotation(0), 'YXZ').x);
     }));
     expect(most[0]).toBeGreaterThan(0.01);
     expect(most[1]).toBe(0);
@@ -184,7 +185,7 @@ describe('a bow', () => {
   const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['the soldier', () => new Body(humanoid(SOLDIER), { dev: true })]];
   /** how far (m) each palm stands ahead of its thigh's axis (hip to knee) and out beside it, in the pelvis's facing */
   const palms = (body: Body) => SIDES.map((side) => {
-    const p = body.pose, yaw = yawOf(p.local(0).clone()), sign = side === 'left' ? 1 : -1;
+    const p = poseOf(body), yaw = yawOf(p.local(0).clone()), sign = side === 'left' ? 1 : -1;
     const hip = p.position(INDEX[`${side}UpperLeg`]), axis = p.position(INDEX[`${side}LowerLeg`]).clone().sub(hip);
     const palm = p.point(INDEX[`${side}Hand`], palmOf(insides(body).proportions, side), new Vector3());
     const off = palm.sub(hip).addScaledVector(axis, -clamp(palm.dot(axis) / axis.lengthSq(), 0, 1));
@@ -285,19 +286,36 @@ describe('pose of the arms', () => {
   });
 });
 
-describe('pose pace', () => {
-  it('notes a pose that ends well short of an angle for its part\'s pace, and not one held long enough', () => {
-    const noted = (posture: Posture, seconds: number, make: () => Body = () => person({ dev: { notes: true } })) => {
-      const body = make();
-      play(function* () { yield* pose(body, posture, { until: seconds }); }, [body], seconds + 0.5);
-      return body.notes.filter((note) => note.check.startsWith('pose ended short'));
-    };
-    // (a person's bow at 1.2 rad/s: 0.6 rad comes about half its way in 0.4 s; a creature's lean, rocked 0.3 s each way, ~0.065 of 0.12)
-    expect(noted({ bow: 0.6 }, 0.4)).toEqual([expect.objectContaining({ where: 'bow', limit: 2 / 3 })]);
-    expect(noted({ bow: 0.6 }, 1.5)).toEqual([]);
-    expect(noted({ head: { pitch: 0.3 } }, 0.3)).toEqual([]);
-    expect(noted({ arms: { right: { out: 2 } } }, 0.3)).toEqual([expect.objectContaining({ where: 'right arm out' })]);
-    expect(noted({ lean: 0.12 }, 0.3, () => new Body(droid(), { dev: { notes: true } }))).toEqual([expect.objectContaining({ where: 'lean' })]);
+describe('pose hold', () => {
+  /** how long `posture` given `hold` takes to end, and what it returned */
+  const ended = (posture: Posture, hold: number, make: () => Body = () => person()) => {
+    const body = make();
+    let result: boolean | undefined, took = 0;
+    play(function* () { result = yield* pose(body, posture, { hold }); }, [body], 20, (time) => {
+      took = time;
+      return result !== undefined;
+    });
+    return { result, took };
+  };
+
+  it('ends once the posture has come at its part\'s pace, the hold on', () => {
+    // (a person's bow at 1.2 rad/s; a head at 2.5)
+    const bow = ended({ bow: 0.6 }, 0), held = ended({ bow: 0.6 }, 0.5);
+    expect(bow.result).toBe(true);
+    expect(bow.took).toBeGreaterThan(0.5);
+    expect(bow.took).toBeLessThan(1.2);
+    expect(held.took - bow.took).toBeCloseTo(0.5, 1);
+    expect(ended({ head: { pitch: 0.3 } }, 0).took).toBeLessThan(0.5);
+    expect(ended({ lean: 0.12 }, 0, () => new Body(droid())).result).toBe(true);
+    expect(() => pose(person(), { bow: 0.1 }, { hold: 1, until: 1 })).toThrow(/not both/);
+  });
+
+  it('a pose held has arrived when it ends', () => {
+    const body = person();
+    let bowed = 0, done = false;
+    const chest = () => body.bones.chest.getWorldQuaternion(new Quaternion()).angleTo(new Quaternion());
+    play(function* () { yield* pose(body, { bow: 0.6 }, { hold: 0 }); bowed = chest(); done = true; }, [body], 5, () => done);
+    expect(bowed).toBeGreaterThan(0.2);
   });
 });
 
@@ -322,12 +340,12 @@ describe('lookAt', () => {
 });
 
 /** the chest's pitch in the world (rad, + forward) */
-const chestPitch = (body: Body) => new Euler().setFromQuaternion(new Quaternion().setFromAxisAngle(UP, -body.facing).multiply(body.pose.rotation(INDEX.chest)), 'YXZ').x;
+const chestPitch = (body: Body) => new Euler().setFromQuaternion(new Quaternion().setFromAxisAngle(UP, -body.facing).multiply(poseOf(body).rotation(INDEX.chest)), 'YXZ').x;
 /** the head's roll in the world (rad, + its left side up) */
-const headRoll = (body: Body) => new Euler().setFromQuaternion(new Quaternion().setFromAxisAngle(UP, -body.facing).multiply(body.pose.rotation(INDEX.head)), 'YXZ').z;
+const headRoll = (body: Body) => new Euler().setFromQuaternion(new Quaternion().setFromAxisAngle(UP, -body.facing).multiply(poseOf(body).rotation(INDEX.head)), 'YXZ').z;
 /** how far (m) the extrapolated centre of mass is outside the feet's support (− inside) */
 function xcomOutside(body: Body, h: ReturnType<typeof insides>): number {
-  const com = body.pose.com(new Vector3()), velocity = h.frame.prev.com(new Vector3()).sub(h.frame.prev2.com(new Vector3())).divideScalar(h.frame.dt);
+  const com = poseOf(body).com(new Vector3()), velocity = h.frame.prev.com(new Vector3()).sub(h.frame.prev2.com(new Vector3())).divideScalar(h.frame.dt);
   const xcom = xcomOf(com, velocity, h.proportions.legLength, new Vector3());
   const support = (h.stepper?.legs ?? []).flatMap((leg) => footprint(h.proportions, leg.anchor, leg.yaw));
   return outside(hullOf(support), xcom);

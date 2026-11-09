@@ -7,6 +7,7 @@ import { gazeOff, insides, person, play } from '../bodies';
 import { DOG } from '../../skills/animate/references/dog';
 import { HORSE } from '../../skills/animate/references/horse';
 import { box, empty, roomOf, worldOf } from '../things';
+import { poseOf } from '../../src/puppet';
 
 describe('bodies together', () => {
   // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: 0.104 m at this life seed)
@@ -42,15 +43,12 @@ describe('bodies together', () => {
     const giver = person({ dev: true }), taker = person({ dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
     giver.object.name = 'giver';
     const room = roomOf(giver, taker), load = box(room, new Vector3(0, 0.9, 0.45), { mass: 2, solid: false });
-    let tried = false;
-    play(function* () {
+    expect(() => play(function* () {
       yield* grab(giver, load, { left: 'left', right: 'right' });
       yield* parallel('race', carry(giver, load, new Vector3(0, 1.05, 0.8), { until: Infinity }), function* () {
         yield* parallel('race', grab(taker, load, { left: 'right' }), wait(0.1));
-        tried = true;
       });
-    }, [giver, taker], 10, () => tried);
-    expect(taker.log).toContainEqual(expect.objectContaining({ check: 'grip another body’s hand holds', where: 'box right: giver’s right hand' }));
+    }, [giver, taker], 10)).toThrow(/"right" of "box" is under giver's right hand/);
   });
 
   it('a dog fetches a stick to a person, who takes it from its jaw', () => {
@@ -110,8 +108,8 @@ describe('bodies together', () => {
       });
     }, [watcher, walker], 15, (time) => {
       // (once the eyes have found the walker's, on them as they cross ~1.8 rad of the watcher's view: within the eyes' own range)
-      const eyes = insides(walker).gazer.eyes(walker.pose, new Vector3());
-      if (time > 1) most = Math.max(most, gazeOff(insides(watcher).gazer, watcher.pose, eyes));
+      const eyes = insides(walker).gazer.eyes(poseOf(walker), new Vector3());
+      if (time > 1) most = Math.max(most, gazeOff(insides(watcher).gazer, poseOf(watcher), eyes));
       return done;
     });
     expect(done).toBe(true);

@@ -1,6 +1,6 @@
 import { Bone, BoxGeometry, CylinderGeometry, Float32BufferAttribute, InstancedMesh, Line3, Matrix4, Mesh, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, TorusGeometry, Uint16BufferAttribute, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, carry, FIST, grab, humanoid, pose, release, wait } from '../../src/index';
+import { attempt, Body, carry, grab, humanoid, Missed, pose, release, wait } from '../../src/index';
 import { selfOf } from '../../src/body/body';
 import { PERSON } from '../../skills/animate/references/person';
 import { FINGERED } from '../skeletons/fingered';
@@ -8,6 +8,7 @@ import { LIFTED } from '../../src/fingers/shape';
 import { Thing } from '../../src/things/thing';
 import { person, play } from '../bodies';
 import { empty, roomOf } from '../things';
+import { gripOn, placement, shapeHand } from '../../src/puppet';
 
 /** how far bone `name` of `body` is bent off its rest (rad) */
 const bent = (body: Body, name: string) => 2 * Math.acos(Math.min(1, Math.abs(body.bones[name].quaternion.w)));
@@ -21,13 +22,13 @@ function closedOn(mesh: Mesh): Quaternion[] {
   Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.015 });
   room.add(mesh);
   room.updateMatrixWorld(true);
-  const placement = body.placement('right', grip), hand = body.bones.rightHand, arm = hand.parent;
+  const on = placement(body, 'right', grip), hand = body.bones.rightHand, arm = hand.parent;
   if (!arm) throw new Error('no forearm');
-  const { wrist, rotation } = body.gripOn('right', placement);
+  const { wrist, rotation } = gripOn(body, 'right', on);
   hand.position.copy(arm.worldToLocal(wrist));
   hand.quaternion.copy(arm.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
   hand.updateMatrixWorld(true);
-  for (let k = 0; k < 40; k++) body.shapeHand('right', placement, 0.05);
+  for (let k = 0; k < 40; k++) shapeHand(body, 'right', on, 0.05);
   return Object.entries(body.bones).filter(([name]) => /^right(Thumb|Index|Middle|Ring|Little)/.test(name)).map(([, bone]) => bone.quaternion.clone());
 }
 
@@ -149,13 +150,13 @@ describe('fingers', () => {
     Object.assign(grip.userData, { handle: [0, 1, 0], facing: [1, 0, 0], digits: { index: { curl: 0, hook: 0 } } });
     room.add(rod);
     // (the hand bone put where its placement holds the rod, as a puppet would)
-    const placement = body.placement('right', grip), hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = body.gripOn('right', placement);
+    const on = placement(body, 'right', grip), hand = body.bones.rightHand, arm = hand.parent, { wrist, rotation } = gripOn(body, 'right', on);
     if (!arm) throw new Error('no forearm');
     arm.updateWorldMatrix(true, false);
     hand.position.copy(arm.worldToLocal(wrist));
     hand.quaternion.copy(arm.getWorldQuaternion(new Quaternion()).invert().multiply(rotation));
     hand.updateMatrixWorld(true);
-    for (let k = 0; k < 20; k++) body.shapeHand('right', placement, 0.05);
+    for (let k = 0; k < 20; k++) shapeHand(body, 'right', on, 0.05);
     expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.05);
     expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.8);
   });
@@ -193,7 +194,7 @@ describe('fingers', () => {
     roomOf(body);
     let fisted = 0;
     play(function* () {
-      yield* pose(body, { fingers: { right: FIST } }, { until: 0.5 });
+      yield* pose(body, { fingers: { right: 'fist' } }, { until: 0.5 });
       fisted = bent(body, 'rightIndexIntermediate');
       yield* wait(1);
     }, [body], 2);
@@ -232,7 +233,7 @@ describe('fingers', () => {
     expect(apart).toBeCloseTo(-2 * LIFTED * (Math.PI / 2), 1);
   });
 
-  it('end a grab that stops short of its grip false, soon after its plan, saying so: a ring held on the grenade\'s far side', () => {
+  it('miss a grab that stops short of its grip soon after its plan: a ring held on the grenade\'s far side', () => {
     const body = new Body(humanoid(FINGERED), { dev: true }), room = roomOf(body);
     const grenade = new Mesh(new SphereGeometry(0.032, 16, 12));
     grenade.name = 'grenade';
@@ -246,22 +247,21 @@ describe('fingers', () => {
     pin.add(ring);
     Object.assign(empty(pin, 'ring', new Vector3(0, 0.045, -0.038)).userData, { handle: [0, 1, 0], facing: [0, 0, 1], radius: 0.0016 });
     room.add(grenade);
-    let hooked: boolean | undefined, began = 0, ended = 0;
+    let hooked: Missed | null | undefined, began = 0, ended = 0;
     play(function* () {
       yield* grab(body, grenade, { right: 'body' });
       yield* carry(body, grenade, new Vector3(-0.08, 1.12, 0.32), { step: false });
       began = selfOf(body).time;
-      hooked = yield* grab(body, pin, { left: 'ring' });
+      hooked = yield* attempt(grab(body, pin, { left: 'ring' }));
       ended = selfOf(body).time;
     }, [body], 10, () => hooked !== undefined);
-    expect(hooked).toBe(false);
+    expect(hooked).toMatchObject({ verb: 'grab', where: expect.stringContaining('ring') });
     expect(ended - began).toBeLessThan(3);
-    expect(body.log.map(({ check }) => check)).toContain('late reach: distance (m)');
   });
 
   it('are refused where a skeleton has some finger bones but not all, or none to pose', () => {
     expect(() => humanoid([...PERSON, { name: 'leftIndexProximal', parent: 'leftHand', position: [0.85, 1.41, 0] }])).toThrow(/finger bones but not/);
-    expect(() => pose(person(), { fingers: { right: FIST } })).toThrow(/no finger bones/);
+    expect(() => pose(person(), { fingers: { right: 'fist' } })).toThrow(/no finger bones/);
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { index: { curl: 2 } } } })).toThrow(/-0.15 … 1/);
     expect(() => pose(new Body(humanoid(FINGERED)), { fingers: { right: { thumb: { curl: -0.1 } } } })).toThrow(/0 … 1/);
     const both = empty(new Mesh(new CylinderGeometry(0.015, 0.015, 0.3)), 'grip', new Vector3());

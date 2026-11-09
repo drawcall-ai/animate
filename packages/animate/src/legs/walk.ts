@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Go, Stance } from '../kernel/go';
+import type { Miss } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
 import type { Legged } from './legged';
@@ -9,8 +10,9 @@ import { FLAT } from './floor';
 
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
 const STROLL = { speed: 1.3, accel: 1.2 };
-/** arrived: the body this close to its goal (m, default body) and turned this close to its facing (rad), at rest on both feet */
-const ARRIVED = { distance: 0.15, yaw: 0.15 };
+/** arrived: the body this close to its goal (m, default body) and turned this close to its facing (rad), at rest on both feet; a creature
+ * whose legs have stopped short counts as there within `stopped` (measured over the examples: at most 0.39 of it) */
+const ARRIVED = { distance: 0.15, yaw: 0.15, stopped: 0.5 };
 /** within reach of a point, the way to it is fixed this much further off than the reach (m, default body) */
 const CLOSE = 1;
 /** stalled: a walk no nearer its goal by this much (m, default body; a radian of facing left counting as `turn` m) for this long (s) —
@@ -53,8 +55,8 @@ interface Route {
  * A walk to `way`, a sub-step at a time (`step`): it asks balance to go there (and face so), and says when it will stand there facing so
  * (`there`, as the body turns; `eta`, a little sooner: what the hands time their reach to), when it will end (`ends`: its feet squared
  * and settled too) and whether it has (`arrived`: there, turned and settled on its squared feet). Within reach (`within`), it stops
- * short with the point that far ahead, facing it. It says once in the dev log if it stalls (`stalled`: no nearer its goal; one followed,
- * no nearer it standing still), and goes on.
+ * short with the point that far ahead, facing it. It says if it stalls (`stall`: no nearer its goal; one followed, no nearer it standing
+ * still), and goes on.
  */
 export class Walk {
   eta = Infinity;
@@ -62,7 +64,8 @@ export class Walk {
   ends = Infinity;
   /** how far (rad) the body is still to turn to the facing it arrives with */
   unturned = Infinity;
-  stalled = false;
+  /** what stopped it, once it has stalled */
+  stall: Miss | null = null;
   private readonly go: Go = { to: new Vector3(), speed: STROLL.speed, accel: STROLL.accel };
 
   private readonly end = new Vector3();
@@ -70,8 +73,8 @@ export class Walk {
   private leg = 0;
   /** within reach, the way to the point is fixed once close: from where the body then stands it would drift as it settles off it */
   private fixed: number | null = null;
-  /** the stall watch: the least left of the walk so far, since when, and where the goal stood then; whether a goal that is no point was said */
-  private best = Infinity; private since = 0; private readonly watched = new Vector3(); private nowhere = false;
+  /** the stall watch: the least left of the walk so far, since when, and where the goal stood then */
+  private best = Infinity; private since = 0; private readonly watched = new Vector3();
   /** since when it has stood there facing as asked, its feet still to square and settle (null: not there) */
   private stood: number | null = null;
 
@@ -83,14 +86,9 @@ export class Walk {
   /** where it asks the legs to take the body this sub-step (none: a goal that is no point) */
   step(f: Frame): Go | undefined {
     const { self, way, go } = this, yaw = this.where(f);
-    if (!this.stalled) this.watch(f, yaw);
+    if (!this.stall) this.watch(f, yaw);
     go.velocity = way.velocity?.(f);
-    // (a live goal that turns out no point — live input — is a problem in the dev log, once: the body stands)
-    if (![go.to.x, go.to.z, ...(go.velocity?.toArray() ?? [])].every(Number.isFinite)) {
-      if (!this.nowhere) f.dev?.append(f.time, { check: 'walk goal not finite', value: 1, limit: 0, where: 'goal' });
-      this.nowhere = true;
-      return undefined;
-    }
+    if (![go.to.x, go.to.z, ...(go.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error(`walk: a goal that is no point: (${go.to.x}, ${go.to.z})`);
     go.stance = way.stance;
     const via = way.via ?? [];
     let previous: Readonly<Vector3> = go.to, onward = 0;
@@ -111,15 +109,21 @@ export class Walk {
     return go;
   }
 
-  /** whether it has arrived: at its goal (or as near as its legs take it), turned to its facing and settled */
-  arrived(f: Frame): boolean {
+  /** whether it stands at its goal (or as near as its legs take it), turned to its facing */
+  stands(f: Frame): boolean {
     const yaw = this.where(f);
     if (this.leg < (this.way.via?.length ?? 0)) return false;
     const body = placeOf(this.self, f), locomotion = this.self.locomotion;
-    const there = Math.hypot(body.x - this.go.to.x, body.z - this.go.to.z) < ARRIVED.distance * this.self.scale || locomotion.there;
-    const turned = yaw === null || Math.abs(wrapAngle(yaw - locomotion.facing)) < ARRIVED.yaw;
-    // (and come to rest: settled feet under a body still edging onto its goal would have it shift its weight, and step, as the walk ends)
-    return there && turned && locomotion.settled && locomotion.velocity.lengthSq() === 0;
+    const off = Math.hypot(body.x - this.go.to.x, body.z - this.go.to.z) / this.self.scale;
+    const near = off < ARRIVED.distance || (locomotion.there && off < ARRIVED.stopped);
+    return near && (yaw === null || Math.abs(wrapAngle(yaw - locomotion.facing)) < ARRIVED.yaw);
+  }
+
+  /** whether it has arrived: there, and come to rest (settled feet under a body still edging onto its goal would have it shift its weight,
+   * and step, as the walk ends) */
+  arrived(f: Frame): boolean {
+    const { settled, velocity } = this.self.locomotion;
+    return this.stands(f) && settled && velocity.lengthSq() === 0;
   }
 
   /** where it goes this sub-step (`go.to`), and the facing it arrives with (null: none) */
@@ -150,7 +154,7 @@ export class Walk {
 
   /**
    * a walk no nearer its goal for `STALL.seconds` — nor turned nearer its facing, or with none asked the way to its goal; one followed,
-   * the goal standing still meanwhile — has stalled: a problem in the dev log, once (there, saying its feet never settled)
+   * the goal standing still meanwhile — has stalled (there, saying its feet never settled)
    */
   private watch(f: Frame, yaw: number | null): void {
     const { self, go } = this, body = placeOf(self, f), facing = yaw ?? headingOf(go.to.x - body.x, go.to.z - body.z), s = self.scale;
@@ -163,12 +167,13 @@ export class Walk {
       [this.best, this.since] = [left, f.time];
       this.watched.copy(go.to);
     } else if (f.time - this.since > STALL.seconds) {
-      this.stalled = true;
       const there = off < ARRIVED.distance * s && Math.abs(wrapAngle(facing - self.locomotion.facing)) < ARRIVED.yaw;
-      f.dev?.append(f.time, {
-        check: `stalled walk: no nearer its goal for ${STALL.seconds} s (m left)`, value: off, limit: ARRIVED.distance * s, where: 'walk',
-        detail: there ? 'there and turned, its feet never settled: a foot keeps wanting to step' : 'short of its goal or its facing',
-      });
+      this.stall = {
+        where: `walk, ${off.toFixed(2)} m left`, off, limit: ARRIVED.distance * s,
+        why: there
+          ? `there and turned, but its feet never settled: a foot keeps wanting to step. An empty on a body moves as it breathes, so walk to a fixed point, or end on \`until: arriving(body, 0.3)\``
+          : `no nearer its goal or its facing for ${STALL.seconds} s, ${off.toFixed(2)} m short: something holds it off, or it circles`,
+      };
     }
   }
 }

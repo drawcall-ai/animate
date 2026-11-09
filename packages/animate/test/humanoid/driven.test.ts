@@ -4,7 +4,7 @@ import type { Body, Root } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/kernel/math';
 import type { Person } from '../../src/body/person';
-import { dt, insides, person, feetOf } from '../bodies';
+import { dt, insides, person, feetOf, airborne } from '../bodies';
 
 /** a driven root, as a player's controller writes it */
 type Driving = Root & { velocity: Vector3; crouch: number };
@@ -48,8 +48,6 @@ it.each([
   expect(apart).toBeLessThanOrEqual(SWAY_BAND);
   expect(steps).toBeGreaterThan(4);
   expect(h.log).toEqual([]);
-  // (the balance bound is only noted for a driven body)
-  expect(h.notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
   expect(feetOf(h).every((foot) => foot.phase === 'planted')).toBe(true);
   expect(h.locomotion.settled).toBe(true);
 });
@@ -155,22 +153,6 @@ it.each([
   expect(standing - low).toBeLessThan(0.45);
   expect(h.log).toEqual([]);
 });
-// (a driven body's balance is its player's: its XCoM past its feet is a note, recorded only when asked for)
-it('notes a driven XCoM only when asked', () => {
-  // (a sprint stopped dead: the root halts at once, the body's momentum carries its centre of mass on past its feet)
-  const sprint = (t: number) => forwardOf(0).multiplyScalar(t > 0.5 && t < 3 ? 3.5 : 0);
-  expect(drive(4, sprint).h.notes).toEqual([]);
-  const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-  const h = person({ drive: () => root, dev: { notes: true } });
-  for (let t = dt; t <= 4; t += dt) {
-    root.velocity.copy(sprint(t));
-    root.position.addScaledVector(root.velocity, dt);
-    h.update(dt);
-  }
-  expect(h.notes.length).toBeGreaterThan(0);
-  expect(h.notes.every((note) => note.check === 'driven XCoM outside support (m)')).toBe(true);
-});
-
 it.each([
   ['standing', 0],
   ['from a walk', 1.4],
@@ -180,9 +162,9 @@ it.each([
   const { h, apart } = drive(4, moving(0.3, 3, forwardOf(0).multiplyScalar(speed)), () => 0, (t, root, h, body) => {
     root.jump = Math.abs(t - 1.5 + dt) < dt / 2 ? 2.5 : undefined;
     if (Math.abs(t - 1.5) < dt / 2) [pressed, standing] = [t, h.pose.position(0).y];
-    if (body.airborne && Number.isNaN(off)) off = t;
-    if (!body.airborne && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
-    if (body.airborne) top = Math.max(top, h.pose.position(0).y - standing);
+    if (airborne(body) && Number.isNaN(off)) off = t;
+    if (!airborne(body) && !Number.isNaN(off) && Number.isNaN(landed)) landed = t;
+    if (airborne(body)) top = Math.max(top, h.pose.position(0).y - standing);
   });
   expect(off - pressed).toBeLessThanOrEqual(0.12);
   expect(landed - off).toBeGreaterThan(0.45);

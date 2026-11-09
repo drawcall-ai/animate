@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, test } from 'vitest';
-import { Body, humanoid, species, type Spring } from '../src/index';
+import { Body, humanoid } from '../src/index';
+import { species, type Spring } from '../src/species';
 import { Binding } from '../src/body/model';
 import { Springs } from '../src/springs';
 import { PERSON } from '../skills/animate/references/person';

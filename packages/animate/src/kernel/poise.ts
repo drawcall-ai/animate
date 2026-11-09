@@ -1,4 +1,4 @@
-import type { Fingers } from '../fingers/shape';
+import type { HandShape } from '../fingers/shape';
 import type { Vector3 } from 'three';
 
 /**
@@ -21,8 +21,8 @@ export interface Posture {
   head?: { pitch?: number; yaw?: number; roll?: number };
   /** a person's arms posed over their hang and swing, each its own (`ArmPosture`) */
   arms?: { left?: ArmPosture; right?: ArmPosture };
-  /** a person's fingers, each hand's shape (`Fingers`): not added onto anything but taken as asked, by a hand holding nothing */
-  fingers?: { left?: Fingers; right?: Fingers };
+  /** a person's fingers, each hand's shape: not added onto anything but taken as asked, by a hand holding nothing */
+  fingers?: { left?: HandShape; right?: HandShape };
 }
 
 /**

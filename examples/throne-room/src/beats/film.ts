@@ -124,8 +124,8 @@ export const beat: Beat & { order: number } = {
       // (early enough that Leia holds Luke's medal as the trio comes to stand before her)
       yield* wait(() => luke.position.z > 26);
       mark('bearer steps up');
-      if (!(yield* grab(bearer, lukeMedal, { right: INNER.right }))) throw new Error('the bearer could not take Luke\'s medal');
-      if (!(yield* grab(bearer, hanMedal, { left: INNER.left }))) throw new Error('the bearer could not take Han\'s medal');
+      yield* grab(bearer, lukeMedal, { right: INNER.right });
+      yield* grab(bearer, hanMedal, { left: INNER.left });
       const spot = place(0.65, 36.15, Math.PI + 0.5); // at her right, turned a little toward her
       yield* parallel('all', walkTo(bearer, spot, { speed: 0.5 }), lookAt(leia, luke, { until: 1.2 }));
       yield* parallel('race', lookAt(bearer, leia), function* () {

@@ -31,7 +31,6 @@ import { handStep, HOLD, placeArm } from '../hands/person/arms';
 import { armClear } from '../hands/person/trunk';
 import { hanging } from '../hands/person/hang';
 import { steadied } from '../hands/person/take';
-import { padOff } from '../hands/person/press';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
 import type { ArmPosture } from '../kernel/poise';
@@ -102,11 +101,10 @@ export class Person extends Self {
         handStep(this, f, side, steadied(this, side, hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
-        checkParents(this, f);
-        if (f.dev) checkTaking(this, f, taking);
+        checkParents(this);
+        checkTaking(this, f, taking);
         move(this, f, this.carrying);
-        if (f.dev) checkHeld(this, f, noted);
-        if (f.dev) checkSettled(this, f);
+        checkHeld(this, f, noted);
         this.carrying.clear();
         bear(this, f, this.worn, this.borne);
       },
@@ -152,19 +150,20 @@ function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
   return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
 }
 
-/** development: each grip a hand has just taken, its palm as near it as a grip taken is */
+/** each grip a hand has just taken, its palm as near it as a grip taken is: else what took it misses */
 function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, readonly [Thing, string]>>): void {
   for (const side of SIDES) {
     const hold = person.holding[side], was = taking[side];
     taking[side] = hold ? [hold.thing, hold.grip] : undefined;
     if (!hold || (was?.[0] === hold.thing && was[1] === hold.grip)) continue;
     const value = gripGap(person, f, side, hold);
-    if (value > GRIP_TAKEN) f.dev?.append(f.time, { check: 'grip activation distance (m)', value, limit: GRIP_TAKEN, where: `${hold.thing.object.name} ${side} ${hold.grip}` });
+    if (value > GRIP_TAKEN) hold.by?.fail({ where: `${hold.thing.object.name} ${side} ${hold.grip}`, off: value, limit: GRIP_TAKEN, why: `the palm closed ${(100 * value).toFixed(1)} cm off its grip` });
   }
 }
 
 /** Check final grip distance after fitting, once per hold (not of what hangs from its hand, which goes with it): unreachable carries draw
- * the wrists together and off their grips, and a hand on what the body wears is held off it by its joints. */
+ * the wrists together and off their grips, and a hand on what the body wears is held off it by its joints. The verb moving that hand then
+ * misses; a hand no verb moves has nothing to miss, and is said in the dev log. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
@@ -172,22 +171,12 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
     const value = gripGap(person, f, side, hold);
     if (value <= HELD) continue;
     noted.add(hold);
-    f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where: `${hold.thing.object.name} ${side}` });
+    const where = `${hold.thing.object.name} ${side}`, why = `the hand was drawn ${(100 * value).toFixed(1)} cm off its grip: its other hand or its joints hold it off`;
+    const mover = person.owner(`hand.${side}`)?.request;
+    if (mover && !mover.aimer && !mover.owned) mover.fail({ where, off: value, limit: HELD, why });
+    else f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where, detail: why });
   }
 }
-
-/** a pad its facing fixes off its grip, said once its turn is made up: the grab it closed still took hold (`FIXED_OFF`) */
-function checkSettled(person: Person, f: Frame): void {
-  for (const side of SIDES) {
-    const hold = person.holding[side];
-    if (!hold?.point || hold.settles === undefined || f.time < hold.settles) continue;
-    hold.settles = undefined;
-    const value = padOff(person, { side, thing: hold.thing, grip: hold.grip, point: hold.point }, f), limit = FIXED_OFF * person.scale;
-    if (value > limit) f.dev?.append(f.time, { check: 'a fingertip closed off its grip (m)', value, limit, where: `${hold.thing.object.name} ${side} ${hold.grip}` });
-  }
-}
-/** Tuned: how far off its grip a pad its facing fixes may stay unsaid (m, default body): a fingertip's breadth */
-const FIXED_OFF = 0.01;
 
 /** Start relaxed on `floor` at `at` (its x and z), facing `yaw`, with flat feet each on the floor under it and the pelvis within standing reach. */
 function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3, yaw: number): Pose {

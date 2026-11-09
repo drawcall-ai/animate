@@ -1,6 +1,7 @@
+import { grip } from '@drawcall/animate';
 import { BoxCollider, RigidBody } from '@drawcall/physics';
 import {
-  BufferGeometry, CylinderGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Object3D, Quaternion, RepeatWrapping, SRGBColorSpace,
+  BufferGeometry, CylinderGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Quaternion, RepeatWrapping, SRGBColorSpace,
   TextureLoader, TorusGeometry, Vector2, Vector3, type Texture,
 } from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -108,41 +109,29 @@ export function createRover(maps?: PaintMaps) {
   shaft.finish(column);
   body.add(column);
 
-  const mark = (parent: Object3D, name: string, at: Point) => {
-    const empty = new Object3D();
-    empty.name = name;
-    empty.position.set(...at);
-    parent.add(empty);
-    return empty;
-  };
   // A rifle stands in the rack muzzle up beside the windscreen's right pillar, outboard of the dash and its top to the rear: where a
   // soldier at the doorway sets it in one hand.
-  const rack = mark(body, 'rifle rack', [-0.93, 0.95, 0.64]);
+  const rack = grip(body, 'rifle rack', [-0.93, 0.95, 0.64]);
   rack.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
   // (left of the wheel's centre as the driver sees it is −X: the wheel faces back, turned half round)
   // (each the rim as a handle, its thumb up along it: the palm on the rim's outside facing in toward the hub and on into the wheel's face,
   // so the fingers come over its front and the thumb round its back — the rim lies across the palm with the wrist straight on a forearm
   // that comes up from the lap)
-  const grip = (side: -1 | 1) => {
-    const at = mark(rim, `${side < 0 ? 'left' : 'right'} grip`, [side * RIM.radius * Math.cos(HELD), RIM.radius * Math.sin(HELD), 0]);
+  const rimGrip = (side: -1 | 1) => {
+    const at = grip(rim, `${side < 0 ? 'left' : 'right'} grip`, [side * RIM.radius * Math.cos(HELD), RIM.radius * Math.sin(HELD), 0], { handle: [0, 1, 0], facing: [-side * 0.9, 0, -0.45], radius: RIM.thick });
     at.rotation.z = side * HELD;
-    Object.assign(at.userData, { handle: [0, 1, 0], facing: [-side * 0.9, 0, -0.45], radius: RIM.thick });
     return at;
   };
   /** an empty a hand holds as a handle along `axis` (its thumb toward the axis's end), its palm facing onto it along `palm`, `radius` thick */
-  const holdable = (name: string, at: Point, axis: Point, palm: Point, radius: number) => {
-    const empty = mark(body, name, at);
-    Object.assign(empty.userData, { handle: axis, facing: palm, radius });
-    return empty;
-  };
+  const holdable = (name: string, at: Point, axis: Point, palm: Point, radius: number) => grip(body, name, at, { handle: axis, facing: palm, radius });
   const [lower, upper] = GRAB.brackets;
   const marks = {
     /** where the driver's hips sit */
-    seat: mark(body, 'driver seat', [DRIVER, 1.09, -0.11]),
+    seat: grip(body, 'driver seat', [DRIVER, 1.09, -0.11]),
     /** where each ankle rests: the left beside the clutch, the right on the accelerator */
-    pedals: { left: mark(body, 'clutch', [DRIVER + 0.14, 0.73, 0.47]), right: mark(body, 'accelerator', [DRIVER - 0.07, 0.75, 0.48]) },
+    pedals: { left: grip(body, 'clutch', [DRIVER + 0.14, 0.73, 0.47]), right: grip(body, 'accelerator', [DRIVER - 0.07, 0.75, 0.48]) },
     /** where the hands hold the rim, a little above nine and three, each turned `FOLLOW` as far as the wheel: +Y along the rim upward, +Z out of the wheel's face */
-    grips: { left: grip(-1), right: grip(1) },
+    grips: { left: rimGrip(-1), right: rimGrip(1) },
     /** the grab handle's upright behind the windscreen's right pillar, held from the doorway as the forearm reaches it, in and forward:
      * thumb up along it, the palm on its outboard back facing in and a little forward, the fingers round its front between it and the
      * pillar */
@@ -152,9 +141,9 @@ export function createRover(maps?: PaintMaps) {
     dash: holdable('dash top', [DASH.end + DASH.round, DASH.top - DASH.round, DASH.lean], [0, 0, -1], [0, -1, 0], DASH.round),
     rack,
     /** the engine under the bonnet, where it is heard from */
-    engine: mark(body, 'engine', [0, 0.85, 1.35]),
+    engine: grip(body, 'engine', [0, 0.85, 1.35]),
     /** where the driver stands to get in, on the ground beside the front of the doorway, facing forward: a standing capsule's width off the hull */
-    door: mark(body, 'doorway', [-1.21, 0, 0.42]),
+    door: grip(body, 'doorway', [-1.21, 0, 0.42]),
   };
 
   return {
