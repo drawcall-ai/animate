@@ -43,8 +43,8 @@ export interface Steering {
   xcom?: Vector3;
   /** where it will be and face `ahead` s on, to read without changing it: a landing foresees that, not a straight run at its turning rate */
   forecast?: (ahead: number) => { position: Vector3; yaw: number };
-  /** the turn (rad/s) it would make if its legs kept up, when they hold it back (a planner's): a gait's feet step to make way for it */
-  turning?: number;
+  /** how it would be going, its turn (rad/s) and velocity (m/s), if its legs kept up, when they hold it back (a planner's): a gait's feet step to make way for it */
+  wanted?: { angular: number; velocity: Vector3 };
   /** a person's: the root at its centre of mass, the hips holding it there and the feet's middle a little behind it (a planner's); else at
    * the hips, the feet under them (a scene's) */
   centre?: boolean;

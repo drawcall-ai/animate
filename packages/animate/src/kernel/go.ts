@@ -1,5 +1,8 @@
 import type { Vector3 } from 'three';
 
+/** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
+export const STROLL = { speed: 1.3, accel: 1.2 };
+
 /** How the body stands when nothing asks for more. */
 export interface Stance {
   /** half the distance between the ankles, sideways (m) */

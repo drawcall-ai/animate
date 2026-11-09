@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import type { Go, Stance } from '../kernel/go';
+import { STROLL, type Go, type Stance } from '../kernel/go';
 import type { Miss } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
@@ -8,8 +8,8 @@ import type { Legged } from './legged';
 import { remaining, SETTLED_AFTER } from './step/state';
 import { FLAT } from './floor';
 
-/** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
-const STROLL = { speed: 1.3, accel: 1.2 };
+/** Tuned: this share of a speed asked counts as reaching it */
+const NEAR = 0.9;
 /** arrived: the body this close to its goal (m, default body) and turned this close to its facing (rad), at rest on both feet; a creature
  * whose legs have stopped short counts as there within `stopped` (measured over the examples: at most 0.39 of it) */
 const ARRIVED = { distance: 0.15, yaw: 0.15, stopped: 0.5 };
@@ -41,7 +41,6 @@ interface Route {
   velocity?: (f: Frame) => Vector3 | undefined;
   /** an explicit pace; otherwise a stroll, slowed by the weight held, quickened by the body's tempo */
   speed?: number;
-  accel?: number;
   stance?: Partial<Stance>;
   /** arriving, square the feet into the stance (default true) */
   plant?: boolean;
@@ -77,6 +76,8 @@ export class Walk {
   private best = Infinity; private since = 0; private readonly watched = new Vector3();
   /** since when it has stood there facing as asked, its feet still to square and settle (null: not there) */
   private stood: number | null = null;
+  /** the fastest it has gone (m/s), and the furthest it has had to go (m) */
+  private peak = 0; private farthest = 0;
 
   constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;
@@ -86,6 +87,7 @@ export class Walk {
   /** where it asks the legs to take the body this sub-step (none: a goal that is no point) */
   step(f: Frame): Go | undefined {
     const { self, way, go } = this, yaw = this.where(f);
+    this.peak = Math.max(this.peak, self.locomotion.velocity.length());
     if (!this.stall) this.watch(f, yaw);
     go.velocity = way.velocity?.(f);
     if (![go.to.x, go.to.z, ...(go.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error(`walk: a goal that is no point: (${go.to.x}, ${go.to.z})`);
@@ -98,6 +100,7 @@ export class Walk {
       previous = next;
     }
     const body = placeOf(self, f);
+    this.farthest = Math.max(this.farthest, Math.hypot(go.to.x - body.x, go.to.z - body.z));
     this.there = etaOf(self, body, go, yaw, TURNING) + onward;
     this.eta = etaOf(self, body, go, yaw, LEADING_TURN) + onward;
     this.stood = this.there > 0 ? null : this.stood ?? f.time;
@@ -107,6 +110,14 @@ export class Walk {
     const arriving = way.face?.(f) ?? null;
     this.unturned = arriving === null ? 0 : Math.abs(wrapAngle(arriving - self.locomotion.facing));
     return go;
+  }
+
+  /** Says in a dev log, as a walk to a place ends, a speed above a stroll it had the room to reach (speeding up as it brakes, v² = a·d) and came nowhere near. */
+  report(f: Frame): void {
+    const asked = this.way.speed, { go, peak } = this;
+    if (!f.dev || asked === undefined || asked <= STROLL.speed || !this.arrives) return;
+    const limit = Math.min(asked, Math.sqrt(go.accel * this.farthest));
+    if (peak < NEAR * limit) f.dev.append(f.time, { check: 'walk speed not reached (m/s)', value: peak, limit, where: 'root' });
   }
 
   /** whether it stands at its goal (or as near as its legs take it), turned to its facing */
@@ -130,8 +141,11 @@ export class Walk {
   private where(f: Frame): number | null {
     const { self, way, go } = this, within = way.within ?? 0, via = way.via ?? [];
     const effort = loadFactor(self.load), body = placeOf(self, f).setY(0);
-    go.speed = way.speed ?? STROLL.speed * self.tempo / effort;
-    go.accel = way.accel ?? STROLL.accel * self.tempo / effort;
+    go.speed = Math.min(way.speed ?? STROLL.speed * self.tempo / effort, self.stepper?.top ?? Infinity);
+    // (asked faster than a stroll it speeds up and brakes the quicker, as fast as it is asked or going: a gallop's stop within a gallop's reach.
+    // Fit: 2, 3.9 and 2.1–3.9 m/s² at 3.5, 14 and 4 m/s, a lion's as tuned by hand before: 2, 3 and 3)
+    const quicker = (way.speed ?? 0) > STROLL.speed ? Math.sqrt(Math.max(way.speed!, self.locomotion.velocity.length()) / STROLL.speed) : 1;
+    go.accel = STROLL.accel * quicker * self.tempo / effort;
     this.start ??= body.clone();
     if (this.leg < via.length && body.distanceTo(_v.copy(via[this.leg](f)).setY(0)) < ARRIVED.distance * self.scale) {
       this.leg++;

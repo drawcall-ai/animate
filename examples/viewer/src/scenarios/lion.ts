@@ -99,13 +99,13 @@ export function lionRun(): Scenario {
         bodies: [lion],
         // (the prey runs at its pace as the lion walks, trots and gallops after it)
         story: () => parallel('all', action({ update: (_, clock) => void (prey.position.z += pace * clock.delta) }), function* () {
-          yield* walkTo(lion, prey, { speed: 1.3, accel: 1.2, until: () => gap() < PREY.trots });
-          yield* walkTo(lion, prey, { speed: 3.5, accel: 2, until: () => gap() < PREY.bolts });
+          yield* walkTo(lion, prey, { speed: 1.3, until: () => gap() < PREY.trots });
+          yield* walkTo(lion, prey, { speed: 3.5, until: () => gap() < PREY.bolts });
           pace = PREY.pace;
-          yield* walkTo(lion, prey, { speed: 14, accel: 3, until: () => gap() < PREY.breaks });
+          yield* walkTo(lion, prey, { speed: 14, until: () => gap() < PREY.breaks });
           pace = PREY.escape;
           // (it gives up: slows over as far as it takes to stop from its gallop, and stands)
-          stopped = yield* walkTo(lion, lion.position.add(new Vector3(0, 0, 36)), { speed: 4, accel: 3 });
+          stopped = yield* walkTo(lion, lion.position.add(new Vector3(0, 0, 36)), { speed: 4 });
         }),
         done: () => stopped,
       };

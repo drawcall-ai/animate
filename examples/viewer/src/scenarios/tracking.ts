@@ -240,7 +240,7 @@ export function reaching(variation: Variation = {}): Scenario {
               reached = yield* reach(person, { right: followed }, { speed: 2,
                 until: () => time >= stops && person.bones.rightHand.getWorldPosition(new Vector3()).distanceTo(marker.position) < 0.01 });
             },
-            walkTo(person, followNextWaypoint, { speed: 1.3 * pace, accel: 1.2 * pace ** 2, until: Infinity,
+            walkTo(person, followNextWaypoint, { speed: 1.3 * pace, until: Infinity,
               face: () => person.position.clone().add(new Vector3(Math.sin(facing), 0, Math.cos(facing))) }),
             // (the eyes lead the hand: where it is going a moment on)
             lookAt(person, (time) => target(time + GLANCE / pace, new Vector3())),

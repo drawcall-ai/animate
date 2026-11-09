@@ -441,7 +441,9 @@ export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
     if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
   }
   const value = outside(hull, xcom);
-  if (value > LIMIT.xcom * s) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: LIMIT.xcom * s, where: 'hips' });
+  // (none for a run, set off or brought to a stop: the reading is an inverted pendulum's standing on a centre of pressure (read: Hof et al.
+  // 2005, its assumptions: constant length, a base of support); a flight has none)
+  if (value > LIMIT.xcom * s && (person.going?.speed ?? 0) < (person.stepper?.st.run[0] ?? Infinity)) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: LIMIT.xcom * s, where: 'hips' });
 }
 
 /** where the feet's middle stands from the centre of mass (`OVER` behind it, facing as the stepper does; × `scale`) */

@@ -117,7 +117,7 @@ it('a horse walks a 2 m circle at 1.6 m/s after a carrot, its legs keeping up, i
     last = angle;
     return swept > 2 * Math.PI;
   };
-  play(function* () { yield* walkTo(mare, carrot, { speed: 1.6, accel: 1.2, until: once }); circled = true; }, [mare], 40, () => {
+  play(function* () { yield* walkTo(mare, carrot, { speed: 1.6, until: once }); circled = true; }, [mare], 40, () => {
     lag = Math.max(lag, Math.abs(mare.position.distanceTo(centre) - radius));
     return circled;
   });

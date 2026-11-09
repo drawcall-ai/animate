@@ -142,7 +142,7 @@ it('trots as a Labrador does: its stride, its duty and its carpus and hock foldi
   expect(angle('leftHind1', 'leftHind2', 'leftHind3')).toBeLessThan(145);
   const lands: number[] = [], carpus: number[] = [], hock: number[] = [];
   let up = false, planted = 0, sampled = 0;
-  play(() => walkTo(labrador, new Vector3(0, 0, 40), { speed: 2, accel: 2 }), [labrador], 14, (time) => {
+  play(() => walkTo(labrador, new Vector3(0, 0, 40), { speed: 2 }), [labrador], 14, (time) => {
     const lifted = at('leftFore3').y > 0.038;
     if (time > 6) {
       if (up && !lifted) lands.push(time);

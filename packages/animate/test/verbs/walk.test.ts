@@ -99,7 +99,7 @@ it.each([
   let ended = NaN, unsettled = 0, moved = 0;
   const feet: Vector3[] = [];
   play(function* () {
-    yield* walkTo(body, to, { speed, accel: speed });
+    yield* walkTo(body, to, { speed });
     ended = h.frame.time;
     feet.push(...h.stepper!.legs.map((leg) => leg.anchor.clone()));
   }, [body], 15, () => {
@@ -215,4 +215,24 @@ it('throws on a pace that is none, and for a body its app drives', () => {
   expect(() => walkTo(body, new Vector3(), { speed: 0 })).toThrow('no pace');
   const driven = person({ drive: () => ({ position: new Vector3(), velocity: new Vector3(), yaw: 0 }) });
   expect(() => play(function* () { yield* walkTo(driven, new Vector3(0, 0, 1)); }, [driven], 0.1)).toThrow('drives it');
+});
+
+it('a person asked 3 m/s runs there, in flight between its stances, and asked past its top says so', () => {
+  const walk = (speed: number) => {
+    const body = person({ dev: true, at: new Vector3(0, 0, -30), face: 0 }), h = insides(body);
+    let peak = 0, flying = 0, done = false;
+    play(function* () { yield* walkTo(body, new Vector3(), { speed }); done = true; }, [body], 40, () => {
+      peak = Math.max(peak, h.locomotion.velocity.length());
+      if (body.feet.every((foot) => !foot.planted)) flying++;
+      return done;
+    });
+    return { peak, flying, done, said: body.log.filter((row) => row.check.startsWith('walk speed')) };
+  };
+  const run = walk(3), past = walk(6);
+  expect(run.done).toBe(true);
+  expect(run.peak).toBeCloseTo(3, 1);
+  expect(run.flying).toBeGreaterThan(30);
+  expect(run.said).toEqual([]);
+  expect(past.peak).toBeCloseTo(4, 1);
+  expect(past.said).toHaveLength(1);
 });

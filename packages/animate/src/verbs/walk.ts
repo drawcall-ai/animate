@@ -20,11 +20,15 @@ export interface WalkOptions {
    * past ~9°), else to the right. A target to face that moves re-aims the steps mid-swing, so turn to a fixed angle or point.
    */
   face?: number | Target;
-  /** its top speed (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7 ×
-   * its scale, a person's height over the default 1.75 m, so a group sharing a climbing speed keeps under its smallest body's cap) */
+  /**
+   * how fast it may go (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7 ×
+   * its scale, a person's height over the default 1.75 m, so a group sharing a climbing speed keeps under its smallest body's cap). An upper
+   * limit: it gets there with room to, speeding up and braking quicker the faster it is asked. On a straight, asking faster does not arrive
+   * later, within its last step or so; a walk that turns first or arrives turned goes as its turn lets it, and may. Its gait follows: a
+   * person breaks into a run from 2 m/s, running by 3, and goes 4 m/s at most (× √ its legs' length); a creature as fast as its legs keep up.
+   * Ending on arriving, held well short of a speed above a stroll it had the room for, it says so in its dev log (`walk speed not reached`).
+   */
   speed?: number;
-  /** how quickly it speeds up (m/s²; default 1.2) */
-  accel?: number;
   /** ends on this instead of arriving (`true` if it stands there as it ends, turned; else `false`): a target that moves is followed until
    * then; it still throws if the walk stalls short of a target standing still */
   until?: Until;
@@ -39,11 +43,9 @@ export interface WalkOptions {
  * under it warns once on the console.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
-  const { face, speed, accel, until } = options;
+  const { face, speed, until } = options;
   if (target instanceof Body) throw new Error('walkTo: a body is no target: give a point beside it (`other.position`), or one of its bones');
-  for (const [name, value] of [['speed', speed], ['accel', accel]] as const) {
-    if (value !== undefined && !(Number.isFinite(value) && value > 0)) throw new Error(`walkTo: ${name} ${value} is no pace`);
-  }
+  if (speed !== undefined && !(Number.isFinite(speed) && speed > 0)) throw new Error(`walkTo: speed ${speed} is no pace`);
   if (typeof face === 'number' && !Number.isFinite(face)) throw new Error('walkTo: the facing is no angle');
   return verb(body, 'walkTo', (request) => function* () {
     const self = selfOf(body);
@@ -66,7 +68,7 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       if (mark && height > OFF_FLOOR) self.warn('walk target', `a walk target is ${height.toFixed(2)} m off the floor under it: its height is ignored`);
       return found.position;
     };
-    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, accel, backs: true }, until === undefined);
+    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, backs: true }, until === undefined);
     request.there = () => walk.stands(self.frame);
     const step = (f: Frame) => {
       const go = walk.step(f);
@@ -76,6 +78,7 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
     // (given `until`, it follows its target, however it moves, until then — or it stalls short of one standing still)
     if (until !== undefined) yield* during(request, 'go', 'asked', step, () => walk.stall !== null);
     else yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stall !== null));
+    walk.report(self.frame);
     if (walk.stall) request.fail(stallOf(self, request, walk.stall));
     else request.met();
     // (there, the legs are its, standing, till its story moves on)

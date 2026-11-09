@@ -51,10 +51,10 @@ export class Planner {
     // (the largest share of its speed and turn the legs keep up with, found to within `PRECISION`: none, it stands. Sought down from
     // whole before halving between: on a bend, a share just short of whole may hold where a slower one does not)
     let plan = planned(1);
-    this.root.turning = undefined;
+    this.root.wanted = undefined;
     if (!kept(plan)) {
-      // (the turn it is held back from, as it would be under way)
-      this.root.turning = plan(f.time + PRESSING).angular;
+      // (what it is held back from, as it would be under way)
+      this.root.wanted = plan(f.time + PRESSING);
       // (a plan at rest is the same at any share: there is none to search)
       if (!still) {
         let [lo, hi] = [0, 1];
@@ -196,7 +196,7 @@ export function stanceYaw(legs: readonly { yaw: number; sign: 1 | -1 }[], rootYa
 /** whether a goal `heading` away (rad) is off the way a root facing `rootYaw` goes: it turns to it first, facing it till it is on its way */
 export const offTheWay = (heading: number, rootYaw: number) => Math.abs(wrapAngle(heading - rootYaw)) >= Math.PI / 4;
 
-/** Tuned: how far ahead (s) the turn it is held back from is read, under way */
+/** Tuned: how far ahead (s) what it is held back from is read, under way */
 const PRESSING = 0.5;
 /** Tuned: how finely the share of speed and turn the legs keep up with is found */
 const PRECISION = 1 / 64;

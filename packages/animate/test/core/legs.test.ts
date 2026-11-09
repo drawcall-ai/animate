@@ -56,7 +56,7 @@ it('a swing ends on the stance rate rather than at rest', () => {
 function writtenOver(dev: boolean, speed: number, later: (f: Frame, body: Body) => void) {
   const body: Body = new Body(MARE, { dev });
   claim(body, 'trunk', (f) => later(f, body));
-  return { body, step: scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 20), { speed, accel: 0.65 }); } : undefined) };
+  return { body, step: scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 20), { speed }); } : undefined) };
 }
 
 it('leg contact checks read the final pose after a later writer, and disappear with dev off', () => {
@@ -109,7 +109,7 @@ it('follows a moving goal with supported contacts and a root that turns toward i
   let turned = 0;
   const body: Body = new Body(MARE, { dev: true });
   claim(body, 'trunk', (f) => { turned = Math.max(turned, Math.abs(2 * Math.atan2(f.current.rotation(0).y, f.current.rotation(0).w))); });
-  const step = scene([body], function* () { yield* walkTo(body, (time) => new Vector3(0.05, 0, 2 + 0.75 * time), { speed: 0.95, accel: 0.65, until: Infinity }); });
+  const step = scene([body], function* () { yield* walkTo(body, (time) => new Vector3(0.05, 0, 2 + 0.75 * time), { speed: 0.95, until: Infinity }); });
   for (let tick = 0; tick < 8 * 60; tick++) step();
   expect(poseOf(body).position(0).z).toBeGreaterThan(4);
   expect(turned).toBeGreaterThan(0.01);
@@ -143,7 +143,7 @@ it('back flexion pivots about the hips without translating their attachments', (
 });
 
 it('a slow horse walk supports on an extended carpus, folds in swing and visibly nods', () => {
-  const { body, step, planted: down, phase } = movingHorse('walk', 0.95, {}, 42, () => null, 0.65);
+  const { body, step, planted: down, phase } = movingHorse('walk', 0.95);
   const support: number[] = [], swing: number[] = [], poll: number[] = [];
   const hoofPitch: number[] = [], hindHock: number[] = [], column: number[] = [];
   const planted = [true, true, true, true];
@@ -196,22 +196,23 @@ it('a slow horse walk supports on an extended carpus, folds in swing and visibly
 it.each([[0.4, 0], [0, -2], [1, 2]])('supports ordinary goals (%s, %s), then follows their next position', (x, z) => {
   let goal = new Vector3(x, 0, z);
   const body: Body = new Body(MARE, { dev: true });
-  const step = scene([body], function* () { yield* walkTo(body, () => goal, { speed: 0.95, accel: 0.65, until: Infinity }); });
+  const step = scene([body], function* () { yield* walkTo(body, () => goal, { speed: 0.95, until: Infinity }); });
   const start = poseOf(body).position(0).clone();
   for (let tick = 0; tick < 120; tick++) step();
   // (a goal behind it turned to on the spot, the root staying put; one beside it within reach stepped toward)
   if (z < 0) expect(poseOf(body).position(0).clone().setY(start.y).distanceTo(start)).toBeLessThan(1e-6);
   goal = new Vector3(0, 0, 3);
-  // (the next one ahead it then walks on to: after a turn on the forehand back round — 4–5 hind steps, ~2 s — and 3 m)
-  for (let tick = 0; tick < (z < 0 ? 5.5 : 4) * 60; tick++) step();
-  expect(poseOf(body).position(0).z).toBeGreaterThan(1);
+  // (the next one ahead it then walks on to and stands at: after a turn on the forehand back round — 4–5 hind steps, ~2 s — and 3 m. How far
+  // it has come on the way is no measure: picking its way round the bend it dips to a stand, sooner or later whatever it speeds up at)
+  for (let tick = 0; tick < (z < 0 ? 8 : 7) * 60; tick++) step();
+  expect(poseOf(body).position(0).clone().setY(0).distanceTo(goal)).toBeLessThan(0.15);
   expect(body.log).toEqual([]);
 });
 
 it('brakes for a moving goal that crosses behind a travelling root', () => {
   const body: Body = new Body(MARE, { dev: true });
   const step = scene([body], function* () {
-    yield* walkTo(body, (time) => time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(time), 0, -2), { speed: 0.95, accel: 0.65, until: Infinity });
+    yield* walkTo(body, (time) => time < 2 ? new Vector3(0, 0, 5) : new Vector3(0.1 * Math.sin(time), 0, -2), { speed: 0.95, until: Infinity });
   });
   for (let tick = 0; tick < 480; tick++) step();
   expect(poseOf(body).position(0).z).toBeGreaterThan(0.5);
@@ -284,10 +285,10 @@ it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up 
 });
 
 
-function movingHorse(gait: 'walk' | 'trot', speed: number, life: Temperament = {}, seed = 42, look: () => Vector3 | null = () => null, accel = 1.85) {
+function movingHorse(gait: 'walk' | 'trot', speed: number, life: Temperament = {}, seed = 42, look: () => Vector3 | null = () => null) {
   const body: Body = new Body(horse(HORSE, gait), { life: { ...life, seed }, dev: true });
   claim(body, 'look', () => { const at = look(); if (at) selfOf(body).look = at; });
-  const step = scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 200), { speed, accel }); } : undefined);
+  const step = scene([body], speed ? function* () { yield* walkTo(body, new Vector3(0, 0, 200), { speed }); } : undefined);
   const stepper = () => {
     const legs = selfOf(body).stepper;
     if (!legs) throw new Error('no legs');

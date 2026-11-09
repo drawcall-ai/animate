@@ -59,7 +59,7 @@ export function keepTime(steps: Steps, now: Now, cues: Cues) {
   steps.scheduled = legs.map((leg) => down(leg).length);
   // (setting off from standing, the gait's cycle starts with the foot furthest behind where it would land: it steps first; a root its
   // legs hold back is setting off too — its feet step in their turn to make way for it, else it waits on feet that wait on it)
-  const underway = moving > 0 || pressed !== 0 || now.r.turning !== undefined;
+  const underway = moving > 0 || pressed !== 0 || now.r.wanted !== undefined;
   if (underway && !steps.going && legs.every((leg) => !leg.swing)) [steps.clock, steps.since] = [steps.lifts[firstStep(steps, now, lead).i], 0];
   steps.going = underway || legs.some((leg) => leg.swing);
   if (!underway && !legs.some((leg) => leg.swing || wants(steps, now, cues, leg))) return;
@@ -142,10 +142,12 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
   if (airborne) return !leg.swing && air > 0;
   // (a planned walk keeps its supporting foot down even when short of reach; so does a walking landing while its knees recover, and a foot
-  // the body pivots on or turns quickly over: lifted, both feet were in the air)
+  // the body pivots on or turns quickly over: lifted, both feet were in the air. A run's flight is both in the air: a foot lifts once it has
+  // stood its stance, the other down or not; before then its reach alone would have it stand a frame)
   const recovering = !!now.contact && now.run === 0 && (steps.jumping.phase === 'down' || steps.jumping.phase === 'up');
   const pivoting = leg.pivot !== undefined || (now.spinning && steps.pivots(leg));
-  if (other.swing && (r.forecast || recovering || pivoting) && !steps.clocked) return false;
+  const flies = now.run > 0 && leg.planted >= now.Ts;
+  if (other.swing && ((r.forecast && !flies) || recovering || pivoting) && !steps.clocked) return false;
   // A lower leading foot takes the weight as the pelvis descends. A foot already home cannot improve its reach by stepping in place.
   const ahead = aheadOf(steps, now, leg) < 0;
   const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (!!r.forecast && leg.planted < SETTLING * now.C));
