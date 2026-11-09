@@ -5,7 +5,8 @@ import type { ReadonlyPose } from './kernel/pose';
 import type { LogEntry } from './kernel/dev';
 import type { AnySpecies, Species } from './species/define';
 import { Person } from './person/person';
-import { Self, type SelfOptions } from './body/self';
+import { Creature } from './creature/creature';
+import type { Self, SelfOptions } from './body/self';
 import { Binding } from './body/binding';
 import { handsOn } from './things/hold';
 import { Thing } from './things/thing';
@@ -64,7 +65,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
     sameThree(options.at);
     sameThree(options.model);
     const binding = new Binding(species, options.model);
-    selves.set(this, species.person ? new Person(species, options, binding) : new Self(species, options, binding));
+    selves.set(this, species.person ? new Person(species, options, binding) : new Creature(species, options, binding));
     this.object = binding.object;
     this.bones = binding.bones;
   }

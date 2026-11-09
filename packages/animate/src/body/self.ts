@@ -20,9 +20,7 @@ import { anchors, movers, resolve, type Hold, type Holder, type Interpolated } f
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
-import { bear, checkParents, heldMass, wornOf, type Bearing } from '../things/hold';
-import { creature } from '../creature/balance';
-import { creatureHands, keeping } from '../creature/hands';
+import { heldMass, wornOf, type Bearing } from '../things/hold';
 import type { Handling } from './handling';
 import { FLAT, type Floor } from '../step/floor';
 import { FingerState } from '../fingers/state';
@@ -69,7 +67,7 @@ export interface SelfOptions {
 
 /** Body state and arbitration. Each 1/60 s sub-step applies balance, request staging, part claims, then carried things.
  * Balance reads the previous sub-step’s asks; after all writes, final poses advance current → prev → prev2. */
-export class Self implements Holder {
+export abstract class Self implements Holder {
   readonly skeleton: Skeleton;
   readonly scale: number;
   readonly restOf;
@@ -126,7 +124,7 @@ export class Self implements Holder {
   private pending = 0;
   /** whether it is posing a sub-step (its current pose is being written) */
   private stepping = false;
-  private behaviours: Behaviours | null = null;
+  protected behaviours: Behaviours | null = null;
   /** its fingers, for a species with finger bones: written over each update's pose */
   readonly fingers: FingerState | null;
   private readonly springs: Springs | null;
@@ -146,7 +144,6 @@ export class Self implements Holder {
     this.drive = options.drive;
     this.floor = options.floor ?? FLAT;
     this.life = options.life ?? {};
-    if (this.life.steady !== undefined && !species.person) throw new Error(`life.steady: a person's; a ${species.name ?? 'custom species'} has no such setting`);
     // (a body stands on its floor wherever it is asked to start)
     const at = options.at, height = at ? Math.abs(at.y - this.floor(at.x, at.z)) : 0;
     if (height > OFF_FLOOR && !options.drive) this.warn('at', `it stands on its floor: its start's height is ignored, ${height.toFixed(3)} m off it`);
@@ -169,8 +166,6 @@ export class Self implements Holder {
     this.binding.write(this.pose, this.floor);
     this.springs = species.springs ? new Springs(species, binding, trunk ?? null) : null;
     this.fingers = species.fingers ? new FingerState(species.fingers, binding.bones, this.holding, binding.object, (check, message) => this.warn(check, message)) : null;
-    /** Construct creature behaviours now so infeasible legs fail before the first update. */
-    if (!species.person) this.behaviours = this.behave();
   }
 
   /** what it bears of the things it holds and wears */
@@ -186,27 +181,14 @@ export class Self implements Holder {
 
   private handled: Handling | null = null;
 
-  /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now: a creature's, wherever it reaches */
-  holds(_f: Frame, _hand: string, _wrist: Goal): boolean {
-    return true;
-  }
+  /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now */
+  abstract holds(f: Frame, hand: string, wrist: Goal): boolean;
 
-  /** a creature's hands: one at a time, each the tip of its chain */
-  protected handle(): Handling {
-    return creatureHands(this);
-  }
+  /** what its hands do for the verbs */
+  protected abstract handle(): Handling;
 
-  /** its behaviours (made after construction, once all it is has been made): a creature's legs and carriage, its jaw keeping hold */
-  protected behave(): Behaviours {
-    return {
-      balance: this.species.legs ? creature(this) : undefined,
-      keep: keeping(this),
-      things: (f) => {
-        checkParents(this);
-        bear(this, f, this.worn, this.borne);
-      },
-    };
-  }
+  /** its behaviours: made once all it is has been made */
+  protected abstract behave(): Behaviours;
 
   /** the weight its hands bear off their support (kg) */
   get load(): number {
