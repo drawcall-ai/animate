@@ -100,7 +100,10 @@ export function bringShoulder(person: Person, f: Frame, side: Side, hand: Readon
   // so a short-armed body is not left short. A load already held goes where its course takes it: the knees do not chase it.)
   const deep = height < proportions.hipHeight - proportions.thigh / 4;
   const span = proportions.shoulderHeight - proportions.hipHeight;
+  // (a load set down low, the bow exhausted: as far as the shoulder must still come down for the arm to reach, off where it is now, so the knees close it all)
+  const down = shoulder.y - hand.y - Math.sqrt(Math.max(0, reach ** 2 - (hand.x - shoulder.x) ** 2 - (hand.z - shoulder.z) ** 2));
   const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
+    : deep && !mass && heldMass(person) > 0 ? (pitch + correction > bowLimit ? Math.max(0, floor + proportions.hipHeight - f.current.position(0).y + down - crouched - lower) : 0)
     : Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * span;
   if (low && overflow > 0) person.asks.add({ lower: Math.min(squatOf(proportions), crouched + lower + overflow) * share });
   person.asks.add({ bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });

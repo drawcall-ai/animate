@@ -259,6 +259,19 @@ it('walks on with what the arm cannot hold at its carrying place, and ends', () 
   expect(carried).toBe(true);
 });
 
+describe('set down low', () => {
+  // (from a stand with its knees let down as far as they need to, its bow capped by what it holds; a grab of the same place had always reached it)
+  it.each<[number, number, number]>([[2, 0.3, 0.45], [2, 0.2, 0.45], [2, 0.05, 0.45], [8, 0.3, 1.5], [8, 0.05, 1.5]])('%f kg in both hands to %f m up, %f m ahead', (mass, y, z) => {
+    const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { mass, solid: false }), spot = empty(room, 'spot', new Vector3(0, y, z));
+    let carried: boolean | null = null;
+    play(function* () {
+      yield* grab(body, load, BOTH);
+      carried = yield* carry(body, load, spot);
+    }, [body], 20);
+    expect(carried).toBe(true);
+  });
+});
+
 describe('a thing in both hands', () => {
   // (a bail in the right hand, a side in the left, as a story might come to hold them: it is the same hold however it got there)
   it.each<[string, readonly ('right' | 'left' | 'both')[]]>([

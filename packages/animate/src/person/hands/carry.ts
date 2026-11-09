@@ -111,7 +111,9 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
   let lifted = rise <= 0, approached = false;
   // (raised onto its place as the body comes there turned as it stands: begun before it has turned, the load would turn to its place's
   // facing ahead of the body, its grips swung out of the hands' reach)
-  const near = () => plan.walk.arrival <= RAISE_LEAD && plan.walk.unturned <= RAISE_TURN;
+  // (a load's knees wait for the feet (`bringShoulder`): going low under one, it waits for them too)
+  const lead = loadFactor(heldMass(person)) > 1 && end(person.frame).position.y < floorUnder(person) + person.proportions.hipHeight ? 0 : RAISE_LEAD;
+  const near = () => plan.walk.arrival <= lead && plan.walk.unturned <= RAISE_TURN;
   const eyes = (f: Frame) => lifted ? end(f).position : watched;
   // (the time to its end, `lift` s of the lift still to go: the walk up to the raise, alongside the lift, then the raise — unknown, ∞,
   // before the walk has first stepped)

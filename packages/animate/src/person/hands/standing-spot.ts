@@ -4,6 +4,7 @@ import type { Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../kernel/math';
 import { Walk } from '../../step/walk';
+import { heldMass } from '../../things/hold';
 import { during, type Request } from '../../kernel/requests';
 import { ARM_REACH, PROTRACTION } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
@@ -102,7 +103,7 @@ export function footing(person: Person, to: Stand, step = true) {
   const height = grips.reduce((sum, grip) => sum + grip.at.y, 0) / grips.length - floor;
   const standing = proportions.shoulderHeight;
   const reach = ARM_REACH * proportions.armLength;
-  const { drop, forward } = point ? stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach)) : { drop: 0, forward: 0 };
+  const { drop, forward } = point ? stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach), bowLimit(person, height)) : { drop: 0, forward: 0 };
   const shoulders = standing - drop + (point ? Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing)) : 0);
   // (a point taken in one hand, faced: its shoulder stands its half width aside of the line to it)
   const aside = point && grips.length === 1 && grips[0].side ? proportions.shoulderHalfWidth : 0;
@@ -119,9 +120,12 @@ export function footing(person: Person, to: Stand, step = true) {
   // lies below the hips, which the trunk bows over)
   const clearOf = point && !to.things ? 0 : backOf(to.things ?? [], middle, forwardOf(face), floor + proportions.hipHeight);
   const trunk = clearOf > -Infinity ? clearOf + BODY_RADIUS * proportions.height + LOAD_RESERVE * proportions.scale : 0;
-  let ahead = Math.max(trunk, Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both));
+  // (a walk stands the mass it carries, what the hands hold with it, that far off: setting a load down, its own mass is to be as far off as asked, so nearer by the load's share)
+  const own = person.pose.skeleton.bones.reduce((sum, bone) => sum + bone.mass, 0), loaded = point && height < proportions.hipHeight ? own / (own + heldMass(person)) : 1;
+  let ahead = Math.max(trunk, Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both)) * loaded;
   const nowhere = (why: string, off: number, limit = reach) => ({ nowhere: { where: `${grips.length} grips`, off, limit, why } });
-  if (point && Math.abs(height - shoulders) > reach) return nowhere(`the placing point is ${Math.abs(height - shoulders).toFixed(2)} m from the shoulders, lowered and bowed: no stand reaches it`, Math.abs(height - shoulders));
+  const deepest = stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach)).drop;
+  if (point && Math.abs(height - (standing - deepest)) > reach && Math.abs(height - shoulders) > reach) return nowhere(`the placing point is ${Math.abs(height - shoulders).toFixed(2)} m from the shoulders, lowered and bowed: no stand reaches it`, Math.abs(height - shoulders));
   const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - floor - (standing + TIPTOE * proportions.scale);
   if (above > reach) return nowhere(`the grip is ${above.toFixed(2)} m above the shoulders on tiptoe: no stand reaches it`, above);
   if (person.drive) return 'there' as const;
@@ -161,7 +165,8 @@ export function footing(person: Person, to: Stand, step = true) {
   const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
   if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there' as const;
   if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there' as const;
-  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there' as const;
+  // (near its stand is there, for a place below the hips only if the arms reach it from here, bowed as far as what they hold lets them)
+  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale && (!point || height >= proportions.hipHeight || grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < available))) return 'there' as const;
   const rotation = (f: Frame) => {
     const current = point ? to.place(f) : null;
     return start?.quaternion && current?.quaternion ? current.quaternion.clone().multiply(start.quaternion.clone().invert()) : new Quaternion();
@@ -225,17 +230,20 @@ export function* walkingToReach(request: Request, plan: ReachWalk, after?: numbe
 function planted(person: Person, grip: { side?: Side; at: Vector3 }): number {
   const proportions = person.proportions, reach = ARM_REACH * proportions.armLength;
   const standing = floorUnder(person) + proportions.shoulderHeight, height = grip.at.y;
-  const { drop, forward } = stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach));
+  const { drop, forward } = stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach), bowLimit(person, height - floorUnder(person)));
   const shoulders = standing - drop + Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing));
   const across = Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2)) + forward + proportions.shoulderHalfWidth + PROTRACTION * proportions.height;
   return Math.max(Math.abs(height - shoulders) - reach, flat(shoulderOf(person, grip.side), grip.at) - across);
 }
 
-/** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */
-function stoop(proportions: Person['proportions'], want: number): { drop: number; forward: number } {
-  const lever = bowLever(proportions, proportions.shoulderHeight), most = squatOf(proportions) + lever * (1 - Math.cos(MOST_BOW));
+/** the deepest the body bows for a place at `height` over its floor, as what its hands hold lets it (as `bringShoulder` will bow it) */
+const bowLimit = (person: Person, height: number) => height < person.proportions.hipHeight ? MOST_BOW / loadFactor(heldMass(person)) ** 2 : MOST_BOW;
+
+/** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and a bow of `limit` let them */
+function stoop(proportions: Person['proportions'], want: number, limit = MOST_BOW): { drop: number; forward: number } {
+  const lever = bowLever(proportions, proportions.shoulderHeight), most = squatOf(proportions) + lever * (1 - Math.cos(limit));
   const drop = Math.min(want, most), { bow } = lowering(proportions, { drop, ahead: 0, height: proportions.shoulderHeight });
-  return { drop, forward: lever * Math.sin(bow) };
+  return { drop, forward: lever * Math.sin(Math.min(bow, limit)) };
 }
 
 /** the facing to take grips `grips` with: the left hand's to the left of the right's, or toward a single one from where the body stands */
