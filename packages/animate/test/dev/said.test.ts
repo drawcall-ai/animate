@@ -1,5 +1,5 @@
 // What the library says, and goes on: a warning for an app, with no dev flag.
-import { BoxGeometry, Mesh, Object3D, Vector3 } from 'three';
+import { BoxGeometry, Group, Mesh, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it, vi } from 'vitest';
 import { Body, carry, grab, grip, play, release, wait, walkTo } from '../../src/index';
@@ -99,5 +99,127 @@ describe('a verb never yielded', () => {
     play(body, walkTo(body, new Vector3(0, 0, 0.5)));
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('a target taken out of the scene', () => {
+  it('stands where it was, said once, a hand keeping to it staying put', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = person(), room = roomOf(body), cup = box(room, new Vector3(-0.28, 1, 0.25), { size: new Vector3(0.08, 0.1, 0.08), mass: 0.3 });
+    const mouth = empty(body.bones.chest, 'mouth', new Vector3(-0.1, 0.1, 0.35));
+    let lowest = Infinity, gone = false;
+    play(body, function* () {
+      yield* grab(body, cup, { right: 'right' }, { already: true });
+      yield* carry(body, cup, mouth);
+      mouth.removeFromParent();
+      gone = true;
+      yield* wait(2);
+    }, { frame: () => { if (gone) lowest = Math.min(lowest, body.bones.rightHand.getWorldPosition(new Vector3()).y); } });
+    const said = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(lowest).toBeGreaterThan(0.9);
+    expect(said).toEqual([expect.stringContaining('"mouth" was taken out of the scene')]);
+  });
+
+  it('a target never in a scene is unremarked: its numbers are the world\'s', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = person(), spot = new Object3D();
+    spot.position.set(0, 0, 1);
+    play(body, walkTo(body, spot));
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+describe('a carry\'s way', () => {
+  const said = (story: (body: Body, room: Object3D, load: Object3D) => Generator<unknown, unknown, unknown>) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { solid: false, mass: 2, size: new Vector3(0.3, 0.1, 0.2) });
+    play(body, story(body, room, load) as Parameters<typeof play>[1], { limit: 20 });
+    const lines = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    return lines;
+  };
+  const BOTH = { left: 'left', right: 'right' };
+
+  it('an approach the arms cannot take it through is said, with how far short, and the carry goes on', () => {
+    expect(said(function* (body, room, load) {
+      const shelf = empty(room, 'shelf', new Vector3(0, 1.3, 0.55)), slot = empty(shelf, 'slot', new Vector3());
+      empty(shelf, 'above', new Vector3(0, 1.2, 0));
+      slot.userData.approach = ['above'];
+      room.updateMatrixWorld(true);
+      yield* grab(body, load, BOTH);
+      yield* carry(body, load, slot);
+    })).toEqual([expect.stringMatching(/approach "above" than \d+ cm/)]);
+  });
+
+  it('a waypoint out of reach is said; one in reach is not', () => {
+    const end = new Vector3(0, 1.05, 0.45);
+    expect(said(function* (body, _room, load) {
+      yield* grab(body, load, BOTH);
+      yield* carry(body, load, [new Vector3(0, 2.4, 0.4), end]);
+    })).toEqual([expect.stringMatching(/waypoint 1 than \d+ cm/)]);
+    expect(said(function* (body, _room, load) {
+      yield* grab(body, load, BOTH);
+      yield* carry(body, load, [new Vector3(0, 1.3, 0.4), end]);
+    })).toEqual([]);
+  });
+});
+
+describe('a target taken out of the scene', () => {
+  const told = (fn: () => void) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fn();
+    const lines = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    return lines;
+  };
+  /** an empty in a group a little way off in the room, that group taken away as `carry` goes to the empty */
+  const inGroup = () => {
+    const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { solid: false }), furniture = new Group();
+    furniture.position.set(0.8, 0, 0.8);
+    room.add(furniture);
+    const spot = empty(furniture, 'spot', new Vector3(-0.8, 1.2, -0.3));
+    room.updateMatrixWorld(true);
+    return { body, room, load, furniture, spot };
+  };
+
+  it('with what it hangs from: said once, and the thing goes on to where it last was, not to its local numbers', () => {
+    const { body, load, furniture, spot } = inGroup();
+    let ended: boolean | null = null;
+    const lines = told(() => play(body, function* () {
+      yield* grab(body, load, { left: 'left', right: 'right' }, { already: true });
+      yield* parallel('all', function* () { ended = yield* carry(body, load, spot); }, function* () {
+        yield* wait(0.2);
+        furniture.removeFromParent();
+      });
+    }, { limit: 12 }));
+    expect(lines).toEqual([expect.stringMatching(/target "spot" was taken out of the scene/)]);
+    expect(ended).toBe(true);
+    expect(load.getWorldPosition(new Vector3()).distanceTo(new Vector3(0, 1.2, 0.5))).toBeLessThan(0.02);
+  });
+
+  it('a release onto one left outside the scene says the thing went with it', () => {
+    const { body, load, furniture, spot } = inGroup();
+    const lines = told(() => play(body, function* () {
+      yield* grab(body, load, { left: 'left', right: 'right' }, { already: true });
+      yield* carry(body, load, spot);
+      furniture.removeFromParent();
+      release(body, load, spot);
+    }, { limit: 12 }));
+    expect(lines).toEqual([expect.stringMatching(/put onto "spot", which is not in the body's scene/)]);
+  });
+
+  it('one never in the scene, and a function\'s, are places of their own numbers: nothing is said', () => {
+    const { body, load } = inGroup(), free = new Object3D();
+    free.position.set(0, 1.1, 0.45);
+    const lines = told(() => play(body, function* () {
+      yield* grab(body, load, { left: 'left', right: 'right' }, { already: true });
+      yield* carry(body, load, free);
+      const made = new Object3D();
+      made.position.set(0, 1.05, 0.45);
+      yield* carry(body, load, () => made);
+    }, { limit: 12 }));
+    expect(lines).toEqual([]);
   });
 });

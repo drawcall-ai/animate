@@ -3,6 +3,7 @@ import { SUBSTEP } from '../kernel/frame';
 import { REACHED, type Placement } from '../kernel/goal';
 import type { Miss } from '../kernel/requests';
 import { spinOf } from '../kernel/rotation';
+import { topOf } from '../kernel/scene';
 import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { END } from './hand-staging';
@@ -48,7 +49,7 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
   else {
     // (a thing lifted is left in the world where it is, under the scene's root; one never lifted — a button, a part still in its place —
     // stays where it is)
-    if (thing.lifted) attach(thing, rootOf(object));
+    if (thing.lifted) attach(thing, topOf(object));
     if (!bodyOf(object)) thing.lifted = false;
   }
   return { motion, miss: null };
@@ -59,6 +60,8 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
  */
 function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Placement>): Miss | null {
   const empty = self.movingFrameOf(onto).at(self.frame.time).current, off = at.position.distanceTo(empty.position), turned = at.quaternion.angleTo(empty.quaternion);
+  // (an empty out of the scene takes the thing out of it with it)
+  if (self.object.parent && topOf(onto) !== topOf(self.object)) self.warn(`onto gone ${onto.uuid}`, `"${thing.object.name}" was put onto "${onto.name}", which is not in the body's scene, so it has gone out of the scene with it: put it onto an empty still there`);
   attach(thing, onto);
   if (!bodyOf(thing.object)) thing.lifted = false;
   const fix = 'and stays so: `carry` it there and let go as that carry ends, for after it the thing rides the hand';
@@ -70,9 +73,3 @@ function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Placement>):
   return null;
 }
 
-/** the root of the scene `object` is in */
-function rootOf(object: Object3D): Object3D {
-  let root = object;
-  while (root.parent) root = root.parent;
-  return root;
-}

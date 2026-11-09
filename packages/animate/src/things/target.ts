@@ -1,5 +1,6 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { sameThree } from '../kernel/math';
+import { topOf } from '../kernel/scene';
 import type { Frame } from '../kernel/frame';
 import type { Self } from '../body/self';
 import type { Goal } from '../kernel/goal';
@@ -49,7 +50,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     else (made = new MovingFrame(placed.position, placed.quaternion)).place(time, placed.position, placed.quaternion);
     return made;
   };
-  let time = NaN, parented: Object3D | null = null;
+  let time = NaN, inScene: Object3D | null = null;
   return (f) => {
     if (time === f.time) return found;
     time = f.time;
@@ -58,14 +59,17 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
       if (![at.x, at.y, at.z].every(Number.isFinite)) throw new Error(`a target that is no point: (${at.x}, ${at.y}, ${at.z})`);
       return Object.assign(found, { position: found.position.copy(at), quaternion: undefined, velocity: undefined, object: undefined, carriedBy: undefined });
     }
-    // (taken out of the scene while still a target: its numbers now mean nowhere, so it stands where it was last, said once; put back, it goes on)
-    if (parented === at && !at.parent) {
+    // (taken out of the body's scene, itself or with what it hangs from, while still a target: its numbers now mean nowhere, so it stands
+    // where it was last, said once; put back, it goes on. One never in that scene is a place of its own numbers: a function's object is the
+    // app's to place each sub-step)
+    const shared = topOf(at) === topOf(self.object);
+    if (inScene === at && !shared && typeof target !== 'function') {
       self.warn(`target gone ${at.uuid}`, `the target "${at.name}" was taken out of the scene while a verb still goes to it, or a hand it brought something to still keeps to it: it stays where it was. Remove it after the next verb on that hand has ended`);
       found.velocity = undefined;
       found.carriedBy = undefined;
       return found;
     }
-    parented = at.parent ? at : null;
+    inScene = shared ? at : null;
     const on = bodyOf(at);
     if (on) self.meet(on);
     const frame = typeof target === 'function' ? fresh(at, f.time) : self.movingFrameOf(at);

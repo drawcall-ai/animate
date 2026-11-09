@@ -6,6 +6,13 @@ export interface Placed extends Placement {
   scale: number;
 }
 
+/** the top of the tree `node` is in: its scene's root, if it is in one */
+export function topOf(node: Object3D): Object3D {
+  let top = node;
+  while (top.parent) top = top.parent;
+  return top;
+}
+
 /** where `node` is in the world as the scene stands now, its scale with it */
 export function placedOf(node: Object3D): Placed {
   node.updateWorldMatrix(true, false);
