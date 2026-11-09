@@ -321,6 +321,15 @@ it('borrows no eyes for a place on its own head: the head stays, the hand gets t
   expect(body.log).toEqual([]);
 });
 
+it('says a point a function gives on its own head turned with the head as the eyes chased it, not that a joint held the arm off it', () => {
+  const body = person({ dev: true, life: { seed: 3, steady: 1 } }), head = body.bones.head, spot = empty(head, 'spot', new Vector3(-0.25, 0.05, 0.1));
+  let miss: unknown, done = false;
+  play(function* () { miss = yield* attempt(reach(body, { right: () => spot.getWorldPosition(new Vector3()) }, { step: false })); done = true; }, [body], 6, () => done);
+  expect(miss).toBeInstanceOf(Missed);
+  expect((miss as Missed).message).toMatch(/turned with the head as the eyes turned it to look/);
+  expect((miss as Missed).message).not.toMatch(/joint’s range/);
+});
+
 it('looks at a place on what hangs from its other hand, as a grab of it does: no look moves it; one on its chest it leaves be', () => {
   const looked = (on: (body: Body, held: Object3D) => Object3D, verb: 'reach' | 'grab') => {
     const body = person({ dev: true }), room = roomOf(body), held = box(room, new Vector3(0.2, 0.9, 0.42), { size: new Vector3(0.12, 0.12, 0.12), mass: 0.3 });

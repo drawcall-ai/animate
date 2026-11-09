@@ -66,6 +66,9 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
   // (the eyes on what does not ride with the body)
   const seen = targets.filter(({ target }) => { const { object } = target(person.frame); return !object || !ridesBody(person, object); }), eyes = () => noticing(person, request, middleOf(seen), { own: !seen.length });
   const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
+  // (read against the target and the head as the reach is asked)
+  const chased = targets.map(({ target }) => turnsWithHead(person, target));
+  for (const read of chased) read(person.frame);
   // (the verdict as its story ends it, moving or not: as near as a stopped hand counts as there)
   request.there = () => targets.every(({ side, target }) => closeTo(person.frame, person.hands[side], target(person.frame)));
   let going: ReturnType<typeof handsGoing> | null = null, lasts = 0, stalled: Miss | null = null;
@@ -81,7 +84,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
     for (;;) {
       // (each plan watched afresh: a stop close to a target gone since says nothing of the new place)
       let close = false;
-      const late = lateWatch(person, request, targets.map(({ side, target }) => ({ side, goal: target, where: side })));
+      const late = lateWatch(person, request, targets.map(({ side, target }, k) => ({ side, goal: target, where: side, cause: (at: Vector3) => chased[k](person.frame) ?? limitOf(person, side)(at) })));
       const eta = (f: Frame) => {
         // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
         // whole of a stance that never settles
@@ -129,6 +132,30 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
   });
 }
 
+/**
+ * what says, once a reach falls short, that its target (a point a function gives) turned with the head as the eyes turned it to look —
+ * a point on the body's own head, chased round by the look — rather than what held the arm off it; else nothing. Read against the
+ * target and the head as the reach first asks for it.
+ */
+function turnsWithHead(person: Person, target: (f: Frame) => Goal): (f: Frame) => string | undefined {
+  let from: { local: Vector3; world: Vector3; turn: Quaternion } | null = null;
+  const local = (f: Frame, at: Vector3) => at.clone().sub(f.prev.position(INDEX.head)).applyQuaternion(f.prev.rotation(INDEX.head).clone().invert());
+  return (f) => {
+    const at = target(f).position;
+    if (!from) {
+      from = { local: local(f, at), world: at.clone(), turn: f.prev.rotation(INDEX.head).clone() };
+      return undefined;
+    }
+    const turned = f.prev.rotation(INDEX.head).angleTo(from.turn), s = person.scale;
+    if (turned < CHASE.turned || at.distanceTo(from.world) < CHASE.moved * s || local(f, at).distanceTo(from.local) > CHASE.within * s) return undefined;
+    return `its target turned with the head as the eyes turned it to look (${(turned * 180 / Math.PI).toFixed(0)}° round): a point on the body's own head chases the look round, so give the object, which is reached without being looked at, not a function giving its point`;
+  };
+}
+
+/** how far the head turns (rad) and its target with it in the world (m, default body) while staying as near where it was on the head (m)
+ * for a reach to say the look chased it */
+const CHASE = { turned: 0.35, moved: 0.05, within: 0.02 };
+
 /** `goal`, if further from hand `side`'s shoulder than the arm holds out, as far as the arm goes along the way to it: where a hand trying for what is out of reach goes */
 export function withinArm(person: Person, f: Frame, side: Side, goal: Goal): Goal {
   const shoulder = f.prev.position(INDEX[`${side}UpperArm`]), way = goal.position.clone().sub(shoulder), most = ARM_REACH * person.proportions.armLength;
@@ -153,7 +180,7 @@ export function handsGoing(person: Person, targets: readonly { side: Side; targe
  * is off its goal. While the legs are still stepping or settling under the hands, each is watched afresh: the body carrying a hand past
  * its goal and back is not the hand's own lack of progress. Returns whether every hand has stopped as near as counts as there.
  */
-export function lateWatch(person: Person, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => MovingFrame; where: string }[]) {
+export function lateWatch(person: Person, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => MovingFrame; where: string; cause?: (at: Vector3) => string }[]) {
   const progress = hands.map(() => new Progress());
   let late = false, close = false;
   const within = (f: Frame) => hands.every(({ side, goal, on }) => closeTo(f, person.hands[side], goal(f), on?.()));
@@ -167,8 +194,8 @@ export function lateWatch(person: Person, request: Request, hands: readonly { si
     });
     if (!stopped && f.time <= ends + REACHING) return false;
     late = true;
-    for (const { side, goal, on, where } of hands) {
-      const miss = lateReach(f, person.hands[side], goal(f), where, on?.(), limitOf(person, side));
+    for (const { side, goal, on, where, cause } of hands) {
+      const miss = lateReach(f, person.hands[side], goal(f), where, on?.(), cause ?? limitOf(person, side));
       if (miss) request.fail(miss);
     }
     return close = stopped && within(f);
