@@ -292,3 +292,41 @@ describe('a thing in both hands', () => {
     expect(body.log.map(({ check }) => check)).toContain('arms crossed at the end of a carry (m)');
   });
 });
+
+describe('what a carry calls there, a release onto it accepts', () => {
+  // (the trials that found it: each carry ends 6 mm to 1.1 cm off, within a stopped hand's tolerance, and a release there threw)
+  const placed = () => {
+    const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { size: new Vector3(0.3, 0.1, 0.2), solid: false });
+    const spot = empty(room, 'spot', new Vector3(0, 0.5, 0.45));
+    room.updateMatrixWorld(true);
+    let carried = false;
+    play(function* () {
+      yield* grab(body, load, BOTH);
+      carried = yield* carry(body, load, spot);
+      release(body, load, spot);
+    }, [body], 12, () => load.parent === spot);
+    return { carried, load, spot };
+  };
+
+  it('in both hands, low: set exactly on it', () => {
+    const { carried, load, spot } = placed();
+    expect(carried).toBe(true);
+    expect(load.parent).toBe(spot);
+    expect(worldOf(load).distanceTo(worldOf(spot))).toBeLessThan(1e-9);
+  });
+
+  it('a dog\'s jaw, off it by what its tip is allowed', () => {
+    const body = new Body(dog(DOG)), room = roomOf(body), ball = box(room, new Vector3(0, 0.05, 0.6), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.06, solid: false, name: 'ball' });
+    const spot = empty(room, 'spot', new Vector3(0.3, 0.05, 1.2));
+    room.updateMatrixWorld(true);
+    let done = false;
+    play(function* () {
+      yield* grab(body, ball, { jaw: 'left' });
+      yield* carry(body, ball, spot);
+      release(body, ball, spot);
+      done = true;
+    }, [body], 15, () => done);
+    expect(done).toBe(true);
+    expect(ball.parent).toBe(spot);
+  });
+});

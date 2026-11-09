@@ -1,5 +1,6 @@
 import { Object3D, Vector3 } from 'three';
 import { SUBSTEP } from '../kernel/frame';
+import { REACHED } from '../kernel/goal';
 import type { Miss } from '../kernel/requests';
 import { spinOf } from '../kernel/rotation';
 import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
@@ -7,9 +8,9 @@ import type { Thing } from '../things/thing';
 import { END } from './hand-staging';
 import type { Self } from './self';
 
-/** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — as near as a carry there leaves it at rest (`END`,
- * read a sub-step before), a sub-step on */
-const ONTO = END.distance + END.speed * SUBSTEP;
+/** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — what a carry there calls there (`REACHED.close`),
+ * a sub-step on at the speed it has come to rest within (`END`) */
+const ONTO = REACHED.close + END.speed * SUBSTEP;
 
 /** How a thing was moving as it was let go (world): its velocity (m/s) and its spin (rad/s about the world's axes). */
 export interface Released {
@@ -54,13 +55,13 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
 }
 
 /**
- * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there within 5 mm, else where it is, a miss
+ * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there as near as a carry there leaves it, else where it is, a miss
  */
 function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Vector3>): Miss | null {
   const off = at.distanceTo(self.movingFrameOf(onto).at(self.frame.time).current.position);
   attach(thing, onto);
   if (!bodyOf(thing.object)) thing.lifted = false;
-  if (off > ONTO) return { where: `${thing.object.name} onto ${onto.name}`, off, limit: ONTO, why: `it was ${(100 * off).toFixed(1)} cm off the empty as it was let go, and stays so: \`carry\` it there first` };
+  if (off > ONTO) return { where: `${thing.object.name} onto ${onto.name}`, off, limit: ONTO, why: `it was ${(100 * off).toFixed(1)} cm off the empty as it was let go, and stays so: \`carry\` it there and let go as that carry ends, for after it the thing rides the hand` };
   thing.object.position.set(0, 0, 0);
   thing.object.quaternion.identity();
   return null;

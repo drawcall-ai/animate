@@ -24,7 +24,7 @@ import type { HandOptions } from '../body/hand-staging';
  * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, turned as its target
  * is (within 3°). Its hold ends with the verb: after it the thing rides the hand, drifting a few centimetres as the arm eases, so
  * `until: Infinity` (raced) holds it on. A thing in one hand carried to an `Object3D` is seated on it in the fingers once the arm has
- * brought it within 3 cm, so a `release` onto that object puts it there exactly. A grip that declares its contact (`userData.point`, a
+ * brought it within 3 cm, if it can be. Whatever ends `true` there a `release` onto that object, as it ends, sets exactly on it. A grip that declares its contact (`userData.point`, a
  * digit on an empty) keeps it, neither regripped nor seated: the arm alone puts the thing there. It
  * throws `Missed` if no stand reaches the target (with `step: false`: if it is out of reach from where the body stands), and, carried
  * straight there, if the thing does not come to rest in place: stopped getting nearer more than 1.5 cm short of it, held off by the arms

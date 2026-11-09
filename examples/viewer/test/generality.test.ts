@@ -13,8 +13,6 @@ import { ball, box, cylinder } from '../src/things';
 const check = cases([
   // Turns on the spot, its facing to 2.7 rad, rather than back up, so it comes no nearer for 6 s and misses 0.28 m short; it expects to arrive, facing as it did.
   ['a dog walks 0.5 m back, keeping its facing', /no nearer its goal/],
-  // The carry ends 6 mm off its empty, the release 5 mm at most: a jaw is not seated on its empty as a person's fingers seat what they carry; it expects the release to take.
-  ['a dog takes a ball, puts it down 1 m off, takes it again and puts it back', /off the empty as it was let go/],
 ]);
 
 type Story = NonReuseableTimeline<unknown, unknown>;
