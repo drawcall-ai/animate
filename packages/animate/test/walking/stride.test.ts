@@ -1,8 +1,9 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, humanoid } from '../../src/index';
+import { Body, humanoid, walkTo } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { play, readings } from '../kit/bodies';
+import { RIGGED } from '../kit/skeletons/rigged';
 import { sized, walked } from '../kit/gait';
 
 // A person's cadence is dynamically similar to its legs' length, and its stride can be styled.
@@ -86,4 +87,15 @@ describe('people of one build', () => {
     expect(Math.max(...heads[0].map((x, k) => Math.abs(x - heads[1][k])))).toBeGreaterThan(0.19);
     for (const body of bodies) expect(body.log).toEqual([]);
   });
+});
+
+// (hips set behind the feet: a foot's home under its hip, not its root, had a plain walk slide its planted feet and carry its XCoM past them)
+it.each([{}, { bob: 0.7 }, { bob: 0.5 }, { cadence: 0.85 }, { bob: 0.5, cadence: 0.85 }])('walks a rigged body 6 m with no dev note, stride %j', (stride) => {
+  for (let seed = 1; seed <= 8; seed++) {
+    const body = new Body(humanoid(RIGGED, { stride }), { dev: true, life: { seed } });
+    let arrived = false;
+    play(function* () { arrived = yield* walkTo(body, new Vector3(0, 0, 6)); }, [body], 30, () => arrived);
+    expect(arrived).toBe(true);
+    expect(body.log).toEqual([]);
+  }
 });
