@@ -123,7 +123,7 @@ describe('a hand on what a grip declares', () => {
   it('misses, saying so, a pad its wrist stays near but cannot bring on', () => {
     const { body, room, rod, grip } = rodBefore('thumb', 0.01);
     delete rod.userData.mass;
-    rod.position.set(-0.25, 0.6, 0.1);
+    rod.position.set(-0.23, 0.62, 0.1);
     grip.position.set(0, 0, 0);
     room.updateMatrixWorld(true);
     let miss: Missed | null | undefined;

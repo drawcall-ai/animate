@@ -52,7 +52,6 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   if (neck === undefined && head !== undefined) throw new Error('lookAt: a head share needs a neck to turn the head (its posture turns it)');
   if (neck === undefined) return (f) => void (self.asks.look = target(f));
-  let over: boolean | null = null;
   /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
   let shift = 0;
   /** the last two head goals, in world rotation and in its own angles (`fick`; null: not followed in them) */
@@ -73,7 +72,6 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it; a new sight starts a gaze shift)
     const jumped = (aimed?.distanceTo(point) ?? Infinity) > JUMP * f.dt;
     if (jumped) {
-      over = null;
       seen = null;
       seenBefore = null;
       sighted = null;
@@ -89,8 +87,7 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     const origin = self.headOffset.eyes(f.prev, _eyes).sub(f.prev.position(base)).applyQuaternion(carried).add(pose.position(base));
     const d = _d.subVectors(point, origin).normalize();
     if (d.lengthSq() === 0) return;
-    // (upright, `upright`: the way it faces easing to the neck's parent's nearly straight up or down; toward the target, or away and
-    // pitched back over for a point just behind the feet)
+    // (upright, `upright`: the way it faces easing to the neck's parent's nearly straight up or down)
     const facing = yawOf(turned);
     const strainOf = (head: Quaternion) => strain(gazer, pose, bones, turned, head, point);
     const local = _line.copy(d).applyQuaternion(_rel.copy(turned).invert());
@@ -101,33 +98,25 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     if (jumped || !seen || !aimed) eyes.sight(worldDown, resting);
     else eyes.step(f.dt, worldDown, pitchAlong(_line.subVectors(aimed, origin), facing), resting, shift >= SETTLED);
     (aimed ??= new Vector3()).copy(point);
-    const ways = (line: Vector3) => {
+    const way = (line: Vector3) => {
       // (as far as the line itself has a heading: one passing straight down under the eyes swings its heading round in a moment, and
       // the eyes' own pitch, reset at each new sight, would make it jump too: judged by either, a squat over a box snapped the head ~450°/s)
       const vertical = MathUtils.smoothstep(Math.hypot(line.x, line.z), 0.1, 0.35);
-      const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
-      upright(line, facing + toward * vertical, _q);
-      upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
-      _q.multiply(_p.setFromAxisAngle(X, -eyes.value));
-      _o.multiply(_p);
+      upright(line, facing + wrapAngle(Math.atan2(line.x, line.z) - facing) * vertical, _whole).multiply(_p.setFromAxisAngle(X, -eyes.value));
     };
-    ways(d);
+    way(d);
     const last = bones[bones.length - 1];
     const was = _was.copy(self.headOffset.rotation(f.prev, last));
-    // Acquire from the final head history once; earlier gaze layers cannot choose the branch.
-    over ??= angleOf(_o, was) < angleOf(_q, was) - 1e-9;
-    const [kept, other] = over ? [_o, _q] : [_q, _o];
-    const strained = strainOf(kept);
-    if (strainOf(other) < strained - HYSTERESIS) over = !over;
-    // (the head's line, the way taken: the eyes take the rest of a turn aside, EYES of it and no more than EYES_MOST of what is left
+    const strained = strainOf(_whole);
+    // (the head's line: the eyes take the rest of a turn aside, EYES of it and no more than EYES_MOST of what is left
     // of their range where the neck stops short — given the head's share, the rest of it, as far as all that is left of their range;
     // up or down, and over the top, the head all the way: the eyes have little to spare there)
     const aside = wrapAngle(Math.atan2(d.x, d.z) - facing);
     const room = (share: number) => share * gazer.range.side * Math.max(0, 1 - strained) * Math.sqrt(Math.max(0, 1 - (eyes.value / gazer.range.down) ** 2));
     const glance = head === undefined ? Math.min(EYES * Math.abs(aside), room(EYES_MOST)) : Math.min((1 - head) * Math.abs(aside), room(1));
-    if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * glance));
+    way(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * glance));
     // Follow in world space so the trunk can move beneath a steady gaze.
-    const whole = _whole.copy(over ? _o : _q);
+    const whole = _whole;
     declinationToHead(whole, eyes, strainOf);
     // The desired look depends on the last eye position. Differentiate over two steps so alternating errors in that feedback
     // are not chased as target velocity; a steady pursuit keeps its exact speed.
@@ -185,12 +174,38 @@ function declinationToHead(whole: Quaternion, eyes: EyePitch, strainOf: (head: Q
  * `each` given each bone's share (local) in turn
  */
 function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<Quaternion>, each: (bone: number, share: Quaternion) => void): void {
-  const left = _left.copy(turn);
+  const left = cutToNeck(skeleton, bones, _left.copy(turn));
   bones.forEach((b, k) => {
     const share = limited(skeleton, b, _goal.identity().slerp(left, 1 / (bones.length - k)));
     left.premultiply(_taken.copy(share).invert());
     each(b, share);
   });
+}
+
+/**
+ * `turn` with its yaw and roll, Fick's (a pitch past straight up or down kept as one), cut to as much of each as `bones` take on their own. A
+ * limit cuts a swing and a twist: left to it, a turn past the neck stops its twist and keeps its swing toward the bearing it stopped short
+ * of, which on a head turned that far is a roll: ear to shoulder for what is low behind it.
+ */
+function cutToNeck(skeleton: Skeleton, bones: readonly number[], turn: Quaternion): Quaternion {
+  _euler.setFromQuaternion(turn, 'YXZ');
+  let { x: pitch, y: yaw, z: roll } = _euler;
+  if (Math.abs(roll) > Math.PI / 2) [yaw, pitch, roll] = [yaw + Math.PI, Math.PI - pitch, roll - Math.sign(roll) * Math.PI];
+  // (as level as those angles still tell a turn about the vertical from a roll: see `LEVEL`)
+  const level = levelness(turn);
+  if (level === 0) return turn;
+  yaw = wrapAngle(yaw);
+  const reachedYaw = reachOf(skeleton, bones, Y, yaw), reachedRoll = reachOf(skeleton, bones, Z, roll);
+  // (nothing to cut: the turn as it is, not a round trip through its angles)
+  if (Math.abs(reachedYaw - yaw) + Math.abs(reachedRoll - roll) < WITHIN) return turn;
+  return turn.slerp(_cut.setFromEuler(_euler.set(pitch, reachedYaw, reachedRoll, 'YXZ')), level);
+}
+
+/** as much of a turn `angle` about `axis` as `bones` take, each within its limit */
+function reachOf(skeleton: Skeleton, bones: readonly number[], axis: Vector3, angle: number): number {
+  const left = _r.setFromAxisAngle(axis, angle);
+  bones.forEach((b, k) => left.premultiply(_taken.copy(limited(skeleton, b, _goal.identity().slerp(left, 1 / (bones.length - k)))).invert()));
+  return angle - 2 * Math.atan2(left.dot(_axis.set(axis.x, axis.y, axis.z, 0)), left.w);
 }
 
 /** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned `share` of the bearing to `at` (at most 45°)
@@ -216,8 +231,6 @@ const PITCHED = 0.25 / 0.65;
 const SETTLED = (2 * Math.PI) / 180;
 /** how fast a target moves at most and is still pursued (m/s): faster, it jumped (5 cm in a 60 Hz step) */
 const JUMP = 3;
-/** how much less strained (of the eyes' range) the other way round must be for the head to change to it */
-const HYSTERESIS = 0.3;
 /** a head's peak speed in a gaze shift (its main sequence): `least` (rad/s) and `slope` more per radian of the shift — 100°/s and
  * 2.3°/s per degree, so 150°/s for 20°, 300°/s for 90° (recalled, not checked: Guitton & Volle 1987, head peaks 100–350°/s growing
  * ~2.3°/s per degree in large shifts; read: in active tasks head speeds of ~90–180°/s, Freedman 2008's review via its summary.
@@ -293,8 +306,12 @@ function upright(d: Vector3, yaw: number, out: Quaternion): Quaternion {
   return out.setFromAxisAngle(Y, yaw).multiply(_p.setFromAxisAngle(X, pitchAlong(d, yaw)));
 }
 
+/** how little (rad) a neck may fall short of a turn's yaw and roll for it to take the turn as it is */
+const WITHIN = 1e-6;
 const X = new Vector3(1, 0, 0);
 const Y = new Vector3(0, 1, 0);
+const Z = new Vector3(0, 0, 1);
+const _r = new Quaternion(), _axis = new Quaternion(), _cut = new Quaternion();
 const _euler = new Euler();
 const [_com, _d, _eyes, _l, _line, _spin, _tl, _now, _aim, _turning, _before, _next, _offset, _eyeOffset, _eyeOrigin] = Array.from({ length: 15 }, () => new Vector3());
-const [_q, _o, _p, _rel, _left, _taken, _goal, _out, _within, _was, _was2, _fick, _whole, _full, _candidate] = Array.from({ length: 15 }, () => new Quaternion());
+const [_p, _rel, _left, _taken, _goal, _out, _within, _was, _was2, _fick, _whole, _full, _candidate] = Array.from({ length: 13 }, () => new Quaternion());

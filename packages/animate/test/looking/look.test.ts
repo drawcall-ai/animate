@@ -69,3 +69,14 @@ it("follows a function that gives a body: its eyes, then the next body's as the 
   expect(turns[1]).toBeLessThan(-0.5);
   expect(body.log).toEqual([]);
 });
+
+// (round about the body (rad), height, distance from its axis: low and far behind, inside its reach, level behind, within a head's width)
+it.each([[2.6, 0.6, 1.3], [-2.6, 0.6, 1.3], [1.9, 0.6, 1.3], [2.8, 1.3, 0.3], [1.5, 1.55, 0.15], [2.4, 1.55, 0.15], [3.14, 0, 0.8]])('keeps the head from rolling ear to shoulder: round %s, height %s, %s m off', (round, height, distance) => {
+  const body = person({ dev: true }), point = new Vector3(Math.sin(round) * distance, height, Math.cos(round) * distance);
+  let worst = 0;
+  play(function* () { yield* lookAt(body, point); }, [body], 3, () => {
+    worst = Math.max(worst, Math.abs(new Vector3(1, 0, 0).applyQuaternion(body.bones.head.getWorldQuaternion(new Quaternion())).y));
+  });
+  expect(Math.asin(worst)).toBeLessThan(0.35);
+  expect(body.log).toEqual([]);
+});
