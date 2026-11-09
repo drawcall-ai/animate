@@ -197,8 +197,7 @@ export function* liftingClear(person: Person, request: Request, thing: Thing) {
   // (first up off what it rests on, then drawn in toward the hips to within `CLEAR.out` of them: held at arm's length, the arms would
   // fall short of it once the reach no longer bows the body for them)
   const quaternion = movingFrame.current.quaternion.clone(), up = movingFrame.current.position.clone(), root = person.pose.position(0);
-  // A bulky load must rise into reach as it comes clear of the trunk, rather than drawing in below that reachable height.
-  up.y = Math.max(up.y + CLEAR.height * person.scale, floorUnder(person) + person.proportions.hipHeight + inReach(person, thing, true));
+  up.y += CLEAR.height * person.scale;
   const out = Math.hypot(up.x - root.x, up.z - root.z), most = CLEAR.out * person.proportions.armLength;
   const clear = out > most ? new Vector3(root.x + (up.x - root.x) * most / out, up.y, root.z + (up.z - root.z) * most / out) : up;
   const way: Waypoint[] = [[CLEAR.seconds / person.tempo, { position: up, quaternion }]];
@@ -231,7 +230,7 @@ function carried(person: Person, turn: Readonly<Quaternion>): (f: Frame) => Plac
 }
 
 /** Minimum carry height that puts every held grip in reach without intersecting the trunk. */
-function inReach(person: Person, thing: Thing, wideOnly = false): number {
+function inReach(person: Person, thing: Thing): number {
   const proportions = person.proportions, o = proportions.offsets, reach = ARM_REACH * proportions.armLength + PROTRACTION * proportions.height;
   const ahead = BODY_RADIUS * proportions.height + LOAD_RESERVE * person.scale - thing.bounds.min.z;
   return Math.max(-Infinity, ...SIDES.map((side) => {
@@ -240,7 +239,6 @@ function inReach(person: Person, thing: Thing, wideOnly = false): number {
     const grip = hold.goal.position;
     const shoulder = o[`${side}Shoulder`].clone().add(o[`${side}UpperArm`]);
     const across = Math.hypot(grip.x - shoulder.x, ahead + grip.z - o.spine.z - o.chest.z - shoulder.z);
-    if (wideOnly && across < ARM_REACH * proportions.armLength) return -Infinity;
     return proportions.shoulderHeight - proportions.hipHeight - Math.sqrt(Math.max(0, reach ** 2 - across ** 2)) - grip.y;
   }));
 }

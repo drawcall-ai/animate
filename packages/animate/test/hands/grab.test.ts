@@ -1,5 +1,5 @@
 import { BoxGeometry, Mesh, Object3D, Quaternion, Vector3 } from 'three';
-import { grip, attempt, Body, dog, grab, Missed, reach, release, wait, walkTo } from '../../src/index';
+import { grip, attempt, Body, carry, dog, grab, Missed, reach, release, wait, walkTo } from '../../src/index';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../kit/open';
 import { runTimeline } from '@pmndrs/timeline';
@@ -127,6 +127,34 @@ describe('grab, walking up', () => {
     expect(load.parent).not.toBe(room);
     expect(body.holds(load)).toBe(true);
     expect(body.log).toEqual([]);
+  });
+});
+
+describe('a loose thing lifted clear', () => {
+  /** a two-hand grab of a 4 kg box at 0.5 m, 0.6 m wide, turned `turn`, its mesh running `back` m behind its grips, then a walk with it (`far`): how far it rose at most by the grab's end, and how high it went by the end */
+  const lifted = (turn: number, back = 0.15, far = false) => {
+    const body = person({ dev: true, life: { seed: 3 } }), room = roomOf(body);
+    const load = box(room, new Vector3(0, 0.5, 0.5), { size: new Vector3(0.6, 0.2, 0.3), mass: 4, turn });
+    (load as Mesh).geometry.translate(0, 0, 0.15 - back);
+    let took: boolean | undefined, carried = !far, rise = 0, top = 0;
+    play(function* () {
+      took = yield* grab(body, load, turn ? { left: 'right', right: 'left' } : BOTH);
+      if (far) carried = yield* carry(body, load, new Vector3(0, 1, 2.2));
+    }, [body], 16, () => {
+      room.updateMatrixWorld(true);
+      if (took === undefined) rise = Math.max(rise, worldOf(load).y - 0.5);
+      top = Math.max(top, worldOf(load).y);
+      return took !== undefined && carried;
+    });
+    expect(took).toBe(true);
+    expect(carried).toBe(true);
+    return { rise, top };
+  };
+
+  it('rises as little however it stands and wherever its bulk runs', () => {
+    expect(lifted(0).rise).toBeLessThan(0.1);
+    expect(lifted(Math.PI).rise).toBeLessThan(0.1);
+    expect(lifted(0, 0.5).rise).toBeLessThan(0.1);
   });
 });
 
