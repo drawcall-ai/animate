@@ -210,7 +210,8 @@ it('an empty parented to a body on a raised floor is read where the scene has it
     const body = person({ floor: () => floor });
     const target = empty(body.object, 'target', new Vector3(-0.2, 1.3, 0.35));
     play(function* () {
-      yield* reach(body, { right: target }, { step: false, until: 2 });
+      // (this empty's turn is beyond the wrist, so given time the reach misses: where the hand got to is what is compared)
+      yield* attempt(reach(body, { right: target }, { step: false, until: 2 }));
     }, [body], 2);
     body.object.updateMatrixWorld(true);
     return worldOf(body.bones.rightHand);

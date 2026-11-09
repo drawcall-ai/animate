@@ -249,7 +249,7 @@ export function lateReach(f: Frame, tip: number, target: Goal, where: string, on
   const offset = `${cm(ahead)} cm ${ahead >= 0 ? 'ahead of' : 'behind'}, ${cm(left)} cm ${left >= 0 ? 'left of' : 'right of'}, ` +
     `${cm(off.y)} cm ${off.y >= 0 ? 'above' : 'below'} it in the body's frame`;
   if (distance > REACHED.close) return { where, off: distance, limit: REACHED.close, why: `stopped ${cm(distance)} cm off it (${offset})${held}` };
-  if (angle > REACHED.angle) return { where, off: angle, limit: REACHED.angle, why: `stopped turned ${(angle * 180 / Math.PI).toFixed(1)}° off it, in rad${held}: change the grip's roll or the target's turn` };
+  if (angle > REACHED.angle) return { where, off: angle, limit: REACHED.angle, why: `stopped turned ${(angle * 180 / Math.PI).toFixed(1)}° off it${held}: change the grip's roll or the target's turn` };
   return null;
 }
 
