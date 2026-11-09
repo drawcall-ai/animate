@@ -1,7 +1,7 @@
 // A person's body over its root, whoever drives it: the core stepper keeps the legs under it; here the trunk, the leg chains and the checks.
 import type { Frame, Behaviour } from '../../kernel/frame';
 import { lerp, wrapAngle } from '../../kernel/math';
-import { Stepper } from '../../step/stepper';
+import { Stepper, underway } from '../../step/stepper';
 import { Asks } from '../../kernel/asks';
 import type { LegGoal } from '../../step/leg-goal';
 import { seedOf } from '../../kernel/random';
@@ -65,7 +65,7 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
     trunk.settle(legs);
     locomotion.facing = wrapAngle(yaw);
     // (a walker's walk under way, as its planner says — its weight shifting over planted feet is none; a player's root moving)
-    locomotion.moving = (root.underway ?? Math.hypot(root.velocity.x, root.velocity.z) > 0.05) || stepping;
+    locomotion.moving = underway(root) || stepping;
     locomotion.velocity.copy(root.velocity).setY(0);
     locomotion.settled = stepper.settled && (!seat || seat.seated);
   };

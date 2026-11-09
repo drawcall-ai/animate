@@ -180,8 +180,7 @@ export class Stepper {
     // (staggered about where the feet stood, till they have squared up again: off the root, which settles over the feet's middle as the
     // first foot steps, the second foot's home ran on after it and a third step trimmed it, on one foot past its XCoM; squaring up, the
     // back foot stepped after the root again and again, and each stagger crept the body on by up to half of it)
-    const underway = r.underway ?? Math.hypot(r.velocity.x, r.velocity.z) > STILL;
-    if (underway) this.staggeredAt = undefined;
+    if (underway(r)) this.staggeredAt = undefined;
     else if (r.stagger) this.staggeredAt ??= this.legs.reduce((sum, leg) => sum.add(leg.anchor), new Vector3()).divideScalar(this.legs.length);
     const root = read(this, f, r, physics);
     const stride = timing(this, root, stroke);
@@ -204,7 +203,7 @@ export class Stepper {
     const stepping = legs.some((leg) => leg.swing);
     this.phase += Math.PI * input.dt / (input.C / 2) * Number(stepping);
     [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, input.moving, run, input.Ts, input.C];
-    const still = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > SETTLED_AFTER);
+    const still = !(v > STILL || stepping) && legs.every((leg) => leg.planted > SETTLED_AFTER);
     // (and no foot would step once the root is at rest: a root creeping to its rest is not yet settled on feet that would square up there)
     this.settled = still && legs.every((leg) => !wants(this, prompts, leg, 0));
     if (!r.stagger && this.settled) this.staggeredAt = undefined;
@@ -434,6 +433,11 @@ export function descent(floor: Floor, contact: Vector3 | undefined, velocity: Ve
 const PELVIS_TURN = (50 * Math.PI) / 180;
 /** Tuned: a root slower than `STILL` (m/s), not said to be under way, stands */
 const STILL = 0.05;
+
+/** whether root `r` is under way: as its planner says, else moving at `STILL` or faster */
+export function underway(r: Steering): boolean {
+  return r.underway ?? Math.hypot(r.velocity.x, r.velocity.z) > STILL;
+}
 /** Tuned: the weight going off a foot, the centre of mass goes this far (m, default body) inside the other feet's prints */
 const INSIDE = 0.01;
 /** Tuned: in a flight physics owns, the feet are posed for a landing no further off than this (s) */
