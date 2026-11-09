@@ -109,11 +109,14 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
     const turnedOff = turns(f) ? movingFrame.current.quaternion.angleTo(guide.goal.quaternion) : 0;
     const short = movingFrame.current.position.distanceTo(goal), close = closeOn(movingFrame.current, goal, turns(f) ? guide.goal.quaternion : undefined);
     // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it (`SEATS`), a thing in one hand is
-    // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it)
+    // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it. Once
+    // the arm has brought it to rest there (`slow`): seated as it still came on, the hand held where it was, the arm carried it on past
+    // its place as the fingers drew it back onto it, slid in the hand as far as the arm had still to go — and the fingers closed afresh
+    // about it where it got to, an index opened off the face it was on)
     const side = seating(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
     const resting = rested(f, movingFrame, goal, turns(f) ? guide.goal.quaternion : undefined);
     // (once overdue no more: a seat that will not take would go on being tried, and the carry on running)
-    if (side && led && !overdue(f) && short <= SEATS && !resting.spins && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
+    if (side && led && !overdue(f) && short <= SEATS && resting.slow && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
       // (the thing as it stood with its end a sub-step before, as `restingAt` reads them: a sub-step apart, a moving body's place would
       // seem off it by as far as it moves in one)
       seated = seat(person, side, thing, movingFrame.moved(f.time) ? movingFrame.prev : movingFrame.current, ended);
@@ -214,10 +217,10 @@ export function holdAlong(person: Person, request: Request, thing: Thing, guide:
 }
 
 /** how a carried thing stands at its course's end (`at`): whether it has come to rest there, as `END` has it, within `near` of it; whether
- * it moves and turns with its end as slowly as that (`slow`); whether, at an end that sets a turn (`turn`), it still turns there — a
- * thing swung through its end's turn is not in it as it passes; and whether the end itself has moved faster than that within
- * `STALL.seconds` (`moves`) */
-function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Readonly<Vector3>, turn?: Readonly<Quaternion>) => { rests: boolean; spins: boolean; slow: boolean; moves: boolean } {
+ * it moves and turns with its end as slowly as that (`slow`) — at an end that sets a turn (`turn`), not still turning there: a thing
+ * swung through its end's turn is not in it as it passes; and whether the end itself has moved faster than that within `STALL.seconds`
+ * (`moves`) */
+function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Readonly<Vector3>, turn?: Readonly<Quaternion>) => { rests: boolean; slow: boolean; moves: boolean } {
   let end: MovingFrame | null = null, stirred = -Infinity;
   return (f, movingFrame, at, turn) => {
     end ??= new MovingFrame(new Vector3().copy(at), new Quaternion().copy(turn ?? IDENTITY));
@@ -227,7 +230,11 @@ function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Reado
     else if (!end.moved(f.time)) end.move(f.time, at, turn ?? IDENTITY);
     // (a thing its body moves is moved after the hands, so not yet this sub-step; one hanging from a hand is read where the hand is now)
     const [thing, before] = movingFrame.moved(f.time) ? [movingFrame.prev, movingFrame.prev2] : [movingFrame.current, movingFrame.prev];
-    const off = _v.subVectors(thing.position, before.position).sub(_g.subVectors(end.prev.position, end.prev2.position)).divideScalar(f.dt);
+    // (where it is off its end in its end's frame, a sub-step apart: what it moves more than its end does — a thing kept as far behind
+    // an end the body swings round as the hand follows it is still on it)
+    const off = _v.subVectors(thing.position, end.prev.position).applyQuaternion(_t.copy(end.prev.quaternion).invert())
+      .sub(_off.subVectors(before.position, end.prev2.position).applyQuaternion(_t.copy(end.prev2.quaternion).invert())).divideScalar(f.dt);
+    _g.subVectors(end.prev.position, end.prev2.position);
     // (its turn in its end's frame, a sub-step apart: what it turns more than its end does)
     const turned = _t.copy(end.prev2.quaternion).invert().multiply(before.quaternion).invert()
       .multiply(_u.copy(end.prev.quaternion).invert().multiply(thing.quaternion));
@@ -235,7 +242,7 @@ function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Reado
     const slow = off.length() < END.speed && !spins;
     if (_g.length() / f.dt >= END.speed) stirred = f.time;
     const moves = f.time - stirred < STALL.seconds;
-    return { rests: thing.position.distanceTo(end.prev.position) < near && slow, spins, slow, moves };
+    return { rests: thing.position.distanceTo(end.prev.position) < near && slow, slow, moves };
   };
 }
 const _v = new Vector3(), _g = new Vector3(), _off = new Vector3();

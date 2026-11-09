@@ -142,6 +142,34 @@ describe('release', () => {
     expect(body.log).toEqual([]);
   });
 
+  // (seated as the arm still brought it on, the hand carried it on past its place as the fingers drew it back: it slid 25 mm in the hand)
+  it('seats what a carry brought briskly to a turned place once the arm has brought it to rest there, sliding it in the fingers only as far as the arm leaves it off', () => {
+    const body = new Body(humanoid(NATIVE), { at: new Vector3(0.98, 0, -1.5), face: Math.atan2(-0.98, -0.15), dev: true, life: { seed: 1, steady: 1 } }), room = roomOf(body);
+    const home = empty(room, 'home', new Vector3(0.62, 0.79, -1.31)), load = new Mesh(new BoxGeometry(0.04, 0.02, 0.04).translate(0, 0.01, 0));
+    load.userData.mass = 0.2;
+    home.add(load);
+    empty(load, 'top', new Vector3(0, 0.0292, 0));
+    const place = empty(room, 'place', new Vector3(0.54, 0.79, -1.45));
+    place.rotation.y = 0.5;
+    room.updateMatrixWorld(true);
+    let carrying = false, carried = false, slid = 0, was: Vector3 | null = null;
+    play(function* () {
+      yield* grab(body, load, { left: 'top' }, { step: false, speed: 1 });
+      carrying = true;
+      carried = yield* carry(body, load, place, { step: false, speed: 1 });
+      carrying = false;
+    }, [body], 20, () => {
+      if (!carrying || load.parent !== body.bones.leftHand) return carried;
+      const at = load.position.clone().multiplyScalar(body.bones.leftHand.getWorldScale(new Vector3()).x);
+      if (was) slid += at.distanceTo(was);
+      was = at;
+      return carried;
+    });
+    expect(carried).toBe(true);
+    expect(slid).toBeLessThan(0.01);
+    expect(body.log).toEqual([]);
+  });
+
 
   it('follows through: a hand let go of something moving carries on its way, then off it', () => {
     const body = person(), h = readings(body), room = roomOf(body);
