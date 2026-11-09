@@ -1,6 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Body, dog, humanoid, lookAt, poseOf } from '../../src/index';
+import { parallel } from '@pmndrs/timeline';
+import { Body, dog, humanoid, lookAt, poseOf, walkTo } from '../../src/index';
 import { INDEX, gazeOff, readings, person, play } from '../kit/bodies';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
@@ -54,6 +55,28 @@ describe('lookAt with a trunk share', () => {
     };
     expect(chest(0.5)).toBeCloseTo(0.3, 1);
     expect(Math.abs(chest())).toBeLessThan(0.05);
+  });
+
+  it.each([
+    ['straight behind', () => new Vector3(0, 1.5, -3)],
+    ['5 cm left of straight behind', () => new Vector3(0.05, 1.5, -3)],
+    ['5 cm right of straight behind', () => new Vector3(-0.05, 1.5, -3)],
+    ['passing slowly behind', (time: number) => new Vector3(-0.5 + 0.1 * time, 1.5, -3)],
+  ] as const)('keeps the trunk to one side for a point %s, standing and walking away: no sub-step swings it across', (_name, at) => {
+    for (const seed of [1, 3]) for (const walks of [false, true]) {
+      const body = person({ dev: true, life: { seed } });
+      let time = 0, was = 0, most = 0;
+      const look = lookAt(body, () => at(time), { trunk: 0.65 });
+      play(walks ? parallel('race', look, walkTo(body, new Vector3(0, 0, 5))) : look, [body], walks ? 6 : 10, (t) => {
+        time = t;
+        // (the chest's turn off the hips about the vertical)
+        const turn = new Euler().setFromQuaternion(poseOf(body).rotation(INDEX.hips).clone().invert().multiply(poseOf(body).rotation(INDEX.chest)), 'YXZ').y;
+        // (once it has turned to it: it is taken up at once, at the trunk's joints' pace)
+        if (t > 1) most = Math.max(most, Math.abs(turn - was));
+        was = turn;
+      });
+      expect(most).toBeLessThan(0.2);
+    }
   });
 });
 
