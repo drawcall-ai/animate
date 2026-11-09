@@ -2,7 +2,7 @@ import type { Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import type { Thing } from './thing';
-import { bodyOf, boneOf } from './hold';
+import { bodyOf, boneOf, ridesBody } from './hold';
 import type { Self } from '../body/self';
 
 /** How a carried thing is kept clear of the body: of its trunk and head (true); of its head alone (`head`: on its way to a place on the
@@ -39,6 +39,8 @@ export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: F
   return {
     /** Destination follows this body, so walking cannot bring it nearer. */
     own: end !== null && bodyOf(end) === person,
+    /** whether the eyes go to its end: not one riding the body, but what hangs from a hand (`ridesBody`) */
+    watched: end === null || !ridesBody(person, end),
     /** Waypoints before a body-mounted insertion corridor. */
     outside: hasBodyApproach(end) && !hasBodyApproach(seat) ? targets.length - 1 : 0,
     /** the points it passes through, the last its end */

@@ -55,6 +55,13 @@ export function boneOf(self: Self, object: Object3D): number {
   return anchor?.body === self ? anchor.bone : NaN;
 }
 
+/** whether `object` rides `self` (under its object or a bone of it) but for hanging from one of its hands: what its verbs borrow no eyes
+ * for, as turning or bowing to look at it would bring it along. What hangs from a hand is looked at: passed to the other, no look moves it */
+export function ridesBody(self: Self, object: Object3D): boolean {
+  const bone = boneOf(self, object);
+  return !Number.isNaN(bone) && !Object.values(self.hands).includes(bone);
+}
+
 /** the body `object` is on (attached under its object or a bone of it), if any */
 export function bodyOf(object: Object3D): Self | null {
   return anchorOf(object)?.body ?? null;

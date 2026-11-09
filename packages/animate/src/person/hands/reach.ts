@@ -15,6 +15,8 @@ import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { paceAt, type HandOptions } from '../../body/hand-staging';
 import { BODY_RADIUS } from './load-clearance';
+import { ridesBody } from '../../things/hold';
+import type { Found } from '../../things/target';
 import type { Person } from '../person';
 
 /**
@@ -43,7 +45,7 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 }
 
 /** Follow targets with borrowed walking; replan after movement while keeping each hand's motion history. */
-export function* reachingTo(person: Person, request: Request, targets: readonly { side: Side; target: (f: Frame) => Goal }[], pace: HandOptions) {
+export function* reachingTo(person: Person, request: Request, targets: readonly { side: Side; target: (f: Frame) => Found }[], pace: HandOptions) {
   const motion = paceAt(pace.speed, CALM);
   targets = targets.map(({ side, target }) => {
     const sample = new PointVelocity();
@@ -62,7 +64,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
   const middleOf = (some: typeof targets) => (f: Frame) => some.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(some.length);
   const middle = middleOf(targets);
   // (the eyes on what does not ride with the body)
-  const seen = targets.filter(({ target }) => target(person.frame).carriedBy !== person), eyes = () => noticing(person, request, middleOf(seen), { own: !seen.length });
+  const seen = targets.filter(({ target }) => { const { object } = target(person.frame); return !object || !ridesBody(person, object); }), eyes = () => noticing(person, request, middleOf(seen), { own: !seen.length });
   const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   // (the verdict as its story ends it, moving or not: as near as a stopped hand counts as there)
   request.there = () => targets.every(({ side, target }) => closeTo(person.frame, person.hands[side], target(person.frame)));

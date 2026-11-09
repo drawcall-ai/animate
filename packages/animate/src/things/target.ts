@@ -34,7 +34,8 @@ export function handTarget(target: Target, verb: string): Target {
 
 /** A target as a body finds it in a sub-step: where, turned how (an `Object3D`'s; none for a point), moving how fast (if known), and the
  * object it is, if it is one. */
-interface Found extends Goal {
+/** a target as found: where it is, and the object it is, if one */
+export interface Found extends Goal {
   object?: Object3D;
 }
 

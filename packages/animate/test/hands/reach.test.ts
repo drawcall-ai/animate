@@ -320,3 +320,26 @@ it('borrows no eyes for a place on its own head: the head stays, the hand gets t
   expect(turned).toBeLessThan(0.2);
   expect(body.log).toEqual([]);
 });
+
+it('looks at a place on what hangs from its other hand, as a grab of it does: no look moves it; one on its chest it leaves be', () => {
+  const looked = (on: (body: Body, held: Object3D) => Object3D, verb: 'reach' | 'grab') => {
+    const body = person({ dev: true }), room = roomOf(body), held = box(room, new Vector3(0.2, 0.9, 0.42), { size: new Vector3(0.12, 0.12, 0.12), mass: 0.3 });
+    empty(held, 'top', new Vector3(0, 0.06, 0));
+    const spot = on(body, held);
+    let looking = false, result: boolean | undefined;
+    play(function* () {
+      yield* grab(body, held, { left: 'top' }, { step: false });
+      result = verb === 'reach' ? yield* reach(body, { right: spot }, { step: false }) : yield* grab(body, held, { right: spot.name }, { step: false });
+    }, [body], 8, () => {
+      looking ||= body.owners.look?.verb === verb;
+      return result !== undefined;
+    });
+    expect(result).toBe(true);
+    expect(body.log).toEqual([]);
+    return looking;
+  };
+  const onHeld = (_body: Body, held: Object3D) => empty(held, 'side', new Vector3(-0.06, 0, 0));
+  expect(looked(onHeld, 'reach')).toBe(true);
+  expect(looked(onHeld, 'grab')).toBe(true);
+  expect(looked((body) => empty(body.bones.chest, 'badge', new Vector3(-0.1, 0, 0.15)), 'reach')).toBe(false);
+});

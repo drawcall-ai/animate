@@ -1,5 +1,5 @@
 import { MathUtils, Box3, Quaternion, Ray, Vector3 } from 'three';
-import { bear, bodyOf, boneOf, grasp, held as heldThings, lift, onBody } from '../../things/hold';
+import { bear, bodyOf, grasp, held as heldThings, lift, onBody, ridesBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
@@ -55,8 +55,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
     request.fail({ ...plan.nowhere, where: takes.map(({ thing, side, grip }) => `${thing.object.name} ${side} ${grip}`).join(', ') });
     return false;
   }
-  // (a thing on its own body rides with it: no eyes borrowed for it. What hangs from a hand is looked at, passed to the other: no look moves it)
-  const own = takes.every(({ thing }) => bodyOf(thing.object) === person && !Object.values(person.hands).includes(boneOf(person, thing.object)));
+  const own = takes.every(({ thing }) => ridesBody(person, thing.object));
   let stood = plan === 'there';
   const walk: Walk | null = plan === 'there' ? null : plan.walk;
   // (the walk up ends within `seconds`: standing there already, once the body is at rest)

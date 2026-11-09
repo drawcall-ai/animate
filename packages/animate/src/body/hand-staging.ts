@@ -3,6 +3,7 @@ import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Motion, Placement } from '../kernel/goal';
 import type { Hold } from '../things/hold';
+import type { Found } from '../things/target';
 import type { Request } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Until } from '../verbs/story';
@@ -62,7 +63,7 @@ export interface HandStaging {
   /** the hands holding `thing` bring it through `points` (each a sub-step at a time; the last sets its turn), in to `end` (an empty) by its approach, and keep it there */
   bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, options: HandOptions): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */
-  reach(request: Request, targets: readonly { hand: string; target: (f: Frame) => Goal }[], options: HandOptions): Handwork;
+  reach(request: Request, targets: readonly { hand: string; target: (f: Frame) => Found }[], options: HandOptions): Handwork;
   /** the way (world) a hand on `hold` backs out of it, by a thing placed so: a fingertip draws back off its button the way it came in; none: on the way it was going */
   away(hold: Hold, placed: Placement): Vector3 | null;
   /** `hands`, having let go, back out of what they held, first along `away` (world) where given: a request of the body's own */
