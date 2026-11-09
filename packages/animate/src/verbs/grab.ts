@@ -8,6 +8,8 @@ import { verb, type Verb } from './story';
 import { letGo } from '../body/let-go';
 import type { GrabOptions } from '../body/hand-staging';
 import { personOf } from './person-of';
+import { holdingAtOnce } from '../person/hands/grab';
+import type { Request } from '../kernel/requests';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
@@ -30,9 +32,10 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
   if (!named.length) throw new Error('grab: name a grip for a hand');
   if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`grab: a speed of ${options.speed}`);
   if (options.already && options.speed !== undefined) throw new Error('grab: already holding it, the hands have no way to go at a `speed`: give one or the other');
-  if (options.already) personOf(body, 'grab already');
-  return verb(body, 'grab', (request) => function* () {
-    const self = selfOf(body), held = Thing.of(thing), on = bodyOf(thing), hands = Object.keys(self.hands);
+  const self = selfOf(body);
+  // (as it starts: what its hands hold else let go, the grips looked over)
+  const starting = (request: Request) => {
+    const held = Thing.of(thing), on = bodyOf(thing), hands = Object.keys(self.hands);
     for (const { hand } of named) if (!hands.includes(hand)) throw new Error(`grab: a ${body.species.name ?? 'custom species'} has no hand "${hand}", only ${hands.join(', ') || 'none'}`);
     // (a named hand holding something else lets go of it first, as `release` would, without backing out)
     for (const { hand } of named) {
@@ -43,7 +46,14 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
     if (on && on !== self) checkShared(on, held, named);
     for (const { grip } of named) checkGrip(self, held, held.grip(grip).node);
     request.there = () => named.every(({ hand, grip }) => self.holding[hand]?.thing === held && self.holding[hand]?.grip === grip);
-    yield* self.handStaging.take(request, held, named, options);
+    return held;
+  };
+  if (options.already) {
+    const person = personOf(body, 'grab already');
+    return verb(body, 'grab', () => function* () {}, { until: options.until, first: (request) => holdingAtOnce(person, request, starting(request), named) });
+  }
+  return verb(body, 'grab', (request) => function* () {
+    yield* self.handStaging.take(request, starting(request), named, options);
   }, { until: options.until });
 }
 

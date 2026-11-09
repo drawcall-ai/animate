@@ -261,7 +261,7 @@ export const bowLever = (proportions: Proportions, height: number) => 0.8 * (hei
 export const MOST_BOW = 60 * Math.PI / 180;
 
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
-function loadLean(pose: ReadonlyBonePose, proportions: Proportions, forward: Readonly<Vector3>): number {
+export function loadLean(pose: ReadonlyBonePose, proportions: Proportions, forward: Readonly<Vector3>): number {
   const hips = pose.position(0);
   let moment = 0, mass = 0;
   pose.skeleton.bones.forEach((bone, i) => {

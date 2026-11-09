@@ -1,6 +1,6 @@
 import { action, type TimelineYield } from '@pmndrs/timeline';
 import { selfOf, type Body } from '../body';
-import type { Miss, RequestKind, Staging } from '../kernel/requests';
+import type { Miss, Request, RequestKind, Staging } from '../kernel/requests';
 import type { Self } from '../body/self';
 
 /** When something ends: after this many seconds of the story's time, once a condition holds, or never (`Infinity`). */
@@ -69,6 +69,8 @@ interface Ending {
   until?: Until;
   /** an aimer ends only when told, and then `true` */
   kind?: Exclude<RequestKind, 'own'>;
+  /** what it does as the story reaches it, before the body's next sub-step: all it does, for a verb done at once */
+  first?: (request: Request) => void;
 }
 
 /**
@@ -83,10 +85,11 @@ export function verb(body: Body, name: string, staging: Staging, ending: Ending 
   return run(self, call, staging, ending);
 }
 
-function* run(self: Self, call: Call, staging: Staging, { until, kind }: Ending): Verb {
+function* run(self: Self, call: Call, staging: Staging, { until, kind, first }: Ending): Verb {
   self.unyielded.delete(call);
   const ends = until === undefined ? null : endsOf(until), request = self.file(call.verb, () => call.site, staging, kind);
   try {
+    first?.(request);
     yield (_state, clock) => {
       request.renewed = self.time;
       if (request.error || request.miss) return 'finished';

@@ -4,7 +4,7 @@ import { paceAt, type HandStaging } from '../../body/hand-staging';
 import { CALM } from './arms';
 import { bodyOf } from '../../things/hold';
 import { sideOf } from '../anatomy/bones';
-import { grabbing, grabAtOnce } from './grab';
+import { grabbing } from './grab';
 import { carrying, liftingClear } from './carry';
 import { carryPathOf } from '../../things/carry-path';
 import { reachingTo } from './reach';
@@ -29,10 +29,6 @@ export function personHands(person: Person): HandStaging {
         person.fingers?.toward(take.side, take.placement);
       }
       try {
-        if (options.already) {
-          yield* grabAtOnce(person, request, takes);
-          return request.met();
-        }
         const motion = options.speed === undefined ? undefined : paceAt(options.speed, CALM);
         if (!(yield* grabbing(person, request, takes, options.step ?? true, motion))) return;
         // (held once the fingers have closed on it: taken away as the hand arrives, a thing would leave before the grasp holds it)

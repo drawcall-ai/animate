@@ -175,13 +175,13 @@ export const closeOn = (at: Placement, position: Vector3, quaternion?: Quaternio
 
 const cm = (m: number) => (100 * m).toFixed(1);
 
-/** Keep each held grip on its own arm; a released or replaced hold stops participating. */
-export function holdAlong(person: Person, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, idles = false) {
+/** Each hand holding `thing` kept on its grip as `guide` takes it to `to`; a released or replaced hold stops participating. */
+export function handsHolding(person: Person, thing: Thing, guide: Guide, to: Live<Goal>) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
     ? [{ side: sideOf(hand), hold, tip: (hold.arm ??= new LimbMover(`${hand}Arm`)) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
   const single = hands.length === 1 ? grasped(person, hands[0].side, thing) : null;
-  const step = ({ side, tip }: (typeof hands)[number]) => (f: Frame) => {
+  return hands.map(({ side, hold: held, tip }) => ({ side, hold: held, move: (f: Frame) => {
     const movingFrame = guide.read(f, to), hold = person.holding[side], carried = movingFrame.carriedBy === person;
     if (!hold || hold.thing !== thing) return;
     // (the hand on the carrier, its motion the carrier's: a goal the body carries — a pouch on its chest — is followed with the body however
@@ -195,11 +195,14 @@ export function holdAlong(person: Person, request: Request, thing: Thing, guide:
     bringShoulder(person, f, side, _g.copy(hold.goal.position).applyQuaternion(movingFrame.current.quaternion).add(guide.goal.position), 1, 0, carried);
     person.carrying.set(thing.object, movingFrame);
     handStep(person, f, side, hold.goal, { on: movingFrame, thing, ...HOLD, bodyFollows: true }, tip);
-  };
-  return parallel<Frame>('race', ...hands.map((hand) => {
-    const move = step(hand);
-    if (idles) hand.hold.idle = move;
-    return during(request, `hand.${hand.side}`, 'asked', move, until);
+  } }));
+}
+
+/** Keep each held grip on its own arm until `until`, each hand kept so on past it if it `idles` */
+export function holdAlong(person: Person, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, idles = false) {
+  return parallel<Frame>('race', ...handsHolding(person, thing, guide, to).map((hand) => {
+    if (idles) hand.hold.idle = hand.move;
+    return during(request, `hand.${hand.side}`, 'asked', hand.move, until);
   }));
 }
 

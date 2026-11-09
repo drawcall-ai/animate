@@ -245,7 +245,7 @@ export abstract class Self {
   }
 
   /**
-   * `bones` as its pose being written has them, written into its earlier poses too: as if they had always stood so, so nothing reads
+   * `bones` as its pose being written has them, what they carry too, written into its earlier poses: as if they had always stood so, so nothing reads
    * the change as motion — only as it starts, before its first update ends (none of its poses has been shown)
    */
   startAs(bones: readonly number[]): void {
@@ -253,7 +253,10 @@ export abstract class Self {
     const current = this.frame.current;
     for (const pose of this.poses) {
       if (pose === current) continue;
-      for (const bone of bones) pose.setLocal(bone, current.local(bone));
+      for (const bone of bones) {
+        pose.setLocal(bone, current.local(bone));
+        pose.setLoad(bone, current.load(bone).mass, current.load(bone).at);
+      }
     }
   }
 

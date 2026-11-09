@@ -27,7 +27,9 @@ export interface HandOptions {
 /** How a `grab` goes. */
 export interface GrabOptions extends HandOptions {
   /** a person starts its story already holding the thing, the hands there at once, not a `speed`: only in the body's first update (the arms
-   * posed as if they had always held it, which a body already shown cannot be: later it throws), the grips within its arms' reach from where it stands */
+   * posed, its weight borne and the trunk leaning against it before the body's first step, as if it had always held it, which a body already shown
+   * cannot be: later it throws), the grips within its arms' reach from where it stands. Taking it moves nothing: the thing stays where it is
+   * through the body's first second, as the hips settle back under a heavy one, and then rides it as what a finished grab holds does */
   already?: boolean;
 }
 

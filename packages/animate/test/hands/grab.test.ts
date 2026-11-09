@@ -196,6 +196,32 @@ it('a reach takes an object\'s turn only as far as the wrist goes, and is there;
 
 // (the trial that asked for it: a bearer who had to be seen picking both medals up, 9 s of the beat, to start it holding them)
 describe('grab already', () => {
+  // (the trial that found it: taken up on the second frame the thing stepped 15 mm whatever its mass, the hips 7.5 mm, then rose as the trunk
+  // leant against its weight: 7.4 cm at 8 kg by half a second, and stayed)
+  it.each([0.5, 2, 8, 20])('the thing does not move for being taken: %f kg', (mass) => {
+    const body = person(), room = roomOf(body), at = new Vector3(0, 1.05, 0.4), tray = box(room, at, { mass, solid: false, size: new Vector3(0.3, 0.1, 0.2) });
+    let step = 0, settling = 0, rise = 0, hipsStep = -1, last: Vector3 | null = null, hips: Vector3 | null = null;
+    play(function* () {
+      yield* grab(body, tray, BOTH, { already: true });
+      yield* wait(4);
+    }, [body], 4, (time) => {
+      const now = worldOf(tray), hipsNow = worldOf(body.bones.hips);
+      if (time <= 1) settling = Math.max(settling, now.y - at.y);
+      if (last && hips) {
+        step = Math.max(step, now.distanceTo(last));
+        // (its first step: the arms and the weight there before it, nothing jumps; the hips go on back to balance a heavy one, over half a second)
+        if (hipsStep < 0) hipsStep = hipsNow.distanceTo(hips);
+      }
+      rise = Math.max(rise, now.y - at.y);
+      [last, hips] = [now, hipsNow];
+    });
+    expect(step).toBeLessThan(0.001);
+    expect(settling).toBeLessThan(0.01);
+    // (from then on it rides the chest as what a finished grab holds does, rising and falling with its breath)
+    expect(rise).toBeLessThan(0.025);
+    expect(hipsStep).toBeLessThan(0.003);
+  });
+
   it('leaves the thing as a finished grab does: it rides a walk in the hands', () => {
     const body = person(), room = roomOf(body), tray = box(room, new Vector3(0, 1.05, 0.4));
     play(function* () {

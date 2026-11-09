@@ -1,9 +1,9 @@
 import { MathUtils, Box3, Quaternion, Ray, Vector3 } from 'three';
-import { bodyOf, grasp, held as heldThings, lift, onBody } from '../../things/hold';
+import { bear, bodyOf, grasp, held as heldThings, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
-import { leftOf } from '../../kernel/math';
+import { forwardOf, leftOf } from '../../kernel/math';
 import type { Walk } from '../../step/walk';
 import { during, type Request } from '../../kernel/requests';
 import { placeArm, reaching } from './arms';
@@ -15,8 +15,13 @@ import { pathAhead } from '../look/around';
 import { bringShoulder } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { approach } from './approach';
+import { loadLean } from '../legs/walk-pose';
 import { handsGoing } from './reach';
-import { emptyAt, gripAt, holdOn, type HandPlan } from './plan';
+import { emptyAt, gripAt, handPlanOf, holdOn, type HandPlan } from './plan';
+import { handsHolding } from './travel';
+import { CARRYING, guidesFor } from './guide';
+import { sideOf } from '../anatomy/bones';
+import type { Thing } from '../../things/thing';
 import { ARM } from './arm-clearance';
 import { flat, footing, walkingToReach } from './standing-spot';
 import type { Person } from '../person';
@@ -110,35 +115,54 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
 }
 
 /**
- * The hands on their grips at once, as the body starts (`grab`'s `already`): each arm posed onto its grip as if it had always
- * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
- * the arm's reach from where the body stands fails it.
+ * The hands on their grips at once, before the body's first sub-step (`grab`'s `already`): each arm posed onto its grip as if it had always
+ * held it — its history the same, so nothing reads the jump as motion, and balance setting out from the body as it now is — and a loose thing
+ * with a mass taken up where it is, staying there (`SETTLING`) as the body settles under it, the arms taking that up. A grip beyond the arm's
+ * reach from where the body stands fails it.
  */
-export function* grabAtOnce(person: Person, request: Request, takes: readonly HandPlan[]) {
+export function holdingAtOnce(person: Person, request: Request, thing: Thing, named: readonly { hand: string; grip: string }[]): void {
   if (person.updates > 0) throw new Error('grab: `already` holds it only as a body starts (in its first update): a body already shown reaches for it');
+  const takes = named.map(({ hand, grip }) => handPlanOf(person, sideOf(hand), thing, grip));
   const f = person.frame, reach = ARM_REACH * person.proportions.armLength;
   for (const take of takes) {
     const short = person.pose.position(INDEX[`${take.side}UpperArm`]).distanceTo(gripAt(person, take, f)) - reach;
     if (short <= 0) continue;
-    request.fail({ where: `${take.thing.object.name} ${take.side} ${take.grip}`, off: short, limit: 0,
+    request.fail({ where: `${thing.object.name} ${take.side} ${take.grip}`, off: short, limit: 0,
       why: `at once, the grip is ${short.toFixed(2)} m beyond the arm's reach from where the body stands (the arm ${person.proportions.armLength.toFixed(2)} m: species.person.armLength): start it nearer` });
   }
   if (request.outcome === 'failed') return;
-  let placed = false;
-  yield* parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked', (f) => {
-    const frame = person.movingFrameOf(take.thing.object).at(f.time).current;
+  const frame = person.movingFrameOf(thing.object).at(f.time).current, place = { position: frame.position.clone(), quaternion: frame.quaternion.clone() };
+  const posed = () => takes.forEach((take) => {
     // (posed again until the wrist stays put: on a grip that sets no turn the wrist is a palm back from it along the hand as last posed)
     const wrist = new Vector3(Infinity, 0, 0);
-    for (let pass = 0; pass < 8 && wrist.distanceTo(gripAt(person, take, f)) > 1e-4; pass++) {
-      placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && frame.quaternion.clone().multiply(take.goal.quaternion) });
+    for (let pass = 0; pass < 32 && wrist.distanceTo(gripAt(person, take, f)) > 1e-6; pass++) {
+      placeArm(person, f, take.side, { position: wrist.copy(gripAt(person, take, f)), quaternion: take.goal.quaternion && place.quaternion.clone().multiply(take.goal.quaternion) });
       person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
     }
-    grasp(person, take.side, { ...holdOn(person, take), by: request });
-    placed = true;
-  }, () => placed)));
-  // (a loose thing with a mass taken up where it is, as a finished grab leaves it, its weight coming on over a moment as there)
-  for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !bodyOf(thing.object)) lift(person, thing);
+  });
+  posed();
+  for (const take of takes) grasp(person, take.side, { ...holdOn(person, take), by: request });
+  request.met();
+  if (!thing.massive || bodyOf(thing.object)) return;
+  lift(person, thing);
+  // (its weight borne from the start, and the trunk leaning against it as it would: balance sets out from them, nothing to take up)
+  bear(person, f, [], person.borne);
+  const facing = person.locomotion.facing, spine = new Quaternion().setFromAxisAngle(_right, -loadLean(f.current, person.proportions, forwardOf(facing)) / 2);
+  f.current.setLocal(INDEX.spine, spine);
+  f.current.setLocal(INDEX.chest, spine);
+  person.startAs([INDEX.spine, INDEX.chest]);
+  posed();
+  bear(person, f, [], person.borne);
+  person.startAs(takes.map((take) => person.hands[take.side]));
+  const guide = guidesFor(person, thing, CARRYING, false)();
+  for (const { hold, move } of handsHolding(person, thing, guide, place)) hold.idle = (at) => {
+    move(at);
+    if (at.time >= SETTLING || person.claims.owner('legs')) hold.idle = undefined;
+  };
 }
+
+/** Tuned: how long (s) from its start a body settles under its weight and its own stance: its first half second and a little (a heavy tray's rise, measured) */
+const SETTLING = 1;
 
 /**
  * `at` (world), on the way from `shoulder` to what `take` takes, drawn back along that way so far as the hand held out along it (its
@@ -160,4 +184,4 @@ function shortOf(person: Person, take: HandPlan, shoulder: Vector3, at: Vector3)
 }
 
 const _grip = new Vector3(), _middle = new Vector3(), _back = new Quaternion(), _box = new Box3(), _from = new Vector3(), _to = new Vector3();
-const _way = new Vector3(), _hit = new Vector3(), _ray = new Ray();
+const _way = new Vector3(), _hit = new Vector3(), _ray = new Ray(), _right = new Vector3(1, 0, 0);
