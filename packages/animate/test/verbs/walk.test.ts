@@ -1,7 +1,8 @@
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { arriving, grab, lookAt, reach, release, wait, walkTo } from '../../src/index';
+import { arriving, Body, dog, grab, lookAt, reach, release, wait, walkTo } from '../../src/index';
+import { DOG } from '../../skills/animate/references/dog';
 import { insides, person, play } from '../bodies';
 import { box, roomOf } from '../things';
 
@@ -165,6 +166,30 @@ it('given until, walks after a target that moves, and stops with it', () => {
   expect(done).toBe(true);
   expect(body.position.distanceTo(lead.position)).toBeLessThan(0.15);
   expect(body.log).toEqual([]);
+});
+
+it('a dog keeps to an empty at a person\'s heel at a run and stands by it, and one held slower than its target says so', () => {
+  const leader = person({ dev: true }), rex = new Body(dog(DOG), { dev: true, at: new Vector3(-0.6, 0, 0) });
+  roomOf(leader, rex);
+  const heel = new Object3D();
+  heel.position.set(-0.6, 0, 0);
+  leader.object.add(heel);
+  let ended = false;
+  play(function* () {
+    yield* parallel('race', function* () { yield* walkTo(leader, new Vector3(0, 0, 12), { face: 0 }); yield* wait(9); }, walkTo(rex, heel, { speed: 1.7, until: Infinity }));
+    ended = true;
+  }, [leader, rex], 40, () => ended);
+  expect(ended).toBe(true);
+  expect(rex.position.setY(0).distanceTo(heel.getWorldPosition(new Vector3()).setY(0))).toBeLessThan(0.2);
+  const slow = person({ dev: true }), runner = new Object3D();
+  roomOf(slow).add(runner);
+  let done: boolean | undefined;
+  play(function* () { done = yield* walkTo(slow, runner, { speed: 1, until: 6 }); }, [slow], 7, (time) => {
+    runner.position.z = time * 2.5;
+    return done !== undefined;
+  });
+  expect(done).toBe(false);
+  expect(slow.log.map((row) => row.check)).toContain('walk cannot keep up with its target (m/s)');
 });
 
 // (people turn into their gaze: an about-turn goes round the side the head is turned to — recalled: Hollands et al. 2001, gaze and head

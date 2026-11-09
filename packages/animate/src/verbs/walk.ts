@@ -30,7 +30,7 @@ export interface WalkOptions {
    */
   speed?: number;
   /** ends on this instead of arriving (`true` if it stands there as it ends, turned; else `false`): a target that moves is followed until
-   * then; it still throws if the walk stalls short of a target standing still */
+   * then, and one it has reached is kept to; it still throws if the walk stalls short of a target standing still */
   until?: Until;
 }
 
@@ -39,7 +39,8 @@ export interface WalkOptions {
  * arrive facing as asked: a mover, it ends once there (within 15 cm × its scale, or a creature as near as its legs bring it), turned and
  * settled — its feet squared, a second or two after the body is there; end it on `until: arriving(body, 0.5)` to start what follows sooner.
  * It throws `Missed` if it stalls, `until` or not: no nearer a target standing still for 6 s (saying whether the body stood there and its
- * feet never settled). A body is no target: give one of its bones, or a point. It asks for the legs. A point or an empty off the floor
+ * feet never settled). To walk beside a body, follow an empty parented to its `object` with `until` and a `speed` above its pace: falling a
+ * metre behind a target faster than `speed` or its legs says so in its dev log. A body is no target: give one of its bones, or a point. It asks for the legs. A point or an empty off the floor
  * under it warns once on the console.
  */
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {

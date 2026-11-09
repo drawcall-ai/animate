@@ -18,6 +18,8 @@ const CLOSE = 1;
 /** stalled: a walk no nearer its goal by this much (m, default body; a radian of facing left counting as `turn` m) for this long (s) —
  * longer than a creature takes to come round on an arc to a goal behind it — one followed (ended on `until`) as long as it stands still */
 const STALL = { nearer: 0.02, turn: 0.3, seconds: 6 };
+/** how far behind a target (m, default body) a walk says it cannot keep up, its target's pace (over a second or so: a head bobs) past this share of its own */
+const BEHIND = 1, KEEPING = 1.1;
 /** about how fast the body turns (rad/s; measured: a person turning in place, 1.2–1.4 rad/s), and its minimum estimated starting pace (m/s) */
 const TURNING = 1.25, SETTING_OFF = 0.5;
 /** the turn rate the hands time their reach to (rad/s; tuned: quicker than the body turns, so they set off as it comes round) */
@@ -78,6 +80,8 @@ export class Walk {
   private stood: number | null = null;
   /** the fastest it has gone (m/s), and the furthest it has had to go (m) */
   private peak = 0; private farthest = 0;
+  /** how fast its goal goes (m/s) */
+  private goalPace = 0;
 
   constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;
@@ -100,6 +104,8 @@ export class Walk {
       previous = next;
     }
     const body = placeOf(self, f);
+    this.goalPace += ((go.velocity?.length() ?? 0) - this.goalPace) * f.dt;
+    if (f.dev && this.goalPace > KEEPING * go.speed && Math.hypot(go.to.x - body.x, go.to.z - body.z) > BEHIND * self.scale) f.dev.append(f.time, { check: 'walk cannot keep up with its target (m/s)', value: this.goalPace, limit: go.speed, where: 'root' });
     this.farthest = Math.max(this.farthest, Math.hypot(go.to.x - body.x, go.to.z - body.z));
     this.there = etaOf(self, body, go, yaw, TURNING) + onward;
     this.eta = etaOf(self, body, go, yaw, LEADING_TURN) + onward;
@@ -173,6 +179,11 @@ export class Walk {
   private watch(f: Frame, yaw: number | null): void {
     const { self, go } = this, body = placeOf(self, f), facing = yaw ?? headingOf(go.to.x - body.x, go.to.z - body.z), s = self.scale;
     const off = Math.hypot(body.x - go.to.x, body.z - go.to.z);
+    // (a walk that follows, there, has nothing to get nearer: it keeps at its goal until its `until`)
+    if (!this.arrives && (off < ARRIVED.distance * s || (self.locomotion.there && off < ARRIVED.stopped * s))) {
+      this.since = f.time;
+      return;
+    }
     const left = off + Math.abs(wrapAngle(facing - self.locomotion.facing)) * STALL.turn * s;
     // (a goal followed — a walk not to end on arriving — that moves starts the watch again: it may be kept at a distance)
     const moved = !this.arrives && this.watched.distanceTo(go.to) > STALL.nearer * s;
