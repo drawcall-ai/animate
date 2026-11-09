@@ -173,10 +173,11 @@ export function footing(person: Person, to: Stand, step = true) {
   face = clearYaw;
   const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
   const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
-  if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there' as const;
-  if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there' as const;
   // (near its stand is there, for a place below the hips only if the arms reach it from here, bowed as far as what they hold lets them)
-  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale && (!point || height >= proportions.hipHeight || grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < available))) return 'there' as const;
+  const inArms = !point || height >= proportions.hipHeight || grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < available);
+  if (near && inArms && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there' as const;
+  if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there' as const;
+  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale && inArms) return 'there' as const;
   const rotation = (f: Frame) => {
     const current = point ? to.place(f) : null;
     return start?.quaternion && current?.quaternion ? current.quaternion.clone().multiply(start.quaternion.clone().invert()) : new Quaternion();
