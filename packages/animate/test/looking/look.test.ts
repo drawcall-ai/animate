@@ -67,7 +67,7 @@ describe('lookAt with a trunk share', () => {
       const body = person({ dev: true, life: { seed } });
       let time = 0, was = 0, most = 0;
       const look = lookAt(body, () => at(time), { trunk: 0.65 });
-      play(walks ? parallel('race', look, walkTo(body, new Vector3(0, 0, 5))) : look, [body], walks ? 6 : 10, (t) => {
+      play(function* () { yield* walks ? parallel('race', look, walkTo(body, new Vector3(0, 0, 5))) : look; }, [body], walks ? 6 : 10, (t) => {
         time = t;
         // (the chest's turn off the hips about the vertical)
         const turn = new Euler().setFromQuaternion(poseOf(body).rotation(INDEX.hips).clone().invert().multiply(poseOf(body).rotation(INDEX.chest)), 'YXZ').y;
