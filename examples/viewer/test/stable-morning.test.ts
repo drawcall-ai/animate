@@ -53,10 +53,6 @@ const test = cases([
   // arms hang its wrists at 0.97 m, so as far as it stops from the rack it bends its knees past the bound for a load at knuckle height (35°),
   // at many life seeds, this among them: to 36°, and its log holds the breach below too.
   ['leading posture and clearance on the soldier', /or equal to 35/, [1]],
-  // (#18) XCoM 0.110 m for one sub-step at 9.35 s, bound 0.103: the trailing knee held straight at full reach through pre-swing, the heel flat till
-  // the reach runs out, peels and snaps the knee bent as the foot lifts — the centre of mass jolted with it.
-  ['leading posture and clearance on the soldier', /XCoM outside support/, [3]],
-  ['takes the slack without stretching the rope on the soldier', /XCoM outside support/, [3]],
 ]);
 
 for (const [on, skeleton] of BODIES) {

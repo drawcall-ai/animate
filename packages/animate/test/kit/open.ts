@@ -15,13 +15,13 @@ const said = (cause: unknown) => cause instanceof Error ? `${cause.message} ${JS
  * has is an error, so the list cannot outlive its cases.
  */
 export function cases(open: readonly Open[]) {
+  const listed = new Map(open.map(([title, fails, seeds]) => [title, { fails, seeds }]));
   const named = new Set<string>();
-  afterAll(() => expect(open.map(([title]) => title).filter((title) => !named.has(title)), 'open cases no test has').toEqual([]));
+  afterAll(() => expect([...listed.keys()].filter((title) => !named.has(title)), 'open cases no test has').toEqual([]));
   return (title: string, fn: () => void, timeout?: number) => {
     named.add(title);
-    // (a case may be open for different faults at different seeds: an entry for each)
-    const entry = open.map(([listed, fails, seeds]) => ({ listed, fails, seeds })).find(({ listed, seeds }) => listed === title && (!seeds || seeds.includes(LIFE_SEED)));
-    if (!entry) return void it(title, fn, timeout);
+    const entry = listed.get(title);
+    if (!entry || (entry.seeds && !entry.seeds.includes(LIFE_SEED))) return void it(title, fn, timeout);
     it(title, () => {
       try {
         fn();
