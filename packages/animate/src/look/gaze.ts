@@ -174,12 +174,17 @@ function declinationToHead(whole: Quaternion, eyes: EyePitch, strainOf: (head: Q
  * `each` given each bone's share (local) in turn
  */
 function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<Quaternion>, each: (bone: number, share: Quaternion) => void): void {
-  const left = cutToNeck(skeleton, bones, _left.copy(turn));
+  takeOver(skeleton, bones, cutToNeck(skeleton, bones, _left.copy(turn)), each);
+}
+
+/** `left` taken over `bones`, base first, each an even share of what the bones before it left, within its own limit: `left` what none took */
+function takeOver(skeleton: Skeleton, bones: readonly number[], left: Quaternion, each?: (bone: number, share: Quaternion) => void): Quaternion {
   bones.forEach((b, k) => {
     const share = limited(skeleton, b, _goal.identity().slerp(left, 1 / (bones.length - k)));
     left.premultiply(_taken.copy(share).invert());
-    each(b, share);
+    each?.(b, share);
   });
+  return left;
 }
 
 /**
@@ -203,8 +208,7 @@ function cutToNeck(skeleton: Skeleton, bones: readonly number[], turn: Quaternio
 
 /** as much of a turn `angle` about `axis` as `bones` take, each within its limit */
 function reachOf(skeleton: Skeleton, bones: readonly number[], axis: Vector3, angle: number): number {
-  const left = _r.setFromAxisAngle(axis, angle);
-  bones.forEach((b, k) => left.premultiply(_taken.copy(limited(skeleton, b, _goal.identity().slerp(left, 1 / (bones.length - k)))).invert()));
+  const left = takeOver(skeleton, bones, _r.setFromAxisAngle(axis, angle));
   return angle - 2 * Math.atan2(left.dot(_axis.set(axis.x, axis.y, axis.z, 0)), left.w);
 }
 

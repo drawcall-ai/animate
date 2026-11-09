@@ -28,6 +28,7 @@ export function personHands(person: Person): HandStaging {
       const shaping = takes.map((take) => {
         person.coming[take.side] = take;
         person.fingers?.toward(take.side, take.placement);
+        // (a claim that does nothing a sub-step: it only makes this grab the fingers' newest owner, so an older pose's shape yields to `toward`)
         return request.claim(`fingers.${take.side}`, 'asked', () => {});
       });
       try {
