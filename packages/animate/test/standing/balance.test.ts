@@ -6,6 +6,12 @@ import { PERSON } from '../../skills/animate/references/person';
 import { INDEX, dt, readings, person, play, run, feetOf } from '../kit/bodies';
 import { wrapAngle, yawOf } from '../kit/angles';
 
+/** where bone `name` of a body is in the scene, as its last update wrote it */
+const atBone = (body: Body, name: keyof Body['bones']) => {
+  body.object.updateMatrixWorld(true);
+  return body.bones[name].getWorldPosition(new Vector3());
+};
+
 describe('balance', () => {
   it('stands facing as it started on hips set ahead of its root, no lean to step under', () => {
     const skeleton = PERSON.map((bone) => {
@@ -82,6 +88,19 @@ describe('balance', () => {
     expect(heelHeight).toBeLessThanOrEqual(1e-6);
     expect(body.settled).toBe(true);
     expect(body.log).toEqual([]);
+  });
+
+  it('stands where it is put, relaxed, the soles on the floor, still', () => {
+    const body = person({ at: new Vector3(1, 0, 2), face: 0.5 }), p = body.species.person!;
+    // (it settles its weight over its feet' rear half within its first half second, then stands, breathing)
+    for (let i = 0; i < 60; i++) body.update(dt);
+    expect(body.facing).toBeCloseTo(0.5, 9);
+    expect(body.velocity.length()).toBeLessThan(0.005);
+    for (const side of ['left', 'right'] as const) expect(atBone(body, `${side}Foot`).y).toBeCloseTo(p.ankleHeight, 3);
+    expect(atBone(body, 'hips').distanceTo(new Vector3(1, p.hips.y, 2))).toBeLessThan(0.04);
+    // the arms hang
+    for (const side of ['left', 'right'] as const) expect(atBone(body, `${side}UpperArm`).y - atBone(body, `${side}Hand`).y).toBeGreaterThan(0.95 * p.armLength);
+    expect(poseOf(body).position(INDEX.head).distanceTo(atBone(body, 'head'))).toBeLessThan(1e-6);
   });
 });
 

@@ -1,6 +1,6 @@
 import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { attempt, Body, carry, grab, humanoid, Missed, release, wait } from '../../src/index';
+import { Body, carry, grab, humanoid, release, wait } from '../../src/index';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
 import { person, play, run } from '../kit/bodies';
 import { armed, box, empty, roomOf, worldOf, named } from '../kit/things';
@@ -165,33 +165,6 @@ describe('a sword in a scabbard on the hips', () => {
     expect(sword.position.length()).toBe(0);
     expect(sword.quaternion.angleTo(new Quaternion())).toBe(0);
     expect(body.log).toEqual([]);
-  });
-});
-
-describe('hands that cannot get there', () => {
-  it('given until, what cannot get there misses all the same: a grab out of the arms, a carry stopped short', () => {
-    // (driven: nothing walks it up to what it reaches for)
-    const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
-    const body = person({ dev: true, drive: () => root }), room = roomOf(body);
-    const far = box(room, new Vector3(0, 1, 3), { solid: false, name: 'far' });
-    let ended = false, miss: Missed | null = null;
-    play(function* () {
-      miss = yield* attempt(grab(body, far, { left: 'left', right: 'right' }, { until: 6 }));
-      ended = true;
-    }, [body], 7, () => ended);
-    expect(ended).toBe(true);
-    expect(miss).toBeInstanceOf(Missed);
-    expect(body.holds(far)).toBe(false);
-    const near = box(room, new Vector3(0, 1.1, 0.35), { solid: false, name: 'near' });
-    ended = false;
-    play(function* () {
-      yield* grab(body, near, { left: 'left', right: 'right' });
-      miss = yield* attempt(carry(body, near, new Vector3(0, 1.1, 1.3), { until: 6 }));
-      ended = true;
-    }, [body], 12, () => ended);
-    expect(ended).toBe(true);
-    expect(miss).toBeInstanceOf(Missed);
-    expect(body.holds(near)).toBe(true);
   });
 });
 

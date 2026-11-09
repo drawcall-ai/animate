@@ -1,6 +1,8 @@
+import { runTimeline } from '@pmndrs/timeline';
 import { Object3D, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { carry, grab, lookAt, reach, release, track, walkTo, Body, dog, type Root } from '../../src/index';
+import { carry, grab, humanoid, lookAt, release, track, walkTo, Body, dog, type Root } from '../../src/index';
+import { PERSON } from '../../skills/animate/references/person';
 import { DOG } from '../../skills/animate/references/dog';
 import { dt, person, play, run } from '../kit/bodies';
 import { box, empty, roomOf } from '../kit/things';
@@ -39,6 +41,8 @@ describe('a misuse throws, saying what is wrong', () => {
     const load = box(room, new Vector3(0, 0.9, 0.5));
     expect(playing(body, function* () { yield* grab(body, load, { tail: 'left' }); })).toThrow('has no hand "tail", only left, right');
     expect(() => release(body, { tail: load })).toThrow('the body has no hand "tail"');
+    const pup = new Body(dog(DOG)), toy = box(roomOf(pup), new Vector3(0, 0.2, 0.8));
+    expect(playing(pup, function* () { yield* grab(pup, toy, { right: 'right' } as never); })).toThrow('has no hand "right", only jaw');
   });
 
   it('letting go of what no hand holds, or of what another hand holds', () => {
@@ -76,6 +80,38 @@ describe('a misuse throws, saying what is wrong', () => {
       }, [body], 6)).toThrow(`"slot" ${message}`);
     }
   });
+
+  it('a walk to a body says what to pass', () => {
+    const body = person(), other = person({ at: new Vector3(0, 0, 3) });
+    expect(playing(body, function* () { yield* walkTo(body, other as unknown as Vector3); })).toThrow(/\.position/);
+  });
+
+  it('`carry` of what no hand holds throws, naming the fix', () => {
+    const body = person(), thing = box(roomOf(body), new Vector3(0, 1, 0.4));
+    expect(playing(body, function* () { yield* carry(body, thing, new Vector3()); })).toThrow(/grab it first/);
+  });
+
+  it('a misuse in staging reaches the story\'s `try` once, its `finally` runs and nothing stays filed', () => {
+    const body = person(), thing = box(roomOf(body), new Vector3(0, 1, 0.4));
+    let caught = 0, cleaned = 0, thrown = 0;
+    const step = runTimeline(function* () {
+      try {
+        yield* carry(body, thing, new Vector3());
+      } catch { caught++; } finally { cleaned++; }
+    });
+    for (let k = 0; k < 30; k++) {
+      try { step(undefined, dt); body.update(dt); } catch { thrown++; }
+    }
+    expect({ caught, cleaned, thrown }).toEqual({ caught: 1, cleaned: 1, thrown: 0 });
+    expect(body.owners.hands).toEqual({});
+  });
+
+  it('a value of another copy of three is said at the first target, naming the fix', () => {
+    class Other { isVector3 = true; x = 0; y = 0; z = 1; }
+    const body = person();
+    expect(playing(body, function* () { yield* walkTo(body, new Other() as never); })).toThrow(/another copy of three/);
+    expect(() => new Body(humanoid(PERSON), { at: new Other() as never })).toThrow(/another copy of three/);
+  });
 });
 
 it('rejects malformed placement speed instead of defaulting it', () => {
@@ -111,39 +147,6 @@ it('rejects creature carry routes it cannot traverse', () => {
       yield* carry(body, load, route === 'waypoints' ? [new Vector3(0, 0.4, 0.6), slot] : slot);
     }, [body], 12)).toThrow(/creature hands do not support/);
   }
-});
-
-it.each(['reach', 'grab', 'carry'] as const)('uses creature %s pace in its motion', (verb) => {
-  const after = (speed: number) => {
-    const body = new Body(dog(DOG)), room = roomOf(body);
-    const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
-    if (verb === 'carry') {
-      play(function* () { yield* grab(body, load, { jaw: 'left' }); }, [body], 6);
-      expect(body.holds(load)).toBe(true);
-    }
-    play(function* () {
-      if (verb === 'reach') yield* reach(body, { jaw: new Vector3(0, 0.4, 0.48) }, { speed });
-      else if (verb === 'grab') yield* grab(body, load, { jaw: 'left' }, { speed });
-      else yield* carry(body, load, new Vector3(0, 0.4, 0.48), { speed });
-    }, [body], 0.3);
-    return body.bones.jaw.getWorldPosition(new Vector3());
-  };
-  expect(after(0.2)).not.toEqual(after(0.8));
-});
-
-it('lifts an attached item when a creature starts carrying it', () => {
-  const body = new Body(dog(DOG)), room = roomOf(body);
-  const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
-  body.bones.trunk.attach(load);
-  let finished = false;
-  play(function* () {
-    if (!(yield* grab(body, load, { jaw: 'left' }))) throw new Error('fixture grab failed');
-    expect(load.parent).toBe(body.bones.trunk);
-    yield* carry(body, load, new Vector3(0, 0.45, 0.5), { until: 0.2 });
-    finished = true;
-  }, [body], 12, () => finished);
-  expect(finished).toBe(true);
-  expect(load.parent).toBe(body.bones.jaw);
 });
 
 // (a body stands on its floor: a height asked of where it stands that is off the floor there is ignored, and it warns, once)

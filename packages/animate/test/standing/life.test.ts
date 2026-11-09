@@ -82,16 +82,6 @@ it.each([1.6, 1.75, 1.85])('bends its knees for an 8 kg load taken low, on a %s 
   expect(body.log).toEqual([]);
 });
 
-it('glances about on its own schedule: bodies without a seed do not look aside in step', () => {
-  const headYaws = (at: Vector3) => {
-    const body = person({ at }), h = readings(body), yaws: number[] = [];
-    run(body, 20, () => yaws.push(yawOf(h.pose.rotation(INDEX.head))));
-    return yaws;
-  };
-  const a = headYaws(new Vector3(0, 0, 0)), b = headYaws(new Vector3(3, 0, 1));
-  expect(Math.max(...a.map((yaw, i) => Math.abs(yaw - b[i])))).toBeGreaterThan(0.2);
-});
-
 // (the trial that asked for it: soldiers at attention, scripted, who glanced about and shifted their weight like bystanders)
 it.each([['the default person', 1.75], ['a 2.3 m skeleton', 0]])('holds still as its life asks, scripted: %s', (_name, height) => {
   const stood = (steady: number) => {

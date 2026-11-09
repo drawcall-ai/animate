@@ -28,14 +28,9 @@ describe('a reach to the end of the arm (driven: it cannot step)', () => {
     const body = driven();
     expect(play(body, reach(body, { right: out(1.012) }, { step: false, until: 4 })).result).toBe(true);
   });
-  it('once there, a target gone out of the arm misses all the same (until)', () => {
-    const body = driven(), at = out(1.012);
-    let t = 0;
-    const miss = play(body, () => attempt(reach(body, { right: () => { t += 1 / 60; if (t > 3) at.z = 1.16; return at; } }, { step: false, until: () => t > 12 })), { limit: 20 }).result;
-    expect(miss).toBeInstanceOf(Missed);
-  });
-  it('once exactly there, a target gone out of the arm misses all the same (until)', () => {
-    const body = driven(), at = out(0.7);
+
+  it.each([['there', 1.012], ['exactly there', 0.7]])('once %s, a target gone out of the arm misses all the same (until)', (_, z) => {
+    const body = driven(), at = out(z);
     let t = 0;
     const miss = play(body, () => attempt(reach(body, { right: () => { t += 1 / 60; if (t > 3) at.z = 1.16; return at; } }, { step: false, until: () => t > 12 })), { limit: 20 }).result;
     expect(miss).toBeInstanceOf(Missed);

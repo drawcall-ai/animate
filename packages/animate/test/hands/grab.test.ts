@@ -1,8 +1,8 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { BoxGeometry, Mesh, Object3D, Quaternion, Vector3 } from 'three';
+import { grip, attempt, Body, dog, grab, Missed, reach, release, wait } from '../../src/index';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../kit/open';
 import { runTimeline } from '@pmndrs/timeline';
-import { attempt, Body, dog, grab, Missed, reach, release, wait } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { run, INDEX, type Side, dt, readings, person, play, feetOf, gazeOff, type Readings } from '../kit/bodies';
 import { box, empty, roomOf, worldOf, named } from '../kit/things';
@@ -236,4 +236,23 @@ it('refuses a reach onto a grip', () => {
   const grip = named(box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false }), 'right');
   grip.userData.handle = [0, 1, 0];
   expect(() => reach(body, { right: grip })).toThrow(/reach: "right" has userData.handle, a grip/);
+});
+
+describe('grip', () => {
+  it('adds a named empty that a grab takes, its spec its userData', () => {
+    const body = person(), room = roomOf(body), rod = new Mesh(new BoxGeometry(0.03, 0.2, 0.03));
+    rod.name = 'rod';
+    rod.position.set(-0.2, 1, 0.3);
+    rod.userData.mass = 0.2;
+    room.add(rod);
+    const handle = grip(rod, 'shaft', new Vector3(0, 0.02, 0), { handle: [0, 1, 0], radius: 0.015 });
+    expect(handle).toBeInstanceOf(Object3D);
+    expect(handle.parent).toBe(rod);
+    expect(handle.userData).toEqual({ handle: [0, 1, 0], radius: 0.015 });
+    expect(grip(rod, 'tip', [0, 0.1, 0]).position.y).toBe(0.1);
+    let took: boolean | undefined;
+    play(function* () { took = yield* grab(body, rod, { right: 'shaft' }); }, [body], 6, () => took !== undefined);
+    expect(took).toBe(true);
+    expect(body.holds(rod)).toBe(true);
+  });
 });

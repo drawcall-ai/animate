@@ -9,7 +9,7 @@ import { INDEX } from '../../src/person/anatomy/bones';
 import { humanoid, poseOf } from '../../src/index';
 import { rng, turnUpTo } from '../kit/random';
 import { dt, person } from '../kit/bodies';
-import { claim, insides } from './insides';
+import { claim } from './insides';
 import { PERSON } from '../../skills/animate/references/person';
 
 /** where bone `name` of a body is in the scene, as its last update wrote it */
@@ -19,19 +19,6 @@ const at = (body: ReturnType<typeof person>, name: keyof typeof body.bones) => {
 };
 
 describe('a person', () => {
-  it('stands where it is put, relaxed, the soles on the floor, still', () => {
-    const body = person({ at: new Vector3(1, 0, 2), face: 0.5 }), h = insides(body), p = h.proportions;
-    // (it settles its weight over its feet' rear half within its first half second, then stands, breathing)
-    for (let i = 0; i < 60; i++) body.update(dt);
-    expect(body.facing).toBeCloseTo(0.5, 9);
-    expect(body.velocity.length()).toBeLessThan(0.005);
-    for (const side of ['left', 'right'] as const) expect(at(body, `${side}Foot`).y).toBeCloseTo(p.ankleHeight, 3);
-    expect(at(body, 'hips').distanceTo(new Vector3(1, p.hips.y, 2))).toBeLessThan(0.04);
-    // the arms hang
-    for (const side of ['left', 'right'] as const) expect(at(body, `${side}UpperArm`).y - at(body, `${side}Hand`).y).toBeGreaterThan(0.95 * p.armLength);
-    expect(poseOf(body).position(INDEX.head).distanceTo(at(body, 'head'))).toBeLessThan(1e-6);
-  });
-
   it('solves its named chains within its ranges of motion: a wrist onto a point in reach', () => {
     const target = new Vector3(-0.25, 1.2, 0.3), body = person();
     claim(body, 'hand.right', (f) => solveChain(f, 'rightArm', { tip: { position: target }, pole: new Vector3(-0.6, 0.8, -0.3) }));

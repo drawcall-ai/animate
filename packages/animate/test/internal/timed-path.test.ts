@@ -27,7 +27,7 @@ function sampled(waypoints: Waypoint[], seconds: number) {
 
 const place = (x: number, y: number, z: number, quaternion?: Quaternion) => ({ position: new Vector3(x, y, z), quaternion });
 
-describe('course', () => {
+describe('timedPath', () => {
   it('passes its placements without stopping, smoothly, coming to rest only at its end', () => {
     const { path, speeds } = sampled([[0.6, place(0.3, 0.1, 0)], [0.6, place(0.4, 0.4, 0.1)], [0.6, place(0.2, 0.6, 0.3)]], 2.2);
     // (through each placement: within a few mm of it at some sub-step)

@@ -1,6 +1,7 @@
+import { Body, dog, arriving, attempt, carry, grab, humanoid, Missed, release, wait, reach } from '../../src/index';
+import { DOG } from '../../skills/animate/references/dog';
 import { BoxGeometry, Group, Mesh, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { arriving, attempt, Body, carry, grab, humanoid, Missed, release, wait } from '../../src/index';
 import { NATIVE } from '../kit/skeletons/native';
 import { readings, person, play } from '../kit/bodies';
 import { box, empty, roomOf, worldOf } from '../kit/things';
@@ -65,12 +66,6 @@ describe('carry', () => {
     expect(far.off).toBeGreaterThan(0.01);
     // (given a condition that never comes, it still misses: else it held the thing short of its end for ever)
     expect(outcome(new Vector3(0, 1.3, 0.76), () => false).miss).toBeInstanceOf(Missed);
-  });
-
-  it('throws when no hand holds what it is asked to carry', () => {
-    const body = person(), room = roomOf(body);
-    const load = box(room, new Vector3(0, 0.9, 0.5));
-    expect(() => play(function* () { yield* carry(body, load, new Vector3()); }, [body], 0.1)).toThrow('grab it first');
   });
 
   // (a target on the body given as an object or by a function: either way the carry ends with the thing there and turned, and keeps it so)
@@ -205,4 +200,37 @@ describe('release', () => {
     }, [body], 8, () => done);
     expect(body.log).toEqual([]);
   });
+});
+
+it.each(['reach', 'grab', 'carry'] as const)('uses creature %s pace in its motion', (verb) => {
+  const after = (speed: number) => {
+    const body = new Body(dog(DOG)), room = roomOf(body);
+    const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
+    if (verb === 'carry') {
+      play(function* () { yield* grab(body, load, { jaw: 'left' }); }, [body], 6);
+      expect(body.holds(load)).toBe(true);
+    }
+    play(function* () {
+      if (verb === 'reach') yield* reach(body, { jaw: new Vector3(0, 0.4, 0.48) }, { speed });
+      else if (verb === 'grab') yield* grab(body, load, { jaw: 'left' }, { speed });
+      else yield* carry(body, load, new Vector3(0, 0.4, 0.48), { speed });
+    }, [body], 0.3);
+    return body.bones.jaw.getWorldPosition(new Vector3());
+  };
+  expect(after(0.2)).not.toEqual(after(0.8));
+});
+
+it('lifts an attached item when a creature starts carrying it', () => {
+  const body = new Body(dog(DOG)), room = roomOf(body);
+  const load = box(room, new Vector3(0, 0.4, 0.48), { mass: 0.1, solid: false });
+  body.bones.trunk.attach(load);
+  let finished = false;
+  play(function* () {
+    if (!(yield* grab(body, load, { jaw: 'left' }))) throw new Error('fixture grab failed');
+    expect(load.parent).toBe(body.bones.trunk);
+    yield* carry(body, load, new Vector3(0, 0.45, 0.5), { until: 0.2 });
+    finished = true;
+  }, [body], 12, () => finished);
+  expect(finished).toBe(true);
+  expect(load.parent).toBe(body.bones.jaw);
 });

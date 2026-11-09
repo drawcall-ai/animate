@@ -1,9 +1,8 @@
-import { Mesh, Object3D, BoxGeometry, Vector3 } from 'three';
+import { Object3D, Vector3 } from 'three';
 import { parallel, runTimeline } from '@pmndrs/timeline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { attempt, Body, carry, dog, grab, grip, humanoid, lookAt, Missed, play, pose, reach, release, wait, walkTo } from '../../src/index';
+import { attempt, Body, carry, grab, grip, humanoid, lookAt, Missed, play, pose, reach, release, wait, walkTo } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { DOG } from '../../skills/animate/references/dog';
 import { person } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
 
@@ -175,69 +174,6 @@ describe('Missed', () => {
   });
 });
 
-describe('misuse', () => {
-  it('a walk to a body says what to pass', () => {
-    const body = person(), other = person({ at: new Vector3(0, 0, 3) });
-    expect(() => play([body], walkTo(body, other as unknown as Vector3))).toThrow(/\.position/);
-  });
-
-  it('a hand the body does not have throws', () => {
-    const pup = new Body(dog(DOG)), toy = box(roomOf(pup), new Vector3(0, 0.2, 0.8));
-    expect(() => play(pup, grab(pup, toy, { right: 'right' } as never))).toThrow('has no hand "right", only jaw');
-  });
-
-  it('a key on a grip nothing reads is said once, naming what a grip takes; the grab goes on', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person(), thing = box(roomOf(body), new Vector3(0, 1, 0.4), { mass: null });
-    thing.getObjectByName('right')!.userData.radious = 0.02;
-    expect(play(body, function* () {
-      yield* grab(body, thing, { right: 'right' });
-      release(body, thing);
-      return yield* grab(body, thing, { right: 'right' });
-    }).result).toBe(true);
-    const said = warn.mock.calls.map(([message]) => String(message));
-    warn.mockRestore();
-    expect(said).toEqual([expect.stringMatching(/userData\.radious.*approach and speed/)]);
-  });
-
-  it('a thing gripped by its own name keeps its data unremarked', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person(), thing = box(roomOf(body), new Vector3(-0.2, 1, 0.35));
-    thing.name = 'crate';
-    thing.userData.gameId = 7;
-    play(body, grab(body, thing, { right: 'crate' }));
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
-  it('`carry` of what no hand holds throws, naming the fix', () => {
-    const body = person(), thing = box(roomOf(body), new Vector3(0, 1, 0.4));
-    expect(() => play(body, carry(body, thing, new Vector3()))).toThrow(/grab it first/);
-  });
-
-  it('a misuse in staging reaches the story\'s `try` once, its `finally` runs and nothing stays filed', () => {
-    const body = person(), thing = box(roomOf(body), new Vector3(0, 1, 0.4));
-    let caught = 0, cleaned = 0, thrown = 0;
-    const step = runTimeline(function* () {
-      try {
-        yield* carry(body, thing, new Vector3());
-      } catch { caught++; } finally { cleaned++; }
-    });
-    for (let k = 0; k < 30; k++) {
-      try { step(undefined, dt); body.update(dt); } catch { thrown++; }
-    }
-    expect({ caught, cleaned, thrown }).toEqual({ caught: 1, cleaned: 1, thrown: 0 });
-    expect(body.owners.hands).toEqual({});
-  });
-
-  it('a value of another copy of three is said at the first target, naming the fix', () => {
-    class Other { isVector3 = true; x = 0; y = 0; z = 1; }
-    const body = person();
-    expect(() => play(body, walkTo(body, new Other() as never))).toThrow(/another copy of three/);
-    expect(() => new Body(humanoid(PERSON), { at: new Other() as never })).toThrow(/another copy of three/);
-  });
-});
-
 describe('play', () => {
   it('runs a story to its end, reporting its result and how long it took, a body alone or several', () => {
     const body = person(), { result, time } = play(body, function* () {
@@ -261,98 +197,4 @@ describe('play', () => {
     expect(seen).toBeCloseTo(time * 60, 0);
   });
 
-  it('prints nothing', () => {
-    const log = vi.spyOn(console, 'log');
-    const body = person();
-    play(body, wait(0.1));
-    expect(log).not.toHaveBeenCalled();
-    log.mockRestore();
-  });
-});
-
-describe('a door swung with the body standing still', () => {
-  const door = (body: Body) => {
-    const room = roomOf(body), hinge = new Object3D(), leaf = new Mesh(new BoxGeometry(0.8, 2, 0.04));
-    hinge.position.set(-0.7, 0, 0.55);
-    room.add(hinge);
-    leaf.name = 'door';
-    leaf.position.set(0.4, 1, 0);
-    hinge.add(leaf);
-    grip(leaf, 'handle', [0.3, 0, -0.03], { handle: [0, 1, 0], radius: 0.015 });
-    room.updateMatrixWorld(true);
-    const swing = (rate = 1.2) => wait(() => {
-      hinge.rotation.y -= rate / 60;
-      hinge.updateMatrixWorld(true);
-      return hinge.rotation.y < -1.8;
-    });
-    return { leaf, swing };
-  };
-
-  it('keeps its hold, and is said once with no dev flag, naming the thing, how far and the fix', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person({ life: { seed: 1 } }), { leaf, swing } = door(body);
-    play(body, function* () {
-      yield* grab(body, leaf, { right: 'handle' }, { step: false });
-      yield* swing();
-      yield* wait(0.3);
-    });
-    const said = warn.mock.calls.map(([message]) => String(message));
-    warn.mockRestore();
-    expect(body.holds(leaf)).toBe(true);
-    expect(said).toEqual([expect.stringMatching(/hand holding "door" has fallen [\d.]+ cm off its grip.*walk the body with what moves it, or release it/)]);
-  });
-
-  it('walked with, it is not', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person({ life: { seed: 1 } }), { leaf, swing } = door(body);
-    play(body, function* () {
-      yield* grab(body, leaf, { right: 'handle' }, { step: false });
-      yield* parallel('all', swing(0.4), walkTo(body, new Vector3(-0.6, 0, 0.75), { speed: 0.4, face: 0 }));
-    });
-    const said = warn.mock.calls.map(([message]) => String(message));
-    warn.mockRestore();
-    expect(said).toEqual([]);
-  });
-});
-
-describe('a verb never yielded', () => {
-  const warned = (story: (body: Body) => void) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person();
-    story(body);
-    for (let k = 0; k < 90; k++) body.update(dt);
-    const said = warn.mock.calls.map(([message]) => String(message));
-    warn.mockRestore();
-    return said;
-  };
-
-  it('is said once, after a second, with where it was called', () => {
-    const said = warned((body) => void walkTo(body, new Vector3(0, 0, 1)));
-    expect(said).toEqual([expect.stringMatching(/walkTo \(outcome\.test\.ts:\d+\) was called but never run/)]);
-  });
-
-  it('nothing is said of one run', () => {
-    const body = person();
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    play(body, walkTo(body, new Vector3(0, 0, 0.5)));
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
-  });
-});
-
-describe('grip', () => {
-  it('adds a named empty that a grab takes, its spec its userData', () => {
-    const body = person(), room = roomOf(body), rod = new Mesh(new BoxGeometry(0.03, 0.2, 0.03));
-    rod.name = 'rod';
-    rod.position.set(-0.2, 1, 0.3);
-    rod.userData.mass = 0.2;
-    room.add(rod);
-    const handle = grip(rod, 'shaft', new Vector3(0, 0.02, 0), { handle: [0, 1, 0], radius: 0.015 });
-    expect(handle).toBeInstanceOf(Object3D);
-    expect(handle.parent).toBe(rod);
-    expect(handle.userData).toEqual({ handle: [0, 1, 0], radius: 0.015 });
-    expect(grip(rod, 'tip', [0, 0.1, 0]).position.y).toBe(0.1);
-    expect(play(body, grab(body, rod, { right: 'shaft' })).result).toBe(true);
-    expect(body.holds(rod)).toBe(true);
-  });
 });

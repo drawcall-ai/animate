@@ -4,7 +4,7 @@ import { MovingFrame } from '../../src/kernel/moving-frame';
 import { SUBSTEP } from '../../src/kernel/frame';
 import { turn } from './rigs';
 
-describe('Carrier', () => {
+describe('MovingFrame', () => {
   it('keeps its last placements, is moved once a sub-step, and stood still through a sub-step it was not moved in', () => {
     const cart = new MovingFrame(new Vector3());
     cart.move(SUBSTEP, new Vector3(1, 0, 0));

@@ -1,6 +1,6 @@
+import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Vector3 } from 'three';
 import { attempt, Body, carry, dog, grab, horse, humanoid, lookAt, Missed, reach, release, wait } from '../../src/index';
 import { species } from '../../src/species';
 import { HORSE } from '../../skills/animate/references/horse';
@@ -217,4 +217,19 @@ it('an empty parented to a body on a raised floor is read where the scene has it
     return worldOf(body.bones.rightHand);
   };
   expect(handAt(1).distanceTo(handAt(0).add(new Vector3(0, 1, 0)))).toBeLessThan(0.005);
+});
+
+it('a dog reaches an object’s orientation as well as its position', () => {
+  const pet = new Body(dog(DOG), { dev: true }), room = roomOf(pet);
+  const target = empty(room, 'mouth target', worldOf(pet.bones.jaw));
+  target.rotation.z = Math.PI;
+  let result: boolean | undefined;
+  let closest = Infinity;
+  play(function* () { result = yield* reach(pet, { jaw: target }); }, [pet], 10, () => {
+    closest = Math.min(closest, pet.bones.jaw.getWorldQuaternion(new Quaternion()).angleTo(target.getWorldQuaternion(new Quaternion())));
+    return result !== undefined;
+  });
+  expect(result).toBe(true);
+  expect(closest).toBeLessThan(0.05);
+  expect(pet.log).toEqual([]);
 });

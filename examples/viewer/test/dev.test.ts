@@ -1,4 +1,4 @@
-import { run } from './dev-log';
+import { run } from '../scripts/run';
 import { expect } from 'vitest';
 import { SCENARIOS } from '../src/scenarios/index';
 import { reaching } from '../src/scenarios/tracking';

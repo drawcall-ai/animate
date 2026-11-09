@@ -1,7 +1,7 @@
+import { attempt, Missed, arriving, Body, dog, grab, lookAt, reach, release, wait, walkTo } from '../../src/index';
 import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { arriving, Body, dog, grab, lookAt, reach, release, wait, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { now, readings, person, play } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
@@ -220,3 +220,11 @@ it('throws on a pace that is none, and for a body its app drives', () => {
   expect(() => play(function* () { yield* walkTo(driven, new Vector3(0, 0, 1)); }, [driven], 0.1)).toThrow('drives it');
 });
 
+it('a walk given until misses once it stalls short of a goal standing still', () => {
+  // (a dog before a wall 1.5 m high: it can get no nearer the point beyond)
+  const body = new Body(dog(DOG), { dev: true, floor: (_x, z) => (z > 1 ? 1.5 : 0) });
+  let miss: Missed | null | undefined;
+  const ended = play(function* () { miss = yield* attempt(walkTo(body, new Vector3(0, 0, 2), { until: 20 })); }, [body], 25, () => miss !== undefined);
+  expect(miss).toMatchObject({ verb: 'walkTo', why: expect.stringContaining('no nearer') });
+  expect(ended).toBeLessThan(15);
+});

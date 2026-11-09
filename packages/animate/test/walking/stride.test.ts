@@ -82,6 +82,8 @@ describe('people of one build', () => {
       expect(median(r), name).toBeLessThan(0.3);
       expect(Math.max(...r), name).toBeLessThan(0.97);
     }
+    // (and they do look aside: not a crowd all eyes ahead)
+    expect(Math.max(...heads[0].map((x, k) => Math.abs(x - heads[1][k])))).toBeGreaterThan(0.19);
     for (const body of bodies) expect(body.log).toEqual([]);
   });
 });

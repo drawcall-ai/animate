@@ -27,7 +27,7 @@ const GAZE = { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, 0.05, 0.08]
 const gazing = () => new Body(species(NECK, { gaze: GAZE }, { masses: { chest: 1, neck: 1, head: 1 } }));
 const eyesOf = (body: Body) => poseOf(body).point(2, new Vector3(0, 0.05, 0.08), new Vector3());
 
-describe('chainTo', () => {
+describe('LimbMover', () => {
   it("moves a chain's tip on to its target, its joints braked to `turnAccel`, and gets there", () => {
     const goal = new Vector3(0.25, 0.35, 0.3), body = leg(), tip = new LimbMover('leg');
     let ended = -1;
@@ -62,7 +62,7 @@ describe('chainTo', () => {
   });
 });
 
-describe('TrackedRotation', () => {
+describe('RotationFollower', () => {
   it('holds a joint to its acceleration where its goal jumps, and follows a goal moving smoothly without lag', () => {
     const joint = new RotationFollower();
     let goal = (t: number) => turn(1, 0, 0, Math.sin(2 * t));

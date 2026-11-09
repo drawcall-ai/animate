@@ -4,7 +4,7 @@ import { BonePose } from '../../src/kernel/bone-pose';
 import { solveChain } from '../../src/kernel/chain';
 import { leg, turn } from './rigs';
 
-describe('Pose', () => {
+describe('BonePose', () => {
   it('derives world transforms by forward kinematics, again after a write', () => {
     const pose = new BonePose(leg());
     expect(pose.position(3).toArray()).toEqual([0.1, 1 - 0.45 - 0.4, 0]);

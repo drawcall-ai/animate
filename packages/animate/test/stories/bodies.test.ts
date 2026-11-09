@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../kit/open';
-import { Body, carry, dog, grab, horse, lookAt, reach, release, wait, walkTo, poseOf } from '../../src/index';
+import { Body, carry, dog, grab, horse, lookAt, release, wait, walkTo, poseOf } from '../../src/index';
 import { gazeOff, readings, person, play } from '../kit/bodies';
 import { DOG } from '../../skills/animate/references/dog';
 import { HORSE } from '../../skills/animate/references/horse';
@@ -117,19 +117,4 @@ describe('bodies together', () => {
     expect([...watcher.log, ...walker.log]).toEqual([]);
     expect(() => lookAt(watcher, watcher)).toThrow('its own eyes');
   });
-});
-
-it('a dog reaches an object’s orientation as well as its position', () => {
-  const pet = new Body(dog(DOG), { dev: true }), room = roomOf(pet);
-  const target = empty(room, 'mouth target', worldOf(pet.bones.jaw));
-  target.rotation.z = Math.PI;
-  let result: boolean | undefined;
-  let closest = Infinity;
-  play(function* () { result = yield* reach(pet, { jaw: target }); }, [pet], 10, () => {
-    closest = Math.min(closest, pet.bones.jaw.getWorldQuaternion(new Quaternion()).angleTo(target.getWorldQuaternion(new Quaternion())));
-    return result !== undefined;
-  });
-  expect(result).toBe(true);
-  expect(closest).toBeLessThan(0.05);
-  expect(pet.log).toEqual([]);
 });
