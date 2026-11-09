@@ -54,15 +54,15 @@ describe('grab already', () => {
       yield* wait(3);
     }, [body], 3, (time) => {
       if (Number.isNaN(first) && body.holds(cushion)) first = time;
-      const hand = worldOf(body.bones.rightHand);
+      const hand = worldOf(body.bones.rightHand).sub(worldOf(body.bones.hips));
       if (last) fastest = Math.max(fastest, hand.distanceTo(last) * 60);
       last = hand;
     });
     expect(took).toBe(true);
     expect(first).toBeCloseTo(1 / 60, 6);
-    // (the hands as still as standing holds them: no reach, no jump onto the grips)
-    expect(fastest).toBeLessThan(0.05);
-    expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.02 * scale);
+    // (riding the hips as a held thing does, through a body's first half second settling: 2 mm a frame at most on them, no reach, no jump onto the grips)
+    expect(fastest).toBeLessThan(0.15);
+    expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.03 * scale);
     expect(palmAt(insides(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
     expect(body.log).toEqual([]);
   });

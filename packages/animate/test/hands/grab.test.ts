@@ -1,5 +1,5 @@
 import { BoxGeometry, Mesh, Object3D, Quaternion, Vector3 } from 'three';
-import { grip, attempt, Body, dog, grab, Missed, reach, release, wait } from '../../src/index';
+import { grip, attempt, Body, dog, grab, Missed, reach, release, wait, walkTo } from '../../src/index';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../kit/open';
 import { runTimeline } from '@pmndrs/timeline';
@@ -196,6 +196,17 @@ it('a reach takes an object\'s turn only as far as the wrist goes, and is there;
 
 // (the trial that asked for it: a bearer who had to be seen picking both medals up, 9 s of the beat, to start it holding them)
 describe('grab already', () => {
+  it('leaves the thing as a finished grab does: it rides a walk in the hands', () => {
+    const body = person(), room = roomOf(body), tray = box(room, new Vector3(0, 1.05, 0.4));
+    play(function* () {
+      yield* grab(body, tray, BOTH, { already: true });
+      yield* walkTo(body, new Vector3(0, 0, 2.5));
+    }, [body], 12);
+    expect(body.holds(tray)).toBe(true);
+    expect(tray.parent).toBe(body.bones.hips);
+    expect(tray.getWorldPosition(new Vector3()).z).toBeGreaterThan(2.5);
+  });
+
 
 
   it.each([1 / 72, 1 / 120, 0])('counts an update of %f s, too short for a sub-step, as not having shown the body', (first) => {
