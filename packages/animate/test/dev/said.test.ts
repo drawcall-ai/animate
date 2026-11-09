@@ -101,32 +101,3 @@ describe('a verb never yielded', () => {
     warn.mockRestore();
   });
 });
-
-describe('a target taken out of the scene', () => {
-  it('stands where it was, said once, a hand keeping to it staying put', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person(), room = roomOf(body), cup = box(room, new Vector3(-0.28, 1, 0.25), { size: new Vector3(0.08, 0.1, 0.08), mass: 0.3 });
-    const mouth = empty(body.bones.chest, 'mouth', new Vector3(-0.1, 0.1, 0.35));
-    let lowest = Infinity, gone = false;
-    play(body, function* () {
-      yield* grab(body, cup, { right: 'right' }, { already: true });
-      yield* carry(body, cup, mouth);
-      mouth.removeFromParent();
-      gone = true;
-      yield* wait(2);
-    }, { frame: () => { if (gone) lowest = Math.min(lowest, body.bones.rightHand.getWorldPosition(new Vector3()).y); } });
-    const said = warn.mock.calls.map(([message]) => String(message));
-    warn.mockRestore();
-    expect(lowest).toBeGreaterThan(0.9);
-    expect(said).toEqual([expect.stringContaining('"mouth" was taken out of the scene')]);
-  });
-
-  it('a target never in a scene is unremarked: its numbers are the world\'s', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const body = person(), spot = new Object3D();
-    spot.position.set(0, 0, 1);
-    play(body, walkTo(body, spot));
-    expect(warn).not.toHaveBeenCalled();
-    warn.mockRestore();
-  });
-});

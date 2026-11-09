@@ -137,10 +137,10 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
       was.copy(offset);
       wasTurned.copy(movingFrame.current.quaternion);
     }
-    const stalled = f.time - still > STALL.seconds, isOverdue = overdue(f);
+    const stalled = f.time - still > STALL.seconds;
     // (within `STALL.close`, swaying with a body that carries its end, it will never stand still: long enough there is there too)
-    if ((stalled || isOverdue) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
-    if (!late && (isOverdue || (stalled && !close))) {
+    if ((stalled || overdue(f)) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
+    if (!late && (overdue(f) || (stalled && !close))) {
       late = true;
       // (a place on its way, no end of it: as near as the arms take it, and on — only the end is a carry's to miss)
       if (!end) return true;

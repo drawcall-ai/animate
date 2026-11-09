@@ -23,7 +23,7 @@ import type { HandOptions } from '../body/hand-staging';
  * trunk, past a joint's range, or strained — the hand regrips it in its fingers as it comes there, onto a grasp the arm holds there
  * comfortably (people choose a grasp for the posture it ends in), the thing still ending turned as asked. When it must walk there (and `step`
  * allows) it lifts it to its body, walks (borrowed legs) and raises it onto its place as it arrives; its eyes go where it goes (borrowed).
- * Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, turned as its target
+ * A place on its way that it came no nearer than 10 cm is said once on the console, naming it, and it goes on. Like `grab`, it picks where to stand once, as it starts. A mover, it ends once the thing has come to rest there, turned as its target
  * is (within 3°). Its hold ends with the verb: after it the thing rides the hand, drifting a few centimetres as the arm eases, so
  * `until: Infinity` (raced) holds it on. A thing in one hand carried to an `Object3D` is seated on it in the fingers once the arm has
  * brought it within 3 cm, if it can be. Whatever ends `true` there a `release` onto that object, as it ends, sets exactly on it. A grip that declares its contact (`userData.point`, a

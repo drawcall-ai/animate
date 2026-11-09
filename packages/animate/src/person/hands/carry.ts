@@ -36,7 +36,15 @@ const ALONG = { speed: 0.5, least: 0.4 };
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
 /** Carry the route, retaining a fresh guide at each travel/hold boundary. */
-export function* carrying(person: Person, request: Request, thing: Thing, way: CarryPath, options: HandOptions) {
+export function* carrying(person: Person, request: Request, thing: Thing, path: CarryPath, options: HandOptions) {
+  // (each place on its way, as near as the thing came as it went there: one the arms cannot take it to is passed short, and that way may be
+  // what kept it out of something)
+  const passed = path.points.slice(0, -1).map(() => Infinity), passing = (point: (f: Frame) => Goal, k: number) => k === passed.length ? point : (f: Frame) => {
+    const goal = point(f);
+    passed[k] = Math.min(passed[k], person.movingFrameOf(thing.object).current.position.distanceTo(goal.position));
+    return goal;
+  };
+  const way = { ...path, points: path.points.map(passing) };
   const sides = handsOn(person, thing).map(sideOf);
   const resting = supported(thing);
   yield* lifting(person, request, thing);
@@ -63,6 +71,9 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   const moving = () => along(person, request, thing, way, guides, resting, grasp, options.speed);
   if (plan === 'there') yield* way.own ? moving() : parallel<Frame>('race', noticing(person, request, (f) => end(f).position), moving());
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
+  passed.forEach((nearest, k) => {
+    if (nearest > PASSED * person.scale) person.warn(`passed ${thing.object.name} ${way.names[k]}`, `a carry of "${thing.object.name}" came no nearer its ${way.names[k]} than ${(100 * nearest).toFixed(0)} cm, as far as the arms took it, and went on: if it must go that way, stand nearer first`);
+  });
   request.met();
   noteCrossed(person, thing);
   const kept = guides();
@@ -73,6 +84,9 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   };
   yield* holdAlong(person, request, thing, kept, end, undefined, way.own);
 }
+
+/** how far short of a place on its way (m, default body) a carry may pass it unsaid */
+const PASSED = 0.1;
 
 /** how far (m, default body) a thing in both hands may end with the left hand to the right of the right before the dev log says so */
 const CROSSED = 0.05;

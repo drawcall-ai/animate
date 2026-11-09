@@ -18,9 +18,11 @@ export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: F
   const f = person.frame, at = person.movingFrameOf(thing.object).current.position.clone();
   const turn = (f: Frame) => targets[targets.length - 1](f).quaternion;
   const seat = thing.object.parent;
-  const leaving = seat ? approachOf(seat).reverse().map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position })) : [];
-  const coming = end ? approachOf(end).map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position, quaternion: turn(frame) })) : [];
+  const out = seat ? approachOf(seat).reverse() : [], into = end ? approachOf(end) : [];
+  const leaving = out.map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position }));
+  const coming = into.map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position, quaternion: turn(frame) }));
   const points: ((f: Frame) => Goal)[] = [...leaving, ...targets.slice(0, -1), ...coming, targets[targets.length - 1]];
+  const names = [...out.map(({ name }) => `way out "${name}"`), ...targets.slice(0, -1).map((_, k) => `waypoint ${k + 1}`), ...into.map(({ name }) => `approach "${name}"`), 'end'];
   // (a draw from part way out of a scabbard does not push back in to the mouth first)
   let nearest = 0, best = Infinity;
   leaving.forEach((point, k) => {
@@ -41,6 +43,8 @@ export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: F
     outside: hasBodyApproach(end) && !hasBodyApproach(seat) ? targets.length - 1 : 0,
     /** the points it passes through, the last its end */
     points: points.slice(Math.min(nearest, points.length - 1)),
+    /** what each of them is, as a carry says it */
+    names: names.slice(Math.min(nearest, points.length - 1)),
     last,
     /** whether it is kept clear of the body (`clearBody`): not on a way out of or into an empty on one of the body's bones by that
      * empty's approach (a pouch, a scabbard, a helm's place on the head), which brings it out or in */
