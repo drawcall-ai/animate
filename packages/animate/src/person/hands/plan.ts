@@ -8,7 +8,7 @@ import { toWorld } from '../../kernel/scene';
 import { digitsOf, handOn, type HandPart, type HandPlacement, type HandPoint } from '../../fingers/placement';
 import { POINT, shapeOf, type Shape } from '../../fingers/shape';
 import type { GripOn, Thing } from '../../things/thing';
-import type { Hold } from '../../things/holder';
+import type { Hold } from '../../things/hold';
 import { INDEX, type Side } from '../anatomy/bones';
 import { palmOf } from '../anatomy/landmarks';
 import { broughtTurn } from './arms';

@@ -1,7 +1,7 @@
 import { Vector3, type Object3D } from 'three';
 import { selfOf, type Body, type ByHand } from '../body';
 import { bodyOf } from '../things/hold';
-import type { Holder } from '../things/holder';
+import type { Self } from '../body/self';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
@@ -45,7 +45,7 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
 }
 
 /** a grip another body's hand holds: two hands cannot be on one spot (a hand-over gives the taker grips of its own) */
-function checkShared(holder: Holder, thing: Thing, named: readonly { hand: string; grip: string }[]): void {
+function checkShared(holder: Self, thing: Thing, named: readonly { hand: string; grip: string }[]): void {
   for (const { grip } of named) {
     const hand = Object.keys(holder.holding).find((side) => holder.holding[side]?.thing === thing && holder.holding[side]?.grip === grip);
     if (hand === undefined) continue;
@@ -58,7 +58,7 @@ const GRIP_KEYS = new Set(['handle', 'facing', 'radius', 'length', 'point', 'dig
 
 /** a key on an empty that no grip reads may be a typo, or an artist's extras or data of the app's: said once. A grip's world scale must be
  * uniform: else it has no one turn a hand can take. (A thing gripped by its own name is the app's own object, its data its own.) */
-function checkGrip(self: Holder & { warn(check: string, message: string): void }, thing: Thing, node: Object3D): void {
+function checkGrip(self: Self, thing: Thing, node: Object3D): void {
   if (node !== thing.object) for (const key of Object.keys(node.userData)) {
     if (!GRIP_KEYS.has(key)) self.warn(`grip key ${key}`, `grip "${node.name}" has userData.${key}, which nothing reads: a grip takes handle, facing, radius, length, point, digits, approach and speed (\`grip\`). A typo?`);
   }

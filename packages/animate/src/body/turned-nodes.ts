@@ -4,7 +4,7 @@ import type { Goal, Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { within } from '../kernel/scene';
 import { placedFor } from '../things/placed';
-import { turners } from '../things/holder';
+import { turners } from '../things/anchors';
 import type { Self } from './self';
 
 /** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight — the elbow still

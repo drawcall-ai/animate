@@ -2,7 +2,7 @@ import { MathUtils, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from '
 import type { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import { inFrame, placedOf, toWorld, within, worldOf, type Placed, vectorOf } from '../kernel/scene';
-import type { Hold } from '../things/holder';
+import type { Hold } from '../things/hold';
 import type { DigitBones } from './digit-bones';
 import { closedOn, PAD_DEPTH } from './closing';
 import { meet, type Contact } from './contact';

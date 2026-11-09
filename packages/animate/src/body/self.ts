@@ -16,11 +16,11 @@ import { yawOf } from '../kernel/math';
 import { Binding } from './binding';
 import { PlatformFrame } from './platform';
 import { placedFor } from '../things/placed';
-import { anchors, movers, type Hold, type Holder, type Interpolated } from '../things/holder';
+import { anchors, movers, type Interpolated } from '../things/anchors';
 import { Claims, Request, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
-import { heldMass, wornOf, type Bearing } from '../things/hold';
+import { heldMass, wornOf, type Bearing, type Hold } from '../things/hold';
 import type { HandStaging } from './hand-staging';
 import { FLAT, type Floor } from '../step/floor';
 import { FingerState } from '../fingers/state';
@@ -31,7 +31,7 @@ import type { Person } from '../person/person';
 
 /** Body state and arbitration. Each 1/60 s sub-step applies balance, request staging, part claims, then carried things.
  * Balance reads the previous sub-step’s asks; after all writes, final poses advance current → prev → prev2. */
-export abstract class Self implements Holder {
+export abstract class Self {
   readonly skeleton: Skeleton;
   readonly scale: number;
   readonly restOf;
@@ -184,25 +184,25 @@ export abstract class Self implements Holder {
   }
 
   /** Self reads the pose being written (the last final pose between sub-steps); a body ahead of another reader exposes its update-start pose. */
-  poseFor(reader: Holder): ReadonlyBonePose {
+  poseFor(reader: Self): ReadonlyBonePose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
     return this.updates > reader.updates ? this.before[0] : this.frame.prev;
   }
 
   /** its final poses as `reader` reads them (`poseFor`): the last and the one before */
-  posesFor(reader: Holder): readonly [ReadonlyBonePose, ReadonlyBonePose] {
+  posesFor(reader: Self): readonly [ReadonlyBonePose, ReadonlyBonePose] {
     return this.updates > reader.updates ? [this.before[0], this.before[1]] : [this.frame.prev, this.frame.prev2];
   }
 
   /** it deals with the body `other` is (a target on it, a thing in its hands): each keeps clear of the other from now on */
-  meet(other: Holder): void {
-    if (!(other instanceof Self) || other === this) return;
+  meet(other: Self): void {
+    if (other === this) return;
     this.near.add(other);
     other.near.add(this);
   }
 
   /** where it moves `node`, as `reader` reads it (`poseFor`): its own this sub-step; another's as it was before its update this frame */
-  movedFor(reader: Holder, node: Object3D): Placement | null {
+  movedFor(reader: Self, node: Object3D): Placement | null {
     const movingFrame = this.carried.get(node);
     if (!movingFrame) return null;
     if (reader === this) return movingFrame.at(this.frame.time).current;

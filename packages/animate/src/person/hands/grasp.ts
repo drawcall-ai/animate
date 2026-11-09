@@ -5,7 +5,7 @@ import { minimumJerk } from '../../kernel/math';
 import { digitsOf } from '../../fingers/placement';
 import { handsOn, inHand } from '../../things/hold';
 import { placedFor } from '../../things/placed';
-import type { Hold, Regrip } from '../../things/holder';
+import type { Hold, Regrip } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { sideOf, type Side } from '../anatomy/bones';
 import { broughtTurn, elbowPole } from './arms';

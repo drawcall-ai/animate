@@ -3,7 +3,7 @@ import { sameThree } from '../kernel/math';
 import { surfaceOf, Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import { vectorOf } from '../kernel/scene';
-import type { Holder } from './holder';
+import type { Self } from '../body/self';
 import { digitOf } from '../fingers/shape';
 
 /** Object mass (`userData.mass`, kg), centre (`userData.centre`, local; default origin), and bounds excluding attached things.
@@ -17,7 +17,7 @@ export class Thing {
   lifted = false;
   /** the parent the library last gave it: another (a stray `scene.add`, a physics sync) under a holding hand is a problem */
   parent: Object3D | null = null;
-  readonly holders = new Set<Holder>();
+  readonly holders = new Set<Self>();
 
   private constructor(readonly object: Object3D) {
     const { mass, centre } = object.userData;

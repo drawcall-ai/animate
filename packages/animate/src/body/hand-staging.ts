@@ -2,7 +2,7 @@ import type { Object3D, Vector3 } from 'three';
 import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Motion, Placement } from '../kernel/goal';
-import type { Hold } from '../things/holder';
+import type { Hold } from '../things/hold';
 import type { Request } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Until } from '../verbs/story';
