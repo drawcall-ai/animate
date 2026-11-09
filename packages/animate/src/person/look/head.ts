@@ -74,19 +74,20 @@ export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Fra
 
 /** Recruit turning beyond TURN and lowering beneath the tracked eyes; feed the moving support point forward to walking. */
 function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => LegGoal {
-  const face = { yaw: NaN };
-  const go: LegGoal & { velocity: Vector3 } = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER, face };
+  const go: LegGoal & { velocity: Vector3 } = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER };
+  let face = NaN;
   /** turning after the head; how long it has been turned past TURN (s); the eyes' last height */
   let turning = false, turnedFor = 0, height = NaN;
   return (f, eyes, yaw) => {
     const proportions = person.proportions;
     const facing = person.locomotion.facing;
     const off = Math.abs(wrapAngle(yaw - facing));
-    if (Number.isNaN(face.yaw)) face.yaw = facing;
-    if (turning && off < SQUARED && person.locomotion.settled) [turning, face.yaw] = [false, facing];
+    if (Number.isNaN(face)) face = facing;
+    if (turning && off < SQUARED && person.locomotion.settled) [turning, face] = [false, facing];
     turnedFor = off > TURN ? turnedFor + f.dt : 0;
     if (turnedFor >= WAIT) turning = true;
-    if (turning) face.yaw = yaw;
+    if (turning) face = yaw;
+    go.face = face;
     // (as low as the eyes will be once the knees have caught up: `balance` takes a drop up at its own pace, so the pelvis lags one
     // moving at v by about v² / 2a)
     const rising = Number.isNaN(height) ? 0 : (eyes.y - height) / f.dt;

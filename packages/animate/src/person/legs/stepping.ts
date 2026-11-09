@@ -4,7 +4,7 @@ import type { Gait } from '../../species/gait';
 import { powerGait, stanceOf } from '../../species/schedule';
 import { squatOf, STANDING_REACH } from './walk-pose';
 import { lerp } from '../../kernel/math';
-import { defaultStance } from '../anatomy/stance';
+import { stanceWidth, TOE_OUT } from '../anatomy/stance';
 import type { Stride } from '../anatomy/humanoid';
 import { UNVARIED, type Variation } from './variation';
 import type { CadencedStepping } from '../../step/types';
@@ -37,10 +37,10 @@ export const personGait = (proportions: Proportions): Gait => powerGait({
 export const personStepping = (proportions: Proportions, foreseen = true, style: Stride = {}, variation: Variation = UNVARIED): CadencedStepping => {
   const { cadence = 1, width = 1, bob = 1, toeOut = 1 } = style;
   const walker: CadencedStepping = {
-    scale: proportions.legs, offsets: [0, 0.5], toeOut: defaultStance(proportions).toeOut * toeOut, duty: { walk: 0.6, side: 0.5, run: 0.32 }, run: [2, 3],
+    scale: proportions.legs, offsets: [0, 0.5], toeOut: TOE_OUT * toeOut, duty: { walk: 0.6, side: 0.5, run: 0.32 }, run: [2, 3],
     cadence: (speed, sideways, time) => cadence * variation.cadenceAt(time) * cadenceOf(speed, foreseen ? sideways : 0, proportions.legs),
     travel: { forward: 0.85, run: 0.75, back: 0.6, side: 0.3 }, landAhead: { share: 0.4, side: 0.5, most: 0.3, run: 0.22 },
-    width: { stand: defaultStance(proportions).width, walk: 0.09 * width, run: 0.07 * width, narrowest: 0.1, sway: 0.09 * (width - 1) }, bob: 0.042 * bob, drop: { walk: 0, side: 0.03, run: 0.06 },
+    width: { stand: stanceWidth(proportions), walk: 0.09 * width, run: 0.07 * width, narrowest: 0.1, sway: 0.09 * (width - 1) }, bob: 0.042 * bob, drop: { walk: 0, side: 0.03, run: 0.06 },
     lift: { walk: 0.09, run: 0.25, jump: 0.2 }, arc: 4.5, strike: { walk: 0.2, run: 0.08, ahead: 0.15 }, pitch: { heel: 0.35, ball: -0.95 }, dorsiflexion: 0.6, plantarflexion: 0.75,
     push: 20 * Math.PI / 180,
     crouch: { depth: squatOf(proportions) / proportions.scale, wider: 0, ahead: 0.14, travel: 0.4, lift: 0.5 },

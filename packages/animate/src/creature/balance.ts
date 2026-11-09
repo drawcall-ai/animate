@@ -71,12 +71,12 @@ export function creature(body: Self): Behaviour {
     // (a still goal behind it, nearer than its feet stand, it does not turn round for: come past it, it is there; asked a facing, it
     // steps back to it)
     const behind = _gap.copy(asked).sub(root).dot(forwardOf(planner.root.yaw, _to)) < 0;
-    if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && !face) going = false;
+    if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && face === undefined) going = false;
     const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
-    const faced = face?.yaw ?? (to.distanceTo(root) > radius && offTheWay(heading, planner.root.yaw) ? heading : undefined);
+    const faced = face ?? (to.distanceTo(root) > radius && offTheWay(heading, planner.root.yaw) ? heading : undefined);
     // (or where the scene drives it)
     const r: Steering = driven ? driven(f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
-      { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: Math.min(face?.rate ?? Infinity, turning) }, stance, (forecast) => stepper.reachable(forecast));
+      { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: turning }, stance, (forecast) => stepper.reachable(forecast));
     stepper.move(f, r);
     f.current.setLocal(0, _yaw.setFromAxisAngle(UP, stepper.yaw));
     // (the root's turn, and how much further round it will face `LOOKING` s on: what its head leads into; its lean into its acceleration)

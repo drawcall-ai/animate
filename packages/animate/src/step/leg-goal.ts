@@ -3,21 +3,9 @@ import type { Vector3 } from 'three';
 /** a walk unless asked otherwise: its top speed (m/s) and how quickly it speeds up (m/s²) */
 export const STROLL = { speed: 1.3, accel: 1.2 };
 
-/** How the body stands when nothing asks for more. */
-export interface Stance {
-  /** half the distance between the ankles, sideways (m) */
-  width: number;
-  /** how far the pelvis is let down, the knees bent (m): a ready stance */
-  crouch: number;
-  /** the pelvis and feet turned off the facing (rad): a bladed stance */
-  blade: number;
-  /** each foot turned out (rad) */
-  toeOut: number;
-}
-
 /**
  * Where the legs are asked to take the body, by the one request that has them: the point on the floor, its velocity, how fast the body
- * may go (m/s, m/s²), the facing to turn to (at most `rate` rad/s) and how to stand.
+ * may go (m/s, m/s²) and the facing to turn to (rad).
  */
 export interface LegGoal {
   to: Vector3;
@@ -30,6 +18,5 @@ export interface LegGoal {
   /** a few steps back or aside, asked to face about as the body faces, it keeps its facing, backing or side-stepping (a person's walk's;
    * default false: it faces the way it goes) */
   backs?: boolean;
-  face?: { yaw: number; rate?: number };
-  stance?: Partial<Stance>;
+  face?: number;
 }

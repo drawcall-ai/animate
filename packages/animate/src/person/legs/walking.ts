@@ -3,7 +3,6 @@ import type { Behaviour } from '../../kernel/frame';
 import { offTheWay, Planner, stanceYaw } from '../../step/planner';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
 import { INDEX } from '../anatomy/bones';
-import type { Stance } from '../../step/leg-goal';
 import type { Stepper } from '../../step/stepper';
 import { hullOf, past } from '../../step/support';
 import { footprint } from './foot';
@@ -22,7 +21,7 @@ import type { Person } from '../person';
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
  */
-export function walking(person: Person, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
+export function walking(person: Person, options: { seed?: number } = {}): Behaviour {
   const proportions = person.proportions, s = proportions.scale, toeOut = personStepping(proportions, true, person.stride).toeOut;
   const variation = variationOf(seedFor(person, options.seed));
   // (asked off, it sets off its own moment later: since when it was asked, s)
@@ -69,7 +68,7 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     still = moving ? null : leaning ? still : root.clone();
     // (a walk is under way while the body turns to a facing asked too: turning on the spot, a goal moving off is walked after at once, not
     // once it is a start's distance away)
-    const unturned = asking ? Math.abs(wrapAngle(asking.yaw - plan.root.yaw)) : 0;
+    const unturned = asking !== undefined ? Math.abs(wrapAngle(asking - plan.root.yaw)) : 0;
     const off = (still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced;
     if (moving || !off) asked = NaN;
     else if (Number.isNaN(asked)) asked = f.time;
@@ -79,8 +78,8 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
     const heading = Math.atan2(stop.x - root.x, stop.z - root.z);
     const travelYaw = plan.root.velocity.lengthSq() > 1e-8 ? Math.atan2(plan.root.velocity.x, plan.root.velocity.z) : heading;
-    const yaw = face ? halfTurn(f.prev.rotation(INDEX.head), plan.root.yaw, face.yaw) : moving ? travelYaw : plan.root.yaw;
-    const faced = !!face || !moving || offTheWay(heading, plan.root.yaw);
+    const yaw = face !== undefined ? halfTurn(f.prev.rotation(INDEX.head), plan.root.yaw, face) : moving ? travelYaw : plan.root.yaw;
+    const faced = face !== undefined || !moving || offTheWay(heading, plan.root.yaw);
     const stance = stanceYaw(stepper.legs, plan.root.yaw, toeOut);
     // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
     const shift = !moving && !go ? asks.shift : null;
@@ -113,7 +112,7 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     };
     const walking = Math.min(go?.speed ?? 1.3 * s, starting ? START_GLIDE * s : Infinity);
     const speed = moving ? walking : waiting ? 0 : go ? (edged ? EDGE * s : 0) : leaned || rest ? LEAN.speed * s : 0;
-    const motion = { accel: go?.accel ?? BRAKING * s, speed, turnSpeed: face?.rate };
+    const motion = { accel: go?.accel ?? BRAKING * s, speed };
     // (the legs judge the planner's root as the stepper is given it: the feet's middle, behind the centre of mass)
     const holds: Parameters<Planner['step']>[4] = (forecast) => stepper.reachable((t) => {
       const at = forecast(t);

@@ -10,7 +10,7 @@ import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { INDEX, type Side } from '../anatomy/bones';
 import { floorUnder } from '../legs/height';
 import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../legs/walk-pose';
-import { defaultStance } from '../anatomy/stance';
+import { stanceWidth } from '../anatomy/stance';
 import type { Person } from '../person';
 
 /** Comfortable stand distance as a share of arm length. */
@@ -131,7 +131,7 @@ export function footing(person: Person, to: Stand, step = true) {
   }
   const at = middle.clone(), there = new Vector3();
   // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
-  const feetOut = Math.max(proportions.hipHalfWidth, defaultStance(proportions).width);
+  const feetOut = Math.max(proportions.hipHalfWidth, stanceWidth(proportions));
   const clear = (spot = there) => [...person.near].every((other) => {
     const pose = other.posesFor(person)[0];
     return pose.skeleton.bones.every((bone, b) => {

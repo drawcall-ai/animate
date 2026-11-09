@@ -3,7 +3,7 @@ import type { Frame, Behaviour } from '../../kernel/frame';
 import { lerp, wrapAngle } from '../../kernel/math';
 import { Stepper } from '../../step/stepper';
 import { Asks } from '../../kernel/asks';
-import type { LegGoal, Stance } from '../../step/leg-goal';
+import type { LegGoal } from '../../step/leg-goal';
 import { seedOf } from '../../kernel/random';
 import { variationOf, type Variation } from './variation';
 import { checkLegs } from './checks';
@@ -12,7 +12,7 @@ import { poseLeg } from './leg';
 import { Trunk } from './trunk';
 import { drivenRoot } from '../../step/root';
 import { personStepping } from './stepping';
-import { defaultStance, standingFeet } from '../anatomy/stance';
+import { standingFeet } from '../anatomy/stance';
 import type { Person } from '../person';
 import type { Steering } from '../../step/types';
 
@@ -40,7 +40,7 @@ export function seedFor(person: Pick<Person, 'proportions' | 'pose' | 'yaw'>, se
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
  * less as it holds still (`steady`). It steps, swings its arms and sways as the `variation` it is; `foreseen`: `Steps.foreseen`.
  */
-export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null, asks: Asks, stepper: Stepper) => Steering, options: { foreseen: boolean; stance?: Partial<Stance>; seed?: number; variation: Variation }): Behaviour {
+export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null, asks: Asks, stepper: Stepper) => Steering, options: { foreseen: boolean; seed?: number; variation: Variation }): Behaviour {
   const { foreseen, variation } = options, proportions = person.proportions;
   const feet = personFeet(proportions);
   // (the feet where they stand as it is made: in its stance under it)
@@ -48,7 +48,7 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
   const stepper = person.stepper = new Stepper(personStepping(proportions, foreseen, person.stride, variation), foreseen ? feet : pivotingFeet(proportions, feet), standing, person.yaw, person.floor, foreseen);
   const asks = new Asks();
   const depth = personStepping(proportions, true, person.stride).crouch.depth;
-  const trunk = new Trunk(person, stepper, variation.sway, seedFor(person, options.seed), depth, { ...defaultStance(proportions), ...options.stance }, standing);
+  const trunk = new Trunk(person, stepper, variation.sway, seedFor(person, options.seed), depth, standing);
   return (f) => {
     if (f.dev && f.time > f.dt) checkLegs(person, f, f.dev, stepper.legs);
     person.asks.pass(asks);

@@ -7,7 +7,6 @@ import { TRUNK_PITCH } from '../anatomy/ranges';
 import { INDEX } from '../anatomy/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../anatomy/proportions';
-import type { Stance } from '../../step/leg-goal';
 import type { Stride } from '../anatomy/humanoid';
 import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../kernel/inertia';
@@ -77,7 +76,7 @@ export interface WalkPoseState {
   stride: Stride;
   /** the root's ground velocity (m/s) */
   velocity: Vector3;
-  offset: Vector3; yaw: number; walk: number; run: number; moving: boolean; stance: Stance;
+  offset: Vector3; yaw: number; walk: number; run: number; moving: boolean;
   /** where the feet stood or, swinging, were to land as the sub-step began */
   feet: readonly { readonly anchor: Vector3 }[];
   /** the weight going off a foot, standing, for it to lift and as it swings: where the centre of mass goes (`Steps.onto`), whether the
@@ -172,15 +171,15 @@ export class WalkPose {
     const forward = pace * (1 - MathUtils.smoothstep(bow, 0, BOWED)) * (1 - MathUtils.smoothstep(lower, 0, LOWERED * H));
     // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
     const tilt = 0.5 * nod + pelvisTilt(proportions, lower, bow) + TILT * run;
-    quatYXZ(state.yaw + pelvisYaw + state.stance.blade + hips, tilt, roll, state.pelvisRotation);
-    pelvis.y = proportions.hipHeight - state.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
+    quatYXZ(state.yaw + pelvisYaw + hips, tilt, roll, state.pelvisRotation);
+    pelvis.y = proportions.hipHeight - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
     // nodding, bowing and bent sideways
     this.inertia?.step(state.velocity, state.yaw, dt);
     const lean = this.inertia ?? { pitch: 0, roll: 0 };
     const pitch = forward + nod + bow - loadLean(f.prev, proportions, fwd) + life.breath + lean.pitch;
-    quatYXZ(state.yaw + thoraxYaw + state.stance.blade, pitch, thoraxRoll + lean.roll + bent, out.chest);
+    quatYXZ(state.yaw + thoraxYaw, pitch, thoraxRoll + lean.roll + bent, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }

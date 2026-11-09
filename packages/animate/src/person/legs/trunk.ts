@@ -5,7 +5,7 @@ import { follow, PointFollower, RotationFollower } from '../../kernel/follow';
 import type { Frame } from '../../kernel/frame';
 import { clampRotation } from '../../kernel/limits';
 import { clamp, forwardOf, lerp, minimumJerk, quatYXZ, yawOf } from '../../kernel/math';
-import type { LegGoal, Stance } from '../../step/leg-goal';
+import type { LegGoal } from '../../step/leg-goal';
 import type { Locomotion } from '../../step/locomotion';
 import type { Stepper } from '../../step/stepper';
 import { xcomOfPoses } from '../../step/support';
@@ -83,10 +83,10 @@ export class Trunk {
     private readonly person: Person, private readonly stepper: Stepper, sway: Variation['sway'], seed: number,
     /** the depth (× scale) a story's `lower` is a share of, as a walker crouches whoever drives it */
     private readonly depth: number,
-    private readonly stance: Stance, standing: readonly { position: Vector3 }[],
+    standing: readonly { position: Vector3 }[],
   ) {
     this.state = {
-      p: person.proportions, stride: person.stride, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: person.yaw, walk: 0, run: 0, moving: false, stance,
+      p: person.proportions, stride: person.stride, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: person.yaw, walk: 0, run: 0, moving: false,
       // (where the feet stood as the sub-step began: the posture shifts the weight between them)
       feet: standing.map((foot) => ({ anchor: foot.position.clone() })),
       pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false, unloading: null,
@@ -106,7 +106,6 @@ export class Trunk {
     const offsets = this.offsets;
     // the hips carried off the root: swaying and turning with the stride, off a centre of mass's as far as the mass leans ahead of them
     const speed = root.velocity.length();
-    state.stance = go?.stance ? { ...this.stance, ...go.stance } : this.stance;
     state.walk = walkBlend(state.walk, speed, dt);
     state.moving = root.underway ?? person.locomotion.moving;
     state.yaw = stepper.yaw;

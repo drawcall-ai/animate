@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import { STROLL, type LegGoal, type Stance } from './leg-goal';
+import { STROLL, type LegGoal } from './leg-goal';
 import type { Miss, Request } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
@@ -44,7 +44,6 @@ interface Route {
   velocity?: (f: Frame) => Vector3 | undefined;
   /** an explicit pace; otherwise a stroll, slowed by the weight held, quickened by the body's tempo */
   speed?: number;
-  stance?: Partial<Stance>;
   /** points to pass on the way first */
   via?: readonly ((f: Frame) => Readonly<Vector3>)[];
   /** a few steps back or aside, asked to face as the body faces, it keeps its facing (`LegGoal.backs`) */
@@ -93,7 +92,6 @@ export class Walk {
     if (!this.stall) this.watch(f, yaw);
     go.velocity = way.velocity?.(f);
     if (![go.to.x, go.to.z, ...(go.velocity?.toArray() ?? [])].every(Number.isFinite)) throw new Error(`walk: a goal that is no point: (${go.to.x}, ${go.to.z})`);
-    go.stance = way.stance;
     const via = way.via ?? [];
     let previous: Readonly<Vector3> = go.to, onward = 0;
     for (let i = this.leg + 1; i <= via.length; i++) {
@@ -109,7 +107,7 @@ export class Walk {
     this.eta = etaOf(self, body, go, yaw, LEADING_TURN) + onward;
     this.stood = this.arrival > 0 ? null : this.stood ?? f.time;
     this.ends = this.arrival + closing(self, this.stood === null ? null : f.time - this.stood);
-    go.face = yaw === null ? undefined : { yaw };
+    go.face = yaw ?? undefined;
     // (to the facing it arrives with, whichever leg of its way it is on)
     const arriving = way.face?.(f) ?? null;
     this.unturned = arriving === null ? 0 : Math.abs(wrapAngle(arriving - self.locomotion.facing));
