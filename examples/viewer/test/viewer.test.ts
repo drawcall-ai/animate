@@ -10,6 +10,9 @@ import { SOLDIER } from '../src/skeletons/index';
 import { cases } from '../../../packages/animate/test/kit/open';
 
 const test = cases([
+  // (#18) XCoM 0.110 m for one sub-step at 9.35 s, bound 0.103: the trailing knee held straight at full reach through pre-swing, the heel flat till
+  // the reach runs out, peels and snaps the knee bent as the foot lifts — the centre of mass jolted with it.
+  ['stable-morning finishes cleanly in the SOLDIER viewer', /XCoM outside support/, [3]],
 ]);
 
 // Wardrobe skins these same named bones; meshes do not participate in the solver. Keep the rig's bone hierarchy and the live
